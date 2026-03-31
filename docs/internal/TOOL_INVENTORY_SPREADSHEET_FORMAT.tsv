@@ -1,0 +1,596 @@
+WHITEBOX TOOL INVENTORY - SPREADSHEET FORMAT (2026-03-24)
+
+CATEGORY SUMMARY TAB
+Category	Legacy_Count	Ported_Count	New_Tools_Count	Remaining_To_Port	Status	Platform	Notes
+Agriculture	6	6	0	0	Complete	wbtools_pro	All Pro-tier precision agriculture tools; full callback support
+Data Tools	27	27	0	0	Complete	wbtools_oss	Format conversion and vector cleansing; geometry validation
+Geomorphometry	100	100+	Multiple	0	Complete+Enhanced	wbtools_oss/pro	Parity + modernized implementations; multi-scale analysis
+GIS (Overlay/Analysis)	102	105	3	0	Complete+New	wbtools_oss/pro	Raster overlay + aggregation/interpolation + workflow wrappers; 3 new enhancements
+Hydrology	60	60	0	0	Complete	wbtools_oss	Depression removal + flow algorithms + diagnostics + watersheds
+Remote Sensing	82	82+	Multiple	0	Complete+Enhanced	wbtools_oss/pro	Image filters + classification + ML; enhanced implementations
+LiDAR Processing	63	64	1	0	Complete+Enhanced	wbtools_oss/pro	Phases 1-3 done; CRS propagation; batch-mode support; 1 dormant legacy exception + 1 workflow wrapper
+Stream Network Analysis	26	29	3	0	Complete+Enhanced	wbtools_oss/pro	Stream ordering + magnitude + link analysis + vector topology repair + workflow wrappers
+Math & Statistics	99	98	0	0	Complete	wbtools_oss	All legacy except 1 intentional exception (hdbscan_clustering)
+TOTAL	619	543*	Multi	0	100% Parity	Mixed	*543 unique registered (529 OSS + 30 Pro, accounting for overlaps)
+
+---
+
+AGRICULTURE TOOLS (6 tools)
+Tool_Name	Status	Platform	Type	Legacy_Equivalent	Notes	Python_Wrapper_Status
+recreate_pass_lines	done	wbtools_pro	Vector	Yes	Pass-line reconstruction from yield data
+yield_filter	done	wbtools_pro	Vector	Yes	Statistical outlier filtering in yield maps
+yield_map	done	wbtools_pro	Vector	Yes	Yield polygon generation from pass lines
+yield_normalization	done	wbtools_pro	Vector	Yes	Yield standardization and scaling
+remove_field_edge_points	done	wbtools_pro	Vector	Yes	Edge-effect removal from yield data
+reconcile_multiple_headers	done	wbtools_pro	Vector	Yes	Multi-header yield aggregation
+
+---
+
+DATA TOOLS (27 tools)
+Tool_Name	Status	Platform	Type	Notes	Python_Wrapper_Status
+add_point_coordinates_to_table	done	wbtools_oss	Vector	Append XCOORD, YCOORD fields from point geometry
+clean_vector	done	wbtools_oss	Vector	Remove null and invalid geometries
+convert_nodata_to_zero	done	wbtools_oss	Raster	Replace nodata with 0
+csv_points_to_vector	done	wbtools_oss	Vector	Import point features from CSV
+export_table_to_csv	done	wbtools_oss	Vector	Export attribute table to CSV
+fix_dangling_arcs	done	wbtools_oss	Vector	Snap undershot/overshot line endpoints
+join_tables	done	wbtools_oss	Vector	Join attribute tables by field
+lines_to_polygons	done	wbtools_oss	Vector	Close line features into polygons
+merge_table_with_csv	done	wbtools_oss	Vector	Merge CSV data into attribute table
+merge_vectors	done	wbtools_oss	Vector	Combine multiple vector layers
+modify_nodata_value	done	wbtools_oss	Raster	Change nodata value in raster
+multipart_to_singlepart	done	wbtools_oss	Vector	Explode multipart geometries
+new_raster_from_base_raster	done	wbtools_oss	Raster	Create blank raster from template
+new_raster_from_base_vector	done	wbtools_oss	Raster	Create blank raster from vector extent
+polygons_to_lines	done	wbtools_oss	Vector	Convert polygon boundaries to lines
+print_geotiff_tags	done	wbtools_oss	Raster	Display GeoTIFF metadata tags
+raster_to_vector_lines	done	wbtools_oss	Vector	Vectorize raster line features
+raster_to_vector_polygons	done	wbtools_oss	Vector	Vectorize raster polygon patches
+raster_to_vector_points	done	wbtools_oss	Vector	Sample raster as point features
+reinitialize_attribute_table	done	wbtools_oss	Vector	Reset attribute table structure
+remove_polygon_holes	done	wbtools_oss	Vector	Remove holes from polygon features
+remove_raster_polygon_holes	done	wbtools_oss	Raster	Remove holes from raster patches
+set_nodata_value	done	wbtools_oss	Raster	Define nodata value in raster
+singlepart_to_multipart	done	wbtools_oss	Vector	Merge single geometries into multi-part
+vector_lines_to_raster	done	wbtools_oss	Raster	Rasterize line features
+vector_polygons_to_raster	done	wbtools_oss	Raster	Rasterize polygon features
+vector_points_to_raster	done	wbtools_oss	Raster	Rasterize point features
+
+---
+
+GEOMORPHOMETRY (100+ tools)
+Tool_Name	Status	Platform	Notes	Python_Wrapper_Status
+aspect	done	wbtools_oss	Slope aspect in degrees clockwise from north
+slope	done	wbtools_oss	Slope gradient (degrees/radians/percent)
+elevation_percentile	done	wbtools_oss	Elevation ranking within terrain context
+curvedness	done	wbtools_oss	Combined curvature magnitude
+mean_curvature	done	wbtools_oss	Average principal curvature
+profile_curvature	done	wbtools_oss	Slope curvature in flow direction
+plan_curvature	done	wbtools_oss	Slope curvature perpendicular to flow
+tangential_curvature	done	wbtools_oss	Contour curvature; alternative: plan curvature
+total_curvature	done	wbtools_oss	Sum of absolute principal curvatures
+casorati_curvature	done	wbtools_oss	Casorati curvature (Gaussian/product curvature)
+gaussian_curvature	done	wbtools_oss	Product of principal curvatures
+horizontal_excess_curvature	done	wbtools_oss	Plan curvature excess
+vertical_excess_curvature	done	wbtools_oss	Profile curvature excess
+maximal_curvature	done	wbtools_oss	Maximum principal curvature
+minimal_curvature	done	wbtools_oss	Minimum principal curvature
+difference_curvature	done	wbtools_oss	Curvature difference metric
+ring_curvature	done	wbtools_oss	Circular terrain curvature
+accumulation_curvature	done	wbtools_oss	Flow-weighted curvature
+multiscale_curvatures	done	wbtools_pro	Multi-scale curvature analysis; NEW_ENHANCEMENT
+hillshade	done	wbtools_oss	Shaded relief visualization
+sky_view_factor	done	wbtools_oss	Sky visibility index (0-1)
+openness	done	wbtools_oss	Positive and negative openness metrics
+visibility_index	done	wbtools_oss	Terrain visibility from point/raster
+viewshed	done	wbtools_oss	Grid-based viewshed from DEM
+horizon_angle	done	wbtools_oss	Maximum horizon angle from point
+horizon_area	done	wbtools_pro	Terrain area visible to horizon
+average_horizon_distance	done	wbtools_pro	Mean visible distance to horizon
+exposure_towards_wind_flux	done	wbtools_oss	Wind exposure metric
+ruggedness_index	done	wbtools_oss	Terrain roughness index
+surface_area_ratio	done	wbtools_oss	Actual vs. projected surface area
+slope_vs_aspect_plot	done	wbtools_pro	Diagnostic visualization
+slope_vs_elev_plot	done	wbtools_oss	Diagnostic visualization
+standard_deviation_of_slope	done	wbtools_oss	Slope variability over neighborhood
+topographic_hachures	done	wbtools_pro	Decorative slope-based rendering
+relief	done	wbtools_oss	Directional relief metric
+relative_topographic_position	done	wbtools_oss	Relative elevation percentile
+relative_aspect	done	wbtools_oss	Aspect relative to slope direction
+elevation_relative_to_min_max	done	wbtools_oss	Normalized elevation (0-1)
+elevation_relative_to_watershed_min_max	done	wbtools_oss	Watershed-relative elevation
+elevation_percentile	done	wbtools_oss	Percentile rank of elevation
+max_elevation_deviation	done	wbtools_oss	Max deviation from mean in neighborhood
+difference_from_mean_elevation	done	wbtools_oss	Individual point vs. mean
+max_difference_from_mean	done	wbtools_oss	Max difference in neighborhood
+deviation_from_mean_elevation	done	wbtools_oss	Signed elevation deviation
+elev_above_pit	done	wbtools_oss	Elevation above nearest pit
+elev_above_pit_dist	done	wbtools_oss	Distance to nearest pit
+percent_elev_range	done	wbtools_oss	Elevation as % of local range
+max_downslope_elev_change	done	wbtools_oss	Maximum downslope gradient
+max_upslope_elev_change	done	wbtools_oss	Maximum upslope gradient
+min_downslope_elev_change	done	wbtools_oss	Minimum downslope gradient
+downslope_index	done	wbtools_oss	Downslope flow magnitude metric
+num_downslope_neighbours	done	wbtools_oss	Count of downslope neighbors
+num_upslope_neighbours	done	wbtools_oss	Count of upslope neighbors
+relative_stream_power_index	done	wbtools_oss	Stream power index (normalized)
+sediment_transport_index	done	wbtools_oss	Sediment transport capacity metric
+topographic_position_animation	done	wbtools_pro	Animated TPI classification
+multiscale_topographic_position_image	done	wbtools_oss	Multi-scale TPI; NEW_ENHANCEMENT
+multiscale_elevation_percentile	done	wbtools_oss	Multi-scale elevation ranking; NEW_ENHANCEMENT
+multiscale_elevated_index	done	wbtools_oss	Multi-scale elevated terrain index; NEW_ENHANCEMENT
+multiscale_low_lying_index	done	wbtools_oss	Multi-scale depression index; NEW_ENHANCEMENT
+multiscale_roughness	done	wbtools_oss	Multi-scale surface roughness; NEW_ENHANCEMENT
+multiscale_roughness_signature	done	wbtools_oss	Multi-scale roughness profile; NEW_ENHANCEMENT
+multiscale_std_dev_normals	done	wbtools_oss	Multi-scale surface normal variation; NEW_ENHANCEMENT
+multiscale_std_dev_normals_signature	done	wbtools_oss	Multi-scale normal variation profile; NEW_ENHANCEMENT
+geomorphons	done	wbtools_oss	Landform classification system
+pennock_landform_classification	done	wbtools_oss	Pennock ecogeomorphic classification (7 types)
+dem_void_filling	done	wbtools_pro	Interpolate missing DEM data
+fill_missing_data	done	wbtools_oss	Alternative missing-data method
+feature_preserving_smoothing	done	wbtools_oss	Smooth while preserving edges
+find_ridges	done	wbtools_oss	Ridge feature extraction
+map_off_terrain_objects	done	wbtools_oss	Identify non-terrain features (buildings, trees)
+remove_off_terrain_objects	done	wbtools_oss	Filter non-terrain features
+smooth_vegetation_residual	done	wbtools_pro	Vegetation removal smoothing
+edge_density	done	wbtools_oss	Feature boundary density
+breakline_mapping	done	wbtools_pro	Discontinuity detection
+embankment_mapping	done	wbtools_oss	Embankment/terrace detection
+principal_curvature_direction	done	wbtools_oss	Principal curvature orientation
+convergence_index	done	wbtools_oss	Flow convergence metric
+circular_variance_of_aspect	done	wbtools_oss	Aspect uniformity metric
+average_normal_vector_angular_deviation	done	wbtools_oss	Normal vector variability
+spherical_std_dev_of_normals	done	wbtools_oss	Spherical standard deviation of surface normals
+unsphericity	done	wbtools_oss	Surface sphericity index
+shape_index	done	wbtools_oss	Landform shape index (-1 to 1)
+max_anisotropy_dev	done	wbtools_oss	Maximum directional variation
+max_anisotropy_dev_signature	done	wbtools_oss	Anisotropy signature profile
+max_branch_length	done	wbtools_oss	Longest branch from cell
+hypsometric_analysis	done	wbtools_oss	Elevation distribution analysis
+local_hypsometric_analysis	done	wbtools_pro	Local hypsometric analysis
+hypsometrically_tinted_hillshade	done	wbtools_oss	Elevation-colored hillshade
+low_points_on_headwater_divides	done	wbtools_pro	Drainage divide saddle detection
+assess_route	done	wbtools_pro	Route quality/passability analysis
+shadow_image	done	wbtools_pro	Aspect-based shadow rendering
+shadow_animation	done	wbtools_pro	Animated multi-azimuth shadows
+skyline_analysis	done	wbtools_pro	Skyline extraction from DEM
+time_in_daylight	done	wbtools_oss	Sun exposure duration map
+directional_relief	done	wbtools_oss	Aspect-specific relief
+profile	done	wbtools_oss	Cross-section profile extraction
+rotor	done	wbtools_oss	Rotational curvature metric
+contours_from_raster	done	wbtools_oss	Vector contour lines from DEM
+contours_from_points	done	wbtools_oss	Vector contours from point cloud
+topo_render	done	wbtools_pro	Advanced terrain visualization
+generating_function	done	wbtools_oss	Terrain generation function fitting
+multidirectional_hillshade	done	wbtools_oss	Multi-direction composite hillshade
+max_elev_dev_signature	done	wbtools_oss	Elevation deviation signature curve
+
+---
+
+GIS - RASTER OVERLAY & ANALYSIS (105 tools total: 102 legacy + 3 new)
+Tool_Name	Status	Platform	Category	Notes	Python_Wrapper_Status
+average_overlay	done	wbtools_oss	Overlay	Cell-by-cell average across rasters
+count_if	done	wbtools_oss	Overlay	Count cells matching condition
+highest_position	done	wbtools_oss	Overlay	Index of highest-value raster per cell
+lowest_position	done	wbtools_oss	Overlay	Index of lowest-value raster per cell
+max_absolute_overlay	done	wbtools_oss	Overlay	Maximum absolute value per cell
+max_overlay	done	wbtools_oss	Overlay	Maximum value per cell
+min_absolute_overlay	done	wbtools_oss	Overlay	Minimum absolute value per cell
+min_overlay	done	wbtools_oss	Overlay	Minimum value per cell
+multiply_overlay	done	wbtools_oss	Overlay	Cell-by-cell multiplication
+percent_equal_to	done	wbtools_oss	Overlay	Percentage of cells equal to value
+percent_greater_than	done	wbtools_oss	Overlay	Percentage of cells greater than value
+percent_less_than	done	wbtools_oss	Overlay	Percentage of cells less than value
+pick_from_list	done	wbtools_oss	Overlay	Select raster by index per cell
+standard_deviation_overlay	done	wbtools_oss	Overlay	Cell-by-cell standard deviation
+sum_overlay	done	wbtools_oss	Overlay	Cell-by-cell sum across rasters
+weighted_overlay	done	wbtools_oss	Overlay	Weighted sum of rasters
+weighted_sum	done	wbtools_oss	Overlay	Weighted raster combination
+aggregate_raster	done	wbtools_oss	Aggregation	Reduce resolution by block aggregation
+buffer_raster	done	wbtools_oss	Aggregation	Binary buffer around non-zero cells
+centroid_raster	done	wbtools_oss	Aggregation	Patch centroid identification
+clump	done	wbtools_oss	Aggregation	Group contiguous equal-valued cells
+nibble	done	wbtools_pro	Analysis	Fills masked background cells using nearest-neighbour allocation	ported
+create_plane	done	wbtools_oss	Synthesis	Create raster from planar equation
+find_lowest_or_highest_points	done	wbtools_oss	Analysis	Extract extrema as vector points
+heat_map	done	wbtools_oss	Interpolation	Kernel density estimation
+hexagonal_grid_from_raster_base	done	wbtools_oss	Synthesis	Hexagonal grid on raster extent
+hexagonal_grid_from_vector_base	done	wbtools_oss	Synthesis	Hexagonal grid on vector extent
+idw_interpolation	done	wbtools_oss	Interpolation	Inverse-distance-weighted interpolation
+layer_footprint_raster	done	wbtools_oss	Analysis	Raster layer footprint extraction
+layer_footprint_vector	done	wbtools_oss	Analysis	Vector layer footprint extraction
+map_features	done	wbtools_oss	Analysis	Feature-to-raster mapping
+rectangular_grid_from_raster_base	done	wbtools_oss	Synthesis	Regular grid on raster extent
+rectangular_grid_from_vector_base	done	wbtools_oss	Synthesis	Regular grid on vector extent
+natural_neighbour_interpolation	done	wbtools_oss	Interpolation	Voronoi-based interpolation
+nearest_neighbour_interpolation	done	wbtools_oss	Interpolation	Nearest-neighbor rasterization
+modified_shepard_interpolation	done	wbtools_oss	Interpolation	Modified Shepard method (multiquadric RBF)
+radial_basis_function_interpolation	done	wbtools_oss	Interpolation	RBF interpolation (thin-plate spline, polyharmonic, etc.)
+raster_cell_assignment	done	wbtools_oss	Analysis	Cell-value assignment workflows
+tin_interpolation	done	wbtools_oss	Interpolation	Triangulation-based interpolation
+block_maximum	done	wbtools_oss	Aggregation	Block-wise maximum values
+block_minimum	done	wbtools_oss	Aggregation	Block-wise minimum values
+sieve	done	wbtools_pro	Analysis	Removes small raster patches using clump-area masking and nibble	ported
+NEW_ENHANCEMENT_TOOL_1	done	wbtools_oss	(Category TBD)	NEW - Beyond legacy count (+1 tool)
+
+---
+
+HYDROLOGY (60 tools)
+Tool_Name	Status	Platform	SubCategory	Notes	Python_Wrapper_Status
+breach_depressions_least_cost	done	wbtools_oss	Depression_Removal	Optimal least-cost pit breach carving
+breach_single_cell_pits	done	wbtools_oss	Depression_Removal	Single-cell feature removal
+fill_depressions	done	wbtools_oss	Depression_Removal	Full depression fill to outlet spill elevation
+fill_depressions_planchon_and_darboux	done	wbtools_oss	Depression_Removal	Planchon-Darboux multi-direction fill algorithm
+fill_depressions_wang_and_liu	done	wbtools_oss	Depression_Removal	Wang-Liu priority-flood algorithm
+fill_pits	done	wbtools_oss	Depression_Removal	Lightweight single-cell pit filling
+d8_pointer	done	wbtools_oss	Flow_Direction	D8 steepest-descent pointer
+d8_flow_accum	done	wbtools_oss	Flow_Accumulation	D8 single-direction flow accumulation
+dinf_pointer	done	wbtools_oss	Flow_Direction	D-Infinity multiple-direction pointer
+dinf_flow_accum	done	wbtools_oss	Flow_Accumulation	D-Infinity multiple-direction accumulation
+fd8_pointer	done	wbtools_oss	Flow_Direction	Fully-distributed 8-direction pointer
+fd8_flow_accum	done	wbtools_oss	Flow_Accumulation	FD8 multiple-direction accumulation
+rho8_pointer	done	wbtools_oss	Flow_Direction	Rho8 stochastic pointer
+rho8_flow_accum	done	wbtools_oss	Flow_Accumulation	Rho8 stochastic accumulation
+mdinf_flow_accum	done	wbtools_oss	Flow_Accumulation	MD-Infinity triangular multiple-direction accumulation
+qin_flow_accumulation	done	wbtools_oss	Flow_Accumulation	Qin gradient-dependent MFD accumulation
+quinn_flow_accumulation	done	wbtools_oss	Flow_Accumulation	Quinn accumulation-dependent MFD
+minimal_dispersion_flow_algorithm	done	wbtools_oss	Flow_Accumulation	Minimal dispersion combined direction+accumulation
+flow_accum_full_workflow	done	wbtools_oss	Flow_Accumulation	Complete depression-removal + flow accumulation workflow
+d8_mass_flux	done	wbtools_oss	Flow_Accumulation	D8 mass flux from mass-load raster
+dinf_mass_flux	done	wbtools_oss	Flow_Accumulation	D-Infinity mass flux
+find_noflow_cells	done	wbtools_oss	Diagnostics	Locate cells with no downstream direction
+num_inflowing_neighbours	done	wbtools_oss	Diagnostics	Count upstream neighbors contributing to cell
+find_parallel_flow	done	wbtools_oss	Diagnostics	Identify multi-directional flow cells
+edge_contamination	done	wbtools_oss	Diagnostics	Detect edge-of-grid flow artifacts
+flow_length_diff	done	wbtools_oss	Diagnostics	Compare flow-path lengths
+downslope_flowpath_length	done	wbtools_oss	Diagnostics	Total downstream path length to outlet
+max_upslope_flowpath_length	done	wbtools_oss	Diagnostics	Longest upstream tributary path
+average_upslope_flowpath_length	done	wbtools_oss	Diagnostics	Mean upstream path length
+elevation_above_stream	done	wbtools_oss	Diagnostics	Elevation distance to nearest stream
+elevation_above_stream_euclidean	done	wbtools_oss	Diagnostics	Euclidean distance to nearest stream
+downslope_distance_to_stream	done	wbtools_oss	Diagnostics	Flow-path distance to stream
+average_flowpath_slope	done	wbtools_oss	Diagnostics	Mean slope along flow path
+max_upslope_value	done	wbtools_oss	Diagnostics	Maximum value in upslope area
+longest_flowpath	done	wbtools_oss	Diagnostics	Longest path from highest point to outlet
+depth_to_water	done	wbtools_oss	Diagnostics	Vertical distance to water surface
+fill_burn	done	wbtools_oss	Diagnostics	Stream burning and DEM conditioning
+burn_streams_at_roads	done	wbtools_oss	Diagnostics	Road-stream interaction mapping
+trace_downslope_flowpaths	done	wbtools_oss	Diagnostics	Flow-path tracing from points
+flood_order	done	wbtools_oss	Diagnostics	Flood sequence ordering
+insert_dams	done	wbtools_oss	Diagnostics	Dam insertion points for flow control
+raise_walls	done	wbtools_oss	Diagnostics	Wall elevation for containment
+topological_breach_burn	done	wbtools_oss	Diagnostics	Topology-aware stream conditioning
+stochastic_depression_analysis	done	wbtools_oss	Diagnostics	Random depression characterization
+unnest_basins	done	wbtools_oss	Diagnostics	Basin nesting analysis
+upslope_depression_storage	done	wbtools_oss	Diagnostics	Depression water-holding capacity
+flatten_lakes	done	wbtools_oss	Diagnostics	Flatten enclosed water bodies
+hydrologic_connectivity	done	wbtools_oss	Diagnostics	Hydrologic flow connectivity
+impoundment_size_index	done	wbtools_oss	Diagnostics	Water impoundment area index
+depth_in_sink	done	wbtools_oss	Diagnostics	Depth in enclosed depressions
+sink	done	wbtools_oss	Diagnostics	Sink/depression identification
+basins	done	wbtools_oss	Watersheds	Complete drainage basins from D8 pointer
+watershed_from_raster_pour_points	done	wbtools_oss	Watersheds	Watershed delineation from pour points
+watershed	done	wbtools_oss	Watersheds	Watershed delineation (flow-based)
+jenson_snap_pour_points	done	wbtools_oss	Watersheds	Jenson snap-to-stream algorithm
+snap_pour_points	done	wbtools_oss	Watersheds	Snap outlet points to streams
+subbasins	done	wbtools_oss	Watersheds	Sub-basin delineation
+hillslopes	done	wbtools_oss	Watersheds	Hillslope feature extraction
+strahler_order_basins	done	wbtools_oss	Watersheds	Strahler stream-order based basins
+isobasins	done	wbtools_oss	Watersheds	Isocline-based basin isolation
+
+---
+
+REMOTE SENSING (82+ tools)
+Tool_Name	Status	Platform	Category	Legacy_Equivalent	Notes	Python_Wrapper_Status
+adaptive_filter	done	wbtools_oss	Filter	Yes	Adaptive edge-preserving filter
+anisotropic_diffusion_filter	done	wbtools_oss	Filter	Yes	Anisotropic diffusion smoothing
+balance_contrast_enhancement	done	wbtools_oss	Enhancement	Yes	Histogram balancing
+bilateral_filter	done	wbtools_oss	Filter	Yes	Bilateral smoothing
+canny_edge_detection	done	wbtools_oss	EdgeDetection	Yes	Canny edge detector
+conservative_smoothing_filter	done	wbtools_oss	Filter	Yes	Conservative smoothing
+change_vector_analysis	done	wbtools_oss	Analysis	Yes	Multi-temporal change detection
+closing	done	wbtools_oss	Morphology	Yes	Morphological closing
+corner_detection	done	wbtools_oss	EdgeDetection	Yes	Corner feature detection
+correct_vignetting	done	wbtools_oss	Enhancement	Yes	Vignetting correction
+create_colour_composite	done	wbtools_oss	ColorOps	Yes	RGB composite creation
+diff_of_gaussians_filter	done	wbtools_oss	Filter	Yes	Difference-of-Gaussians filter
+direct_decorrelation_stretch	done	wbtools_oss	Enhancement	Yes	Decorrelation stretch
+diversity_filter	done	wbtools_oss	Filter	Yes	Diversity metric filter
+edge_preserving_mean_filter	done	wbtools_oss	Filter	Yes	Edge-preserving mean filter
+emboss_filter	done	wbtools_oss	Filter	Yes	Emboss effect
+evaluate_training_sites	done	wbtools_oss	Classification	Yes	Training site validation
+fast_almost_gaussian_filter	done	wbtools_oss	Filter	Yes	Approximate Gaussian filter (fast)
+flip_image	done	wbtools_oss	Spatial	Yes	Image flip/rotation
+frost_filter	done	wbtools_oss	Filter	Yes	Frost speckle filter (SAR)
+frangi_filter	done	wbtools_oss	Filter	Yes	Frangi vessel-like structure filter
+fuzzy_knn_classification	done	wbtools_oss	Classification	Yes	Fuzzy k-nearest neighbor
+gabor_filter_bank	done	wbtools_oss	Filter	Yes	Gabor filter bank
+generalize_classified_raster	done	wbtools_oss	Spatial	Yes	Raster class generalization
+generalize_with_similarity	done	wbtools_oss	Spatial	Yes	Similarity-based generalization
+gaussian_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Gaussian contrast stretch
+gaussian_filter	done	wbtools_oss	Filter	Yes	Gaussian smoothing
+gamma_correction	done	wbtools_oss	Enhancement	Yes	Gamma radiometric correction
+gamma_map_filter	done	wbtools_oss	Enhancement	Yes	Gamma mapping filter
+guided_filter	done	wbtools_oss	Filter	Yes	Guided filter
+high_pass_filter	done	wbtools_oss	Filter	Yes	High-pass filter
+high_pass_bilateral_filter	done	wbtools_oss	Filter	Yes	High-pass bilateral filter
+high_pass_median_filter	done	wbtools_oss	Filter	Yes	High-pass median filter
+histogram_equalization	done	wbtools_oss	Enhancement	Yes	Histogram equalization
+histogram_matching	done	wbtools_oss	Enhancement	Yes	Histogram matching (single image)
+histogram_matching_two_images	done	wbtools_oss	Enhancement	Yes	Histogram matching (two images)
+ihs_to_rgb	done	wbtools_oss	ColorOps	Yes	IHS to RGB color conversion
+k_means_clustering	done	wbtools_oss	Classification	Yes	K-means unsupervised clustering
+k_nearest_mean_filter	done	wbtools_oss	Filter	Yes	k-nearest mean filter
+knn_classification	done	wbtools_oss	Classification	Yes	k-nearest neighbor classification
+knn_regression	done	wbtools_oss	Regression	Yes	k-nearest neighbor regression
+logistic_regression	done	wbtools_oss	Regression	Yes	Logistic regression classification
+kuan_filter	done	wbtools_oss	Filter	Yes	Kuan speckle filter (SAR)
+kuwahara_filter	done	wbtools_oss	Filter	Yes	Kuwahara edge-preserving filter
+image_slider	done	wbtools_oss	Analysis	Yes	Multi-band image slider
+image_segmentation	done	wbtools_oss	Spatial	Yes	Image segmentation/clustering
+integral_image_transform	done	wbtools_oss	Analysis	Yes	Integral image computation
+image_stack_profile	done	wbtools_oss	Analysis	Yes	Multi-band profile/transect
+laplacian_filter	done	wbtools_oss	Filter	Yes	Laplacian edge detection
+laplacian_of_gaussians_filter	done	wbtools_oss	Filter	Yes	Laplacian-of-Gaussians filter
+lee_filter	done	wbtools_oss	Filter	Yes	Lee speckle filter (SAR)
+line_detection_filter	done	wbtools_oss	Filter	Yes	Line detection filter
+line_thinning	done	wbtools_oss	Morphology	Yes	Line feature thinning
+majority_filter	done	wbtools_oss	Filter	Yes	Majority/mode filter
+maximum_filter	done	wbtools_oss	Filter	Yes	Maximum filter (dilation)
+mean_filter	done	wbtools_oss	Filter	Yes	Mean smoothing filter
+median_filter	done	wbtools_oss	Filter	Yes	Median filter
+min_max_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Min-max contrast stretch
+min_dist_classification	done	wbtools_oss	Classification	Yes	Minimum distance classification
+minimum_filter	done	wbtools_oss	Filter	Yes	Minimum filter (erosion)
+modified_k_means_clustering	done	wbtools_oss	Classification	Yes	Modified k-means iterative refinement
+mosaic	done	wbtools_oss	Spatial	Yes	Tile mosaic assembly
+mosaic_with_feathering	done	wbtools_oss	Spatial	Yes	Mosaic with feathering
+non_local_means_filter	done	wbtools_oss	Filter	Yes	Non-local means denoising
+nnd_classification	done	wbtools_oss	Classification	Yes	Nearest-neighbor density classification
+normalized_difference_index	done	wbtools_oss	Analysis	Yes	Vegetation/spectral index calculation
+opening	done	wbtools_oss	Morphology	Yes	Morphological opening
+olympic_filter	done	wbtools_oss	Filter	Yes	Olympic filter (exclusion statistics)
+otsu_thresholding	done	wbtools_oss	Enhancement	Yes	Otsu automatic thresholding
+panchromatic_sharpening	done	wbtools_oss	Enhancement	Yes	Pan-sharpening fusion
+parallelepiped_classification	done	wbtools_oss	Classification	Yes	Parallelepiped classification
+percentage_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Percentage contrast stretch
+piecewise_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Piecewise contrast stretch
+percentile_filter	done	wbtools_oss	Filter	Yes	Percentile filter
+prewitt_filter	done	wbtools_oss	Filter	Yes	Prewitt edge detection
+random_forest_classification	done	wbtools_oss	Classification	Yes	Random forest classification
+random_forest_classification_fit	done	wbtools_oss	Classification	Yes	Random forest model fitting
+random_forest_classification_predict	done	wbtools_oss	Classification	Yes	Random forest prediction
+random_forest_regression	done	wbtools_oss	Regression	Yes	Random forest regression
+random_forest_regression_fit	done	wbtools_oss	Regression	Yes	Random forest regression fitting
+random_forest_regression_predict	done	wbtools_oss	Regression	Yes	Random forest regression prediction
+range_filter	done	wbtools_oss	Filter	Yes	Range (max-min) filter
+rgb_to_ihs	done	wbtools_oss	ColorOps	Yes	RGB to IHS color conversion
+remove_spurs	done	wbtools_oss	Morphology	Yes	Spur removal from lines
+roberts_cross_filter	done	wbtools_oss	Filter	Yes	Roberts cross edge detection
+resample	done	wbtools_oss	Spatial	Yes	Image resampling
+savitzky_golay_2d_filter	done	wbtools_oss	Filter	Yes	Savitzky-Golay 2D filter
+scharr_filter	done	wbtools_oss	Filter	Yes	Scharr edge detection
+sigmoidal_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Sigmoidal contrast stretch
+sobel_filter	done	wbtools_oss	Filter	Yes	Sobel edge detection
+split_colour_composite	done	wbtools_oss	ColorOps	Yes	RGB color decomposition
+standard_deviation_contrast_stretch	done	wbtools_oss	Enhancement	Yes	Std-dev contrast stretch
+standard_deviation_filter	done	wbtools_oss	Filter	Yes	Standard deviation filter
+svm_classification	done	wbtools_oss	Classification	Yes	Support vector machine classification
+svm_regression	done	wbtools_oss	Regression	Yes	Support vector machine regression
+thicken_raster_line	done	wbtools_oss	Morphology	Yes	Raster line thickening
+total_filter	done	wbtools_oss	Filter	Yes	Total filter (combined gradient)
+tophat_transform	done	wbtools_oss	Morphology	Yes	Top-hat morphological transform
+unsharp_masking	done	wbtools_oss	Enhancement	Yes	Unsharp masking sharpening
+user_defined_weights_filter	done	wbtools_oss	Filter	Yes	Custom convolution filter
+wiener_filter	done	wbtools_oss	Filter	Yes	Wiener filter
+write_function_memory_insertion	done	wbtools_oss	Analysis	Yes	(Specialized analysis tool)
+
+---
+
+LIDAR PROCESSING (64 active + 1 dormant)
+Tool_Name	Status	Platform	Phase	Notes	Python_Wrapper_Status
+lidar_nearest_neighbour_gridding	done	wbtools_oss	Phase1_Interp	Nearest-neighbor point sampling
+lidar_idw_interpolation	done	wbtools_oss	Phase1_Interp	Inverse-distance-weighted interpolation
+lidar_tin_gridding	done	wbtools_oss	Phase1_Interp	Delaunay TIN with barycentric interpolation
+lidar_radial_basis_function_interpolation	done	wbtools_oss	Phase1_Interp	RBF (thin-plate spline, polyharmonic, etc.)
+lidar_sibson_interpolation	done	wbtools_oss	Phase1_Interp	Sibson/Voronoi natural-neighbor interpolation
+lidar_block_maximum	done	wbtools_oss	Phase1_Block	Block-wise maximum elevation
+lidar_block_minimum	done	wbtools_oss	Phase1_Block	Block-wise minimum elevation
+lidar_point_density	done	wbtools_oss	Phase1_Grid	Point density gridding
+lidar_digital_surface_model	done	wbtools_oss	Phase1_Grid	DSM from point cloud
+lidar_hillshade	done	wbtools_oss	Phase1_Grid	Shaded relief from LiDAR
+filter_lidar_classes	done	wbtools_oss	Phase2_Filt	Exclude/include LAS classification codes
+filter_lidar_noise	done	wbtools_oss	Phase2_Filt	Isolated noise point removal
+filter_lidar_scan_angles	done	wbtools_oss	Phase2_Filt	Filter by scan angle range
+filter_lidar_by_percentile	done	wbtools_oss	Phase2_Filt	Percentile-based elevation filtering
+filter_lidar_by_reference_surface	done	wbtools_oss	Phase2_Filt	Filter relative to reference (DTM/DSM)
+filter_lidar	done	wbtools_oss	Phase2_Filt	Conditional expression filtering
+lidar_thin	done	wbtools_oss	Phase2_Thin	Point thinning (first/last/random returns)
+lidar_thin_high_density	done	wbtools_oss	Phase2_Thin	Density-based thinning
+lidar_elevation_slice	done	wbtools_oss	Phase2_Filter	Elevation range extraction
+lidar_remove_outliers	done	wbtools_oss	Phase2_QA	Outlier identification and removal
+remove_duplicates	done	wbtools_oss	Phase2_QA	Duplicate point removal
+lidar_join	done	wbtools_oss	Phase2_Batch	Merge multiple point clouds
+lidar_tile	done	wbtools_oss	Phase2_Batch	Tile point cloud by spatial grid
+sort_lidar	done	wbtools_oss	Phase2_Util	Sort points by attribute
+split_lidar	done	wbtools_oss	Phase2_Batch	Split cloud by attribute/threshold
+lidar_shift	done	wbtools_oss	Phase2_Util	XYZ coordinate shifting
+modify_lidar	done	wbtools_oss	Phase2_Util	Expression-based point modification
+normalize_lidar	done	wbtools_oss	Phase2_Process	Height normalization by DTM
+height_above_ground	done	wbtools_oss	Phase2_Process	Height as Z values above ground
+lidar_ground_point_filter	done	wbtools_oss	Phase2_Class	Automated ground classification
+classify_lidar	done	wbtools_oss	Phase2_Class	Multi-stage RANSAC classification (roofs, facades, ground)
+classify_overlap_points	done	wbtools_oss	Phase2_Class	Overlapping return classification
+classify_buildings_in_lidar	done	wbtools_oss	Phase2_Class	Building mask enforcement
+lidar_classify_subset	done	wbtools_oss	Phase2_Class	Classify subset matching criteria
+lidar_segmentation	done	wbtools_oss	Phase2_Segment	Point cloud segmentation
+lidar_segmentation_based_filter	done	wbtools_oss	Phase2_Segment	Segment-aware filtering
+clip_lidar_to_polygon	done	wbtools_oss	Phase2_Spatial	Polygon-based clipping
+erase_polygon_from_lidar	done	wbtools_oss	Phase2_Spatial	Polygon-based erasing
+select_tiles_by_polygon	done	wbtools_oss	Phase2_Spatial	Batch polygon selection
+lidar_colourize	done	wbtools_oss	Phase2_Color	RGB colorization
+colourize_based_on_class	done	wbtools_oss	Phase2_Color	Classification-based coloring
+colourize_based_on_point_returns	done	wbtools_oss	Phase2_Color	Return-count coloring
+ascii_to_las	done	wbtools_oss	Phase2_Format	ASCII to LAS conversion
+las_to_ascii	done	wbtools_oss	Phase2_Format	LAS to ASCII conversion
+lidar_contour	done	wbtools_pro	Phase3_Vector	Raster-based contour vectorization
+lidar_construct_vector_tin	done	wbtools_pro	Phase3_Vector	TIN-based vector output
+lidar_hex_bin	done	wbtools_pro	Phase3_Vector	Hexagonal binning with geometry output
+lidar_tile_footprint	done	wbtools_pro	Phase3_Vector	Tile boundary footprints
+las_to_shapefile	done	wbtools_pro	Phase3_Vector	Point-to-shapefile conversion
+lidar_info	done	wbtools_pro	Phase3_Diag	LiDAR metadata and statistics reporting
+lidar_histogram	done	wbtools_pro	Phase3_Diag	Attribute distribution histogram
+lidar_point_stats	done	wbtools_pro	Phase3_Diag	Per-tile point statistics grid
+lidar_point_return_analysis	done	wbtools_pro	Phase3_Diag	Return-count analysis and reporting
+flightline_overlap	done	wbtools_pro	Phase3_QA	Flightline overlap detection
+recover_flightline_info	done	wbtools_pro	Phase3_Diag	Flightline metadata recovery
+find_flightline_edge_points	done	wbtools_pro	Phase3_Diag	Flightline boundary point identification
+lidar_tophat_transform	done	wbtools_pro	Phase3_Process	Top-hat morphological transform
+normal_vectors	done	wbtools_pro	Phase3_Features	Surface normal vector extraction
+lidar_eigenvalue_features	done	wbtools_pro	Phase3_Features	Eigenvector-based feature metrics
+lidar_ransac_planes	done	wbtools_pro	Phase3_Features	RANSAC planar surface detection
+lidar_rooftop_analysis	done	wbtools_pro	Phase3_Features	Building roof structure analysis
+individual_tree_detection	done	wbtools_pro	Phase3_Features	Tree crown/stem detection
+lidar_kappa	done	wbtools_pro	Phase3_QA	Classification accuracy assessment
+improved_ground_point_filter	done	wbtools_pro	Phase3_Process	Multi-stage percentile, TIN, and reference-surface ground filtering	ported
+lidar_dem_full_workflow	NOT_PORTED	(Dormant)	(Dormant)	Legacy dormant exception; not ported
+
+---
+
+STREAM NETWORK ANALYSIS (29 tools)
+Tool_Name	Status	Platform	SubCategory	Notes	Python_Wrapper_Status
+strahler_stream_order	done	wbtools_oss	StreamOrdering	Strahler hierarchy (2-order rule)
+horton_stream_order	done	wbtools_oss	StreamOrdering	Horton order (main-stem emphasis)
+hack_stream_order	done	wbtools_oss	StreamOrdering	Hack order (outlet-to-headwater counting)
+topological_stream_order	done	wbtools_oss	StreamOrdering	Topological distance from outlet
+shreve_stream_magnitude	done	wbtools_oss	StreamMagnitude	Shreve magnitude (headwater summing)
+stream_link_identifier	done	wbtools_oss	LinkAnalysis	Unique link segment IDs
+stream_link_class	done	wbtools_oss	LinkAnalysis	Link type classification (exterior, interior, sink, etc.)
+stream_link_length	done	wbtools_oss	LinkAnalysis	Per-link total length
+stream_link_slope	done	wbtools_oss	LinkAnalysis	Per-link average slope
+stream_slope_continuous	done	wbtools_oss	LinkAnalysis	Per-cell slope along stream
+distance_to_outlet	done	wbtools_oss	DistanceMetrics	Flow-path distance to outlet
+length_of_upstream_channels	done	wbtools_oss	DistanceMetrics	Total upstream channel length
+tributary_identifier	done	wbtools_oss	LinkAnalysis	Tributary numbering/labeling
+extract_streams	done	wbtools_oss	Extraction	Stream extraction from flow accumulation
+extract_valleys	done	wbtools_oss	Extraction	Valley extraction (lq, jandr, pandd variants)
+raster_streams_to_vector	done	wbtools_oss	Conversion	Raster to vector stream conversion
+rasterize_streams	done	wbtools_oss	Conversion	Vector to raster stream rasterization
+find_main_stem	done	wbtools_oss	NetworkAnalysis	Outlet-to-source main channel tracing
+farthest_channel_head	done	wbtools_oss	NetworkAnalysis	Most-distant headwater identification
+long_profile	done	wbtools_oss	Profile	Stream profile from D8 pointer + DEM
+long_profile_from_points	done	wbtools_oss	Profile	Vector point-based profile generation
+remove_short_streams	done	wbtools_oss	Filtering	Remove stream segments below minimum length
+repair_stream_vector_topology	done	wbtools_pro	VectorTopology	Intersection splitting + dangling arc correction
+vector_stream_network_analysis	done	wbtools_pro	AdvancedAnalysis	Network traversal with key-point routing and ridge-cutting
+prune_vector_streams	done	wbtools_pro	VectorTopology	Legacy priority-flood + squared-distance snapping + TUCL thresholding
+river_centerlines	done	wbtools_pro	VectorSynthesis	Raster EDT + thinning + endpoint trace + braid correction
+burn_streams	done	wbtools_oss	Diagnostics	Rasterize-and-burn stream vector into DEM workflow	ported
+horton_ratios	done	wbtools_oss	AdvancedAnalysis	Bifurcation, length, area, and slope Horton ratios from stream network	ported
+ridge_and_valley_vectors	done	wbtools_pro	VectorSynthesis	DEM-derived ridge and valley centreline extraction workflow	ported
+
+---
+
+MATH & STATISTICAL TOOLS (98 ported, 99 legacy including 1 exception)
+Tool_Name	Status	Platform	Category	Notes	Python_Wrapper_Status
+abs	done	wbtools_oss	UnaryMath	Absolute value
+arccos	done	wbtools_oss	UnaryMath	Inverse cosine (radians)
+arcosh	done	wbtools_oss	UnaryMath	Inverse hyperbolic cosine
+arcsin	done	wbtools_oss	UnaryMath	Inverse sine (radians)
+arctan	done	wbtools_oss	UnaryMath	Inverse tangent (radians)
+arsinh	done	wbtools_oss	UnaryMath	Inverse hyperbolic sine
+artanh	done	wbtools_oss	UnaryMath	Inverse hyperbolic tangent
+bool_not	done	wbtools_oss	UnaryMath	Logical NOT
+ceil	done	wbtools_oss	UnaryMath	Round up to integer
+cos	done	wbtools_oss	UnaryMath	Cosine (radians)
+cosh	done	wbtools_oss	UnaryMath	Hyperbolic cosine
+decrement	done	wbtools_oss	UnaryMath	Subtract 1 from each cell
+exp	done	wbtools_oss	UnaryMath	Exponential (e^x)
+exp2	done	wbtools_oss	UnaryMath	2^x exponential
+floor	done	wbtools_oss	UnaryMath	Round down to integer
+increment	done	wbtools_oss	UnaryMath	Add 1 to each cell
+is_nodata	done	wbtools_oss	UnaryMath	Identify nodata cells
+ln	done	wbtools_oss	UnaryMath	Natural logarithm
+log10	done	wbtools_oss	UnaryMath	Base-10 logarithm
+log2	done	wbtools_oss	UnaryMath	Base-2 logarithm
+negate	done	wbtools_oss	UnaryMath	Negate values (-x)
+reciprocal	done	wbtools_oss	UnaryMath	1/x reciprocal
+round	done	wbtools_oss	UnaryMath	Round to nearest integer
+sin	done	wbtools_oss	UnaryMath	Sine (radians)
+sinh	done	wbtools_oss	UnaryMath	Hyperbolic sine
+sqrt	done	wbtools_oss	UnaryMath	Square root
+square	done	wbtools_oss	UnaryMath	x^2 squaring
+tan	done	wbtools_oss	UnaryMath	Tangent (radians)
+tanh	done	wbtools_oss	UnaryMath	Hyperbolic tangent
+to_degrees	done	wbtools_oss	UnaryMath	Radians to degrees conversion
+to_radians	done	wbtools_oss	UnaryMath	Degrees to radians conversion
+truncate	done	wbtools_oss	UnaryMath	Truncate to integer (towards zero)
+add	done	wbtools_oss	BinaryMath	Addition (two rasters)
+subtract	done	wbtools_oss	BinaryMath	Subtraction (two rasters)
+multiply	done	wbtools_oss	BinaryMath	Multiplication (two rasters)
+divide	done	wbtools_oss	BinaryMath	Division (two rasters)
+modulo	done	wbtools_oss	BinaryMath	Modulo operation (remainder)
+integer_division	done	wbtools_oss	BinaryMath	Integer division (floor divide)
+power	done	wbtools_oss	BinaryMath	Power operation (x^y)
+atan2	done	wbtools_oss	BinaryMath	Two-argument arctangent
+bool_and	done	wbtools_oss	BinaryMath	Logical AND
+bool_or	done	wbtools_oss	BinaryMath	Logical OR
+bool_xor	done	wbtools_oss	BinaryMath	Logical XOR
+equal_to	done	wbtools_oss	BinaryMath	Equality comparison
+not_equal_to	done	wbtools_oss	BinaryMath	Inequality comparison
+less_than	done	wbtools_oss	BinaryMath	Less-than comparison
+greater_than	done	wbtools_oss	BinaryMath	Greater-than comparison
+conditional_evaluation	done	wbtools_oss	Indexing	If-then-else raster expression
+pick_from_list	done	wbtools_oss	Indexing	Select from multi-raster list by index
+raster_calculator	done	wbtools_oss	General	Multi-raster expression evaluation
+raster_summary_stats	done	wbtools_oss	Statistics	Summary statistics (mean, std, range, etc.)
+raster_histogram	done	wbtools_oss	Statistics	Raster value histogram
+min	done	wbtools_oss	Statistics	Minimum value
+max	done	wbtools_oss	Statistics	Maximum value
+quantiles	done	wbtools_oss	Statistics	Percentile/quantile values
+list_unique_values	done	wbtools_oss	Statistics	Unique value list (vector attributes)
+list_unique_values_raster	done	wbtools_oss	Statistics	Unique raster values
+cumulative_distribution	done	wbtools_oss	Statistics	Cumulative distribution function
+z_scores	done	wbtools_oss	Statistics	Standardize to z-scores
+rescale_value_range	done	wbtools_oss	Statistics	Linear rescaling to target range
+root_mean_square_error	done	wbtools_oss	Statistics	RMSE calculation
+ks_normality_test	done	wbtools_oss	Statistics	Kolmogorov-Smirnov normality test
+paired_sample_t_test	done	wbtools_oss	Statistics	Paired t-test (two sample sets)
+two_sample_ks_test	done	wbtools_oss	Statistics	Two-sample KS test
+wilcoxon_signed_rank_test	done	wbtools_oss	Statistics	Wilcoxon signed-rank (paired) test
+anova	done	wbtools_oss	Statistics	Analysis of variance across groups
+attribute_histogram	done	wbtools_oss	Statistics	Vector attribute distribution histogram
+attribute_scattergram	done	wbtools_oss	Statistics	Attribute scatter plot (XY relationship)
+attribute_correlation	done	wbtools_oss	Statistics	Attribute pairwise correlations
+cross_tabulation	done	wbtools_oss	Statistics	Contingency table analysis
+phi_coefficient	done	wbtools_oss	Statistics	Phi association coefficient
+kappa_index	done	wbtools_oss	Statistics	Cohen's kappa classification agreement
+crispness_index	done	wbtools_oss	Statistics	Classification crispness metric
+image_correlation	done	wbtools_oss	SpatialStats	Raster image correlation
+image_autocorrelation	done	wbtools_oss	SpatialStats	Raster spatial autocorrelation
+image_correlation_neighbourhood_analysis	done	wbtools_oss	SpatialStats	Neighborhood autocorrelation analysis
+image_regression	done	wbtools_oss	SpatialStats	Regression between two rasters
+random_forest_classification	done	wbtools_oss	ML_Classification	Random forest classifier
+random_forest_classification_fit	done	wbtools_oss	ML_Classification	Random forest model fitting
+random_forest_classification_predict	done	wbtools_oss	ML_Classification	Random forest prediction
+random_forest_regression	done	wbtools_oss	ML_Regression	Random forest regression
+random_forest_regression_fit	done	wbtools_oss	ML_Regression	Random forest model fitting
+random_forest_regression_predict	done	wbtools_oss	ML_Regression	Random forest prediction
+svm_classification	done	wbtools_oss	ML_Classification	Support vector machine classification
+svm_regression	done	wbtools_oss	ML_Regression	Support vector machine regression
+logistic_regression	done	wbtools_oss	ML_Classification	Logistic regression classifier
+dbscan	done	wbtools_oss	ML_Clustering	DBSCAN clustering algorithm
+principal_component_analysis	done	wbtools_oss	Multivariate	PCA dimension reduction
+inverse_pca	done	wbtools_oss	Multivariate	Inverse PCA reconstruction
+trend_surface	done	wbtools_oss	Multivariate	Polynomial trend surface fitting
+trend_surface_vector_points	done	wbtools_oss	Multivariate	Trend surface from vector points
+turning_bands_simulation	done	wbtools_oss	Multivariate	Stochastic field simulation
+zonal_statistics	done	wbtools_oss	Statistics	Zone-based summary statistics
+inplace_add	done	wbtools_oss	InPlace	In-place raster addition
+inplace_subtract	done	wbtools_oss	InPlace	In-place raster subtraction
+inplace_multiply	done	wbtools_oss	InPlace	In-place raster multiplication
+inplace_divide	done	wbtools_oss	InPlace	In-place raster division
+random_field	done	wbtools_oss	Random	Random field generation
+random_sample	done	wbtools_oss	Random	Random point sampling
+hdbscan_clustering	NOT_PORTED	(Legacy_Exception)	ML_Clustering	INTENTIONAL EXCEPTION: Failed legacy experiment; excluded from new backend
+

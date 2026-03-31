@@ -1,0 +1,5 @@
+case,operation,iters,total_us,avg_us,repeats,min_avg_us,max_avg_us,cells,total_vertices
+uniform_small,voronoi,4,36595.375,9148.844,3,8686.302,12285.166,3000,20956
+uniform_medium,voronoi,2,110511.167,55255.583,3,54574.334,55864.312,12000,83937
+uniform_large,voronoi,1,221752.250,221752.250,3,220600.291,222333.625,30000,209904
+clustered_medium,voronoi,2,111182.667,55591.334,3,55343.854,57628.875,12000,83950

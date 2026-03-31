@@ -1,0 +1,88 @@
+[package]
+name        = "wbvector"
+version     = "0.1.0"
+edition     = "2021"
+authors = ["John Lindsay, Whitebox Geospatial Inc."]
+description = "Pure-Rust library for reading and writing vector GIS formats"
+license     = "MIT OR Apache-2.0"
+readme      = "README.md"
+repository  = "https://github.com/jblindsay/whitebox_next_gen"
+homepage    = "https://github.com/jblindsay/whitebox_next_gen"
+documentation = "https://docs.rs/wbvector"
+keywords    = ["gis", "geospatial", "shapefile", "geojson", "geopackage"]
+categories  = ["encoding", "science::geo"]
+exclude     = ["data/"]
+
+[features]
+default = []
+kmz = ["dep:zip"]
+osmpbf = ["dep:osmpbfreader"]
+geoparquet = ["dep:parquet", "dep:serde_json"]
+
+# ── Core dependencies ────────────────────────────────────────────────────────
+[dependencies]
+thiserror = "1"
+flatbuffers = "24.12.23"
+wbprojection = { path = "../wbprojection", version = "0.1.0" }
+zip = { version = "0.6", optional = true, default-features = false, features = ["deflate"] }
+osmpbfreader = { version = "0.16", optional = true }
+parquet = { version = "54", optional = true }
+serde_json = { version = "1", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "shapefile_io"
+path = "examples/shapefile_io.rs"
+
+[[example]]
+name = "geojson_io"
+path = "examples/geojson_io.rs"
+
+[[example]]
+name = "flatgeobuf_io"
+path = "examples/flatgeobuf_io.rs"
+
+[[example]]
+name = "geopackage_io"
+path = "examples/geopackage_io.rs"
+
+[[example]]
+name = "geoparquet_io"
+path = "examples/geoparquet_io.rs"
+required-features = ["geoparquet"]
+
+[[example]]
+name = "convert"
+path = "examples/convert.rs"
+
+[[example]]
+name = "gml_io"
+path = "examples/gml_io.rs"
+
+[[example]]
+name = "gpx_io"
+path = "examples/gpx_io.rs"
+
+[[example]]
+name = "kml_io"
+path = "examples/kml_io.rs"
+
+[[example]]
+name = "kmz_io"
+path = "examples/kmz_io.rs"
+required-features = ["kmz"]
+
+[[example]]
+name = "mapinfo_io"
+path = "examples/mapinfo_io.rs"
+
+[[example]]
+name = "osmpbf_io"
+path = "examples/osmpbf_io.rs"
+required-features = ["osmpbf"]
+
+[[example]]
+name = "reproject_io"
+path = "examples/reproject_io.rs"

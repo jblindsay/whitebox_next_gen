@@ -1,0 +1,35 @@
+[package]
+name = "wbgeotiff"
+version = "0.1.0"
+edition = "2021"
+authors = ["John Lindsay, Whitebox Geospatial Inc."]
+description = "Shared GeoTIFF / BigTIFF / COG read-write engine for Whitebox crates"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/jblindsay/whitebox_next_gen"
+homepage = "https://github.com/jblindsay/whitebox_next_gen"
+documentation = "https://docs.rs/wbgeotiff"
+keywords = ["geotiff", "bigtiff", "cog", "gis", "raster"]
+categories = ["science", "encoding", "filesystem"]
+
+[lib]
+name = "wbgeotiff"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = "1.0"
+flate2 = "1"
+zstd = "0.13"
+ruzstd = "0.8"
+lz4_flex = "0.11"
+weezl = "0.1"
+jpeg-encoder = "0.6"
+jpeg-decoder = "0.3"
+webp = "0.3"
+png = "0.17"
+zune-core = "0.5"
+zune-jpegxl = "0.5"
+jxl-oxide = "0.12"
+
+[dev-dependencies]
+tempfile = "3"

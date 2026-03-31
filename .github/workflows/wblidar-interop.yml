@@ -1,0 +1,115 @@
+name: wblidar external interoperability
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixture_archive_url:
+        description: "Optional URL to a .tar.gz/.tgz/.zip archive containing LAZ fixtures"
+        required: false
+        type: string
+      min_fixture_profiles:
+        description: "Optional minimum fixture profile count required for pass (non-negative integer)"
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - "crates/wblidar/**"
+      - ".github/workflows/wblidar-interop.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/wblidar/**"
+      - ".github/workflows/wblidar-interop.yml"
+
+jobs:
+  strict-interop:
+    name: strict interop validation (pdal)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install PDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pdal || true
+          if ! command -v pdal >/dev/null 2>&1; then
+            echo "pdal installation failed or package unavailable on this runner"
+            exit 1
+          fi
+          pdal --version
+
+      - name: Prepare optional fixture archive
+        id: fixtures
+        env:
+          FIXTURE_ARCHIVE_URL: ${{ github.event.inputs.fixture_archive_url }}
+        run: |
+          fixture_dir=""
+          if [ -n "${FIXTURE_ARCHIVE_URL}" ]; then
+            echo "downloading fixture archive: ${FIXTURE_ARCHIVE_URL}"
+            mkdir -p "${GITHUB_WORKSPACE}/artifacts/interop-fixtures"
+            archive_path="${GITHUB_WORKSPACE}/artifacts/interop-fixtures/fixtures.bundle"
+            curl -fL "${FIXTURE_ARCHIVE_URL}" -o "${archive_path}"
+
+            case "${FIXTURE_ARCHIVE_URL}" in
+              *.tar.gz|*.tgz)
+                tar -xzf "${archive_path}" -C "${GITHUB_WORKSPACE}/artifacts/interop-fixtures"
+                ;;
+              *.zip)
+                unzip -q "${archive_path}" -d "${GITHUB_WORKSPACE}/artifacts/interop-fixtures"
+                ;;
+              *)
+                echo "unsupported fixture archive format: ${FIXTURE_ARCHIVE_URL}"
+                exit 1
+                ;;
+            esac
+
+            fixture_dir="${GITHUB_WORKSPACE}/artifacts/interop-fixtures"
+            echo "fixture directory prepared at ${fixture_dir}"
+          else
+            echo "no fixture archive URL supplied; running generated-profile validation only"
+          fi
+
+          echo "fixture_dir=${fixture_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run strict external interoperability test
+        env:
+          WBLIDAR_LAZ_INTEROP_REPORT: ${{ github.workspace }}/artifacts/wblidar-interop-report.json
+          WBLIDAR_LAZ_INTEROP_FIXTURE_DIR: ${{ steps.fixtures.outputs.fixture_dir }}
+          WBLIDAR_LAZ_INTEROP_MIN_FIXTURE_PROFILES: ${{ github.event.inputs.min_fixture_profiles }}
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/artifacts"
+          cargo test -q -p wblidar --test standards_external_validation standards_outputs_validate_in_external_consumers_strict -- --ignored
+
+      - name: Render interoperability markdown summary
+        if: always()
+        run: |
+          if [ -f "${GITHUB_WORKSPACE}/artifacts/wblidar-interop-report.json" ]; then
+            python3 "${GITHUB_WORKSPACE}/crates/wblidar/scripts/laz_interop_report_summary.py" \
+              "${GITHUB_WORKSPACE}/artifacts/wblidar-interop-report.json" \
+              --output "${GITHUB_WORKSPACE}/artifacts/wblidar-interop-summary.md"
+            cat "${GITHUB_WORKSPACE}/artifacts/wblidar-interop-summary.md" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "interop report missing; summary not generated" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload interoperability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wblidar-interop-report
+          path: artifacts/wblidar-interop-report.json
+          if-no-files-found: warn
+
+      - name: Upload interoperability summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wblidar-interop-summary
+          path: artifacts/wblidar-interop-summary.md
+          if-no-files-found: warn

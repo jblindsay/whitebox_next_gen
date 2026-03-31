@@ -1,0 +1,6 @@
+name,file,expected_lenient,expected_strict,notes
+bng_27700_legacy,bng_27700_legacy.prj,27700,27700,UK National Grid legacy WKT1
+etrs89_utm32n_legacy,etrs89_utm32n_legacy.prj,25832,25832,ETRS89 UTM zone 32N legacy WKT1
+portugal_tm06_3763_legacy,portugal_tm06_3763_legacy.prj,3763,3763,Portugal TM06 legacy WKT1
+ggrs87_2100_legacy,ggrs87_2100_legacy.prj,2100,2100,Greece GGRS87 Greek Grid legacy WKT1
+wgs84_utm33n_legacy,wgs84_utm33n_legacy.prj,32633,32633,WGS84 UTM zone 33N legacy WKT1

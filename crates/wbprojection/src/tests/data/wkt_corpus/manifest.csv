@@ -1,0 +1,10 @@
+name,file,expected_lenient,expected_strict,notes
+embedded_authority_4326,embedded_authority_4326.wkt,4326,4326,explicit EPSG authority marker
+wkt2_id_4326,wkt2_id_4326.wkt,4326,4326,WKT2 ID authority
+legacy_csrs_utm17_a,legacy_csrs_utm17_a.prj,2958,,legacy ESRI-style CSRS UTM 17N
+legacy_csrs_utm17_b,legacy_csrs_utm17_b.prj,2958,,legacy ESRI-style CSRS UTM 17N variant
+nad83_utm14n,nad83_utm14n.prj,26914,26914,NAD83 UTM zone 14N
+nad83_utm17n,nad83_utm17n.prj,26917,26917,NAD83 UTM zone 17N
+wgs84_geogcs,wgs84_geogcs.prj,4326,4326,WGS84 geographic WKT1
+name_only_epsg_token,name_only_epsg_token.wkt,,,EPSG token in name only should not resolve
+not_specified,not_specified.prj,,,non-WKT placeholder

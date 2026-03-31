@@ -1,0 +1,41 @@
+[package]
+name = "wbtopology"
+version = "0.1.0"
+edition = "2021"
+authors = ["John Lindsay, Whitebox Geospatial Inc."]
+description = "A pure-Rust topology suite inspired by JTS"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/jblindsay/whitebox_next_gen"
+homepage = "https://github.com/jblindsay/whitebox_next_gen"
+documentation = "https://docs.rs/wbtopology"
+exclude = ["dev/"]
+keywords = ["topology", "geometry", "gis", "jts", "spatial"]
+categories = ["algorithms", "science::geo"]
+
+[lib]
+name = "wbtopology"
+path = "src/lib.rs"
+
+[dependencies]
+wbvector = { path = "../wbvector", version = "0.1.0" }
+rayon = { version = "1.10", optional = true }
+
+[features]
+default = []
+parallel = ["dep:rayon"]
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "spatial_index_bench"
+harness = false
+
+[[bench]]
+name = "hull_bench"
+harness = false
+
+[[example]]
+name = "vector_interop"
+path = "examples/vector_interop.rs"

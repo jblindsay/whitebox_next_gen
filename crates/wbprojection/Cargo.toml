@@ -1,0 +1,40 @@
+[package]
+name = "wbprojection"
+version = "0.1.0"
+edition = "2021"
+authors = ["John Lindsay, Whitebox Geospatial Inc."]
+description = "Whitebox Projections is a map projection library for Rust, inspired by PROJ"
+license = "MIT OR Apache-2.0"
+keywords = ["gis", "projection", "cartography", "geodesy", "maps"]
+categories = ["science", "mathematics"]
+repository = "https://github.com/jblindsay/whitebox_next_gen"
+homepage = "https://github.com/jblindsay/whitebox_next_gen"
+documentation = "https://docs.rs/wbprojection"
+readme = "README.md"
+exclude = ["dev/"]
+
+[dependencies]
+thiserror = "1.0"
+wbgeotiff = { path = "../wbgeotiff", version = "0.1.0" }
+wide = "1.2"
+
+[dev-dependencies]
+approx = "0.5"
+criterion = "0.5"
+
+[[bench]]
+name = "simd_benchmarks"
+harness = false
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+
+[[example]]
+name = "simd_batch_transform"
+path = "examples/simd_batch_transform.rs"

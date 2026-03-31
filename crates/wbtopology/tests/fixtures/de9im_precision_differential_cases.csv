@@ -1,0 +1,16 @@
+# case_id,scale,parity_status
+near_points_snap_equal,100,converge
+near_points_snap_equal,1000,converge
+near_points_snap_equal,10000,converge
+near_point_line_endpoint_snap,100,converge
+near_point_line_endpoint_snap,1000,converge
+near_point_line_endpoint_snap,10000,converge
+near_polygon_boundary_snap,100,converge
+near_polygon_boundary_snap,1000,converge
+near_polygon_boundary_snap,10000,converge
+near_line_line_touch_snap,100,converge
+near_line_line_touch_snap,1000,converge
+near_line_line_touch_snap,10000,converge
+near_line_polygon_cross_snap,100,converge
+near_line_polygon_cross_snap,1000,converge
+near_line_polygon_cross_snap,10000,converge

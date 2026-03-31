@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml" xmlns:gv="https://geovec.rs/gml"><gml:featureMember><gv:feature fid="0" srsName="EPSG:4326"><gv:geometry><gml:LineString srsName="EPSG:4326"><gml:posList>-0.1 51.5 -0.11 51.52 -0.12 51.53</gml:posList></gml:LineString></gv:geometry><gv:attr name="name" type="Text">A-Road</gv:attr><gv:attr name="speed" type="Integer">50</gv:attr></gv:feature></gml:featureMember></gml:FeatureCollection>

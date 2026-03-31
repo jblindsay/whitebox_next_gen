@@ -1,0 +1,20 @@
+# name|eps|a_shell|a_holes|b_shell|b_holes|mode
+# shell/hole encoding:
+#   - rectangle shorthand: x0:y0:x1:y1
+#   - explicit ring: poly:x1:y1,x2:y2,x3:y3,...
+# hole lists are ';' separated ring specs, '-' means none
+overlap_basic|1e-9|0:0:2:2|-|1:0:3:2|-|strict
+edge_touch|1e-9|0:0:1:1|-|1:0:2:1|-|strict
+point_touch|1e-9|0:0:1:1|-|1:1:2:2|-|relaxed
+containment_simple|1e-9|0:0:4:4|-|1:1:3:3|-|strict
+containment_holey_contained|1e-9|0:0:10:10|-|2:2:8:8|4:4:6:6|strict
+hole_boundary_touch|1e-9|0:0:6:6|2:2:4:4|4:2.5:5:3.5|-|strict
+non_containment_donut_overlap|1e-9|0:0:10:10|3:3:7:7|-2:0:8:10|1:3:5:7|strict
+tiny_offset_overlap|1e-9|0:0:1:1|-|0.000001:0.000001:1.000001:1.000001|-|relaxed
+near_collinear_sliver|1e-9|0:0:10:1|-|poly:2:0.999999,9:1.000001,9:2,2:2|-|relaxed
+ultra_thin_corridor_touch|1e-9|0:0:2:2|-|poly:2:0.9,4:0.9,4:1.1,2:1.1|-|relaxed
+
+# Mixed-scale / large-magnitude fixtures (Milestone D robustness)
+large_scale_shifted_overlap|1e-8|1000000:1000000:1010000:1010000|-|1000500:999500:1010500:1009500|-|relaxed
+large_scale_thin_vertical_slice|1e-8|1000000:1000000:1010000:1010000|-|1005000:999000:1005002:1011000|-|relaxed
+large_scale_hole_boundary_proximity|1e-8|1000000:1000000:1010000:1010000|1004000:1004000:1006000:1006000|1006000:1004999.5:1008000:1005000.5|-|relaxed

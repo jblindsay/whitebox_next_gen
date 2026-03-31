@@ -1,0 +1,10 @@
+name,file,expected_lenient,actual_lenient,pass_lenient,expected_strict,actual_strict,pass_strict,ambiguous_lenient,ambiguous_strict,top1_code,top1_score,top2_code,top2_score
+embedded_authority_4326,embedded_authority_4326.wkt,4326,4326,true,4326,4326,true,false,false,4326,999.000000,,0.000000
+wkt2_id_4326,wkt2_id_4326.wkt,4326,4326,true,4326,4326,true,false,false,4326,999.000000,,0.000000
+legacy_csrs_utm17_a,legacy_csrs_utm17_a.prj,2958,2958,true,,,true,true,true,2958,98.000000,2150,98.000000
+legacy_csrs_utm17_b,legacy_csrs_utm17_b.prj,2958,32617,false,,,true,true,true,32617,90.000000,32417,90.000000
+nad83_utm14n,nad83_utm14n.prj,26914,32614,false,26914,,false,true,true,32614,90.000000,32414,90.000000
+nad83_utm17n,nad83_utm17n.prj,26917,32617,false,26917,,false,true,true,32617,90.000000,32417,90.000000
+wgs84_geogcs,wgs84_geogcs.prj,4326,4148,false,4326,4148,false,false,false,4148,200.000000,,0.000000
+name_only_epsg_token,name_only_epsg_token.wkt,,,true,,,true,false,false,,0.000000,,0.000000
+not_specified,not_specified.prj,,,true,,,true,false,false,,0.000000,,0.000000

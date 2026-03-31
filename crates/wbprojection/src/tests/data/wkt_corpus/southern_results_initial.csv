@@ -1,0 +1,6 @@
+name,file,expected_lenient,actual_lenient,pass_lenient,expected_strict,actual_strict,pass_strict,ambiguous_lenient,ambiguous_strict,top1_code,top1_score,top2_code,top2_score
+gda94_mga55_28355_legacy,gda94_mga55_28355_legacy.prj,28355,28355,true,28355,,false,true,true,28355,93.000000,25855,93.000000
+gda2020_mga55_7855_legacy,gda2020_mga55_7855_legacy.prj,7855,28355,false,7855,,false,true,true,28355,93.000000,25855,93.000000
+nzgd2000_nztm_2193_legacy,nzgd2000_nztm_2193_legacy.prj,2193,2193,true,2193,2193,true,false,false,2193,86.000000,2933,78.000000
+wgs84_utm56s_32756_legacy,wgs84_utm56s_32756_legacy.prj,32756,32756,true,32756,32756,true,false,false,32756,120.000000,32656,105.000000
+sirgas2000_utm23s_31983_legacy,sirgas2000_utm23s_31983_legacy.prj,31983,31983,true,31983,31983,true,false,false,31983,106.000000,29193,90.000000

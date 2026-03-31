@@ -1,0 +1,19 @@
+[package]
+name = "wbw_r"
+version = "2.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = []
+pro = ["dep:wbtools_pro"]
+
+[dependencies]
+wbcore = { path = "../wbcore" }
+wblicense_core = { path = "../wblicense_core" }
+wbtools_oss = { path = "../wbtools_oss" }
+wbtools_pro = { path = "../../../wbtools_pro", optional = true }
+serde_json.workspace = true
+extendr-api = "0.8.1"

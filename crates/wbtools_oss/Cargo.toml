@@ -1,0 +1,46 @@
+[package]
+name = "wbtools_oss"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wbcore = { path = "../wbcore" }
+serde_json.workspace = true
+wbraster = { path = "../wbraster" }
+wbgeotiff = { path = "../wbgeotiff" }
+wbvector = { path = "../wbvector" }
+wbprojection = { path = "../wbprojection" }
+wbtopology = { path = "../wbtopology" }
+wblidar = { path = "../wblidar" }
+rayon = "1"
+rand = "0.10.0"
+wide = "1.2.0"
+chrono = { version = "0.4", default-features = true }
+image = "0.25"
+kdtree = "0.8.0"
+evalexpr = "13.1.0"
+nalgebra = "0.34.1"
+smartcore = "0.4.9"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "rank_filters_bench"
+harness = false
+
+[[bench]]
+name = "bilateral_filters_bench"
+harness = false
+
+[[bench]]
+name = "feature_preserving_smoothing_bench"
+harness = false
+
+[[bench]]
+name = "geomorphons_bench"
+harness = false
+
+[[bench]]
+name = "individual_tree_segmentation_bench"
+harness = false

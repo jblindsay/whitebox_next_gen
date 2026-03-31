@@ -1,0 +1,13 @@
+# name|distance|outer|holes|min_components|max_components|min_total_area|max_total_area
+# outer and holes use ring syntax:
+# - rect shorthand: x0:y0:x1:y1
+# - poly shorthand: poly:x0:y0,x1:y1,x2:y2,...
+# holes are ';' separated, or '-' for none
+
+square_shrink|-1.0|0:0:10:10|-|1|1|60.0|68.0
+square_full_collapse|-2.0|0:0:2:2|-|0|0|0.0|0.0
+l_shape_single|-0.5|poly:0:0,10:0,10:6,6:6,6:10,0:10|-|1|2|20.0|120.0
+h_shape_split|-3.0|0:0:30:20|poly:0:6,13:6,13:14,0:14;poly:17:6,30:6,30:14,17:14|1|6|1.0|400.0
+thin_corridor_disconnect|-0.75|poly:0:0,20:0,20:4,12:4,12:12,8:12,8:4,0:4|-|1|4|1.0|200.0
+hole_near_boundary_consumes|-0.8|0:0:12:12|poly:0.5:0.5,11.5:0.5,11.5:11.5,0.5:11.5|1|1|90.0|120.0
+large_coords_sliver|-0.5|poly:1000000:1000000,1000030:1000000,1000030:1000010,1000018:1000010,1000018:1000030,1000012:1000030,1000012:1000010,1000000:1000010|-|1|4|1.0|1000.0

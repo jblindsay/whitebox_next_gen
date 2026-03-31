@@ -1,0 +1,23 @@
+{
+  "alg": "EdDSA",
+  "kid": "k1",
+  "payload": {
+    "schema_version": 1,
+    "entitlement_id": "ent_fixture_001",
+    "customer_id": "cust_fixture_001",
+    "product": "whitebox_next_gen",
+    "tier": "Pro",
+    "capabilities": {
+      "max_tier": "Pro",
+      "allowed_tool_ids": [
+        "aspect",
+        "slope"
+      ]
+    },
+    "not_before_unix": 1699999940,
+    "expires_at_unix": 1700086400,
+    "issued_at_unix": 1699999940,
+    "issuer": "radiant-garden"
+  },
+  "signature_b64url": "bC4RWKKhHOXsuSyDH7UQlgEkkq_yqhauDIZmcXmC2yoY8nMrURjAFieesZ9pZk4Xd8wvsRIeaEVeBLF8l_uKDg"
+}

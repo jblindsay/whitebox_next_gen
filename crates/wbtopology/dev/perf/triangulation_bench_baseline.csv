@@ -1,0 +1,5 @@
+case,operation,iters,total_us,avg_us,repeats,min_avg_us,max_avg_us,triangles,input_points
+uniform_small,triangulation,3,43096.000,14365.333,3,14056.931,19342.708,9967,5000
+uniform_medium,triangulation,2,220849.667,110424.833,3,109860.979,110939.604,39957,20000
+uniform_large,triangulation,1,503709.167,503709.167,3,501736.084,508872.250,99942,50000
+clustered_medium,triangulation,2,234014.083,117007.042,3,116721.084,117010.896,39967,20000

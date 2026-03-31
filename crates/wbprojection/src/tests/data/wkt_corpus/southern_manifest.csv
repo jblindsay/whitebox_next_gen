@@ -1,0 +1,6 @@
+name,file,expected_lenient,expected_strict,notes
+gda94_mga55_28355_legacy,gda94_mga55_28355_legacy.prj,28355,28355,Australia GDA94 MGA zone 55
+gda2020_mga55_7855_legacy,gda2020_mga55_7855_legacy.prj,7855,7855,Australia GDA2020 MGA zone 55
+nzgd2000_nztm_2193_legacy,nzgd2000_nztm_2193_legacy.prj,2193,2193,New Zealand NZTM2000 legacy style
+wgs84_utm56s_32756_legacy,wgs84_utm56s_32756_legacy.prj,32756,32756,WGS84 UTM zone 56S
+sirgas2000_utm23s_31983_legacy,sirgas2000_utm23s_31983_legacy.prj,31983,31983,SIRGAS2000 UTM zone 23S

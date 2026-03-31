@@ -1,0 +1,42 @@
+[package]
+name = "wblidar"
+version = "0.1.0"
+edition = "2021"
+authors = ["John Lindsay, Whitebox Geospatial Inc."]
+description = "High-performance library for reading and writing LiDAR point cloud data (LAS, LAZ, COPC, PLY, E57)"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/jblindsay/whitebox_next_gen"
+homepage = "https://github.com/jblindsay/whitebox_next_gen"
+documentation = "https://docs.rs/wblidar"
+# Internal development tools and QA docs are excluded from the published package.
+exclude = [
+    "docs/internal/**",
+    "tools/**",
+    "artifacts/**",
+    ".DS_Store",
+]
+
+[dependencies]
+# Intentionally minimal — all point-cloud format codecs are implemented natively.
+# wbprojection provides EPSG/WKT metadata lookup and coordinate transforms.
+# wide provides portable SIMD via software fallback on unsupported targets.
+wide = "1.2"
+wbprojection = { path = "../wbprojection", version = "0.1.0" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"], optional = true }
+rayon = { version = "1.10", optional = true }
+
+[features]
+default = []
+copc-http = ["dep:reqwest"]
+copc-parallel = ["dep:rayon"]
+laz-parallel = ["dep:rayon"]
+parallel = ["copc-parallel", "laz-parallel"]
+
+[lib]
+name = "wblidar"
+path = "src/lib.rs"
+
+[dev-dependencies]
+serde_json = "1"
+tiny_http = "0.12"

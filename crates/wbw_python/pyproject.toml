@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "whitebox-workflows"
+version = "0.1.0"
+description = "Python bindings for Whitebox backend tool runtime"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Rust",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+]
+
+[tool.maturin]
+module-name = "whitebox_workflows"
+manifest-path = "Cargo.toml"

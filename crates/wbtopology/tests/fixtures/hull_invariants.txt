@@ -1,0 +1,10 @@
+# name|mode|threshold|coords|min_kind|max_concave_area|min_convex_area|allow_disjoint
+# mode: absolute | relative
+# coords format: x:y,x:y,...
+# min_kind: point | line | polygon
+
+square_cloud|absolute|3.0|0:0,2:0,4:0,4:2,4:4,2:4,0:4,0:2,2:2|polygon|15.5|15.5|false
+u_shape_absolute|absolute|2.9|0:0,2:0,4:0,6:0,0:2,6:2,0:4,2:4,4:4,6:4|polygon|0.1|20.0|true
+u_shape_relative|relative|0.34|0:0,2:0,4:0,6:0,0:2,6:2,0:4,2:4,4:4,6:4|polygon|0.1|20.0|true
+collinear|absolute|1.0|0:0,1:0,2:0,3:0|line|0.0|0.0|false
+single_point|absolute|1.0|1:2|point|0.0|0.0|false

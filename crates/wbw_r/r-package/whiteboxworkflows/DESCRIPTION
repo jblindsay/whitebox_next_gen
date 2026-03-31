@@ -1,0 +1,21 @@
+Package: whiteboxworkflows
+Title: Whitebox Workflows for R
+Version: 0.1.0
+Authors@R: c(
+    person("TODO", "Maintainer", email = "todo@example.com", role = c("aut", "cre"))
+    )
+Description: Scaffolded R package layer for the wbw_r runtime. Provides a stable
+    facade over generated wrappers and a binding-registration bridge for the
+    underlying native runtime implementation.
+License: MIT
+SystemRequirements: Cargo (Rust's package manager), rustc
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 4.1)
+Imports:
+    jsonlite
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+LazyData: true

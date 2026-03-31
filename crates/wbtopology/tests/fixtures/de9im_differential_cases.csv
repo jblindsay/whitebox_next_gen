@@ -1,0 +1,19 @@
+# case_id,pattern,intersects,contains,within,touches,crosses,overlaps,parity_status
+point_point_equal,0********,true,true,true,false,false,false,converge
+point_point_disjoint,F********,false,false,false,false,false,false,converge
+point_in_line_interior,0********,true,false,true,false,false,false,converge
+point_on_line_endpoint,F0*******,true,false,true,true,false,false,converge
+point_on_polygon_boundary,F0*******,true,false,true,true,false,false,converge
+point_outside_polygon,F********,false,false,false,false,false,false,converge
+polygon_contains_point,0********,true,true,false,false,false,false,converge
+line_line_cross,1********,true,false,false,false,true,true,known_diff
+line_line_touch_endpoint,F********,true,false,false,true,false,false,converge
+polygon_contains_polygon,2********,true,true,false,false,false,false,converge
+polygon_within_polygon,2********,true,false,true,false,false,false,converge
+polygon_polygon_touch_edge,F***T****,true,false,false,true,false,false,converge
+point_in_polygon_hole,F********,false,false,false,false,false,false,converge
+point_on_hole_boundary,F0*******,true,false,true,true,false,false,converge
+line_crosses_polygon_with_hole,F********,true,false,false,true,false,false,converge
+line_crosses_polygon,10*0*****,true,false,false,false,true,false,converge
+line_within_polygon,1********,true,false,true,false,false,false,converge
+polygon_polygon_overlap,2********,true,false,false,false,false,true,converge

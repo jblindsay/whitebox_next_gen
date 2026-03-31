@@ -1,0 +1,33 @@
+TARGET = $(subst 64,x86_64,$(subst 32,i686,$(WIN)))-pc-windows-gnu
+TARGET_DIR = ./rust-target
+BUILD_PROFILE = $(if $(filter true,$(WBW_R_PACKAGE_RELEASE)),release,debug)
+LIBDIR = $(TARGET_DIR)/$(TARGET)/$(BUILD_PROFILE)
+STATLIB = $(LIBDIR)/libwbw_r.a
+CARGO_MANIFEST = ../../../Cargo.toml
+CARGO_FEATURES =
+WRAPPER_TIER = open
+CARGO_PROFILE_FLAG =
+
+ifeq ($(WBW_R_PACKAGE_PRO),true)
+CARGO_FEATURES += --features pro
+WRAPPER_TIER = pro
+endif
+
+ifeq ($(BUILD_PROFILE),release)
+CARGO_PROFILE_FLAG = --release
+endif
+
+PKG_LIBS = -L$(LIBDIR) -lwbw_r -lws2_32 -ladvapi32 -luserenv -lbcrypt -lntdll
+
+all: $(SHLIB)
+
+.PHONY: $(STATLIB)
+
+$(SHLIB): $(STATLIB)
+
+$(STATLIB):
+	cargo build -p wbw_r $(CARGO_FEATURES) $(CARGO_PROFILE_FLAG) --target=$(TARGET) --lib --manifest-path=$(CARGO_MANIFEST) --target-dir=$(TARGET_DIR)
+	cargo run -p wbw_r $(CARGO_FEATURES) $(CARGO_PROFILE_FLAG) --target=$(TARGET) --example generate_r_wrappers --manifest-path=$(CARGO_MANIFEST) --target-dir=$(TARGET_DIR) -- --tier $(WRAPPER_TIER) --output ../R/zz_generated_wrappers.R
+
+clean:
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) $(TARGET_DIR)

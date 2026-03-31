@@ -1,0 +1,11 @@
+# Rust build output
+/target/
+
+# Large local benchmark/test assets
+/artifacts/
+
+# macOS
+.DS_Store
+
+# Nested crate git metadata backups (local only)
+**/.git.nested_backup/

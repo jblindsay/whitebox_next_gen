@@ -422,6 +422,8 @@ input.write_cog_with_options("output_opts.cog.tif", &cog_opts).unwrap();
 For non-COG GeoTIFF layouts (e.g., stripped/tiled non-COG output), use the
 full `GeoTiffWriteOptions` + `Raster::write_geotiff_with_options(...)` API.
 
+If you specifically need the lower-level TIFF / GeoTIFF / BigTIFF / COG engine rather than the higher-level multi-format raster abstraction, see [wbgeotiff](https://docs.rs/wbgeotiff).
+
 ## Architecture
 
 ```
@@ -543,6 +545,7 @@ wbraster/
 ## GeoTIFF / COG Notes
 
 - `RasterFormat::GeoTiff` reads GeoTIFF, BigTIFF, and COG files.
+- GeoTIFF / COG support in `wbraster` is implemented on top of the standalone [wbgeotiff](https://docs.rs/wbgeotiff) crate.
 - Write mode defaults to deflate-compressed GeoTIFF.
 - `Raster::write_cog(path)` writes a COG with convenience defaults
   (deflate compression, tile size 512, BigTIFF disabled).

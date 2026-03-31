@@ -43,7 +43,7 @@ No. `wbgeotiff` is developed primarily to support Whitebox, but it is not restri
 
 `wbgeotiff` is a low-level TIFF/GeoTIFF I/O engine. It is **not** a full raster abstraction layer.
 
-- Not a multi-format raster library (for ENVI, SAGA, PCRaster, Zarr, etc. see `wbraster`).
+- Not a multi-format raster library (for ENVI, SAGA, PCRaster, Zarr, and a higher-level raster API spanning GeoTIFF/COG plus other formats, see [wbraster](https://docs.rs/wbraster)).
 - Not a raster analysis or processing library (filtering, statistics, reprojection belong in higher-level Whitebox tooling).
 - Not a rendering or visualization engine.
 - Not a GeoTIFF metadata editing tool (IFD-level tag surgery is out of scope).
@@ -234,6 +234,8 @@ wbgeotiff/
 	raster abstractions and multi-format IO.
 - `wbprojection` can depend on the same shared GeoTIFF engine for projection-related
 	metadata workflows without creating circular dependencies.
+
+`wbgeotiff` exists as a separate crate because `wbraster` and `wbprojection` both need low-level GeoTIFF support, but they operate at different layers of the stack. `wbraster` is the higher-level multi-format raster crate, while `wbprojection` needs access to GeoTIFF georeferencing metadata and related projection-facing primitives without depending on the full raster abstraction layer. Keeping the TIFF / GeoTIFF engine in `wbgeotiff` allows both crates to share the same low-level implementation while avoiding a circular dependency between `wbprojection` and `wbraster`.
 
 ## License
 

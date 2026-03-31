@@ -15,6 +15,40 @@ Whitebox Next Gen is a ground-up redesign that improves on its predecessor in ne
 - **LiDAR I/O** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
 - **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin are in active development.
 
+## Design Goals
+
+Whitebox development is guided by a small set of core priorities that, taken together, make it meaningfully different from most other geospatial software packages.
+
+### Broad geospatial functionality with deep specialization
+
+Whitebox aims to be a comprehensive general-purpose GIS and remote sensing toolset — covering raster analysis, vector processing, coordinate reference systems, and LiDAR — while maintaining particular depth in geomorphometry, spatial hydrology, and point-cloud processing. Breadth and depth are both first-class goals.
+
+### Full-stack architecture
+
+Most geospatial software packages — open-source and commercial alike — are built on a common foundation of external C/C++ libraries such as GDAL, PROJ, and GEOS for low-level I/O, projection, and geometry. Whitebox deliberately does not follow that model.
+
+Whitebox is **full-stack**: all foundational plumbing — GeoTIFF I/O, map projections, raster abstraction, vector I/O, LiDAR parsing, and topology — is implemented in this codebase rather than delegated to external libraries. This choice has several important consequences:
+
+- **Performance** — Every interface between a library boundary introduces overhead and reduces the ability to optimize holistically. Owning the full stack means Whitebox can tune performance end-to-end without friction at foreign-function interfaces.
+- **Development velocity** — There is no dependency on upstream library release cycles, no forced adaptation to breaking changes in third-party APIs, and no need to wait for upstream maintainers to prioritize features or fixes that Whitebox needs.
+- **Flexibility** — Owning the stack allows Whitebox to make design decisions — data representations, memory layouts, codec choices — that would be impossible or impractical when adapting a general-purpose external library to a specialized use case.
+
+### Pure Rust, minimal dependencies
+
+The full-stack architecture and the choice of pure Rust are deeply linked. Rust provides the performance headroom that makes it practical to implement things like LiDAR codecs, map projection engines, and raster I/O entirely from scratch without sacrificing speed. It also brings memory safety without a garbage collector, and excellent cross-platform compilation with no native toolchain requirements at build time.
+
+External crates are used where they provide clear, well-contained value (compression codecs, serialization formats, etc.), but Whitebox avoids dependencies that would pull in C/C++ linkage or impose significant API coupling.
+
+### Innovation in spatial analysis
+
+Whitebox is a research vehicle as much as a production tool. New spatial analysis algorithms — particularly in geomorphometry and spatial hydrology — are developed, tested, and published through Whitebox first, then made available to the wider community.
+
+### Human–AI collaborative development
+
+Whitebox Next Gen embraces human–AI collaboration as a first-class part of the development process, using it to accelerate implementation, improve documentation, and explore algorithm design. This is reflected in development pace and project scope.
+
+---
+
 ## Project Model
 
 Whitebox Next Gen follows an open-core model:

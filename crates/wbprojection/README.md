@@ -11,6 +11,7 @@ A map projection library for Rust, inspired by [PROJ](https://proj.org/), and in
 - [Is wbprojection Only for Whitebox?](#is-wbprojection-only-for-whitebox)
 - [What wbprojection Is Not](#what-wbprojection-is-not)
 - [Features](#features)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Using EPSG Codes](#using-epsg-codes)
 - [Supported Datums](#supported-datums)
@@ -73,16 +74,30 @@ No. `wbprojection` is developed primarily to support Whitebox, but it is not res
 
 ---
 
-## Quick Start
+## Installation
 
-Add to `Cargo.toml`:
+Crates.io dependency:
 
 ```toml
 [dependencies]
 wbprojection = "0.1"
 ```
 
----
+Enable `serde` support when you need to serialize CRS or projection-related types:
+
+```toml
+[dependencies]
+wbprojection = { version = "0.1", features = ["serde"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wbprojection = { path = "../wbprojection" }
+```
+
+## Quick Start
 
 ## Using EPSG Codes
 

@@ -94,12 +94,21 @@ All codecs are built in. No optional feature flag is required.
 
 ## Installation
 
-Workspace/path dependency:
+Crates.io dependency:
+
+```toml
+[dependencies]
+wbgeotiff = "0.1"
+```
+
+Local workspace/path dependency:
 
 ```toml
 [dependencies]
 wbgeotiff = { path = "../wbgeotiff" }
 ```
+
+`wbgeotiff` currently has no optional Cargo features.
 
 ## Quick Start
 

@@ -9,6 +9,7 @@ A Rust library for reading and writing common raster GIS formats intended to ser
 - [Is wbraster Only for Whitebox?](#is-wbraster-only-for-whitebox)
 - [What wbraster Is Not](#what-wbraster-is-not)
 - [Supported Formats](#supported-formats)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
 - [Coordinate Reference System (CRS)](#coordinate-reference-system-crs)
@@ -94,17 +95,30 @@ Legend: `✓` supported, `–` not currently supported, `~` limited/custom repre
 See [CRS / spatial reference (CRS)](#crs--spatial-reference-crs) for setup/read-back examples and workflow guidance.
 See [Sidecar metadata keys](#sidecar-metadata-keys) for format-specific sidecar CRS metadata names.
 
-## Quick Start
+## Installation
+
+Crates.io dependency:
 
 ```toml
 [dependencies]
 wbraster = "0.1"
-
-# Optional feature selection:
-# - default includes native zstd bindings ("zstd-native")
-# - for pure-Rust zstd decode-only, disable default features and enable:
-# wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
 ```
+
+`wbraster` enables `zstd-native` by default. If you prefer pure-Rust decode-only Zstandard support, disable default features and enable `zstd-pure-rust-decode` instead:
+
+```toml
+[dependencies]
+wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wbraster = { path = "../wbraster" }
+```
+
+## Quick Start
 
 ```rust
 use wbraster::{

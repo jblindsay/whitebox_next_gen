@@ -10,6 +10,7 @@
 - [What wblidar Is Not](#what-wblidar-is-not)
 - [Supported Formats](#supported-formats)
 - [Design Goals](#design-goals)
+- [Installation](#installation)
 - [Compilation Features](#compilation-features)
 - [API Overview](#api-overview)
 - [Architecture](#architecture)
@@ -65,6 +66,36 @@ Point-cloud processing, filtering, segmentation, and analysis belong in the Whit
 - **Minimal dependencies**: keep dependency surface tight and auditable.
 - **Whitebox integration**: maintain a stable API for Whitebox ingestion/export workflows.
 - **Predictable behavior**: deterministic output where applicable and explicit error modes.
+
+## Installation
+
+Crates.io dependency:
+
+```toml
+[dependencies]
+wblidar = "0.1"
+```
+
+Enable optional features only when needed:
+
+```toml
+[dependencies]
+wblidar = { version = "0.1", features = ["copc-http", "parallel"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wblidar = { path = "../wblidar" }
+```
+
+Feature notes:
+
+- `copc-http` enables HTTP range fetching for remote COPC access.
+- `copc-parallel` enables Rayon-backed parallel work in COPC writing paths.
+- `laz-parallel` enables optional parallel LAZ chunk decoding.
+- `parallel` enables both `copc-parallel` and `laz-parallel`.
 
 ## Compilation Features
 

@@ -14,6 +14,7 @@ Optional parallel execution is available via the `parallel` feature (Rayon), int
 - [What wbtopology Is Not](#what-wbtopology-is-not)
 - [Design goals](#design-goals)
 - [Current capabilities](#current-capabilities)
+- [Installation](#installation)
 - [Quick start](#quick-start)
 - [wbvector interop](#wbvector-interop)
 - [Examples](#examples)
@@ -120,21 +121,30 @@ Notes:
 
 - Topology, predicates, overlay, buffering, hulls, triangulation, and simplification operate in XY; optional Z values are carried on coordinates and preserved where practical.
 
-## Quick start
+## Installation
 
-Add `wbtopology` to your `Cargo.toml`:
+Crates.io dependency:
+
+```toml
+[dependencies]
+wbtopology = "0.1"
+```
+
+Enable the optional `parallel` feature when you want Rayon-backed parallel execution on larger workloads:
+
+```toml
+[dependencies]
+wbtopology = { version = "0.1", features = ["parallel"] }
+```
+
+Local workspace/path dependency:
 
 ```toml
 [dependencies]
 wbtopology = { path = "../wbtopology" }
 ```
 
-If you want parallel execution support, enable the optional `parallel` feature:
-
-```toml
-[dependencies]
-wbtopology = { path = "../wbtopology", features = ["parallel"] }
-```
+## Quick start
 
 Then import the APIs you need:
 

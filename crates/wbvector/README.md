@@ -11,7 +11,7 @@ Pure-Rust library for reading and writing common vector GIS formats with a singl
 - [Features](#features)
 - [Supported Formats](#supported-formats)
 - [Format Properties (Detailed Comparison)](#format-properties-detailed-comparison)
-- [Install](#install)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Format Drivers](#format-drivers)
 - [Generic Sniffed I/O](#generic-sniffed-io)
@@ -93,14 +93,34 @@ Supported formats are summarized above; this section provides deeper trade-off g
 | MapInfo Interchange (`.mif` + `.mid`) | Mixed text (`.mif` geometry + `.mid` attributes) | Yes | Medium (common vector primitives) | Limited / driver-dependent | Single dataset pair | Plain-text interchange; moderate performance and size | Legacy MapInfo interoperability and migration | Read + Write |
 | OSM PBF (`.osm.pbf`) | Binary Protocol Buffers | Yes (tag map) | Medium-High (depends on OSM primitives) | Implicit WGS84 | Planet/extract object collections | Very compact for OSM extracts; efficient for large-scale reads | Large OpenStreetMap extracts and network base data ingestion | Read-only *(optional `osmpbf` feature)* |
 
-## Install
+## Installation
+
+Crates.io dependency:
+
 ```toml
 [dependencies]
 wbvector = "0.1"
-
-# Optional features example:
-# wbvector = { version = "0.1", features = ["geoparquet", "kmz", "osmpbf"] }
 ```
+
+Enable optional format drivers only when you need them:
+
+```toml
+[dependencies]
+wbvector = { version = "0.1", features = ["geoparquet", "kmz", "osmpbf"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wbvector = { path = "../wbvector" }
+```
+
+Optional features:
+
+- `geoparquet` enables GeoParquet read/write support.
+- `kmz` enables KMZ read/write support.
+- `osmpbf` enables OpenStreetMap PBF read support.
 
 ## Quick Start
 

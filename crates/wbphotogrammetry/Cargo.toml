@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "Pure-Rust photogrammetry primitives for drone SfM workflows."
 license = "MIT OR Apache-2.0"
+publish = false
 
 [dependencies]
 wbcore      = { path = "../wbcore" }

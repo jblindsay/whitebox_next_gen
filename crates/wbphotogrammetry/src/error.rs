@@ -29,6 +29,10 @@ pub enum PhotogrammetryError {
     #[error("raster I/O error: {0}")]
     Raster(#[from] wbraster::RasterError),
 
+    /// Sensor-bundle discovery or parsing failed.
+    #[error("bundle error: {0}")]
+    Bundle(String),
+
     /// Generic I/O error.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

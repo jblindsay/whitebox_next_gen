@@ -24,17 +24,26 @@ pub mod alignment;
 pub mod dense;
 pub mod mosaic;
 pub mod qa;
+pub mod bundle;
 
 // Convenient top-level re-exports used by `wbtools_pro`.
 pub use error::{PhotogrammetryError, Result};
 pub use camera::{CameraIntrinsics, CameraModel};
 pub use ingest::{FrameMetadata, GpsCoordinate, ImageFrame, IngestChecks, compute_ingest_checks, ingest_image_set};
 pub use features::{
+    FeatureDistanceMetric,
+    FeatureMatchingOptions,
+    FeatureMethod,
     MatchStats,
     PairCorrespondences,
     run_feature_matching,
     run_feature_matching_brief,
     run_feature_matching_orb,
+    run_feature_matching_rootsift,
+    run_feature_matching_sift,
+    run_feature_matching_superpoint,
+    run_feature_matching_with_method,
+    run_feature_matching_with_options,
 };
 pub use alignment::{AlignmentResult, AlignmentStats, CameraPose, run_camera_alignment};
 pub use dense::{DenseResult, DsmStats, run_dense_surface, run_dense_surface_with_dtm};
@@ -42,4 +51,10 @@ pub use mosaic::{MosaicResult, SeamStats, run_orthomosaic, run_orthomosaic_with_
 pub use qa::{
     ProfileThresholds, ProcessingProfile, QaReport, QaStatus,
     build_qa_report,
+};
+pub use bundle::{
+    ResolvedOpticalBundle,
+    SensorBundleProvider,
+    SensorBundleRegistry,
+    Sentinel2SafeBundleProvider,
 };

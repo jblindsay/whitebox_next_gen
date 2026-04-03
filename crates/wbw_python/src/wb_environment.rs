@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -17,6 +17,10 @@ use wbraster::{
     Raster as WbRaster,
     ReprojectOptions,
     ResampleMethod,
+    SensorBundle,
+    SafeBundle,
+    open_sensor_bundle,
+    open_sensor_bundle_path,
 };
 use wblidar::reproject::{
     LidarReprojectOptions,
@@ -37,7 +41,7 @@ use wbvector::reproject::{
     TransformFailurePolicy as VectorTransformFailurePolicy,
     VectorReprojectOptions,
 };
-use wbvector::{Layer as WbLayer, VectorFormat};
+use wbvector::{FieldDef, FieldType, FieldValue, Layer as WbLayer, VectorFormat};
 
 use crate::{map_tool_error, parse_tier, PyCallbackSink, PythonToolRuntime};
 
@@ -251,6 +255,116 @@ fn detect_vector_output_format(path: &Path) -> PyResult<VectorFormat> {
     })
 }
 
+fn read_vector_layer_for_python(vector: &Vector) -> PyResult<WbLayer> {
+    wbvector::read(&vector.file_path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to read vector '{}': {e}",
+            vector.file_path.display()
+        ))
+    })
+}
+
+fn write_vector_layer_for_python(vector: &Vector, layer: &WbLayer) -> PyResult<()> {
+    let format = detect_vector_output_format(&vector.file_path)?;
+    wbvector::write(layer, &vector.file_path, format).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to write vector '{}': {e}",
+            vector.file_path.display()
+        ))
+    })
+}
+
+fn parse_field_type_name(field_type: &str) -> PyResult<FieldType> {
+    match field_type.trim().to_ascii_lowercase().as_str() {
+        "integer" | "int" | "i64" => Ok(FieldType::Integer),
+        "float" | "double" | "f64" => Ok(FieldType::Float),
+        "text" | "string" | "str" => Ok(FieldType::Text),
+        "boolean" | "bool" => Ok(FieldType::Boolean),
+        "blob" | "bytes" | "binary" => Ok(FieldType::Blob),
+        "date" => Ok(FieldType::Date),
+        "datetime" | "timestamp" => Ok(FieldType::DateTime),
+        "json" => Ok(FieldType::Json),
+        _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "unsupported field_type '{field_type}'. Expected one of: integer, float, text, boolean, blob, date, datetime, json"
+        ))),
+    }
+}
+
+fn field_value_to_pyobject(py: Python<'_>, value: &FieldValue) -> PyResult<Py<PyAny>> {
+    match value {
+        FieldValue::Integer(v) => Ok((*v).into_pyobject(py)?.unbind().into_any()),
+        FieldValue::Float(v) => Ok((*v).into_pyobject(py)?.unbind().into_any()),
+        FieldValue::Text(v) => Ok(v.clone().into_pyobject(py)?.unbind().into_any()),
+        FieldValue::Boolean(v) => Ok((*v).into_pyobject(py)?.to_owned().unbind().into_any()),
+        FieldValue::Blob(v) => Ok(PyBytes::new(py, v).unbind().into_any()),
+        FieldValue::Date(v) => Ok(v.clone().into_pyobject(py)?.unbind().into_any()),
+        FieldValue::DateTime(v) => Ok(v.clone().into_pyobject(py)?.unbind().into_any()),
+        FieldValue::Null => Ok(py.None()),
+    }
+}
+
+fn py_any_to_field_value(value: &Bound<'_, PyAny>, expected_type: FieldType) -> PyResult<FieldValue> {
+    if value.is_none() {
+        return Ok(FieldValue::Null);
+    }
+
+    match expected_type {
+        FieldType::Integer => {
+            if let Ok(v) = value.extract::<i64>() {
+                Ok(FieldValue::Integer(v))
+            } else if let Ok(v) = value.extract::<f64>() {
+                Ok(FieldValue::Integer(v as i64))
+            } else {
+                Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "expected an integer-compatible value",
+                ))
+            }
+        }
+        FieldType::Float => {
+            if let Ok(v) = value.extract::<f64>() {
+                Ok(FieldValue::Float(v))
+            } else if let Ok(v) = value.extract::<i64>() {
+                Ok(FieldValue::Float(v as f64))
+            } else {
+                Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "expected a float-compatible value",
+                ))
+            }
+        }
+        FieldType::Text => value
+            .extract::<String>()
+            .map(FieldValue::Text)
+            .map_err(|_| PyErr::new::<pyo3::exceptions::PyTypeError, _>("expected a string value")),
+        FieldType::Boolean => value
+            .extract::<bool>()
+            .map(FieldValue::Boolean)
+            .map_err(|_| PyErr::new::<pyo3::exceptions::PyTypeError, _>("expected a boolean value")),
+        FieldType::Blob => {
+            if let Ok(v) = value.extract::<Vec<u8>>() {
+                Ok(FieldValue::Blob(v))
+            } else {
+                Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "expected a bytes-like value",
+                ))
+            }
+        }
+        FieldType::Date => value
+            .extract::<String>()
+            .map(FieldValue::Date)
+            .map_err(|_| PyErr::new::<pyo3::exceptions::PyTypeError, _>("expected a date string value")),
+        FieldType::DateTime => value
+            .extract::<String>()
+            .map(FieldValue::DateTime)
+            .map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>("expected a datetime string value")
+            }),
+        FieldType::Json => value
+            .extract::<String>()
+            .map(FieldValue::Text)
+            .map_err(|_| PyErr::new::<pyo3::exceptions::PyTypeError, _>("expected a JSON string value")),
+    }
+}
+
 fn emit_callback_event(callback: &Option<Py<PyAny>>, event: serde_json::Value) -> PyResult<()> {
     if let Some(cb) = callback {
         let payload = serde_json::to_string(&event).map_err(|e| {
@@ -449,6 +563,29 @@ fn extract_output_string_by_key(tool_id: &str, response: &serde_json::Value, key
         })
 }
 
+fn extract_output_path_by_key(tool_id: &str, response: &serde_json::Value, key: &str) -> PyResult<PathBuf> {
+    let outputs = response.get("outputs").unwrap_or(response);
+    let value = outputs.get(key).ok_or_else(|| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "tool '{}' did not return output key '{}'",
+            tool_id, key
+        ))
+    })?;
+
+    if let Some(path) = value.get("path").and_then(serde_json::Value::as_str) {
+        return Ok(PathBuf::from(path));
+    }
+
+    if let Some(path) = value.as_str() {
+        return Ok(PathBuf::from(path));
+    }
+
+    Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+        "tool '{}' output '{}' did not include a path",
+        tool_id, key
+    )))
+}
+
 fn extract_typed_output_list(response: &serde_json::Value) -> PyResult<Vec<PathBuf>> {
     let outputs = response.get("outputs").unwrap_or(response);
     let arr = outputs
@@ -569,6 +706,156 @@ pub struct Lidar {
     pub file_path: PathBuf,
 }
 
+/// A read-only remote sensing bundle wrapper.
+#[pyclass]
+pub struct Bundle {
+    pub bundle_root: PathBuf,
+    pub family: String,
+}
+
+fn sensor_bundle_family_name(bundle: &SensorBundle) -> &'static str {
+    match bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel1(_)) => "sentinel1_safe",
+        SensorBundle::Safe(SafeBundle::Sentinel2(_)) => "sentinel2_safe",
+        SensorBundle::Landsat(_) => "landsat",
+        SensorBundle::Iceye(_) => "iceye",
+        SensorBundle::PlanetScope(_) => "planetscope",
+        SensorBundle::Dimap(_) => "dimap",
+        SensorBundle::MaxarWorldView(_) => "maxar_worldview",
+        SensorBundle::Radarsat2(_) => "radarsat2",
+        SensorBundle::Rcm(_) => "rcm",
+    }
+}
+
+fn open_bundle_for_python_bundle(bundle: &Bundle) -> PyResult<SensorBundle> {
+    open_sensor_bundle(&bundle.bundle_root).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "failed to open bundle '{}': {e}",
+            bundle.bundle_root.display()
+        ))
+    })
+}
+
+fn sensor_bundle_metadata_json_value(bundle: &SensorBundle) -> serde_json::Value {
+    match bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => json!({
+            "family": "sentinel2_safe",
+            "product_level": format!("{:?}", pkg.product_level),
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "tile_id": pkg.tile_id,
+            "cloud_cover_percent": pkg.cloud_coverage_assessment,
+            "sun_azimuth_deg": pkg.mean_solar_azimuth_deg,
+            "sun_zenith_deg": pkg.mean_solar_zenith_deg,
+            "sun_elevation_deg": serde_json::Value::Null,
+            "processing_baseline": pkg.processing_baseline,
+        }),
+        SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => json!({
+            "family": "sentinel1_safe",
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": pkg.polarization,
+            "polarizations": pkg.list_polarizations(),
+            "orbit_direction": serde_json::Value::Null,
+            "look_direction": serde_json::Value::Null,
+            "incidence_angle_near_deg": serde_json::Value::Null,
+            "incidence_angle_far_deg": serde_json::Value::Null,
+            "pixel_spacing_range_m": serde_json::Value::Null,
+            "pixel_spacing_azimuth_m": serde_json::Value::Null,
+            "spatial_bounds": pkg.spatial_bounds,
+        }),
+        SensorBundle::Landsat(pkg) => json!({
+            "family": "landsat",
+            "mission": format!("{:?}", pkg.mission),
+            "processing_level": format!("{:?}", pkg.processing_level),
+            "product_id": pkg.product_id,
+            "collection_number": pkg.collection_number,
+            "acquisition_datetime_utc": match (&pkg.acquisition_date_utc, &pkg.scene_center_time_utc) {
+                (Some(d), Some(t)) => Some(format!("{d}T{t}")),
+                (Some(d), None) => Some(d.clone()),
+                _ => None,
+            },
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "sun_azimuth_deg": pkg.sun_azimuth_deg,
+            "sun_elevation_deg": pkg.sun_elevation_deg,
+            "path_row": pkg.path_row,
+        }),
+        SensorBundle::Iceye(pkg) => json!({
+            "family": "iceye",
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": pkg.polarization,
+            "polarizations": pkg.list_polarizations(),
+            "orbit_direction": pkg.orbit_direction,
+            "look_direction": pkg.look_direction,
+            "incidence_angle_near_deg": pkg.incidence_angle_near_deg,
+            "incidence_angle_far_deg": pkg.incidence_angle_far_deg,
+            "pixel_spacing_range_m": pkg.pixel_spacing_range_m,
+            "pixel_spacing_azimuth_m": pkg.pixel_spacing_azimuth_m,
+        }),
+        SensorBundle::PlanetScope(pkg) => json!({
+            "family": "planetscope",
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "product_type": pkg.product_type,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "sun_azimuth_deg": pkg.sun_azimuth_deg,
+            "sun_elevation_deg": pkg.sun_elevation_deg,
+            "view_angle_deg": pkg.view_angle_deg,
+            "off_nadir_angle_deg": pkg.off_nadir_angle_deg,
+        }),
+        SensorBundle::Dimap(pkg) => json!({
+            "family": "dimap",
+            "mission": pkg.mission,
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "processing_level": pkg.processing_level,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "sun_azimuth_deg": pkg.sun_azimuth_deg,
+            "sun_elevation_deg": pkg.sun_elevation_deg,
+        }),
+        SensorBundle::MaxarWorldView(pkg) => json!({
+            "family": "maxar_worldview",
+            "mission": pkg.satellite,
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "sun_azimuth_deg": pkg.sun_azimuth_deg,
+            "sun_elevation_deg": pkg.sun_elevation_deg,
+            "off_nadir_angle_deg": pkg.off_nadir_angle_deg,
+        }),
+        SensorBundle::Radarsat2(pkg) => json!({
+            "family": "radarsat2",
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": serde_json::Value::Null,
+            "polarizations": pkg.polarizations,
+            "orbit_direction": pkg.orbit_direction,
+            "look_direction": pkg.look_direction,
+            "incidence_angle_near_deg": pkg.incidence_angle_near_deg,
+            "incidence_angle_far_deg": pkg.incidence_angle_far_deg,
+            "pixel_spacing_range_m": pkg.pixel_spacing_range_m,
+            "pixel_spacing_azimuth_m": pkg.pixel_spacing_azimuth_m,
+        }),
+        SensorBundle::Rcm(pkg) => json!({
+            "family": "rcm",
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": serde_json::Value::Null,
+            "polarizations": pkg.polarizations,
+            "orbit_direction": pkg.orbit_direction,
+            "look_direction": pkg.look_direction,
+            "incidence_angle_near_deg": pkg.incidence_angle_near_deg,
+            "incidence_angle_far_deg": pkg.incidence_angle_far_deg,
+            "pixel_spacing_range_m": pkg.pixel_spacing_range_m,
+            "pixel_spacing_azimuth_m": pkg.pixel_spacing_azimuth_m,
+        }),
+    }
+}
+
 #[pymethods]
 impl RasterConfigs {
     #[new]
@@ -648,6 +935,530 @@ impl RasterConfigs {
     fn epsg_code(&self) -> i32 { self.epsg_code }
     #[setter]
     fn set_epsg_code(&mut self, v: i32) { self.epsg_code = v; }
+}
+
+#[pymethods]
+impl Bundle {
+    #[getter]
+    fn bundle_root(&self) -> String {
+        self.bundle_root.to_string_lossy().to_string()
+    }
+
+    #[getter]
+    fn family(&self) -> String {
+        self.family.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Bundle('{}', family='{}')",
+            self.bundle_root.display(),
+            self.family
+        )
+    }
+
+    /// Return parsed bundle metadata as a JSON object string.
+    fn metadata_json(&self) -> PyResult<String> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let value = sensor_bundle_metadata_json_value(&bundle);
+        serde_json::to_string_pretty(&value).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to serialize bundle metadata: {e}"
+            ))
+        })
+    }
+
+    fn acquisition_datetime_utc(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.acquisition_datetime_utc,
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.acquisition_datetime_utc,
+            SensorBundle::Landsat(pkg) => match (pkg.acquisition_date_utc, pkg.scene_center_time_utc) {
+                (Some(d), Some(t)) => Some(format!("{d}T{t}")),
+                (Some(d), None) => Some(d),
+                _ => None,
+            },
+            SensorBundle::Iceye(pkg) => pkg.acquisition_datetime_utc,
+            SensorBundle::PlanetScope(pkg) => pkg.acquisition_datetime_utc,
+            SensorBundle::Dimap(pkg) => pkg.acquisition_datetime_utc,
+            SensorBundle::MaxarWorldView(pkg) => pkg.acquisition_datetime_utc,
+            SensorBundle::Radarsat2(pkg) => pkg.acquisition_datetime_utc,
+            SensorBundle::Rcm(pkg) => pkg.acquisition_datetime_utc,
+        };
+        Ok(out)
+    }
+
+    fn product_type(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.product_type,
+            SensorBundle::Iceye(pkg) => pkg.product_type,
+            SensorBundle::PlanetScope(pkg) => pkg.product_type,
+            SensorBundle::Radarsat2(pkg) => pkg.product_type,
+            SensorBundle::Rcm(pkg) => pkg.product_type,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn acquisition_mode(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.acquisition_mode,
+            SensorBundle::Iceye(pkg) => pkg.acquisition_mode,
+            SensorBundle::Radarsat2(pkg) => pkg.acquisition_mode,
+            SensorBundle::Rcm(pkg) => pkg.acquisition_mode,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn processing_level(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => Some(format!("{:?}", pkg.product_level)),
+            SensorBundle::Landsat(pkg) => Some(format!("{:?}", pkg.processing_level)),
+            SensorBundle::Dimap(pkg) => pkg.processing_level,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn mission(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Landsat(pkg) => Some(format!("{:?}", pkg.mission)),
+            SensorBundle::Dimap(pkg) => pkg.mission,
+            SensorBundle::MaxarWorldView(pkg) => pkg.satellite,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn scene_id(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::PlanetScope(pkg) => pkg.scene_id,
+            SensorBundle::Dimap(pkg) => pkg.scene_id,
+            SensorBundle::MaxarWorldView(pkg) => pkg.scene_id,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn tile_id(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.tile_id,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn collection_number(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Landsat(pkg) => pkg.collection_number,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn processing_baseline(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.processing_baseline,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn cloud_cover_percent(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.cloud_coverage_assessment,
+            SensorBundle::Landsat(pkg) => pkg.cloud_cover_percent,
+            SensorBundle::PlanetScope(pkg) => pkg.cloud_cover_percent,
+            SensorBundle::Dimap(pkg) => pkg.cloud_cover_percent,
+            SensorBundle::MaxarWorldView(pkg) => pkg.cloud_cover_percent,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn sun_azimuth_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.mean_solar_azimuth_deg,
+            SensorBundle::Landsat(pkg) => pkg.sun_azimuth_deg,
+            SensorBundle::PlanetScope(pkg) => pkg.sun_azimuth_deg,
+            SensorBundle::Dimap(pkg) => pkg.sun_azimuth_deg,
+            SensorBundle::MaxarWorldView(pkg) => pkg.sun_azimuth_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn sun_elevation_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Landsat(pkg) => pkg.sun_elevation_deg,
+            SensorBundle::PlanetScope(pkg) => pkg.sun_elevation_deg,
+            SensorBundle::Dimap(pkg) => pkg.sun_elevation_deg,
+            SensorBundle::MaxarWorldView(pkg) => pkg.sun_elevation_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn sun_zenith_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.mean_solar_zenith_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn view_angle_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::PlanetScope(pkg) => pkg.view_angle_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn off_nadir_angle_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::PlanetScope(pkg) => pkg.off_nadir_angle_deg,
+            SensorBundle::MaxarWorldView(pkg) => pkg.off_nadir_angle_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn polarization(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.polarization,
+            SensorBundle::Iceye(pkg) => pkg.polarization,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn polarizations(&self) -> PyResult<Vec<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.list_polarizations(),
+            SensorBundle::Iceye(pkg) => pkg.list_polarizations(),
+            SensorBundle::Radarsat2(pkg) => pkg.polarizations,
+            SensorBundle::Rcm(pkg) => pkg.polarizations,
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn orbit_direction(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.orbit_direction,
+            SensorBundle::Radarsat2(pkg) => pkg.orbit_direction,
+            SensorBundle::Rcm(pkg) => pkg.orbit_direction,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn look_direction(&self) -> PyResult<Option<String>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.look_direction,
+            SensorBundle::Radarsat2(pkg) => pkg.look_direction,
+            SensorBundle::Rcm(pkg) => pkg.look_direction,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn incidence_angle_near_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.incidence_angle_near_deg,
+            SensorBundle::Radarsat2(pkg) => pkg.incidence_angle_near_deg,
+            SensorBundle::Rcm(pkg) => pkg.incidence_angle_near_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn incidence_angle_far_deg(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.incidence_angle_far_deg,
+            SensorBundle::Radarsat2(pkg) => pkg.incidence_angle_far_deg,
+            SensorBundle::Rcm(pkg) => pkg.incidence_angle_far_deg,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn pixel_spacing_range_m(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.pixel_spacing_range_m,
+            SensorBundle::Radarsat2(pkg) => pkg.pixel_spacing_range_m,
+            SensorBundle::Rcm(pkg) => pkg.pixel_spacing_range_m,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn pixel_spacing_azimuth_m(&self) -> PyResult<Option<f64>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.pixel_spacing_azimuth_m,
+            SensorBundle::Radarsat2(pkg) => pkg.pixel_spacing_azimuth_m,
+            SensorBundle::Rcm(pkg) => pkg.pixel_spacing_azimuth_m,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn path_row(&self) -> PyResult<Option<(u16, u16)>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Landsat(pkg) => pkg.path_row,
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn spatial_bounds(&self) -> PyResult<Option<Vec<f64>>> {
+        let bundle = open_bundle_for_python_bundle(self)?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => {
+                pkg.spatial_bounds.map(|b| vec![b[0], b[1], b[2], b[3]])
+            }
+            _ => None,
+        };
+        Ok(out)
+    }
+
+    fn list_band_keys(&self) -> PyResult<Vec<String>> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.list_band_keys(),
+            SensorBundle::Landsat(pkg) => pkg.list_band_keys(),
+            SensorBundle::PlanetScope(pkg) => pkg.list_band_keys(),
+            SensorBundle::Dimap(pkg) => pkg.list_band_keys(),
+            SensorBundle::MaxarWorldView(pkg) => pkg.list_band_keys(),
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn list_qa_keys(&self) -> PyResult<Vec<String>> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.list_qa_keys(),
+            SensorBundle::Landsat(pkg) => pkg.list_qa_keys(),
+            SensorBundle::PlanetScope(pkg) => pkg.list_qa_keys(),
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn list_aux_keys(&self) -> PyResult<Vec<String>> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.list_aux_keys(),
+            SensorBundle::Landsat(pkg) => pkg.list_aux_keys(),
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn list_measurement_keys(&self) -> PyResult<Vec<String>> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let out = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.list_measurement_keys(),
+            SensorBundle::Radarsat2(pkg) => pkg.list_measurement_keys(),
+            SensorBundle::Rcm(pkg) => pkg.list_measurement_keys(),
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn list_asset_keys(&self) -> PyResult<Vec<String>> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let out = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.list_asset_keys(),
+            _ => Vec::new(),
+        };
+        Ok(out)
+    }
+
+    fn read_band(&self, key: &str) -> PyResult<Raster> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let path = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.band_path(key).map(Path::to_path_buf),
+            SensorBundle::Landsat(pkg) => pkg.band_path(key).map(Path::to_path_buf),
+            SensorBundle::PlanetScope(pkg) => pkg.band_path(key).map(Path::to_path_buf),
+            SensorBundle::Dimap(pkg) => pkg.band_path(key).map(Path::to_path_buf),
+            SensorBundle::MaxarWorldView(pkg) => pkg.band_path(key).map(Path::to_path_buf),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("read_band is not supported for bundle family '{}'", self.family),
+                ));
+            }
+        };
+        let file_path = path.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "band key '{}' not found in bundle '{}'",
+                key,
+                self.bundle_root.display()
+            ))
+        })?;
+        Ok(Raster { file_path, active_band: 0 })
+    }
+
+    fn read_qa_layer(&self, key: &str) -> PyResult<Raster> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let path = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.qa_path(key).map(Path::to_path_buf),
+            SensorBundle::Landsat(pkg) => pkg.qa_path(key).map(Path::to_path_buf),
+            SensorBundle::PlanetScope(pkg) => pkg.qa_path(key).map(Path::to_path_buf),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("read_qa_layer is not supported for bundle family '{}'", self.family),
+                ));
+            }
+        };
+        let file_path = path.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "qa key '{}' not found in bundle '{}'",
+                key,
+                self.bundle_root.display()
+            ))
+        })?;
+        Ok(Raster { file_path, active_band: 0 })
+    }
+
+    fn read_aux_layer(&self, key: &str) -> PyResult<Raster> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let path = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.aux_path(key).map(Path::to_path_buf),
+            SensorBundle::Landsat(pkg) => pkg.aux_path(key).map(Path::to_path_buf),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("read_aux_layer is not supported for bundle family '{}'", self.family),
+                ));
+            }
+        };
+        let file_path = path.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "aux key '{}' not found in bundle '{}'",
+                key,
+                self.bundle_root.display()
+            ))
+        })?;
+        Ok(Raster { file_path, active_band: 0 })
+    }
+
+    fn read_measurement(&self, key: &str) -> PyResult<Raster> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let path = match bundle {
+            SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.measurement_path(key).map(Path::to_path_buf),
+            SensorBundle::Radarsat2(pkg) => pkg.measurement_path(key).map(Path::to_path_buf),
+            SensorBundle::Rcm(pkg) => pkg.measurement_path(key).map(Path::to_path_buf),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("read_measurement is not supported for bundle family '{}'", self.family),
+                ));
+            }
+        };
+        let file_path = path.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "measurement key '{}' not found in bundle '{}'",
+                key,
+                self.bundle_root.display()
+            ))
+        })?;
+        Ok(Raster { file_path, active_band: 0 })
+    }
+
+    fn read_asset(&self, key: &str) -> PyResult<Raster> {
+        let bundle = open_sensor_bundle(&self.bundle_root).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                self.bundle_root.display()
+            ))
+        })?;
+        let path = match bundle {
+            SensorBundle::Iceye(pkg) => pkg.asset_path(key).map(Path::to_path_buf),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    format!("read_asset is not supported for bundle family '{}'", self.family),
+                ));
+            }
+        };
+        let file_path = path.ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "asset key '{}' not found in bundle '{}'",
+                key,
+                self.bundle_root.display()
+            ))
+        })?;
+        Ok(Raster { file_path, active_band: 0 })
+    }
 }
 
 #[pymethods]
@@ -2163,6 +2974,187 @@ impl Vector {
         file_modified_unix_seconds(&self.file_path)
     }
 
+    fn feature_count(&self) -> PyResult<usize> {
+        Ok(read_vector_layer_for_python(self)?.features.len())
+    }
+
+    fn attribute_field_names(&self) -> PyResult<Vec<String>> {
+        let layer = read_vector_layer_for_python(self)?;
+        Ok(layer
+            .schema
+            .fields()
+            .iter()
+            .map(|f| f.name.clone())
+            .collect())
+    }
+
+    fn attribute_fields(&self) -> PyResult<Vec<(String, String, bool, usize, usize)>> {
+        let layer = read_vector_layer_for_python(self)?;
+        Ok(layer
+            .schema
+            .fields()
+            .iter()
+            .map(|f| {
+                (
+                    f.name.clone(),
+                    f.field_type.as_str().to_string(),
+                    f.nullable,
+                    f.width,
+                    f.precision,
+                )
+            })
+            .collect())
+    }
+
+    fn get_attributes(&self, py: Python<'_>, feature_index: usize) -> PyResult<Py<PyAny>> {
+        let layer = read_vector_layer_for_python(self)?;
+        let feature = layer.features.get(feature_index).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                "feature_index {} out of range (feature_count={})",
+                feature_index,
+                layer.features.len()
+            ))
+        })?;
+
+        let out = PyDict::new(py);
+        for (idx, field) in layer.schema.fields().iter().enumerate() {
+            let value = feature.attributes.get(idx).unwrap_or(&FieldValue::Null);
+            out.set_item(field.name.as_str(), field_value_to_pyobject(py, value)?)?;
+        }
+        Ok(out.unbind().into_any())
+    }
+
+    fn get_attribute(&self, py: Python<'_>, feature_index: usize, field_name: &str) -> PyResult<Py<PyAny>> {
+        let layer = read_vector_layer_for_python(self)?;
+        let idx = layer
+            .schema
+            .field_index(field_name)
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                    "attribute field '{}' not found",
+                    field_name
+                ))
+            })?;
+        let feature = layer.features.get(feature_index).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                "feature_index {} out of range (feature_count={})",
+                feature_index,
+                layer.features.len()
+            ))
+        })?;
+        let value = feature.attributes.get(idx).unwrap_or(&FieldValue::Null);
+        field_value_to_pyobject(py, value)
+    }
+
+    fn set_attribute(
+        &self,
+        feature_index: usize,
+        field_name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let mut layer = read_vector_layer_for_python(self)?;
+        let idx = layer
+            .schema
+            .field_index(field_name)
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                    "attribute field '{}' not found",
+                    field_name
+                ))
+            })?;
+        let expected_type = layer.schema.fields()[idx].field_type;
+        let converted = py_any_to_field_value(value, expected_type)?;
+        let feature_count = layer.features.len();
+        let feature = layer.features.get_mut(feature_index).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                "feature_index {} out of range (feature_count={})",
+                feature_index, feature_count
+            ))
+        })?;
+        feature.set_by_index(idx, converted);
+        write_vector_layer_for_python(self, &layer)
+    }
+
+    fn set_attributes(&self, feature_index: usize, values: &Bound<'_, PyDict>) -> PyResult<()> {
+        let mut layer = read_vector_layer_for_python(self)?;
+        let mut updates: Vec<(usize, FieldValue)> = Vec::new();
+
+        for (k, v) in values.iter() {
+            let key = k.extract::<String>().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>("attribute keys must be strings")
+            })?;
+            let idx = layer
+                .schema
+                .field_index(&key)
+                .ok_or_else(|| {
+                    PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                        "attribute field '{}' not found",
+                        key
+                    ))
+                })?;
+            let expected_type = layer.schema.fields()[idx].field_type;
+            updates.push((idx, py_any_to_field_value(&v, expected_type)?));
+        }
+
+        let feature_count = layer.features.len();
+        let feature = layer.features.get_mut(feature_index).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                "feature_index {} out of range (feature_count={})",
+                feature_index, feature_count
+            ))
+        })?;
+
+        for (idx, value) in updates {
+            feature.set_by_index(idx, value);
+        }
+
+        write_vector_layer_for_python(self, &layer)
+    }
+
+    #[pyo3(signature = (name, field_type="text", nullable=true, width=0, precision=0, default_value=None))]
+    fn add_attribute_field(
+        &self,
+        name: &str,
+        field_type: &str,
+        nullable: bool,
+        width: usize,
+        precision: usize,
+        default_value: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let mut layer = read_vector_layer_for_python(self)?;
+        if layer.schema.field_index(name).is_some() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "attribute field '{}' already exists",
+                name
+            )));
+        }
+
+        let parsed_type = parse_field_type_name(field_type)?;
+        let mut def = FieldDef::new(name, parsed_type);
+        def.nullable = nullable;
+        def.width = width;
+        def.precision = precision;
+        layer.add_field(def);
+
+        let idx = layer.schema.field_index(name).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "failed to resolve newly added attribute field index",
+            )
+        })?;
+
+        let default = if let Some(v) = default_value {
+            py_any_to_field_value(v, parsed_type)?
+        } else {
+            FieldValue::Null
+        };
+
+        for feature in &mut layer.features {
+            feature.set_by_index(idx, default.clone());
+        }
+
+        write_vector_layer_for_python(self, &layer)
+    }
+
     #[pyo3(signature = (
         dst_epsg,
         output_path=None,
@@ -3277,6 +4269,145 @@ impl WbEnvironment {
             .collect()
     }
 
+    /// Read a single remote sensing bundle using unified family detection.
+    fn read_bundle(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let input_path = if Path::new(bundle_root).is_absolute() {
+            PathBuf::from(bundle_root)
+        } else {
+            self.working_directory.join(bundle_root)
+        };
+
+        if !input_path.exists() {
+            return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                "Bundle path not found: {}",
+                input_path.display()
+            )));
+        }
+
+        let opened = open_sensor_bundle_path(&input_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "failed to open bundle '{}': {e}",
+                input_path.display()
+            ))
+        })?;
+
+        let family = sensor_bundle_family_name(&opened.bundle).to_string();
+        let resolved_root = opened.extracted_root.unwrap_or(input_path);
+
+        Ok(Bundle {
+            bundle_root: resolved_root,
+            family,
+        })
+    }
+
+    /// Read a Landsat bundle.
+    fn read_landsat(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "landsat" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected landsat bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a Sentinel-2 SAFE bundle.
+    fn read_sentinel2(&self, safe_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(safe_root)?;
+        if bundle.family != "sentinel2_safe" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected sentinel2_safe bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a Sentinel-1 SAFE bundle.
+    fn read_sentinel1(&self, safe_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(safe_root)?;
+        if bundle.family != "sentinel1_safe" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected sentinel1_safe bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a PlanetScope bundle.
+    fn read_planetscope(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "planetscope" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected planetscope bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read an ICEYE bundle.
+    fn read_iceye(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "iceye" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected iceye bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a DIMAP (SPOT/Pleiades) bundle.
+    fn read_dimap(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "dimap" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected dimap bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a Maxar/WorldView bundle.
+    fn read_maxar_worldview(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "maxar_worldview" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected maxar_worldview bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read a RADARSAT-2 bundle.
+    fn read_radarsat2(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "radarsat2" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected radarsat2 bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
+    /// Read an RCM bundle.
+    fn read_rcm(&self, bundle_root: &str) -> PyResult<Bundle> {
+        let bundle = self.read_bundle(bundle_root)?;
+        if bundle.family != "rcm" {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Expected rcm bundle, detected '{}'",
+                bundle.family
+            )));
+        }
+        Ok(bundle)
+    }
+
     #[pyo3(signature = (
         input,
         dst_epsg,
@@ -3752,39 +4883,129 @@ impl WbEnvironment {
         Ok(())
     }
 
-    #[pyo3(signature = (input, output, yield_field_name, max_change_in_heading=25.0, ignore_zeros=false, output_points=None, callback=None))]
-    fn recreate_pass_lines(
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (
+        input,
+        output_prefix="yield_pipeline",
+        yield_field_name="YIELD",
+        profile="balanced",
+        swath_width=6.096,
+        edge_radius=None,
+        reconcile_radius=None,
+        normalization_radius=None,
+        z_score_threshold=None,
+        min_yield=None,
+        max_yield=None,
+        mean_tonnage=None,
+        header_field_name="HEADER",
+        use_field_aliases=true,
+        moisture_field_name=None,
+        target_moisture_pct=15.5,
+        speed_field_name=None,
+        heading_field_name=None,
+        min_speed_kmh=1.0,
+        max_speed_kmh=18.0,
+        max_heading_change_deg=35.0,
+        lag_correction_mode="none",
+        lag_distance_m=0.0,
+        filtering_mode="standard",
+        robust_mad_threshold=3.0,
+        standardize=false,
+        ignore_zeros=false,
+        max_change_in_heading=25.0,
+        callback=None
+    ))]
+    fn yield_data_conditioning_and_qa(
         &self,
         input: &Vector,
-        output: &str,
+        output_prefix: &str,
         yield_field_name: &str,
-        max_change_in_heading: f64,
+        profile: &str,
+        swath_width: f64,
+        edge_radius: Option<f64>,
+        reconcile_radius: Option<f64>,
+        normalization_radius: Option<f64>,
+        z_score_threshold: Option<f64>,
+        min_yield: Option<f64>,
+        max_yield: Option<f64>,
+        mean_tonnage: Option<f64>,
+        header_field_name: &str,
+        use_field_aliases: bool,
+        moisture_field_name: Option<&str>,
+        target_moisture_pct: f64,
+        speed_field_name: Option<&str>,
+        heading_field_name: Option<&str>,
+        min_speed_kmh: f64,
+        max_speed_kmh: f64,
+        max_heading_change_deg: f64,
+        lag_correction_mode: &str,
+        lag_distance_m: f64,
+        filtering_mode: &str,
+        robust_mad_threshold: f64,
+        standardize: bool,
         ignore_zeros: bool,
-        output_points: Option<&str>,
+        max_change_in_heading: f64,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<(Vector, Vector)> {
-        let out_lines = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
+    ) -> PyResult<(Vector, Vector, Vector, Vector, String)> {
+        let output_prefix_path = if Path::new(output_prefix).is_absolute() {
+            PathBuf::from(output_prefix)
         } else {
-            self.working_directory.join(output)
-        };
-        let out_points = if let Some(path) = output_points {
-            if Path::new(path).is_absolute() {
-                PathBuf::from(path)
-            } else {
-                self.working_directory.join(path)
-            }
-        } else {
-            derived_output_path(&out_lines, "pass_points")
+            self.working_directory.join(output_prefix)
         };
 
         let mut args = serde_json::Map::new();
         args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_lines.to_string_lossy().to_string()));
-        args.insert("output_points".to_string(), json!(out_points.to_string_lossy().to_string()));
+        args.insert(
+            "output_prefix".to_string(),
+            json!(output_prefix_path.to_string_lossy().to_string()),
+        );
         args.insert("yield_field_name".to_string(), json!(yield_field_name));
-        args.insert("max_change_in_heading".to_string(), json!(max_change_in_heading));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("swath_width".to_string(), json!(swath_width));
+        args.insert("header_field_name".to_string(), json!(header_field_name));
+        args.insert("use_field_aliases".to_string(), json!(use_field_aliases));
+        args.insert("target_moisture_pct".to_string(), json!(target_moisture_pct));
+        args.insert("min_speed_kmh".to_string(), json!(min_speed_kmh));
+        args.insert("max_speed_kmh".to_string(), json!(max_speed_kmh));
+        args.insert("max_heading_change_deg".to_string(), json!(max_heading_change_deg));
+        args.insert("lag_correction_mode".to_string(), json!(lag_correction_mode));
+        args.insert("lag_distance_m".to_string(), json!(lag_distance_m));
+        args.insert("filtering_mode".to_string(), json!(filtering_mode));
+        args.insert("robust_mad_threshold".to_string(), json!(robust_mad_threshold));
+        args.insert("standardize".to_string(), json!(standardize));
         args.insert("ignore_zeros".to_string(), json!(ignore_zeros));
+        args.insert("max_change_in_heading".to_string(), json!(max_change_in_heading));
+
+        if let Some(v) = edge_radius {
+            args.insert("edge_radius".to_string(), json!(v));
+        }
+        if let Some(v) = reconcile_radius {
+            args.insert("reconcile_radius".to_string(), json!(v));
+        }
+        if let Some(v) = normalization_radius {
+            args.insert("normalization_radius".to_string(), json!(v));
+        }
+        if let Some(v) = z_score_threshold {
+            args.insert("z_score_threshold".to_string(), json!(v));
+        }
+        if let Some(v) = min_yield {
+            args.insert("min_yield".to_string(), json!(v));
+        }
+        if let Some(v) = max_yield {
+            args.insert("max_yield".to_string(), json!(v));
+        }
+        if let Some(v) = mean_tonnage {
+            args.insert("mean_tonnage".to_string(), json!(v));
+        }
+        if let Some(v) = moisture_field_name {
+            args.insert("moisture_field_name".to_string(), json!(v));
+        }
+        if let Some(v) = speed_field_name {
+            args.insert("speed_field_name".to_string(), json!(v));
+        }
+        if let Some(v) = heading_field_name {
+            args.insert("heading_field_name".to_string(), json!(v));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -3794,7 +5015,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("recreate_pass_lines", &args_json, &sink)
+                .run_tool_json_with_progress_sink("yield_data_conditioning_and_qa", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -3802,47 +5023,45 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("recreate_pass_lines", &args_json)
+                .run_tool_json_with_progress("yield_data_conditioning_and_qa", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let lines_path = extract_typed_output_path_by_key("recreate_pass_lines", &response, "lines")?;
-        let points_path = extract_typed_output_path_by_key("recreate_pass_lines", &response, "points")?;
+        let qa_flags = extract_output_path_by_key("yield_data_conditioning_and_qa", &response, "qa_flags")?;
+        let clean_points = extract_output_path_by_key("yield_data_conditioning_and_qa", &response, "clean_points")?;
+        let clean_map = extract_output_path_by_key("yield_data_conditioning_and_qa", &response, "clean_map")?;
+        let confidence_points = extract_output_path_by_key("yield_data_conditioning_and_qa", &response, "confidence_points")?;
+        let summary = extract_output_string_by_key("yield_data_conditioning_and_qa", &response, "summary")?;
 
         Ok((
-            Vector { file_path: lines_path },
-            Vector { file_path: points_path },
+            Vector { file_path: qa_flags },
+            Vector { file_path: clean_points },
+            Vector { file_path: clean_map },
+            Vector { file_path: confidence_points },
+            summary,
         ))
     }
 
-    #[pyo3(signature = (input, output, yield_field_name, pass_field_name, swath_width=6.096, z_score_threshold=2.5, min_yield=0.0, max_yield=f64::INFINITY, callback=None))]
-    fn yield_filter(
+    #[pyo3(signature = (input_stack, qa_stack=None, algorithm_mode="fast", min_observations=24, output_prefix=None, callback=None))]
+    fn time_series_change_intelligence(
         &self,
-        input: &Vector,
-        output: &str,
-        yield_field_name: &str,
-        pass_field_name: &str,
-        swath_width: f64,
-        z_score_threshold: f64,
-        min_yield: f64,
-        max_yield: f64,
+        input_stack: &Raster,
+        qa_stack: Option<&Raster>,
+        algorithm_mode: &str,
+        min_observations: i64,
+        output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let out_path = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
-        } else {
-            self.working_directory.join(output)
-        };
-
+    ) -> PyResult<(Raster, Raster, Raster, Raster, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
-        args.insert("yield_field_name".to_string(), json!(yield_field_name));
-        args.insert("pass_field_name".to_string(), json!(pass_field_name));
-        args.insert("swath_width".to_string(), json!(swath_width));
-        args.insert("z_score_threshold".to_string(), json!(z_score_threshold));
-        args.insert("min_yield".to_string(), json!(min_yield));
-        args.insert("max_yield".to_string(), json!(max_yield));
+        args.insert("input_stack".to_string(), json!(input_stack.file_path.to_string_lossy().to_string()));
+        if let Some(qa) = qa_stack {
+            args.insert("qa_stack".to_string(), json!(qa.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("algorithm_mode".to_string(), json!(algorithm_mode));
+        args.insert("min_observations".to_string(), json!(min_observations));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -3852,7 +5071,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("yield_filter", &args_json, &sink)
+                .run_tool_json_with_progress_sink("time_series_change_intelligence", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -3860,36 +5079,47 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("yield_filter", &args_json)
+                .run_tool_json_with_progress("time_series_change_intelligence", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let out = extract_typed_output_path_by_key("yield_filter", &response, "output")?;
-        Ok(Vector { file_path: out })
+        let trend_path = extract_output_path_by_key("time_series_change_intelligence", &response, "trend_change")?;
+        let count_path = extract_output_path_by_key("time_series_change_intelligence", &response, "breakpoint_count")?;
+        let date_path = extract_output_path_by_key("time_series_change_intelligence", &response, "breakpoint_date")?;
+        let conf_path = extract_output_path_by_key("time_series_change_intelligence", &response, "change_confidence")?;
+        let summary_path = extract_output_path_by_key("time_series_change_intelligence", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: trend_path, active_band: input_stack.active_band },
+            Raster { file_path: count_path, active_band: input_stack.active_band },
+            Raster { file_path: date_path, active_band: input_stack.active_band },
+            Raster { file_path: conf_path, active_band: input_stack.active_band },
+            summary_path.to_string_lossy().to_string(),
+        ))
     }
 
-    #[pyo3(signature = (input, output, pass_field_name, swath_width=6.096, max_change_in_heading=25.0, callback=None))]
-    fn yield_map(
+    #[pyo3(signature = (input_sar, input_dem, pair_sar=None, speckle_window=5, z_factor=1.0, output_prefix=None, callback=None))]
+    fn sar_analysis_readiness(
         &self,
-        input: &Vector,
-        output: &str,
-        pass_field_name: &str,
-        swath_width: f64,
-        max_change_in_heading: f64,
+        input_sar: &Raster,
+        input_dem: &Raster,
+        pair_sar: Option<&Raster>,
+        speckle_window: i64,
+        z_factor: f64,
+        output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let out_path = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
-        } else {
-            self.working_directory.join(output)
-        };
-
+    ) -> PyResult<(Raster, Raster, Raster, Option<Raster>, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
-        args.insert("pass_field_name".to_string(), json!(pass_field_name));
-        args.insert("swath_width".to_string(), json!(swath_width));
-        args.insert("max_change_in_heading".to_string(), json!(max_change_in_heading));
+        args.insert("input_sar".to_string(), json!(input_sar.file_path.to_string_lossy().to_string()));
+        args.insert("input_dem".to_string(), json!(input_dem.file_path.to_string_lossy().to_string()));
+        if let Some(pair) = pair_sar {
+            args.insert("pair_sar".to_string(), json!(pair.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("speckle_window".to_string(), json!(speckle_window));
+        args.insert("z_factor".to_string(), json!(z_factor));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -3899,7 +5129,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("yield_map", &args_json, &sink)
+                .run_tool_json_with_progress_sink("sar_analysis_readiness", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -3907,40 +5137,47 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("yield_map", &args_json)
+                .run_tool_json_with_progress("sar_analysis_readiness", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let out = extract_typed_output_path_by_key("yield_map", &response, "output")?;
-        Ok(Vector { file_path: out })
+        let calibrated = extract_output_path_by_key("sar_analysis_readiness", &response, "sar_backscatter_calibrated")?;
+        let speckle = extract_output_path_by_key("sar_analysis_readiness", &response, "speckle_filtered")?;
+        let rtc = extract_output_path_by_key("sar_analysis_readiness", &response, "rtc_factor")?;
+        let coherence = {
+            let outputs = response.get("outputs").unwrap_or(&response);
+            outputs
+                .get("coherence")
+                .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+                .map(|p| Raster { file_path: PathBuf::from(p), active_band: input_sar.active_band })
+        };
+        let summary = extract_output_path_by_key("sar_analysis_readiness", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: calibrated, active_band: input_sar.active_band },
+            Raster { file_path: speckle, active_band: input_sar.active_band },
+            Raster { file_path: rtc, active_band: input_sar.active_band },
+            coherence,
+            summary.to_string_lossy().to_string(),
+        ))
     }
 
-    #[pyo3(signature = (input, output, yield_field_name, radius=0.0, standardize=false, min_yield=0.0, max_yield=f64::INFINITY, callback=None))]
-    fn yield_normalization(
+    #[pyo3(signature = (dem, wetland_mask, max_polygon_features=10000, output_prefix=None, callback=None))]
+    fn wetland_hydrogeomorphic_classification(
         &self,
-        input: &Vector,
-        output: &str,
-        yield_field_name: &str,
-        radius: f64,
-        standardize: bool,
-        min_yield: f64,
-        max_yield: f64,
+        dem: &Raster,
+        wetland_mask: &Raster,
+        max_polygon_features: i64,
+        output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let out_path = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
-        } else {
-            self.working_directory.join(output)
-        };
-
+    ) -> PyResult<(Raster, Vector, Raster, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
-        args.insert("yield_field_name".to_string(), json!(yield_field_name));
-        args.insert("radius".to_string(), json!(radius));
-        args.insert("standardize".to_string(), json!(standardize));
-        args.insert("min_yield".to_string(), json!(min_yield));
-        args.insert("max_yield".to_string(), json!(max_yield));
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("wetland_mask".to_string(), json!(wetland_mask.file_path.to_string_lossy().to_string()));
+        args.insert("max_polygon_features".to_string(), json!(max_polygon_features));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -3950,7 +5187,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("yield_normalization", &args_json, &sink)
+                .run_tool_json_with_progress_sink("wetland_hydrogeomorphic_classification", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -3958,36 +5195,43 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("yield_normalization", &args_json)
+                .run_tool_json_with_progress("wetland_hydrogeomorphic_classification", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let out = extract_typed_output_path_by_key("yield_normalization", &response, "output")?;
-        Ok(Vector { file_path: out })
+        let cls = extract_output_path_by_key("wetland_hydrogeomorphic_classification", &response, "hgm_class")?;
+        let polys = extract_output_path_by_key("wetland_hydrogeomorphic_classification", &response, "wetland_polygons")?;
+        let conf = extract_output_path_by_key("wetland_hydrogeomorphic_classification", &response, "confidence")?;
+        let summary = extract_output_path_by_key("wetland_hydrogeomorphic_classification", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: cls, active_band: dem.active_band },
+            Vector { file_path: polys },
+            Raster { file_path: conf, active_band: dem.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
     }
 
-    #[pyo3(signature = (input, output, radius, max_change_in_heading=25.0, flag_edges=false, callback=None))]
-    fn remove_field_edge_points(
+    #[pyo3(signature = (baseline_urban, scenario_urban, streams, habitat_sensitivity=None, output_prefix=None, callback=None))]
+    fn urban_expansion_impact_assessment(
         &self,
-        input: &Vector,
-        output: &str,
-        radius: f64,
-        max_change_in_heading: f64,
-        flag_edges: bool,
+        baseline_urban: &Raster,
+        scenario_urban: &Raster,
+        streams: &Vector,
+        habitat_sensitivity: Option<&Raster>,
+        output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let out_path = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
-        } else {
-            self.working_directory.join(output)
-        };
-
+    ) -> PyResult<(Raster, Vector, Raster, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
-        args.insert("radius".to_string(), json!(radius));
-        args.insert("max_change_in_heading".to_string(), json!(max_change_in_heading));
-        args.insert("flag_edges".to_string(), json!(flag_edges));
+        args.insert("baseline_urban".to_string(), json!(baseline_urban.file_path.to_string_lossy().to_string()));
+        args.insert("scenario_urban".to_string(), json!(scenario_urban.file_path.to_string_lossy().to_string()));
+        args.insert("streams".to_string(), json!(streams.file_path.to_string_lossy().to_string()));
+        if let Some(hs) = habitat_sensitivity {
+            args.insert("habitat_sensitivity".to_string(), json!(hs.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -3997,7 +5241,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("remove_field_edge_points", &args_json, &sink)
+                .run_tool_json_with_progress_sink("urban_expansion_impact_assessment", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -4005,42 +5249,39 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("remove_field_edge_points", &args_json)
+                .run_tool_json_with_progress("urban_expansion_impact_assessment", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let out = extract_typed_output_path_by_key("remove_field_edge_points", &response, "output")?;
-        Ok(Vector { file_path: out })
+        let impact = extract_output_path_by_key("urban_expansion_impact_assessment", &response, "impact_severity")?;
+        let affected = extract_output_path_by_key("urban_expansion_impact_assessment", &response, "affected_streams")?;
+        let habitat = extract_output_path_by_key("urban_expansion_impact_assessment", &response, "habitat_loss")?;
+        let summary = extract_output_path_by_key("urban_expansion_impact_assessment", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: impact, active_band: baseline_urban.active_band },
+            Vector { file_path: affected },
+            Raster { file_path: habitat, active_band: baseline_urban.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
     }
 
-    #[pyo3(signature = (input, output, region_field_name, yield_field_name, radius, min_yield=f64::MIN_POSITIVE, max_yield=f64::INFINITY, mean_tonnage=f64::NEG_INFINITY, callback=None))]
-    fn reconcile_multiple_headers(
+    #[pyo3(signature = (dem, candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None))]
+    fn solar_site_suitability_analysis(
         &self,
-        input: &Vector,
-        output: &str,
-        region_field_name: &str,
-        yield_field_name: &str,
-        radius: f64,
-        min_yield: f64,
-        max_yield: f64,
-        mean_tonnage: f64,
+        dem: &Raster,
+        candidate_threshold: f64,
+        max_candidate_sites: i64,
+        output_prefix: Option<&str>,
         callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let out_path = if Path::new(output).is_absolute() {
-            PathBuf::from(output)
-        } else {
-            self.working_directory.join(output)
-        };
-
+    ) -> PyResult<(Raster, Raster, Vector, String)> {
         let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
-        args.insert("region_field_name".to_string(), json!(region_field_name));
-        args.insert("yield_field_name".to_string(), json!(yield_field_name));
-        args.insert("radius".to_string(), json!(radius));
-        args.insert("min_yield".to_string(), json!(min_yield));
-        args.insert("max_yield".to_string(), json!(max_yield));
-        args.insert("mean_tonnage".to_string(), json!(mean_tonnage));
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("candidate_threshold".to_string(), json!(candidate_threshold));
+        args.insert("max_candidate_sites".to_string(), json!(max_candidate_sites));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
@@ -4050,7 +5291,7 @@ impl WbEnvironment {
             let sink = PyCallbackSink::new(cb);
             let r = self
                 .runtime
-                .run_tool_json_with_progress_sink("reconcile_multiple_headers", &args_json, &sink)
+                .run_tool_json_with_progress_sink("solar_site_suitability_analysis", &args_json, &sink)
                 .map_err(map_tool_error)?;
             if let Some(msg) = sink.take_error() {
                 return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
@@ -4058,12 +5299,446 @@ impl WbEnvironment {
             r
         } else {
             self.runtime
-                .run_tool_json_with_progress("reconcile_multiple_headers", &args_json)
+                .run_tool_json_with_progress("solar_site_suitability_analysis", &args_json)
                 .map_err(map_tool_error)?
         };
 
-        let out = extract_typed_output_path_by_key("reconcile_multiple_headers", &response, "output")?;
-        Ok(Vector { file_path: out })
+        let score = extract_output_path_by_key("solar_site_suitability_analysis", &response, "suitability_score")?;
+        let impact = extract_output_path_by_key("solar_site_suitability_analysis", &response, "visual_impact")?;
+        let sites = extract_output_path_by_key("solar_site_suitability_analysis", &response, "candidate_sites")?;
+        let summary = extract_output_path_by_key("solar_site_suitability_analysis", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: score, active_band: dem.active_band },
+            Raster { file_path: impact, active_band: dem.active_band },
+            Vector { file_path: sites },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (dem, start_features, end_features, constraints=None, cost_profile="slope_roughness", terminal_anchor_strategy="mixed", corridor_tolerance=0.15, output_prefix=None, callback=None))]
+    fn corridor_mapping_intelligence(
+        &self,
+        dem: &Raster,
+        start_features: &Vector,
+        end_features: &Vector,
+        constraints: Option<&Vector>,
+        cost_profile: &str,
+        terminal_anchor_strategy: &str,
+        corridor_tolerance: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Vector, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "start_features".to_string(),
+            json!(start_features.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "end_features".to_string(),
+            json!(end_features.file_path.to_string_lossy().to_string()),
+        );
+        if let Some(c) = constraints {
+            args.insert("constraints".to_string(), json!(c.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("cost_profile".to_string(), json!(cost_profile));
+        args.insert("terminal_anchor_strategy".to_string(), json!(terminal_anchor_strategy));
+        args.insert("corridor_tolerance".to_string(), json!(corridor_tolerance));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("corridor_mapping_intelligence", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("corridor_mapping_intelligence", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let cost_surface = extract_output_path_by_key("corridor_mapping_intelligence", &response, "cost_surface")?;
+        let accumulated_cost = extract_output_path_by_key("corridor_mapping_intelligence", &response, "accumulated_cost")?;
+        let optimal_route = extract_output_path_by_key("corridor_mapping_intelligence", &response, "optimal_route")?;
+        let corridor_suitability = extract_output_path_by_key("corridor_mapping_intelligence", &response, "corridor_suitability")?;
+        let summary = extract_output_path_by_key("corridor_mapping_intelligence", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: cost_surface, active_band: dem.active_band },
+            Raster { file_path: accumulated_cost, active_band: dem.active_band },
+            Vector { file_path: optimal_route },
+            Raster { file_path: corridor_suitability, active_band: dem.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (dem, rainfall_intensity=None, profile="balanced", susceptibility_threshold=0.65, max_zone_features=5000, output_prefix=None, callback=None))]
+    fn landslide_susceptibility_assessment(
+        &self,
+        dem: &Raster,
+        rainfall_intensity: Option<&Raster>,
+        profile: &str,
+        susceptibility_threshold: f64,
+        max_zone_features: i64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, Vector, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        if let Some(rain) = rainfall_intensity {
+            args.insert("rainfall_intensity".to_string(), json!(rain.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("susceptibility_threshold".to_string(), json!(susceptibility_threshold));
+        args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("landslide_susceptibility_assessment", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("landslide_susceptibility_assessment", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let susceptibility = extract_output_path_by_key("landslide_susceptibility_assessment", &response, "susceptibility")?;
+        let trigger = extract_output_path_by_key("landslide_susceptibility_assessment", &response, "trigger_pressure")?;
+        let confidence = extract_output_path_by_key("landslide_susceptibility_assessment", &response, "confidence")?;
+        let zones = extract_output_path_by_key("landslide_susceptibility_assessment", &response, "risk_zones")?;
+        let summary = extract_output_path_by_key("landslide_susceptibility_assessment", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: susceptibility, active_band: dem.active_band },
+            Raster { file_path: trigger, active_band: dem.active_band },
+            Raster { file_path: confidence, active_band: dem.active_band },
+            Vector { file_path: zones },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (dem, streams, profile="balanced", output_prefix=None, callback=None))]
+    fn river_corridor_health_assessment(
+        &self,
+        dem: &Raster,
+        streams: &Vector,
+        profile: &str,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, Vector, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("streams".to_string(), json!(streams.file_path.to_string_lossy().to_string()));
+        args.insert("profile".to_string(), json!(profile));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("river_corridor_health_assessment", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("river_corridor_health_assessment", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let erosion = extract_output_path_by_key("river_corridor_health_assessment", &response, "erosion_pressure")?;
+        let confidence = extract_output_path_by_key("river_corridor_health_assessment", &response, "corridor_confidence")?;
+        let health = extract_output_path_by_key("river_corridor_health_assessment", &response, "stream_health_score")?;
+        let zones = extract_output_path_by_key("river_corridor_health_assessment", &response, "restoration_zones")?;
+        let summary = extract_output_path_by_key("river_corridor_health_assessment", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: erosion, active_band: dem.active_band },
+            Raster { file_path: confidence, active_band: dem.active_band },
+            Raster { file_path: health, active_band: dem.active_band },
+            Vector { file_path: zones },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (dem, soil_moisture=None, profile="balanced", target_moisture=0.6, max_irrigation_mm=18.0, output_prefix=None, callback=None))]
+    fn precision_irrigation_optimization(
+        &self,
+        dem: &Raster,
+        soil_moisture: Option<&Raster>,
+        profile: &str,
+        target_moisture: f64,
+        max_irrigation_mm: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        if let Some(m) = soil_moisture {
+            args.insert("soil_moisture".to_string(), json!(m.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("target_moisture".to_string(), json!(target_moisture));
+        args.insert("max_irrigation_mm".to_string(), json!(max_irrigation_mm));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("precision_irrigation_optimization", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("precision_irrigation_optimization", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let prescription = extract_output_path_by_key("precision_irrigation_optimization", &response, "irrigation_prescription")?;
+        let stress = extract_output_path_by_key("precision_irrigation_optimization", &response, "moisture_stress_risk")?;
+        let zones = extract_output_path_by_key("precision_irrigation_optimization", &response, "vri_zones")?;
+        let summary = extract_output_path_by_key("precision_irrigation_optimization", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: prescription, active_band: dem.active_band },
+            Raster { file_path: stress, active_band: dem.active_band },
+            Raster { file_path: zones, active_band: dem.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (yield_surface, terrain_context=None, profile="balanced", zone_count=4, max_zone_features=5000, output_prefix=None, callback=None))]
+    fn precision_ag_yield_zone_intelligence(
+        &self,
+        yield_surface: &Raster,
+        terrain_context: Option<&Raster>,
+        profile: &str,
+        zone_count: i64,
+        max_zone_features: i64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Vector, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("yield_surface".to_string(), json!(yield_surface.file_path.to_string_lossy().to_string()));
+        if let Some(t) = terrain_context {
+            args.insert("terrain_context".to_string(), json!(t.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("zone_count".to_string(), json!(zone_count));
+        args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("precision_ag_yield_zone_intelligence", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("precision_ag_yield_zone_intelligence", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let stability = extract_output_path_by_key("precision_ag_yield_zone_intelligence", &response, "yield_stability")?;
+        let zones = extract_output_path_by_key("precision_ag_yield_zone_intelligence", &response, "management_zones")?;
+        let zones_vec = extract_output_path_by_key("precision_ag_yield_zone_intelligence", &response, "management_zones_vector")?;
+        let conf = extract_output_path_by_key("precision_ag_yield_zone_intelligence", &response, "zone_confidence")?;
+        let summary = extract_output_path_by_key("precision_ag_yield_zone_intelligence", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: stability, active_band: yield_surface.active_band },
+            Raster { file_path: zones, active_band: yield_surface.active_band },
+            Vector { file_path: zones_vec },
+            Raster { file_path: conf, active_band: yield_surface.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (baseline_bundle, change_bundle, input_sar, input_dem, baseline_red_band_index=0, baseline_nir_band_index=1, change_red_band_index=0, change_nir_band_index=1, pair_sar=None, profile="balanced", high_confidence_threshold=0.8, max_zone_features=25000, output_prefix=None, callback=None))]
+    fn multi_sensor_fusion_monitoring(
+        &self,
+        baseline_bundle: &Raster,
+        change_bundle: &Raster,
+        input_sar: &Raster,
+        input_dem: &Raster,
+        baseline_red_band_index: i64,
+        baseline_nir_band_index: i64,
+        change_red_band_index: i64,
+        change_nir_band_index: i64,
+        pair_sar: Option<&Raster>,
+        profile: &str,
+        high_confidence_threshold: f64,
+        max_zone_features: i64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, Vector, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("baseline_bundle".to_string(), json!(baseline_bundle.file_path.to_string_lossy().to_string()));
+        args.insert("baseline_red_band_index".to_string(), json!(baseline_red_band_index));
+        args.insert("baseline_nir_band_index".to_string(), json!(baseline_nir_band_index));
+        args.insert("change_bundle".to_string(), json!(change_bundle.file_path.to_string_lossy().to_string()));
+        args.insert("change_red_band_index".to_string(), json!(change_red_band_index));
+        args.insert("change_nir_band_index".to_string(), json!(change_nir_band_index));
+        args.insert("input_sar".to_string(), json!(input_sar.file_path.to_string_lossy().to_string()));
+        args.insert("input_dem".to_string(), json!(input_dem.file_path.to_string_lossy().to_string()));
+        if let Some(pair) = pair_sar {
+            args.insert("pair_sar".to_string(), json!(pair.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
+        args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("multi_sensor_fusion_monitoring", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("multi_sensor_fusion_monitoring", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let fused = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "fused_change_probability")?;
+        let agreement = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "sensor_agreement")?;
+        let terrain = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "terrain_context")?;
+        let zones = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "high_confidence_change_zones")?;
+        let summary = extract_output_path_by_key("multi_sensor_fusion_monitoring", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: fused, active_band: baseline_bundle.active_band },
+            Raster { file_path: agreement, active_band: baseline_bundle.active_band },
+            Raster { file_path: terrain, active_band: baseline_bundle.active_band },
+            Vector { file_path: zones },
+            summary.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input_red, input_nir, input_dem, solar_zenith_deg, solar_azimuth_deg, input_green=None, profile="balanced", output_prefix=None, callback=None))]
+    fn brdf_surface_reflectance_consistency(
+        &self,
+        input_red: &Raster,
+        input_nir: &Raster,
+        input_dem: &Raster,
+        solar_zenith_deg: f64,
+        solar_azimuth_deg: f64,
+        input_green: Option<&Raster>,
+        profile: &str,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input_red".to_string(), json!(input_red.file_path.to_string_lossy().to_string()));
+        args.insert("input_nir".to_string(), json!(input_nir.file_path.to_string_lossy().to_string()));
+        args.insert("input_dem".to_string(), json!(input_dem.file_path.to_string_lossy().to_string()));
+        args.insert("solar_zenith_deg".to_string(), json!(solar_zenith_deg));
+        args.insert("solar_azimuth_deg".to_string(), json!(solar_azimuth_deg));
+        if let Some(g) = input_green {
+            args.insert("input_green".to_string(), json!(g.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("brdf_surface_reflectance_consistency", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("brdf_surface_reflectance_consistency", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let normalized = extract_output_path_by_key("brdf_surface_reflectance_consistency", &response, "brdf_normalized_reflectance")?;
+        let delta = extract_output_path_by_key("brdf_surface_reflectance_consistency", &response, "normalization_delta")?;
+        let confidence = extract_output_path_by_key("brdf_surface_reflectance_consistency", &response, "consistency_confidence")?;
+        let summary = extract_output_path_by_key("brdf_surface_reflectance_consistency", &response, "summary")?;
+
+        Ok((
+            Raster { file_path: normalized, active_band: input_red.active_band },
+            Raster { file_path: delta, active_band: input_red.active_band },
+            Raster { file_path: confidence, active_band: input_red.active_band },
+            summary.to_string_lossy().to_string(),
+        ))
     }
 
     // Hydrology flow accumulation tools
@@ -4372,6 +6047,711 @@ impl WbEnvironment {
                 file_path: accum_path,
                 active_band: dem.active_band,
             },
+        ))
+    }
+
+    #[pyo3(signature = (baseline_red, baseline_nir, change_red, change_nir, intermediate_ndvi=None, profile="balanced", high_confidence_threshold=0.85, output_prefix=None, callback=None))]
+    fn remote_sensing_change_detection(
+        &self,
+        baseline_red: &Raster,
+        baseline_nir: &Raster,
+        change_red: &Raster,
+        change_nir: &Raster,
+        intermediate_ndvi: Option<&Raster>,
+        profile: &str,
+        high_confidence_threshold: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("baseline_red".to_string(), json!(baseline_red.file_path.to_string_lossy().to_string()));
+        args.insert("baseline_nir".to_string(), json!(baseline_nir.file_path.to_string_lossy().to_string()));
+        args.insert("change_red".to_string(), json!(change_red.file_path.to_string_lossy().to_string()));
+        args.insert("change_nir".to_string(), json!(change_nir.file_path.to_string_lossy().to_string()));
+        if let Some(ndvi) = intermediate_ndvi {
+            args.insert("intermediate_ndvi".to_string(), json!(ndvi.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("remote_sensing_change_detection", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("remote_sensing_change_detection", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let change_path = extract_output_path_by_key("remote_sensing_change_detection", &response, "change_map")?;
+        let confidence_path = extract_output_path_by_key("remote_sensing_change_detection", &response, "confidence")?;
+        let summary_path = extract_output_path_by_key("remote_sensing_change_detection", &response, "summary")?;
+
+        Ok((
+            Raster {
+                file_path: change_path,
+                active_band: baseline_red.active_band,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: baseline_red.active_band,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input_dem, safe_root=None, input_red=None, input_nir=None, input_green=None, input_blue=None, solar_mode="auto", solar_zenith_deg=40.0, solar_azimuth_deg=165.0, acquisition_datetime_utc=None, latitude=None, longitude=None, profile="balanced", cloud_threshold=None, shadow_threshold=None, qa_mask=None, qa_mask_format="auto", mask_strategy="auto", z_factor=1.0, output_prefix=None, callback=None))]
+    fn terrain_corrected_optical_analytics(
+        &self,
+        input_dem: &Raster,
+        safe_root: Option<&str>,
+        input_red: Option<&Raster>,
+        input_nir: Option<&Raster>,
+        input_green: Option<&Raster>,
+        input_blue: Option<&Raster>,
+        solar_mode: &str,
+        solar_zenith_deg: f64,
+        solar_azimuth_deg: f64,
+        acquisition_datetime_utc: Option<&str>,
+        latitude: Option<f64>,
+        longitude: Option<f64>,
+        profile: &str,
+        cloud_threshold: Option<f64>,
+        shadow_threshold: Option<f64>,
+        qa_mask: Option<&Raster>,
+        qa_mask_format: &str,
+        mask_strategy: &str,
+        z_factor: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Option<Raster>, Option<Raster>, Raster, Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input_dem".to_string(), json!(input_dem.file_path.to_string_lossy().to_string()));
+        if let Some(root) = safe_root {
+            args.insert("safe_root".to_string(), json!(root));
+        }
+        if let Some(red) = input_red {
+            args.insert("input_red".to_string(), json!(red.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(nir) = input_nir {
+            args.insert("input_nir".to_string(), json!(nir.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(green) = input_green {
+            args.insert("input_green".to_string(), json!(green.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(blue) = input_blue {
+            args.insert("input_blue".to_string(), json!(blue.file_path.to_string_lossy().to_string()));
+        }
+        if let Some(dt) = acquisition_datetime_utc {
+            args.insert("acquisition_datetime_utc".to_string(), json!(dt));
+        }
+        if let Some(lat) = latitude {
+            args.insert("latitude".to_string(), json!(lat));
+        }
+        if let Some(lon) = longitude {
+            args.insert("longitude".to_string(), json!(lon));
+        }
+        if let Some(cloud) = cloud_threshold {
+            args.insert("cloud_threshold".to_string(), json!(cloud));
+        }
+        if let Some(shadow) = shadow_threshold {
+            args.insert("shadow_threshold".to_string(), json!(shadow));
+        }
+        if let Some(mask) = qa_mask {
+            args.insert("qa_mask".to_string(), json!(mask.file_path.to_string_lossy().to_string()));
+        }
+        args.insert("solar_mode".to_string(), json!(solar_mode));
+        args.insert("solar_zenith_deg".to_string(), json!(solar_zenith_deg));
+        args.insert("solar_azimuth_deg".to_string(), json!(solar_azimuth_deg));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("qa_mask_format".to_string(), json!(qa_mask_format));
+        args.insert("mask_strategy".to_string(), json!(mask_strategy));
+        args.insert("z_factor".to_string(), json!(z_factor));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("terrain_corrected_optical_analytics", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("terrain_corrected_optical_analytics", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let red_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "red_corrected")?;
+        let nir_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "nir_corrected")?;
+        let green_path = {
+            let outputs = response.get("outputs").unwrap_or(&response);
+            outputs
+                .get("green_corrected")
+                .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+                .map(PathBuf::from)
+        };
+        let blue_path = {
+            let outputs = response.get("outputs").unwrap_or(&response);
+            outputs
+                .get("blue_corrected")
+                .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+                .map(PathBuf::from)
+        };
+        let mask_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "cloud_shadow_mask")?;
+        let factor_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "topographic_correction_factor")?;
+        let quality_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "quality_confidence")?;
+        let summary_path = extract_output_path_by_key("terrain_corrected_optical_analytics", &response, "summary")?;
+        let default_active_band = input_red
+            .map(|r| r.active_band)
+            .unwrap_or(input_dem.active_band);
+
+        Ok((
+            Raster {
+                file_path: red_path,
+                active_band: default_active_band,
+            },
+            Raster {
+                file_path: nir_path,
+                active_band: input_nir
+                    .map(|r| r.active_band)
+                    .unwrap_or(default_active_band),
+            },
+            green_path.map(|p| Raster {
+                file_path: p,
+                active_band: input_green
+                    .map(|r| r.active_band)
+                    .unwrap_or(default_active_band),
+            }),
+            blue_path.map(|p| Raster {
+                file_path: p,
+                active_band: input_blue
+                    .map(|r| r.active_band)
+                    .unwrap_or(default_active_band),
+            }),
+            Raster {
+                file_path: mask_path,
+                active_band: default_active_band,
+            },
+            Raster {
+                file_path: factor_path,
+                active_band: default_active_band,
+            },
+            Raster {
+                file_path: quality_path,
+                active_band: default_active_band,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input, flat_slope_threshold=3.0, profile_curvature_threshold=0.01, plan_curvature_threshold=0.01, fine_scale=2.0, coarse_scale=8.0, z_factor=1.0, output_prefix=None, landform_polygons_output=None, callback=None))]
+    fn soil_landscape_classification(
+        &self,
+        input: &Raster,
+        flat_slope_threshold: f64,
+        profile_curvature_threshold: f64,
+        plan_curvature_threshold: f64,
+        fine_scale: f64,
+        coarse_scale: f64,
+        z_factor: f64,
+        output_prefix: Option<&str>,
+        landform_polygons_output: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Vector, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("flat_slope_threshold".to_string(), json!(flat_slope_threshold));
+        args.insert("profile_curvature_threshold".to_string(), json!(profile_curvature_threshold));
+        args.insert("plan_curvature_threshold".to_string(), json!(plan_curvature_threshold));
+        args.insert("fine_scale".to_string(), json!(fine_scale));
+        args.insert("coarse_scale".to_string(), json!(coarse_scale));
+        args.insert("z_factor".to_string(), json!(z_factor));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+        if let Some(path) = self.resolve_output_path_for_wd(landform_polygons_output) {
+            args.insert("landform_polygons_output".to_string(), json!(path));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("soil_landscape_classification", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("soil_landscape_classification", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let landform_units_path = extract_output_path_by_key("soil_landscape_classification", &response, "landform_units")?;
+        let multiscale_signature_path = extract_output_path_by_key("soil_landscape_classification", &response, "multiscale_signature")?;
+        let polygons_path = extract_output_path_by_key("soil_landscape_classification", &response, "landform_polygons")?;
+        let summary_path = extract_output_path_by_key("soil_landscape_classification", &response, "summary")?;
+
+        Ok((
+            Raster {
+                file_path: landform_units_path,
+                active_band: input.active_band,
+            },
+            Raster {
+                file_path: multiscale_signature_path,
+                active_band: input.active_band,
+            },
+            Vector {
+                file_path: polygons_path,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", output_prefix=None, callback=None))]
+    fn wind_turbine_siting(
+        &self,
+        dem: &Raster,
+        settlements: &Vector,
+        settlements_epsg: Option<u32>,
+        visibility_radius_meters: i64,
+        min_slope_degrees: f64,
+        max_slope_degrees: f64,
+        profile: &str,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("settlements".to_string(), json!(settlements.file_path.to_string_lossy().to_string()));
+        if let Some(epsg) = settlements_epsg {
+            args.insert("settlements_epsg".to_string(), json!(epsg));
+        }
+        args.insert("visibility_radius_meters".to_string(), json!(visibility_radius_meters));
+        args.insert("min_slope_degrees".to_string(), json!(min_slope_degrees));
+        args.insert("max_slope_degrees".to_string(), json!(max_slope_degrees));
+        args.insert("profile".to_string(), json!(profile));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("wind_turbine_siting", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("wind_turbine_siting", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let score_path = extract_output_path_by_key("wind_turbine_siting", &response, "siting_score")?;
+        let confidence_path = extract_output_path_by_key("wind_turbine_siting", &response, "confidence")?;
+        let summary_path = extract_output_path_by_key("wind_turbine_siting", &response, "summary")?;
+
+        Ok((
+            Raster {
+                file_path: score_path,
+                active_band: dem.active_band,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: dem.active_band,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input, profile="balanced", block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, high_confidence_threshold=0.8, output_prefix=None, output_path=None, callback=None))]
+    fn lidar_qa_and_confidence(
+        &self,
+        input: &Lidar,
+        profile: &str,
+        block_size: f64,
+        max_building_size: f64,
+        slope_threshold: f64,
+        elev_threshold: f64,
+        high_confidence_threshold: f64,
+        output_prefix: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Lidar, Raster, Raster, Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("block_size".to_string(), json!(block_size));
+        args.insert("max_building_size".to_string(), json!(max_building_size));
+        args.insert("slope_threshold".to_string(), json!(slope_threshold));
+        args.insert("elev_threshold".to_string(), json!(elev_threshold));
+        args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("lidar_qa_and_confidence", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("lidar_qa_and_confidence", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let classified_lidar = extract_output_path_by_key("lidar_qa_and_confidence", &response, "classified_lidar")?;
+        let dtm_path = extract_output_path_by_key("lidar_qa_and_confidence", &response, "dtm")?;
+        let confidence_path = extract_output_path_by_key("lidar_qa_and_confidence", &response, "confidence")?;
+        let uncertainty_path = extract_output_path_by_key("lidar_qa_and_confidence", &response, "uncertainty")?;
+        let qa_flags_path = extract_output_path_by_key("lidar_qa_and_confidence", &response, "qa_flags")?;
+        let summary_path = extract_output_path_by_key("lidar_qa_and_confidence", &response, "summary")?;
+
+        Ok((
+            Lidar {
+                file_path: classified_lidar,
+            },
+            Raster {
+                file_path: dtm_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: uncertainty_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: qa_flags_path,
+                active_band: 0,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input, profile="balanced", block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, z_factor=1.0, hillshade_azimuth=315.0, hillshade_altitude=45.0, high_confidence_threshold=0.8, output_prefix=None, output_path=None, callback=None))]
+    fn lidar_terrain_product_suite(
+        &self,
+        input: &Lidar,
+        profile: &str,
+        block_size: f64,
+        max_building_size: f64,
+        slope_threshold: f64,
+        elev_threshold: f64,
+        z_factor: f64,
+        hillshade_azimuth: f64,
+        hillshade_altitude: f64,
+        high_confidence_threshold: f64,
+        output_prefix: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Raster, Raster, Raster, Raster, String, Option<Lidar>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("block_size".to_string(), json!(block_size));
+        args.insert("max_building_size".to_string(), json!(max_building_size));
+        args.insert("slope_threshold".to_string(), json!(slope_threshold));
+        args.insert("elev_threshold".to_string(), json!(elev_threshold));
+        args.insert("z_factor".to_string(), json!(z_factor));
+        args.insert("hillshade_azimuth".to_string(), json!(hillshade_azimuth));
+        args.insert("hillshade_altitude".to_string(), json!(hillshade_altitude));
+        args.insert("high_confidence_threshold".to_string(), json!(high_confidence_threshold));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("lidar_terrain_product_suite", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("lidar_terrain_product_suite", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let dtm_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "dtm")?;
+        let dsm_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "dsm")?;
+        let slope_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "slope")?;
+        let hillshade_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "hillshade")?;
+        let confidence_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "confidence")?;
+        let uncertainty_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "uncertainty")?;
+        let metadata_path = extract_output_path_by_key("lidar_terrain_product_suite", &response, "metadata")?;
+
+        let classified_lidar = {
+            let outputs = response.get("outputs").unwrap_or(&response);
+            outputs
+                .get("classified_lidar")
+                .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+                .map(|path| Lidar {
+                    file_path: PathBuf::from(path),
+                })
+        };
+
+        Ok((
+            Raster {
+                file_path: dtm_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: dsm_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: slope_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: hillshade_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: uncertainty_path,
+                active_band: 0,
+            },
+            metadata_path.to_string_lossy().to_string(),
+            classified_lidar,
+        ))
+    }
+
+    #[pyo3(signature = (input, corridors, profile="balanced", resolution=2.0, risk_height_threshold=3.0, corridor_influence_distance=60.0, priority_zone_threshold=None, max_zone_features=5000, output_prefix=None, callback=None))]
+    fn utility_corridor_encroachment_intelligence(
+        &self,
+        input: &Lidar,
+        corridors: &Vector,
+        profile: &str,
+        resolution: f64,
+        risk_height_threshold: f64,
+        corridor_influence_distance: f64,
+        priority_zone_threshold: Option<f64>,
+        max_zone_features: i64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Vector, Vector, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("corridors".to_string(), json!(corridors.file_path.to_string_lossy().to_string()));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("resolution".to_string(), json!(resolution));
+        args.insert("risk_height_threshold".to_string(), json!(risk_height_threshold));
+        args.insert("corridor_influence_distance".to_string(), json!(corridor_influence_distance));
+        if let Some(v) = priority_zone_threshold {
+            args.insert("priority_zone_threshold".to_string(), json!(v));
+        }
+        args.insert("max_zone_features".to_string(), json!(max_zone_features));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("utility_corridor_encroachment_intelligence", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("utility_corridor_encroachment_intelligence", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let risk_path = extract_output_path_by_key("utility_corridor_encroachment_intelligence", &response, "encroachment_risk")?;
+        let zones_path = extract_output_path_by_key("utility_corridor_encroachment_intelligence", &response, "corridor_priority_zones")?;
+        let table_path = extract_output_path_by_key("utility_corridor_encroachment_intelligence", &response, "asset_risk_table")?;
+        let confidence_path = extract_output_path_by_key("utility_corridor_encroachment_intelligence", &response, "classification_confidence")?;
+        let summary_path = extract_output_path_by_key("utility_corridor_encroachment_intelligence", &response, "summary")?;
+
+        Ok((
+            Raster {
+                file_path: risk_path,
+                active_band: 0,
+            },
+            Vector {
+                file_path: zones_path,
+            },
+            Vector {
+                file_path: table_path,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: 0,
+            },
+            summary_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    #[pyo3(signature = (input, profile="balanced", resolution=2.0, stand_block_cells=12, biomass_cap=25.0, output_prefix=None, callback=None))]
+    fn forestry_structure_and_biomass_intelligence(
+        &self,
+        input: &Lidar,
+        profile: &str,
+        resolution: f64,
+        stand_block_cells: i64,
+        biomass_cap: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, Vector, Raster, Raster, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("profile".to_string(), json!(profile));
+        args.insert("resolution".to_string(), json!(resolution));
+        args.insert("stand_block_cells".to_string(), json!(stand_block_cells));
+        args.insert("biomass_cap".to_string(), json!(biomass_cap));
+        if let Some(prefix) = self.resolve_output_path_for_wd(output_prefix) {
+            args.insert("output_prefix".to_string(), json!(prefix));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("forestry_structure_and_biomass_intelligence", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("forestry_structure_and_biomass_intelligence", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let canopy_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "canopy_height_metrics",
+        )?;
+        let class_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "vertical_structure_class",
+        )?;
+        let stand_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "stand_structure_units",
+        )?;
+        let biomass_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "biomass_proxy",
+        )?;
+        let confidence_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "confidence",
+        )?;
+        let summary_path = extract_output_path_by_key(
+            "forestry_structure_and_biomass_intelligence",
+            &response,
+            "summary",
+        )?;
+
+        Ok((
+            Raster {
+                file_path: canopy_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: class_path,
+                active_band: 0,
+            },
+            Vector {
+                file_path: stand_path,
+            },
+            Raster {
+                file_path: biomass_path,
+                active_band: 0,
+            },
+            Raster {
+                file_path: confidence_path,
+                active_band: 0,
+            },
+            summary_path.to_string_lossy().to_string(),
         ))
     }
 
@@ -18861,6 +21241,30 @@ mod tests {
         }
     }
 
+    fn make_test_vector_with_attributes(path: &Path) -> Vector {
+        let mut layer = WbLayer::new("cities")
+            .with_geom_type(GeometryType::Point)
+            .with_crs_epsg(4326);
+        layer.add_field(FieldDef::new("name", FieldType::Text));
+        layer.add_field(FieldDef::new("count", FieldType::Integer));
+        layer
+            .add_feature(
+                Some(Geometry::point(-75.0, 45.0)),
+                &[("name", "alpha".into()), ("count", 1i64.into())],
+            )
+            .unwrap();
+        layer
+            .add_feature(
+                Some(Geometry::point(-74.0, 46.0)),
+                &[("name", "beta".into()), ("count", 2i64.into())],
+            )
+            .unwrap();
+        wbvector::write(&layer, path, VectorFormat::GeoPackage).unwrap();
+        Vector {
+            file_path: path.to_path_buf(),
+        }
+    }
+
     fn make_test_lidar(path: &Path) -> Lidar {
         let cloud = PointCloud {
             points: vec![
@@ -18874,6 +21278,74 @@ mod tests {
         Lidar {
             file_path: path.to_path_buf(),
         }
+    }
+
+    fn make_test_landsat_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(
+            root.join("LC09_TEST_MTL.txt"),
+            "SPACECRAFT_ID = \"LANDSAT_9\"\nPROCESSING_LEVEL = \"L2SP\"\nWRS_PATH = 1\nWRS_ROW = 1\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("LC09_TEST_SR_B2.TIF"), b"").unwrap();
+    }
+
+    fn make_test_sentinel2_safe_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(
+            root.join("MTD_MSIL2A.xml"),
+            "<n1:Level-2A_User_Product><General_Info><Product_Info><PRODUCT_START_TIME>2026-04-01T00:00:00Z</PRODUCT_START_TIME></Product_Info></General_Info></n1:Level-2A_User_Product>",
+        )
+        .unwrap();
+        let img = root.join("GRANULE").join("T32ABC_001").join("IMG_DATA").join("R10m");
+        std::fs::create_dir_all(&img).unwrap();
+        std::fs::write(img.join("T32ABC_20260401T000000_B04_10m.jp2"), b"").unwrap();
+    }
+
+    fn make_test_sentinel1_safe_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("manifest.safe"), "<xfdu>Sentinel-1</xfdu>").unwrap();
+        let meas = root.join("measurement");
+        std::fs::create_dir_all(&meas).unwrap();
+        std::fs::write(meas.join("s1a-iw-grd-vv-20260401t000000.tiff"), b"").unwrap();
+    }
+
+    fn make_test_planetscope_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("metadata.json"), r#"{"id":"PSScene_01"}"#).unwrap();
+        std::fs::write(root.join("scene_analytic_b4.tif"), b"").unwrap();
+        std::fs::write(root.join("scene_udm2.tif"), b"").unwrap();
+    }
+
+    fn make_test_iceye_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("metadata.xml"), "<product>ICEYE</product>").unwrap();
+        std::fs::write(root.join("ICEYE_TEST_GRD_VV.tif"), b"").unwrap();
+    }
+
+    fn make_test_dimap_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("DIM_PHR1A_PMS_001.XML"), "<Dimap_Document>DIMAP</Dimap_Document>")
+            .unwrap();
+        std::fs::write(root.join("IMG_B1.JP2"), b"").unwrap();
+    }
+
+    fn make_test_maxar_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("scene.IMD"), "satId = \"WV03\"").unwrap();
+        std::fs::write(root.join("IMG_BAND_R.TIF"), b"").unwrap();
+    }
+
+    fn make_test_radarsat2_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("product.xml"), "<product>RADARSAT-2</product>").unwrap();
+        std::fs::write(root.join("imagery_HH.tif"), b"").unwrap();
+    }
+
+    fn make_test_rcm_bundle(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        std::fs::write(root.join("product.xml"), "<product>RCM</product>").unwrap();
+        std::fs::write(root.join("rcm_scene_VV.tif"), b"").unwrap();
     }
 
     fn event_strings(events: &Bound<'_, PyList>) -> Vec<String> {
@@ -19190,6 +21662,71 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn vector_attribute_api_supports_read_write() {
+        Python::initialize();
+        let td = TempDirGuard::new("vector_attrs");
+        let vector_path = td.path().join("cities_attrs.gpkg");
+        let vector = make_test_vector_with_attributes(&vector_path);
+
+        assert_eq!(vector.feature_count().unwrap(), 2);
+        assert_eq!(
+            vector.attribute_field_names().unwrap(),
+            vec!["name".to_string(), "count".to_string()]
+        );
+
+        Python::attach(|py| -> PyResult<()> {
+            let py_vec = Py::new(py, vector)?;
+
+            let name0 = py_vec.call_method1(py, "get_attribute", (0usize, "name"))?;
+            assert_eq!(name0.extract::<String>(py)?, "alpha");
+
+            py_vec.call_method1(py, "set_attribute", (1usize, "count", 9i64))?;
+            let count1 = py_vec.call_method1(py, "get_attribute", (1usize, "count"))?;
+            assert_eq!(count1.extract::<i64>(py)?, 9);
+
+            py_vec.call_method1(
+                py,
+                "add_attribute_field",
+                ("score", "float", true, 0usize, 0usize, 1.5f64),
+            )?;
+
+            let updates = PyDict::new(py);
+            updates.set_item("name", "omega")?;
+            updates.set_item("score", 3.25f64)?;
+            py_vec.call_method1(py, "set_attributes", (0usize, updates))?;
+
+            let attrs = py_vec.call_method1(py, "get_attributes", (0usize,))?;
+            let attrs = attrs.bind(py).cast::<PyDict>()?;
+            assert_eq!(
+                attrs
+                    .get_item("name")?
+                    .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("missing name"))?
+                    .extract::<String>()?,
+                "omega"
+            );
+            assert!((
+                attrs
+                    .get_item("score")?
+                    .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("missing score"))?
+                    .extract::<f64>()?
+                - 3.25
+            )
+                .abs()
+                < 1e-12);
+
+            Ok(())
+        })
+        .unwrap();
+
+        let layer = wbvector::read(&vector_path).unwrap();
+        assert!(layer.schema.field_index("score").is_some());
+        assert_eq!(
+            layer.features[1].get(&layer.schema, "count").unwrap(),
+            &FieldValue::Integer(9)
+        );
     }
 
     #[test]
@@ -19562,6 +22099,147 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn wbenvironment_read_bundle_detects_landsat_family() {
+        let td = TempDirGuard::new("bundle_landsat_detect");
+        let landsat_root = td.path().join("landsat_bundle");
+        make_test_landsat_bundle(&landsat_root);
+
+        let env = WbEnvironment::new(false, "open").unwrap();
+        let bundle = env
+            .read_bundle(landsat_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(bundle.family, "landsat");
+        assert_eq!(bundle.bundle_root, landsat_root);
+    }
+
+    #[test]
+    fn wbenvironment_read_landsat_rejects_non_landsat_bundle() {
+        Python::initialize();
+        let td = TempDirGuard::new("bundle_landsat_reject");
+        let s2_root = td.path().join("S2A_TEST_MSIL2A.SAFE");
+        make_test_sentinel2_safe_bundle(&s2_root);
+
+        let env = WbEnvironment::new(false, "open").unwrap();
+        let err = match env.read_landsat(s2_root.to_string_lossy().as_ref()) {
+            Ok(_) => panic!("expected read_landsat to reject non-landsat bundle"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("Expected landsat bundle"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn wbenvironment_read_sentinel_wrappers_validate_family() {
+        Python::initialize();
+        let td = TempDirGuard::new("bundle_sentinel_wrappers");
+        let s2_root = td.path().join("S2A_TEST_MSIL2A.SAFE");
+        make_test_sentinel2_safe_bundle(&s2_root);
+        let s1_root = td.path().join("S1A_TEST_IW_GRD.SAFE");
+        make_test_sentinel1_safe_bundle(&s1_root);
+
+        let env = WbEnvironment::new(false, "open").unwrap();
+
+        let s2 = env
+            .read_sentinel2(s2_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(s2.family, "sentinel2_safe");
+
+        let s1 = env
+            .read_sentinel1(s1_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(s1.family, "sentinel1_safe");
+
+        let err = match env.read_sentinel2(s1_root.to_string_lossy().as_ref()) {
+            Ok(_) => panic!("expected read_sentinel2 to reject sentinel1 safe"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("Expected sentinel2_safe bundle"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn wbenvironment_read_additional_bundle_wrappers_validate_family() {
+        let td = TempDirGuard::new("bundle_additional_wrappers");
+
+        let planetscope_root = td.path().join("planetscope");
+        make_test_planetscope_bundle(&planetscope_root);
+        let iceye_root = td.path().join("iceye");
+        make_test_iceye_bundle(&iceye_root);
+        let dimap_root = td.path().join("dimap");
+        make_test_dimap_bundle(&dimap_root);
+        let maxar_root = td.path().join("maxar");
+        make_test_maxar_bundle(&maxar_root);
+        let rs2_root = td.path().join("radarsat2");
+        make_test_radarsat2_bundle(&rs2_root);
+        let rcm_root = td.path().join("rcm");
+        make_test_rcm_bundle(&rcm_root);
+
+        let env = WbEnvironment::new(false, "open").unwrap();
+
+        let planetscope = env
+            .read_planetscope(planetscope_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(planetscope.family, "planetscope");
+
+        let iceye = env.read_iceye(iceye_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(iceye.family, "iceye");
+
+        let dimap = env.read_dimap(dimap_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(dimap.family, "dimap");
+
+        let maxar = env
+            .read_maxar_worldview(maxar_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(maxar.family, "maxar_worldview");
+
+        let rs2 = env
+            .read_radarsat2(rs2_root.to_string_lossy().as_ref())
+            .unwrap();
+        assert_eq!(rs2.family, "radarsat2");
+
+        let rcm = env.read_rcm(rcm_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(rcm.family, "rcm");
+    }
+
+    #[test]
+    fn bundle_metadata_accessors_expose_expected_fields() {
+        let td = TempDirGuard::new("bundle_metadata_accessors");
+
+        let s2_root = td.path().join("S2A_TEST_MSIL2A.SAFE");
+        make_test_sentinel2_safe_bundle(&s2_root);
+        let landsat_root = td.path().join("landsat_bundle");
+        make_test_landsat_bundle(&landsat_root);
+        let iceye_root = td.path().join("iceye_bundle");
+        make_test_iceye_bundle(&iceye_root);
+
+        let env = WbEnvironment::new(false, "open").unwrap();
+
+        let s2 = env.read_sentinel2(s2_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(s2.tile_id().unwrap(), None);
+        assert!(s2.sun_zenith_deg().unwrap().is_none());
+        let s2_json = s2.metadata_json().unwrap();
+        assert!(s2_json.contains("\"family\": \"sentinel2_safe\""));
+        assert!(s2_json.contains("\"product_level\""));
+
+        let ls = env.read_landsat(landsat_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(ls.collection_number().unwrap(), None);
+        assert_eq!(ls.path_row().unwrap(), Some((1, 1)));
+        let ls_json = ls.metadata_json().unwrap();
+        assert!(ls_json.contains("\"family\": \"landsat\""));
+        assert!(ls_json.contains("\"mission\""));
+
+        let ice = env.read_iceye(iceye_root.to_string_lossy().as_ref()).unwrap();
+        assert_eq!(ice.product_type().unwrap(), None);
+        let ice_json = ice.metadata_json().unwrap();
+        assert!(ice_json.contains("\"family\": \"iceye\""));
+        assert!(ice_json.contains("\"polarizations\""));
     }
 }
 

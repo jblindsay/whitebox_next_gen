@@ -123,6 +123,53 @@ struct BaPruneStats {
     kept_observations: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct IntrinsicsRefineMask {
+    params: [bool; 8],
+}
+
+impl IntrinsicsRefineMask {
+    fn none() -> Self {
+        Self { params: [false; 8] }
+    }
+}
+
+/// Controls how bundle adjustment refines camera intrinsics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IntrinsicsRefinementPolicy {
+    /// Use heuristic gating based on observation count and geometry support.
+    Auto,
+    /// Keep all intrinsics fixed during bundle adjustment.
+    None,
+    /// Refine core intrinsics only (`fx`, `fy`, `cx`, `cy`).
+    CoreOnly,
+    /// Refine core intrinsics and radial distortion (`k1`, `k2`).
+    CoreAndRadial,
+    /// Refine all supported intrinsics (`fx`, `fy`, `cx`, `cy`, `k1`, `k2`, `p1`, `p2`).
+    All,
+}
+
+impl Default for IntrinsicsRefinementPolicy {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+/// Optional controls for camera alignment and bundle adjustment behavior.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AlignmentOptions {
+    /// Intrinsics refinement policy used by bundle adjustment.
+    pub intrinsics_refinement: IntrinsicsRefinementPolicy,
+}
+
+impl Default for AlignmentOptions {
+    fn default() -> Self {
+        Self {
+            intrinsics_refinement: IntrinsicsRefinementPolicy::Auto,
+        }
+    }
+}
+
 /// Run camera alignment on `frames` using the supplied match statistics.
 ///
 /// Sprint 1 minimal implementation: derives poses from available metadata
@@ -132,6 +179,22 @@ pub fn run_camera_alignment(
     match_stats: &MatchStats,
     camera_model: CameraModel,
 ) -> Result<AlignmentResult> {
+    run_camera_alignment_with_options(
+        frames,
+        match_stats,
+        camera_model,
+        AlignmentOptions::default(),
+    )
+}
+
+/// Run camera alignment with optional tuning controls.
+pub fn run_camera_alignment_with_options(
+    frames: &[ImageFrame],
+    match_stats: &MatchStats,
+    camera_model: CameraModel,
+    options: AlignmentOptions,
+) -> Result<AlignmentResult> {
+    let model = resolve_camera_model(camera_model, frames);
     let n = frames.len();
     if n == 0 {
         return Ok(AlignmentResult {
@@ -148,7 +211,7 @@ pub fn run_camera_alignment(
                 mean_parallax_px: 0.0,
                 estimated_gsd_m: 0.0,
                 intrinsics: CameraIntrinsics::identity(4000, 3000),
-                model: resolve_camera_model(camera_model, frames),
+                model,
                 loop_closure_constraints: 0,
                 mean_loop_closure_correction_m: 0.0,
                 max_loop_closure_correction_m: 0.0,
@@ -191,6 +254,8 @@ pub fn run_camera_alignment(
         &rotations,
         match_stats,
         &intrinsics,
+        model,
+        options.intrinsics_refinement,
     );
     intrinsics = refined_intrinsics;
     let (positions, loop_closure_diag) = apply_loop_closure_global_optimization(
@@ -236,7 +301,6 @@ pub fn run_camera_alignment(
     let tie_points_median = estimate_tie_points_median(match_stats);
     let tracks_median = estimate_tracks_median(match_stats, aligned);
     let estimated_gsd_m = estimate_gsd_m(frames, &intrinsics, quality);
-    let model = resolve_camera_model(camera_model, frames);
     Ok(AlignmentResult {
         poses,
         crs: pose_crs,
@@ -836,6 +900,7 @@ fn matrix_to_quaternion(r: &Matrix3<f64>) -> [f64; 4] {
 #[derive(Debug, Clone)]
 struct BaObservation {
     cam_idx: usize,
+    point_id: usize,
     point_world: Vector3<f64>,
     obs_px: Vector2<f64>,
     quality_weight: f64,
@@ -897,6 +962,8 @@ fn run_simplified_bundle_adjustment(
     rotations: &[[f64; 4]],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    intrinsics_refinement_policy: IntrinsicsRefinementPolicy,
 ) -> (Vec<[f64; 3]>, Vec<[f64; 4]>, CameraIntrinsics, Vec<f64>, BaDiagnostics) {
     if positions.len() < 2 || rotations.len() != positions.len() {
         return (
@@ -936,6 +1003,14 @@ fn run_simplified_bundle_adjustment(
         &rotations_c2w,
         match_stats,
         intrinsics,
+        camera_model,
+    );
+    observations = refine_structure_points_from_observations(
+        &centres,
+        &rotations_c2w,
+        &observations,
+        intrinsics,
+        camera_model,
     );
     if observations.len() < 12 {
         return (
@@ -966,6 +1041,14 @@ fn run_simplified_bundle_adjustment(
     let weak_geometry_support = centres.len() <= 8
         && (initial_supported_camera_fraction < 0.95
             || observations_initial < centres.len().max(2) * 24);
+    let intrinsics_refine_mask = build_intrinsics_refine_mask(
+        intrinsics_refinement_policy,
+        allow_intrinsics_refinement,
+        observations_initial,
+        centres.len(),
+        initial_supported_camera_fraction,
+        weak_geometry_support,
+    );
     let freeze_rotation_updates = weak_geometry_support && initial_supported_camera_fraction < 0.90;
     let pose_prior_sigma_m = if weak_geometry_support { 2.5 } else { 6.0 };
     let pose_prior_scale_px2 = if weak_geometry_support { 450.0 } else { 180.0 };
@@ -1006,6 +1089,7 @@ fn run_simplified_bundle_adjustment(
         &rotations_c2w,
         &observations,
         &intrinsics_opt,
+        camera_model,
         huber_threshold,
         Some(&original_centres),
         &pose_prior_weights,
@@ -1027,6 +1111,7 @@ fn run_simplified_bundle_adjustment(
                 &observations,
                 &rotations_c2w,
                 &intrinsics_opt,
+                camera_model,
                 huber_threshold,
                 &original_centres[cam_idx],
                 pose_prior_weights[cam_idx],
@@ -1037,12 +1122,9 @@ fn run_simplified_bundle_adjustment(
                 continue;
             }
 
-            let mut grad = Vector3::zeros();
-            let mut hdiag = Vector3::repeat(1.0e-6);
-            for axis in 0..3 {
-                if axis == 2 {
-                    continue;
-                }
+            let mut grad = [0.0_f64; 2];
+            let mut hdiag = [1.0e-6_f64; 2];
+            for axis in 0..2 {
                 let mut cp = centres[cam_idx];
                 cp[axis] += eps;
                 let ep = camera_observation_error_with_huber(
@@ -1051,6 +1133,7 @@ fn run_simplified_bundle_adjustment(
                     &observations,
                     &rotations_c2w,
                     &intrinsics_opt,
+                    camera_model,
                     huber_threshold,
                     &original_centres[cam_idx],
                     pose_prior_weights[cam_idx],
@@ -1066,6 +1149,7 @@ fn run_simplified_bundle_adjustment(
                     &observations,
                     &rotations_c2w,
                     &intrinsics_opt,
+                    camera_model,
                     huber_threshold,
                     &original_centres[cam_idx],
                     pose_prior_weights[cam_idx],
@@ -1080,13 +1164,93 @@ fn run_simplified_bundle_adjustment(
                 }
             }
 
+            let mut hxy = 0.0_f64;
+            {
+                let mut cpp = centres[cam_idx];
+                cpp[0] += eps;
+                cpp[1] += eps;
+                let e_pp = camera_observation_error_with_huber(
+                    cam_idx,
+                    &cpp,
+                    &observations,
+                    &rotations_c2w,
+                    &intrinsics_opt,
+                    camera_model,
+                    huber_threshold,
+                    &original_centres[cam_idx],
+                    pose_prior_weights[cam_idx],
+                    pose_prior_sigma_m,
+                    pose_prior_scale_px2,
+                );
+
+                let mut cpm = centres[cam_idx];
+                cpm[0] += eps;
+                cpm[1] -= eps;
+                let e_pm = camera_observation_error_with_huber(
+                    cam_idx,
+                    &cpm,
+                    &observations,
+                    &rotations_c2w,
+                    &intrinsics_opt,
+                    camera_model,
+                    huber_threshold,
+                    &original_centres[cam_idx],
+                    pose_prior_weights[cam_idx],
+                    pose_prior_sigma_m,
+                    pose_prior_scale_px2,
+                );
+
+                let mut cmp = centres[cam_idx];
+                cmp[0] -= eps;
+                cmp[1] += eps;
+                let e_mp = camera_observation_error_with_huber(
+                    cam_idx,
+                    &cmp,
+                    &observations,
+                    &rotations_c2w,
+                    &intrinsics_opt,
+                    camera_model,
+                    huber_threshold,
+                    &original_centres[cam_idx],
+                    pose_prior_weights[cam_idx],
+                    pose_prior_sigma_m,
+                    pose_prior_scale_px2,
+                );
+
+                let mut cmm = centres[cam_idx];
+                cmm[0] -= eps;
+                cmm[1] -= eps;
+                let e_mm = camera_observation_error_with_huber(
+                    cam_idx,
+                    &cmm,
+                    &observations,
+                    &rotations_c2w,
+                    &intrinsics_opt,
+                    camera_model,
+                    huber_threshold,
+                    &original_centres[cam_idx],
+                    pose_prior_weights[cam_idx],
+                    pose_prior_sigma_m,
+                    pose_prior_scale_px2,
+                );
+
+                if e_pp.is_finite() && e_pm.is_finite() && e_mp.is_finite() && e_mm.is_finite() {
+                    hxy = ((e_pp - e_pm) - (e_mp - e_mm)) / (4.0 * eps * eps);
+                }
+            }
+
             let mut accepted = false;
             let mut lambda_try = lambda_center;
             for _ in 0..5 {
                 let mut delta = Vector3::zeros();
-                for axis in 0..2 {
-                    let denom = hdiag[axis] + lambda_try;
-                    delta[axis] = (grad[axis] / denom).clamp(-center_step_cap, center_step_cap);
+                let h00 = hdiag[0] + lambda_try;
+                let h11 = hdiag[1] + lambda_try;
+                if let Some((dx, dy)) = solve_2x2(h00, hxy, hxy, h11, grad[0], grad[1]) {
+                    delta[0] = dx.clamp(-center_step_cap, center_step_cap);
+                    delta[1] = dy.clamp(-center_step_cap, center_step_cap);
+                } else {
+                    delta[0] = (grad[0] / h00).clamp(-center_step_cap, center_step_cap);
+                    delta[1] = (grad[1] / h11).clamp(-center_step_cap, center_step_cap);
                 }
                 if !delta.iter().all(|v| v.is_finite()) {
                     lambda_try *= 2.0;
@@ -1100,6 +1264,7 @@ fn run_simplified_bundle_adjustment(
                     &observations,
                     &rotations_c2w,
                     &intrinsics_opt,
+                    camera_model,
                     huber_threshold,
                     &original_centres[cam_idx],
                     pose_prior_weights[cam_idx],
@@ -1129,6 +1294,7 @@ fn run_simplified_bundle_adjustment(
                     &observations,
                     &rotations_c2w,
                     &intrinsics_opt,
+                    camera_model,
                     huber_threshold,
                     &original_centres[cam_idx],
                     pose_prior_weights[cam_idx],
@@ -1140,7 +1306,7 @@ fn run_simplified_bundle_adjustment(
                 }
 
                 let mut grad_rot = Vector3::zeros();
-                let mut hdiag_rot = Vector3::repeat(1.0e-6);
+                let mut hdiag_rot = [1.0e-6_f64; 2];
                 // Perturbations around X and Y axes only (small-angle approximation)
                 for rot_axis in 0..2 {
                     let mut r_pert = rotations_c2w[cam_idx];
@@ -1162,6 +1328,7 @@ fn run_simplified_bundle_adjustment(
                         &observations,
                         &rotations_p,
                         &intrinsics_opt,
+                        camera_model,
                         huber_threshold,
                         &original_centres[cam_idx],
                         pose_prior_weights[cam_idx],
@@ -1187,6 +1354,7 @@ fn run_simplified_bundle_adjustment(
                         &observations,
                         &rotations_m,
                         &intrinsics_opt,
+                        camera_model,
                         huber_threshold,
                         &original_centres[cam_idx],
                         pose_prior_weights[cam_idx],
@@ -1201,13 +1369,113 @@ fn run_simplified_bundle_adjustment(
                     }
                 }
 
+                let mut hxy_rot = 0.0_f64;
+                {
+                    let mut rotations_pp = rotations_c2w.clone();
+                    let delta_pp = Vector3::new(rot_eps, rot_eps, 0.0);
+                    let update_pp = Matrix3::new(
+                        1.0, -delta_pp[2], delta_pp[1],
+                        delta_pp[2], 1.0, -delta_pp[0],
+                        -delta_pp[1], delta_pp[0], 1.0,
+                    );
+                    rotations_pp[cam_idx] = update_pp * rotations_c2w[cam_idx];
+                    let e_pp = camera_observation_error_with_huber(
+                        cam_idx,
+                        &centres[cam_idx],
+                        &observations,
+                        &rotations_pp,
+                        &intrinsics_opt,
+                        camera_model,
+                        huber_threshold,
+                        &original_centres[cam_idx],
+                        pose_prior_weights[cam_idx],
+                        pose_prior_sigma_m,
+                        pose_prior_scale_px2,
+                    );
+
+                    let mut rotations_pm = rotations_c2w.clone();
+                    let delta_pm = Vector3::new(rot_eps, -rot_eps, 0.0);
+                    let update_pm = Matrix3::new(
+                        1.0, -delta_pm[2], delta_pm[1],
+                        delta_pm[2], 1.0, -delta_pm[0],
+                        -delta_pm[1], delta_pm[0], 1.0,
+                    );
+                    rotations_pm[cam_idx] = update_pm * rotations_c2w[cam_idx];
+                    let e_pm = camera_observation_error_with_huber(
+                        cam_idx,
+                        &centres[cam_idx],
+                        &observations,
+                        &rotations_pm,
+                        &intrinsics_opt,
+                        camera_model,
+                        huber_threshold,
+                        &original_centres[cam_idx],
+                        pose_prior_weights[cam_idx],
+                        pose_prior_sigma_m,
+                        pose_prior_scale_px2,
+                    );
+
+                    let mut rotations_mp = rotations_c2w.clone();
+                    let delta_mp = Vector3::new(-rot_eps, rot_eps, 0.0);
+                    let update_mp = Matrix3::new(
+                        1.0, -delta_mp[2], delta_mp[1],
+                        delta_mp[2], 1.0, -delta_mp[0],
+                        -delta_mp[1], delta_mp[0], 1.0,
+                    );
+                    rotations_mp[cam_idx] = update_mp * rotations_c2w[cam_idx];
+                    let e_mp = camera_observation_error_with_huber(
+                        cam_idx,
+                        &centres[cam_idx],
+                        &observations,
+                        &rotations_mp,
+                        &intrinsics_opt,
+                        camera_model,
+                        huber_threshold,
+                        &original_centres[cam_idx],
+                        pose_prior_weights[cam_idx],
+                        pose_prior_sigma_m,
+                        pose_prior_scale_px2,
+                    );
+
+                    let mut rotations_mm = rotations_c2w.clone();
+                    let delta_mm = Vector3::new(-rot_eps, -rot_eps, 0.0);
+                    let update_mm = Matrix3::new(
+                        1.0, -delta_mm[2], delta_mm[1],
+                        delta_mm[2], 1.0, -delta_mm[0],
+                        -delta_mm[1], delta_mm[0], 1.0,
+                    );
+                    rotations_mm[cam_idx] = update_mm * rotations_c2w[cam_idx];
+                    let e_mm = camera_observation_error_with_huber(
+                        cam_idx,
+                        &centres[cam_idx],
+                        &observations,
+                        &rotations_mm,
+                        &intrinsics_opt,
+                        camera_model,
+                        huber_threshold,
+                        &original_centres[cam_idx],
+                        pose_prior_weights[cam_idx],
+                        pose_prior_sigma_m,
+                        pose_prior_scale_px2,
+                    );
+
+                    if e_pp.is_finite() && e_pm.is_finite() && e_mp.is_finite() && e_mm.is_finite() {
+                        hxy_rot = ((e_pp - e_pm) - (e_mp - e_mm)) / (4.0 * rot_eps * rot_eps);
+                    }
+                }
+
                 let mut accepted = false;
                 let mut lambda_try = lambda_rot;
                 for _ in 0..5 {
                     let mut delta = Vector3::zeros();
-                    for axis in 0..2 {
-                        let denom = hdiag_rot[axis] + lambda_try;
-                        delta[axis] = (grad_rot[axis] / denom).clamp(-rotation_step_cap, rotation_step_cap);
+                    let h00 = hdiag_rot[0] + lambda_try;
+                    let h11 = hdiag_rot[1] + lambda_try;
+                    if let Some((dx, dy)) = solve_2x2(h00, hxy_rot, hxy_rot, h11, grad_rot[0], grad_rot[1]) {
+                        delta[0] = dx.clamp(-rotation_step_cap, rotation_step_cap);
+                        delta[1] = dy.clamp(-rotation_step_cap, rotation_step_cap);
+                    } else {
+                        delta[0] = (grad_rot[0] / h00).clamp(-rotation_step_cap, rotation_step_cap);
+                        delta[1] = (grad_rot[1] / h11).clamp(-rotation_step_cap, rotation_step_cap);
                     }
                     if !delta.iter().all(|v| v.is_finite()) {
                         lambda_try *= 2.0;
@@ -1229,6 +1497,7 @@ fn run_simplified_bundle_adjustment(
                         &observations,
                         &rotations_candidate,
                         &intrinsics_opt,
+                        camera_model,
                         huber_threshold,
                         &original_centres[cam_idx],
                         pose_prior_weights[cam_idx],
@@ -1254,6 +1523,7 @@ fn run_simplified_bundle_adjustment(
             &rotations_c2w,
             &observations,
             &intrinsics_opt,
+            camera_model,
             huber_threshold,
             Some(&original_centres),
             &pose_prior_weights,
@@ -1264,6 +1534,9 @@ fn run_simplified_bundle_adjustment(
             let mut grads = [0.0_f64; 8];
             let mut hdiag_intr = [1.0e-8_f64; 8];
             for param_idx in 0..8 {
+                if !intrinsics_refine_mask.params[param_idx] {
+                    continue;
+                }
                 let eps = intrinsics_eps[param_idx];
                 let mut plus = intrinsics_opt.clone();
                 perturb_intrinsics_param(&mut plus, param_idx, eps);
@@ -1272,6 +1545,7 @@ fn run_simplified_bundle_adjustment(
                     &rotations_c2w,
                     &observations,
                     &plus,
+                    camera_model,
                     huber_threshold,
                     Some(&original_centres),
                     &pose_prior_weights,
@@ -1286,6 +1560,7 @@ fn run_simplified_bundle_adjustment(
                     &rotations_c2w,
                     &observations,
                     &minus,
+                    camera_model,
                     huber_threshold,
                     Some(&original_centres),
                     &pose_prior_weights,
@@ -1305,6 +1580,9 @@ fn run_simplified_bundle_adjustment(
             for _ in 0..5 {
                 let mut scaled_lrs = [0.0_f64; 8];
                 for i in 0..8 {
+                    if !intrinsics_refine_mask.params[i] {
+                        continue;
+                    }
                     let lm_scale = 1.0 / (hdiag_intr[i] + lambda_try);
                     scaled_lrs[i] = (intrinsics_lr[i] * lm_scale).clamp(0.0, intrinsics_lr[i]);
                 }
@@ -1314,6 +1592,7 @@ fn run_simplified_bundle_adjustment(
                     &mut candidate,
                     &grads,
                     &scaled_lrs,
+                    intrinsics_refine_mask,
                     image_width_hint,
                     image_height_hint,
                 );
@@ -1322,6 +1601,7 @@ fn run_simplified_bundle_adjustment(
                     &rotations_c2w,
                     &observations,
                     &candidate,
+                    camera_model,
                     huber_threshold,
                     Some(&original_centres),
                     &pose_prior_weights,
@@ -1347,12 +1627,20 @@ fn run_simplified_bundle_adjustment(
             &rotations_c2w,
             &observations,
             &intrinsics_opt,
+            camera_model,
             pass_idx,
             max_passes,
         );
         let pruned_count = pruned_observations.len();
         let pre_prune_count = observations.len();
         observations = pruned_observations;
+        observations = refine_structure_points_from_observations(
+            &centres,
+            &rotations_c2w,
+            &observations,
+            &intrinsics_opt,
+            camera_model,
+        );
         pass_observations.push(prune_stats.kept_observations);
         pass_prune_thresholds.push(prune_stats.threshold_px);
         ba_observation_debug_line(format!(
@@ -1369,6 +1657,7 @@ fn run_simplified_bundle_adjustment(
             &rotations_c2w,
             &observations,
             &intrinsics_opt,
+            camera_model,
             huber_threshold,
             Some(&original_centres),
             &pose_prior_weights,
@@ -1442,6 +1731,7 @@ fn run_simplified_bundle_adjustment(
         &rotations_c2w,
         &observations,
         &intrinsics_opt,
+        camera_model,
     );
 
     let final_cost = total_observation_error_with_huber(
@@ -1449,6 +1739,7 @@ fn run_simplified_bundle_adjustment(
         &rotations_c2w,
         &observations,
         &intrinsics_opt,
+        camera_model,
         huber_threshold,
         Some(&original_centres),
         &pose_prior_weights,
@@ -1516,6 +1807,143 @@ fn perturb_intrinsics_param(intrinsics: &mut CameraIntrinsics, param_idx: usize,
     }
 }
 
+fn solve_2x2(
+    a00: f64,
+    a01: f64,
+    a10: f64,
+    a11: f64,
+    b0: f64,
+    b1: f64,
+) -> Option<(f64, f64)> {
+    let det = a00 * a11 - a01 * a10;
+    if !det.is_finite() || det.abs() <= 1.0e-12 {
+        return None;
+    }
+    let inv00 = a11 / det;
+    let inv01 = -a01 / det;
+    let inv10 = -a10 / det;
+    let inv11 = a00 / det;
+    Some((inv00 * b0 + inv01 * b1, inv10 * b0 + inv11 * b1))
+}
+
+fn refine_structure_points_from_observations(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    observations: &[BaObservation],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Vec<BaObservation> {
+    if observations.is_empty() {
+        return Vec::new();
+    }
+
+    let max_point_id = observations
+        .iter()
+        .map(|obs| obs.point_id)
+        .max()
+        .unwrap_or(0);
+    let mut grouped: Vec<Vec<usize>> = vec![Vec::new(); max_point_id + 1];
+    for (obs_idx, obs) in observations.iter().enumerate() {
+        if obs.point_id < grouped.len() {
+            grouped[obs.point_id].push(obs_idx);
+        }
+    }
+
+    let mut refined = observations.to_vec();
+    for obs_group in grouped.iter() {
+        if obs_group.len() < 2 {
+            continue;
+        }
+        let Some(xw) = triangulate_point_from_observation_set(
+            centres,
+            rotations_c2w,
+            intrinsics,
+            observations,
+            obs_group,
+            camera_model,
+        ) else {
+            continue;
+        };
+
+        for &obs_idx in obs_group {
+            refined[obs_idx].point_world = xw;
+        }
+    }
+
+    refined
+}
+
+fn triangulate_point_from_observation_set(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    intrinsics: &CameraIntrinsics,
+    observations: &[BaObservation],
+    obs_indices: &[usize],
+    camera_model: CameraModel,
+) -> Option<Vector3<f64>> {
+    if obs_indices.len() < 2 {
+        return None;
+    }
+
+    let mut a = DMatrix::zeros(obs_indices.len() * 2, 4);
+    for (row_idx, &obs_idx) in obs_indices.iter().enumerate() {
+        let obs = observations.get(obs_idx)?;
+        if obs.cam_idx >= centres.len() || obs.cam_idx >= rotations_c2w.len() {
+            return None;
+        }
+        let r_w2c = rotations_c2w[obs.cam_idx].transpose();
+        let t = -(r_w2c * centres[obs.cam_idx]);
+        let p = Matrix3x4::new(
+            r_w2c[(0, 0)], r_w2c[(0, 1)], r_w2c[(0, 2)], t[0],
+            r_w2c[(1, 0)], r_w2c[(1, 1)], r_w2c[(1, 2)], t[1],
+            r_w2c[(2, 0)], r_w2c[(2, 1)], r_w2c[(2, 2)], t[2],
+        );
+        let xn = (obs.obs_px[0] - intrinsics.cx) / intrinsics.fx;
+        let yn = (obs.obs_px[1] - intrinsics.cy) / intrinsics.fy;
+
+        let r0 = row_idx * 2;
+        let e0 = xn * p.row(2) - p.row(0);
+        let e1 = yn * p.row(2) - p.row(1);
+        for c in 0..4 {
+            a[(r0, c)] = e0[c];
+            a[(r0 + 1, c)] = e1[c];
+        }
+    }
+
+    let svd = a.svd(true, true);
+    let v_t = svd.v_t?;
+    let xh = v_t.row(v_t.nrows() - 1);
+    if xh[3].abs() <= 1.0e-12 {
+        return None;
+    }
+    let xw = Vector3::new(xh[0] / xh[3], xh[1] / xh[3], xh[2] / xh[3]);
+    if !xw.iter().all(|v| v.is_finite()) {
+        return None;
+    }
+
+    let mut valid = 0usize;
+    for &obs_idx in obs_indices {
+        let obs = observations.get(obs_idx)?;
+        let residual = reprojection_residual_px(
+            &xw,
+            &centres[obs.cam_idx],
+            &rotations_c2w[obs.cam_idx],
+            intrinsics,
+            camera_model,
+            &obs.obs_px,
+        );
+        if residual.is_finite() && residual <= BA_MAX_INITIAL_REPROJ_PX * 1.6 {
+            valid += 1;
+        }
+    }
+
+    if valid >= 2 {
+        Some(xw)
+    } else {
+        None
+    }
+}
+
 fn supported_camera_fraction_from_observations(observations: &[BaObservation], camera_count: usize) -> f64 {
     if camera_count == 0 {
         return 0.0;
@@ -1574,6 +2002,7 @@ fn apply_intrinsics_update(
     intrinsics: &mut CameraIntrinsics,
     grads: &[f64; 8],
     lrs: &[f64; 8],
+    refine_mask: IntrinsicsRefineMask,
     image_width_hint: f64,
     image_height_hint: f64,
 ) {
@@ -1591,14 +2020,90 @@ fn apply_intrinsics_update(
     deltas[6] = deltas[6].clamp(-0.0005, 0.0005);
     deltas[7] = deltas[7].clamp(-0.0005, 0.0005);
 
-    intrinsics.fx = (intrinsics.fx - deltas[0]).clamp(120.0, 25000.0);
-    intrinsics.fy = (intrinsics.fy - deltas[1]).clamp(120.0, 25000.0);
-    intrinsics.cx = (intrinsics.cx - deltas[2]).clamp(0.0, image_width_hint);
-    intrinsics.cy = (intrinsics.cy - deltas[3]).clamp(0.0, image_height_hint);
-    intrinsics.k1 = (intrinsics.k1 - deltas[4]).clamp(-0.50, 0.50);
-    intrinsics.k2 = (intrinsics.k2 - deltas[5]).clamp(-0.50, 0.50);
-    intrinsics.p1 = (intrinsics.p1 - deltas[6]).clamp(-0.10, 0.10);
-    intrinsics.p2 = (intrinsics.p2 - deltas[7]).clamp(-0.10, 0.10);
+    if refine_mask.params[0] {
+        intrinsics.fx = (intrinsics.fx - deltas[0]).clamp(120.0, 25000.0);
+    }
+    if refine_mask.params[1] {
+        intrinsics.fy = (intrinsics.fy - deltas[1]).clamp(120.0, 25000.0);
+    }
+    if refine_mask.params[2] {
+        intrinsics.cx = (intrinsics.cx - deltas[2]).clamp(0.0, image_width_hint);
+    }
+    if refine_mask.params[3] {
+        intrinsics.cy = (intrinsics.cy - deltas[3]).clamp(0.0, image_height_hint);
+    }
+    if refine_mask.params[4] {
+        intrinsics.k1 = (intrinsics.k1 - deltas[4]).clamp(-0.50, 0.50);
+    }
+    if refine_mask.params[5] {
+        intrinsics.k2 = (intrinsics.k2 - deltas[5]).clamp(-0.50, 0.50);
+    }
+    if refine_mask.params[6] {
+        intrinsics.p1 = (intrinsics.p1 - deltas[6]).clamp(-0.10, 0.10);
+    }
+    if refine_mask.params[7] {
+        intrinsics.p2 = (intrinsics.p2 - deltas[7]).clamp(-0.10, 0.10);
+    }
+}
+
+fn build_intrinsics_refine_mask(
+    intrinsics_refinement_policy: IntrinsicsRefinementPolicy,
+    allow_intrinsics_refinement: bool,
+    observations_initial: usize,
+    camera_count: usize,
+    supported_camera_fraction: f64,
+    weak_geometry_support: bool,
+) -> IntrinsicsRefineMask {
+    match intrinsics_refinement_policy {
+        IntrinsicsRefinementPolicy::None => return IntrinsicsRefineMask::none(),
+        IntrinsicsRefinementPolicy::CoreOnly => {
+            return IntrinsicsRefineMask {
+                params: [true, true, true, true, false, false, false, false],
+            };
+        }
+        IntrinsicsRefinementPolicy::CoreAndRadial => {
+            return IntrinsicsRefineMask {
+                params: [true, true, true, true, true, true, false, false],
+            };
+        }
+        IntrinsicsRefinementPolicy::All => {
+            return IntrinsicsRefineMask {
+                params: [true, true, true, true, true, true, true, true],
+            };
+        }
+        IntrinsicsRefinementPolicy::Auto => {}
+    }
+
+    if !allow_intrinsics_refinement {
+        return IntrinsicsRefineMask::none();
+    }
+
+    let cam_scale = camera_count.max(2);
+    let enough_for_pp = observations_initial >= cam_scale * 28
+        && supported_camera_fraction >= 0.92
+        && !weak_geometry_support;
+    let enough_for_k1 = observations_initial >= cam_scale * 32
+        && supported_camera_fraction >= 0.88;
+    let enough_for_k2 = observations_initial >= cam_scale * 44
+        && supported_camera_fraction >= 0.90
+        && !weak_geometry_support;
+    let enough_for_tangential = observations_initial >= cam_scale * 52
+        && supported_camera_fraction >= 0.93
+        && !weak_geometry_support;
+
+    IntrinsicsRefineMask {
+        // [fx, fy, cx, cy, k1, k2, p1, p2]
+        params: [
+            true,
+            true,
+            enough_for_pp,
+            enough_for_pp,
+            enough_for_k1,
+            enough_for_k2,
+            enough_for_tangential,
+            enough_for_tangential,
+        ],
+    }
 }
 
 fn total_observation_error_with_huber(
@@ -1606,6 +2111,7 @@ fn total_observation_error_with_huber(
     rotations_c2w: &[Matrix3<f64>],
     observations: &[BaObservation],
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     huber_threshold: f64,
     seed_centres: Option<&[Vector3<f64>]>,
     pose_prior_weights: &[f64],
@@ -1620,6 +2126,7 @@ fn total_observation_error_with_huber(
             &centres[obs.cam_idx],
             &rotations_c2w[obs.cam_idx],
             intrinsics,
+            camera_model,
         ) {
             let dx = pix[0] - obs.obs_px[0];
             let dy = pix[1] - obs.obs_px[1];
@@ -1668,6 +2175,7 @@ fn camera_observation_error_with_huber(
     observations: &[BaObservation],
     rotations_c2w: &[Matrix3<f64>],
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     huber_threshold: f64,
     seed_centre: &Vector3<f64>,
     pose_prior_weight: f64,
@@ -1682,6 +2190,7 @@ fn camera_observation_error_with_huber(
             candidate_centre,
             &rotations_c2w[cam_idx],
             intrinsics,
+            camera_model,
         ) {
             let dx = pix[0] - obs.obs_px[0];
             let dy = pix[1] - obs.obs_px[1];
@@ -1712,6 +2221,7 @@ fn build_ba_observations(
     rotations_c2w: &[Matrix3<f64>],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
 ) -> Vec<BaObservation> {
     let strict_profile = BaObservationBuildProfile {
         max_pts_per_pair: 48,
@@ -1730,6 +2240,7 @@ fn build_ba_observations(
         rotations_c2w,
         match_stats,
         intrinsics,
+        camera_model,
         strict_profile,
     );
     if strict_observations.len() >= 12 {
@@ -1753,6 +2264,7 @@ fn build_ba_observations(
         rotations_c2w,
         match_stats,
         intrinsics,
+        camera_model,
         relaxed_profile,
     );
     if relaxed_observations.len() >= 12 {
@@ -1776,6 +2288,7 @@ fn build_ba_observations(
         rotations_c2w,
         match_stats,
         intrinsics,
+        camera_model,
         emergency_profile,
     );
     if emergency_observations.len() > relaxed_observations.len().max(strict_observations.len()) {
@@ -1792,10 +2305,12 @@ fn build_ba_observations_with_profile(
     rotations_c2w: &[Matrix3<f64>],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     profile: BaObservationBuildProfile,
 ) -> Vec<BaObservation> {
     let mut observations = Vec::new();
     let mut debug_counts = BaObservationDebugCounts::default();
+    let mut next_point_id: usize = 0;
 
     let min_parallax_px = profile
         .min_parallax_floor_px
@@ -1902,8 +2417,22 @@ fn build_ba_observations_with_profile(
 
                     let left_obs = Vector2::new(p[0], p[1]);
                     let right_obs = Vector2::new(p[2], p[3]);
-                    let left_res = reprojection_residual_px(&xw, &centres[left_idx], &rotations_c2w[left_idx], intrinsics, &left_obs);
-                    let right_res = reprojection_residual_px(&xw, &centres[right_idx], &rotations_c2w[right_idx], intrinsics, &right_obs);
+                    let left_res = reprojection_residual_px(
+                        &xw,
+                        &centres[left_idx],
+                        &rotations_c2w[left_idx],
+                        intrinsics,
+                        camera_model,
+                        &left_obs,
+                    );
+                    let right_res = reprojection_residual_px(
+                        &xw,
+                        &centres[right_idx],
+                        &rotations_c2w[right_idx],
+                        intrinsics,
+                        camera_model,
+                        &right_obs,
+                    );
                     if !left_res.is_finite() || !right_res.is_finite() {
                         debug_counts.skipped_reprojection += 1;
                         continue;
@@ -1918,16 +2447,19 @@ fn build_ba_observations_with_profile(
 
                     observations.push(BaObservation {
                         cam_idx: left_idx,
+                        point_id: next_point_id,
                         point_world: xw,
                         obs_px: left_obs,
                         quality_weight,
                     });
                     observations.push(BaObservation {
                         cam_idx: right_idx,
+                        point_id: next_point_id,
                         point_world: xw,
                         obs_px: right_obs,
                         quality_weight,
                     });
+                    next_point_id = next_point_id.saturating_add(1);
                     debug_counts.accepted_observations += 2;
                 }
             } else {
@@ -1987,6 +2519,7 @@ fn project_world_to_pixel(
     centre: &Vector3<f64>,
     r_c2w: &Matrix3<f64>,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
 ) -> Option<Vector2<f64>> {
     let r_w2c = r_c2w.transpose();
     let xc = r_w2c * (xw - centre);
@@ -1995,12 +2528,28 @@ fn project_world_to_pixel(
     }
     let x = xc[0] / xc[2];
     let y = xc[1] / xc[2];
-    let r2 = x * x + y * y;
+    let (x_base, y_base) = match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => (x, y),
+        CameraModel::Fisheye => {
+            // Equidistant fisheye: r_img = theta, preserving bearing direction.
+            let r = (x * x + y * y).sqrt();
+            if r <= 1.0e-12 {
+                (x, y)
+            } else {
+                let theta = r.atan();
+                let scale = theta / r;
+                (x * scale, y * scale)
+            }
+        }
+    };
+    let r2 = x_base * x_base + y_base * y_base;
     let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
-    let x_t = 2.0 * intrinsics.p1 * x * y + intrinsics.p2 * (r2 + 2.0 * x * x);
-    let y_t = intrinsics.p1 * (r2 + 2.0 * y * y) + 2.0 * intrinsics.p2 * x * y;
-    let x_d = x * radial + x_t;
-    let y_d = y * radial + y_t;
+    let x_t = 2.0 * intrinsics.p1 * x_base * y_base
+        + intrinsics.p2 * (r2 + 2.0 * x_base * x_base);
+    let y_t = intrinsics.p1 * (r2 + 2.0 * y_base * y_base)
+        + 2.0 * intrinsics.p2 * x_base * y_base;
+    let x_d = x_base * radial + x_t;
+    let y_d = y_base * radial + y_t;
     if !x_d.is_finite() || !y_d.is_finite() {
         return None;
     }
@@ -2017,9 +2566,10 @@ fn reprojection_residual_px(
     centre: &Vector3<f64>,
     r_c2w: &Matrix3<f64>,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     obs_px: &Vector2<f64>,
 ) -> f64 {
-    if let Some(pix) = project_world_to_pixel(xw, centre, r_c2w, intrinsics) {
+    if let Some(pix) = project_world_to_pixel(xw, centre, r_c2w, intrinsics, camera_model) {
         let dx = pix[0] - obs_px[0];
         let dy = pix[1] - obs_px[1];
         (dx * dx + dy * dy).sqrt()
@@ -2049,6 +2599,7 @@ fn prune_observations_by_residual(
     rotations_c2w: &[Matrix3<f64>],
     observations: &[BaObservation],
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     pass_idx: usize,
     total_passes: usize,
 ) -> (Vec<BaObservation>, BaPruneStats) {
@@ -2073,6 +2624,7 @@ fn prune_observations_by_residual(
             &centres[obs.cam_idx],
             &rotations_c2w[obs.cam_idx],
             intrinsics,
+            camera_model,
             &obs.obs_px,
         );
         if res.is_finite() {
@@ -2156,6 +2708,7 @@ fn reprojection_residual_samples(
     rotations_c2w: &[Matrix3<f64>],
     observations: &[BaObservation],
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
 ) -> Vec<f64> {
     let mut out = Vec::new();
     for obs in observations {
@@ -2164,6 +2717,7 @@ fn reprojection_residual_samples(
             &centres[obs.cam_idx],
             &rotations_c2w[obs.cam_idx],
             intrinsics,
+            camera_model,
         ) {
             let dx = pix[0] - obs.obs_px[0];
             let dy = pix[1] - obs.obs_px[1];
@@ -2236,6 +2790,11 @@ fn apply_loop_closure_global_optimization(
     let selected_constraints = select_loop_closure_constraints(&constraints, positions.len(), 6);
 
     let baseline_m = median_adjacent_baseline_m(positions).max(0.5);
+    let robust_correction_cutoff_m = loop_closure_outlier_cutoff_m(
+        &selected_constraints,
+        positions,
+        baseline_m,
+    );
     let original: Vec<Vector3<f64>> = positions
         .iter()
         .map(|p| Vector3::new(p[0], p[1], p[2]))
@@ -2263,6 +2822,9 @@ fn apply_loop_closure_global_optimization(
         let quality_factor = (0.70 + 0.50 * constraint.quality_score).clamp(0.70, 1.15);
         let max_shift = baseline_m * (0.45 + 0.30 * span_f.sqrt());
         let bounded_error = closure_error.cap_magnitude(max_shift.max(0.2));
+        if bounded_error.norm() > robust_correction_cutoff_m {
+            continue;
+        }
         let strength = (base_strength * constraint.weight * span_damping * support_factor * quality_factor)
             .clamp(0.04, 0.28);
         candidate_correction_m.push(bounded_error.norm());
@@ -2324,6 +2886,47 @@ fn apply_loop_closure_global_optimization(
             max_correction_m,
         },
     )
+}
+
+fn loop_closure_outlier_cutoff_m(
+    constraints: &[LoopClosureConstraint],
+    positions: &[[f64; 3]],
+    baseline_m: f64,
+) -> f64 {
+    if constraints.is_empty() {
+        return baseline_m * 6.0;
+    }
+
+    let mut magnitudes = Vec::with_capacity(constraints.len());
+    for c in constraints {
+        if c.right_idx >= positions.len() {
+            continue;
+        }
+        let current_right = Vector3::new(
+            positions[c.right_idx][0],
+            positions[c.right_idx][1],
+            positions[c.right_idx][2],
+        );
+        let e = c.target_right - current_right;
+        if e.iter().all(|v| v.is_finite()) {
+            magnitudes.push(e.norm());
+        }
+    }
+    if magnitudes.is_empty() {
+        return baseline_m * 6.0;
+    }
+
+    magnitudes.sort_by(|a, b| a.total_cmp(b));
+    let median = magnitudes[magnitudes.len() / 2];
+    let mut abs_dev = magnitudes
+        .iter()
+        .map(|v| (v - median).abs())
+        .collect::<Vec<_>>();
+    abs_dev.sort_by(|a, b| a.total_cmp(b));
+    let mad = abs_dev[abs_dev.len() / 2];
+    let sigma = (1.4826 * mad).max(0.10 * baseline_m);
+    (median + 3.0 * sigma)
+        .clamp(0.35 * baseline_m, 6.0 * baseline_m)
 }
 
 fn select_loop_closure_constraints(
@@ -3122,6 +3725,90 @@ mod tests {
     }
 
     #[test]
+    fn alignment_options_can_disable_intrinsics_refinement() {
+        let frames = vec![
+            make_frame("a.jpg", None),
+            make_frame("b.jpg", None),
+            make_frame("c.jpg", None),
+            make_frame("d.jpg", None),
+            make_frame("e.jpg", None),
+            make_frame("f.jpg", None),
+        ];
+
+        let strong = MatchStats {
+            frame_count: 6,
+            total_keypoints: 4_800,
+            total_matches: 8_400,
+            connectivity: 0.92,
+            mean_matches_per_pair: 560.0,
+            mean_parallax_px: 6.8,
+            pair_attempt_count: 15,
+            pair_connected_count: 14,
+            pair_rejected_count: 1,
+            adjacent_pair_motions: Vec::new(),
+            pair_correspondences: Vec::new(),
+            failure_reasons: Vec::new(),
+            failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
+        };
+
+        let options = AlignmentOptions {
+            intrinsics_refinement: IntrinsicsRefinementPolicy::None,
+        };
+        let result = run_camera_alignment_with_options(
+            &frames,
+            &strong,
+            CameraModel::Pinhole,
+            options,
+        )
+        .expect("alignment should succeed");
+
+        assert!(!result.stats.ba_intrinsics_refined);
+        assert!(!result.stats.ba_distortion_refined);
+    }
+
+    #[test]
+    fn alignment_options_core_only_never_refines_distortion() {
+        let frames = vec![
+            make_frame("a.jpg", None),
+            make_frame("b.jpg", None),
+            make_frame("c.jpg", None),
+            make_frame("d.jpg", None),
+            make_frame("e.jpg", None),
+            make_frame("f.jpg", None),
+        ];
+
+        let strong = MatchStats {
+            frame_count: 6,
+            total_keypoints: 4_800,
+            total_matches: 8_400,
+            connectivity: 0.92,
+            mean_matches_per_pair: 560.0,
+            mean_parallax_px: 6.8,
+            pair_attempt_count: 15,
+            pair_connected_count: 14,
+            pair_rejected_count: 1,
+            adjacent_pair_motions: Vec::new(),
+            pair_correspondences: Vec::new(),
+            failure_reasons: Vec::new(),
+            failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
+        };
+
+        let result = run_camera_alignment_with_options(
+            &frames,
+            &strong,
+            CameraModel::Pinhole,
+            AlignmentOptions {
+                intrinsics_refinement: IntrinsicsRefinementPolicy::CoreOnly,
+            },
+        )
+        .expect("alignment should succeed");
+
+        assert!(!result.stats.ba_distortion_refined);
+    }
+
+    #[test]
     fn gps_track_with_gap_remains_monotonic_after_smoothing() {
         let frames = vec![
             make_frame(
@@ -3429,6 +4116,8 @@ mod tests {
                 weak_pair_examples: Vec::new(),
             },
             &intrinsics,
+            CameraModel::Pinhole,
+            IntrinsicsRefinementPolicy::Auto,
         );
 
         // Validate that BA successfully:
@@ -3504,6 +4193,8 @@ mod tests {
                 weak_pair_examples: Vec::new(),
             },
             &intrinsics,
+            CameraModel::Pinhole,
+            IntrinsicsRefinementPolicy::Auto,
         );
 
         assert!(ba_diag.observations_initial >= 12, "relaxed BA admission should preserve sparse short-sequence observations");
@@ -3590,5 +4281,60 @@ mod tests {
         assert!(after_drift < before_drift);
         assert!(diag.constraint_count >= 1);
         assert!(diag.max_correction_m > 0.0);
+    }
+
+    #[test]
+    fn fisheye_projection_compresses_far_off_axis_points_vs_pinhole() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1000.0,
+            fy: 1000.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
+        };
+        let centre = Vector3::new(0.0, 0.0, 0.0);
+        let r = Matrix3::identity();
+        let xw = Vector3::new(2.0, 0.0, 2.0); // x/z = 1.0, strong off-axis ray
+
+        let pin = project_world_to_pixel(&xw, &centre, &r, &intrinsics, CameraModel::Pinhole)
+            .expect("pinhole projection");
+        let fish = project_world_to_pixel(&xw, &centre, &r, &intrinsics, CameraModel::Fisheye)
+            .expect("fisheye projection");
+
+        let pin_radius = (pin[0] - intrinsics.cx).abs();
+        let fish_radius = (fish[0] - intrinsics.cx).abs();
+        assert!(
+            fish_radius < pin_radius,
+            "fisheye equidistant projection should compress off-axis radius"
+        );
+    }
+
+    #[test]
+    fn fisheye_and_pinhole_projections_match_near_optical_axis() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1200.0,
+            fy: 1200.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
+        };
+        let centre = Vector3::new(0.0, 0.0, 0.0);
+        let r = Matrix3::identity();
+        let xw = Vector3::new(0.01, -0.008, 2.0); // near-axis ray
+
+        let pin = project_world_to_pixel(&xw, &centre, &r, &intrinsics, CameraModel::Pinhole)
+            .expect("pinhole projection");
+        let fish = project_world_to_pixel(&xw, &centre, &r, &intrinsics, CameraModel::Fisheye)
+            .expect("fisheye projection");
+
+        let du = (pin[0] - fish[0]).abs();
+        let dv = (pin[1] - fish[1]).abs();
+        assert!(du < 0.05 && dv < 0.05, "near-axis projection should be nearly identical");
     }
 }

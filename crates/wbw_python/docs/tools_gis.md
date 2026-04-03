@@ -2,6 +2,175 @@
 
 This document covers the GIS tools currently ported into the backend.
 
+## GIS Workflow Products (Pro)
+
+These workflow methods expose higher-level environmental monitoring and siting products.
+
+### Workflow Product Index
+
+- `wetland_hydrogeomorphic_classification`
+- `urban_expansion_impact_assessment`
+- `wind_turbine_siting`
+- `solar_site_suitability_analysis`
+- `corridor_mapping_intelligence`
+- `landslide_susceptibility_assessment`
+- `river_corridor_health_assessment`
+
+### wetland_hydrogeomorphic_classification
+
+```
+wetland_hydrogeomorphic_classification(dem, wetland_mask, max_polygon_features=10000, output_prefix=None, callback=None)
+```
+
+Returns `(hgm_class_raster, wetland_polygons_vector, confidence_raster, summary_json_path)`.
+
+Example:
+
+```python
+hgm, polygons, confidence, summary = wbe.wetland_hydrogeomorphic_classification(
+	dem=dem,
+	wetland_mask=wetland_mask,
+)
+```
+
+### urban_expansion_impact_assessment
+
+```
+urban_expansion_impact_assessment(baseline_urban, scenario_urban, streams, habitat_sensitivity=None, output_prefix=None, callback=None)
+```
+
+Returns `(impact_severity_raster, affected_streams_vector, habitat_loss_raster, summary_json_path)`.
+
+Example:
+
+```python
+impact, streams_out, habitat_loss, summary = wbe.urban_expansion_impact_assessment(
+	baseline_urban=urban_2020,
+	scenario_urban=urban_2035,
+	streams=streams,
+	habitat_sensitivity=habitat_sensitivity,
+)
+```
+
+### wind_turbine_siting
+
+```
+wind_turbine_siting(dem, settlements, settlements_epsg=None, visibility_radius_meters=5000, min_slope_degrees=5.0, max_slope_degrees=35.0, profile="balanced", output_prefix=None, callback=None)
+```
+
+Returns `(siting_score_raster, confidence_raster, summary_json_path)`.
+
+Example:
+
+```python
+score, confidence, summary = wbe.wind_turbine_siting(
+	dem=dem,
+	settlements=settlements,
+	profile="balanced",
+)
+```
+
+### solar_site_suitability_analysis
+
+```
+solar_site_suitability_analysis(dem, candidate_threshold=0.7, max_candidate_sites=200, output_prefix=None, callback=None)
+```
+
+Returns `(suitability_score_raster, visual_impact_raster, candidate_sites_vector, summary_json_path)`.
+
+Example:
+
+```python
+score, impact, sites, summary = wbe.solar_site_suitability_analysis(
+	dem=dem,
+	candidate_threshold=0.7,
+)
+```
+
+### corridor_mapping_intelligence
+
+```
+corridor_mapping_intelligence(dem, start_features, end_features, constraints=None, cost_profile="slope_roughness", terminal_anchor_strategy="mixed", corridor_tolerance=0.15, output_prefix=None, callback=None)
+```
+
+Returns `(cost_surface_raster, accumulated_cost_raster, optimal_route_vector, corridor_suitability_raster, summary_json_path)`.
+
+Finds the terrain least-cost route and corridor suitability band for siting linear infrastructure (roads, pipelines, utility lines).
+`start_features` and `end_features` are vector layers containing point and/or polygon features.
+`cost_profile` is one of `"slope_only"`, `"slope_roughness"` (default), or `"conservative"`.
+`terminal_anchor_strategy` is one of `"mixed"` (default), `"centroid_only"`, or `"boundary_only"`.
+`corridor_tolerance` is the fractional cost margin above optimal for the suitability band (default 0.15).
+
+Value proposition vs OSS least-cost building blocks:
+- This is an end-to-end workflow product rather than a low-level routing primitive.
+- It derives a terrain cost surface from DEM slope/roughness, runs least-cost routing, and emits both route geometry and corridor alternatives in one call.
+- It supports polygon exclusion constraints and returns a summary JSON contract for reporting/automation.
+
+Endpoint modeling note:
+- Current API is vector-first for terminal modeling.
+- Point features are used directly as candidate anchors.
+- Polygon features contribute sampled boundary/centroid candidates, and the tool chooses a traversable anchor pair.
+- `terminal_anchor_strategy` controls polygon anchor candidate generation.
+- If start/end layers differ from DEM CRS, they are reprojected to the DEM CRS before routing.
+- If constraints differ from DEM CRS, they are reprojected to the DEM CRS before exclusion masking.
+- DEM, start/end layers, and optional constraints must include EPSG metadata for CRS harmonization.
+
+QA-style outputs:
+- `cost_surface_raster`, `accumulated_cost_raster`, and `corridor_suitability_raster` provide inspectable diagnostic surfaces.
+- `optimal_route_vector` includes comparative route attributes (`ROUTE_LEN_M`, `MEAN_SLOPE`, `ROUTE_COST`, `PROFILE`).
+- `summary_json_path` stores reproducible run metadata and key metrics.
+
+Example:
+
+```python
+cost, acc_cost, route, suitability, summary = wbe.corridor_mapping_intelligence(
+	dem=dem,
+	start_features=start_features,
+	end_features=end_features,
+	cost_profile="slope_roughness",
+	terminal_anchor_strategy="mixed",
+	corridor_tolerance=0.15,
+	output_prefix="output/access_road",
+)
+```
+
+
+### landslide_susceptibility_assessment
+
+```
+landslide_susceptibility_assessment(dem, rainfall_intensity=None, profile="balanced", susceptibility_threshold=0.65, max_zone_features=5000, output_prefix=None, callback=None)
+```
+
+Returns `(susceptibility_raster, trigger_pressure_raster, confidence_raster, risk_zones_vector, summary_json_path)`.
+
+Example:
+
+```python
+sus, trigger, confidence, zones, summary = wbe.landslide_susceptibility_assessment(
+	dem=dem,
+	rainfall_intensity=rainfall,
+	profile="balanced",
+)
+```
+
+### river_corridor_health_assessment
+
+```
+river_corridor_health_assessment(dem, streams, profile="balanced", output_prefix=None, callback=None)
+```
+
+Returns `(erosion_pressure_raster, corridor_confidence_raster, stream_health_score_raster, restoration_zones_vector, summary_json_path)`.
+
+Example:
+
+```python
+erosion, confidence, health, restoration, summary = wbe.river_corridor_health_assessment(
+	dem=dem,
+	streams=streams,
+	profile="balanced",
+)
+```
+
 ## GIS (Raster Overlay)
 
 These tools compare or combine aligned raster stacks on a cell-by-cell basis. Use them when the rasters already share the same grid geometry and you want overlay-style summaries or index outputs.

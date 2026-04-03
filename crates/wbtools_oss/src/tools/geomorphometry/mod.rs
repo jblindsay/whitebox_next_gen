@@ -34,6 +34,7 @@ pub use basic_terrain_tools::AspectTool;
 pub use basic_terrain_tools::ConvergenceIndexTool;
 pub use basic_terrain_tools::HillshadeTool;
 pub use basic_terrain_tools::MultidirectionalHillshadeTool;
+pub use basic_terrain_tools::slope_aspect_from_dem;
 pub use terrain_analysis_tools::RuggednessIndexTool;
 pub use terrain_analysis_tools::SurfaceAreaRatioTool;
 pub use terrain_analysis_tools::ElevRelativeToMinMaxTool;

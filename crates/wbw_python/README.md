@@ -258,7 +258,6 @@ wbe = whitebox_workflows.WbEnvironment()
 wbe.working_directory = '/path/to/data'
 wbe.verbose = True
 wbe.max_procs = -1
-
 print(wbe.version())
 print(wbe.license_type())
 print(wbe.license_info())
@@ -267,6 +266,8 @@ print(wbe.license_info())
 ---
 
 ### Working With Raster Data
+
+#### General Raster I/O And Processing
 
 ```python
 import whitebox_workflows
@@ -389,6 +390,74 @@ wbe.clear_raster_memory()
 wbe.write_text('run complete', 'run_log.txt')
 ```
 
+#### Working With Sensor Bundles
+
+```python
+import whitebox_workflows
+
+wbe = whitebox_workflows.WbEnvironment()
+wbe.working_directory = '/path/to/data'
+
+# Unified detection returns a read-only Bundle with family + resolved root.
+bundle = wbe.read_bundle('/data/LC09_L2SP_018030_20240202')
+print(bundle.family)      # e.g. landsat, sentinel2_safe, sentinel1_safe, planetscope
+print(bundle.bundle_root) # directory or extracted archive root
+
+# Family-specific wrappers validate expected type.
+landsat = wbe.read_landsat('/data/LC09_L2SP_018030_20240202')
+s2 = wbe.read_sentinel2('/data/S2A_MSIL2A_20260401T000000.SAFE')
+s1 = wbe.read_sentinel1('/data/S1A_IW_GRDH_20260401T000000.SAFE')
+planetscope = wbe.read_planetscope('/data/PSScene_bundle')
+iceye = wbe.read_iceye('/data/ICEYE_bundle')
+dimap = wbe.read_dimap('/data/SPOT_or_Pleiades_DIMAP')
+maxar = wbe.read_maxar_worldview('/data/Maxar_WorldView_bundle')
+radarsat2 = wbe.read_radarsat2('/data/RADARSAT2_bundle')
+rcm = wbe.read_rcm('/data/RCM_bundle')
+
+# Capability discovery + asset reads.
+print(landsat.list_band_keys())
+print(s2.list_qa_keys())
+print(s2.list_aux_keys())
+print(s1.list_measurement_keys())
+print(iceye.list_asset_keys())
+
+b4 = landsat.read_band('B4')
+scl = s2.read_qa_layer('SCL')
+vv = s1.read_measurement('IW_GRD_VV')
+iceye_vv = iceye.read_asset('VV')
+```
+
+Bundle metadata and capabilities exposed in Python:
+- Common identity:
+  - `bundle.family`, `bundle.bundle_root`, `bundle.__repr__()`.
+- Full parsed metadata snapshot:
+  - `metadata_json()` returns a pretty-printed JSON object with family-specific fields.
+- Common typed metadata helpers (family-dependent; returns `None` when unavailable):
+  - `acquisition_datetime_utc()`, `product_type()`, `acquisition_mode()`, `processing_level()`.
+  - `mission()`, `scene_id()`, `tile_id()`, `collection_number()`, `processing_baseline()`.
+  - `cloud_cover_percent()`, `sun_azimuth_deg()`, `sun_elevation_deg()`, `sun_zenith_deg()`.
+  - `view_angle_deg()`, `off_nadir_angle_deg()`.
+  - `polarization()`, `orbit_direction()`, `look_direction()`.
+  - `incidence_angle_near_deg()`, `incidence_angle_far_deg()`.
+  - `pixel_spacing_range_m()`, `pixel_spacing_azimuth_m()`.
+  - `path_row()`, `spatial_bounds()`.
+- Vector-valued metadata helpers:
+  - `polarizations()` returns `list[str]` (empty list when unavailable).
+- Optical bundle assets:
+  - `list_band_keys()`, `read_band(key)`.
+- QA/aux assets (family-dependent):
+  - `list_qa_keys()`, `read_qa_layer(key)`.
+  - `list_aux_keys()`, `read_aux_layer(key)`.
+- SAR measurement assets (family-dependent):
+  - `list_measurement_keys()`, `read_measurement(key)`.
+- ICEYE assets:
+  - `list_asset_keys()`, `read_asset(key)`.
+
+Notes:
+- Bundle methods are read-only and do not take a `file_mode` parameter.
+- Sentinel-2 exposes solar zenith via `sun_zenith_deg()` (not `sun_elevation_deg()`).
+- `spatial_bounds()` currently returns `[minx, miny, maxx, maxy]` for Sentinel-1 SAFE bundles.
+
 ---
 
 ### Working With Vector Data
@@ -405,6 +474,21 @@ roads = wbe.read_vector('roads.shp')
 # --- Metadata ---
 print(roads.get_short_filename(), roads.get_file_extension(), roads.exists())
 print(roads.absolute_path(), roads.parent_directory())
+print(roads.feature_count())
+
+# --- Attribute table schema ---
+print(roads.attribute_field_names())
+print(roads.attribute_fields())
+
+# --- Attribute reads ---
+attrs0 = roads.get_attributes(0)   # dict for one feature
+name0 = roads.get_attribute(0, 'NAME')
+
+# --- Attribute edits (persisted to the vector dataset) ---
+roads.set_attribute(0, 'NAME', 'Main Street')
+roads.set_attributes(1, {'NAME': 'Second Street'})
+roads.add_attribute_field('priority', 'integer', True, 0, 0, 1)
+roads.set_attribute(0, 'priority', 3)
 
 # --- Copy ---
 roads_copy = roads.deep_copy()
@@ -412,6 +496,11 @@ roads_copy = roads.deep_copy()
 # --- Writing ---
 wbe.write_vector(roads, 'roads_copy.shp')
 ```
+
+Attribute API notes:
+- Supported field types for `add_attribute_field(...)`: `integer`, `float`, `text`, `boolean`, `blob`, `date`, `datetime`, `json`.
+- `get_attribute` and `get_attributes` return Python-native values (`int`, `float`, `str`, `bool`, `bytes`, or `None`).
+- `set_attribute` and `set_attributes` enforce target field types and write changes back to the source dataset path.
 
 ---
 

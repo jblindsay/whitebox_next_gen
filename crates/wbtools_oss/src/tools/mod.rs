@@ -133,6 +133,7 @@ pub use geomorphometry::CasoratiCurvatureTool;
 pub use geomorphometry::OpennessTool;
 pub use geomorphometry::SlopeTool;
 pub use geomorphometry::AspectTool;
+pub use geomorphometry::slope_aspect_from_dem;
 pub use geomorphometry::ConvergenceIndexTool;
 pub use geomorphometry::HillshadeTool;
 pub use geomorphometry::MultidirectionalHillshadeTool;

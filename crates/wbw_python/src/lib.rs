@@ -15,14 +15,9 @@ use wblicense_core::{
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
 #[cfg(feature = "pro")]
 use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegistry as ProRegistry};
-#[cfg(feature = "pro")]
-use wbtools_pro::licensing::{
-    bootstrap_runtime_license_offline, LicensingProviderClient, RuntimeLicenseBootstrapConfig,
-    RuntimeLicensePolicy, RuntimeLicenseResolution, ResolvedCapabilities,
-};
 
 mod wb_environment;
-pub use wb_environment::{Lidar, Raster, RasterConfigs, Vector, WbEnvironment};
+pub use wb_environment::{Bundle, Lidar, Raster, RasterConfigs, Vector, WbEnvironment};
 
 struct CompositeRegistry {
     oss: OssRegistry,
@@ -83,92 +78,6 @@ fn validate_include_pro(include_pro: bool) -> Result<(), ToolError> {
     Ok(())
 }
 
-#[cfg(feature = "pro")]
-fn map_provider_error(err: impl std::fmt::Display) -> ToolError {
-    ToolError::LicenseDenied(format!("provider bootstrap failed: {err}"))
-}
-
-#[cfg(feature = "pro")]
-fn parse_policy_from_env() -> RuntimeLicensePolicy {
-    match std::env::var("WBW_LICENSE_POLICY") {
-        Ok(v) if v.eq_ignore_ascii_case("fail_closed") => RuntimeLicensePolicy::FailClosed,
-        _ => RuntimeLicensePolicy::FailOpen,
-    }
-}
-
-#[cfg(feature = "pro")]
-fn parse_lease_seconds_from_env() -> Option<u64> {
-    std::env::var("WBW_LICENSE_LEASE_SECONDS")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-}
-
-#[cfg(feature = "pro")]
-fn provider_bootstrap_resolution(fallback_tier: LicenseTier) -> Result<Option<RuntimeLicenseResolution>, ToolError> {
-    provider_bootstrap_resolution_with(
-        fallback_tier,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-}
-
-#[cfg(feature = "pro")]
-fn provider_bootstrap_resolution_with(
-    fallback_tier: LicenseTier,
-    provider_url_override: Option<&str>,
-    floating_license_id_override: Option<&str>,
-    machine_id_override: Option<&str>,
-    customer_id_override: Option<&str>,
-    policy_override: Option<RuntimeLicensePolicy>,
-    lease_seconds_override: Option<u64>,
-    state_path_override: Option<&str>,
-) -> Result<Option<RuntimeLicenseResolution>, ToolError> {
-    let provider_url = match provider_url_override {
-        Some(v) if !v.trim().is_empty() => v.to_string(),
-        _ => match std::env::var("WBW_LICENSE_PROVIDER_URL") {
-            Ok(v) if !v.trim().is_empty() => v,
-            _ => return Ok(None),
-        },
-    };
-
-    let mut cfg = RuntimeLicenseBootstrapConfig::default_fail_open("whitebox_next_gen");
-    cfg.fallback_tier = fallback_tier;
-    cfg.policy = policy_override.unwrap_or_else(parse_policy_from_env);
-    cfg.lease_duration_seconds = lease_seconds_override.or_else(parse_lease_seconds_from_env);
-    cfg.local_state_path = state_path_override
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("WBW_LICENSE_STATE_PATH").ok().map(PathBuf::from));
-    cfg.floating_license_id = floating_license_id_override
-        .map(ToString::to_string)
-        .or_else(|| std::env::var("WBW_FLOATING_LICENSE_ID").ok());
-    cfg.floating_machine_id = machine_id_override
-        .map(ToString::to_string)
-        .or_else(|| std::env::var("WBW_MACHINE_ID").ok())
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .or_else(|| std::env::var("COMPUTERNAME").ok());
-    cfg.floating_customer_id = customer_id_override
-        .map(ToString::to_string)
-        .or_else(|| std::env::var("WBW_CUSTOMER_ID").ok());
-
-    let client = LicensingProviderClient::new(provider_url).map_err(map_provider_error)?;
-    match client.bootstrap_runtime_license(&cfg, None) {
-        Ok(r) => Ok(Some(r)),
-        Err(e) => {
-            if matches!(cfg.policy, RuntimeLicensePolicy::FailOpen) {
-                let offline = bootstrap_runtime_license_offline(&cfg, None, None, current_unix())
-                    .map_err(map_provider_error)?;
-                Ok(Some(offline))
-            } else {
-                Err(map_provider_error(e))
-            }
-        }
-    }
-}
 
 pub struct PythonToolRuntime {
     runtime: RuntimeMode,
@@ -205,30 +114,6 @@ impl PythonToolRuntime {
             None
         };
 
-        if include_pro {
-            if let Some(resolution) = provider_bootstrap_resolution(max_tier)? {
-                return match resolution.capabilities {
-                    ResolvedCapabilities::Entitled(capabilities) => Ok(Self {
-                        runtime: RuntimeMode::Entitled(OwnedToolRuntimeWithCapabilities::new(
-                            CompositeRegistry { oss, pro },
-                            RuntimeOptions {
-                                max_tier: resolution.effective_tier,
-                                expose_locked_tools: false,
-                            },
-                            capabilities,
-                        )),
-                    }),
-                    ResolvedCapabilities::Fallback(_) => Ok(Self {
-                        runtime: RuntimeMode::Tier(
-                            ToolRuntimeBuilder::new(CompositeRegistry { oss, pro })
-                                .max_tier(resolution.effective_tier)
-                                .build(),
-                        ),
-                    }),
-                };
-            }
-        }
-
         Ok(Self {
             runtime: RuntimeMode::Tier(
                 ToolRuntimeBuilder::new(CompositeRegistry { oss, pro })
@@ -249,6 +134,8 @@ impl PythonToolRuntime {
     ) -> Result<Self, ToolError> {
         validate_include_pro(include_pro)?;
 
+        let _ = (floating_license_id, provider_url, machine_id, customer_id);
+
         let mut oss = OssRegistry::new();
         register_default_oss_tools(&mut oss);
 
@@ -259,39 +146,6 @@ impl PythonToolRuntime {
         } else {
             None
         };
-
-        if include_pro {
-            if let Some(resolution) = provider_bootstrap_resolution_with(
-                fallback_tier,
-                provider_url,
-                Some(floating_license_id),
-                machine_id,
-                customer_id,
-                None,
-                None,
-                None,
-            )? {
-                return match resolution.capabilities {
-                    ResolvedCapabilities::Entitled(capabilities) => Ok(Self {
-                        runtime: RuntimeMode::Entitled(OwnedToolRuntimeWithCapabilities::new(
-                            CompositeRegistry { oss, pro },
-                            RuntimeOptions {
-                                max_tier: resolution.effective_tier,
-                                expose_locked_tools: false,
-                            },
-                            capabilities,
-                        )),
-                    }),
-                    ResolvedCapabilities::Fallback(_) => Ok(Self {
-                        runtime: RuntimeMode::Tier(
-                            ToolRuntimeBuilder::new(CompositeRegistry { oss, pro })
-                                .max_tier(resolution.effective_tier)
-                                .build(),
-                        ),
-                    }),
-                };
-            }
-        }
 
         Ok(Self {
             runtime: RuntimeMode::Tier(
@@ -1451,10 +1305,11 @@ fn whitebox_tools(
 }
 
 #[pymodule]
-fn wbw_python(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RuntimeSession>()?;
     m.add_class::<Raster>()?;
     m.add_class::<RasterConfigs>()?;
+    m.add_class::<Bundle>()?;
     m.add_class::<Vector>()?;
     m.add_class::<Lidar>()?;
     m.add_class::<WbEnvironment>()?;
@@ -1850,8 +1705,10 @@ mod tests {
     #[test]
     #[cfg(not(feature = "pro"))]
     fn include_pro_rejected_when_pro_feature_disabled() {
-        let err = PythonToolRuntime::new_with_options(true, LicenseTier::Pro)
-            .expect_err("include_pro should be rejected without 'pro' feature");
+        let err = match PythonToolRuntime::new_with_options(true, LicenseTier::Pro) {
+            Ok(_) => panic!("include_pro should be rejected without 'pro' feature"),
+            Err(err) => err,
+        };
         assert!(matches!(err, ToolError::InvalidRequest(_)));
     }
 

@@ -113,10 +113,14 @@ SuperPoint backend.
 - 128-D floating-point SIFT descriptors with L2 matching
 - Optional RootSIFT post-normalization (L1 normalize, elementwise square root,
   final L2 normalize) for improved descriptor distinctiveness under Euclidean matching
+- `FeatureMatchingOptions::default()` selects `RootSIFT` with the `balanced`
+  profile
 
 **Pair validation pipeline (both variants):**
-1. Hamming distance and ratio test filtering
-2. Fundamental matrix RANSAC (8-point normalised DLT + rank-2 SVD enforcement)
+1. Hamming/L2 filtering with ratio test (requires a valid second-nearest
+   candidate; singleton nearest-neighbor cases are rejected)
+2. Fundamental matrix RANSAC (8-point normalised DLT + rank-2 SVD enforcement),
+   followed by LO-style iterative local re-estimation and inlier refresh
    or robust 2-point translation/scale fitting for near-nadir pairs
 3. Spatial distribution filtering (4×4 grid, max 32 matches per cell,
    minimum 2 occupied cells)
@@ -124,9 +128,10 @@ SuperPoint backend.
    GPS bearing prior if available)
 5. Convergence-point (epipole) filter for cross-flightline pairs
 
-**GPS-aware pair culling:** Frame pairs whose great-circle separation exceeds a
-profile-dependent multiple of their combined footprint radii are skipped before
-matching, substantially reducing computation on large surveys.
+**GPS-aware pair culling:** Frame pairs are prefiltered with a footprint-aware
+soft distance weighting around a profile-dependent spacing envelope, with an
+outer culling boundary for very distant pairs. This reduces unnecessary
+comparison work while preserving near-limit pair candidates at reduced weight.
 
 **Three processing profiles:**
 
@@ -167,6 +172,9 @@ refines them via bundle adjustment.
 - Optional intrinsic refinement: focal lengths, principal point, radial distortion
   (k₁, k₂) and tangential distortion (p₁, p₂) — enabled when the observation
   count is sufficient (≥18 per camera) and network geometry support is strong (≥85%)
+- Optional explicit intrinsics policy via `run_camera_alignment_with_options`
+  and `AlignmentOptions.intrinsics_refinement`
+  (`Auto`, `None`, `CoreOnly`, `CoreAndRadial`, `All`)
 - Iterative observation pruning: adaptive residual thresholds derived from RMSE
   quantiles at each pass
 - Gaussian pose priors: tighter on small/weakly-supported missions (σ = 2.5 m,
@@ -182,7 +190,7 @@ point count, track-length statistics, estimated GSD, loop closure correction
 magnitude.
 
 **Key types:** `CameraPose`, `AlignmentResult`, `AlignmentStats`, `CameraIntrinsics`,
-`CameraModel`
+`CameraModel`, `AlignmentOptions`, `IntrinsicsRefinementPolicy`
 
 ---
 
@@ -317,11 +325,9 @@ likely to require further development.
 
 ### Feature Matching
 
-- `SIFT` and `RootSIFT` are now available as internal experimental backends
-  with native scale-space detection, orientation assignment, 128-D descriptors,
-  and L2 matching. They have not yet been tuned or benchmarked to the same
-  level as the BRIEF/ORB paths, and should currently be treated as opt-in
-  development backends rather than production-default methods.
+- Tuning and benchmarking maturity is still in progress relative to the older
+  BRIEF/ORB paths; production users should still validate method/profile
+  choices on their mission types.
 - `SuperPoint` is still only an API placeholder. Learned inference, weight
   management, and model runtime integration are not implemented.
 - SURF is intentionally not on the near-term roadmap because of continuing
@@ -329,36 +335,28 @@ likely to require further development.
 - Cross-scale matching is not supported: ORB matches are gated to adjacent
   pyramid octaves (max difference = 2), which limits robustness when the same
   scene feature appears at very different scales in two frames.
-- GPS pair culling is a hard distance threshold. There is no soft distance
-  weighting; pairs just inside the radius are treated identically to adjacent
-  pairs.
-- The ratio test requires at least two match candidates per query descriptor.
-  When only one candidate is found the match is passed unconditionally, which
-  can introduce incorrect correspondences in low-feature areas.
-- Fundamental matrix RANSAC is a single-pass 8-point algorithm. There is
-  no iterative refinement of the inlier set after initial consensus, so the
-  geometric filter is less precise than a full LORANSAC or LO+ implementation.
 
 ### Camera Alignment and Bundle Adjustment
 
-- Bundle adjustment uses a simplified Levenberg–Marquardt implementation.
-  There is no covariance tracking, no structure-only shooting, and no
-  second-order update of the normal equations (i.e., no Schur complement
-  elimination of structure variables). On very large networks this limits
-  convergence quality and speed.
-- Intrinsic refinement is all-or-nothing: either all intrinsic parameters
-  (focal lengths, principal point, distortion) are refined together or none
-  are. There is no mechanism to freeze individual parameters (e.g., hold
-  principal point fixed while refining focal length).
-- Fisheye distortion parameters are not refined during bundle adjustment.
-  The fisheye camera model is available for projection/unprojection but the
-  BA solver only updates pinhole parameters.
+- Bundle adjustment still uses a simplified Levenberg–Marquardt implementation.
+  It now includes iterative structure-only point refresh and coupled
+  second-order camera updates, but it still does not expose covariance
+  estimates or a full sparse Schur-complement solve. On very large networks
+  this can still limit convergence quality and speed.
+- Intrinsic refinement now supports selective parameter freezing based on
+  observation support/geometry quality, but the policy is heuristic and not
+  yet user-configurable per run.
+- Bundle adjustment now evaluates residuals with a fisheye-aware equidistant
+  projection path when the fisheye camera model is selected, but intrinsic
+  optimization still uses the pinhole-style distortion parameter set
+  (`k1/k2/p1/p2`). A dedicated fisheye calibration parameterization is not yet
+  implemented.
 - Camera-motion priors (smooth acceleration, constant-speed models suited to
   drone flight paths) are not implemented. The current pose priors are
   Gaussian position constraints only.
 - The loop closure optimisation uses a basic graph solver with non-adjacent
-  pair constraints. It is not a full pose-graph SLAM formulation; there is no
-  robust outlier rejection of spurious loop closures.
+  pair constraints and robust correction-magnitude outlier rejection. It is
+  not a full pose-graph SLAM formulation.
 - The essential matrix recovery is based on the 8-point normalised DLT
   algorithm alone. There is no iterative triangulation refinement or
   disambiguation of degenerate configurations (pure rotation, forward motion).

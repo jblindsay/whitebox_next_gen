@@ -17,9 +17,11 @@ remote sensing tools will be added to this same section as they are ported.
 - [`wbe.anisotropic_diffusion_filter`](#wbeanisotropic_diffusion_filter)
 - [`wbe.balance_contrast_enhancement`](#wbebalance_contrast_enhancement)
 - [`wbe.bilateral_filter`](#wbebilateral_filter)
+- [`wbe.brdf_surface_reflectance_consistency`](#wbebrdf_surface_reflectance_consistency)
 - [`wbe.canny_edge_detection`](#wbecanny_edge_detection)
 - [`wbe.conservative_smoothing_filter`](#wbeconservative_smoothing_filter)
 - [`wbe.change_vector_analysis`](#wbechange_vector_analysis)
+- [`wbe.remote_sensing_change_detection`](#wberemote_sensing_change_detection)
 - [`wbe.closing`](#wbeclosing)
 - [`wbe.corner_detection`](#wbecorner_detection)
 - [`wbe.correct_vignetting`](#wbecorrect_vignetting)
@@ -82,6 +84,7 @@ remote sensing tools will be added to this same section as they are ported.
 - [`wbe.modified_k_means_clustering`](#wbemodified_k_means_clustering)
 - [`wbe.mosaic`](#wbemosaic)
 - [`wbe.mosaic_with_feathering`](#wbemosaic_with_feathering)
+- [`wbe.multi_sensor_fusion_monitoring`](#wbemulti_sensor_fusion_monitoring)
 - [`wbe.non_local_means_filter`](#wbenon_local_means_filter)
 - [`wbe.nnd_classification`](#wbennd_classification)
 - [`wbe.normalized_difference_index`](#wbenormalized_difference_index)
@@ -108,9 +111,12 @@ remote sensing tools will be added to this same section as they are ported.
 - [`wbe.standard_deviation_filter`](#wbestandard_deviation_filter)
 - [`wbe.svm_classification`](#wbesvm_classification)
 - [`wbe.svm_regression`](#wbesvm_regression)
+- [`wbe.time_series_change_intelligence`](#wbetime_series_change_intelligence)
 - [`wbe.thicken_raster_line`](#wbethicken_raster_line)
+- [`wbe.terrain_corrected_optical_analytics`](#wbeterrain_corrected_optical_analytics)
 - [`wbe.total_filter`](#wbetotal_filter)
 - [`wbe.tophat_transform`](#wbetophat_transform)
+- [`wbe.sar_analysis_readiness`](#wbesar_analysis_readiness)
 - [`wbe.unsharp_masking`](#wbeunsharp_masking)
 - [`wbe.user_defined_weights_filter`](#wbeuser_defined_weights_filter)
 - [`wbe.wiener_filter`](#wbewiener_filter)
@@ -278,6 +284,317 @@ cva = wbe.change_vector_analysis(
 )
 mag = cva["magnitude"]
 direction = cva["direction"]
+```
+
+---
+
+### `wbe.remote_sensing_change_detection`
+
+```
+wbe.remote_sensing_change_detection(
+    baseline_red,
+    baseline_nir,
+    change_red,
+    change_nir,
+    intermediate_ndvi=None,
+    profile="balanced",
+    high_confidence_threshold=0.85,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, str]
+```
+
+Runs workflow-grade NDVI change detection and returns a change raster, a confidence raster, and a summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `baseline_red` | `Raster` | required | Baseline-date red band |
+| `baseline_nir` | `Raster` | required | Baseline-date NIR band |
+| `change_red` | `Raster` | required | Change-date red band |
+| `change_nir` | `Raster` | required | Change-date NIR band |
+| `intermediate_ndvi` | `Raster \| None` | `None` | Optional intermediate NDVI raster for temporal consistency |
+| `profile` | `str` | `"balanced"` | One of `"aggressive"`, `"balanced"`, `"conservative"` |
+| `high_confidence_threshold` | `float` | `0.85` | Threshold in `[0, 1]` used in summary metrics |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+change_map, confidence, summary = wbe.remote_sensing_change_detection(
+    baseline_red=baseline_red,
+    baseline_nir=baseline_nir,
+    change_red=change_red,
+    change_nir=change_nir,
+    profile="balanced",
+)
+```
+
+---
+
+### `wbe.terrain_corrected_optical_analytics`
+
+```
+wbe.terrain_corrected_optical_analytics(
+    input_dem,
+    safe_root=None,
+    input_red=None,
+    input_nir=None,
+    input_green=None,
+    input_blue=None,
+    solar_mode="auto",
+    solar_zenith_deg=40.0,
+    solar_azimuth_deg=165.0,
+    acquisition_datetime_utc=None,
+    latitude=None,
+    longitude=None,
+    profile="balanced",
+    cloud_threshold=None,
+    shadow_threshold=None,
+    qa_mask=None,
+    qa_mask_format="auto",
+    mask_strategy="auto",
+    z_factor=1.0,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster | None, Raster | None, Raster, Raster, Raster, str]
+```
+
+Runs topographic C-correction for optical imagery and returns corrected red/NIR/(optional green)/(optional blue), cloud-shadow mask, correction factor, quality confidence, and summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input_dem` | `Raster` | required | Input DEM |
+| `safe_root` | `str \| None` | `None` | Optional Sentinel-2 SAFE root; can auto-resolve B04/B08/B03/B02 and QA metadata |
+| `input_red` | `Raster \| None` | `None` | Input red band (required unless `safe_root` resolves B04) |
+| `input_nir` | `Raster \| None` | `None` | Input NIR band (required unless `safe_root` resolves B08) |
+| `input_green` | `Raster \| None` | `None` | Optional green band |
+| `input_blue` | `Raster \| None` | `None` | Optional blue band |
+| `solar_mode` | `str` | `"auto"` | One of `"auto"`, `"manual"`, `"metadata"`, `"datetime_location"` |
+| `solar_zenith_deg` | `float` | `40.0` | Solar zenith angle in degrees |
+| `solar_azimuth_deg` | `float` | `165.0` | Solar azimuth in degrees |
+| `acquisition_datetime_utc` | `str \| None` | `None` | RFC3339 UTC timestamp for `datetime_location` mode |
+| `latitude` | `float \| None` | `None` | Optional latitude for `datetime_location` |
+| `longitude` | `float \| None` | `None` | Optional longitude for `datetime_location` |
+| `profile` | `str` | `"balanced"` | One of `"conservative"`, `"balanced"`, `"fast"` |
+| `cloud_threshold` | `float \| None` | `None` | Optional cloud threshold override in source units |
+| `shadow_threshold` | `float \| None` | `None` | Optional shadow threshold override in source units |
+| `qa_mask` | `Raster \| None` | `None` | Optional QA mask raster |
+| `qa_mask_format` | `str` | `"auto"` | One of `"auto"`, `"landsat_qa_pixel"`, `"sentinel2_scl"`, `"sentinel2_qa60"`, `"binary"` |
+| `mask_strategy` | `str` | `"auto"` | One of `"auto"`, `"qa_only"`, `"heuristic_only"`, `"qa_plus_heuristic"` |
+| `z_factor` | `float` | `1.0` | Vertical exaggeration for slope/aspect derivation |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+red_corr, nir_corr, green_corr, blue_corr, mask, correction_factor, quality, summary = wbe.terrain_corrected_optical_analytics(
+    input_dem=dem,
+    input_red=red_band,
+    input_nir=nir_band,
+    input_green=green_band,
+    input_blue=blue_band,
+    profile="balanced",
+)
+```
+
+---
+
+### `wbe.time_series_change_intelligence`
+
+```
+wbe.time_series_change_intelligence(
+    input_stack,
+    qa_stack=None,
+    algorithm_mode="fast",
+    min_observations=24,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster, Raster, str]
+```
+
+Runs temporal trend and breakpoint workflow analysis on a stack-like raster input.
+Returns trend change, breakpoint count, breakpoint date, change confidence, and summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input_stack` | `Raster` | required | Input temporal stack raster |
+| `qa_stack` | `Raster \| None` | `None` | Optional QA stack used to screen low-quality observations |
+| `algorithm_mode` | `str` | `"fast"` | Algorithm mode (e.g. `"fast"`, `"iterative"`, `"bfast"`) |
+| `min_observations` | `int` | `24` | Minimum per-pixel observations needed for model fitting |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+trend, count, date, confidence, summary = wbe.time_series_change_intelligence(
+    input_stack=time_stack,
+    qa_stack=time_stack_qa,
+    algorithm_mode="bfast",
+    min_observations=24,
+)
+```
+
+---
+
+### `wbe.sar_analysis_readiness`
+
+```
+wbe.sar_analysis_readiness(
+    input_sar,
+    input_dem,
+    pair_sar=None,
+    speckle_window=5,
+    z_factor=1.0,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster, Raster | None, str]
+```
+
+Runs SAR analysis-ready preprocessing and returns calibrated backscatter,
+speckle-filtered SAR, RTC factor, optional coherence, and summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input_sar` | `Raster` | required | Input SAR raster |
+| `input_dem` | `Raster` | required | DEM used for terrain corrections |
+| `pair_sar` | `Raster \| None` | `None` | Optional second SAR raster used for coherence output |
+| `speckle_window` | `int` | `5` | Speckle filtering window size |
+| `z_factor` | `float` | `1.0` | Vertical exaggeration factor for terrain terms |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+calibrated, speckle, rtc, coherence, summary = wbe.sar_analysis_readiness(
+    input_sar=sar_a,
+    input_dem=dem,
+    pair_sar=sar_b,
+    speckle_window=5,
+)
+```
+
+---
+
+### `wbe.multi_sensor_fusion_monitoring`
+
+```
+wbe.multi_sensor_fusion_monitoring(
+    baseline_bundle,
+    change_bundle,
+    input_sar,
+    input_dem,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    change_red_band_index=0,
+    change_nir_band_index=1,
+    pair_sar=None,
+    profile="balanced",
+    high_confidence_threshold=0.8,
+    max_zone_features=25000,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster, Vector, str]
+```
+
+Runs multi-sensor disturbance fusion from optical change, SAR stability cues, and terrain context.
+Returns fused change probability, sensor agreement, terrain context, high-confidence zones,
+and a summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `baseline_bundle` | `Raster` | required | Baseline-date multiband raster bundle |
+| `change_bundle` | `Raster` | required | Change-date multiband raster bundle |
+| `input_sar` | `Raster` | required | SAR raster for agreement/fusion cues |
+| `input_dem` | `Raster` | required | DEM used for terrain context |
+| `baseline_red_band_index` | `int` | `0` | Baseline red-band index |
+| `baseline_nir_band_index` | `int` | `1` | Baseline NIR-band index |
+| `change_red_band_index` | `int` | `0` | Change red-band index |
+| `change_nir_band_index` | `int` | `1` | Change NIR-band index |
+| `pair_sar` | `Raster \| None` | `None` | Optional paired SAR raster for coherence-style cues |
+| `profile` | `str` | `"balanced"` | One of `"aggressive"`, `"balanced"`, `"conservative"` |
+| `high_confidence_threshold` | `float` | `0.8` | Threshold in `[0, 1]` used to derive high-confidence zones |
+| `max_zone_features` | `int` | `25000` | Maximum number of output zone features |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+fused, agreement, terrain, zones, summary = wbe.multi_sensor_fusion_monitoring(
+    baseline_bundle=baseline_bundle,
+    change_bundle=change_bundle,
+    input_sar=sar_a,
+    input_dem=dem,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    change_red_band_index=0,
+    change_nir_band_index=1,
+    pair_sar=sar_b,
+    profile="balanced",
+)
+```
+
+---
+
+### `wbe.brdf_surface_reflectance_consistency`
+
+```
+wbe.brdf_surface_reflectance_consistency(
+    input_red,
+    input_nir,
+    input_dem,
+    solar_zenith_deg,
+    solar_azimuth_deg,
+    input_green=None,
+    profile="balanced",
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster, str]
+```
+
+Runs BRDF/illumination consistency normalization and returns normalized reflectance,
+normalization delta, consistency confidence, and a summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input_red` | `Raster` | required | Input red band |
+| `input_nir` | `Raster` | required | Input NIR band |
+| `input_dem` | `Raster` | required | DEM used for terrain-aware normalization |
+| `solar_zenith_deg` | `float` | required | Solar zenith angle in degrees |
+| `solar_azimuth_deg` | `float` | required | Solar azimuth in degrees |
+| `input_green` | `Raster \| None` | `None` | Optional green band |
+| `profile` | `str` | `"balanced"` | One of `"fast"`, `"balanced"`, `"conservative"` |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+normalized, delta, confidence, summary = wbe.brdf_surface_reflectance_consistency(
+    input_red=red_band,
+    input_nir=nir_band,
+    input_dem=dem,
+    solar_zenith_deg=40.0,
+    solar_azimuth_deg=165.0,
+    input_green=green_band,
+    profile="balanced",
+)
 ```
 
 ---

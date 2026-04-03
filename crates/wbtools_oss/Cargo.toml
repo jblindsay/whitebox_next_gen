@@ -2,6 +2,7 @@
 name = "wbtools_oss"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [dependencies]
 wbcore = { path = "../wbcore" }
@@ -10,8 +11,8 @@ wbraster = { path = "../wbraster" }
 wbgeotiff = { path = "../wbgeotiff" }
 wbvector = { path = "../wbvector" }
 wbprojection = { path = "../wbprojection" }
-wbtopology = { path = "../wbtopology" }
-wblidar = { path = "../wblidar" }
+wbtopology = { path = "../wbtopology", features = ["parallel"] }
+wblidar = { path = "../wblidar", features = ["parallel"] }
 rayon = "1"
 rand = "0.10.0"
 wide = "1.2.0"

@@ -93,6 +93,7 @@ Terrain analysis and land-surface form tools available on `WbEnvironment`.
 - `wbe.ruggedness_index`
 - `wbe.sediment_transport_index`
 - `wbe.shape_index`
+- `wbe.soil_landscape_classification`
 - `wbe.spherical_std_dev_of_normals`
 - `wbe.sky_view_factor`
 - `wbe.shadow_animation`
@@ -752,6 +753,42 @@ Returns a `(Raster, str)` tuple where the string is a human-readable classificat
 6  Divergent Backslope
 7  Level
 ```
+
+#### `wbe.soil_landscape_classification`
+
+```
+wbe.soil_landscape_classification(
+    input,
+    flat_slope_threshold=3.0,
+    profile_curvature_threshold=0.01,
+    plan_curvature_threshold=0.01,
+    fine_scale=2.0,
+    coarse_scale=8.0,
+    z_factor=1.0,
+    output_prefix=None,
+    landform_polygons_output=None,
+    callback=None,
+) -> tuple[Raster, Raster, Vector, str]
+```
+
+Runs the workflow soil-landscape classifier and returns:
+- landform-units raster
+- multiscale-signature raster
+- landform polygons vector
+- summary JSON path
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input` | `Raster` | required | Input DEM raster |
+| `flat_slope_threshold` | `float` | `3.0` | Slope threshold in degrees for flat/summit/depression separation |
+| `profile_curvature_threshold` | `float` | `0.01` | Absolute threshold for profile-curvature convex/concave separation |
+| `plan_curvature_threshold` | `float` | `0.01` | Absolute threshold for plan-curvature convergent/divergent separation |
+| `fine_scale` | `float` | `2.0` | Fine-scale smoothing radius |
+| `coarse_scale` | `float` | `8.0` | Coarse-scale smoothing radius |
+| `z_factor` | `float` | `1.0` | Vertical exaggeration factor |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `landform_polygons_output` | `str \| None` | `None` | Optional explicit polygon output path |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
 
 #### `wbe.spherical_std_dev_of_normals`
 

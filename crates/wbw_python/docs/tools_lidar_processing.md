@@ -113,6 +113,10 @@ The following convenience methods are available on `WbEnvironment`:
 51. `lidar_eigenvalue_features(input=None, num_neighbours=None, search_radius=None, output_path=None, callback=None)`
 52. `lidar_ransac_planes(input, search_radius=2.0, num_iterations=50, num_samples=10, inlier_threshold=0.15, acceptable_model_size=30, max_planar_slope=75.0, classify=False, only_last_returns=False, output_path=None, callback=None)`
 53. `lidar_rooftop_analysis(lidar_inputs, building_footprints, search_radius=2.0, num_iterations=50, num_samples=10, inlier_threshold=0.15, acceptable_model_size=30, max_planar_slope=75.0, norm_diff_threshold=2.0, azimuth=180.0, altitude=30.0, output_path=None, callback=None)`
+54. `lidar_qa_and_confidence(input, profile="balanced", block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, high_confidence_threshold=0.8, output_prefix=None, output_path=None, callback=None)`
+55. `lidar_terrain_product_suite(input, profile="balanced", block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, z_factor=1.0, hillshade_azimuth=315.0, hillshade_altitude=45.0, high_confidence_threshold=0.8, output_prefix=None, output_path=None, callback=None)`
+56. `utility_corridor_encroachment_intelligence(input, corridors, profile="balanced", resolution=2.0, risk_height_threshold=3.0, corridor_influence_distance=60.0, priority_zone_threshold=None, max_zone_features=5000, output_prefix=None, callback=None)`
+57. `forestry_structure_and_biomass_intelligence(input, profile="balanced", resolution=2.0, stand_block_cells=12, biomass_cap=25.0, output_prefix=None, callback=None)`
 
 Notes:
 - `returns_included` supports `all`, `first`, and `last`.
@@ -251,6 +255,28 @@ Notes:
 - Identifies rooftop facets inside `building_footprints` and writes polygon output with rooftop attributes such as `MAX_ELEV`, `HILLSHADE`, `SLOPE`, `ASPECT`, and `AREA`.
 - `lidar_inputs` accepts one or more LiDAR tiles covering the buildings of interest.
 - Current parity implementation outputs convex-hull roof facets per detected planar segment.
+
+### lidar_qa_and_confidence
+- Runs a QA workflow that classifies/filters ground points and produces DTM, confidence, uncertainty, QA flags, and summary outputs.
+- Returns a tuple of `(classified_lidar, dtm, confidence, uncertainty, qa_flags, summary_path)`.
+- `profile` supports `strict`, `balanced`, and `permissive`.
+
+### lidar_terrain_product_suite
+- Runs an end-to-end terrain product workflow and outputs DTM, DSM, slope, hillshade, confidence, uncertainty, metadata summary, and optional classified lidar.
+- Returns `(dtm, dsm, slope, hillshade, confidence, uncertainty, metadata_path, classified_lidar_optional)`.
+- `profile` supports `strict`, `balanced`, and `permissive`.
+
+### utility_corridor_encroachment_intelligence
+- Detects LiDAR-derived vegetation encroachment risk near utility corridor centerlines.
+- Returns `(encroachment_risk_raster, corridor_priority_zones_vector, asset_risk_table_vector, classification_confidence_raster, summary_path)`.
+- `profile` supports `fast`, `balanced`, and `strict`; `priority_zone_threshold` and `max_zone_features` control zone selection density.
+- `risk_height_threshold` controls the canopy height where risk increases, and `corridor_influence_distance` controls proximity decay.
+
+### forestry_structure_and_biomass_intelligence
+- Produces canopy metrics, vertical structure classes, stand units, biomass proxy, and confidence outputs from LiDAR.
+- Returns `(canopy_height_metrics_raster, vertical_structure_class_raster, stand_structure_units_vector, biomass_proxy_raster, confidence_raster, summary_path)`.
+- `profile` supports `fast`, `balanced`, and `strict`; `stand_block_cells` controls stand-level aggregation size.
+- `biomass_cap` sets an upper bound for biomass proxy scaling.
 
 ### filter_lidar_classes
 - Removes points whose classification is listed in `excluded_classes`.

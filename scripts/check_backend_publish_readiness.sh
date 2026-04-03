@@ -14,6 +14,15 @@ backend_crates=(
   wblidar
 )
 
+non_publishable_crates=(
+  wbcore
+  wblicense_core
+  wbtools_oss
+  wbphotogrammetry
+  wbw_python
+  wbw_r
+)
+
 publish_order=(
   wbgeotiff
   wbprojection
@@ -38,6 +47,7 @@ deny_pattern='(^|/)examples/internal/|(^|/)dev/|(^|/)docs/internal/|(^|/)tools/|
 echo "Repository: $repo_root"
 echo ""
 echo "Backend crates: ${backend_crates[*]}"
+echo "Non-publishable crates: ${non_publishable_crates[*]}"
 echo "Recommended publish order: ${publish_order[*]}"
 echo ""
 
@@ -54,6 +64,20 @@ for crate in "${backend_crates[@]}"; do
       metadata_fail=1
     fi
   done
+done
+
+echo ""
+echo "== Non-publishable crate policy =="
+non_publishable_fail=0
+for crate in "${non_publishable_crates[@]}"; do
+  manifest="crates/$crate/Cargo.toml"
+  echo "-- $crate"
+  if grep -Eq '^[[:space:]]*publish[[:space:]]*=[[:space:]]*false[[:space:]]*$' "$manifest"; then
+    echo "   ok: publish = false"
+  else
+    echo "   MISSING: publish = false"
+    non_publishable_fail=1
+  fi
 done
 
 echo ""
@@ -93,7 +117,7 @@ for crate in "${backend_crates[@]}"; do
 done
 
 echo ""
-if [[ "$metadata_fail" -eq 0 && "$policy_fail" -eq 0 && "$package_fail" -eq 0 ]]; then
+if [[ "$metadata_fail" -eq 0 && "$non_publishable_fail" -eq 0 && "$policy_fail" -eq 0 && "$package_fail" -eq 0 ]]; then
   echo "All checks passed."
   exit 0
 fi

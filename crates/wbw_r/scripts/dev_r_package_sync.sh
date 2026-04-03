@@ -48,7 +48,7 @@ LIB_DEST="$LIB_DEST_DIR/libwbw_r$EXT"
 mkdir -p "$LIB_DEST_DIR"
 cp "$LIB_SRC" "$LIB_DEST"
 
-cargo run -p wbw_r ${FEATURE_ARGS} --example generate_r_wrappers -- --tier "$([[ "$INCLUDE_PRO" == true ]] && echo pro || echo open)" --output "$CRATE_DIR/generated/wbw_tools_generated.R"
+cargo run -p wbw_r ${FEATURE_ARGS} --example generate_r_wrappers -- $([[ "$INCLUDE_PRO" == true ]] && echo --include-pro) --tier "$([[ "$INCLUDE_PRO" == true ]] && echo pro || echo open)" --output "$CRATE_DIR/generated/wbw_tools_generated.R"
 cp "$CRATE_DIR/generated/wbw_tools_generated.R" "$PACKAGE_DIR/R/zz_generated_wrappers.R"
 
 popd >/dev/null

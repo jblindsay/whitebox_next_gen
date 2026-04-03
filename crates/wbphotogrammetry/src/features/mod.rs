@@ -49,6 +49,9 @@ const HARRIS_K: f64 = 0.04;
 const GPS_DEFAULT_SENSOR_WIDTH_MM: f64 = 13.2;
 const GPS_DEFAULT_HFOV_DEG: f64 = 84.0;
 const GPS_FILTER_DEBUG_ENV: &str = "WBPHOTOGRAMMETRY_DEBUG_GPS_FILTER";
+const GPS_SOFT_CULL_INNER_MIN_WEIGHT: f64 = 0.55;
+const GPS_SOFT_CULL_OUTER_MIN_WEIGHT: f64 = 0.12;
+const GPS_SOFT_CULL_OUTER_GRACE_MULTIPLIER: f64 = 1.35;
 const PAIR_EDGE_MIN_INLIERS_ADJACENT: usize = 5;
 const PAIR_EDGE_MIN_INLIERS_NON_ADJACENT: usize = 8;
 const PAIR_EDGE_MIN_SPATIAL_PENALTY_ADJACENT: f64 = 0.20;
@@ -594,7 +597,7 @@ pub fn run_feature_matching_orb(frames: &[ImageFrame], profile: &str) -> Result<
     run_feature_matching_with_method(frames, profile, FeatureMethod::Orb)
 }
 
-/// Reserved public API hook for future floating-point SIFT descriptors.
+/// Run feature matching using the in-crate floating-point SIFT backend.
 pub fn run_feature_matching_sift(frames: &[ImageFrame], profile: &str) -> Result<MatchStats> {
     run_feature_matching_with_method(frames, profile, FeatureMethod::Sift)
 }
@@ -691,15 +694,15 @@ fn run_feature_matching_with_algorithm(
         .flat_map(|i| {
             let mut local: Vec<PairMatchEvaluation> = Vec::new();
             for j in (i + 1)..frame_features.len() {
-                if !should_attempt_pair(
+                let Some(pair_distance_weight) = should_attempt_pair(
                     &frames[i],
                     &frames[j],
                     i,
                     j,
                     feature_profile.gps_pair_footprint_multiplier,
-                ) {
+                ) else {
                     continue;
-                }
+                };
                 let pair_native_scale = 0.5
                     * (frame_features[i].native_scale_px + frame_features[j].native_scale_px);
                 let (pair_stats, pts, weights) = verify_pair_matches(
@@ -712,6 +715,7 @@ fn run_feature_matching_with_algorithm(
                     feature_profile.ratio_test_threshold,
                     feature_profile.geometric_tolerance_px,
                     octave_constraint,
+                    pair_distance_weight,
                 );
 
                 let adjacent = j == i + 1;
@@ -2012,6 +2016,7 @@ fn verify_pair_matches(
     ratio_threshold: f64,
     geometric_tolerance_px: f64,
     max_octave_diff: Option<u8>,
+    pair_distance_weight: f64,
 ) -> (PairInlierStats, Vec<[f64; 4]>, Vec<f64>) {
     let empty = PairInlierStats { inlier_count: 0, median_displacement_px: 0.0, model_dx_px: 0.0, model_dy_px: 0.0 };
     if (left.binary_descriptors.is_empty() || right.binary_descriptors.is_empty())
@@ -2040,7 +2045,8 @@ fn verify_pair_matches(
                         r.corner.x as f64,
                         r.corner.y as f64,
                     ],
-                    descriptor_confidence: descriptor_match_confidence(*m),
+                    descriptor_confidence: (descriptor_match_confidence(*m) * pair_distance_weight)
+                        .clamp(0.02, 1.0),
                     texture_confidence: texture_confidence(l.texture_stddev, r.texture_stddev),
                 }
             })
@@ -2066,7 +2072,8 @@ fn verify_pair_matches(
                         r.corner.x as f64,
                         r.corner.y as f64,
                     ],
-                    descriptor_confidence: descriptor_match_confidence(*m),
+                    descriptor_confidence: (descriptor_match_confidence(*m) * pair_distance_weight)
+                        .clamp(0.02, 1.0),
                     texture_confidence: texture_confidence(l.texture_stddev, r.texture_stddev),
                 }
             })
@@ -2182,7 +2189,7 @@ fn match_binary_descriptors(
                     if best_dist > distance_threshold as f64 {
                         return None;
                     }
-                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, right.len()) {
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold) {
                         return None;
                     }
                     Some((best_idx, best_dist, second_dist))
@@ -2199,7 +2206,7 @@ fn match_binary_descriptors(
                     if best_dist > distance_threshold as f64 {
                         return None;
                     }
-                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, left.len()) {
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold) {
                         return None;
                     }
                     Some((best_idx, best_dist, second_dist))
@@ -2248,7 +2255,7 @@ fn match_float_descriptors(
                     if best_dist > distance_threshold {
                         return None;
                     }
-                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, right.len()) {
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold) {
                         return None;
                     }
                     Some((best_idx, best_dist, second_dist))
@@ -2265,7 +2272,7 @@ fn match_float_descriptors(
                     if best_dist > distance_threshold {
                         return None;
                     }
-                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, left.len()) {
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold) {
                         return None;
                     }
                     Some((best_idx, best_dist, second_dist))
@@ -2381,10 +2388,9 @@ fn passes_ratio_test(
     best_dist: f64,
     second_dist: Option<f64>,
     ratio_threshold: f64,
-    candidate_count: usize,
 ) -> bool {
     let Some(second) = second_dist else {
-        return candidate_count == 1 && best_dist <= 1.0e-9;
+        return false;
     };
     if second <= 1.0e-9 {
         return best_dist <= 1.0e-9;
@@ -3031,24 +3037,55 @@ fn should_attempt_pair(
     left_idx: usize,
     right_idx: usize,
     gps_pair_footprint_multiplier: f64,
-) -> bool {
+) -> Option<f64> {
     // Always keep adjacent-frame attempts; this preserves the strongest
     // sequential motion constraints even when GPS is noisy.
     if right_idx == left_idx + 1 {
-        return true;
+        return Some(1.0);
     }
 
     let (left_gps, right_gps) = match (left.metadata.gps.as_ref(), right.metadata.gps.as_ref()) {
         (Some(a), Some(b)) => (a, b),
-        _ => return true, // Fallback: no GPS on either frame means no filtering.
+        _ => return Some(1.0), // Fallback: no GPS on either frame means no filtering.
     };
 
     let spacing_m = great_circle_distance_m(left_gps.lat, left_gps.lon, right_gps.lat, right_gps.lon);
     let left_footprint = estimate_frame_footprint_width_m(left);
     let right_footprint = estimate_frame_footprint_width_m(right);
     let max_spacing_m = gps_pair_footprint_multiplier * 0.5 * (left_footprint + right_footprint);
+    let effective_spacing = max_spacing_m.max(1.0);
+    let spacing_ratio = spacing_m / effective_spacing;
 
-    spacing_m <= max_spacing_m
+    if spacing_ratio > GPS_SOFT_CULL_OUTER_GRACE_MULTIPLIER {
+        gps_filter_debug_line(format!(
+            "pair={} spacing_m={:.2} max_spacing_m={:.2} ratio={:.3} decision=skip",
+            pair_label_from_paths(&left.path, &right.path),
+            spacing_m,
+            max_spacing_m,
+            spacing_ratio
+        ));
+        return None;
+    }
+
+    let weight = if spacing_ratio <= 1.0 {
+        (1.0 - 0.45 * spacing_ratio.powf(1.35)).clamp(GPS_SOFT_CULL_INNER_MIN_WEIGHT, 1.0)
+    } else {
+        let t = ((spacing_ratio - 1.0) / (GPS_SOFT_CULL_OUTER_GRACE_MULTIPLIER - 1.0))
+            .clamp(0.0, 1.0);
+        ((1.0 - t) * GPS_SOFT_CULL_INNER_MIN_WEIGHT + t * GPS_SOFT_CULL_OUTER_MIN_WEIGHT)
+            .clamp(GPS_SOFT_CULL_OUTER_MIN_WEIGHT, GPS_SOFT_CULL_INNER_MIN_WEIGHT)
+    };
+
+    gps_filter_debug_line(format!(
+        "pair={} spacing_m={:.2} max_spacing_m={:.2} ratio={:.3} distance_weight={:.3}",
+        pair_label_from_paths(&left.path, &right.path),
+        spacing_m,
+        max_spacing_m,
+        spacing_ratio,
+        weight
+    ));
+
+    Some(weight)
 }
 
 fn estimate_frame_footprint_width_m(frame: &ImageFrame) -> f64 {
@@ -3211,6 +3248,7 @@ fn filter_matches_with_fundamental_ransac(
     let threshold = (0.35 * geometric_tolerance_px).powi(2).max(1.5);
     let iterations = (match_points.len().max(16) * 3).min(220);
     let mut best_inliers: Vec<usize> = Vec::new();
+    let mut best_median_residual = f64::INFINITY;
     let mut best_f = Matrix3::identity();
 
     for iter in 0..iterations {
@@ -3227,9 +3265,12 @@ fn filter_matches_with_fundamental_ransac(
         let Some(f) = estimate_fundamental_from_correspondences(&sample_points) else {
             continue;
         };
-        let inliers = sampson_inliers_fundamental(&f, match_points, threshold);
-        if inliers.len() > best_inliers.len() {
+        let (inliers, median_residual) = sampson_inliers_with_median_residual(&f, match_points, threshold);
+        if inliers.len() > best_inliers.len()
+            || (inliers.len() == best_inliers.len() && median_residual < best_median_residual)
+        {
             best_inliers = inliers;
+            best_median_residual = median_residual;
             best_f = f;
         }
     }
@@ -3238,20 +3279,80 @@ fn filter_matches_with_fundamental_ransac(
         return None;
     }
 
-    let refined_points: Vec<[(f64, f64); 2]> = best_inliers
-        .iter()
-        .map(|&idx| {
-            let ((x1, y1), (x2, y2)) = match_points[idx];
-            [(x1, y1), (x2, y2)]
-        })
-        .collect();
-    let refined_f = estimate_fundamental_from_correspondences(&refined_points).unwrap_or(best_f);
-    let refined_inliers = sampson_inliers_fundamental(&refined_f, match_points, threshold);
+    let (refined_f, refined_inliers) = locally_optimize_fundamental_model(best_f, match_points, threshold);
     let mut residuals = vec![f64::INFINITY; match_points.len()];
     for &idx in &refined_inliers {
         residuals[idx] = sampson_residual_fundamental(&refined_f, match_points[idx]);
     }
     Some((refined_inliers, residuals))
+}
+
+fn locally_optimize_fundamental_model(
+    initial_f: Matrix3<f64>,
+    match_points: &[((f64, f64), (f64, f64))],
+    base_threshold: f64,
+) -> (Matrix3<f64>, Vec<usize>) {
+    let mut best_f = initial_f;
+    let (mut best_inliers, mut best_median_residual) =
+        sampson_inliers_with_median_residual(&best_f, match_points, base_threshold);
+
+    for _ in 0..5 {
+        if best_inliers.len() < FUNDAMENTAL_RANSAC_MIN_INLIERS {
+            break;
+        }
+
+        let points: Vec<[(f64, f64); 2]> = best_inliers
+            .iter()
+            .map(|&idx| {
+                let ((x1, y1), (x2, y2)) = match_points[idx];
+                [(x1, y1), (x2, y2)]
+            })
+            .collect();
+        let Some(candidate_f) = estimate_fundamental_from_correspondences(&points) else {
+            break;
+        };
+
+        let adaptive_threshold = if best_median_residual.is_finite() {
+            (best_median_residual * 2.5)
+                .clamp(base_threshold * 0.55, base_threshold * 1.20)
+        } else {
+            base_threshold
+        };
+        let (candidate_inliers, candidate_median_residual) =
+            sampson_inliers_with_median_residual(&candidate_f, match_points, adaptive_threshold);
+
+        let improved = candidate_inliers.len() > best_inliers.len()
+            || (candidate_inliers.len() == best_inliers.len()
+                && candidate_median_residual < best_median_residual * 0.985);
+        if !improved {
+            break;
+        }
+
+        best_f = candidate_f;
+        best_inliers = candidate_inliers;
+        best_median_residual = candidate_median_residual;
+    }
+
+    (best_f, best_inliers)
+}
+
+fn sampson_inliers_with_median_residual(
+    f: &Matrix3<f64>,
+    points: &[((f64, f64), (f64, f64))],
+    threshold: f64,
+) -> (Vec<usize>, f64) {
+    let inliers = sampson_inliers_fundamental(f, points, threshold);
+    if inliers.is_empty() {
+        return (inliers, f64::INFINITY);
+    }
+
+    let mut residuals = inliers
+        .iter()
+        .map(|&idx| sampson_residual_fundamental(f, points[idx]))
+        .collect::<Vec<_>>();
+    residuals.sort_by(|a, b| a.total_cmp(b));
+    let median = residuals[residuals.len() / 2];
+    (inliers, median)
 }
 
 fn estimate_fundamental_from_correspondences(
@@ -3468,7 +3569,7 @@ mod tests {
     use super::*;
     use image::{GrayImage, Luma};
 
-    use crate::ingest::FrameMetadata;
+    use crate::ingest::{FrameMetadata, GpsCoordinate};
 
     fn make_frame(path: &std::path::Path) -> ImageFrame {
         ImageFrame {
@@ -3895,7 +3996,19 @@ mod tests {
             texture_stddev: 12.0,
             octave: 0,
         };
-        let left = vec![query.clone()];
+        let left = vec![
+            query.clone(),
+            BriefDescriptor {
+                corner: Keypoint {
+                    x: 100,
+                    y: 100,
+                    score: 1,
+                },
+                words: [u64::MAX, u64::MAX, u64::MAX, u64::MAX],
+                texture_stddev: 12.0,
+                octave: 0,
+            },
+        ];
         let ambiguous_right = vec![
             BriefDescriptor {
                 corner: Keypoint {
@@ -3948,8 +4061,12 @@ mod tests {
             },
         ];
         let accepted = match_binary_descriptors(&left, &unambiguous_right, 256, 0.8, None);
-        assert_eq!(accepted.len(), 1, "clear nearest neighbor should be retained");
+        assert!(
+            accepted.iter().any(|m| m.left_idx == 0 && m.right_idx == 0),
+            "clear nearest neighbor should be retained"
+        );
 
+        let singleton_left = vec![query.clone()];
         let singleton_right = vec![BriefDescriptor {
             corner: Keypoint {
                 x: 3,
@@ -3960,16 +4077,63 @@ mod tests {
             texture_stddev: 12.0,
             octave: 0,
         }];
-        let accepted_singleton = match_binary_descriptors(&left, &singleton_right, 256, 0.8, None);
-        assert_eq!(
-            accepted_singleton.len(),
-            1,
-            "singleton exact match should be allowed only when distance is exact"
+        let accepted_singleton =
+            match_binary_descriptors(&singleton_left, &singleton_right, 256, 0.8, None);
+        assert!(
+            accepted_singleton.is_empty(),
+            "singleton candidate must fail ratio filtering"
         );
 
         assert!(
-            !passes_ratio_test(5.0, None, 0.8, 3),
+            !passes_ratio_test(5.0, None, 0.8),
             "missing second-best must fail ratio filtering when candidate set is not singleton"
+        );
+        assert!(
+            !passes_ratio_test(0.0, None, 0.8),
+            "even exact singleton matches must fail ratio filtering"
+        );
+    }
+
+    #[test]
+    fn gps_pair_filter_applies_soft_distance_weighting() {
+        fn frame(path: &str, lat: f64, lon: f64) -> ImageFrame {
+            ImageFrame {
+                path: path.to_string(),
+                width: 4000,
+                height: 3000,
+                metadata: FrameMetadata {
+                    gps: Some(GpsCoordinate {
+                        lat,
+                        lon,
+                        alt: 120.0,
+                    }),
+                    focal_length_mm: Some(8.8),
+                    sensor_width_mm: Some(13.2),
+                    image_width_px: 4000,
+                    image_height_px: 3000,
+                    timestamp: None,
+                    orientation_prior: None,
+                    blur_score: Some(20.0),
+                    has_rtk_gps: false,
+                },
+            }
+        }
+
+        let left = frame("left.jpg", 45.0, -81.0);
+        let near = frame("near.jpg", 45.00002, -81.00002);
+        let far_inside = frame("inside.jpg", 45.00012, -81.00012);
+        let outside_grace = frame("outside.jpg", 45.0100, -81.0100);
+
+        let near_w = should_attempt_pair(&left, &near, 0, 4, 1.8).expect("near pair should pass");
+        let far_inside_w = should_attempt_pair(&left, &far_inside, 0, 9, 1.8)
+            .expect("inside-threshold pair should pass");
+
+        assert!(near_w > far_inside_w, "nearby pair should carry higher prior weight");
+        assert!(far_inside_w < 1.0, "non-adjacent pairs should be softly downweighted");
+
+        assert!(
+            should_attempt_pair(&left, &outside_grace, 0, 12, 1.8).is_none(),
+            "very distant pair should still be culled"
         );
     }
 

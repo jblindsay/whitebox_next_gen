@@ -6,8 +6,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use image::{GrayImage, Luma};
 use serde_json::json;
 use wbphotogrammetry::{
-    CameraModel, FeatureMethod, FrameMetadata, GpsCoordinate, ImageFrame,
-    run_camera_alignment, run_dense_surface, run_feature_matching_with_method, run_orthomosaic,
+    AlignmentOptions, CameraModel, FeatureMethod, FrameMetadata, GpsCoordinate, ImageFrame,
+    IntrinsicsRefinementPolicy, run_camera_alignment_with_options, run_dense_surface,
+    run_feature_matching_with_method, run_orthomosaic,
 };
 
 #[derive(Debug, Clone)]
@@ -44,6 +45,9 @@ fn main() {
             eprintln!("invalid --feature-method: {e}");
             std::process::exit(2);
         });
+    let intrinsics_refinement = parse_intrinsics_refinement_policy(
+        &parse_string_arg(&args, "--intrinsics-refinement", "auto"),
+    );
     let resolution_m = parse_arg(&args, "--resolution", 0.12_f64);
     let json_out = parse_optional_string_arg(&args, "--json-out");
 
@@ -65,8 +69,15 @@ fn main() {
         let feature_time = start_feature.elapsed();
 
         let start_alignment = Instant::now();
-        let alignment = run_camera_alignment(&frames, &match_stats, CameraModel::Auto)
-            .expect("alignment stage");
+        let alignment = run_camera_alignment_with_options(
+            &frames,
+            &match_stats,
+            CameraModel::Auto,
+            AlignmentOptions {
+                intrinsics_refinement,
+            },
+        )
+        .expect("alignment stage");
         let alignment_time = start_alignment.elapsed();
 
         let start_dense = Instant::now();
@@ -307,6 +318,22 @@ fn parse_string_arg(args: &[String], key: &str, default: &str) -> String {
         .find(|w| w[0] == key)
         .map(|w| w[1].clone())
         .unwrap_or_else(|| default.to_string())
+}
+
+fn parse_intrinsics_refinement_policy(s: &str) -> IntrinsicsRefinementPolicy {
+    match s {
+        "auto" => IntrinsicsRefinementPolicy::Auto,
+        "none" => IntrinsicsRefinementPolicy::None,
+        "core-only" => IntrinsicsRefinementPolicy::CoreOnly,
+        "core-and-radial" => IntrinsicsRefinementPolicy::CoreAndRadial,
+        "all" => IntrinsicsRefinementPolicy::All,
+        _ => {
+            eprintln!(
+                "invalid --intrinsics-refinement: {s}. expected auto|none|core-only|core-and-radial|all"
+            );
+            std::process::exit(2);
+        }
+    }
 }
 
     fn parse_optional_string_arg(args: &[String], key: &str) -> Option<String> {

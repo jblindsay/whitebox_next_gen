@@ -45,7 +45,15 @@ pub use features::{
     run_feature_matching_with_method,
     run_feature_matching_with_options,
 };
-pub use alignment::{AlignmentResult, AlignmentStats, CameraPose, run_camera_alignment};
+pub use alignment::{
+    AlignmentOptions,
+    AlignmentResult,
+    AlignmentStats,
+    CameraPose,
+    IntrinsicsRefinementPolicy,
+    run_camera_alignment,
+    run_camera_alignment_with_options,
+};
 pub use dense::{DenseResult, DsmStats, run_dense_surface, run_dense_surface_with_dtm};
 pub use mosaic::{MosaicResult, SeamStats, run_orthomosaic, run_orthomosaic_with_confidence};
 pub use qa::{

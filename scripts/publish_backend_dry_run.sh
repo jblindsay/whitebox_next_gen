@@ -18,9 +18,19 @@ publish_order=(
   wblidar
 )
 
+non_publishable_crates=(
+  wbcore
+  wblicense_core
+  wbtools_oss
+  wbphotogrammetry
+  wbw_python
+  wbw_r
+)
+
 echo "Repository: $repo_root"
 echo "Dry-run mode: cargo package --allow-dirty --no-verify"
 echo "Publish order: ${publish_order[*]}"
+echo "Excluded from crates.io publishing: ${non_publishable_crates[*]}"
 echo ""
 
 failed=0

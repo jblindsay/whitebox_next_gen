@@ -6,6 +6,8 @@ This runbook describes:
 2. How to publish a single individual crate.
 3. The checks to run before and after publishing.
 
+This guide applies only to crates intended for crates.io publication. Not every crate in this workspace should ever be published to crates.io.
+
 ## 1. Scope and Current Publish Order
 
 Current backend crates covered by this guide:
@@ -30,6 +32,17 @@ Why order matters:
 
 - Several crates depend on sibling crates that must already exist on crates.io.
 - A dependency crate must be published before dependent crates can pass package verification.
+
+Crates in this workspace that are intentionally excluded from crates.io publishing:
+
+- wbcore
+- wblicense_core
+- wbtools_oss
+- wbphotogrammetry
+- wbw_python
+- wbw_r
+
+These crates are frontend plumbing, internal support crates, or product-specific integration layers. They are GitHub-only crates and must keep `publish = false` in their Cargo.toml manifests.
 
 ## 2. One-Time Setup (First Time Only)
 
@@ -70,6 +83,7 @@ bash scripts/check_backend_publish_readiness.sh
 This script currently checks:
 
 - Required package metadata fields.
+- Non-publishable crates retain `publish = false`.
 - Strict no-internal-files package policy.
 - Dry packaging behavior for each backend crate.
 
@@ -90,6 +104,8 @@ bash scripts/publish_backend_dry_run.sh --continue
 ## 4. Publishing the Full Backend Set (Monorepo Release)
 
 Use this when releasing all backend crates in sequence.
+
+Do not use this workflow for wbcore, wblicense_core, wbtools_oss, wbphotogrammetry, wbw_python, or wbw_r. Those crates are intentionally excluded from crates.io publication.
 
 ### 4.1 Publish wbgeotiff
 
@@ -152,8 +168,9 @@ Yes, there are separate steps when publishing just one crate.
 Use this workflow:
 
 1. Choose target crate and target version.
-2. Update that crate version in its Cargo.toml.
-3. If sibling dependency versions changed, update dependent version requirements.
+2. Confirm the target crate is one of the six backend crates covered by this runbook.
+3. Update that crate version in its Cargo.toml.
+4. If sibling dependency versions changed, update dependent version requirements.
 4. Run targeted checks:
 
 ```bash
@@ -176,6 +193,8 @@ Example, publish only wbvector:
 2. Run cargo check -p wbvector.
 3. Run cargo package -p wbvector --allow-dirty --no-verify.
 4. Run cargo publish -p wbvector.
+
+If the target crate has `publish = false`, stop. That crate is outside the crates.io publishing scope of this repository.
 
 ## 6. Versioning Guidance
 
@@ -229,6 +248,16 @@ Fix:
 1. Move maintainer assets under excluded paths such as dev or docs/internal.
 2. Re-run strict readiness script.
 
+### Error: package is marked as unpublishable
+
+Cause:
+
+- The crate manifest contains `publish = false`.
+
+Fix:
+
+- Do not override this for internal/frontend crates. This is the expected guardrail for crates that are GitHub-only and not part of the crates.io release set.
+
 ## 8. Maintainer-Only Workflows
 
 Maintainer-only utilities are kept under excluded dev paths.
@@ -261,6 +290,7 @@ bash scripts/run_maintainer_workflows.sh topology-perf-gate
 
 1. Run metadata and strict package checks.
 2. Run publish dry-run in order.
-3. Publish in required sequence.
-4. Verify crates.io and docs.rs.
-5. Tag release in git and update changelog/release notes.
+3. Confirm no non-publishable crate has been added to the crates.io release plan.
+4. Publish in required sequence.
+5. Verify crates.io and docs.rs.
+6. Tag release in git and update changelog/release notes.

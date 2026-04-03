@@ -18,6 +18,61 @@ pub struct ConvergenceIndexTool;
 pub struct HillshadeTool;
 pub struct MultidirectionalHillshadeTool;
 
+/// Compute slope (degrees) and aspect (degrees clockwise from north) in one pass.
+///
+/// This is a workflow-oriented helper that avoids running separate tool dispatches
+/// when both derivatives are needed together.
+pub fn slope_aspect_from_dem(input: &Raster, z_factor: f64) -> Result<(Raster, Raster), ToolError> {
+    let mut slope = Raster::new_like(input);
+    let mut aspect = Raster::new_like(input);
+    let rows = input.rows;
+    let cols = input.cols;
+    let nodata = input.nodata;
+    let dx = input.cell_size_x.abs().max(f64::EPSILON);
+    let dy = input.cell_size_y.abs().max(f64::EPSILON);
+    let is_geographic = TerrainCore::raster_is_geographic(input);
+    let n = input.rows * input.cols * input.bands;
+    let band_stride = rows * cols;
+
+    let values: Vec<(f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|i| {
+            let band = (i / band_stride) as isize;
+            let rc = i % band_stride;
+            let row = (rc / cols) as isize;
+            let col = (rc % cols) as isize;
+
+            let Some((p, q)) = (if is_geographic {
+                TerrainCore::pq_geographic(input, band, row, col, z_factor)
+            } else {
+                TerrainCore::pq_projected(input, band, row, col, z_factor, dx, dy)
+            }) else {
+                return (nodata, nodata);
+            };
+
+            let t = p.mul_add(p, q * q).sqrt();
+            let slope_v = t.atan().to_degrees();
+            let aspect_v = if t <= 0.0 {
+                -1.0
+            } else {
+                let mut a = 180.0 - (q / p).atan().to_degrees() + 90.0 * p.signum();
+                if a >= 360.0 {
+                    a -= 360.0;
+                }
+                a
+            };
+            (slope_v, aspect_v)
+        })
+        .collect();
+
+    for (i, (s, a)) in values.into_iter().enumerate() {
+        slope.data.set_f64(i, s);
+        aspect.data.set_f64(i, a);
+    }
+
+    Ok((slope, aspect))
+}
+
 struct TerrainCore;
 
 impl TerrainCore {
@@ -281,49 +336,35 @@ impl TerrainCore {
         }
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = Raster::new_like(&input);
         let rows = input.rows;
         let cols = input.cols;
-        let bands = input.bands;
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
         let is_geographic = Self::raster_is_geographic(&input);
 
-        for band_idx in 0..bands {
-            let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let row = r as isize;
-                        let col = c as isize;
-                        let Some((p, q)) = (if is_geographic {
-                            Self::pq_geographic(&input, band, row, col, z_factor)
-                        } else {
-                            Self::pq_projected(&input, band, row, col, z_factor, dx, dy)
-                        }) else {
-                            continue;
-                        };
-                        let t = p.mul_add(p, q * q).sqrt();
-                        row_out[c] = match units.as_str() {
-                            "radians" => t.atan(),
-                            "percent" => t * 100.0,
-                            _ => t.atan().to_degrees(),
-                        };
-                    }
-                    row_out
-                })
-                .collect();
-
-            for (r, row) in row_data.iter().enumerate() {
-                output
-                    .set_row_slice(band, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+        let band_stride = rows * cols;
+        output.data.par_fill_with(|i| {
+            let band = (i / band_stride) as isize;
+            let rc = i % band_stride;
+            let row = (rc / cols) as isize;
+            let col = (rc % cols) as isize;
+            let Some((p, q)) = (if is_geographic {
+                Self::pq_geographic(&input, band, row, col, z_factor)
+            } else {
+                Self::pq_projected(&input, band, row, col, z_factor, dx, dy)
+            }) else {
+                return nodata;
+            };
+            let t = p.mul_add(p, q * q).sqrt();
+            match units.as_str() {
+                "radians" => t.atan(),
+                "percent" => t * 100.0,
+                _ => t.atan().to_degrees(),
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
-        }
+        });
+        ctx.progress.progress(1.0);
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -364,54 +405,39 @@ impl TerrainCore {
         let z_factor = Self::parse_z_factor(args);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = Raster::new_like(&input);
         let rows = input.rows;
         let cols = input.cols;
-        let bands = input.bands;
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
         let is_geographic = Self::raster_is_geographic(&input);
 
-        for band_idx in 0..bands {
-            let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let row = r as isize;
-                        let col = c as isize;
-                        let Some((p, q)) = (if is_geographic {
-                            Self::pq_geographic(&input, band, row, col, z_factor)
-                        } else {
-                            Self::pq_projected(&input, band, row, col, z_factor, dx, dy)
-                        }) else {
-                            continue;
-                        };
-                        let g = p.mul_add(p, q * q).sqrt();
-                        row_out[c] = if g <= 0.0 {
-                            -1.0
-                        } else {
-                            let mut aspect =
-                                180.0 - (q / p).atan().to_degrees() + 90.0 * p.signum();
-                            if aspect >= 360.0 {
-                                aspect -= 360.0;
-                            }
-                            aspect
-                        };
-                    }
-                    row_out
-                })
-                .collect();
-
-            for (r, row) in row_data.iter().enumerate() {
-                output
-                    .set_row_slice(band, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+        let band_stride = rows * cols;
+        output.data.par_fill_with(|i| {
+            let band = (i / band_stride) as isize;
+            let rc = i % band_stride;
+            let row = (rc / cols) as isize;
+            let col = (rc % cols) as isize;
+            let Some((p, q)) = (if is_geographic {
+                Self::pq_geographic(&input, band, row, col, z_factor)
+            } else {
+                Self::pq_projected(&input, band, row, col, z_factor, dx, dy)
+            }) else {
+                return nodata;
+            };
+            let g = p.mul_add(p, q * q).sqrt();
+            if g <= 0.0 {
+                -1.0
+            } else {
+                let mut aspect = 180.0 - (q / p).atan().to_degrees() + 90.0 * p.signum();
+                if aspect >= 360.0 {
+                    aspect -= 360.0;
+                }
+                aspect
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
-        }
+        });
+        ctx.progress.progress(1.0);
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }

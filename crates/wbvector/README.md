@@ -11,7 +11,7 @@ Pure-Rust library for reading and writing common vector GIS formats with a singl
 - [Features](#features)
 - [Supported Formats](#supported-formats)
 - [Format Properties (Detailed Comparison)](#format-properties-detailed-comparison)
-- [Install](#install)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Format Drivers](#format-drivers)
 - [Generic Sniffed I/O](#generic-sniffed-io)
@@ -34,7 +34,16 @@ Pure-Rust library for reading and writing common vector GIS formats with a singl
 
 ## The Whitebox Project
 
-Whitebox is a collection of related open-source geospatial data analysis software. The Whitebox project began in 2009 at the [University of Guelph](https://geg.uoguelph.ca), Canada, developed by [Dr. John Lindsay](https://jblindsay.github.io/ghrg/index.html) a professor of geomatics. Whitebox has long served as Dr. Lindsay's platform for disseminating the output of his geomatics-based research and has developed an extensive worldwide user base. In 2021 Dr. Lindsay and Anthony Francioni founded [Whitebox Geospatial Inc.](https://www.whiteboxgeo.com) in order to ensure the sustainable and ongoing development of this open-source geospatial project. We are currently working on the next iteration of the Whitebox software, **Whitebox Next Gen**. This crate is part of that larger effort.
+[Whitebox](https://www.whiteboxgeo.com) is a suite of open-source geospatial data analysis software with roots at the [University of Guelph](https://geg.uoguelph.ca), Canada, where [Dr. John Lindsay](https://jblindsay.github.io/ghrg/index.html) began the project in 2009. Over more than fifteen years it has grown into a widely used platform for geomorphometry, spatial hydrology, LiDAR processing, and remote sensing research. In 2021 Dr. Lindsay and Anthony Francioni founded [Whitebox Geospatial Inc.](https://www.whiteboxgeo.com) to ensure the project's long-term, sustainable development. **Whitebox Next Gen** is the current major iteration of that work, and this crate is part of that larger effort.
+
+Whitebox Next Gen is a ground-up redesign that improves on its predecessor in nearly every dimension:
+
+- **CRS & reprojection** — Full read/write of coordinate reference system metadata across raster, vector, and LiDAR data, with multiple resampling methods for raster reprojection.
+- **Raster I/O** — More robust GeoTIFF handling (including Cloud-Optimized GeoTIFFs), plus newly supported formats such as GeoPackage Raster and JPEG2000.
+- **Vector I/O** — Expanded from Esri Shapefile-only to 11 formats, including GeoPackage, FlatGeobuf, GeoParquet, and other modern interchange formats.
+- **Vector topology** — A new, dedicated topology engine (`wbtopology`) enabling robust overlay, buffering, and related operations.
+- **LiDAR I/O** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
+- **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin are in active development.
 
 ## Is wbvector Only for Whitebox?
 
@@ -93,14 +102,34 @@ Supported formats are summarized above; this section provides deeper trade-off g
 | MapInfo Interchange (`.mif` + `.mid`) | Mixed text (`.mif` geometry + `.mid` attributes) | Yes | Medium (common vector primitives) | Limited / driver-dependent | Single dataset pair | Plain-text interchange; moderate performance and size | Legacy MapInfo interoperability and migration | Read + Write |
 | OSM PBF (`.osm.pbf`) | Binary Protocol Buffers | Yes (tag map) | Medium-High (depends on OSM primitives) | Implicit WGS84 | Planet/extract object collections | Very compact for OSM extracts; efficient for large-scale reads | Large OpenStreetMap extracts and network base data ingestion | Read-only *(optional `osmpbf` feature)* |
 
-## Install
+## Installation
+
+Crates.io dependency:
+
 ```toml
 [dependencies]
 wbvector = "0.1"
-
-# Optional features example:
-# wbvector = { version = "0.1", features = ["geoparquet", "kmz", "osmpbf"] }
 ```
+
+Enable optional format drivers only when you need them:
+
+```toml
+[dependencies]
+wbvector = { version = "0.1", features = ["geoparquet", "kmz", "osmpbf"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wbvector = { path = "../wbvector" }
+```
+
+Optional features:
+
+- `geoparquet` enables GeoParquet read/write support.
+- `kmz` enables KMZ read/write support.
+- `osmpbf` enables OpenStreetMap PBF read support.
 
 ## Quick Start
 

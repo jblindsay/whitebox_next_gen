@@ -9,6 +9,8 @@ use nalgebra::{DMatrix, Matrix3, Vector2, Vector3};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt;
+use std::str::FromStr;
 
 use crate::error::{PhotogrammetryError, Result};
 use crate::ingest::ImageFrame;
@@ -21,6 +23,16 @@ const ORB_ORIENTATION_RADIUS_PX: i32 = 9;
 const ORB_DESCRIPTOR_RADIUS_PX: i32 = 24;
 const ORB_PYRAMID_LEVELS: usize = 4;
 const ORB_SCALE_FACTOR: f64 = 1.2;
+const SIFT_SCALES_PER_OCTAVE: usize = 3;
+const SIFT_EXTRA_LEVELS: usize = 3;
+const SIFT_BASE_SIGMA: f32 = 1.6;
+const SIFT_CONTRAST_THRESHOLD: f32 = 0.018;
+const SIFT_EDGE_RATIO_THRESHOLD: f32 = 10.0;
+const SIFT_ORIENTATION_BINS: usize = 36;
+const SIFT_DESCRIPTOR_CELLS: usize = 4;
+const SIFT_DESCRIPTOR_BINS: usize = 8;
+const SIFT_DESCRIPTOR_LEN: usize =
+    SIFT_DESCRIPTOR_CELLS * SIFT_DESCRIPTOR_CELLS * SIFT_DESCRIPTOR_BINS;
 const DESCRIPTOR_TEXTURE_RADIUS_PX: i32 = 4;
 const MIN_DESCRIPTOR_STDDEV: f64 = 8.0;
 const MIN_CORNER_SPACING_PX: i32 = 5;
@@ -101,6 +113,108 @@ pub struct MatchStats {
     pub weak_pair_examples: Vec<String>,
 }
 
+/// Feature detection and description method used by the matching stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureMethod {
+    /// FAST + BRIEF binary descriptors.
+    Brief,
+    /// ORB-style rotated BRIEF binary descriptors.
+    Orb,
+    /// Scale-space detector with floating-point SIFT descriptors.
+    Sift,
+    /// SIFT descriptors with L1-sqrt RootSIFT post-normalization.
+    RootSift,
+    /// Learned SuperPoint keypoints and floating-point descriptors.
+    SuperPoint,
+}
+
+impl FeatureMethod {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Brief => "brief",
+            Self::Orb => "orb",
+            Self::Sift => "sift",
+            Self::RootSift => "rootsift",
+            Self::SuperPoint => "superpoint",
+        }
+    }
+
+    pub const fn descriptor_metric(self) -> FeatureDistanceMetric {
+        match self {
+            Self::Brief | Self::Orb => FeatureDistanceMetric::Hamming,
+            Self::Sift | Self::RootSift => FeatureDistanceMetric::EuclideanL2,
+            Self::SuperPoint => FeatureDistanceMetric::Cosine,
+        }
+    }
+
+    pub const fn uses_floating_point_descriptors(self) -> bool {
+        matches!(self, Self::Sift | Self::RootSift | Self::SuperPoint)
+    }
+
+    pub const fn is_implemented(self) -> bool {
+        matches!(self, Self::Brief | Self::Orb | Self::Sift | Self::RootSift)
+    }
+}
+
+impl fmt::Display for FeatureMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for FeatureMethod {
+    type Err = PhotogrammetryError;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        let normalized = value.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "brief" => Ok(Self::Brief),
+            "orb" => Ok(Self::Orb),
+            "sift" => Ok(Self::Sift),
+            "rootsift" | "root_sift" => Ok(Self::RootSift),
+            "superpoint" | "super_point" => Ok(Self::SuperPoint),
+            _ => Err(PhotogrammetryError::FeatureMatching(format!(
+                "unsupported feature method '{}'; expected one of: brief, orb, sift, rootsift, superpoint",
+                value
+            ))),
+        }
+    }
+}
+
+/// Distance metric required by a feature descriptor family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureDistanceMetric {
+    Hamming,
+    EuclideanL2,
+    Cosine,
+}
+
+/// Public options for the feature matching stage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeatureMatchingOptions {
+    /// Built-in tuning profile (`fast`, `balanced`, `survey`).
+    pub profile: String,
+    /// Keypoint and descriptor method to use.
+    pub method: FeatureMethod,
+}
+
+impl FeatureMatchingOptions {
+    pub fn new(profile: impl Into<String>, method: FeatureMethod) -> Self {
+        Self {
+            profile: profile.into(),
+            method,
+        }
+    }
+}
+
+impl Default for FeatureMatchingOptions {
+    fn default() -> Self {
+        Self::new("balanced", FeatureMethod::RootSift)
+    }
+}
+
 /// Robust motion estimate between adjacent frames.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdjacentPairMotion {
@@ -136,6 +250,7 @@ struct FeatureProfile {
     max_features_per_image: usize,
     fast_threshold: u8,
     match_distance_threshold: u32,
+    float_match_distance_threshold: f64,
     ratio_test_threshold: f64,
     geometric_tolerance_px: f64,
     max_image_dimension_px: u32,
@@ -146,6 +261,8 @@ struct FeatureProfile {
 enum FeatureAlgorithm {
     Brief,
     Orb,
+    Sift,
+    RootSift,
 }
 
 impl FeatureProfile {
@@ -155,6 +272,7 @@ impl FeatureProfile {
                 max_features_per_image: 450,
                 fast_threshold: 28,
                 match_distance_threshold: 96,
+                float_match_distance_threshold: 0.95,
                 ratio_test_threshold: 0.98,
                 geometric_tolerance_px: 18.0,
                 max_image_dimension_px: 1200,
@@ -164,6 +282,7 @@ impl FeatureProfile {
                 max_features_per_image: 1_400,
                 fast_threshold: 13,
                 match_distance_threshold: 60,
+                float_match_distance_threshold: 0.74,
                 ratio_test_threshold: 0.92,
                 geometric_tolerance_px: 11.5,
                 max_image_dimension_px: 1800,
@@ -173,6 +292,7 @@ impl FeatureProfile {
                 max_features_per_image: 1_100,
                 fast_threshold: 16,
                 match_distance_threshold: 78,
+                float_match_distance_threshold: 0.82,
                 ratio_test_threshold: 0.96,
                 geometric_tolerance_px: 15.0,
                 max_image_dimension_px: 1600,
@@ -187,9 +307,23 @@ impl FeatureProfile {
             max_features_per_image: boosted_features.max(self.max_features_per_image + 200),
             fast_threshold: self.fast_threshold.saturating_sub(4).max(8),
             match_distance_threshold: (self.match_distance_threshold + 36).min(160),
+            float_match_distance_threshold: (self.float_match_distance_threshold + 0.08).min(1.15),
             ratio_test_threshold: (self.ratio_test_threshold + 0.02).min(0.995),
             geometric_tolerance_px: (self.geometric_tolerance_px + 8.0).min(30.0),
             max_image_dimension_px: (self.max_image_dimension_px + 300).min(2200),
+            gps_pair_footprint_multiplier: self.gps_pair_footprint_multiplier,
+        }
+    }
+
+    fn tuned_for_sift(self) -> Self {
+        Self {
+            max_features_per_image: self.max_features_per_image.saturating_add(250),
+            fast_threshold: self.fast_threshold,
+            match_distance_threshold: self.match_distance_threshold,
+            float_match_distance_threshold: (self.float_match_distance_threshold - 0.06).max(0.58),
+            ratio_test_threshold: self.ratio_test_threshold.min(0.86),
+            geometric_tolerance_px: (self.geometric_tolerance_px + 2.0).min(24.0),
+            max_image_dimension_px: self.max_image_dimension_px,
             gps_pair_footprint_multiplier: self.gps_pair_footprint_multiplier,
         }
     }
@@ -217,9 +351,73 @@ struct BriefDescriptor {
 }
 
 #[derive(Clone)]
+struct FloatDescriptor {
+    corner: Keypoint,
+    values: [f32; SIFT_DESCRIPTOR_LEN],
+    texture_stddev: f64,
+    octave: u8,
+}
+
+#[derive(Clone)]
+struct FloatImage {
+    width: usize,
+    height: usize,
+    data: Vec<f32>,
+}
+
+impl FloatImage {
+    fn from_gray(image: &GrayImage) -> Self {
+        let width = image.width() as usize;
+        let height = image.height() as usize;
+        let mut data = Vec::with_capacity(width * height);
+        for y in 0..image.height() {
+            for x in 0..image.width() {
+                data.push(image.get_pixel(x, y)[0] as f32 / 255.0);
+            }
+        }
+        Self { width, height, data }
+    }
+
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            data: vec![0.0; width * height],
+        }
+    }
+
+    fn get(&self, x: usize, y: usize) -> f32 {
+        self.data[y * self.width + x]
+    }
+
+    fn get_clamped(&self, x: i32, y: i32) -> f32 {
+        let cx = x.clamp(0, self.width.saturating_sub(1) as i32) as usize;
+        let cy = y.clamp(0, self.height.saturating_sub(1) as i32) as usize;
+        self.get(cx, cy)
+    }
+
+    fn sample_bilinear(&self, x: f32, y: f32) -> f32 {
+        let x0 = x.floor() as i32;
+        let y0 = y.floor() as i32;
+        let tx = x - x0 as f32;
+        let ty = y - y0 as f32;
+
+        let v00 = self.get_clamped(x0, y0);
+        let v10 = self.get_clamped(x0 + 1, y0);
+        let v01 = self.get_clamped(x0, y0 + 1);
+        let v11 = self.get_clamped(x0 + 1, y0 + 1);
+
+        let top = v00 * (1.0 - tx) + v10 * tx;
+        let bottom = v01 * (1.0 - tx) + v11 * tx;
+        top * (1.0 - ty) + bottom * ty
+    }
+}
+
+#[derive(Clone)]
 struct FrameFeatures {
     keypoint_count: usize,
-    descriptors: Vec<BriefDescriptor>,
+    binary_descriptors: Vec<BriefDescriptor>,
+    float_descriptors: Vec<FloatDescriptor>,
     native_scale_px: f64,
     image_width_px: u32,
     image_height_px: u32,
@@ -229,8 +427,9 @@ struct FrameFeatures {
 struct DescriptorMatch {
     left_idx: usize,
     right_idx: usize,
-    best_dist: u32,
-    second_dist: Option<u32>,
+    best_dist: f64,
+    second_dist: Option<f64>,
+    metric: FeatureDistanceMetric,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -367,14 +566,62 @@ pub fn run_feature_matching(frames: &[ImageFrame], profile: &str) -> Result<Matc
     run_feature_matching_brief(frames, profile)
 }
 
+/// Run feature matching using an explicit method selection.
+pub fn run_feature_matching_with_method(
+    frames: &[ImageFrame],
+    profile: &str,
+    method: FeatureMethod,
+) -> Result<MatchStats> {
+    let algorithm = feature_algorithm_from_method(method)?;
+    run_feature_matching_with_algorithm(frames, profile, algorithm)
+}
+
+/// Run feature matching using a structured options object.
+pub fn run_feature_matching_with_options(
+    frames: &[ImageFrame],
+    options: &FeatureMatchingOptions,
+) -> Result<MatchStats> {
+    run_feature_matching_with_method(frames, &options.profile, options.method)
+}
+
 /// Run feature detection and matching using the legacy BRIEF descriptor path.
 pub fn run_feature_matching_brief(frames: &[ImageFrame], profile: &str) -> Result<MatchStats> {
-    run_feature_matching_with_algorithm(frames, profile, FeatureAlgorithm::Brief)
+    run_feature_matching_with_method(frames, profile, FeatureMethod::Brief)
 }
 
 /// Run feature detection and matching using ORB-style rotated BRIEF descriptors.
 pub fn run_feature_matching_orb(frames: &[ImageFrame], profile: &str) -> Result<MatchStats> {
-    run_feature_matching_with_algorithm(frames, profile, FeatureAlgorithm::Orb)
+    run_feature_matching_with_method(frames, profile, FeatureMethod::Orb)
+}
+
+/// Reserved public API hook for future floating-point SIFT descriptors.
+pub fn run_feature_matching_sift(frames: &[ImageFrame], profile: &str) -> Result<MatchStats> {
+    run_feature_matching_with_method(frames, profile, FeatureMethod::Sift)
+}
+
+/// Run feature matching using SIFT keypoints with RootSIFT descriptor normalization.
+pub fn run_feature_matching_rootsift(frames: &[ImageFrame], profile: &str) -> Result<MatchStats> {
+    run_feature_matching_with_method(frames, profile, FeatureMethod::RootSift)
+}
+
+/// Reserved public API hook for future learned SuperPoint descriptors.
+pub fn run_feature_matching_superpoint(
+    frames: &[ImageFrame],
+    profile: &str,
+) -> Result<MatchStats> {
+    run_feature_matching_with_method(frames, profile, FeatureMethod::SuperPoint)
+}
+
+fn feature_algorithm_from_method(method: FeatureMethod) -> Result<FeatureAlgorithm> {
+    match method {
+        FeatureMethod::Brief => Ok(FeatureAlgorithm::Brief),
+        FeatureMethod::Orb => Ok(FeatureAlgorithm::Orb),
+        FeatureMethod::Sift => Ok(FeatureAlgorithm::Sift),
+        FeatureMethod::RootSift => Ok(FeatureAlgorithm::RootSift),
+        FeatureMethod::SuperPoint => Err(PhotogrammetryError::NotImplemented(
+            "feature method 'superpoint' has been scaffolded in the public API, but learned inference, weight loading, and floating-point descriptor matching are not implemented yet".to_string(),
+        )),
+    }
 }
 
 fn run_feature_matching_with_algorithm(
@@ -406,14 +653,20 @@ fn run_feature_matching_with_algorithm(
     let feature_profile = match algorithm {
         FeatureAlgorithm::Brief => base_profile,
         FeatureAlgorithm::Orb => base_profile.tuned_for_orb(),
+        FeatureAlgorithm::Sift => base_profile.tuned_for_sift(),
+        FeatureAlgorithm::RootSift => base_profile.tuned_for_sift(),
     };
     let test_pairs = match algorithm {
         FeatureAlgorithm::Brief => build_deterministic_test_pairs(256),
         FeatureAlgorithm::Orb => build_orb_rbrief_test_pairs(256),
+        FeatureAlgorithm::Sift => Vec::new(),
+        FeatureAlgorithm::RootSift => Vec::new(),
     };
     let octave_constraint: Option<u8> = match algorithm {
         FeatureAlgorithm::Brief => None,
         FeatureAlgorithm::Orb => Some(2),
+        FeatureAlgorithm::Sift => Some(1),
+        FeatureAlgorithm::RootSift => Some(1),
     };
 
     let frame_features: Vec<FrameFeatures> = frames
@@ -455,6 +708,7 @@ fn run_feature_matching_with_algorithm(
                     &frame_features[i],
                     &frame_features[j],
                     feature_profile.match_distance_threshold,
+                    feature_profile.float_match_distance_threshold,
                     feature_profile.ratio_test_threshold,
                     feature_profile.geometric_tolerance_px,
                     octave_constraint,
@@ -663,19 +917,22 @@ fn extract_frame_features(
         FeatureAlgorithm::Brief => BRIEF_PATCH_DIAMETER_PX,
         FeatureAlgorithm::Orb => (ORB_DESCRIPTOR_RADIUS_PX as u32 * 2 + 1)
             .max(ORB_ORIENTATION_RADIUS_PX as u32 * 2 + 1),
+        FeatureAlgorithm::Sift => 33,
+        FeatureAlgorithm::RootSift => 33,
     };
     let required_dim = (FAST_EDGE_RADIUS_PX * 2 + 1).max(descriptor_diameter);
     if min_dim < required_dim {
         return Ok(FrameFeatures {
             keypoint_count: 0,
-            descriptors: Vec::new(),
+            binary_descriptors: Vec::new(),
+            float_descriptors: Vec::new(),
             native_scale_px: 1.0,
             image_width_px: gray.width(),
             image_height_px: gray.height(),
         });
     }
 
-    let descriptors = match algorithm {
+    let (binary_descriptors, float_descriptors, keypoint_count) = match algorithm {
         FeatureAlgorithm::Brief => {
             let keypoints = detect_fast_corners(
                 &gray,
@@ -683,17 +940,34 @@ fn extract_frame_features(
                 profile.max_features_per_image,
             );
             if keypoints.is_empty() {
-                Vec::new()
+                (Vec::new(), Vec::new(), 0)
             } else {
-                compute_brief_descriptors(&gray, &keypoints, test_pairs)
+                let descriptors = compute_brief_descriptors(&gray, &keypoints, test_pairs);
+                let count = descriptors.len();
+                (descriptors, Vec::new(), count)
             }
         }
-        FeatureAlgorithm::Orb => extract_orb_pyramid_descriptors(&gray, profile, test_pairs),
+        FeatureAlgorithm::Orb => {
+            let descriptors = extract_orb_pyramid_descriptors(&gray, profile, test_pairs);
+            let count = descriptors.len();
+            (descriptors, Vec::new(), count)
+        }
+        FeatureAlgorithm::Sift => {
+            let descriptors = extract_sift_descriptors(&gray, profile, false);
+            let count = descriptors.len();
+            (Vec::new(), descriptors, count)
+        }
+        FeatureAlgorithm::RootSift => {
+            let descriptors = extract_sift_descriptors(&gray, profile, true);
+            let count = descriptors.len();
+            (Vec::new(), descriptors, count)
+        }
     };
 
     Ok(FrameFeatures {
-        keypoint_count: descriptors.len(),
-        descriptors,
+        keypoint_count,
+        binary_descriptors,
+        float_descriptors,
         native_scale_px: (frame.width.max(1) as f64 / gray.width().max(1) as f64)
             .max(1.0),
         image_width_px: gray.width(),
@@ -775,6 +1049,409 @@ fn extract_orb_pyramid_descriptors(
     }
 
     accepted
+}
+
+fn extract_sift_descriptors(
+    base_image: &GrayImage,
+    profile: FeatureProfile,
+    rootsift: bool,
+) -> Vec<FloatDescriptor> {
+    let base = FloatImage::from_gray(base_image);
+    let pyramid = build_sift_pyramid(&base);
+    if pyramid.is_empty() {
+        return Vec::new();
+    }
+
+    let mut descriptors = Vec::new();
+    for (octave_idx, octave) in pyramid.iter().enumerate() {
+        for scale_idx in 1..octave.dogs.len().saturating_sub(1) {
+            let dog = &octave.dogs[scale_idx];
+            if dog.width < 17 || dog.height < 17 {
+                continue;
+            }
+            for y in 8..(dog.height - 8) {
+                for x in 8..(dog.width - 8) {
+                    let value = dog.get(x, y);
+                    if value.abs() < SIFT_CONTRAST_THRESHOLD {
+                        continue;
+                    }
+                    if !is_sift_scale_space_extremum(octave, scale_idx, x, y, value) {
+                        continue;
+                    }
+                    if sift_edge_like_response(dog, x, y) {
+                        continue;
+                    }
+
+                    let gaussian = &octave.gaussians[scale_idx + 1];
+                    let sigma = SIFT_BASE_SIGMA
+                        * 2.0_f32.powf(scale_idx as f32 / SIFT_SCALES_PER_OCTAVE as f32)
+                        * 2.0_f32.powf(octave_idx as f32);
+                    let Some((angle, response)) = sift_dominant_orientation(gaussian, x as f32, y as f32, sigma) else {
+                        continue;
+                    };
+                    let texture = sift_local_stddev(gaussian, x as i32, y as i32, 4);
+                    if texture < (MIN_DESCRIPTOR_STDDEV as f32 / 255.0) {
+                        continue;
+                    }
+                    let Some(mut values) = compute_sift_descriptor(gaussian, x as f32, y as f32, sigma, angle) else {
+                        continue;
+                    };
+                    if rootsift {
+                        let Some(()) = normalize_rootsift_descriptor(&mut values) else {
+                            continue;
+                        };
+                    }
+
+                    let scale_to_base = 2usize.pow(octave_idx as u32) as f32;
+                    let base_x = (x as f32 * scale_to_base).round()
+                        .clamp(0.0, base_image.width().saturating_sub(1) as f32) as u32;
+                    let base_y = (y as f32 * scale_to_base).round()
+                        .clamp(0.0, base_image.height().saturating_sub(1) as f32) as u32;
+                    let score = (response * 1_000.0).clamp(0.0, u32::MAX as f32) as u32;
+                    descriptors.push(FloatDescriptor {
+                        corner: Keypoint {
+                            x: base_x,
+                            y: base_y,
+                            score,
+                        },
+                        values,
+                        texture_stddev: texture as f64 * 255.0,
+                        octave: octave_idx as u8,
+                    });
+                }
+            }
+        }
+    }
+
+    descriptors.sort_by(|left, right| {
+        right
+            .corner
+            .score
+            .cmp(&left.corner.score)
+            .then_with(|| right.texture_stddev.total_cmp(&left.texture_stddev))
+    });
+
+    let mut accepted: Vec<FloatDescriptor> =
+        Vec::with_capacity(profile.max_features_per_image.min(descriptors.len()));
+    for candidate in descriptors {
+        if accepted.len() >= profile.max_features_per_image {
+            break;
+        }
+        let too_close = accepted.iter().any(|other| {
+            let dx = other.corner.x as i32 - candidate.corner.x as i32;
+            let dy = other.corner.y as i32 - candidate.corner.y as i32;
+            dx * dx + dy * dy <= (MIN_CORNER_SPACING_PX * 2) * (MIN_CORNER_SPACING_PX * 2)
+        });
+        if !too_close {
+            accepted.push(candidate);
+        }
+    }
+
+    accepted
+}
+
+struct SiftOctave {
+    gaussians: Vec<FloatImage>,
+    dogs: Vec<FloatImage>,
+}
+
+fn build_sift_pyramid(base: &FloatImage) -> Vec<SiftOctave> {
+    let mut octaves = Vec::new();
+    let mut current = gaussian_blur_float(base, SIFT_BASE_SIGMA.max(0.8));
+    let levels_per_octave = SIFT_SCALES_PER_OCTAVE + SIFT_EXTRA_LEVELS;
+    let k = 2.0_f32.powf(1.0 / SIFT_SCALES_PER_OCTAVE as f32);
+
+    while current.width >= 24 && current.height >= 24 && octaves.len() < 6 {
+        let mut gaussians = Vec::with_capacity(levels_per_octave);
+        gaussians.push(current.clone());
+
+        let mut sigma_prev = SIFT_BASE_SIGMA;
+        for level_idx in 1..levels_per_octave {
+            let sigma_total = SIFT_BASE_SIGMA * k.powf(level_idx as f32);
+            let sigma_diff = (sigma_total * sigma_total - sigma_prev * sigma_prev).max(0.01).sqrt();
+            let blurred = gaussian_blur_float(gaussians.last().unwrap(), sigma_diff);
+            gaussians.push(blurred);
+            sigma_prev = sigma_total;
+        }
+
+        let dogs = gaussians
+            .windows(2)
+            .map(|pair| subtract_float_images(&pair[1], &pair[0]))
+            .collect::<Vec<_>>();
+        octaves.push(SiftOctave { gaussians, dogs });
+
+        current = downsample_half_float_image(&octaves.last().unwrap().gaussians[SIFT_SCALES_PER_OCTAVE]);
+    }
+
+    octaves
+}
+
+fn gaussian_blur_float(image: &FloatImage, sigma: f32) -> FloatImage {
+    let radius = (sigma * 3.0).ceil().max(1.0) as i32;
+    let kernel = gaussian_kernel_1d(sigma.max(0.1), radius);
+
+    let mut horizontal = FloatImage::new(image.width, image.height);
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let mut sum = 0.0;
+            for (k_idx, weight) in kernel.iter().enumerate() {
+                let offset = k_idx as i32 - radius;
+                sum += image.get_clamped(x as i32 + offset, y as i32) * *weight;
+            }
+            horizontal.data[y * image.width + x] = sum;
+        }
+    }
+
+    let mut output = FloatImage::new(image.width, image.height);
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let mut sum = 0.0;
+            for (k_idx, weight) in kernel.iter().enumerate() {
+                let offset = k_idx as i32 - radius;
+                sum += horizontal.get_clamped(x as i32, y as i32 + offset) * *weight;
+            }
+            output.data[y * image.width + x] = sum;
+        }
+    }
+    output
+}
+
+fn gaussian_kernel_1d(sigma: f32, radius: i32) -> Vec<f32> {
+    let mut kernel = Vec::with_capacity((radius * 2 + 1) as usize);
+    let mut sum = 0.0;
+    for offset in -radius..=radius {
+        let value = (-((offset * offset) as f32) / (2.0 * sigma * sigma)).exp();
+        kernel.push(value);
+        sum += value;
+    }
+    if sum > 0.0 {
+        for value in &mut kernel {
+            *value /= sum;
+        }
+    }
+    kernel
+}
+
+fn subtract_float_images(left: &FloatImage, right: &FloatImage) -> FloatImage {
+    let mut output = FloatImage::new(left.width, left.height);
+    for idx in 0..left.data.len() {
+        output.data[idx] = left.data[idx] - right.data[idx];
+    }
+    output
+}
+
+fn downsample_half_float_image(image: &FloatImage) -> FloatImage {
+    let width = (image.width / 2).max(1);
+    let height = (image.height / 2).max(1);
+    let mut output = FloatImage::new(width, height);
+    for y in 0..height {
+        for x in 0..width {
+            let sx = x * 2;
+            let sy = y * 2;
+            let v00 = image.get(sx.min(image.width - 1), sy.min(image.height - 1));
+            let v10 = image.get((sx + 1).min(image.width - 1), sy.min(image.height - 1));
+            let v01 = image.get(sx.min(image.width - 1), (sy + 1).min(image.height - 1));
+            let v11 = image.get((sx + 1).min(image.width - 1), (sy + 1).min(image.height - 1));
+            output.data[y * width + x] = 0.25 * (v00 + v10 + v01 + v11);
+        }
+    }
+    output
+}
+
+fn is_sift_scale_space_extremum(octave: &SiftOctave, scale_idx: usize, x: usize, y: usize, value: f32) -> bool {
+    let is_max = value > 0.0;
+    for ds in -1isize..=1 {
+        let dog = &octave.dogs[(scale_idx as isize + ds) as usize];
+        for dy in -1isize..=1 {
+            for dx in -1isize..=1 {
+                if ds == 0 && dx == 0 && dy == 0 {
+                    continue;
+                }
+                let neighbor = dog.get((x as isize + dx) as usize, (y as isize + dy) as usize);
+                if is_max {
+                    if neighbor >= value {
+                        return false;
+                    }
+                } else if neighbor <= value {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn sift_edge_like_response(image: &FloatImage, x: usize, y: usize) -> bool {
+    let x = x as i32;
+    let y = y as i32;
+    let dxx = image.get_clamped(x + 1, y) + image.get_clamped(x - 1, y) - 2.0 * image.get_clamped(x, y);
+    let dyy = image.get_clamped(x, y + 1) + image.get_clamped(x, y - 1) - 2.0 * image.get_clamped(x, y);
+    let dxy = (image.get_clamped(x + 1, y + 1) - image.get_clamped(x + 1, y - 1)
+        - image.get_clamped(x - 1, y + 1) + image.get_clamped(x - 1, y - 1))
+        * 0.25;
+    let trace = dxx + dyy;
+    let det = dxx * dyy - dxy * dxy;
+    if det <= 1.0e-8 {
+        return true;
+    }
+    (trace * trace / det) > ((SIFT_EDGE_RATIO_THRESHOLD + 1.0).powi(2) / SIFT_EDGE_RATIO_THRESHOLD)
+}
+
+fn sift_dominant_orientation(image: &FloatImage, x: f32, y: f32, sigma: f32) -> Option<(f32, f32)> {
+    let radius = (3.0 * 1.5 * sigma).ceil() as i32;
+    if radius < 1 {
+        return None;
+    }
+    let mut histogram = [0.0_f32; SIFT_ORIENTATION_BINS];
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            let fx = x + dx as f32;
+            let fy = y + dy as f32;
+            let gx = image.sample_bilinear(fx + 1.0, fy) - image.sample_bilinear(fx - 1.0, fy);
+            let gy = image.sample_bilinear(fx, fy + 1.0) - image.sample_bilinear(fx, fy - 1.0);
+            let mag = (gx * gx + gy * gy).sqrt();
+            if mag <= 1.0e-6 {
+                continue;
+            }
+            let angle = gy.atan2(gx);
+            let weight = (-(dx * dx + dy * dy) as f32 / (2.0 * (1.5 * sigma) * (1.5 * sigma))).exp();
+            let mut bin = (((angle + std::f32::consts::PI) / (2.0 * std::f32::consts::PI))
+                * SIFT_ORIENTATION_BINS as f32)
+                .floor() as isize;
+            bin = bin.rem_euclid(SIFT_ORIENTATION_BINS as isize);
+            histogram[bin as usize] += mag * weight;
+        }
+    }
+    let (best_bin, best_value) = histogram
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|a, b| a.1.total_cmp(&b.1))?;
+    if best_value <= 1.0e-6 {
+        return None;
+    }
+    let angle = ((best_bin as f32 + 0.5) / SIFT_ORIENTATION_BINS as f32)
+        * 2.0
+        * std::f32::consts::PI
+        - std::f32::consts::PI;
+    Some((angle, best_value))
+}
+
+fn compute_sift_descriptor(
+    image: &FloatImage,
+    x: f32,
+    y: f32,
+    sigma: f32,
+    angle: f32,
+) -> Option<[f32; SIFT_DESCRIPTOR_LEN]> {
+    let mut descriptor = [0.0_f32; SIFT_DESCRIPTOR_LEN];
+    let cos_theta = angle.cos();
+    let sin_theta = angle.sin();
+    let window_half = (sigma * 8.0).max(8.0);
+    let sample_step = (2.0 * window_half) / 16.0;
+
+    for sample_y in 0..16 {
+        for sample_x in 0..16 {
+            let local_x = (sample_x as f32 + 0.5) * sample_step - window_half;
+            let local_y = (sample_y as f32 + 0.5) * sample_step - window_half;
+            let rot_x = cos_theta * local_x - sin_theta * local_y;
+            let rot_y = sin_theta * local_x + cos_theta * local_y;
+            let fx = x + rot_x;
+            let fy = y + rot_y;
+
+            if fx < 1.0 || fy < 1.0 || fx >= (image.width - 2) as f32 || fy >= (image.height - 2) as f32 {
+                continue;
+            }
+
+            let gx = image.sample_bilinear(fx + 1.0, fy) - image.sample_bilinear(fx - 1.0, fy);
+            let gy = image.sample_bilinear(fx, fy + 1.0) - image.sample_bilinear(fx, fy - 1.0);
+            let mag = (gx * gx + gy * gy).sqrt();
+            if mag <= 1.0e-6 {
+                continue;
+            }
+
+            let mut rel_angle = gy.atan2(gx) - angle;
+            while rel_angle < 0.0 {
+                rel_angle += 2.0 * std::f32::consts::PI;
+            }
+            while rel_angle >= 2.0 * std::f32::consts::PI {
+                rel_angle -= 2.0 * std::f32::consts::PI;
+            }
+
+            let cell_x = sample_x / 4;
+            let cell_y = sample_y / 4;
+            let bin = ((rel_angle / (2.0 * std::f32::consts::PI)) * SIFT_DESCRIPTOR_BINS as f32)
+                .floor()
+                .clamp(0.0, (SIFT_DESCRIPTOR_BINS - 1) as f32) as usize;
+            let gaussian_weight = (-(local_x * local_x + local_y * local_y)
+                / (2.0 * (0.5 * 16.0 * sigma).max(1.0).powi(2)))
+                .exp();
+            let idx = (cell_y * SIFT_DESCRIPTOR_CELLS + cell_x) * SIFT_DESCRIPTOR_BINS + bin;
+            descriptor[idx] += mag * gaussian_weight;
+        }
+    }
+
+    normalize_sift_descriptor(&mut descriptor)?;
+    Some(descriptor)
+}
+
+fn normalize_sift_descriptor(descriptor: &mut [f32; SIFT_DESCRIPTOR_LEN]) -> Option<()> {
+    let mut norm = descriptor.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if norm <= 1.0e-8 {
+        return None;
+    }
+    for value in descriptor.iter_mut() {
+        *value /= norm;
+        if *value > 0.2 {
+            *value = 0.2;
+        }
+    }
+    norm = descriptor.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if norm <= 1.0e-8 {
+        return None;
+    }
+    for value in descriptor.iter_mut() {
+        *value /= norm;
+    }
+    Some(())
+}
+
+fn normalize_rootsift_descriptor(descriptor: &mut [f32; SIFT_DESCRIPTOR_LEN]) -> Option<()> {
+    let l1_norm = descriptor.iter().map(|v| v.abs()).sum::<f32>();
+    if l1_norm <= 1.0e-8 {
+        return None;
+    }
+    for value in descriptor.iter_mut() {
+        *value = (*value / l1_norm).max(0.0).sqrt();
+    }
+
+    let l2_norm = descriptor.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if l2_norm <= 1.0e-8 {
+        return None;
+    }
+    for value in descriptor.iter_mut() {
+        *value /= l2_norm;
+    }
+    Some(())
+}
+
+fn sift_local_stddev(image: &FloatImage, x: i32, y: i32, radius: i32) -> f32 {
+    let mut sum = 0.0_f32;
+    let mut sum_sq = 0.0_f32;
+    let mut count = 0.0_f32;
+    for py in (y - radius)..=(y + radius) {
+        for px in (x - radius)..=(x + radius) {
+            let value = image.get_clamped(px, py);
+            sum += value;
+            sum_sq += value * value;
+            count += 1.0;
+        }
+    }
+    if count <= 0.0 {
+        return 0.0;
+    }
+    let mean = sum / count;
+    (sum_sq / count - mean * mean).max(0.0).sqrt()
 }
 
 fn build_orb_pyramid(base_image: &GrayImage) -> Vec<(GrayImage, f64)> {
@@ -1302,46 +1979,77 @@ fn verify_pair_matches(
     left: &FrameFeatures,
     right: &FrameFeatures,
     distance_threshold: u32,
+    float_distance_threshold: f64,
     ratio_threshold: f64,
     geometric_tolerance_px: f64,
     max_octave_diff: Option<u8>,
 ) -> (PairInlierStats, Vec<[f64; 4]>, Vec<f64>) {
     let empty = PairInlierStats { inlier_count: 0, median_displacement_px: 0.0, model_dx_px: 0.0, model_dy_px: 0.0 };
-    if left.descriptors.is_empty() || right.descriptors.is_empty() {
+    if (left.binary_descriptors.is_empty() || right.binary_descriptors.is_empty())
+        && (left.float_descriptors.is_empty() || right.float_descriptors.is_empty())
+    {
         return (empty, Vec::new(), Vec::new());
     }
 
-    let candidate_matches = match_binary_descriptors(
-        &left.descriptors,
-        &right.descriptors,
-        distance_threshold,
-        ratio_threshold,
-        max_octave_diff,
-    );
+    let (candidate_matches, candidates) = if !left.binary_descriptors.is_empty() && !right.binary_descriptors.is_empty() {
+        let matches = match_binary_descriptors(
+            &left.binary_descriptors,
+            &right.binary_descriptors,
+            distance_threshold,
+            ratio_threshold,
+            max_octave_diff,
+        );
+        let candidates: Vec<PairMatchCandidate> = matches
+            .iter()
+            .map(|m| {
+                let l = &left.binary_descriptors[m.left_idx];
+                let r = &right.binary_descriptors[m.right_idx];
+                PairMatchCandidate {
+                    point: [
+                        l.corner.x as f64,
+                        l.corner.y as f64,
+                        r.corner.x as f64,
+                        r.corner.y as f64,
+                    ],
+                    descriptor_confidence: descriptor_match_confidence(*m),
+                    texture_confidence: texture_confidence(l.texture_stddev, r.texture_stddev),
+                }
+            })
+            .collect();
+        (matches, candidates)
+    } else {
+        let matches = match_float_descriptors(
+            &left.float_descriptors,
+            &right.float_descriptors,
+            float_distance_threshold,
+            ratio_threshold,
+            max_octave_diff,
+        );
+        let candidates: Vec<PairMatchCandidate> = matches
+            .iter()
+            .map(|m| {
+                let l = &left.float_descriptors[m.left_idx];
+                let r = &right.float_descriptors[m.right_idx];
+                PairMatchCandidate {
+                    point: [
+                        l.corner.x as f64,
+                        l.corner.y as f64,
+                        r.corner.x as f64,
+                        r.corner.y as f64,
+                    ],
+                    descriptor_confidence: descriptor_match_confidence(*m),
+                    texture_confidence: texture_confidence(l.texture_stddev, r.texture_stddev),
+                }
+            })
+            .collect();
+        (matches, candidates)
+    };
     if candidate_matches.is_empty() {
         return (empty, Vec::new(), Vec::new());
     }
     if candidate_matches.len() < MIN_VERIFIED_PAIR_INLIERS {
         return (empty, Vec::new(), Vec::new());
     }
-
-    let candidates: Vec<PairMatchCandidate> = candidate_matches
-        .iter()
-        .map(|m| {
-            let l = &left.descriptors[m.left_idx];
-            let r = &right.descriptors[m.right_idx];
-            PairMatchCandidate {
-                point: [
-                    l.corner.x as f64,
-                    l.corner.y as f64,
-                    r.corner.x as f64,
-                    r.corner.y as f64,
-                ],
-                descriptor_confidence: descriptor_match_confidence(*m),
-                texture_confidence: texture_confidence(l.texture_stddev, r.texture_stddev),
-            }
-        })
-        .collect();
     let match_points: Vec<((f64, f64), (f64, f64))> = candidates
         .iter()
         .map(|c| ((c.point[0], c.point[1]), (c.point[2], c.point[3])))
@@ -1440,7 +2148,73 @@ fn match_binary_descriptors(
     let best_right_for_left = left
         .par_iter()
         .map(|left_descriptor| {
-            best_two_matches(left_descriptor, right, max_octave_diff).and_then(
+            best_two_binary_matches(left_descriptor, right, max_octave_diff).and_then(
+                |(best_idx, best_dist, second_dist)| {
+                    if best_dist > distance_threshold as f64 {
+                        return None;
+                    }
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, right.len()) {
+                        return None;
+                    }
+                    Some((best_idx, best_dist, second_dist))
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let best_left_for_right = right
+        .par_iter()
+        .map(|right_descriptor| {
+            best_two_binary_matches(right_descriptor, left, max_octave_diff).and_then(
+                |(best_idx, best_dist, second_dist)| {
+                    if best_dist > distance_threshold as f64 {
+                        return None;
+                    }
+                    if !passes_ratio_test(best_dist, second_dist, ratio_threshold, left.len()) {
+                        return None;
+                    }
+                    Some((best_idx, best_dist, second_dist))
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let mut matches = Vec::new();
+    for (left_idx, candidate) in best_right_for_left.iter().enumerate() {
+        let Some((right_idx, best_dist, second_dist)) = candidate else {
+            continue;
+        };
+        if let Some((back_left_idx, _, _)) = best_left_for_right[*right_idx] {
+            if back_left_idx == left_idx {
+                matches.push(DescriptorMatch {
+                    left_idx,
+                    right_idx: *right_idx,
+                    best_dist: *best_dist,
+                    second_dist: *second_dist,
+                    metric: FeatureDistanceMetric::Hamming,
+                });
+            }
+        }
+    }
+
+    matches
+}
+
+fn match_float_descriptors(
+    left: &[FloatDescriptor],
+    right: &[FloatDescriptor],
+    distance_threshold: f64,
+    ratio_threshold: f64,
+    max_octave_diff: Option<u8>,
+) -> Vec<DescriptorMatch> {
+    if left.is_empty() || right.is_empty() {
+        return Vec::new();
+    }
+
+    let best_right_for_left = left
+        .par_iter()
+        .map(|left_descriptor| {
+            best_two_float_matches(left_descriptor, right, max_octave_diff).and_then(
                 |(best_idx, best_dist, second_dist)| {
                     if best_dist > distance_threshold {
                         return None;
@@ -1457,7 +2231,7 @@ fn match_binary_descriptors(
     let best_left_for_right = right
         .par_iter()
         .map(|right_descriptor| {
-            best_two_matches(right_descriptor, left, max_octave_diff).and_then(
+            best_two_float_matches(right_descriptor, left, max_octave_diff).and_then(
                 |(best_idx, best_dist, second_dist)| {
                     if best_dist > distance_threshold {
                         return None;
@@ -1483,6 +2257,7 @@ fn match_binary_descriptors(
                     right_idx: *right_idx,
                     best_dist: *best_dist,
                     second_dist: *second_dist,
+                    metric: FeatureDistanceMetric::EuclideanL2,
                 });
             }
         }
@@ -1491,18 +2266,18 @@ fn match_binary_descriptors(
     matches
 }
 
-fn best_two_matches(
+fn best_two_binary_matches(
     query: &BriefDescriptor,
     candidates: &[BriefDescriptor],
     max_octave_diff: Option<u8>,
-) -> Option<(usize, u32, Option<u32>)> {
+) -> Option<(usize, f64, Option<f64>)> {
     if candidates.is_empty() {
         return None;
     }
 
     let mut best_idx = usize::MAX;
-    let mut best_dist = u32::MAX;
-    let mut second_dist = u32::MAX;
+    let mut best_dist = f64::INFINITY;
+    let mut second_dist = f64::INFINITY;
 
     for (idx, candidate) in candidates.iter().enumerate() {
         if let Some(max_diff) = max_octave_diff {
@@ -1510,7 +2285,7 @@ fn best_two_matches(
                 continue;
             }
         }
-        let dist = hamming_distance(query, candidate);
+        let dist = hamming_distance(query, candidate) as f64;
         if dist < best_dist {
             second_dist = best_dist;
             best_dist = dist;
@@ -1524,7 +2299,48 @@ fn best_two_matches(
         return None;
     }
 
-    let second = if second_dist == u32::MAX {
+    let second = if !second_dist.is_finite() {
+        None
+    } else {
+        Some(second_dist)
+    };
+    Some((best_idx, best_dist, second))
+}
+
+fn best_two_float_matches(
+    query: &FloatDescriptor,
+    candidates: &[FloatDescriptor],
+    max_octave_diff: Option<u8>,
+) -> Option<(usize, f64, Option<f64>)> {
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let mut best_idx = usize::MAX;
+    let mut best_dist = f64::INFINITY;
+    let mut second_dist = f64::INFINITY;
+
+    for (idx, candidate) in candidates.iter().enumerate() {
+        if let Some(max_diff) = max_octave_diff {
+            if query.octave.abs_diff(candidate.octave) > max_diff {
+                continue;
+            }
+        }
+        let dist = euclidean_descriptor_distance(query, candidate);
+        if dist < best_dist {
+            second_dist = best_dist;
+            best_dist = dist;
+            best_idx = idx;
+        } else if dist < second_dist {
+            second_dist = dist;
+        }
+    }
+
+    if best_idx == usize::MAX {
+        return None;
+    }
+
+    let second = if !second_dist.is_finite() {
         None
     } else {
         Some(second_dist)
@@ -1533,18 +2349,18 @@ fn best_two_matches(
 }
 
 fn passes_ratio_test(
-    best_dist: u32,
-    second_dist: Option<u32>,
+    best_dist: f64,
+    second_dist: Option<f64>,
     ratio_threshold: f64,
     candidate_count: usize,
 ) -> bool {
     let Some(second) = second_dist else {
-        return candidate_count == 1 && best_dist == 0;
+        return candidate_count == 1 && best_dist <= 1.0e-9;
     };
-    if second == 0 {
-        return best_dist == 0;
+    if second <= 1.0e-9 {
+        return best_dist <= 1.0e-9;
     }
-    (best_dist as f64 / second as f64) <= ratio_threshold
+    (best_dist / second) <= ratio_threshold
 }
 
 fn hamming_distance(left: &BriefDescriptor, right: &BriefDescriptor) -> u32 {
@@ -1552,6 +2368,15 @@ fn hamming_distance(left: &BriefDescriptor, right: &BriefDescriptor) -> u32 {
         + (left.words[1] ^ right.words[1]).count_ones()
         + (left.words[2] ^ right.words[2]).count_ones()
         + (left.words[3] ^ right.words[3]).count_ones()
+}
+
+fn euclidean_descriptor_distance(left: &FloatDescriptor, right: &FloatDescriptor) -> f64 {
+    let mut sum = 0.0_f64;
+    for idx in 0..SIFT_DESCRIPTOR_LEN {
+        let diff = left.values[idx] as f64 - right.values[idx] as f64;
+        sum += diff * diff;
+    }
+    sum.sqrt()
 }
 
 fn robust_translation_inliers(
@@ -2314,14 +3139,18 @@ fn spatial_distribution_penalty(
 }
 
 fn descriptor_match_confidence(m: DescriptorMatch) -> f64 {
-    let distance_quality = 1.0 - (m.best_dist as f64 / (BRIEF_WORDS as f64 * 64.0));
+    let distance_quality = match m.metric {
+        FeatureDistanceMetric::Hamming => 1.0 - (m.best_dist / (BRIEF_WORDS as f64 * 64.0)),
+        FeatureDistanceMetric::EuclideanL2 => 1.0 - (m.best_dist / 1.4143),
+        FeatureDistanceMetric::Cosine => 1.0 - (m.best_dist / 2.0),
+    };
     let distinctiveness = m
         .second_dist
         .map(|second| {
-            if second == 0 {
+            if second <= 1.0e-9 {
                 1.0
             } else {
-                (1.0 - (m.best_dist as f64 / second as f64)).clamp(0.0, 1.0)
+                (1.0 - (m.best_dist / second)).clamp(0.0, 1.0)
             }
         })
         .unwrap_or(1.0);
@@ -2752,6 +3581,130 @@ mod tests {
     }
 
     #[test]
+    fn sift_backend_finds_matches_on_translated_texture() {
+        let tmp = std::env::temp_dir().join(format!(
+            "wbphotogrammetry_feature_sift_test_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).expect("failed creating temp dir");
+
+        let left_path = tmp.join("left.png");
+        let right_path = tmp.join("right.png");
+
+        let mut left = GrayImage::new(160, 160);
+        let mut right = GrayImage::new(160, 160);
+        for y in 0..160 {
+            for x in 0..160 {
+                let base = if ((x / 10) + (y / 10)) % 2 == 0 { 35 } else { 220 };
+                left.put_pixel(x, y, Luma([base]));
+
+                let sx = x.saturating_sub(4);
+                let sy = y.saturating_sub(3);
+                let shifted = if ((sx / 10) + (sy / 10)) % 2 == 0 { 35 } else { 220 };
+                right.put_pixel(x, y, Luma([shifted]));
+            }
+        }
+
+        for y in 32..128 {
+            left.put_pixel(48, y, Luma([255]));
+            right.put_pixel(52, y, Luma([255]));
+        }
+        for x in 24..136 {
+            left.put_pixel(x, 64, Luma([0]));
+            right.put_pixel(x.saturating_add(4).min(159), 67, Luma([0]));
+        }
+
+        left.save(&left_path).expect("failed writing left frame");
+        right.save(&right_path).expect("failed writing right frame");
+
+        let frames = vec![make_frame(&left_path), make_frame(&right_path)];
+        let stats = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::Sift)
+            .expect("sift matching should succeed");
+
+        assert!(stats.total_keypoints > 0, "expected sift keypoints on synthetic texture");
+        assert!(stats.total_matches > 0, "expected sift matches on translated texture");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn rootsift_backend_finds_matches_on_translated_texture() {
+        let tmp = std::env::temp_dir().join(format!(
+            "wbphotogrammetry_feature_rootsift_test_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).expect("failed creating temp dir");
+
+        let left_path = tmp.join("left.png");
+        let right_path = tmp.join("right.png");
+
+        let mut left = GrayImage::new(160, 160);
+        let mut right = GrayImage::new(160, 160);
+        for y in 0..160 {
+            for x in 0..160 {
+                let base = if ((x / 9) + (y / 9)) % 2 == 0 { 28 } else { 226 };
+                left.put_pixel(x, y, Luma([base]));
+
+                let sx = x.saturating_sub(5);
+                let sy = y.saturating_sub(2);
+                let shifted = if ((sx / 9) + (sy / 9)) % 2 == 0 { 28 } else { 226 };
+                right.put_pixel(x, y, Luma([shifted]));
+            }
+        }
+        for y in 36..124 {
+            left.put_pixel(44, y, Luma([255]));
+            right.put_pixel(49, y, Luma([255]));
+        }
+        for x in 26..138 {
+            left.put_pixel(x, 82, Luma([0]));
+            right.put_pixel(x.saturating_add(5).min(159), 84, Luma([0]));
+        }
+
+        left.save(&left_path).expect("failed writing left frame");
+        right.save(&right_path).expect("failed writing right frame");
+
+        let frames = vec![make_frame(&left_path), make_frame(&right_path)];
+        let stats = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::RootSift)
+            .expect("rootsift matching should succeed");
+
+        assert!(stats.total_keypoints > 0, "expected rootsift keypoints on synthetic texture");
+        assert!(stats.total_matches > 0, "expected rootsift matches on translated texture");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn feature_method_parser_accepts_public_names() {
+        assert_eq!(FeatureMethod::from_str("brief").unwrap(), FeatureMethod::Brief);
+        assert_eq!(FeatureMethod::from_str("orb").unwrap(), FeatureMethod::Orb);
+        assert_eq!(FeatureMethod::from_str("sift").unwrap(), FeatureMethod::Sift);
+        assert_eq!(FeatureMethod::from_str("rootsift").unwrap(), FeatureMethod::RootSift);
+        assert_eq!(
+            FeatureMethod::from_str("super_point").unwrap(),
+            FeatureMethod::SuperPoint
+        );
+    }
+
+    #[test]
+    fn default_feature_matching_options_use_balanced_rootsift() {
+        let options = FeatureMatchingOptions::default();
+        assert_eq!(options.profile, "balanced");
+        assert_eq!(options.method, FeatureMethod::RootSift);
+    }
+
+    #[test]
+    fn unimplemented_floating_point_methods_fail_cleanly() {
+        let sift = run_feature_matching_with_method(&[], "balanced", FeatureMethod::Sift)
+            .expect("sift empty input should succeed");
+        assert_eq!(sift.frame_count, 0);
+        assert_eq!(sift.total_keypoints, 0);
+
+        let err = run_feature_matching_superpoint(&[], "balanced")
+            .expect_err("superpoint should return a not implemented error");
+        assert!(matches!(err, PhotogrammetryError::NotImplemented(message) if message.contains("superpoint")));
+    }
+
+    #[test]
     fn ratio_test_rejects_ambiguous_matches() {
         let query = BriefDescriptor {
             corner: Keypoint {
@@ -2836,7 +3789,7 @@ mod tests {
         );
 
         assert!(
-            !passes_ratio_test(5, None, 0.8, 3),
+            !passes_ratio_test(5.0, None, 0.8, 3),
             "missing second-best must fail ratio filtering when candidate set is not singleton"
         );
     }

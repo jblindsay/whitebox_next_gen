@@ -86,8 +86,12 @@ metadata record for each frame.
 
 ### `features` — Feature Detection and Matching
 
-Detects corners, computes binary descriptors, matches image pairs, and validates
-matches geometrically. Supports two descriptor variants.
+Detects corners, computes descriptors, matches image pairs, and validates matches
+geometrically. The current implementation supports BRIEF, ORB, an internal
+experimental SIFT backend, and `RootSIFT` normalization on top of that SIFT
+path, all written directly inside `wbphotogrammetry` without adding new crate
+dependencies. The public API still reserves a placeholder hook for a future
+SuperPoint backend.
 
 **BRIEF pipeline:**
 - FAST corner detection (16-point Bresenham circle, contiguous 9-point brightness
@@ -102,6 +106,13 @@ matches geometrically. Supports two descriptor variants.
 - Gaussian-sampled rotated BRIEF test pairs; per-keypoint orientation estimated
   from first-order image moments
 - Cross-octave match gating (max octave difference = 2)
+
+**SIFT / RootSIFT pipeline:**
+- In-house Gaussian scale space and Difference-of-Gaussians extrema detection
+- Gradient-histogram orientation assignment
+- 128-D floating-point SIFT descriptors with L2 matching
+- Optional RootSIFT post-normalization (L1 normalize, elementwise square root,
+  final L2 normalize) for improved descriptor distinctiveness under Euclidean matching
 
 **Pair validation pipeline (both variants):**
 1. Hamming distance and ratio test filtering
@@ -306,9 +317,15 @@ likely to require further development.
 
 ### Feature Matching
 
-- Both BRIEF and ORB use binary descriptors. There is no support for
-  floating-point descriptors (e.g. SIFT, SURF, SuperPoint) that perform better
-  on strongly textured or oblique imagery.
+- `SIFT` and `RootSIFT` are now available as internal experimental backends
+  with native scale-space detection, orientation assignment, 128-D descriptors,
+  and L2 matching. They have not yet been tuned or benchmarked to the same
+  level as the BRIEF/ORB paths, and should currently be treated as opt-in
+  development backends rather than production-default methods.
+- `SuperPoint` is still only an API placeholder. Learned inference, weight
+  management, and model runtime integration are not implemented.
+- SURF is intentionally not on the near-term roadmap because of continuing
+  patent risk; it should not be treated as a drop-in alternative to SIFT.
 - Cross-scale matching is not supported: ORB matches are gated to adjacent
   pyramid octaves (max difference = 2), which limits robustness when the same
   scene feature appears at very different scales in two frames.
@@ -405,10 +422,10 @@ likely to require further development.
 
 ```bash
 # Profile the full pipeline on a flight directory
-cargo run --example profile_pipeline --release -- <images_dir> [fast|balanced|survey]
+cargo run --example profile_pipeline --release -- --profile balanced --feature-method rootsift
 
 # Inspect feature matching on a specific image pair
-cargo run --example feature_pair_probe --release -- <image_a> <image_b>
+cargo run --example feature_pair_probe --release -- --images-dir <dir> --left <image_a> --right <image_b> --method rootsift
 
 # Compare QA reports across profiles (requires Python 3)
 python3 examples/compare_profile_reports.py <report_fast.json> <report_survey.json>

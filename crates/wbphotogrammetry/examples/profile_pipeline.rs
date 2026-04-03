@@ -6,8 +6,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use image::{GrayImage, Luma};
 use serde_json::json;
 use wbphotogrammetry::{
-    CameraModel, FrameMetadata, GpsCoordinate, ImageFrame, run_camera_alignment, run_dense_surface,
-    run_feature_matching, run_orthomosaic,
+    CameraModel, FeatureMethod, FrameMetadata, GpsCoordinate, ImageFrame,
+    run_camera_alignment, run_dense_surface, run_feature_matching_with_method, run_orthomosaic,
 };
 
 #[derive(Debug, Clone)]
@@ -38,6 +38,12 @@ fn main() {
     let frame_count = parse_arg(&args, "--frames", 90_usize);
     let repeats = parse_arg(&args, "--repeats", 3_usize);
     let profile = parse_string_arg(&args, "--profile", "balanced");
+    let feature_method = parse_string_arg(&args, "--feature-method", "rootsift")
+        .parse::<FeatureMethod>()
+        .unwrap_or_else(|e| {
+            eprintln!("invalid --feature-method: {e}");
+            std::process::exit(2);
+        });
     let resolution_m = parse_arg(&args, "--resolution", 0.12_f64);
     let json_out = parse_optional_string_arg(&args, "--json-out");
 
@@ -54,7 +60,8 @@ fn main() {
         let ortho_path = tmp_root.join(format!("ortho_run_{}.tif", run_idx));
 
         let start_feature = Instant::now();
-        let match_stats = run_feature_matching(&frames, &profile).expect("feature stage");
+        let match_stats = run_feature_matching_with_method(&frames, &profile, feature_method)
+            .expect("feature stage");
         let feature_time = start_feature.elapsed();
 
         let start_alignment = Instant::now();
@@ -201,6 +208,7 @@ fn write_json_report(
             "frame_count": frame_count,
             "repeats": repeats,
             "profile": profile,
+            "feature_method": feature_method.as_str(),
             "resolution_m": resolution_m,
             "workspace": tmp_root.to_string_lossy(),
         },

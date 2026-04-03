@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::Raster;
 
@@ -8,9 +8,9 @@ use crate::Raster;
 pub const RASTER_MEMORY_PREFIX: &str = "memory://raster/";
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-static RASTER_STORE: OnceLock<Mutex<HashMap<String, Raster>>> = OnceLock::new();
+static RASTER_STORE: OnceLock<Mutex<HashMap<String, Arc<Raster>>>> = OnceLock::new();
 
-fn store() -> &'static Mutex<HashMap<String, Raster>> {
+fn store() -> &'static Mutex<HashMap<String, Arc<Raster>>> {
     RASTER_STORE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -33,17 +33,36 @@ pub fn make_raster_memory_path(id: &str) -> String {
 pub fn put_raster(raster: Raster) -> String {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed).to_string();
     if let Ok(mut map) = store().lock() {
+        map.insert(id.clone(), Arc::new(raster));
+    }
+    id
+}
+
+/// Inserts a shared raster handle into the global store and returns its new unique key.
+pub fn put_raster_arc(raster: Arc<Raster>) -> String {
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed).to_string();
+    if let Ok(mut map) = store().lock() {
         map.insert(id.clone(), raster);
     }
     id
 }
 
-/// Retrieves a clone of the raster associated with `id`, or `None` if absent.
-pub fn get_raster_by_id(id: &str) -> Option<Raster> {
+/// Retrieves a shared handle to the raster associated with `id`, or `None` if absent.
+pub fn get_raster_arc_by_id(id: &str) -> Option<Arc<Raster>> {
     store()
         .lock()
         .ok()
         .and_then(|map| map.get(id).cloned())
+}
+
+/// Retrieves a shared handle to the raster identified by a `memory://raster/<id>` path.
+pub fn get_raster_arc_by_path(path: &str) -> Option<Arc<Raster>> {
+    raster_path_to_id(path).and_then(get_raster_arc_by_id)
+}
+
+/// Retrieves a clone of the raster associated with `id`, or `None` if absent.
+pub fn get_raster_by_id(id: &str) -> Option<Raster> {
+    get_raster_arc_by_id(id).map(|r| (*r).clone())
 }
 
 /// Removes and returns the raster associated with `id`, or `None` if absent.
@@ -51,7 +70,8 @@ pub fn remove_raster_by_id(id: &str) -> Option<Raster> {
     store()
         .lock()
         .ok()
-        .and_then(|mut map| map.remove(id))
+    .and_then(|mut map| map.remove(id))
+    .map(|r| Arc::try_unwrap(r).unwrap_or_else(|shared| (*shared).clone()))
 }
 
 /// Removes and returns the raster identified by a `memory://raster/<id>` path.
@@ -85,7 +105,7 @@ pub fn raster_store_bytes() -> usize {
         .lock()
         .map(|map| {
             map.values()
-                .map(|r| r.data.len() * r.data_type.size_bytes())
+            .map(|r| r.data.len() * r.data_type.size_bytes())
                 .sum()
         })
         .unwrap_or(0)
@@ -95,6 +115,15 @@ pub fn raster_store_bytes() -> usize {
 mod tests {
     use super::*;
     use crate::{DataType, RasterConfig};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    fn memory_store_test_guard() -> MutexGuard<'static, ()> {
+        static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        TEST_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("memory_store test lock poisoned")
+    }
 
     fn make_test_raster(value: f64) -> Raster {
         let cfg = RasterConfig {
@@ -110,6 +139,7 @@ mod tests {
 
     #[test]
     fn remove_raster_by_id_removes_only_target_entry() {
+        let _guard = memory_store_test_guard();
         clear_rasters();
 
         let id1 = put_raster(make_test_raster(1.0));
@@ -127,6 +157,7 @@ mod tests {
 
     #[test]
     fn remove_raster_by_path_and_clear_rasters_work() {
+        let _guard = memory_store_test_guard();
         clear_rasters();
 
         let id1 = put_raster(make_test_raster(5.0));

@@ -8,9 +8,21 @@ A Rust library for reading and writing common raster GIS formats intended to ser
 - [The Whitebox Project](#the-whitebox-project)
 - [Is wbraster Only for Whitebox?](#is-wbraster-only-for-whitebox)
 - [What wbraster Is Not](#what-wbraster-is-not)
-- [Supported Formats](#supported-formats)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
+- [Supported Formats](#supported-formats)
+- [SAFE Bundle Support](#safe-bundle-support)
+- [Landsat Collection Bundle Support](#landsat-collection-bundle-support)
+- [ICEYE Bundle Support](#iceye-bundle-support)
+- [PlanetScope Bundle Support](#planetscope-bundle-support)
+- [SPOT/Pleiades DIMAP Bundle Support](#spotpleiades-dimap-bundle-support)
+- [Maxar/WorldView Bundle Support](#maxarworldview-bundle-support)
+- [RADARSAT-2 Bundle Support](#radarsat-2-bundle-support)
+- [RCM Bundle Support](#rcm-bundle-support)
+- [Unified Sensor Bundle Detection](#unified-sensor-bundle-detection)
+- [Real-Sample Smoke Tests (Opt-In)](#real-sample-smoke-tests-opt-in)
+- [Bundle Canonical Key Reference](#bundle-canonical-key-reference)
 - [Coordinate Reference System (CRS)](#coordinate-reference-system-crs)
 - [Common GeoTIFF / COG Workflows](#common-geotiff--cog-workflows)
 - [Architecture](#architecture)
@@ -34,7 +46,16 @@ A Rust library for reading and writing common raster GIS formats intended to ser
 
 ## The Whitebox Project
 
-Whitebox is a collection of related open-source geospatial data analysis software. The Whitebox project began in 2009 at the [University of Guelph](https://geg.uoguelph.ca), Canada, developed by [Dr. John Lindsay](https://jblindsay.github.io/ghrg/index.html) a professor of geomatics. Whitebox has long served as Dr. Lindsay's platform for disseminating the output of his geomatics-based research and has developed an extensive worldwide user base. In 2021 Dr. Lindsay and Anthony Francioni founded [Whitebox Geospatial Inc.](https://www.whiteboxgeo.com) in order to ensure the sustainable and ongoing development of this open-source geospatial project. We are currently working on the next iteration of the Whitebox software, **Whitebox Next Gen**. This crate is part of that larger effort.
+[Whitebox](https://www.whiteboxgeo.com) is a suite of open-source geospatial data analysis software with roots at the [University of Guelph](https://geg.uoguelph.ca), Canada, where [Dr. John Lindsay](https://jblindsay.github.io/ghrg/index.html) began the project in 2009. Over more than fifteen years it has grown into a widely used platform for geomorphometry, spatial hydrology, LiDAR processing, and remote sensing research. In 2021 Dr. Lindsay and Anthony Francioni founded [Whitebox Geospatial Inc.](https://www.whiteboxgeo.com) to ensure the project's long-term, sustainable development. **Whitebox Next Gen** is the current major iteration of that work, and this crate is part of that larger effort.
+
+Whitebox Next Gen is a ground-up redesign that improves on its predecessor in nearly every dimension:
+
+- **CRS & reprojection** — Full read/write of coordinate reference system metadata across raster, vector, and LiDAR data, with multiple resampling methods for raster reprojection.
+- **Raster I/O** — More robust GeoTIFF handling (including Cloud-Optimized GeoTIFFs), plus newly supported formats such as GeoPackage Raster and JPEG2000.
+- **Vector I/O** — Expanded from Esri Shapefile-only to 11 formats, including GeoPackage, FlatGeobuf, GeoParquet, and other modern interchange formats.
+- **Vector topology** — A new, dedicated topology engine (`wbtopology`) enabling robust overlay, buffering, and related operations.
+- **LiDAR I/O** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
+- **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin are in active development.
 
 ## Is wbraster Only for Whitebox?
 
@@ -53,58 +74,30 @@ No. `wbraster` is developed primarily to support Whitebox, but it is not restric
 - Not a remote sensing pipeline (radiometric correction, band math, and similar operations belong in the tooling layer).
 - Not a distributed or chunked processing framework (Zarr MVP support is focused on local filesystem stores).
 
-## Supported Formats
+## Installation
 
-| Format | Extension(s) | Read | Write | Notes |
-|---|---|:---:|:---:|---|
-| **ENVI HDR Labelled** | `.hdr` + sidecar data | ✓ | ✓ | Multi-band (`BSQ`/`BIL`/`BIP`) |
-| **ER Mapper** | `.ers` + data | ✓ | ✓ | Hierarchical header; reg-coord aware |
-| **Esri ASCII Grid** | `.asc`, `.grd` | ✓ | ✓ | Handles `xllcorner` and `xllcenter` |
-| **Esri Binary Grid** | workspace dir / `.adf` | ✓ | ✓ | Single-band float32, big-endian |
-| **GeoTIFF / BigTIFF / COG** | `.tif`, `.tiff` | ✓ | ✓ | Stripped/tiled GeoTIFF + BigTIFF + COG writer |
-| **GeoPackage Raster (Phase 4)** | `.gpkg` | ✓ | ✓ | Multi-band tiled raster; native-type raw tiles + PNG/JPEG options + extension registration |
-| **GRASS ASCII Raster** | `.asc`, `.txt` | ✓ | ✓ | Header with `north/south/east/west`, `rows/cols` |
-| **Idrisi/TerrSet Raster** | `.rdc` / `.rst` | ✓ | ✓ | byte, integer, real, RGB24 |
-| **JPEG 2000 / GeoJP2** | `.jp2` | ✓ | ✓ | Pure-Rust JP2/GeoJP2 reader + writer |
-| **PCRaster** | `.map` | ✓ | ✓ | CSF parser + value-scale aware writer (`UINT1`/`INT4`/`REAL4`/`REAL8`) |
-| **SAGA GIS Binary** | `.sgrd` / `.sdat` | ✓ | ✓ | All SAGA data types; row-flip handled |
-| **Surfer GRD** | `.grd` | ✓ | ✓ | Reads DSAA (ASCII) + DSRB (Surfer 7); writes DSAA by default, DSRB with `surfer_format=dsrb` |
-| **Zarr v2/v3 (MVP)** | `.zarr` | ✓ | ✓ | 2D + 3D (`band,y,x`) chunked arrays |
-
-### CRS support matrix
-
-| Format | EPSG | WKT | PROJ4 | Notes |
-|---|:---:|:---:|:---:|---|
-| ENVI HDR Labelled | – | ✓ | – | Uses ENVI `coordinate system string`; preserves `map info` CRS tokens in metadata |
-| ER Mapper | – | ~ | – | Preserves `CoordinateSpace` tokens (`er_datum`/`er_projection`/`er_coordinate_type`); WKT set only for WKT-like legacy datum values |
-| Esri ASCII Grid | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
-| Esri Binary Grid | – | ✓ | – | Reads/writes `prj.adf` |
-| GeoTIFF / BigTIFF / COG | ✓ | – | – | Uses `raster.crs.epsg` |
-| GeoPackage Raster (Phase 4) | ✓ | – | – | Uses `srs_id` in GeoPackage metadata tables |
-| GRASS ASCII Raster | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
-| Idrisi/TerrSet Raster | – | ~ | – | Reads/writes optional `.ref` sidecar; WKT is used when `.ref` content is WKT-like |
-| JPEG 2000 / GeoJP2 | ✓ | – | – | Uses `raster.crs.epsg` |
-| PCRaster | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
-| SAGA GIS Binary | – | ✓ | – | Reads/writes optional `.prj` sidecar WKT (metadata key `saga_prj_text`, legacy alias `saga_prj_wkt`) |
-| Surfer GRD | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
-| Zarr v2/v3 (MVP) | ✓ | ✓ | ✓ | Uses metadata keys (`crs_epsg`/`epsg`, `crs_wkt`/`spatial_ref`, `crs_proj4`/`proj4`) |
-
-Legend: `✓` supported, `–` not currently supported, `~` limited/custom representation.
-
-See [CRS / spatial reference (CRS)](#crs--spatial-reference-crs) for setup/read-back examples and workflow guidance.
-See [Sidecar metadata keys](#sidecar-metadata-keys) for format-specific sidecar CRS metadata names.
-
-## Quick Start
+Crates.io dependency:
 
 ```toml
 [dependencies]
 wbraster = "0.1"
-
-# Optional feature selection:
-# - default includes native zstd bindings ("zstd-native")
-# - for pure-Rust zstd decode-only, disable default features and enable:
-# wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
 ```
+
+`wbraster` enables `zstd-native` by default. If you prefer pure-Rust decode-only Zstandard support, disable default features and enable `zstd-pure-rust-decode` instead:
+
+```toml
+[dependencies]
+wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
+```
+
+Local workspace/path dependency:
+
+```toml
+[dependencies]
+wbraster = { path = "../wbraster" }
+```
+
+## Quick Start
 
 ```rust
 use wbraster::{
@@ -182,6 +175,496 @@ Run with:
 ```bash
 cargo run --example raster_basics
 ```
+
+## Supported Formats
+
+| Format | Extension(s) | Read | Write | Notes |
+|---|---|:---:|:---:|---|
+| **ENVI HDR Labelled** | `.hdr` + sidecar data | ✓ | ✓ | Multi-band (`BSQ`/`BIL`/`BIP`) |
+| **ER Mapper** | `.ers` + data | ✓ | ✓ | Hierarchical header; reg-coord aware |
+| **Esri ASCII Grid** | `.asc`, `.grd` | ✓ | ✓ | Handles `xllcorner` and `xllcenter` |
+| **Esri Binary Grid** | workspace dir / `.adf` | ✓ | ✓ | Single-band float32, big-endian |
+| **GeoTIFF / BigTIFF / COG** | `.tif`, `.tiff` | ✓ | ✓ | Stripped/tiled GeoTIFF + BigTIFF + COG writer |
+| **GeoPackage Raster (Phase 4)** | `.gpkg` | ✓ | ✓ | Multi-band tiled raster; native-type raw tiles + PNG/JPEG options + extension registration |
+| **GRASS ASCII Raster** | `.asc`, `.txt` | ✓ | ✓ | Header with `north/south/east/west`, `rows/cols` |
+| **Idrisi/TerrSet Raster** | `.rdc` / `.rst` | ✓ | ✓ | byte, integer, real, RGB24 |
+| **JPEG 2000 / GeoJP2** | `.jp2` | ✓ | ✓ | Pure-Rust JP2/GeoJP2 reader + writer |
+| **PCRaster** | `.map` | ✓ | ✓ | CSF parser + value-scale aware writer (`UINT1`/`INT4`/`REAL4`/`REAL8`) |
+| **SAGA GIS Binary** | `.sgrd` / `.sdat` | ✓ | ✓ | All SAGA data types; row-flip handled |
+| **Surfer GRD** | `.grd` | ✓ | ✓ | Reads DSAA (ASCII) + DSRB (Surfer 7); writes DSAA by default, DSRB with `surfer_format=dsrb` |
+| **Zarr v2/v3 (MVP)** | `.zarr` | ✓ | ✓ | 2D + 3D (`band,y,x`) chunked arrays |
+
+### SAFE Bundle Support
+
+`wbraster` includes package-level SAFE readers for Sentinel missions and a
+mission auto-detection API.
+
+**Sentinel-2 (`Sentinel2SafePackage`):**
+
+```rust
+use wbraster::Sentinel2SafePackage;
+
+let pkg = Sentinel2SafePackage::open("S2A_MSIL2A_20260401T105021_N0510_R051_T32TQM_20260401T134528.SAFE")?;
+
+println!("tile: {:?}", pkg.tile_id);
+println!("solar zenith: {:?}°", pkg.mean_solar_zenith_deg);
+println!("cloud cover: {:?}%", pkg.cloud_coverage_assessment);
+println!("processing baseline: {:?}", pkg.processing_baseline);
+println!("bands: {:?}", pkg.list_band_keys());
+println!("qa layers: {:?}", pkg.list_qa_keys());
+println!("aux layers: {:?}", pkg.list_aux_keys()); // AOT, WVP, TCI (L2A)
+
+// resolve a spectral band path
+if let Some(b04) = pkg.band_path("B04") {
+    println!("red band at: {}", b04.display());
+}
+
+// resolve a QA layer
+if let Some(scl) = pkg.qa_path("SCL") {
+    println!("scene classification at: {}", scl.display());
+}
+
+// resolve L2A auxiliary layers (Aerosol Optical Thickness, Water Vapour Pressure)
+if let Some(aot) = pkg.aux_path("AOT") {
+  println!("AOT layer at: {}", aot.display());
+}
+if let Some(wvp) = pkg.aux_path("WVP") {
+  println!("WVP layer at: {}", wvp.display());
+}
+```
+
+**Sentinel-1 (`Sentinel1SafePackage`):**
+
+```rust
+use wbraster::Sentinel1SafePackage;
+
+let pkg = Sentinel1SafePackage::open("S1A_IW_GRD_1SDV_20260401T052347_20260401T052412_053000_066E58_9F91.SAFE")?;
+
+println!("product type: {:?}", pkg.product_type);
+println!("acquisition mode: {:?}", pkg.acquisition_mode);
+println!("polarization: {:?}", pkg.polarization);
+println!("acquired at: {:?}", pkg.acquisition_datetime_utc);
+println!("bounds (W/S/E/N): {:?}", pkg.spatial_bounds);
+println!("measurements: {:?}", pkg.list_measurement_keys());
+
+// resolve a measurement raster — key is MODE_PRODUCT_POL
+if let Some(vv) = pkg.measurement_path("IW_GRD_VV") {
+    println!("VV measurement raster at: {}", vv.display());
+}
+
+// read VV measurement directly as a Raster
+let raster = pkg.read_measurement("IW_GRD_VV")?;
+
+// read a calibrated raster in linear sigma0 units
+let sigma0 = pkg.read_calibrated_measurement(
+  "IW_GRD_VV",
+  wbraster::Sentinel1CalibrationTarget::SigmaNought,
+)?;
+
+// or immediately in dB
+let sigma0_db = pkg.read_calibrated_measurement_db(
+  "IW_GRD_VV",
+  wbraster::Sentinel1CalibrationTarget::SigmaNought,
+)?;
+
+// apply thermal-noise correction in linear units after calibration
+let sigma0_nc = pkg.read_noise_corrected_calibrated_measurement(
+  "IW_GRD_VV",
+  wbraster::Sentinel1CalibrationTarget::SigmaNought,
+)?;
+
+// or noise-corrected directly in dB
+let sigma0_nc_db = pkg.read_noise_corrected_calibrated_measurement_db(
+  "IW_GRD_VV",
+  wbraster::Sentinel1CalibrationTarget::SigmaNought,
+)?;
+
+// parse ECEF orbit state vectors from the annotation XML
+let orbits = pkg.read_orbit_vectors("IW_GRD_VV")?;
+println!("first orbit vector time: {}", orbits[0].time);
+println!("position (m): {:?}", orbits[0].position);
+println!("velocity (m/s): {:?}", orbits[0].velocity);
+
+// bilinearly-interpolated geolocation grid (lat/lon/height/incidence angle)
+let grid = pkg.read_geolocation_grid("IW_GRD_VV")?;
+let (lat, lon) = grid.interpolated_lat_lon(512, 1024).unwrap();
+let inc_angle = grid.interpolated_incidence_angle(512, 1024).unwrap();
+
+// SLC TOPS burst metadata (returns Err for GRD products)
+if let Ok(burst_list) = pkg.read_burst_list("IW1_SLC_VV") {
+  println!("{} bursts, {} lines each", burst_list.bursts.len(), burst_list.lines_per_burst);
+}
+
+// multi-polarization batch operations
+let pols = pkg.list_polarizations(); // e.g. ["VH", "VV"]
+let vv_rasters = pkg.read_measurements_for_polarization("VV")?;
+let vv_calibrated = pkg.read_calibrated_measurements_for_polarization(
+  "VV",
+  wbraster::Sentinel1CalibrationTarget::SigmaNought,
+)?;
+```
+
+**Unified mission detection (`detect_safe_mission` / `open_safe_bundle`):**
+
+```rust
+use wbraster::{detect_safe_mission, open_safe_bundle, SafeBundle, SafeMission};
+
+// inspect mission type without opening the full package
+match detect_safe_mission("unknown.SAFE")? {
+    SafeMission::Sentinel1 => println!("Sentinel-1 product"),
+    SafeMission::Sentinel2 => println!("Sentinel-2 product"),
+    SafeMission::Unknown   => println!("unrecognised SAFE bundle"),
+}
+
+// open and dispatch on variant
+match open_safe_bundle("my_product.SAFE")? {
+    SafeBundle::Sentinel1(pkg) => {
+        println!("S1 measurements: {:?}", pkg.list_measurement_keys());
+    }
+    SafeBundle::Sentinel2(pkg) => {
+        println!("S2 bands: {:?}", pkg.list_band_keys());
+    }
+}
+```
+
+This is package-level support (metadata + band/QA/measurement discovery), which
+complements the raster I/O support for JPEG2000/GeoJP2 and GeoTIFF.
+
+### Landsat Collection Bundle Support
+
+`wbraster` also includes package-level Landsat Collection bundle support based on
+MTL metadata plus GeoTIFF scene assets.
+
+```rust
+use wbraster::LandsatBundle;
+
+let bundle = LandsatBundle::open("LC09_L2SP_018030_20240202_20240210_02_T1")?;
+
+println!("mission: {:?}", bundle.mission);
+println!("processing level: {:?}", bundle.processing_level);
+println!("product id: {:?}", bundle.product_id);
+println!("path/row: {:?}", bundle.path_row);
+println!("cloud cover: {:?}%", bundle.cloud_cover_percent);
+
+println!("bands: {:?}", bundle.list_band_keys());
+println!("qa layers: {:?}", bundle.list_qa_keys());
+println!("aux layers: {:?}", bundle.list_aux_keys());
+
+if let Some(red) = bundle.band_path("B4") {
+  println!("red band path: {}", red.display());
+}
+if let Some(qa_pixel) = bundle.qa_path("QA_PIXEL") {
+  println!("QA pixel path: {}", qa_pixel.display());
+}
+
+let red = bundle.read_band("B4")?;
+let qa = bundle.read_qa_layer("QA_PIXEL")?;
+```
+
+### ICEYE Bundle Support
+
+`wbraster` includes an initial ICEYE bundle reader for COG/GeoTIFF assets with
+XML metadata.
+
+```rust
+use wbraster::IceyeBundle;
+
+let bundle = IceyeBundle::open("ICEYE_SCENE_DIR")?;
+
+println!("product type: {:?}", bundle.product_type);
+println!("mode: {:?}", bundle.acquisition_mode);
+println!("acquired at: {:?}", bundle.acquisition_datetime_utc);
+println!("polarization: {:?}", bundle.polarization);
+println!("orbit direction: {:?}", bundle.orbit_direction);
+println!("look direction: {:?}", bundle.look_direction);
+println!("incidence near/far: {:?} / {:?}", bundle.incidence_angle_near_deg, bundle.incidence_angle_far_deg);
+println!("assets: {:?}", bundle.list_asset_keys());
+println!("pols: {:?}", bundle.list_polarizations());
+
+if let Some(path) = bundle.asset_path("VV") {
+  println!("VV asset at: {}", path.display());
+}
+
+let vv = bundle.read_asset("VV")?;
+let vv_assets = bundle.read_assets_for_polarization("VV")?;
+```
+
+### PlanetScope Bundle Support
+
+`wbraster` includes package-level PlanetScope support for common GeoTIFF assets
+with JSON/XML sidecars.
+
+```rust
+use wbraster::PlanetScopeBundle;
+
+let bundle = PlanetScopeBundle::open("PLANETSCOPE_SCENE_DIR")?;
+
+println!("scene id: {:?}", bundle.scene_id);
+println!("acquired at: {:?}", bundle.acquisition_datetime_utc);
+println!("product type: {:?}", bundle.product_type);
+println!("bands: {:?}", bundle.list_band_keys());
+println!("qa layers: {:?}", bundle.list_qa_keys());
+
+let red = bundle.read_band("B4")?;
+if let Some(udm2) = bundle.qa_path("UDM2") {
+  println!("udm2 mask path: {}", udm2.display());
+}
+```
+
+### SPOT/Pleiades DIMAP Bundle Support
+
+`wbraster` includes package-level DIMAP support for SPOT/Pleiades products
+(`DIM_*.XML` plus JP2/GeoTIFF assets).
+
+```rust
+use wbraster::DimapBundle;
+
+let bundle = DimapBundle::open("DIMAP_SCENE_DIR")?;
+
+println!("mission: {:?}", bundle.mission);
+println!("scene id: {:?}", bundle.scene_id);
+println!("bands: {:?}", bundle.list_band_keys());
+
+let pan = bundle.read_band("PAN")?;
+```
+
+### Maxar/WorldView Bundle Support
+
+`wbraster` includes package-level Maxar/WorldView support for `.IMD`/XML
+metadata and JP2/GeoTIFF assets.
+
+```rust
+use wbraster::MaxarWorldViewBundle;
+
+let bundle = MaxarWorldViewBundle::open("MAXAR_WORLDVIEW_SCENE_DIR")?;
+
+println!("satellite: {:?}", bundle.satellite);
+println!("scene id: {:?}", bundle.scene_id);
+println!("bands: {:?}", bundle.list_band_keys());
+
+let blue = bundle.read_band("B2")?;
+```
+
+### RADARSAT-2 Bundle Support
+
+`wbraster` includes an initial RADARSAT-2 bundle reader for GeoTIFF imagery and
+`product.xml` metadata.
+
+```rust
+use wbraster::Radarsat2Bundle;
+
+let bundle = Radarsat2Bundle::open("RS2_SCENE_DIR")?;
+
+println!("product type: {:?}", bundle.product_type);
+println!("mode: {:?}", bundle.acquisition_mode);
+println!("acquired at: {:?}", bundle.acquisition_datetime_utc);
+println!("pols: {:?}", bundle.polarizations);
+println!("incidence near/far: {:?} / {:?}", bundle.incidence_angle_near_deg, bundle.incidence_angle_far_deg);
+println!("spacing range/azimuth: {:?} / {:?}", bundle.pixel_spacing_range_m, bundle.pixel_spacing_azimuth_m);
+println!("measurements: {:?}", bundle.list_measurement_keys());
+
+let hh = bundle.read_measurement("HH")?;
+let hh_set = bundle.read_measurements_for_polarization("HH")?;
+```
+
+### RCM Bundle Support
+
+`wbraster` includes an initial RCM bundle reader for GeoTIFF imagery and XML
+metadata.
+
+```rust
+use wbraster::RcmBundle;
+
+let bundle = RcmBundle::open("RCM_SCENE_DIR")?;
+
+println!("product type: {:?}", bundle.product_type);
+println!("mode: {:?}", bundle.acquisition_mode);
+println!("acquired at: {:?}", bundle.acquisition_datetime_utc);
+println!("pols: {:?}", bundle.polarizations);
+println!("incidence near/far: {:?} / {:?}", bundle.incidence_angle_near_deg, bundle.incidence_angle_far_deg);
+println!("spacing range/azimuth: {:?} / {:?}", bundle.pixel_spacing_range_m, bundle.pixel_spacing_azimuth_m);
+println!("measurements: {:?}", bundle.list_measurement_keys());
+
+let vv = bundle.read_measurement("VV")?;
+let vv_set = bundle.read_measurements_for_polarization("VV")?;
+```
+
+### Unified Sensor Bundle Detection
+
+Use a single entrypoint to detect and open a supported bundle family
+(Sentinel SAFE, Landsat, ICEYE, PlanetScope, DIMAP, Maxar/WorldView, RADARSAT-2, RCM):
+
+```rust
+use wbraster::{
+  detect_sensor_bundle_family,
+  open_sensor_bundle,
+  SensorBundle,
+  SensorBundleFamily,
+};
+
+match detect_sensor_bundle_family("some_bundle_root")? {
+  SensorBundleFamily::Landsat => println!("Landsat bundle"),
+  SensorBundleFamily::Iceye => println!("ICEYE bundle"),
+  SensorBundleFamily::PlanetScope => println!("PlanetScope bundle"),
+  SensorBundleFamily::Dimap => println!("SPOT/Pleiades DIMAP bundle"),
+  SensorBundleFamily::MaxarWorldView => println!("Maxar/WorldView bundle"),
+  SensorBundleFamily::Radarsat2 => println!("RADARSAT-2 bundle"),
+  SensorBundleFamily::Rcm => println!("RCM bundle"),
+  SensorBundleFamily::Sentinel1Safe => println!("Sentinel-1 SAFE"),
+  SensorBundleFamily::Sentinel2Safe => println!("Sentinel-2 SAFE"),
+  SensorBundleFamily::Unknown => println!("Unknown bundle"),
+}
+
+match open_sensor_bundle("some_bundle_root")? {
+  SensorBundle::Landsat(pkg) => println!("bands: {:?}", pkg.list_band_keys()),
+  SensorBundle::Iceye(pkg) => println!("assets: {:?}", pkg.list_asset_keys()),
+  SensorBundle::PlanetScope(pkg) => println!("bands: {:?}", pkg.list_band_keys()),
+  SensorBundle::Dimap(pkg) => println!("bands: {:?}", pkg.list_band_keys()),
+  SensorBundle::MaxarWorldView(pkg) => println!("bands: {:?}", pkg.list_band_keys()),
+  SensorBundle::Radarsat2(pkg) => println!("pols: {:?}", pkg.polarizations),
+  SensorBundle::Rcm(pkg) => println!("pols: {:?}", pkg.polarizations),
+  SensorBundle::Safe(pkg) => println!("SAFE bundle: {:?}", pkg),
+}
+
+// Also supports archive paths (.zip, .tar, .tar.gz, .tgz)
+let opened = wbraster::open_sensor_bundle_path("LC09_scene_bundle.tar.gz")?;
+match opened.bundle {
+  SensorBundle::Landsat(pkg) => println!("Landsat bands: {:?}", pkg.list_band_keys()),
+  _ => {}
+}
+// If opened from archive, you can optionally clean up the extracted temp tree:
+if let Some(extracted_root) = opened.extracted_root {
+  // std::fs::remove_dir_all(extracted_root)?;
+}
+```
+
+### Bundle Canonical Key Reference
+
+PlanetScope canonical keys:
+- Bands: `B1`, `B2`, `B3`, `B4`, `B5`, `B6`, `B7`, `B8`, `ANALYTIC`
+- QA: `UDM`, `UDM2`
+
+DIMAP canonical keys:
+- Bands: `PAN`, `B0`, `B1`, `B2`, `B3`, `B4`, `B5`, `SWIR`, `SWIR1`, `SWIR2`
+
+Maxar/WorldView canonical keys:
+- Bands: `PAN`, `B1`, `B2`, `B3`, `B4`, `B5`, `RE`, `Y`, `N2`, `SWIR`, `SWIR1`, `SWIR2`
+
+### Real-Sample Smoke Tests (Opt-In)
+
+The package readers include opt-in smoke tests that open local real datasets
+when environment variables are set.
+
+Set one or both variables to a local dataset path:
+
+- `WBRASTER_LANDSAT_SAMPLE`: path to a Landsat scene directory.
+- `WBRASTER_LANDSAT_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical keys present in the sample (bands/QA/aux; e.g. `B2,B3,B4,QA_PIXEL`).
+- `WBRASTER_S2_SAFE_SAMPLE`: path to a Sentinel-2 `.SAFE` root directory.
+- `WBRASTER_S2_SAFE_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical keys present in the sample (bands/QA/aux; e.g. `B02,B03,B04,MSK_CLDPRB`).
+- `WBRASTER_ICEYE_SAMPLE`: path to an ICEYE scene directory.
+- `WBRASTER_ICEYE_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical asset keys present in the sample (e.g. `VV` or `VV_2`).
+- `WBRASTER_ICEYE_OPEN_DATA_SAMPLE`: path to a local ICEYE Open Data scene directory (e.g. downloaded from the public STAC catalog).
+- `WBRASTER_ICEYE_OPEN_DATA_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical asset keys present in the sample.
+- `WBRASTER_PLANETSCOPE_SAMPLE`: path to a PlanetScope scene directory.
+- `WBRASTER_PLANETSCOPE_SAMPLE_EXPECT_PROFILES`: optional comma-separated expected PlanetScope profiles (e.g. `ANALYTIC,ANALYTIC_SR`).
+- `WBRASTER_DIMAP_SAMPLE`: path to a SPOT/Pleiades DIMAP scene directory.
+- `WBRASTER_DIMAP_SAMPLE_EXPECT_PROFILES`: optional comma-separated expected DIMAP profiles (e.g. `MS,PAN`).
+- `WBRASTER_MAXAR_SAMPLE`: path to a Maxar/WorldView scene directory.
+- `WBRASTER_MAXAR_SAMPLE_EXPECT_PROFILES`: optional comma-separated expected Maxar profiles (e.g. `MS,PAN`).
+- `WBRASTER_RADARSAT2_SAMPLE`: path to a RADARSAT-2 scene directory.
+- `WBRASTER_RADARSAT2_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical measurement keys present in the sample (e.g. `HH,HV`).
+- `WBRASTER_RCM_SAMPLE`: path to an RCM scene directory.
+- `WBRASTER_RCM_SAMPLE_EXPECT_KEYS`: optional comma-separated expected canonical measurement keys present in the sample (e.g. `VV,VH`).
+
+Run the smoke tests:
+
+```bash
+export WBRASTER_LANDSAT_SAMPLE="/path/to/LC08_or_LC09_or_LE07_scene"
+export WBRASTER_LANDSAT_SAMPLE_EXPECT_KEYS="B2,B3,B4,QA_PIXEL"
+cargo test -p wbraster opens_real_landsat_sample_when_env_set
+
+export WBRASTER_S2_SAFE_SAMPLE="/path/to/S2A_or_S2B_product.SAFE"
+export WBRASTER_S2_SAFE_SAMPLE_EXPECT_KEYS="B02,B03,B04,MSK_CLDPRB"
+cargo test -p wbraster opens_real_s2_safe_sample_when_env_set
+
+export WBRASTER_ICEYE_SAMPLE="/path/to/ICEYE_scene_dir"
+export WBRASTER_ICEYE_SAMPLE_EXPECT_KEYS="VV"
+cargo test -p wbraster opens_real_iceye_sample_when_env_set
+
+export WBRASTER_ICEYE_OPEN_DATA_SAMPLE="/path/to/ICEYE_open_data_scene_dir"
+export WBRASTER_ICEYE_OPEN_DATA_SAMPLE_EXPECT_KEYS="VV"
+cargo test -p wbraster opens_real_iceye_open_data_sample_when_env_set
+
+export WBRASTER_PLANETSCOPE_SAMPLE="/path/to/PLANETSCOPE_scene_dir"
+export WBRASTER_PLANETSCOPE_SAMPLE_EXPECT_PROFILES="ANALYTIC,ANALYTIC_SR"
+cargo test -p wbraster opens_real_planetscope_sample_when_env_set
+
+export WBRASTER_DIMAP_SAMPLE="/path/to/SPOT_or_PLEIADES_DIMAP_scene_dir"
+export WBRASTER_DIMAP_SAMPLE_EXPECT_PROFILES="MS,PAN"
+cargo test -p wbraster opens_real_dimap_sample_when_env_set
+
+export WBRASTER_MAXAR_SAMPLE="/path/to/MAXAR_or_WORLDVIEW_scene_dir"
+export WBRASTER_MAXAR_SAMPLE_EXPECT_PROFILES="MS,PAN"
+cargo test -p wbraster opens_real_maxar_worldview_sample_when_env_set
+
+export WBRASTER_RADARSAT2_SAMPLE="/path/to/RADARSAT2_scene_dir"
+export WBRASTER_RADARSAT2_SAMPLE_EXPECT_KEYS="HH,HV"
+cargo test -p wbraster opens_real_radarsat2_sample_when_env_set
+
+export WBRASTER_RCM_SAMPLE="/path/to/RCM_scene_dir"
+export WBRASTER_RCM_SAMPLE_EXPECT_KEYS="VV,VH"
+cargo test -p wbraster opens_real_rcm_sample_when_env_set
+```
+
+If a variable is unset (or points to a missing directory), its smoke test
+returns early and is treated as a no-op.
+
+For ICEYE Open Data, point the variable at a local directory containing at
+least one product `.tif` and one metadata `.json` sidecar from the same scene.
+One way to build that directory is:
+
+```bash
+mkdir -p /tmp/iceye_open_scene
+curl -L "https://iceye-open-data-catalog.s3.amazonaws.com/data/dwell-fine/ICEYE_KDWN1B_20240305T105517Z_3521349_X23_SLEDF/ICEYE_KDWN1B_20240305T105517Z_3521349_X23_SLEDF_GRD.tif" -o /tmp/iceye_open_scene/ICEYE_KDWN1B_GRD.tif
+curl -L "https://iceye-open-data-catalog.s3.amazonaws.com/data/dwell-fine/ICEYE_KDWN1B_20240305T105517Z_3521349_X23_SLEDF/ICEYE_KDWN1B_20240305T105517Z_3521349_X23_SLEDF_GRD.json" -o /tmp/iceye_open_scene/ICEYE_KDWN1B_GRD.json
+export WBRASTER_ICEYE_OPEN_DATA_SAMPLE="/tmp/iceye_open_scene"
+cargo test -p wbraster opens_real_iceye_open_data_sample_when_env_set
+```
+
+### Public Sample Sources (Recommended)
+
+These links are useful for obtaining legal/public sample scenes for local smoke tests:
+
+- Sentinel-2 SAFE: Copernicus Data Space Ecosystem and related Sentinel distribution mirrors.
+- Landsat Collection: USGS EarthExplorer and USGS/Cloud public mirrors for Collection 2 products.
+- ICEYE Open Data: ICEYE public STAC catalog/object storage (example command shown above).
+- PlanetScope: Planet documentation and sample/data-access portals for account holders.
+- SPOT/Pleiades DIMAP: Airbus sample/data portals for account holders and trial datasets.
+- Maxar/WorldView: Maxar Open Data program and account-based sample data portals.
+- RADARSAT-2 and RCM: typically license-gated; use organizationally licensed sample scenes where available.
+
+### CRS support matrix
+
+| Format | EPSG | WKT | PROJ4 | Notes |
+|---|:---:|:---:|:---:|---|
+| ENVI HDR Labelled | – | ✓ | – | Uses ENVI `coordinate system string`; preserves `map info` CRS tokens in metadata |
+| ER Mapper | – | ~ | – | Preserves `CoordinateSpace` tokens (`er_datum`/`er_projection`/`er_coordinate_type`); WKT set only for WKT-like legacy datum values |
+| Esri ASCII Grid | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
+| Esri Binary Grid | – | ✓ | – | Reads/writes `prj.adf` |
+| GeoTIFF / BigTIFF / COG | ✓ | – | – | Uses `raster.crs.epsg` |
+| GeoPackage Raster (Phase 4) | ✓ | – | – | Uses `srs_id` in GeoPackage metadata tables |
+| GRASS ASCII Raster | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
+| Idrisi/TerrSet Raster | – | ~ | – | Reads/writes optional `.ref` sidecar; WKT is used when `.ref` content is WKT-like |
+| JPEG 2000 / GeoJP2 | ✓ | – | – | Uses `raster.crs.epsg` |
+| PCRaster | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
+| SAGA GIS Binary | – | ✓ | – | Reads/writes optional `.prj` sidecar WKT (metadata key `saga_prj_text`, legacy alias `saga_prj_wkt`) |
+| Surfer GRD | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
+| Zarr v2/v3 (MVP) | ✓ | ✓ | ✓ | Uses metadata keys (`crs_epsg`/`epsg`, `crs_wkt`/`spatial_ref`, `crs_proj4`/`proj4`) |
+
+Legend: `✓` supported, `–` not currently supported, `~` limited/custom representation.
+
+See [CRS / spatial reference (CRS)](#crs--spatial-reference-crs) for setup/read-back examples and workflow guidance.
+See [Sidecar metadata keys](#sidecar-metadata-keys) for format-specific sidecar CRS metadata names.
 
 ## Coordinate Reference System (CRS)
 
@@ -422,6 +905,8 @@ input.write_cog_with_options("output_opts.cog.tif", &cog_opts).unwrap();
 For non-COG GeoTIFF layouts (e.g., stripped/tiled non-COG output), use the
 full `GeoTiffWriteOptions` + `Raster::write_geotiff_with_options(...)` API.
 
+If you specifically need the lower-level TIFF / GeoTIFF / BigTIFF / COG engine rather than the higher-level multi-format raster abstraction, see [wbgeotiff](https://docs.rs/wbgeotiff).
+
 ## Architecture
 
 ```
@@ -543,6 +1028,7 @@ wbraster/
 ## GeoTIFF / COG Notes
 
 - `RasterFormat::GeoTiff` reads GeoTIFF, BigTIFF, and COG files.
+- GeoTIFF / COG support in `wbraster` is implemented on top of the standalone [wbgeotiff](https://docs.rs/wbgeotiff) crate.
 - Write mode defaults to deflate-compressed GeoTIFF.
 - `Raster::write_cog(path)` writes a COG with convenience defaults
   (deflate compression, tile size 512, BigTIFF disabled).
@@ -625,25 +1111,104 @@ Notes:
 
 ## Zarr Notes
 
-- Zarr support targets **filesystem stores** and **2D arrays** for both v2 and v3.
-- Read/write supports compressors: `zlib`, `gzip`, `zstd`, and `lz4`.
+- Zarr support targets **local filesystem stores** for both v2 and v3.
+- Reads and writes **2D arrays** and **3D arrays** in `(band, y, x)` form.
+- Supported compressors: `zlib`, `gzip`, `zstd`, `lz4`, or none.
 - `zstd` behavior is feature-gated:
   - `zstd-native` (default): read + write via native `zstd` bindings.
   - `zstd-pure-rust-decode`: read-only zstd decode via `ruzstd`; zstd encoding is unavailable.
-- Default Zarr write uses `zlib` level 6.
-- Select write version using metadata key `zarr_version` (`2` default, `3` for v3).
+- Default write uses `zlib` level 6 and Zarr v2.
+- Select write version with metadata key `zarr_version` (`2` default, `3` for v3).
 
-v2 specifics:
-- Set chunk-key style by adding metadata key `zarr_dimension_separator` to `/` or `.` before writing.
-- Geospatial metadata is written to `.zattrs` (`_ARRAY_DIMENSIONS`, `transform`, `x_min`, `y_min`, `cell_size_x`, `cell_size_y`, `nodata`).
-- CRS metadata is written/read with keys `crs_epsg` / `epsg`, `crs_wkt` / `spatial_ref`, and `crs_proj4` / `proj4`.
+### Validation mode
 
-v3 MVP specifics:
+Both readers support explicit validation strictness via the `zarr_validation_mode` attribute in `.zattrs`
+(v2) or in the `attributes` block of `zarr.json` (v3):
+
+- `strict` (default): fails on conflicting or invalid geospatial metadata.
+- `lenient`: performs best-effort reads, ignoring non-critical metadata conflicts (e.g., a `GeoTransform`
+  string that disagrees with explicit origin/cell-size keys).
+
+### Nodata conventions
+
+Nodata is resolved in this precedence order:
+
+1. explicit `nodata` attribute
+2. `_FillValue` (CF convention, used by `xarray`, `rioxarray`)
+3. `missing_value`
+4. Zarr `fill_value`
+5. default −9999
+
+Zarr stores produced by CF-convention tools that write only `_FillValue` are therefore read correctly
+without any extra configuration.
+
+### CRS interoperability
+
+The readers recognize a broad set of CRS representations:
+
+| Source convention | Recognized attribute key(s) |
+|---|---|
+| Whitebox native | `crs_epsg`, `crs_wkt`, `crs_proj4` |
+| Common aliases | `epsg`, `spatial_ref`, `proj4` |
+| Plain `"EPSG:NNNN"` string | `crs` |
+| OGC URN / URL | `crs` (e.g., `urn:ogc:def:crs:EPSG::4326`, `https://www.opengis.net/def/crs/EPSG/0/4326`) |
+| Object with `properties.name` | `crs` (e.g., `{"properties": {"name": "EPSG:4326"}}`) |
+| Object with `id.authority/code` | `crs` (e.g., `{"id": {"authority": "EPSG", "code": "4326"}}`) |
+| CF `grid_mapping` named object | `grid_mapping` key referencing an object; extracts EPSG, WKT, or proj4 |
+| GDAL-style `GeoTransform` | six-element affine string; origin and cell size are recovered from it |
+| Affine `transform` array | `[x_min, cell_x, 0, y_min, 0, cell_y]` |
+
+### Multi-scale group support (OME-NGFF)
+
+`Raster::read("store.zarr")` automatically detects **OME-NGFF multi-scale groups** for both v2 and v3.
+
+When the path points to a group root:
+
+- **OME-NGFF `multiscales` attribute present** — levels are read from `multiscales[0].datasets[].path`;
+  level 0 (finest resolution) is opened by default.
+- **No OME attributes** — consecutive numeric sub-directories (`0/`, `1/`, `2/`, …) are scanned; the
+  first valid array is opened.
+
+To open a specific resolution level, point the path directly at the sub-array directory:
+
+```rust
+// Default: opens finest resolution (level 0)
+let full_res = Raster::read("image.zarr")?;
+
+// Direct path: opens coarser level 1
+let half_res = Raster::read("image.zarr/1")?;
+```
+
+### Zarr v3 `transpose` codec
+
+The v3 reader supports the `transpose` codec for F-order and custom-permutation arrays:
+
+- `"F"` order reverses the natural axis order.
+- A numeric permutation array (e.g., `[2, 1, 0]`) specifies the exact axis mapping.
+- C-order arrays (including those with an explicit `"C"` transpose entry) are read without remapping.
+
+### `dimension_names` validation (v3)
+
+In strict mode, the v3 reader rejects 3D arrays whose `dimension_names` place spatial axes before the
+band axis (e.g., `["y", "x", "band"]`) with an actionable error. Users can resolve this by adding a
+`transpose` codec in the producer or setting `zarr_validation_mode = "lenient"` in the store attributes.
+Standard 2D layouts and unrecognized dimension names are always accepted.
+
+### v2 specifics
+
+- Set chunk-key style by adding metadata key `zarr_dimension_separator` (`/` or `.`) before writing.
+- Geospatial metadata is written to `.zattrs` (`_ARRAY_DIMENSIONS`, `transform`, `x_min`, `y_min`,
+  `cell_size_x`, `cell_size_y`, `nodata`, `crs_epsg`, `crs_wkt`, `crs_proj4`).
+- Chunk controls: `zarr_chunk_rows`, `zarr_chunk_cols`, `zarr_chunk_bands`.
+
+### v3 specifics
+
 - Supports regular chunk grids with C-order traversal (multi-chunk included).
 - Supports chunk key encoding `default` and `v2` with `.` or `/` separators.
-- Supports `bytes` codec with little/big-endian plus optional compressors (`zlib`, `gzip`, `zstd`, `lz4`).
-- Optional write-time chunk controls via metadata keys `zarr_chunk_rows` and `zarr_chunk_cols`.
+- Supports `bytes` codec pipeline with optional `transpose` codec plus compressor.
+- Compressors: `zlib`, `gzip`, `zstd`, `lz4`.
 - Geospatial metadata/CRS is stored in `zarr.json` under `attributes`.
+- Chunk controls: `zarr_chunk_rows`, `zarr_chunk_cols`, `zarr_chunk_bands`.
 
 ### Zarr v3 write example
 
@@ -704,29 +1269,35 @@ r.write("dem_v2.zarr", RasterFormat::Zarr).unwrap();
 | `zarr_dimension_separator` | v2 + v3 | Chunk key separator | `.` or `/` | Also accepts alias key `zarr_chunk_separator` on write. |
 | `zarr_chunk_separator` | v2 + v3 | Alias for separator key | `.` or `/` | Alias of `zarr_dimension_separator` (write-time lookup). |
 | `zarr_chunk_bands` | v2 + v3 | Band chunk depth for 3D (`band,y,x`) writes | positive integer, clamped to `[1, bands]`, default `1` | Used by both v2 and v3 writers for multiband chunking. |
-| `zarr_chunk_rows` | v3 | Chunk height for writes | positive integer, clamped to `[1, rows]`, default `min(rows, 256)` | v3 only. |
-| `zarr_chunk_cols` | v3 | Chunk width for writes | positive integer, clamped to `[1, cols]`, default `min(cols, 256)` | v3 only. |
+| `zarr_chunk_rows` | v2 + v3 | Chunk height for writes | positive integer, clamped to `[1, rows]`, default `min(rows, 256)` | |
+| `zarr_chunk_cols` | v2 + v3 | Chunk width for writes | positive integer, clamped to `[1, cols]`, default `min(cols, 256)` | |
 | `zarr_chunk_key_encoding` | v3 | Chunk key encoding style | `default` (default), `v2` | Reader populates this key for v3 stores. |
 | `zarr_compressor` | v3 | Compression algorithm | `zlib` (default), `gzip`, `gz`, `zstd`, `lz4`, `none` | v3 writer uses this to build codec pipeline. |
 | `zarr_compression_level` | v3 | Compression level hint | integer; optional | Applied only when compressor supports configurable level. |
+| `zarr_validation_mode` | v2 + v3 | Read-time validation strictness | `strict` (default), `lenient` | Set in store attributes (`.zattrs` or `zarr.json`). |
 
-## Zarr V3 Roadmap
+## Zarr Implementation Status
 
-- Zarr v3 now supports an MVP subset for filesystem stores:
-  - 2D arrays only
-  - regular chunk grids with C-order chunk traversal
-  - `bytes` codec + optional compressor (`zlib`, `gzip`, `zstd`, `lz4`)
-  - chunk key encoding `default` or `v2`
-  - optional write-time chunk controls via metadata keys: `zarr_chunk_rows`, `zarr_chunk_cols`
+What is currently supported:
 
-Planned Phase‑1 (MVP):
+- Local filesystem stores, v2 and v3
+- 2D and 3D `(band, y, x)` arrays, including multi-chunk
+- `bytes` codec + optional compressor (`zlib`, `gzip`, `zstd`, `lz4`)
+- v3 `transpose` codec (F-order, C-order, and explicit permutation)
+- Chunk key encoding `default` and `v2` with `.` or `/` separators
+- Write-time chunk controls (`zarr_chunk_rows`, `zarr_chunk_cols`, `zarr_chunk_bands`) for both v2 and v3
+- Strict and lenient validation modes via `zarr_validation_mode`
+- CF-convention nodata fallbacks (`_FillValue`, `missing_value`)
+- Broad CRS representation interoperability (aliases, object-style, OGC URN/URL, CF `grid_mapping`, `GeoTransform`, affine `transform`)
+- `dimension_names` semantic validation for 3D v3 arrays
+- OME-NGFF multi-scale group detection and automatic level-0 selection (v2 and v3)
+- External fixture smoke tests (env-gated) for parity verification
 
-1. Broader v3 codec pipeline interoperability (e.g., transpose).
-2. Additional real-world fixture coverage from external producers.
+Not currently supported:
 
-Planned Phase‑2:
-
-- Broader metadata interoperability and optional extensions.
+- Remote / cloud stores (S3, HTTP) — use `rclone` mount or pre-download as a workaround
+- Arbitrary N-dimensional arrays (only 2D and 3D `band,y,x` layouts)
+- Zarr v3 codec extensions beyond `bytes`, `transpose`, and the listed compressors
 
 See also: [SIMD guardrail check](../../README.md#simd-guardrail-check) for a script you can run locally to verify speedup and correctness.
 
@@ -828,7 +1399,7 @@ All other codecs (Deflate/zlib, LZ4, LZW, JPEG, WebP, PNG, JPEG XL) are uncondit
 ## Known Limitations
 
 - `wbraster` focuses on format I/O; raster analysis and processing operations belong in higher-level Whitebox tooling.
-- Zarr support targets local filesystem stores and 2D/3D (`band,y,x`) arrays; S3/HTTP stores, Zarr v3 extensions beyond the MVP codec pipeline, and arbitrary N-dimensional arrays are not currently supported.
+- Zarr support targets local filesystem stores and 2D/3D `(band, y, x)` arrays; remote/cloud stores (S3, HTTP) are not natively supported — use a `rclone` FUSE mount or pre-download as a workaround; arbitrary N-dimensional arrays are not supported.
 - GeoPackage Raster (Phase 4) supports single-dataset read by default; multi-dataset disambiguation is handled via explicit API or the `WBRASTER_GPKG_DATASET` environment variable.
 - JPEG 2000 / GeoJP2 codec compatibility is evolving; treat production decode compatibility as active work.
 - Reprojection uses EPSG-based source CRS metadata; formats that store CRS only as WKT require adaptive EPSG identification which may fail for uncommon or authority-marker-free WKT strings.

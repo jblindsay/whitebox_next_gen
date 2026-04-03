@@ -446,6 +446,30 @@ impl RasterData {
             _ => None,
         }
     }
+
+    /// Fill all cells in-place using a parallel closure `f(index) -> f64`.
+    ///
+    /// The index is the flat band-major, row-major cell index. For typed
+    /// storage other than `F64`, the returned `f64` is converted to the
+    /// native stored type before writing. The closure must be `Send + Sync`
+    /// so that Rayon can dispatch it across threads.
+    pub fn par_fill_with<F>(&mut self, f: F)
+    where
+        F: Fn(usize) -> f64 + Send + Sync,
+    {
+        match self {
+            Self::U8(v)  => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as u8),
+            Self::I8(v)  => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as i8),
+            Self::U16(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as u16),
+            Self::I16(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as i16),
+            Self::U32(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as u32),
+            Self::I32(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as i32),
+            Self::U64(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as u64),
+            Self::I64(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as i64),
+            Self::F32(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i) as f32),
+            Self::F64(v) => v.par_iter_mut().enumerate().for_each(|(i, c)| *c = f(i)),
+        }
+    }
 }
 
 // ─── NoData sentinel ─────────────────────────────────────────────────────────
@@ -931,6 +955,25 @@ impl Raster {
         Ok(r)
     }
 
+    /// Create a new raster that reuses spatial metadata and layout from `template`.
+    ///
+    /// Cell values are initialized to the template's nodata value.
+    pub fn new_like(template: &Raster) -> Self {
+        Self::new(RasterConfig {
+            cols: template.cols,
+            rows: template.rows,
+            bands: template.bands,
+            x_min: template.x_min,
+            y_min: template.y_min,
+            cell_size: template.cell_size_x,
+            cell_size_y: Some(template.cell_size_y),
+            nodata: template.nodata,
+            data_type: template.data_type,
+            crs: template.crs.clone(),
+            metadata: template.metadata.clone(),
+        })
+    }
+
     /// Typed fast-path access to `u8` storage.
     pub fn data_u8(&self) -> Option<&[u8]> { self.data.as_u8_slice() }
     /// Typed fast-path mutable access to `u8` storage.
@@ -980,6 +1023,18 @@ impl Raster {
     pub fn data_f64(&self) -> Option<&[f64]> { self.data.as_f64_slice() }
     /// Typed fast-path mutable access to `f64` storage.
     pub fn data_f64_mut(&mut self) -> Option<&mut [f64]> { self.data.as_f64_slice_mut() }
+
+    /// Fill all cells in-place using a parallel closure `f(index) -> f64`.
+    ///
+    /// The index is the flat band-major, row-major cell index. For typed
+    /// storage other than `F64`, the returned `f64` is down-cast to the
+    /// native stored type before writing.
+    pub fn par_fill_with<F>(&mut self, f: F)
+    where
+        F: Fn(usize) -> f64 + Send + Sync,
+    {
+        self.data.par_fill_with(f);
+    }
 
     // ─── Pixel access ──────────────────────────────────────────────────────
 

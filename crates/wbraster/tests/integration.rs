@@ -26,6 +26,90 @@ fn tmp(suffix: &str) -> String {
         .into_owned()
 }
 
+fn env_var_trimmed(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+}
+
+fn env_var_usize(name: &str) -> Option<usize> {
+    env_var_trimmed(name).and_then(|v| v.parse::<usize>().ok())
+}
+
+fn env_var_f64(name: &str) -> Option<f64> {
+    env_var_trimmed(name).and_then(|v| v.parse::<f64>().ok())
+}
+
+fn assert_external_fixture_expectations(r: &Raster, prefix: &str) {
+    let rows_var = format!("{prefix}_EXPECT_ROWS");
+    if let Some(expected_rows) = env_var_usize(&rows_var) {
+        assert_eq!(
+            r.rows, expected_rows,
+            "{rows_var} mismatch: expected {expected_rows}, got {}",
+            r.rows
+        );
+    }
+
+    let cols_var = format!("{prefix}_EXPECT_COLS");
+    if let Some(expected_cols) = env_var_usize(&cols_var) {
+        assert_eq!(
+            r.cols, expected_cols,
+            "{cols_var} mismatch: expected {expected_cols}, got {}",
+            r.cols
+        );
+    }
+
+    let nodata_var = format!("{prefix}_EXPECT_NODATA");
+    if let Some(expected_nodata) = env_var_f64(&nodata_var) {
+        assert!(
+            (r.nodata - expected_nodata).abs() < 1e-9,
+            "{nodata_var} mismatch: expected {expected_nodata}, got {}",
+            r.nodata
+        );
+    }
+
+    // Optional single-cell assertion for quick parity checks against known values.
+    // Format: "row,col,value[,tol]"; default tol = 1e-6.
+    let cell_var = format!("{prefix}_EXPECT_CELL");
+    if let Some(cell_spec) = env_var_trimmed(&cell_var) {
+        let parts: Vec<&str> = cell_spec.split(',').map(|s| s.trim()).collect();
+        assert!(
+            parts.len() == 3 || parts.len() == 4,
+            "{cell_var} must be 'row,col,value[,tol]', got '{cell_spec}'"
+        );
+
+        let row = parts[0]
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("{cell_var}: invalid row '{}': {cell_spec}", parts[0]));
+        let col = parts[1]
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("{cell_var}: invalid col '{}': {cell_spec}", parts[1]));
+        let expected_value = parts[2].parse::<f64>().unwrap_or_else(|_| {
+            panic!("{cell_var}: invalid value '{}': {cell_spec}", parts[2])
+        });
+        let tol = if parts.len() == 4 {
+            parts[3].parse::<f64>().unwrap_or_else(|_| {
+                panic!("{cell_var}: invalid tol '{}': {cell_spec}", parts[3])
+            })
+        } else {
+            1e-6
+        };
+
+        assert!(
+            row < r.rows && col < r.cols,
+            "{cell_var}: row/col out of range for raster size {}x{}: '{cell_spec}'",
+            r.rows,
+            r.cols
+        );
+        let actual = r.get(0, row as isize, col as isize);
+        assert!(
+            (actual - expected_value).abs() <= tol,
+            "{cell_var} mismatch at ({row},{col}): expected {expected_value} +/- {tol}, got {actual}"
+        );
+    }
+}
+
 fn make_test_raster() -> Raster {
     let cfg = RasterConfig {
         cols: 6,
@@ -1081,6 +1165,1740 @@ fn read_python_style_zarr_v3_v2_slash_big_endian_gzip() {
         &r,
         1e-5,
         "Python-style Zarr v3 v2+slash+big-endian+gzip",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_transform_only_georef_attrs() {
+    let dir = tmp("_py_v3_transform_only_attrs.zarr");
+    let rows = 6;
+    let cols = 7;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 9 { -9999.0 } else { (i as f64) * 0.4 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        3,
+        4,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("x_min");
+    attrs.remove("y_min");
+    attrs.remove("cell_size_x");
+    attrs.remove("cell_size_y");
+    attrs.insert(
+        "transform".into(),
+        json!([
+            100.0,
+            0.5,
+            0.0,
+            -27.0,
+            0.0,
+            -0.5
+        ]),
+    );
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    let expected = Raster::from_data(
+        RasterConfig {
+            cols,
+            rows,
+            x_min: 100.0,
+            y_min: -30.0,
+            cell_size: 0.5,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        },
+        data,
+    )
+    .unwrap();
+
+    assert_raster_equal(&expected, &r, 1e-5, "Python-style Zarr v3 transform-only attrs");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_alias_attrs() {
+    let dir = tmp("_py_v3_crs_alias_attrs.zarr");
+    let rows = 5;
+    let cols = 6;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 11 { -9999.0 } else { (i as f64) * 0.3 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        3,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("crs_wkt");
+    attrs.remove("crs_proj4");
+    attrs.insert("epsg".into(), json!(32617));
+    attrs.insert(
+        "spatial_ref".into(),
+        json!("PROJCS[\"WGS 84 / UTM zone 17N\",GEOGCS[\"WGS 84\"]]"),
+    );
+    attrs.insert(
+        "proj4".into(),
+        json!("+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"),
+    );
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(32617));
+    assert!(r.crs.wkt.as_deref().unwrap_or_default().contains("UTM zone 17N"));
+    assert!(r
+        .crs
+        .proj4
+        .as_deref()
+        .unwrap_or_default()
+        .contains("+proj=utm"));
+
+    let expected = Raster::from_data(
+        RasterConfig {
+            cols,
+            rows,
+            x_min: 100.0,
+            y_min: -30.0,
+            cell_size: 0.5,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        },
+        data,
+    )
+    .unwrap();
+    assert_raster_equal(&expected, &r, 1e-5, "Python-style Zarr v3 CRS alias attrs");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_epsg_string_attr() {
+    let dir = tmp("_py_v3_crs_string_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.insert("crs".into(), json!("EPSG:3857"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(3857));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_epsg_object_attr() {
+    let dir = tmp("_py_v3_crs_object_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.insert(
+        "crs".into(),
+        json!({
+            "type": "name",
+            "properties": {
+                "name": "EPSG:32618"
+            }
+        }),
+    );
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(32618));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_authority_code_object_attr() {
+    let dir = tmp("_py_v3_crs_authority_code_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.insert(
+        "crs".into(),
+        json!({
+            "id": {
+                "authority": "EPSG",
+                "code": "3035"
+            }
+        }),
+    );
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(3035));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_ogc_urn_attr() {
+    let dir = tmp("_py_v3_crs_ogc_urn_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.insert("crs".into(), json!("urn:ogc:def:crs:EPSG::26917"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(26917));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_ogc_url_attr() {
+    let dir = tmp("_py_v3_crs_ogc_url_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.insert("crs".into(), json!("https://www.opengis.net/def/crs/EPSG/0/3395"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(3395));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_crs_from_grid_mapping_named_object_attr() {
+    let dir = tmp("_py_v3_crs_grid_mapping_named_object_attr.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 6 { -9999.0 } else { (i as f64) * 0.6 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("crs_epsg");
+    attrs.remove("epsg");
+    attrs.remove("crs_wkt");
+    attrs.remove("spatial_ref");
+    attrs.remove("crs_proj4");
+    attrs.remove("proj4");
+    attrs.insert("grid_mapping".into(), json!("spatial_ref"));
+    attrs.insert(
+        "spatial_ref".into(),
+        json!({
+            "epsg_code": "EPSG:32617",
+            "crs_wkt": "PROJCS[\"WGS 84 / UTM zone 17N\",GEOGCS[\"WGS 84\"]]",
+            "proj4": "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"
+        }),
+    );
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.crs.epsg, Some(32617));
+    assert!(r.crs.wkt.as_deref().unwrap_or_default().contains("UTM zone 17N"));
+    assert!(r.crs.proj4.as_deref().unwrap_or_default().contains("+proj=utm"));
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_geotransform_string_only_attrs() {
+    let dir = tmp("_py_v3_geotransform_only_attrs.zarr");
+    let rows = 6;
+    let cols = 7;
+    let data: Vec<f64> = (0..rows * cols)
+        .map(|i| if i == 9 { -9999.0 } else { (i as f64) * 0.4 })
+        .collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        3,
+        4,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("x_min");
+    attrs.remove("y_min");
+    attrs.remove("cell_size_x");
+    attrs.remove("cell_size_y");
+    attrs.remove("transform");
+    attrs.insert("GeoTransform".into(), json!("100 0.5 0 -27 0 -0.5"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).unwrap();
+    let expected = Raster::from_data(
+        RasterConfig {
+            cols,
+            rows,
+            x_min: 100.0,
+            y_min: -30.0,
+            cell_size: 0.5,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        },
+        data,
+    )
+    .unwrap();
+
+    assert_raster_equal(
+        &expected,
+        &r,
+        1e-5,
+        "Python-style Zarr v3 GeoTransform-only attrs",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_fails_on_conflicting_xmin_and_transform() {
+    let dir = tmp("_py_v3_conflicting_xmin_transform.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.insert(
+        "transform".into(),
+        json!([
+            100.0,
+            0.5,
+            0.0,
+            -28.0,
+            0.0,
+            -0.5
+        ]),
+    );
+    attrs.insert("x_min".into(), json!(999.0));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let err = Raster::read(&dir).expect_err("expected conflicting metadata error");
+    assert!(
+        format!("{err}").contains("conflicting geospatial metadata"),
+        "unexpected error message: {err}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_fails_on_invalid_geotransform_string() {
+    let dir = tmp("_py_v3_invalid_geotransform_string.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("transform");
+    attrs.remove("x_min");
+    attrs.remove("y_min");
+    attrs.remove("cell_size_x");
+    attrs.remove("cell_size_y");
+    attrs.insert("GeoTransform".into(), json!("100 0.5 0 bad 0 -0.5"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let err = Raster::read(&dir).expect_err("expected invalid geotransform error");
+    assert!(
+        format!("{err}").contains("invalid geospatial metadata"),
+        "unexpected error message: {err}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_lenient_mode_allows_conflicting_georef_metadata() {
+    let dir = tmp("_py_v3_lenient_conflicting_xmin_transform.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.insert(
+        "transform".into(),
+        json!([
+            100.0,
+            0.5,
+            0.0,
+            -28.0,
+            0.0,
+            -0.5
+        ]),
+    );
+    attrs.insert("x_min".into(), json!(999.0));
+    attrs.insert("zarr_validation_mode".into(), json!("lenient"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).expect("lenient mode should not fail on conflicts");
+    assert!((r.x_min - 999.0).abs() < 1e-10);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_lenient_mode_allows_invalid_geotransform_string() {
+    let dir = tmp("_py_v3_lenient_invalid_geotransform_string.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(
+        &dir,
+        rows,
+        cols,
+        2,
+        3,
+        "default",
+        "/",
+        "zlib",
+        "little",
+        &data,
+    );
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("zarr.json attributes object missing");
+    attrs.remove("transform");
+    attrs.remove("x_min");
+    attrs.remove("y_min");
+    attrs.remove("cell_size_x");
+    attrs.remove("cell_size_y");
+    attrs.insert("GeoTransform".into(), json!("100 0.5 0 bad 0 -0.5"));
+    attrs.insert("zarr_validation_mode".into(), json!("lenient"));
+    std::fs::write(
+        &zarr_json_path,
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let r = Raster::read(&dir).expect("lenient mode should ignore invalid geotransform");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ─── Phase 3 / Step 1: CF nodata conventions ─────────────────────────────────
+
+#[test]
+fn read_python_style_zarr_v3_nodata_from_cf_fill_value_attr() {
+    // Producer writes `_FillValue` instead of `nodata` (xarray CF style).
+    let dir = tmp("_py_v3_nodata_from_fill_value.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(&dir, rows, cols, 4, 5, "default", "/", "zlib", "little", &data);
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("attributes object missing");
+    attrs.remove("nodata");
+    attrs.insert("_FillValue".into(), json!(-32768.0_f64));
+    std::fs::write(&zarr_json_path, serde_json::to_string_pretty(&zarr_json).unwrap()).unwrap();
+
+    let r = Raster::read(&dir).expect("should read nodata from _FillValue");
+    assert!(
+        (r.nodata - (-32768.0)).abs() < 1e-6,
+        "expected nodata=-32768; got {}",
+        r.nodata
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_nodata_from_missing_value_attr() {
+    // Producer writes `missing_value` (another CF convention).
+    let dir = tmp("_py_v3_nodata_from_missing_value.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(&dir, rows, cols, 4, 5, "default", "/", "zlib", "little", &data);
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("attributes object missing");
+    attrs.remove("nodata");
+    attrs.insert("missing_value".into(), json!(-1.0_f64));
+    std::fs::write(&zarr_json_path, serde_json::to_string_pretty(&zarr_json).unwrap()).unwrap();
+
+    let r = Raster::read(&dir).expect("should read nodata from missing_value");
+    assert!(
+        (r.nodata - (-1.0)).abs() < 1e-6,
+        "expected nodata=-1; got {}",
+        r.nodata
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_explicit_nodata_takes_precedence_over_cf_fill_value() {
+    // When both `nodata` and `_FillValue` are present, the explicit `nodata` key wins.
+    let dir = tmp("_py_v3_nodata_precedence.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(&dir, rows, cols, 4, 5, "default", "/", "zlib", "little", &data);
+
+    let zarr_json_path = std::path::Path::new(&dir).join("zarr.json");
+    let mut zarr_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&zarr_json_path).unwrap()).unwrap();
+    let attrs = zarr_json
+        .get_mut("attributes")
+        .and_then(serde_json::Value::as_object_mut)
+        .expect("attributes object missing");
+    // nodata remains -9999 from the writer; add a contradicting _FillValue
+    attrs.insert("_FillValue".into(), json!(0.0_f64));
+    std::fs::write(&zarr_json_path, serde_json::to_string_pretty(&zarr_json).unwrap()).unwrap();
+
+    let r = Raster::read(&dir).expect("should read OK");
+    assert!(
+        (r.nodata - (-9999.0)).abs() < 1e-6,
+        "expected nodata=-9999 (explicit) to win; got {}",
+        r.nodata
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ─── Phase 3 / Step 1: dimension_names axis validation ───────────────────────
+
+/// Helper: write a zarr v3 store whose zarr.json includes a given
+/// `dimension_names` array in the attributes, along with standard geospatial
+/// metadata.  Uses the same 2D float32 layout as the other producer fixtures.
+fn write_v3_store_with_dimension_names(
+    dir: &str,
+    rows: usize,
+    cols: usize,
+    dimension_names: serde_json::Value,
+    extra_attrs: Option<serde_json::Map<String, serde_json::Value>>,
+    data: &[f64],
+) {
+    std::fs::create_dir_all(dir).unwrap();
+
+    let mut attrs = serde_json::Map::new();
+    attrs.insert("x_min".into(), json!(100.0_f64));
+    attrs.insert("y_min".into(), json!(-30.0_f64));
+    attrs.insert("cell_size_x".into(), json!(0.5_f64));
+    attrs.insert("cell_size_y".into(), json!(0.5_f64));
+    attrs.insert("nodata".into(), json!(-9999.0_f64));
+    if let Some(extra) = extra_attrs {
+        for (k, v) in extra {
+            attrs.insert(k, v);
+        }
+    }
+
+    let zarr_json = json!({
+        "zarr_format": 3,
+        "node_type": "array",
+        "shape": [rows, cols],
+        "data_type": { "name": "float32" },
+        "chunk_grid": {
+            "name": "regular",
+            "configuration": { "chunk_shape": [rows, cols] }
+        },
+        "chunk_key_encoding": { "name": "default", "configuration": { "separator": "/" } },
+        "fill_value": -9999.0,
+        "codecs": [
+            { "name": "bytes", "configuration": { "endian": "little" } },
+            { "name": "zlib", "configuration": { "level": 6 } }
+        ],
+        "dimension_names": dimension_names,
+        "attributes": attrs,
+    });
+    std::fs::write(
+        std::path::Path::new(dir).join("zarr.json"),
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    // Write single chunk.
+    let mut raw = Vec::with_capacity(rows * cols * 4);
+    for v in data.iter() {
+        raw.extend_from_slice(&(*v as f32).to_le_bytes());
+    }
+    use flate2::{write::ZlibEncoder, Compression};
+    use std::io::Write as _;
+    let mut enc = ZlibEncoder::new(Vec::new(), Compression::new(6));
+    enc.write_all(&raw).unwrap();
+    let payload = enc.finish().unwrap();
+
+    let chunk_path = std::path::Path::new(dir).join("c/0/0");
+    std::fs::create_dir_all(chunk_path.parent().unwrap()).unwrap();
+    std::fs::write(chunk_path, payload).unwrap();
+}
+
+#[test]
+fn read_python_style_zarr_v3_dimension_names_standard_2d_y_x() {
+    // Standard ["y","x"] names should be accepted and the store read normally.
+    let dir = tmp("_py_v3_dim_names_y_x.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_v3_store_with_dimension_names(&dir, rows, cols, json!(["y", "x"]), None, &data);
+    let r = Raster::read(&dir).expect("['y','x'] dimension_names should be accepted");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_dimension_names_lat_lon_2d() {
+    // ["lat","lon"] names should also be accepted (CF 2D convention).
+    let dir = tmp("_py_v3_dim_names_lat_lon.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_v3_store_with_dimension_names(&dir, rows, cols, json!(["lat", "lon"]), None, &data);
+    let r = Raster::read(&dir).expect("['lat','lon'] dimension_names should be accepted");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_dimension_names_unrecognized_2d_accepted() {
+    // Unrecognized 2D names should pass through without error (permissive for 2D).
+    let dir = tmp("_py_v3_dim_names_unrecognized.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_v3_store_with_dimension_names(
+        &dir, rows, cols, json!(["dim_0", "dim_1"]), None, &data,
+    );
+    let r = Raster::read(&dir).expect("unrecognized 2D dimension_names should be accepted");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_dimension_names_band_last_strict_fails() {
+    // A 3D store whose dimension_names suggest a band-last layout (["y","x","band"])
+    // should fail in strict mode (the default) because the reader assumes band-first.
+    use wbraster::error::RasterError;
+    let dir = tmp("_py_v3_dim_names_band_last_strict.zarr");
+    // Write as a 3D (1-band) store: shape [1, rows, cols]
+    std::fs::create_dir_all(&dir).unwrap();
+    let rows: usize = 4;
+    let cols: usize = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+
+    let zarr_json = json!({
+        "zarr_format": 3,
+        "node_type": "array",
+        "shape": [rows, cols, 1],
+        "data_type": { "name": "float32" },
+        "chunk_grid": {
+            "name": "regular",
+            "configuration": { "chunk_shape": [rows, cols, 1] }
+        },
+        "chunk_key_encoding": { "name": "default", "configuration": { "separator": "/" } },
+        "fill_value": -9999.0,
+        "codecs": [
+            { "name": "bytes", "configuration": { "endian": "little" } }
+        ],
+        "dimension_names": ["y", "x", "band"],
+        "attributes": {
+            "x_min": 100.0, "y_min": -30.0,
+            "cell_size_x": 0.5, "cell_size_y": 0.5,
+            "nodata": -9999.0
+        }
+    });
+    std::fs::write(
+        std::path::Path::new(&dir).join("zarr.json"),
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    // Write single chunk for 3D [rows, cols, 1] array.
+    let mut raw = Vec::with_capacity(rows * cols * 4);
+    for v in data.iter() {
+        raw.extend_from_slice(&(*v as f32).to_le_bytes());
+    }
+    let chunk_path = std::path::Path::new(&dir).join("c/0/0/0");
+    std::fs::create_dir_all(chunk_path.parent().unwrap()).unwrap();
+    std::fs::write(chunk_path, &raw).unwrap();
+
+    let result = Raster::read(&dir);
+    assert!(
+        result.is_err(),
+        "expected error for band-last dimension_names in strict mode; got: {:?}",
+        result
+    );
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+        err_msg.contains("dimension_names") || err_msg.contains("spatial axes"),
+        "expected diagnostic dimension_names error; got: {err_msg}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_python_style_zarr_v3_dimension_names_band_last_lenient_succeeds() {
+    // The same band-last store passes in lenient mode (best-effort read).
+    let dir = tmp("_py_v3_dim_names_band_last_lenient.zarr");
+    let rows: usize = 4;
+    let cols: usize = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let zarr_json = json!({
+        "zarr_format": 3,
+        "node_type": "array",
+        "shape": [rows, cols, 1],
+        "data_type": { "name": "float32" },
+        "chunk_grid": {
+            "name": "regular",
+            "configuration": { "chunk_shape": [rows, cols, 1] }
+        },
+        "chunk_key_encoding": { "name": "default", "configuration": { "separator": "/" } },
+        "fill_value": -9999.0,
+        "codecs": [
+            { "name": "bytes", "configuration": { "endian": "little" } }
+        ],
+        "dimension_names": ["y", "x", "band"],
+        "attributes": {
+            "x_min": 100.0, "y_min": -30.0,
+            "cell_size_x": 0.5, "cell_size_y": 0.5,
+            "nodata": -9999.0,
+            "zarr_validation_mode": "lenient"
+        }
+    });
+    std::fs::write(
+        std::path::Path::new(&dir).join("zarr.json"),
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    let mut raw = Vec::with_capacity(rows * cols * 4);
+    for v in data.iter() {
+        raw.extend_from_slice(&(*v as f32).to_le_bytes());
+    }
+    let chunk_path = std::path::Path::new(&dir).join("c/0/0/0");
+    std::fs::create_dir_all(chunk_path.parent().unwrap()).unwrap();
+    std::fs::write(chunk_path, &raw).unwrap();
+
+    let r = Raster::read(&dir)
+        .expect("lenient mode should allow band-last dimension_names and attempt a read");
+    // Shape check: with band-last layout and shape [4,5,1], the reader sees
+    // bands=shape[0]=4, rows=shape[1]=5, cols=shape[2]=1 — which is NOT the
+    // intended [4 rows × 5 cols × 1 band], but lenient mode accepted the read.
+    assert!(r.rows > 0);
+    assert!(r.cols > 0);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ─── Phase 3 / Step 1: multi-scale (pyramid) group support ───────────────────
+
+/// Write a minimal zarr v3 multi-scale group at `group_dir`.
+///
+/// Produces a two-level pyramid:
+/// - level 0: `rows × cols`, cell_size 0.5  (full resolution)
+/// - level 1: `(rows/2) × (cols/2)`, cell_size 1.0  (half resolution)
+///
+/// Both levels are single-band, uncompressed f32 stores.  `data0` and `data1`
+/// are the f32 cell values to embed at each level.
+///
+/// The group's `zarr.json` includes an OME-NGFF `multiscales` attributes block.
+fn write_v3_multiscale_group(
+    group_dir: &str,
+    rows: usize,
+    cols: usize,
+    data0: &[f64],   // full-res level  (rows * cols values)
+    data1: &[f64],   // half-res level  ((rows/2) * (cols/2) values)
+) {
+    let rows1 = rows / 2;
+    let cols1 = cols / 2;
+
+    // ── helper: write a single-level v3 array ─────────────────────────────
+    let write_level = |level_dir: &std::path::Path, r: usize, c: usize, data: &[f64],
+                        cell: f64, x_min: f64, y_min: f64| {
+        std::fs::create_dir_all(level_dir).unwrap();
+        let zarr_json = json!({
+            "zarr_format": 3,
+            "node_type": "array",
+            "shape": [r, c],
+            "data_type": { "name": "float32" },
+            "chunk_grid": {
+                "name": "regular",
+                "configuration": { "chunk_shape": [r, c] }
+            },
+            "chunk_key_encoding": { "name": "default", "configuration": { "separator": "/" } },
+            "fill_value": -9999.0,
+            "codecs": [{ "name": "bytes", "configuration": { "endian": "little" } }],
+            "attributes": {
+                "x_min": x_min,
+                "y_min": y_min,
+                "cell_size_x": cell,
+                "cell_size_y": cell,
+                "nodata": -9999.0
+            }
+        });
+        std::fs::write(
+            level_dir.join("zarr.json"),
+            serde_json::to_string_pretty(&zarr_json).unwrap(),
+        ).unwrap();
+
+        // Write single uncompressed chunk.
+        let mut raw = Vec::with_capacity(r * c * 4);
+        for v in data.iter() {
+            raw.extend_from_slice(&(*v as f32).to_le_bytes());
+        }
+        let chunk_path = level_dir.join("c/0/0");
+        std::fs::create_dir_all(chunk_path.parent().unwrap()).unwrap();
+        std::fs::write(chunk_path, &raw).unwrap();
+    };
+
+    let base = std::path::Path::new(group_dir);
+    std::fs::create_dir_all(base).unwrap();
+
+    write_level(&base.join("0"), rows,  cols,  data0, 0.5, 100.0, -30.0);
+    write_level(&base.join("1"), rows1, cols1, data1, 1.0, 100.0, -30.0);
+
+    // ── group zarr.json with OME-NGFF multiscales attribute ───────────────
+    let group_json = json!({
+        "zarr_format": 3,
+        "node_type": "group",
+        "attributes": {
+            "multiscales": [{
+                "version": "0.5",
+                "datasets": [
+                    { "path": "0" },
+                    { "path": "1" }
+                ]
+            }]
+        }
+    });
+    std::fs::write(
+        base.join("zarr.json"),
+        serde_json::to_string_pretty(&group_json).unwrap(),
+    ).unwrap();
+}
+
+/// Write a minimal zarr v2 multi-scale group at `group_dir`.
+///
+/// Same two-level layout as the v3 helper above, but uses `.zgroup` /
+/// `.zarray` / `.zattrs` conventions.
+fn write_v2_multiscale_group(
+    group_dir: &str,
+    rows: usize,
+    cols: usize,
+    data0: &[f64],
+    data1: &[f64],
+) {
+    let rows1 = rows / 2;
+    let cols1 = cols / 2;
+
+    let write_level = |level_dir: &std::path::Path, r: usize, c: usize, data: &[f64],
+                        cell: f64, x_min: f64, y_min: f64| {
+        std::fs::create_dir_all(level_dir).unwrap();
+
+        let zarray = json!({
+            "zarr_format": 2,
+            "shape": [r, c],
+            "chunks": [r, c],
+            "dtype": "<f4",
+            "compressor": null,
+            "fill_value": -9999.0,
+            "order": "C",
+            "filters": null
+        });
+        std::fs::write(
+            level_dir.join(".zarray"),
+            serde_json::to_string_pretty(&zarray).unwrap(),
+        ).unwrap();
+
+        let zattrs = json!({
+            "x_min": x_min,
+            "y_min": y_min,
+            "cell_size_x": cell,
+            "cell_size_y": cell,
+            "nodata": -9999.0
+        });
+        std::fs::write(
+            level_dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        ).unwrap();
+
+        // Single uncompressed chunk (v2 key "0.0").
+        let mut raw = Vec::with_capacity(r * c * 4);
+        for v in data.iter() {
+            raw.extend_from_slice(&(*v as f32).to_le_bytes());
+        }
+        std::fs::write(level_dir.join("0.0"), &raw).unwrap();
+    };
+
+    let base = std::path::Path::new(group_dir);
+    std::fs::create_dir_all(base).unwrap();
+
+    write_level(&base.join("0"), rows,  cols,  data0, 0.5, 100.0, -30.0);
+    write_level(&base.join("1"), rows1, cols1, data1, 1.0, 100.0, -30.0);
+
+    // .zgroup at group root.
+    std::fs::write(base.join(".zgroup"), r#"{"zarr_format":2}"#).unwrap();
+
+    // .zattrs with OME-NGFF multiscales.
+    let zattrs = json!({
+        "multiscales": [{
+            "version": "0.5",
+            "datasets": [
+                { "path": "0" },
+                { "path": "1" }
+            ]
+        }]
+    });
+    std::fs::write(
+        base.join(".zattrs"),
+        serde_json::to_string_pretty(&zattrs).unwrap(),
+    ).unwrap();
+}
+
+#[test]
+fn read_zarr_v3_multiscale_group_reads_full_res_by_default() {
+    // Opening a group root returns the full-resolution (level 0) array.
+    let dir = tmp("_v3_multiscale_group_default.zarr");
+    let rows = 8;
+    let cols = 10;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v3_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    let r = Raster::read(&dir).expect("v3 group root should open at level 0");
+    assert_eq!(r.rows, rows, "expected full-res rows");
+    assert_eq!(r.cols, cols, "expected full-res cols");
+    assert!(
+        (r.cell_size_x - 0.5).abs() < 1e-6,
+        "expected level-0 cell size 0.5; got {}",
+        r.cell_size_x
+    );
+    // Spot-check first value from the full-res level.
+    assert!(
+        (r.get(0, 0, 0) - 0.0).abs() < 1e-3,
+        "expected data[0,0,0]=0; got {}",
+        r.get(0, 0, 0)
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v3_multiscale_group_level1_via_direct_path() {
+    // Pointing directly at the level-1 sub-array yields the coarser resolution.
+    let dir = tmp("_v3_multiscale_direct_level1.zarr");
+    let rows = 8;
+    let cols = 10;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v3_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    let level1_path = format!("{dir}/1");
+    let r = Raster::read(&level1_path).expect("direct sub-array path should open level 1");
+    assert_eq!(r.rows, rows / 2, "expected half-res rows");
+    assert_eq!(r.cols, cols / 2, "expected half-res cols");
+    assert!(
+        (r.cell_size_x - 1.0).abs() < 1e-6,
+        "expected level-1 cell size 1.0; got {}",
+        r.cell_size_x
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v3_multiscale_group_fallback_no_ome_attrs() {
+    // A group without a multiscales attribute block falls back to numeric
+    // sub-directory scanning and still opens level 0.
+    let dir = tmp("_v3_multiscale_fallback.zarr");
+    let rows = 6;
+    let cols = 8;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v3_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    // Overwrite the group zarr.json with one that has NO multiscales attribute.
+    let bare_group = json!({
+        "zarr_format": 3,
+        "node_type": "group",
+        "attributes": {}
+    });
+    std::fs::write(
+        std::path::Path::new(&dir).join("zarr.json"),
+        serde_json::to_string_pretty(&bare_group).unwrap(),
+    ).unwrap();
+
+    let r = Raster::read(&dir).expect("fallback numeric scan should open level 0");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v2_multiscale_group_reads_full_res_by_default() {
+    let dir = tmp("_v2_multiscale_group_default.zarr");
+    let rows = 8;
+    let cols = 10;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v2_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    let r = Raster::read(&dir).expect("v2 group root should open at level 0");
+    assert_eq!(r.rows, rows, "expected full-res rows");
+    assert_eq!(r.cols, cols, "expected full-res cols");
+    assert!(
+        (r.cell_size_x - 0.5).abs() < 1e-6,
+        "expected level-0 cell size 0.5; got {}",
+        r.cell_size_x
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v2_multiscale_group_level1_via_direct_path() {
+    let dir = tmp("_v2_multiscale_direct_level1.zarr");
+    let rows = 8;
+    let cols = 10;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v2_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    let level1_path = format!("{dir}/1");
+    let r = Raster::read(&level1_path).expect("direct v2 sub-array path should open level 1");
+    assert_eq!(r.rows, rows / 2);
+    assert_eq!(r.cols, cols / 2);
+    assert!(
+        (r.cell_size_x - 1.0).abs() < 1e-6,
+        "expected level-1 cell size 1.0; got {}",
+        r.cell_size_x
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v2_multiscale_group_fallback_no_ome_attrs() {
+    // Group with .zgroup but no .zattrs multiscales — falls back to numeric scan.
+    let dir = tmp("_v2_multiscale_fallback.zarr");
+    let rows = 6;
+    let cols = 8;
+    let data0: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    let data1: Vec<f64> = (0..(rows / 2) * (cols / 2)).map(|i| (i * 4) as f64).collect();
+    write_v2_multiscale_group(&dir, rows, cols, &data0, &data1);
+
+    // Remove the .zattrs so there is no multiscales block.
+    let _ = std::fs::remove_file(std::path::Path::new(&dir).join(".zattrs"));
+
+    let r = Raster::read(&dir).expect("fallback numeric scan should open level 0");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn read_zarr_v3_group_with_no_levels_returns_error() {
+    // An empty group (no array children) should return an error, not panic.
+    let dir = tmp("_v3_empty_group.zarr");
+    std::fs::create_dir_all(&dir).unwrap();
+    let group_json = json!({ "zarr_format": 3, "node_type": "group", "attributes": {} });
+    std::fs::write(
+        std::path::Path::new(&dir).join("zarr.json"),
+        serde_json::to_string_pretty(&group_json).unwrap(),
+    ).unwrap();
+
+    let result = Raster::read(&dir);
+    assert!(result.is_err(), "empty group should return an error");
+    let msg = format!("{}", result.unwrap_err());
+    assert!(
+        msg.contains("group") || msg.contains("sub-director"),
+        "expected diagnostic about empty group; got: {msg}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn existing_zarr_v3_array_reads_unaffected_by_group_detection() {
+    // A plain v3 array at the root (no .zgroup / group node_type) should
+    // continue to be read exactly as before.
+    let dir = tmp("_v3_plain_array_unaffected.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..rows * cols).map(|i| i as f64).collect();
+    write_python_style_v3_store(&dir, rows, cols, 4, 5, "default", "/", "zlib", "little", &data);
+
+    let r = Raster::read(&dir).expect("plain v3 array should still read fine");
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn external_zarr_v2_fixture_smoke_local_path() {
+    let Some(path) = env_var_trimmed("WBRASTER_EXTERNAL_ZARR_V2_FIXTURE") else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_ZARR_V2_FIXTURE to a local .zarr directory"
+        );
+        return;
+    };
+
+    let r = Raster::read(&path).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external v2 fixture at '{}': {e}",
+            path
+        )
+    });
+    assert!(r.rows > 0, "external v2 fixture has no rows");
+    assert!(r.cols > 0, "external v2 fixture has no cols");
+    assert_external_fixture_expectations(&r, "WBRASTER_EXTERNAL_ZARR_V2");
+}
+
+#[test]
+fn external_zarr_v3_fixture_smoke_local_path() {
+    let Some(path) = env_var_trimmed("WBRASTER_EXTERNAL_ZARR_V3_FIXTURE") else {
+        eprintln!(
+            "skipping: set WBRASTER_EXTERNAL_ZARR_V3_FIXTURE to a local .zarr directory"
+        );
+        return;
+    };
+
+    let r = Raster::read(&path).unwrap_or_else(|e| {
+        panic!(
+            "failed reading external v3 fixture at '{}': {e}",
+            path
+        )
+    });
+    assert!(r.rows > 0, "external v3 fixture has no rows");
+    assert!(r.cols > 0, "external v3 fixture has no cols");
+    assert_external_fixture_expectations(&r, "WBRASTER_EXTERNAL_ZARR_V3");
+}
+
+// ─── Zarr v3 transpose codec ──────────────────────────────────────────────────
+
+/// Write a zarr v3 store whose chunks are encoded with a `transpose` codec so
+/// that the reader's inverse-transpose logic is exercised by actual read tests.
+///
+/// `order_json` is the value passed as `"order"` in `zarr.json`.  The helper
+/// writes f64 chunks with the bytes laid out exactly as a spec-compliant zarr
+/// v3 writer would after applying `np.transpose(chunk, axes=order)`.
+#[allow(clippy::too_many_arguments)]
+fn write_transpose_v3_store(
+    dir: &str,
+    rows: usize,
+    cols: usize,
+    chunk_rows: usize,
+    chunk_cols: usize,
+    order_json: &serde_json::Value,
+    data: &[f64],
+) {
+    // Resolve the permutation to a concrete Vec<usize>.
+    let ndim = 2usize;
+    let order_vec: Vec<usize> = match order_json {
+        serde_json::Value::String(s) if s.eq_ignore_ascii_case("C") => vec![0, 1],
+        serde_json::Value::String(s) if s.eq_ignore_ascii_case("F") => vec![1, 0],
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .map(|v| v.as_u64().expect("order element must be integer") as usize)
+            .collect(),
+        other => panic!("write_transpose_v3_store: unsupported order: {other:?}"),
+    };
+
+    std::fs::create_dir_all(dir).unwrap();
+
+    let zarr_json = json!({
+        "zarr_format": 3,
+        "node_type": "array",
+        "shape": [rows, cols],
+        "data_type": "float64",
+        "chunk_grid": {
+            "name": "regular",
+            "configuration": { "chunk_shape": [chunk_rows, chunk_cols] }
+        },
+        "chunk_key_encoding": {
+            "name": "default",
+            "configuration": { "separator": "/" }
+        },
+        "codecs": [
+            { "name": "transpose", "configuration": { "order": order_json } },
+            { "name": "bytes", "configuration": { "endian": "little" } }
+        ],
+        "fill_value": -9999.0,
+        "attributes": {
+            "x_min": 100.0,
+            "y_min": -30.0,
+            "cell_size_x": 0.5,
+            "cell_size_y": 0.5,
+            "nodata": -9999.0
+        }
+    });
+    std::fs::write(
+        std::path::Path::new(dir).join("zarr.json"),
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+
+    // Precompute strides once.
+    let n_chunk_rows = rows.div_ceil(chunk_rows);
+    let n_chunk_cols = cols.div_ceil(chunk_cols);
+
+    for cr in 0..n_chunk_rows {
+        for cc in 0..n_chunk_cols {
+            let this_rows = (rows - cr * chunk_rows).min(chunk_rows);
+            let this_cols = (cols - cc * chunk_cols).min(chunk_cols);
+
+            // Stored (transposed) shape: stored_shape[i] = this_shape[order[i]]
+            let this_shape = [this_rows, this_cols];
+            let stored_shape: Vec<usize> =
+                order_vec.iter().map(|&ax| this_shape[ax]).collect();
+
+            let mut stored_strides = vec![1usize; ndim];
+            for d in (0..ndim - 1).rev() {
+                stored_strides[d] = stored_strides[d + 1] * stored_shape[d + 1];
+            }
+
+            let n = stored_shape.iter().product::<usize>();
+            let mut raw = Vec::with_capacity(n * 8);
+
+            for k in 0..n {
+                // Decompose stored flat index → stored_coords → local original coords.
+                let mut rem = k;
+                let mut local_orig = [0usize; 2];
+                for i in 0..ndim {
+                    let coord_i = rem / stored_strides[i];
+                    rem %= stored_strides[i];
+                    local_orig[order_vec[i]] = coord_i;
+                }
+                let row = cr * chunk_rows + local_orig[0];
+                let col = cc * chunk_cols + local_orig[1];
+                raw.extend_from_slice(&data[row * cols + col].to_le_bytes());
+            }
+
+            let key = format!("c/{cr}/{cc}");
+            let path = std::path::Path::new(dir).join(&key);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, raw).unwrap();
+        }
+    }
+}
+
+#[test]
+fn zarr_v3_transpose_f_order_string_single_chunk() {
+    // 3×4 array, one chunk, order="F" (stored as column-major).
+    let dir = tmp("_v3_transpose_f_str.zarr");
+    let rows = 3;
+    let cols = 4;
+    let data: Vec<f64> = (0..(rows * cols)).map(|i| i as f64 * 1.5).collect();
+
+    write_transpose_v3_store(&dir, rows, cols, rows, cols, &json!("F"), &data);
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            let expected = data[row * cols + col];
+            let got = r.get_raw(0, row as isize, col as isize).unwrap();
+            assert!(
+                (got - expected).abs() < 1e-9,
+                "transpose F-string: mismatch at ({row},{col}): expected {expected}, got {got}"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn zarr_v3_transpose_explicit_permutation_single_chunk() {
+    // Same geometry as above but order specified as explicit [1, 0] array.
+    let dir = tmp("_v3_transpose_explicit.zarr");
+    let rows = 3;
+    let cols = 4;
+    let data: Vec<f64> = (0..(rows * cols)).map(|i| (i as f64) * 0.25 - 1.0).collect();
+
+    write_transpose_v3_store(&dir, rows, cols, rows, cols, &json!([1, 0]), &data);
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            let expected = data[row * cols + col];
+            let got = r.get_raw(0, row as isize, col as isize).unwrap();
+            assert!(
+                (got - expected).abs() < 1e-9,
+                "transpose explicit [1,0]: mismatch at ({row},{col}): expected {expected}, got {got}"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn zarr_v3_transpose_c_order_is_noop() {
+    // order="C" is the identity permutation; values must be readable unchanged.
+    let dir = tmp("_v3_transpose_c.zarr");
+    let rows = 4;
+    let cols = 5;
+    let data: Vec<f64> = (0..(rows * cols)).map(|i| i as f64 - 5.0).collect();
+
+    write_transpose_v3_store(&dir, rows, cols, rows, cols, &json!("C"), &data);
+
+    let r = Raster::read(&dir).unwrap();
+    for row in 0..rows {
+        for col in 0..cols {
+            let expected = data[row * cols + col];
+            let got = r.get_raw(0, row as isize, col as isize).unwrap();
+            assert!(
+                (got - expected).abs() < 1e-9,
+                "transpose C noop: mismatch at ({row},{col})"
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn zarr_v3_transpose_f_order_multichunk() {
+    // 9×8 array chunked 4×3 — exercises multiple chunks including boundary chunks.
+    let dir = tmp("_v3_transpose_multichunk.zarr");
+    let rows = 9;
+    let cols = 8;
+    let data: Vec<f64> = (0..(rows * cols))
+        .map(|i| if i == 13 { -9999.0 } else { i as f64 * 0.2 })
+        .collect();
+
+    write_transpose_v3_store(&dir, rows, cols, 4, 3, &json!("F"), &data);
+
+    let r = Raster::read(&dir).unwrap();
+    assert_eq!(r.rows, rows);
+    assert_eq!(r.cols, cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            let expected = data[row * cols + col];
+            let got = r.get_raw(0, row as isize, col as isize).unwrap();
+            let is_nodata = r.is_nodata(expected);
+            if is_nodata {
+                assert!(
+                    r.is_nodata(got),
+                    "transpose multichunk: expected nodata at ({row},{col}), got {got}"
+                );
+            } else {
+                assert!(
+                    (got - expected).abs() < 1e-9,
+                    "transpose multichunk: mismatch at ({row},{col}): expected {expected}, got {got}"
+                );
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn write_v3_metadata_only(dir: &str, zarr_json: serde_json::Value) {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(
+        std::path::Path::new(dir).join("zarr.json"),
+        serde_json::to_string_pretty(&zarr_json).unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn zarr_v3_rejects_unknown_codec_with_actionable_message() {
+    let dir = tmp("_v3_unknown_codec.zarr");
+    write_v3_metadata_only(
+        &dir,
+        json!({
+            "zarr_format": 3,
+            "node_type": "array",
+            "shape": [3, 4],
+            "data_type": "float32",
+            "chunk_grid": {
+                "name": "regular",
+                "configuration": { "chunk_shape": [3, 4] }
+            },
+            "chunk_key_encoding": {
+                "name": "default",
+                "configuration": { "separator": "/" }
+            },
+            "codecs": [
+                { "name": "bytes", "configuration": { "endian": "little" } },
+                { "name": "shuffle", "configuration": {} }
+            ],
+            "fill_value": -9999.0,
+            "attributes": { "x_min": 0.0, "y_min": 0.0, "cell_size_x": 1.0 }
+        }),
+    );
+
+    let err = Raster::read(&dir).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("unsupported zarr v3 codec 'shuffle'") && msg.contains("cannot safely decode"),
+        "expected actionable unknown-codec error, got: {msg}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn zarr_v3_rejects_zero_dimension_shape() {
+    let dir = tmp("_v3_zero_dim_shape.zarr");
+    write_v3_metadata_only(
+        &dir,
+        json!({
+            "zarr_format": 3,
+            "node_type": "array",
+            "shape": [0, 4],
+            "data_type": "float32",
+            "chunk_grid": {
+                "name": "regular",
+                "configuration": { "chunk_shape": [1, 4] }
+            },
+            "chunk_key_encoding": {
+                "name": "default",
+                "configuration": { "separator": "/" }
+            },
+            "codecs": [
+                { "name": "bytes", "configuration": { "endian": "little" } }
+            ],
+            "fill_value": -9999.0,
+            "attributes": { "x_min": 0.0, "y_min": 0.0, "cell_size_x": 1.0 }
+        }),
+    );
+
+    let err = Raster::read(&dir).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("shape") && msg.contains("zero dimension"),
+        "expected zero-dimension shape error, got: {msg}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn zarr_v3_rejects_shape_chunk_rank_mismatch() {
+    let dir = tmp("_v3_shape_chunk_rank_mismatch.zarr");
+    write_v3_metadata_only(
+        &dir,
+        json!({
+            "zarr_format": 3,
+            "node_type": "array",
+            "shape": [3, 4],
+            "data_type": "float32",
+            "chunk_grid": {
+                "name": "regular",
+                "configuration": { "chunk_shape": [1, 3, 4] }
+            },
+            "chunk_key_encoding": {
+                "name": "default",
+                "configuration": { "separator": "/" }
+            },
+            "codecs": [
+                { "name": "bytes", "configuration": { "endian": "little" } }
+            ],
+            "fill_value": -9999.0,
+            "attributes": { "x_min": 0.0, "y_min": 0.0, "cell_size_x": 1.0 }
+        }),
+    );
+
+    let err = Raster::read(&dir).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("chunk_shape") && msg.contains("shape") && msg.contains("must match"),
+        "expected chunk/shape rank mismatch error, got: {msg}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

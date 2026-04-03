@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use flate2::read::{GzDecoder, ZlibDecoder};
 use flate2::write::{GzEncoder, ZlibEncoder};
 use flate2::Compression;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -14,11 +15,44 @@ use crate::error::{RasterError, Result};
 use crate::raster::{DataType, Raster, RasterConfig};
 
 /// Read a Zarr raster from a `.zarr` directory or from a `.zarray` file.
+///
+/// When the target directory is a multi-scale group (OME-NGFF or plain
+/// numeric pyramid), the full-resolution level (`0`) is opened by default.
+/// To read a different level, point `path` directly at the sub-array
+/// directory (e.g. `"store.zarr/1"`).
 pub fn read(path: &str) -> Result<Raster> {
     let dir = resolve_zarr_dir(path)?;
+
+    // ── v3 group? ─────────────────────────────────────────────────────────
+    if crate::formats::zarr_v3::is_v3_group(&dir) {
+        let levels = crate::formats::zarr_v3::discover_multiscale_levels_v3(&dir);
+        if levels.is_empty() {
+            return Err(RasterError::CorruptData(
+                "zarr v3 group contains no recognisable array sub-directories".into(),
+            ));
+        }
+        let level_dir = select_level(&levels);
+        return crate::formats::zarr_v3::read_from_dir(level_dir);
+    }
+
+    // ── v3 array? ─────────────────────────────────────────────────────────
     if crate::formats::zarr_v3::is_v3_store(&dir) {
         return crate::formats::zarr_v3::read_from_dir(&dir);
     }
+
+    // ── v2 group? ─────────────────────────────────────────────────────────
+    if is_v2_group(&dir) {
+        let levels = discover_multiscale_levels_v2(&dir);
+        if levels.is_empty() {
+            return Err(RasterError::CorruptData(
+                "zarr v2 group contains no recognisable array sub-directories".into(),
+            ));
+        }
+        let level_dir = select_level(&levels);
+        return read_from_dir(level_dir);
+    }
+
+    // ── v2 array (default) ────────────────────────────────────────────────
     read_from_dir(&dir)
 }
 
@@ -65,6 +99,69 @@ struct ZarrArrayMeta {
 struct CompressorSpec {
     id: String,
     level: Option<i32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValidationMode {
+    Strict,
+    Lenient,
+}
+
+/// Returns `true` if `dir` is a v2 Zarr group (has `.zgroup` file).
+fn is_v2_group(dir: &Path) -> bool {
+    dir.join(".zgroup").exists()
+}
+
+/// Discover the ordered list of array sub-paths for a v2 multi-scale group.
+///
+/// Tries the OME-NGFF `.zattrs` `multiscales[0].datasets[].path` convention
+/// first; falls back to scanning consecutive numeric sub-directories.
+pub(crate) fn discover_multiscale_levels_v2(dir: &Path) -> Vec<PathBuf> {
+    // Try OME-NGFF .zattrs: multiscales[0].datasets[].path
+    if let Ok(s) = fs::read_to_string(dir.join(".zattrs")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&s) {
+            if let Some(datasets) = v
+                .get("multiscales")
+                .and_then(Value::as_array)
+                .and_then(|ms| ms.first())
+                .and_then(|m| m.get("datasets"))
+                .and_then(Value::as_array)
+            {
+                let paths: Vec<_> = datasets
+                    .iter()
+                    .filter_map(|d| d.get("path").and_then(Value::as_str))
+                    .map(|p| dir.join(p))
+                    .filter(|p| p.join(".zarray").exists())
+                    .collect();
+                if !paths.is_empty() {
+                    return paths;
+                }
+            }
+        }
+    }
+
+    // Fallback: scan consecutive numeric sub-dirs that look like v2 arrays.
+    let mut levels = Vec::new();
+    for i in 0usize.. {
+        let candidate = dir.join(i.to_string());
+        if candidate.join(".zarray").exists() {
+            levels.push(candidate);
+        } else {
+            break;
+        }
+    }
+    levels
+}
+
+/// Select which level to read from a discovered level list.
+///
+/// Honours an optional `zarr_level` raster-metadata hint (not applicable on
+/// read, so we always return index 0 here — the full-resolution level).
+/// A caller that wants a coarser level can point the path directly at the
+/// sub-array directory instead of the group root.
+fn select_level(levels: &[PathBuf]) -> &Path {
+    // Always return the first (finest / full-resolution) level.
+    levels[0].as_path()
 }
 
 fn resolve_zarr_dir(path: &str) -> Result<PathBuf> {
@@ -142,18 +239,60 @@ fn read_from_dir(dir: &Path) -> Result<Raster> {
     let bpp = dtype.size_bytes();
 
     let attrs = read_zattrs(dir)?;
-    let x_min = attrs.get("x_min").and_then(Value::as_f64).unwrap_or(0.0);
-    let y_min = attrs.get("y_min").and_then(Value::as_f64).unwrap_or(0.0);
-    let cell_size = attrs.get("cell_size_x").and_then(Value::as_f64).unwrap_or(1.0);
-    let cell_size_y = attrs.get("cell_size_y").and_then(Value::as_f64);
-    let nodata = attrs.get("nodata").and_then(Value::as_f64).unwrap_or_else(|| fill_value_to_f64(meta.fill_value.as_ref()).unwrap_or(-9999.0));
+    let validation_mode = parse_validation_mode_from_attrs(&attrs);
+    let transform = parse_transform_from_attrs(&attrs, validation_mode)?;
+    let x_min = attrs
+        .get("x_min")
+        .and_then(Value::as_f64)
+        .or_else(|| transform.map(|t| t[0]))
+        .unwrap_or(0.0);
+    let cell_size = attrs
+        .get("cell_size_x")
+        .and_then(Value::as_f64)
+        .or_else(|| transform.map(|t| t[1].abs()))
+        .unwrap_or(1.0);
+    let cell_size_y = attrs
+        .get("cell_size_y")
+        .and_then(Value::as_f64)
+        .or_else(|| transform.map(|t| t[5].abs()));
+    let y_min = attrs
+        .get("y_min")
+        .and_then(Value::as_f64)
+        .or_else(|| {
+            transform.map(|t| {
+                let y_top = t[3];
+                let dy = t[5];
+                if dy == 0.0 {
+                    y_top - cell_size_y.unwrap_or(cell_size) * rows as f64
+                } else {
+                    y_top + dy * rows as f64
+                }
+            })
+        })
+        .unwrap_or(0.0);
 
+    validate_georef_consistency(
+        &attrs,
+        transform,
+        rows,
+        cell_size,
+        cell_size_y,
+        validation_mode,
+    )?;
+    let nodata = attrs.get("nodata").and_then(Value::as_f64)
+        .or_else(|| attrs.get("_FillValue").and_then(Value::as_f64))
+        .or_else(|| attrs.get("missing_value").and_then(Value::as_f64))
+        .unwrap_or_else(|| fill_value_to_f64(meta.fill_value.as_ref()).unwrap_or(-9999.0));
+
+    let attrs_obj = attrs.as_object();
     let crs = crate::crs_info::CrsInfo {
         epsg: attrs
             .get("crs_epsg")
             .and_then(Value::as_u64)
             .map(|v| v as u32)
-            .or_else(|| attrs.get("epsg").and_then(Value::as_u64).map(|v| v as u32)),
+            .or_else(|| attrs.get("epsg").and_then(Value::as_u64).map(|v| v as u32))
+            .or_else(|| parse_epsg_from_crs_value(attrs.get("crs")))
+            .or_else(|| attrs_obj.and_then(parse_epsg_from_grid_mapping_attrs)),
         wkt: attrs
             .get("crs_wkt")
             .and_then(Value::as_str)
@@ -163,66 +302,71 @@ fn read_from_dir(dir: &Path) -> Result<Raster> {
                     .get("spatial_ref")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned)
-            }),
+                    })
+                    .or_else(|| attrs_obj.and_then(parse_wkt_from_grid_mapping_attrs)),
         proj4: attrs
             .get("crs_proj4")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
-            .or_else(|| attrs.get("proj4").and_then(Value::as_str).map(ToOwned::to_owned)),
+                    .or_else(|| attrs.get("proj4").and_then(Value::as_str).map(ToOwned::to_owned))
+                    .or_else(|| attrs_obj.and_then(parse_proj4_from_grid_mapping_attrs)),
     };
 
     let sep = meta.dimension_separator.as_deref().unwrap_or(".");
-    let n_chunk_bands = bands.div_ceil(chunk_bands);
     let n_chunk_rows = rows.div_ceil(chunk_rows);
     let n_chunk_cols = cols.div_ceil(chunk_cols);
 
     let mut data = vec![nodata; bands * rows * cols];
-    for cb in 0..n_chunk_bands {
-        for cr in 0..n_chunk_rows {
-            for cc in 0..n_chunk_cols {
-                let key = if bands > 1 {
-                    chunk_key(&[cb, cr, cc], sep)
-                } else {
-                    chunk_key(&[cr, cc], sep)
-                };
-                let chunk_path = dir.join(key);
+    let band_plane_len = rows * cols;
+    let cb_block_len = chunk_bands * band_plane_len;
+    data.par_chunks_mut(cb_block_len)
+        .enumerate()
+        .try_for_each(|(cb, data_cb)| -> Result<()> {
+            for cr in 0..n_chunk_rows {
+                for cc in 0..n_chunk_cols {
+                    let key = if bands > 1 {
+                        chunk_key(&[cb, cr, cc], sep)
+                    } else {
+                        chunk_key(&[cr, cc], sep)
+                    };
+                    let chunk_path = dir.join(key);
 
-                let this_bands = (bands - cb * chunk_bands).min(chunk_bands);
-                let this_rows = (rows - cr * chunk_rows).min(chunk_rows);
-                let this_cols = (cols - cc * chunk_cols).min(chunk_cols);
-                let expected_bytes = this_bands * this_rows * this_cols * bpp;
+                    let this_bands = (bands - cb * chunk_bands).min(chunk_bands);
+                    let this_rows = (rows - cr * chunk_rows).min(chunk_rows);
+                    let this_cols = (cols - cc * chunk_cols).min(chunk_cols);
+                    let expected_bytes = this_bands * this_rows * this_cols * bpp;
 
-                let raw = if chunk_path.exists() {
-                    let compressed = fs::read(&chunk_path)?;
-                    decompress_bytes(&meta.compressor, &compressed)?
-                } else {
-                    let fv = fill_value_to_f64(meta.fill_value.as_ref()).unwrap_or(nodata);
-                    encode_fill_chunk(this_bands * this_rows * this_cols, dtype, endian, fv)
-                };
+                    let raw = if chunk_path.exists() {
+                        let compressed = fs::read(&chunk_path)?;
+                        decompress_bytes(&meta.compressor, &compressed)?
+                    } else {
+                        let fv = fill_value_to_f64(meta.fill_value.as_ref()).unwrap_or(nodata);
+                        encode_fill_chunk(this_bands * this_rows * this_cols, dtype, endian, fv)
+                    };
 
-                if raw.len() != expected_bytes {
-                    return Err(RasterError::CorruptData(format!(
-                        "chunk {cb},{cr},{cc} size mismatch: expected {expected_bytes}, got {}",
-                        raw.len()
-                    )));
-                }
+                    if raw.len() != expected_bytes {
+                        return Err(RasterError::CorruptData(format!(
+                            "chunk {cb},{cr},{cc} size mismatch: expected {expected_bytes}, got {}",
+                            raw.len()
+                        )));
+                    }
 
-                for bb in 0..this_bands {
-                    for rr in 0..this_rows {
-                        for cc2 in 0..this_cols {
-                            let i_chunk = bb * this_rows * this_cols + rr * this_cols + cc2;
-                            let src = &raw[i_chunk * bpp..(i_chunk + 1) * bpp];
-                            let v = decode_sample(src, dtype, endian)?;
-                            let band = cb * chunk_bands + bb;
-                            let row = cr * chunk_rows + rr;
-                            let col = cc * chunk_cols + cc2;
-                            data[band * rows * cols + row * cols + col] = v;
+                    for bb in 0..this_bands {
+                        for rr in 0..this_rows {
+                            for cc2 in 0..this_cols {
+                                let i_chunk = bb * this_rows * this_cols + rr * this_cols + cc2;
+                                let src = &raw[i_chunk * bpp..(i_chunk + 1) * bpp];
+                                let v = decode_sample(src, dtype, endian)?;
+                                let row = cr * chunk_rows + rr;
+                                let col = cc * chunk_cols + cc2;
+                                data_cb[bb * band_plane_len + row * cols + col] = v;
+                            }
                         }
                     }
                 }
             }
-        }
-    }
+            Ok(())
+        })?;
 
     let cfg = RasterConfig {
         cols,
@@ -251,8 +395,12 @@ fn write_to_dir(raster: &Raster, dir: &Path) -> Result<()> {
     let chunk_bands = metadata_usize(raster, "zarr_chunk_bands")
         .unwrap_or(1)
         .clamp(1, bands.max(1));
-    let chunk_rows = rows.clamp(1, 256);
-    let chunk_cols = cols.clamp(1, 256);
+    let chunk_rows = metadata_usize(raster, "zarr_chunk_rows")
+        .unwrap_or_else(|| rows.clamp(1, 256))
+        .clamp(1, rows.max(1));
+    let chunk_cols = metadata_usize(raster, "zarr_chunk_cols")
+        .unwrap_or_else(|| cols.clamp(1, 256))
+        .clamp(1, cols.max(1));
 
     let dtype = data_type_to_zarr_dtype(raster.data_type);
     let dim_sep = raster
@@ -544,6 +692,292 @@ fn fill_value_to_f64(v: Option<&Value>) -> Option<f64> {
     }
 }
 
+fn parse_transform_tuple(v: Option<&Value>) -> Option<[f64; 6]> {
+    let arr = v?.as_array()?;
+    if arr.len() < 6 {
+        return None;
+    }
+    let mut out = [0.0f64; 6];
+    for (i, slot) in out.iter_mut().enumerate() {
+        *slot = arr[i].as_f64()?;
+    }
+    Some(out)
+}
+
+fn parse_transform_from_attrs_strict(attrs: &Value) -> Result<Option<[f64; 6]>> {
+    let Some(obj) = attrs.as_object() else {
+        return Ok(None);
+    };
+
+    let transform = if let Some(v) = obj.get("transform") {
+        Some(parse_transform_tuple(Some(v)).ok_or_else(|| {
+            RasterError::CorruptData("invalid geospatial metadata: 'transform' must contain at least 6 numeric values".into())
+        })?)
+    } else {
+        None
+    };
+
+    let geotransform = if let Some(v) = obj.get("GeoTransform") {
+        Some(parse_geotransform_string(Some(v)).ok_or_else(|| {
+            RasterError::CorruptData("invalid geospatial metadata: 'GeoTransform' must contain 6 numeric values".into())
+        })?)
+    } else {
+        None
+    };
+
+    match (transform, geotransform) {
+        (Some(a), Some(b)) => {
+            if !same_transform(&a, &b) {
+                return Err(RasterError::CorruptData(
+                    "conflicting geospatial metadata: 'transform' and 'GeoTransform' disagree".into(),
+                ));
+            }
+            Ok(Some(a))
+        }
+        (Some(a), None) => Ok(Some(a)),
+        (None, Some(b)) => Ok(Some(b)),
+        (None, None) => Ok(None),
+    }
+}
+
+fn parse_transform_from_attrs_lenient(attrs: &Value) -> Option<[f64; 6]> {
+    let Some(obj) = attrs.as_object() else {
+        return None;
+    };
+    let transform = obj
+        .get("transform")
+        .and_then(|v| parse_transform_tuple(Some(v)));
+    let geotransform = obj
+        .get("GeoTransform")
+        .and_then(|v| parse_geotransform_string(Some(v)));
+    transform.or(geotransform)
+}
+
+fn parse_transform_from_attrs(attrs: &Value, mode: ValidationMode) -> Result<Option<[f64; 6]>> {
+    match mode {
+        ValidationMode::Strict => parse_transform_from_attrs_strict(attrs),
+        ValidationMode::Lenient => Ok(parse_transform_from_attrs_lenient(attrs)),
+    }
+}
+
+fn same_transform(a: &[f64; 6], b: &[f64; 6]) -> bool {
+    const TOL: f64 = 1e-9;
+    a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= TOL)
+}
+
+fn validate_georef_consistency(
+    attrs: &Value,
+    transform: Option<[f64; 6]>,
+    rows: usize,
+    cell_size: f64,
+    cell_size_y: Option<f64>,
+    mode: ValidationMode,
+) -> Result<()> {
+    if mode == ValidationMode::Lenient {
+        return Ok(());
+    }
+
+    const TOL: f64 = 1e-9;
+    let Some(obj) = attrs.as_object() else {
+        return Ok(());
+    };
+    let Some(t) = transform else {
+        return Ok(());
+    };
+
+    if let Some(x) = obj.get("x_min").and_then(Value::as_f64) {
+        if (x - t[0]).abs() > TOL {
+            return Err(RasterError::CorruptData(
+                "conflicting geospatial metadata: 'x_min' disagrees with transform".into(),
+            ));
+        }
+    }
+
+    if let Some(dx) = obj.get("cell_size_x").and_then(Value::as_f64) {
+        if (dx - t[1].abs()).abs() > TOL {
+            return Err(RasterError::CorruptData(
+                "conflicting geospatial metadata: 'cell_size_x' disagrees with transform".into(),
+            ));
+        }
+    }
+
+    if let Some(dy) = obj.get("cell_size_y").and_then(Value::as_f64) {
+        if (dy - t[5].abs()).abs() > TOL {
+            return Err(RasterError::CorruptData(
+                "conflicting geospatial metadata: 'cell_size_y' disagrees with transform".into(),
+            ));
+        }
+    }
+
+    if let Some(y) = obj.get("y_min").and_then(Value::as_f64) {
+        let y_from_t = if t[5] == 0.0 {
+            t[3] - cell_size_y.unwrap_or(cell_size) * rows as f64
+        } else {
+            t[3] + t[5] * rows as f64
+        };
+        if (y - y_from_t).abs() > TOL {
+            return Err(RasterError::CorruptData(
+                "conflicting geospatial metadata: 'y_min' disagrees with transform".into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_validation_mode_from_attrs(attrs: &Value) -> ValidationMode {
+    let mode = attrs
+        .as_object()
+        .and_then(|obj| obj.get("zarr_validation_mode"))
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_ascii_lowercase());
+    match mode.as_deref() {
+        Some("lenient") => ValidationMode::Lenient,
+        _ => ValidationMode::Strict,
+    }
+}
+
+fn parse_geotransform_string(v: Option<&Value>) -> Option<[f64; 6]> {
+    let s = v?.as_str()?.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = s
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|p| !p.is_empty())
+        .collect();
+    if parts.len() < 6 {
+        return None;
+    }
+    let mut out = [0.0f64; 6];
+    for (i, slot) in out.iter_mut().enumerate() {
+        *slot = parts[i].parse::<f64>().ok()?;
+    }
+    Some(out)
+}
+
+fn parse_epsg_from_crs_str(s: &str) -> Option<u32> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Common simple form: EPSG:XXXX
+    let upper = trimmed.to_ascii_uppercase();
+    if upper.starts_with("EPSG:") {
+        let (_, code) = upper.split_once(":")?;
+        return code.parse::<u32>().ok();
+    }
+
+    // Common OGC forms seen in external metadata, e.g.:
+    // - urn:ogc:def:crs:EPSG::3857
+    // - http://www.opengis.net/def/crs/EPSG/0/3857
+    // - https://www.opengis.net/def/crs/EPSG/0/3857
+    let digits: String = upper
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<Vec<char>>()
+        .into_iter()
+        .rev()
+        .collect();
+    if !digits.is_empty()
+        && (upper.contains(":EPSG::")
+            || upper.contains("/EPSG/")
+            || upper.contains(":EPSG:"))
+    {
+        return digits.parse::<u32>().ok();
+    }
+
+    None
+}
+
+fn parse_epsg_authority_code_obj(obj: &serde_json::Map<String, Value>) -> Option<u32> {
+    let authority = obj.get("authority")?.as_str()?.trim().to_ascii_uppercase();
+    if authority != "EPSG" {
+        return None;
+    }
+    let code_v = obj.get("code")?;
+    match code_v {
+        Value::String(s) => s.trim().parse::<u32>().ok(),
+        Value::Number(n) => n.as_u64().and_then(|x| u32::try_from(x).ok()),
+        _ => None,
+    }
+}
+
+fn parse_epsg_from_crs_json(v: &Value) -> Option<u32> {
+    match v {
+        Value::String(s) => parse_epsg_from_crs_str(s),
+        Value::Number(n) => n.as_u64().and_then(|x| u32::try_from(x).ok()),
+        Value::Object(obj) => {
+            if let Some(epsg) = obj.get("epsg").and_then(parse_epsg_from_crs_json) {
+                return Some(epsg);
+            }
+            if let Some(code) = parse_epsg_authority_code_obj(obj) {
+                return Some(code);
+            }
+            if let Some(name) = obj.get("name").and_then(parse_epsg_from_crs_json) {
+                return Some(name);
+            }
+            if let Some(props) = obj.get("properties").and_then(parse_epsg_from_crs_json) {
+                return Some(props);
+            }
+            if let Some(id) = obj.get("id").and_then(parse_epsg_from_crs_json) {
+                return Some(id);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn parse_epsg_from_crs_value(v: Option<&Value>) -> Option<u32> {
+    parse_epsg_from_crs_json(v?)
+}
+
+fn grid_mapping_object_from_attrs(
+    attrs: &serde_json::Map<String, Value>,
+) -> Option<&serde_json::Map<String, Value>> {
+    match attrs.get("grid_mapping") {
+        Some(Value::Object(obj)) => Some(obj),
+        Some(Value::String(name)) => attrs.get(name).and_then(Value::as_object),
+        _ => None,
+    }
+}
+
+fn parse_epsg_from_grid_mapping_attrs(
+    attrs: &serde_json::Map<String, Value>,
+) -> Option<u32> {
+    let gm = grid_mapping_object_from_attrs(attrs)?;
+    gm.get("epsg")
+        .and_then(parse_epsg_from_crs_json)
+        .or_else(|| gm.get("epsg_code").and_then(parse_epsg_from_crs_json))
+        .or_else(|| gm.get("crs").and_then(parse_epsg_from_crs_json))
+        .or_else(|| gm.get("id").and_then(parse_epsg_from_crs_json))
+        .or_else(|| gm.get("spatial_ref").and_then(parse_epsg_from_crs_json))
+}
+
+fn parse_wkt_from_grid_mapping_attrs(
+    attrs: &serde_json::Map<String, Value>,
+) -> Option<String> {
+    let gm = grid_mapping_object_from_attrs(attrs)?;
+    gm.get("crs_wkt")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| gm.get("spatial_ref").and_then(Value::as_str).map(ToOwned::to_owned))
+        .or_else(|| gm.get("wkt").and_then(Value::as_str).map(ToOwned::to_owned))
+}
+
+fn parse_proj4_from_grid_mapping_attrs(
+    attrs: &serde_json::Map<String, Value>,
+) -> Option<String> {
+    let gm = grid_mapping_object_from_attrs(attrs)?;
+    gm.get("crs_proj4")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| gm.get("proj4").and_then(Value::as_str).map(ToOwned::to_owned))
+}
+
 fn chunk_key(indices: &[usize], sep: &str) -> String {
     let s = if sep == "/" { "/" } else { "." };
     indices
@@ -660,12 +1094,20 @@ fn decode_zstd(bytes: &[u8]) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::raster::RasterConfig;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::env::temp_dir;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn tmp_dir() -> PathBuf {
-        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
-        temp_dir().join(format!("zarr_test_{ts}.zarr"))
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let pid = std::process::id();
+        let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        temp_dir().join(format!("zarr_test_{pid}_{ts}_{n}.zarr"))
     }
 
     #[test]
@@ -742,6 +1184,683 @@ mod tests {
         assert_eq!(r2.get_raw(1, 0, 0), Some(24.0));
         assert_eq!(r2.get_raw(1, 3, 5), Some(47.0));
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_writer_respects_chunk_row_col_metadata() {
+        let cfg = RasterConfig {
+            cols: 9,
+            rows: 7,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..(cfg.cols * cfg.rows)).map(|i| i as f64).collect();
+        let mut r = Raster::from_data(cfg, data).unwrap();
+        r.metadata.push(("zarr_chunk_rows".into(), "3".into()));
+        r.metadata.push(("zarr_chunk_cols".into(), "4".into()));
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let zarray_text = fs::read_to_string(dir.join(".zarray")).unwrap();
+        let zarray_json: serde_json::Value = serde_json::from_str(&zarray_text).unwrap();
+        let chunks = zarray_json
+            .get("chunks")
+            .and_then(serde_json::Value::as_array)
+            .expect(".zarray must contain chunks array");
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].as_u64(), Some(3));
+        assert_eq!(chunks[1].as_u64(), Some(4));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_uses_transform_when_origin_and_cellsize_missing() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("x_min");
+        obj.remove("y_min");
+        obj.remove("cell_size_x");
+        obj.remove("cell_size_y");
+        obj.insert(
+            "transform".into(),
+            json!([
+                10.0,
+                2.0,
+                0.0,
+                30.0,
+                0.0,
+                -2.0
+            ]),
+        );
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert!((r2.x_min - 10.0).abs() < 1e-10);
+        assert!((r2.y_min - 20.0).abs() < 1e-10);
+        assert!((r2.cell_size_x - 2.0).abs() < 1e-10);
+        assert!((r2.cell_size_y - 2.0).abs() < 1e-10);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_aliases_from_external_style_attrs() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            crs: crate::crs_info::CrsInfo::from_epsg(4326),
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("crs_wkt");
+        obj.remove("crs_proj4");
+        obj.insert("epsg".into(), json!(4326));
+        obj.insert(
+            "spatial_ref".into(),
+            json!("GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\"]]"),
+        );
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(4326));
+        assert!(r2.crs.wkt.as_deref().unwrap_or_default().contains("WGS 84"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_epsg_string_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.insert("crs".into(), json!("EPSG:3857"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(3857));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_epsg_object_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.insert(
+            "crs".into(),
+            json!({
+                "type": "name",
+                "properties": {
+                    "name": "EPSG:3395"
+                }
+            }),
+        );
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(3395));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_authority_code_object_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.insert(
+            "crs".into(),
+            json!({
+                "id": {
+                    "authority": "EPSG",
+                    "code": 3035
+                }
+            }),
+        );
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(3035));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_ogc_urn_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.insert("crs".into(), json!("urn:ogc:def:crs:EPSG::32617"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(32617));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_ogc_url_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.insert("crs".into(), json!("https://www.opengis.net/def/crs/EPSG/0/3857"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(3857));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_crs_from_grid_mapping_named_object_attr() {
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 3,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..12).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("crs_epsg");
+        obj.remove("epsg");
+        obj.remove("crs_wkt");
+        obj.remove("spatial_ref");
+        obj.remove("crs_proj4");
+        obj.remove("proj4");
+        obj.insert("grid_mapping".into(), json!("spatial_ref"));
+        obj.insert(
+            "spatial_ref".into(),
+            json!({
+                "epsg_code": "EPSG:32617",
+                "crs_wkt": "PROJCS[\"WGS 84 / UTM zone 17N\",GEOGCS[\"WGS 84\"]]",
+                "proj4": "+proj=utm +zone=17 +datum=WGS84 +units=m +no_defs"
+            }),
+        );
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert_eq!(r2.crs.epsg, Some(32617));
+        assert!(r2.crs.wkt.as_deref().unwrap_or_default().contains("UTM zone 17N"));
+        assert!(r2.crs.proj4.as_deref().unwrap_or_default().contains("+proj=utm"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_uses_geotransform_string_when_transform_missing() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("x_min");
+        obj.remove("y_min");
+        obj.remove("cell_size_x");
+        obj.remove("cell_size_y");
+        obj.remove("transform");
+        obj.insert("GeoTransform".into(), json!("10 2 0 30 0 -2"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).unwrap();
+        assert!((r2.x_min - 10.0).abs() < 1e-10);
+        assert!((r2.y_min - 20.0).abs() < 1e-10);
+        assert!((r2.cell_size_x - 2.0).abs() < 1e-10);
+        assert!((r2.cell_size_y - 2.0).abs() < 1e-10);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_fails_on_conflicting_xmin_and_transform() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.insert("x_min".into(), json!(123.0));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let err = read_from_dir(&dir).expect_err("expected conflicting metadata error");
+        assert!(
+            format!("{err}").contains("conflicting geospatial metadata"),
+            "unexpected error message: {err}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_fails_on_invalid_geotransform_string() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("transform");
+        obj.remove("x_min");
+        obj.remove("y_min");
+        obj.remove("cell_size_x");
+        obj.remove("cell_size_y");
+        obj.insert("GeoTransform".into(), json!("10 2 0 bad 0 -2"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let err = read_from_dir(&dir).expect_err("expected invalid geotransform error");
+        assert!(
+            format!("{err}").contains("invalid geospatial metadata"),
+            "unexpected error message: {err}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_lenient_mode_allows_conflicting_georef_metadata() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.insert("x_min".into(), json!(123.0));
+        obj.insert("zarr_validation_mode".into(), json!("lenient"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).expect("lenient mode should not fail on conflicts");
+        assert!((r2.x_min - 123.0).abs() < 1e-10);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_lenient_mode_allows_invalid_geotransform_string() {
+        let cfg = RasterConfig {
+            cols: 8,
+            rows: 5,
+            x_min: 10.0,
+            y_min: 20.0,
+            cell_size: 2.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..40).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("transform");
+        obj.remove("x_min");
+        obj.remove("y_min");
+        obj.remove("cell_size_x");
+        obj.remove("cell_size_y");
+        obj.insert("GeoTransform".into(), json!("10 2 0 bad 0 -2"));
+        obj.insert("zarr_validation_mode".into(), json!("lenient"));
+        fs::write(
+            dir.join(".zattrs"),
+            serde_json::to_string_pretty(&zattrs).unwrap(),
+        )
+        .unwrap();
+
+        let r2 = read_from_dir(&dir).expect("lenient mode should ignore invalid geotransform");
+        assert_eq!(r2.rows, 5);
+        assert_eq!(r2.cols, 8);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_nodata_from_cf_fill_value_attr() {
+        // A producer that writes _FillValue instead of nodata (e.g. xarray-style CF output).
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 4,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..16).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        // Replace `nodata` with the CF-style `_FillValue` key.
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("nodata");
+        obj.insert("_FillValue".into(), json!(-32768.0_f64));
+        fs::write(dir.join(".zattrs"), serde_json::to_string_pretty(&zattrs).unwrap()).unwrap();
+
+        let r2 = read_from_dir(&dir).expect("should read nodata from _FillValue");
+        assert!(
+            (r2.nodata - (-32768.0)).abs() < 1e-6,
+            "expected nodata=-32768; got {}",
+            r2.nodata
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_read_nodata_from_missing_value_attr() {
+        // A producer that writes missing_value (another CF convention).
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 4,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..16).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.remove("nodata");
+        obj.insert("missing_value".into(), json!(-1.0_f64));
+        fs::write(dir.join(".zattrs"), serde_json::to_string_pretty(&zattrs).unwrap()).unwrap();
+
+        let r2 = read_from_dir(&dir).expect("should read nodata from missing_value");
+        assert!(
+            (r2.nodata - (-1.0)).abs() < 1e-6,
+            "expected nodata=-1; got {}",
+            r2.nodata
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zarr_v2_explicit_nodata_takes_precedence_over_cf_fill_value() {
+        // When both `nodata` and `_FillValue` are present, explicit `nodata` wins.
+        let cfg = RasterConfig {
+            cols: 4,
+            rows: 4,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        };
+        let data: Vec<f64> = (0..16).map(|i| i as f64).collect();
+        let r = Raster::from_data(cfg, data).unwrap();
+
+        let dir = tmp_dir();
+        write_to_dir(&r, &dir).unwrap();
+
+        // Add a _FillValue that differs from nodata; nodata should still win.
+        let mut zattrs: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.join(".zattrs")).unwrap()).unwrap();
+        let obj = zattrs.as_object_mut().unwrap();
+        obj.insert("_FillValue".into(), json!(0.0_f64));
+        fs::write(dir.join(".zattrs"), serde_json::to_string_pretty(&zattrs).unwrap()).unwrap();
+
+        let r2 = read_from_dir(&dir).expect("should read OK");
+        assert!(
+            (r2.nodata - (-9999.0)).abs() < 1e-6,
+            "expected explicit nodata=-9999 to take precedence; got {}",
+            r2.nodata
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 }

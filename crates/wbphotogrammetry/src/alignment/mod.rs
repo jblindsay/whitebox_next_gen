@@ -6075,6 +6075,106 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    fn schur_sparse_solver_benchmark_matrix_reports_runtime_and_parity() {
+        use std::time::Instant;
+
+        fn build_chain_block_system(block_count: usize) -> (SparseSymmetricBlock4, DVector<f64>) {
+            let dim = block_count * 4;
+            let mut sparse = SparseSymmetricBlock4::new(dim);
+
+            for b in 0..block_count {
+                let base = 4 * b;
+                let diag_strength = 8.0 + 0.2 * b as f64;
+                let diag = Matrix4::new(
+                    diag_strength,
+                    0.06,
+                    0.0,
+                    0.0,
+                    0.06,
+                    diag_strength - 0.2,
+                    0.04,
+                    0.0,
+                    0.0,
+                    0.04,
+                    diag_strength - 0.35,
+                    0.03,
+                    0.0,
+                    0.0,
+                    0.03,
+                    diag_strength - 0.5,
+                );
+                sparse.add_block(base, base, diag);
+
+                if b + 1 < block_count {
+                    let off = Matrix4::new(
+                        -0.08,
+                        0.01,
+                        0.0,
+                        0.0,
+                        0.01,
+                        -0.06,
+                        0.008,
+                        0.0,
+                        0.0,
+                        0.008,
+                        -0.05,
+                        0.006,
+                        0.0,
+                        0.0,
+                        0.006,
+                        -0.045,
+                    );
+                    sparse.add_block(base, base + 4, off);
+                }
+            }
+
+            let mut g = Vec::with_capacity(dim);
+            for i in 0..dim {
+                let v = ((i % 7) as f64 - 3.0) * 0.13 + ((i % 3) as f64) * 0.07;
+                g.push(v);
+            }
+            (sparse, DVector::from_vec(g))
+        }
+
+        let damping = 0.25;
+        let pcg_iters = 128;
+        let sizes = [6usize, 16usize, 32usize];
+
+        for blocks in sizes {
+            let (sparse, gradient) = build_chain_block_system(blocks);
+
+            let t_sparse = Instant::now();
+            let sparse_sol = solve_damped_sparse_pcg(&sparse, &gradient, damping, pcg_iters, 1.0e-8)
+                .expect("sparse solve");
+            let sparse_us = t_sparse.elapsed().as_secs_f64() * 1.0e6;
+
+            let mut dense = sparse.clone().into_dense();
+            for i in 0..dense.nrows() {
+                dense[(i, i)] += damping;
+            }
+            let rhs = -&gradient;
+
+            let t_dense = Instant::now();
+            let dense_sol = dense.lu().solve(&rhs).expect("dense solve");
+            let dense_us = t_dense.elapsed().as_secs_f64() * 1.0e6;
+
+            let err = (&sparse_sol - &dense_sol).norm();
+            assert!(err < 1.0e-4, "sparse and dense reduced solves should remain numerically close");
+
+            println!(
+                "Schur benchmark blocks={} dim={} sparse_us={:.2} dense_us={:.2} ratio={:.3} err={:.3e}",
+                blocks,
+                blocks * 4,
+                sparse_us,
+                dense_us,
+                sparse_us / dense_us.max(1.0e-9),
+                err,
+            );
+        }
+    }
+
+    #[test]
     fn reduced_camera_pose_solve_stable_on_larger_synthetic_network() {
         let intrinsics = CameraIntrinsics {
             fx: 1200.0,

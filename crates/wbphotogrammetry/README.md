@@ -344,10 +344,11 @@ likely to require further development.
 ### Camera Alignment and Bundle Adjustment
 
 - Bundle adjustment still uses a simplified Levenberg–Marquardt implementation.
-  It now includes iterative structure-only point refresh and coupled
-  second-order camera updates, but it still does not expose covariance
-  estimates or a full sparse Schur-complement solve. On very large networks
-  this can still limit convergence quality and speed.
+  It now includes iterative structure-only point refresh, coupled
+  second-order camera updates, Schur-style reduced camera solves with sparse
+  block assembly, and covariance-style camera diagnostics. On very large
+  networks this is still not a full production sparse BA backend, and
+  performance should still be benchmarked per mission type.
 - Intrinsic refinement now supports selective parameter freezing based on
   observation support/geometry quality, and the refinement policy is now
   user-configurable per run. The default policy remains heuristic rather than

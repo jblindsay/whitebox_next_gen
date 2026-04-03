@@ -21,11 +21,28 @@ use crate::error::{PhotogrammetryError, Result};
 use crate::ingest::ImageFrame;
 
 const MIN_GRID_DIM: usize = 4;
+const MVS_MAX_SOURCE_VIEWS: usize = 3;
+const MVS_SAMPLE_STEP: usize = 36;
+const MVS_PATCH_RADIUS: i32 = 2;
+const MVS_SEARCH_RADIUS: i32 = 12;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
     center: [f64; 3],
     confidence: f64,
+}
+
+#[derive(Debug, Clone)]
+struct MultiViewDepthSample {
+    point_world: [f64; 3],
+    confidence: f64,
+    support_views: usize,
+}
+
+#[derive(Debug, Clone)]
+struct MultiViewDepthMap {
+    reference_idx: usize,
+    samples: Vec<MultiViewDepthSample>,
 }
 
 /// Statistics from the dense surface model stage.
@@ -492,12 +509,232 @@ fn estimate_stereo_depths_from_adjacent_pairs(
     alignment: &AlignmentResult,
     frames: &[ImageFrame],
 ) -> Vec<DepthHypothesis> {
+    let mvs_maps = estimate_multiview_depth_maps(alignment, frames);
+    let mvs_depths = depth_hypotheses_from_multiview_maps(&mvs_maps);
+    if !mvs_depths.is_empty() {
+        return mvs_depths;
+    }
+
     let image_depths = estimate_stereo_depths_from_image_pairs(alignment, frames);
     if !image_depths.is_empty() {
         return image_depths;
     }
 
     estimate_stereo_depths_from_pose_baselines(alignment)
+}
+
+fn estimate_multiview_depth_maps(
+    alignment: &AlignmentResult,
+    frames: &[ImageFrame],
+) -> Vec<MultiViewDepthMap> {
+    if alignment.poses.len() < 3 || frames.len() < 3 {
+        return Vec::new();
+    }
+
+    let pose_count = alignment.poses.len().min(frames.len());
+    let intrinsics = &alignment.stats.intrinsics;
+    let mut loaded: Vec<Option<(GrayImage, f64)>> = vec![None; pose_count];
+    for i in 0..pose_count {
+        loaded[i] = load_downsampled_gray(&frames[i], 640);
+    }
+
+    let mut maps = Vec::new();
+    for ref_idx in 0..pose_count {
+        let Some((ref_img, ref_scale)) = loaded[ref_idx].as_ref() else {
+            continue;
+        };
+        let source_views = select_mvs_source_views(alignment, ref_idx, pose_count, MVS_MAX_SOURCE_VIEWS);
+        if source_views.len() < 2 {
+            continue;
+        }
+
+        let ref_intr = scaled_intrinsics(intrinsics, *ref_scale);
+        let p_ref = projection_matrix(&alignment.poses[ref_idx]);
+        let mut samples = Vec::new();
+
+        let max_y = ref_img.height().saturating_sub((MVS_PATCH_RADIUS as u32) + 1) as i32;
+        let max_x = ref_img.width().saturating_sub((MVS_PATCH_RADIUS as u32) + 1) as i32;
+        let start = MVS_PATCH_RADIUS + 1;
+        if max_x <= start || max_y <= start {
+            continue;
+        }
+
+        for y in (start..max_y).step_by(MVS_SAMPLE_STEP) {
+            for x in (start..max_x).step_by(MVS_SAMPLE_STEP) {
+                let center_ref = patch_center_intensity(ref_img, x, y);
+                let x_ref_n = Vector2::new(
+                    (x as f64 - ref_intr.0) / ref_intr.2,
+                    (y as f64 - ref_intr.1) / ref_intr.3,
+                );
+
+                let mut best_point: Option<Vector3<f64>> = None;
+                let mut best_conf = 0.0_f64;
+                let mut best_support = 0usize;
+
+                for &src_idx in &source_views {
+                    let Some((src_img, src_scale)) = loaded[src_idx].as_ref() else {
+                        continue;
+                    };
+                    let src_intr = scaled_intrinsics(intrinsics, *src_scale);
+                    let p_src = projection_matrix(&alignment.poses[src_idx]);
+
+                    let mut best = f64::INFINITY;
+                    let mut second = f64::INFINITY;
+                    let mut best_xy = None;
+                    for dy in -MVS_SEARCH_RADIUS..=MVS_SEARCH_RADIUS {
+                        for dx in -MVS_SEARCH_RADIUS..=MVS_SEARCH_RADIUS {
+                            let xr = x + dx;
+                            let yr = y + dy;
+                            if xr <= start || yr <= start || xr >= src_img.width() as i32 - start || yr >= src_img.height() as i32 - start {
+                                continue;
+                            }
+                            let center_src = patch_center_intensity(src_img, xr, yr);
+                            if (center_ref - center_src).abs() > 30.0 {
+                                continue;
+                            }
+                            let score = patch_ssd(ref_img, src_img, x, y, xr, yr, MVS_PATCH_RADIUS);
+                            if score < best {
+                                second = best;
+                                best = score;
+                                best_xy = Some((xr, yr));
+                            } else if score < second {
+                                second = score;
+                            }
+                        }
+                    }
+
+                    let Some((xr, yr)) = best_xy else {
+                        continue;
+                    };
+                    if !best.is_finite() || best > 0.026 || second / best.max(1.0e-9) < 1.05 {
+                        continue;
+                    }
+
+                    let x_src_n = Vector2::new(
+                        (xr as f64 - src_intr.0) / src_intr.2,
+                        (yr as f64 - src_intr.1) / src_intr.3,
+                    );
+                    let Some(point_w) = triangulate_point(&p_ref, &p_src, &x_ref_n, &x_src_n) else {
+                        continue;
+                    };
+                    let z_ref = camera_space_depth(&alignment.poses[ref_idx], &point_w);
+                    let z_src = camera_space_depth(&alignment.poses[src_idx], &point_w);
+                    if z_ref <= 1.0e-5 || z_src <= 1.0e-5 {
+                        continue;
+                    }
+
+                    let mut support_views = 1usize;
+                    let mut consistency = 0.0_f64;
+                    for &other_idx in &source_views {
+                        if other_idx == src_idx {
+                            continue;
+                        }
+                        let Some((other_img, other_scale)) = loaded[other_idx].as_ref() else {
+                            continue;
+                        };
+                        let other_intr = scaled_intrinsics(intrinsics, *other_scale);
+                        let Some((u, v)) = project_point_to_image_pinhole(
+                            &alignment.poses[other_idx],
+                            &point_w,
+                            other_intr,
+                        ) else {
+                            continue;
+                        };
+                        let uu = u.round() as i32;
+                        let vv = v.round() as i32;
+                        if uu <= start || vv <= start || uu >= other_img.width() as i32 - start || vv >= other_img.height() as i32 - start {
+                            continue;
+                        }
+                        let center_other = patch_center_intensity(other_img, uu, vv);
+                        let delta = (center_ref - center_other).abs();
+                        if delta <= 26.0 {
+                            support_views += 1;
+                            consistency += (26.0 - delta) / 26.0;
+                        }
+                    }
+
+                    let match_conf = ((0.032 - best) / 0.032).clamp(0.05, 1.0);
+                    let ratio_conf = ((second / best.max(1.0e-9)) - 1.0).clamp(0.0, 0.25) / 0.25;
+                    let support_factor = (support_views as f64 / source_views.len().max(1) as f64).clamp(0.0, 1.0);
+                    let consistency_factor = (consistency / source_views.len().max(1) as f64).clamp(0.0, 1.0);
+                    let conf = (0.45 * match_conf + 0.20 * ratio_conf + 0.20 * support_factor + 0.15 * consistency_factor)
+                        .clamp(0.05, 0.98);
+
+                    if conf > best_conf {
+                        best_point = Some(point_w);
+                        best_conf = conf;
+                        best_support = support_views;
+                    }
+                }
+
+                if let Some(point_w) = best_point {
+                    samples.push(MultiViewDepthSample {
+                        point_world: [point_w[0], point_w[1], point_w[2]],
+                        confidence: best_conf,
+                        support_views: best_support,
+                    });
+                }
+            }
+        }
+
+        if !samples.is_empty() {
+            maps.push(MultiViewDepthMap {
+                reference_idx: ref_idx,
+                samples,
+            });
+        }
+    }
+
+    maps
+}
+
+fn select_mvs_source_views(
+    alignment: &AlignmentResult,
+    reference_idx: usize,
+    pose_count: usize,
+    max_views: usize,
+) -> Vec<usize> {
+    if pose_count < 2 || reference_idx >= pose_count || max_views == 0 {
+        return Vec::new();
+    }
+
+    let ref_pose = &alignment.poses[reference_idx];
+    let ref_pos = Vector3::new(ref_pose.position[0], ref_pose.position[1], ref_pose.position[2]);
+    let mut scored = Vec::new();
+    for idx in 0..pose_count {
+        if idx == reference_idx {
+            continue;
+        }
+        let p = &alignment.poses[idx];
+        let pos = Vector3::new(p.position[0], p.position[1], p.position[2]);
+        let baseline = (pos - ref_pos).norm();
+        if baseline <= 0.05 {
+            continue;
+        }
+        let quality = (1.0 / (1.0 + 0.5 * (ref_pose.reprojection_error_px + p.reprojection_error_px))).clamp(0.1, 1.0);
+        let baseline_score = (baseline / 30.0).clamp(0.05, 1.0);
+        let score = 0.6 * baseline_score + 0.4 * quality;
+        scored.push((idx, score));
+    }
+
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+    scored.into_iter().take(max_views).map(|v| v.0).collect()
+}
+
+fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<DepthHypothesis> {
+    let mut out = Vec::new();
+    for map in maps {
+        let ref_weight = 1.0 / (1.0 + map.reference_idx as f64 * 0.02);
+        for sample in &map.samples {
+            let support_factor = (sample.support_views as f64 / MVS_MAX_SOURCE_VIEWS.max(1) as f64).clamp(0.0, 1.0);
+            let confidence = (sample.confidence * (0.70 + 0.30 * support_factor) * ref_weight).clamp(0.08, 0.99);
+            out.push(DepthHypothesis {
+                center: sample.point_world,
+                confidence,
+            });
+        }
+    }
+    out
 }
 
 fn estimate_stereo_depths_from_pose_baselines(
@@ -754,6 +991,30 @@ fn camera_space_depth(pose: &crate::alignment::CameraPose, point_w: &Vector3<f64
     let center = Vector3::new(pose.position[0], pose.position[1], pose.position[2]);
     let x_cam = r_w2c * (*point_w - center);
     x_cam[2]
+}
+
+fn project_point_to_image_pinhole(
+    pose: &crate::alignment::CameraPose,
+    point_w: &Vector3<f64>,
+    scaled_intr: (f64, f64, f64, f64),
+) -> Option<(f64, f64)> {
+    let r_c2w = quaternion_to_matrix(&pose.rotation);
+    let r_w2c = r_c2w.transpose();
+    let center = Vector3::new(pose.position[0], pose.position[1], pose.position[2]);
+    let x_cam = r_w2c * (*point_w - center);
+    if x_cam[2] <= 1.0e-6 {
+        return None;
+    }
+
+    let xn = x_cam[0] / x_cam[2];
+    let yn = x_cam[1] / x_cam[2];
+    let u = scaled_intr.0 + scaled_intr.2 * xn;
+    let v = scaled_intr.1 + scaled_intr.3 * yn;
+    if u.is_finite() && v.is_finite() {
+        Some((u, v))
+    } else {
+        None
+    }
 }
 
 fn patch_center_intensity(img: &GrayImage, x: i32, y: i32) -> f64 {
@@ -1655,6 +1916,39 @@ mod tests {
                 "stereo depth Z should be within reasonable bounds of trajectory"
             );
         }
+    }
+
+    #[test]
+    fn mvs_source_view_selection_prefers_non_reference_views() {
+        let alignment = sample_alignment();
+        let views = select_mvs_source_views(&alignment, 1, alignment.poses.len(), 2);
+        assert!(!views.is_empty());
+        assert!(views.len() <= 2);
+        assert!(views.iter().all(|&idx| idx != 1));
+    }
+
+    #[test]
+    fn multiview_maps_convert_to_depth_hypotheses() {
+        let maps = vec![MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![
+                MultiViewDepthSample {
+                    point_world: [1.0, 2.0, 3.0],
+                    confidence: 0.7,
+                    support_views: 2,
+                },
+                MultiViewDepthSample {
+                    point_world: [4.0, 5.0, 6.0],
+                    confidence: 0.6,
+                    support_views: 1,
+                },
+            ],
+        }];
+
+        let hyps = depth_hypotheses_from_multiview_maps(&maps);
+        assert_eq!(hyps.len(), 2);
+        assert!(hyps.iter().all(|h| h.confidence > 0.0 && h.confidence <= 1.0));
+        assert!(hyps.iter().all(|h| h.center.iter().all(|v| v.is_finite())));
     }
 
     #[test]

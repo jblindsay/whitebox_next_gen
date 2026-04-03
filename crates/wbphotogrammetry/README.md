@@ -378,11 +378,11 @@ likely to require further development.
 
 ### Dense Surface Reconstruction
 
-- The crate does not implement multi-view stereo (MVS). Stereo depth estimation
-  relies on coarse patch matching between adjacent post-BA frame pairs and
-  pose-baseline triangulation. This produces surfaces with lower point density
-  and surface completeness than a full MVS approach (patch-based or depth-map
-  fusion). In particular:
+- The crate now includes a lightweight multi-view depth-map seeding stage
+  (reference-view sampling with top-K source-view patch matching and
+  multi-view consistency scoring), but it is still not a full MVS system.
+  Dense reconstruction still has lower point density/completeness than mature
+  patch-based or cost-volume MVS pipelines. In particular:
   - No depth-map voting or occlusion handling
   - No cross-baseline epipolar line search
   - No semi-global matching (SGM/SGM++), Census transform, or learned cost volumes  

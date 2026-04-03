@@ -25,6 +25,7 @@ const MVS_MAX_SOURCE_VIEWS: usize = 3;
 const MVS_SAMPLE_STEP: usize = 36;
 const MVS_PATCH_RADIUS: i32 = 2;
 const MVS_SEARCH_RADIUS: i32 = 12;
+const MVS_OCCLUSION_BIN_PX: f64 = 8.0;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -37,6 +38,8 @@ struct MultiViewDepthSample {
     point_world: [f64; 3],
     confidence: f64,
     support_views: usize,
+    ref_px: [f64; 2],
+    ref_depth: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -570,6 +573,7 @@ fn estimate_multiview_depth_maps(
                 let mut best_point: Option<Vector3<f64>> = None;
                 let mut best_conf = 0.0_f64;
                 let mut best_support = 0usize;
+                let mut best_ref_depth = 0.0_f64;
 
                 for &src_idx in &source_views {
                     let Some((src_img, src_scale)) = loaded[src_idx].as_ref() else {
@@ -592,7 +596,7 @@ fn estimate_multiview_depth_maps(
                             if (center_ref - center_src).abs() > 30.0 {
                                 continue;
                             }
-                            let score = patch_ssd(ref_img, src_img, x, y, xr, yr, MVS_PATCH_RADIUS);
+                            let score = patch_zncc_cost(ref_img, src_img, x, y, xr, yr, MVS_PATCH_RADIUS);
                             if score < best {
                                 second = best;
                                 best = score;
@@ -606,7 +610,7 @@ fn estimate_multiview_depth_maps(
                     let Some((xr, yr)) = best_xy else {
                         continue;
                     };
-                    if !best.is_finite() || best > 0.026 || second / best.max(1.0e-9) < 1.05 {
+                    if !best.is_finite() || best > 0.42 || second / best.max(1.0e-9) < 1.03 {
                         continue;
                     }
 
@@ -633,6 +637,7 @@ fn estimate_multiview_depth_maps(
                             continue;
                         };
                         let other_intr = scaled_intrinsics(intrinsics, *other_scale);
+                        let p_other = projection_matrix(&alignment.poses[other_idx]);
                         let Some((u, v)) = project_point_to_image_pinhole(
                             &alignment.poses[other_idx],
                             &point_w,
@@ -640,16 +645,52 @@ fn estimate_multiview_depth_maps(
                         ) else {
                             continue;
                         };
-                        let uu = u.round() as i32;
-                        let vv = v.round() as i32;
-                        if uu <= start || vv <= start || uu >= other_img.width() as i32 - start || vv >= other_img.height() as i32 - start {
+                        let u0 = u.round() as i32;
+                        let v0 = v.round() as i32;
+                        if u0 <= start || v0 <= start || u0 >= other_img.width() as i32 - start || v0 >= other_img.height() as i32 - start {
                             continue;
                         }
-                        let center_other = patch_center_intensity(other_img, uu, vv);
-                        let delta = (center_ref - center_other).abs();
-                        if delta <= 26.0 {
+
+                        let mut best_other_cost = f64::INFINITY;
+                        let mut best_other_xy = None;
+                        for ddy in -2..=2 {
+                            for ddx in -2..=2 {
+                                let uu = u0 + ddx;
+                                let vv = v0 + ddy;
+                                if uu <= start || vv <= start || uu >= other_img.width() as i32 - start || vv >= other_img.height() as i32 - start {
+                                    continue;
+                                }
+                                let cost = patch_zncc_cost(ref_img, other_img, x, y, uu, vv, MVS_PATCH_RADIUS);
+                                if cost < best_other_cost {
+                                    best_other_cost = cost;
+                                    best_other_xy = Some((uu, vv));
+                                }
+                            }
+                        }
+                        let Some((uo, vo)) = best_other_xy else {
+                            continue;
+                        };
+                        if !best_other_cost.is_finite() || best_other_cost > 0.48 {
+                            continue;
+                        }
+
+                        let x_other_n = Vector2::new(
+                            (uo as f64 - other_intr.0) / other_intr.2,
+                            (vo as f64 - other_intr.1) / other_intr.3,
+                        );
+                        let Some(retriangulated) = triangulate_point(&p_ref, &p_other, &x_ref_n, &x_other_n) else {
+                            continue;
+                        };
+                        let z_other = camera_space_depth(&alignment.poses[other_idx], &retriangulated);
+                        if z_other <= 1.0e-5 {
+                            continue;
+                        }
+
+                        let geo_delta = (retriangulated - point_w).norm();
+                        let z_tol = (0.35 + 0.02 * z_ref.abs()).clamp(0.35, 3.0);
+                        if geo_delta <= z_tol {
                             support_views += 1;
-                            consistency += (26.0 - delta) / 26.0;
+                            consistency += ((0.48 - best_other_cost) / 0.48).clamp(0.0, 1.0);
                         }
                     }
 
@@ -664,6 +705,7 @@ fn estimate_multiview_depth_maps(
                         best_point = Some(point_w);
                         best_conf = conf;
                         best_support = support_views;
+                        best_ref_depth = z_ref;
                     }
                 }
 
@@ -672,6 +714,8 @@ fn estimate_multiview_depth_maps(
                         point_world: [point_w[0], point_w[1], point_w[2]],
                         confidence: best_conf,
                         support_views: best_support,
+                        ref_px: [x as f64, y as f64],
+                        ref_depth: best_ref_depth,
                     });
                 }
             }
@@ -725,11 +769,34 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
     let mut out = Vec::new();
     for map in maps {
         let ref_weight = 1.0 / (1.0 + map.reference_idx as f64 * 0.02);
+        let mut bins: std::collections::HashMap<(i32, i32), Vec<&MultiViewDepthSample>> =
+            std::collections::HashMap::new();
         for sample in &map.samples {
-            let support_factor = (sample.support_views as f64 / MVS_MAX_SOURCE_VIEWS.max(1) as f64).clamp(0.0, 1.0);
-            let confidence = (sample.confidence * (0.70 + 0.30 * support_factor) * ref_weight).clamp(0.08, 0.99);
+            let bx = (sample.ref_px[0] / MVS_OCCLUSION_BIN_PX).floor() as i32;
+            let by = (sample.ref_px[1] / MVS_OCCLUSION_BIN_PX).floor() as i32;
+            bins.entry((bx, by)).or_default().push(sample);
+        }
+
+        for (_, mut samples) in bins {
+            samples.sort_by(|a, b| a.ref_depth.total_cmp(&b.ref_depth));
+            let front = samples[0];
+            let mut occlusion_votes = 1usize;
+            let mut vote_conf_sum = front.confidence;
+            let front_tol = (0.25 + 0.02 * front.ref_depth.abs()).clamp(0.25, 2.0);
+            for s in samples.iter().skip(1) {
+                if (s.ref_depth - front.ref_depth).abs() <= front_tol {
+                    occlusion_votes += 1;
+                    vote_conf_sum += s.confidence;
+                }
+            }
+
+            let support_factor = (front.support_views as f64 / MVS_MAX_SOURCE_VIEWS.max(1) as f64).clamp(0.0, 1.0);
+            let vote_factor = (occlusion_votes as f64 / samples.len().max(1) as f64).clamp(0.0, 1.0);
+            let mean_vote_conf = (vote_conf_sum / occlusion_votes as f64).clamp(0.0, 1.0);
+            let confidence = (mean_vote_conf * (0.55 + 0.20 * support_factor + 0.25 * vote_factor) * ref_weight)
+                .clamp(0.08, 0.99);
             out.push(DepthHypothesis {
-                center: sample.point_world,
+                center: front.point_world,
                 confidence,
             });
         }
@@ -859,7 +926,7 @@ fn estimate_stereo_depths_from_image_pairs(
                         if (center_l - center_r).abs() > 28.0 {
                             continue;
                         }
-                        let score = patch_ssd(left_img, right_img, x, y, xr, yr, patch_radius);
+                        let score = patch_zncc_cost(left_img, right_img, x, y, xr, yr, patch_radius);
                         if score < best {
                             second = best;
                             best = score;
@@ -873,7 +940,7 @@ fn estimate_stereo_depths_from_image_pairs(
                 let Some((xr, yr)) = best_xy else {
                     continue;
                 };
-                if !best.is_finite() || best > 0.020 || second / best.max(1.0e-9) < 1.08 {
+                if !best.is_finite() || best > 0.44 || second / best.max(1.0e-9) < 1.04 {
                     continue;
                 }
 
@@ -894,7 +961,7 @@ fn estimate_stereo_depths_from_image_pairs(
                     continue;
                 }
 
-                let confidence = ((0.035 - best) / 0.035).clamp(0.2, 0.95);
+                let confidence = ((0.50 - best) / 0.50).clamp(0.2, 0.95);
                 stereo_depths.push(DepthHypothesis {
                     center: [point_w[0], point_w[1], point_w[2]],
                     confidence,
@@ -1021,19 +1088,53 @@ fn patch_center_intensity(img: &GrayImage, x: i32, y: i32) -> f64 {
     img.get_pixel(x as u32, y as u32)[0] as f64
 }
 
-fn patch_ssd(left: &GrayImage, right: &GrayImage, xl: i32, yl: i32, xr: i32, yr: i32, radius: i32) -> f64 {
-    let mut sum = 0.0;
-    let mut count: f64 = 0.0;
+fn patch_zncc_cost(
+    left: &GrayImage,
+    right: &GrayImage,
+    xl: i32,
+    yl: i32,
+    xr: i32,
+    yr: i32,
+    radius: i32,
+) -> f64 {
+    let mut sum_l = 0.0;
+    let mut sum_r = 0.0;
+    let mut n = 0.0;
     for dy in -radius..=radius {
         for dx in -radius..=radius {
             let lv = left.get_pixel((xl + dx) as u32, (yl + dy) as u32)[0] as f64 / 255.0;
             let rv = right.get_pixel((xr + dx) as u32, (yr + dy) as u32)[0] as f64 / 255.0;
-            let diff = lv - rv;
-            sum += diff * diff;
-            count += 1.0;
+            sum_l += lv;
+            sum_r += rv;
+            n += 1.0;
         }
     }
-    sum / count.max(1.0)
+    if n <= 0.0 {
+        return 1.0;
+    }
+
+    let mean_l = sum_l / n;
+    let mean_r = sum_r / n;
+    let mut num = 0.0;
+    let mut den_l = 0.0;
+    let mut den_r = 0.0;
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            let lv = left.get_pixel((xl + dx) as u32, (yl + dy) as u32)[0] as f64 / 255.0 - mean_l;
+            let rv = right.get_pixel((xr + dx) as u32, (yr + dy) as u32)[0] as f64 / 255.0 - mean_r;
+            num += lv * rv;
+            den_l += lv * lv;
+            den_r += rv * rv;
+        }
+    }
+
+    let denom = (den_l * den_r).sqrt();
+    if denom <= 1.0e-12 || !denom.is_finite() {
+        return 1.0;
+    }
+    let zncc = (num / denom).clamp(-1.0, 1.0);
+    // Convert to a minimization cost in [0, 1].
+    0.5 * (1.0 - zncc)
 }
 
 fn build_depth_hypotheses(
@@ -1936,11 +2037,15 @@ mod tests {
                     point_world: [1.0, 2.0, 3.0],
                     confidence: 0.7,
                     support_views: 2,
+                    ref_px: [12.0, 18.0],
+                    ref_depth: 3.0,
                 },
                 MultiViewDepthSample {
                     point_world: [4.0, 5.0, 6.0],
                     confidence: 0.6,
                     support_views: 1,
+                    ref_px: [28.0, 30.0],
+                    ref_depth: 6.0,
                 },
             ],
         }];
@@ -1949,6 +2054,56 @@ mod tests {
         assert_eq!(hyps.len(), 2);
         assert!(hyps.iter().all(|h| h.confidence > 0.0 && h.confidence <= 1.0));
         assert!(hyps.iter().all(|h| h.center.iter().all(|v| v.is_finite())));
+    }
+
+    #[test]
+    fn multiview_occlusion_voting_prefers_front_surface() {
+        let maps = vec![MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![
+                MultiViewDepthSample {
+                    point_world: [2.0, 2.0, 4.0],
+                    confidence: 0.9,
+                    support_views: 3,
+                    ref_px: [16.0, 16.0],
+                    ref_depth: 4.0,
+                },
+                MultiViewDepthSample {
+                    point_world: [2.1, 2.0, 7.0],
+                    confidence: 0.85,
+                    support_views: 3,
+                    ref_px: [16.8, 16.6],
+                    ref_depth: 7.0,
+                },
+            ],
+        }];
+
+        let hyps = depth_hypotheses_from_multiview_maps(&maps);
+        assert_eq!(hyps.len(), 1);
+        assert!((hyps[0].center[2] - 4.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn zncc_cost_prefers_matching_patches() {
+        let mut left = GrayImage::new(9, 9);
+        let mut right = GrayImage::new(9, 9);
+        for y in 0..9u32 {
+            for x in 0..9u32 {
+                let v = ((x * 17 + y * 9) % 255) as u8;
+                left.put_pixel(x, y, image::Luma([v]));
+                right.put_pixel(x, y, image::Luma([v]));
+            }
+        }
+        // Make a non-matching alternative patch nearby.
+        for y in 3..6u32 {
+            for x in 3..6u32 {
+                right.put_pixel(x + 1, y, image::Luma([255u8.saturating_sub(left.get_pixel(x, y)[0])]));
+            }
+        }
+
+        let good = patch_zncc_cost(&left, &right, 4, 4, 4, 4, 2);
+        let bad = patch_zncc_cost(&left, &right, 4, 4, 5, 4, 2);
+        assert!(good < bad, "ZNCC cost should be lower for matching patches");
     }
 
     #[test]

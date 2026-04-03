@@ -383,9 +383,11 @@ likely to require further development.
   multi-view consistency scoring), but it is still not a full MVS system.
   Dense reconstruction still has lower point density/completeness than mature
   patch-based or cost-volume MVS pipelines. In particular:
-  - No depth-map voting or occlusion handling
+  - Only lightweight depth-map voting and front-surface (occlusion-aware)
+    selection are implemented; there is no full probabilistic fusion across
+    all views.
   - No cross-baseline epipolar line search
-  - No semi-global matching (SGM/SGM++), Census transform, or learned cost volumes  
+  - No semi-global matching (SGM/SGM++), Census transform, or learned cost volumes
 - DTM separation is a morphological low-pass filtering operation. It is not a
   classification-based or progressive triangulation approach and will not
   reliably separate buildings, dense vegetation, or tall structures from the

@@ -1076,58 +1076,69 @@ fn extract_sift_descriptors(
             );
         }
 
-        for scale_idx in 1..octave.dogs.len().saturating_sub(1) {
-            let dog = &octave.dogs[scale_idx];
-            if dog.width < 17 || dog.height < 17 {
-                continue;
-            }
-            let sigma = sigma_by_scale_idx[scale_idx - 1];
-            let gaussian = &octave.gaussians[scale_idx + 1];
-            for y in 8..(dog.height - 8) {
-                for x in 8..(dog.width - 8) {
-                    let value = dog.get(x, y);
-                    if value.abs() < SIFT_CONTRAST_THRESHOLD {
-                        continue;
-                    }
-                    if !is_sift_scale_space_extremum(octave, scale_idx, x, y, value) {
-                        continue;
-                    }
-                    if sift_edge_like_response(dog, x, y) {
-                        continue;
-                    }
+        let octave_descriptors = (1..octave.dogs.len().saturating_sub(1))
+            .into_par_iter()
+            .map(|scale_idx| {
+                let dog = &octave.dogs[scale_idx];
+                if dog.width < 17 || dog.height < 17 {
+                    return Vec::new();
+                }
+                let sigma = sigma_by_scale_idx[scale_idx - 1];
+                let gaussian = &octave.gaussians[scale_idx + 1];
+                let mut local = Vec::new();
+                for y in 8..(dog.height - 8) {
+                    for x in 8..(dog.width - 8) {
+                        let value = dog.get(x, y);
+                        if value.abs() < SIFT_CONTRAST_THRESHOLD {
+                            continue;
+                        }
+                        if !is_sift_scale_space_extremum(octave, scale_idx, x, y, value) {
+                            continue;
+                        }
+                        if sift_edge_like_response(dog, x, y) {
+                            continue;
+                        }
 
-                    let Some((angle, response)) = sift_dominant_orientation(gaussian, x as f32, y as f32, sigma) else {
-                        continue;
-                    };
-                    let texture = sift_local_stddev(gaussian, x as i32, y as i32, 4);
-                    if texture < (MIN_DESCRIPTOR_STDDEV as f32 / 255.0) {
-                        continue;
-                    }
-                    let Some(mut values) = compute_sift_descriptor(gaussian, x as f32, y as f32, sigma, angle) else {
-                        continue;
-                    };
-                    if rootsift {
-                        let Some(()) = normalize_rootsift_descriptor(&mut values) else {
+                        let texture = sift_local_stddev(gaussian, x as i32, y as i32, 4);
+                        if texture < (MIN_DESCRIPTOR_STDDEV as f32 / 255.0) {
+                            continue;
+                        }
+
+                        let Some((angle, response)) = sift_dominant_orientation(gaussian, x as f32, y as f32, sigma) else {
                             continue;
                         };
-                    }
+                        let Some(mut values) = compute_sift_descriptor(gaussian, x as f32, y as f32, sigma, angle) else {
+                            continue;
+                        };
+                        if rootsift {
+                            let Some(()) = normalize_rootsift_descriptor(&mut values) else {
+                                continue;
+                            };
+                        }
 
-                    let base_x = (x as f32 * octave_scale).round().clamp(0.0, base_max_x) as u32;
-                    let base_y = (y as f32 * octave_scale).round().clamp(0.0, base_max_y) as u32;
-                    let score = (response * 1_000.0).clamp(0.0, u32::MAX as f32) as u32;
-                    descriptors.push(FloatDescriptor {
-                        corner: Keypoint {
-                            x: base_x,
-                            y: base_y,
-                            score,
-                        },
-                        values,
-                        texture_stddev: texture as f64 * 255.0,
-                        octave: octave_idx as u8,
-                    });
+                        let base_x = (x as f32 * octave_scale).round().clamp(0.0, base_max_x) as u32;
+                        let base_y = (y as f32 * octave_scale).round().clamp(0.0, base_max_y) as u32;
+                        let score = (response * 1_000.0).clamp(0.0, u32::MAX as f32) as u32;
+                        local.push(FloatDescriptor {
+                            corner: Keypoint {
+                                x: base_x,
+                                y: base_y,
+                                score,
+                            },
+                            values,
+                            texture_stddev: texture as f64 * 255.0,
+                            octave: octave_idx as u8,
+                        });
+                    }
                 }
-            }
-        }
+                local
+            })
+            .reduce(Vec::new, |mut acc, mut chunk| {
+                acc.append(&mut chunk);
+                acc
+            });
+
+        descriptors.extend(octave_descriptors);
     }
 
     descriptors.sort_by(|left, right| {
@@ -1168,17 +1179,25 @@ fn build_sift_pyramid(base: &FloatImage) -> Vec<SiftOctave> {
     let levels_per_octave = SIFT_SCALES_PER_OCTAVE + SIFT_EXTRA_LEVELS;
     let k = 2.0_f32.powf(1.0 / SIFT_SCALES_PER_OCTAVE as f32);
 
+    let mut sigma_prev = SIFT_BASE_SIGMA;
+    let mut octave_blur_kernels = Vec::with_capacity(levels_per_octave.saturating_sub(1));
+    for level_idx in 1..levels_per_octave {
+        let sigma_total = SIFT_BASE_SIGMA * k.powf(level_idx as f32);
+        let sigma_diff = (sigma_total * sigma_total - sigma_prev * sigma_prev).max(0.01).sqrt();
+        let radius = (sigma_diff * 3.0).ceil().max(1.0) as i32;
+        let kernel = gaussian_kernel_1d(sigma_diff.max(0.1), radius);
+        octave_blur_kernels.push((radius, kernel));
+        sigma_prev = sigma_total;
+    }
+
     while current.width >= 24 && current.height >= 24 && octaves.len() < 6 {
         let mut gaussians = Vec::with_capacity(levels_per_octave);
         gaussians.push(current.clone());
 
-        let mut sigma_prev = SIFT_BASE_SIGMA;
         for level_idx in 1..levels_per_octave {
-            let sigma_total = SIFT_BASE_SIGMA * k.powf(level_idx as f32);
-            let sigma_diff = (sigma_total * sigma_total - sigma_prev * sigma_prev).max(0.01).sqrt();
-            let blurred = gaussian_blur_float(gaussians.last().unwrap(), sigma_diff);
+            let (radius, kernel) = &octave_blur_kernels[level_idx - 1];
+            let blurred = gaussian_blur_float_with_kernel(gaussians.last().unwrap(), *radius, kernel);
             gaussians.push(blurred);
-            sigma_prev = sigma_total;
         }
 
         let mut dogs = Vec::with_capacity(gaussians.len().saturating_sub(1));
@@ -1196,7 +1215,10 @@ fn build_sift_pyramid(base: &FloatImage) -> Vec<SiftOctave> {
 fn gaussian_blur_float(image: &FloatImage, sigma: f32) -> FloatImage {
     let radius = (sigma * 3.0).ceil().max(1.0) as i32;
     let kernel = gaussian_kernel_1d(sigma.max(0.1), radius);
+    gaussian_blur_float_with_kernel(image, radius, &kernel)
+}
 
+fn gaussian_blur_float_with_kernel(image: &FloatImage, radius: i32, kernel: &[f32]) -> FloatImage {
     let mut horizontal = FloatImage::new(image.width, image.height);
     for y in 0..image.height {
         for x in 0..image.width {

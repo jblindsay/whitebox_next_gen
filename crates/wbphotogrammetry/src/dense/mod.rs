@@ -63,6 +63,20 @@ const MVS_REGULARIZATION_DEPTH_TOL_M: f64 = 1.4;
 /// local neighbor average during depth regularization.  High-confidence bins
 /// are pulled proportionally less; the pull scales as `(1 - confidence)`.
 const MVS_REGULARIZATION_STRENGTH: f64 = 0.30;
+/// Number of refinement passes for confidence-calibrated residual tuning.
+const MVS_RESIDUAL_REFINEMENT_ITERS: usize = 2;
+/// Minimum neighboring bins needed for residual refinement.
+const MVS_RESIDUAL_MIN_NEIGHBORS: usize = 2;
+/// Base tolerance (metres) for residual-driven confidence calibration.
+const MVS_RESIDUAL_BASE_TOL_M: f64 = 0.40;
+/// Additional tolerance term proportional to absolute depth magnitude.
+const MVS_RESIDUAL_DEPTH_SCALE: f64 = 0.012;
+/// Maximum confidence boost for very low-residual bins.
+const MVS_RESIDUAL_CONF_BOOST_MAX: f64 = 1.10;
+/// Maximum confidence attenuation for strong residual outliers.
+const MVS_RESIDUAL_CONF_ATTEN_MIN: f64 = 0.58;
+/// Max depth pull for low-confidence, high-consistency bins.
+const MVS_RESIDUAL_PULL_MAX: f64 = 0.24;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -1135,12 +1149,79 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
         }
 
         let reg_bins = regularize_depth_bins(&front_by_bin);
-        let filled_bins = compute_hole_fill_bins(&reg_bins, MVS_HOLE_FILL_ITERS);
+        let refined_bins = refine_depth_bins_by_residuals(&reg_bins, MVS_RESIDUAL_REFINEMENT_ITERS);
+        let filled_bins = compute_hole_fill_bins(&refined_bins, MVS_HOLE_FILL_ITERS);
         out.extend(filled_bins.into_values());
 
-        out.extend(reg_bins.into_values());
+        out.extend(refined_bins.into_values());
     }
     suppress_weak_isolated_hypotheses(out)
+}
+
+/// Refines per-bin depth/confidence by local residual consistency.
+///
+/// Each iteration compares a bin's depth against a confidence-weighted local
+/// neighbor mean (8-connected, edge-gated). Low residual bins receive a small
+/// confidence boost, outliers are attenuated, and low-confidence bins are
+/// gently pulled toward the local consensus depth.
+fn refine_depth_bins_by_residuals(
+    seed_bins: &std::collections::HashMap<(i32, i32), DepthHypothesis>,
+    iterations: usize,
+) -> std::collections::HashMap<(i32, i32), DepthHypothesis> {
+    let mut current = seed_bins.clone();
+    for _ in 0..iterations {
+        let prev = current.clone();
+        for (&key, h) in &prev {
+            let z_self = h.center[2];
+            let mut neighbors = 0usize;
+            let mut wsum = 0.0_f64;
+            let mut zsum = 0.0_f64;
+
+            for (dx, dy) in [
+                (-1, 0), (1, 0), (0, -1), (0, 1),
+                (-1, -1), (-1, 1), (1, -1), (1, 1),
+            ] {
+                let nb = (key.0 + dx, key.1 + dy);
+                let Some(nh) = prev.get(&nb) else {
+                    continue;
+                };
+                if (nh.center[2] - z_self).abs() > MVS_REGULARIZATION_DEPTH_TOL_M {
+                    continue;
+                }
+                neighbors += 1;
+                let w = nh.confidence.max(1.0e-6);
+                wsum += w;
+                zsum += w * nh.center[2];
+            }
+
+            if neighbors < MVS_RESIDUAL_MIN_NEIGHBORS || wsum <= 1.0e-9 {
+                continue;
+            }
+
+            let z_local = zsum / wsum;
+            let residual = (z_self - z_local).abs();
+            let local_tol = (MVS_RESIDUAL_BASE_TOL_M + MVS_RESIDUAL_DEPTH_SCALE * z_self.abs()).clamp(0.35, 2.6);
+            let normalized = (residual / local_tol).clamp(0.0, 3.0);
+            let consistency = (1.0 - normalized).clamp(0.0, 1.0);
+
+            let conf_mult = if normalized <= 1.0 {
+                1.0 + (MVS_RESIDUAL_CONF_BOOST_MAX - 1.0) * (1.0 - normalized)
+            } else {
+                let t = ((normalized - 1.0) / 1.5).clamp(0.0, 1.0);
+                1.0 - t * (1.0 - MVS_RESIDUAL_CONF_ATTEN_MIN)
+            };
+
+            let Some(v) = current.get_mut(&key) else {
+                continue;
+            };
+            v.confidence = (v.confidence * conf_mult).clamp(0.05, 0.99);
+
+            let pull_consistency = (1.0 - (normalized / 2.0)).clamp(0.0, 1.0);
+            let pull = MVS_RESIDUAL_PULL_MAX * (1.0 - h.confidence).clamp(0.0, 1.0) * pull_consistency;
+            v.center[2] = v.center[2] * (1.0 - pull) + z_local * pull;
+        }
+    }
+    current
 }
 
 /// Applies one pass of edge-aware bilateral-style regularization to a sparse
@@ -3579,6 +3660,51 @@ mod tests {
             "bin at depth {z1_before} should not be influenced across a {:.1}-m discontinuity",
             (z1_before - z0_before)
         );
+    }
+
+    #[test]
+    fn residual_refinement_boosts_confidence_for_consistent_bin() {
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((-1, 0), DepthHypothesis { center: [-8.0, 0.0, 10.0], confidence: 0.85 });
+        bins.insert((1, 0), DepthHypothesis { center: [8.0, 0.0, 10.1], confidence: 0.88 });
+        bins.insert((0, -1), DepthHypothesis { center: [0.0, -8.0, 9.95], confidence: 0.87 });
+        bins.insert((0, 1), DepthHypothesis { center: [0.0, 8.0, 10.05], confidence: 0.90 });
+        bins.insert((0, 0), DepthHypothesis { center: [0.0, 0.0, 10.02], confidence: 0.40 });
+
+        let refined = refine_depth_bins_by_residuals(&bins, 1);
+        let c0 = bins[&(0, 0)].confidence;
+        let c1 = refined[&(0, 0)].confidence;
+        assert!(c1 > c0, "consistent residual should increase confidence ({c0} -> {c1})");
+    }
+
+    #[test]
+    fn residual_refinement_attenuates_confidence_for_outlier_bin() {
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((-1, 0), DepthHypothesis { center: [-8.0, 0.0, 10.0], confidence: 0.85 });
+        bins.insert((1, 0), DepthHypothesis { center: [8.0, 0.0, 10.0], confidence: 0.88 });
+        bins.insert((0, -1), DepthHypothesis { center: [0.0, -8.0, 10.1], confidence: 0.87 });
+        bins.insert((0, 1), DepthHypothesis { center: [0.0, 8.0, 10.0], confidence: 0.90 });
+        bins.insert((0, 0), DepthHypothesis { center: [0.0, 0.0, 11.3], confidence: 0.75 });
+
+        let refined = refine_depth_bins_by_residuals(&bins, 1);
+        let c0 = bins[&(0, 0)].confidence;
+        let c1 = refined[&(0, 0)].confidence;
+        assert!(c1 < c0, "outlier residual should reduce confidence ({c0} -> {c1})");
+    }
+
+    #[test]
+    fn residual_refinement_pulls_low_confidence_depth_toward_local_mean() {
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((-1, 0), DepthHypothesis { center: [-8.0, 0.0, 10.0], confidence: 0.90 });
+        bins.insert((1, 0), DepthHypothesis { center: [8.0, 0.0, 10.1], confidence: 0.90 });
+        bins.insert((0, -1), DepthHypothesis { center: [0.0, -8.0, 10.0], confidence: 0.90 });
+        bins.insert((0, 1), DepthHypothesis { center: [0.0, 8.0, 9.9], confidence: 0.90 });
+        bins.insert((0, 0), DepthHypothesis { center: [0.0, 0.0, 10.8], confidence: 0.12 });
+
+        let refined = refine_depth_bins_by_residuals(&bins, 2);
+        let z0 = bins[&(0, 0)].center[2];
+        let z1 = refined[&(0, 0)].center[2];
+        assert!(z1 < z0, "low-confidence outlier should be pulled toward local mean ({z0} -> {z1})");
     }
 
     #[test]

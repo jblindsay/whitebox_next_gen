@@ -279,6 +279,7 @@ pub fn run_camera_alignment_with_options(
         relative_support,
         quality,
         &intrinsics,
+        model,
         match_stats,
     );
     if essential_aligned_count > 0 {
@@ -301,6 +302,7 @@ pub fn run_camera_alignment_with_options(
         &rotations,
         match_stats,
         &intrinsics,
+        model,
         relative_support,
     );
     let (residual_p50_px, residual_p95_px) = if residual_samples_px.len() >= 8 {
@@ -489,6 +491,7 @@ fn derive_positions(
     relative_support: f64,
     quality: f64,
     intrinsics: &CameraIntrinsics,
+    model: CameraModel,
     match_stats: &MatchStats,
 ) -> (Vec<[f64; 3]>, Option<Vec<[f64; 4]>>, CrsInfo, usize) {
     if aligned_count == 0 {
@@ -511,6 +514,7 @@ fn derive_positions(
         aligned_frames,
         match_stats,
         intrinsics,
+        model,
         relative_support,
         quality,
     ) {
@@ -539,6 +543,7 @@ fn derive_incremental_poses_from_essential(
     frames: &[ImageFrame],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     relative_support: f64,
     quality: f64,
 ) -> Option<(Vec<[f64; 3]>, Vec<[f64; 4]>)> {
@@ -560,7 +565,13 @@ fn derive_incremental_poses_from_essential(
     let mut recovered_pairs = 0usize;
     for left_idx in 0..(frames.len() - 1) {
         let mut step_local = last_step_local * baseline_m;
-        if let Some((essential_pose, gap)) = best_incremental_pair_pose(left_idx, match_stats, intrinsics, 3) {
+        if let Some((essential_pose, gap)) = best_incremental_pair_pose(
+            left_idx,
+            match_stats,
+            intrinsics,
+            camera_model,
+            3,
+        ) {
             let direction = -essential_pose.r.transpose() * essential_pose.t;
             if direction.norm() > 1.0e-9 {
                 step_local = direction.normalize() * baseline_m;
@@ -589,6 +600,7 @@ fn best_incremental_pair_pose(
     left_idx: usize,
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     max_gap: usize,
 ) -> Option<(EssentialPose, usize)> {
     for gap in 1..=max_gap {
@@ -602,14 +614,18 @@ fn best_incremental_pair_pose(
         if pair.points.len() < 8 {
             continue;
         }
-        if let Some(pose) = estimate_essential_pose(pair.points.as_slice(), intrinsics) {
+        if let Some(pose) = estimate_essential_pose(pair.points.as_slice(), intrinsics, camera_model) {
             return Some((pose, gap));
         }
     }
     None
 }
 
-fn estimate_essential_pose(points: &[[f64; 4]], intrinsics: &CameraIntrinsics) -> Option<EssentialPose> {
+fn estimate_essential_pose(
+    points: &[[f64; 4]],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Option<EssentialPose> {
     if points.len() < 8 {
         return None;
     }
@@ -617,11 +633,17 @@ fn estimate_essential_pose(points: &[[f64; 4]], intrinsics: &CameraIntrinsics) -
     let n = points.len();
     let mut normalized = Vec::with_capacity(n);
     for p in points {
-        let x1 = (p[0] - intrinsics.cx) / intrinsics.fx;
-        let y1 = (p[1] - intrinsics.cy) / intrinsics.fy;
-        let x2 = (p[2] - intrinsics.cx) / intrinsics.fx;
-        let y2 = (p[3] - intrinsics.cy) / intrinsics.fy;
-        normalized.push((Vector2::new(x1, y1), Vector2::new(x2, y2)));
+        let left = unproject_pixel_to_normalized_camera_ray(
+            &Vector2::new(p[0], p[1]),
+            intrinsics,
+            camera_model,
+        )?;
+        let right = unproject_pixel_to_normalized_camera_ray(
+            &Vector2::new(p[2], p[3]),
+            intrinsics,
+            camera_model,
+        )?;
+        normalized.push((left, right));
     }
 
     let mut best_inliers: Vec<usize> = Vec::new();
@@ -3648,8 +3670,9 @@ fn triangulate_point_from_observation_set(
             r_w2c[(1, 0)], r_w2c[(1, 1)], r_w2c[(1, 2)], t[1],
             r_w2c[(2, 0)], r_w2c[(2, 1)], r_w2c[(2, 2)], t[2],
         );
-        let xn = (obs.obs_px[0] - intrinsics.cx) / intrinsics.fx;
-        let yn = (obs.obs_px[1] - intrinsics.cy) / intrinsics.fy;
+        let ray = unproject_pixel_to_normalized_camera_ray(&obs.obs_px, intrinsics, camera_model)?;
+        let xn = ray[0];
+        let yn = ray[1];
 
         let r0 = row_idx * 2;
         let e0 = xn * p.row(2) - p.row(0);
@@ -4145,8 +4168,20 @@ fn build_ba_observations_with_profile(
         );
 
         for (point_idx, p) in pair.points.iter().take(profile.max_pts_per_pair).enumerate() {
-            let x1n = Vector2::new((p[0] - intrinsics.cx) / intrinsics.fx, (p[1] - intrinsics.cy) / intrinsics.fy);
-            let x2n = Vector2::new((p[2] - intrinsics.cx) / intrinsics.fx, (p[3] - intrinsics.cy) / intrinsics.fy);
+            let Some(x1n) = unproject_pixel_to_normalized_camera_ray(
+                &Vector2::new(p[0], p[1]),
+                intrinsics,
+                camera_model,
+            ) else {
+                continue;
+            };
+            let Some(x2n) = unproject_pixel_to_normalized_camera_ray(
+                &Vector2::new(p[2], p[3]),
+                intrinsics,
+                camera_model,
+            ) else {
+                continue;
+            };
 
             if let Some(xw) = triangulate_point(&p_l, &p_r, &x1n, &x2n) {
                 if xw[2].is_finite() {
@@ -4321,6 +4356,80 @@ fn project_world_to_pixel(
         return None;
     }
     Some(Vector2::new(u, v))
+}
+
+fn unproject_pixel_to_normalized_camera_ray(
+    obs_px: &Vector2<f64>,
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Option<Vector2<f64>> {
+    let x_distorted = (obs_px[0] - intrinsics.cx) / intrinsics.fx;
+    let y_distorted = (obs_px[1] - intrinsics.cy) / intrinsics.fy;
+    if !x_distorted.is_finite() || !y_distorted.is_finite() {
+        return None;
+    }
+
+    match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => Some(Vector2::new(x_distorted, y_distorted)),
+        CameraModel::Fisheye => undistort_fisheye_normalized_coords(x_distorted, y_distorted, intrinsics),
+    }
+}
+
+fn undistort_fisheye_normalized_coords(
+    x_distorted: f64,
+    y_distorted: f64,
+    intrinsics: &CameraIntrinsics,
+) -> Option<Vector2<f64>> {
+    let radius_distorted = (x_distorted * x_distorted + y_distorted * y_distorted).sqrt();
+    if !radius_distorted.is_finite() {
+        return None;
+    }
+    if radius_distorted <= 1.0e-12 {
+        return Some(Vector2::new(x_distorted, y_distorted));
+    }
+
+    let theta = invert_fisheye_theta(radius_distorted, intrinsics)?;
+    let radius_rectilinear = theta.tan();
+    if !radius_rectilinear.is_finite() {
+        return None;
+    }
+
+    let scale = radius_rectilinear / radius_distorted;
+    let x = x_distorted * scale;
+    let y = y_distorted * scale;
+    if x.is_finite() && y.is_finite() {
+        Some(Vector2::new(x, y))
+    } else {
+        None
+    }
+}
+
+fn invert_fisheye_theta(theta_distorted: f64, intrinsics: &CameraIntrinsics) -> Option<f64> {
+    if !theta_distorted.is_finite() || theta_distorted < 0.0 {
+        return None;
+    }
+
+    let mut theta = theta_distorted.clamp(0.0, std::f64::consts::FRAC_PI_2 - 1.0e-4);
+    for _ in 0..10 {
+        let theta2 = theta * theta;
+        let theta4 = theta2 * theta2;
+        let f = theta * (1.0 + intrinsics.k1 * theta2 + intrinsics.k2 * theta4) - theta_distorted;
+        let df = 1.0 + 3.0 * intrinsics.k1 * theta2 + 5.0 * intrinsics.k2 * theta4;
+        if !f.is_finite() || !df.is_finite() || df.abs() <= 1.0e-12 {
+            return None;
+        }
+        let step = f / df;
+        theta = (theta - step).clamp(0.0, std::f64::consts::FRAC_PI_2 - 1.0e-4);
+        if step.abs() <= 1.0e-10 {
+            break;
+        }
+    }
+
+    if theta.is_finite() {
+        Some(theta)
+    } else {
+        None
+    }
 }
 
 fn reprojection_residual_px(
@@ -4519,6 +4628,7 @@ fn apply_loop_closure_global_optimization(
     rotations: &[[f64; 4]],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
     relative_support: f64,
 ) -> (Vec<[f64; 3]>, LoopClosureDiagnostics) {
     if positions.len() < 4 || rotations.len() != positions.len() {
@@ -4532,7 +4642,13 @@ fn apply_loop_closure_global_optimization(
         );
     }
 
-    let mut constraints = estimate_loop_closure_constraints(positions, rotations, match_stats, intrinsics);
+    let mut constraints = estimate_loop_closure_constraints(
+        positions,
+        rotations,
+        match_stats,
+        intrinsics,
+        camera_model,
+    );
     if constraints.is_empty() {
         return (
             positions.to_vec(),
@@ -4744,6 +4860,7 @@ fn estimate_loop_closure_constraints(
     rotations: &[[f64; 4]],
     match_stats: &MatchStats,
     intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
 ) -> Vec<LoopClosureConstraint> {
     let mut constraints = Vec::new();
     if positions.len() < 4 {
@@ -4759,7 +4876,7 @@ fn estimate_loop_closure_constraints(
             continue;
         }
 
-        let essential_pose = match estimate_essential_pose(pair.points.as_slice(), intrinsics) {
+        let essential_pose = match estimate_essential_pose(pair.points.as_slice(), intrinsics, camera_model) {
             Some(v) => v,
             None => continue,
         };
@@ -5745,7 +5862,7 @@ mod tests {
             ]);
         }
 
-        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
+        assert!(estimate_essential_pose(&points, &intrinsics, CameraModel::Pinhole).is_none());
     }
 
     #[test]
@@ -5778,7 +5895,7 @@ mod tests {
             ]);
         }
 
-        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
+        assert!(estimate_essential_pose(&points, &intrinsics, CameraModel::Pinhole).is_none());
     }
 
     #[test]
@@ -5813,7 +5930,7 @@ mod tests {
             }
         }
 
-        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
+        assert!(estimate_essential_pose(&points, &intrinsics, CameraModel::Pinhole).is_none());
     }
 
     #[test]
@@ -6703,6 +6820,7 @@ mod tests {
             &rotations,
             &match_stats,
             &intrinsics,
+            CameraModel::Pinhole,
             0.85,
         );
 
@@ -6795,6 +6913,55 @@ mod tests {
             .expect("fisheye projection");
 
         assert!((base - tangential).norm() < 1.0e-9, "fisheye projection should ignore tangential Brown-Conrady terms");
+    }
+
+    #[test]
+    fn fisheye_essential_pose_recovers_nontrivial_motion() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1100.0,
+            fy: 1090.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.018,
+            k2: -0.003,
+            p1: 0.0,
+            p2: 0.0,
+        };
+        let yaw = 0.06_f64;
+        let r = Matrix3::new(
+            yaw.cos(), -yaw.sin(), 0.0,
+            yaw.sin(),  yaw.cos(), 0.0,
+            0.0,        0.0,       1.0,
+        );
+        let t = Vector3::new(0.20, 0.02, 0.01);
+
+        let mut points = Vec::new();
+        for i in 0..32 {
+            let x = -1.1 + (i as f64) * 0.08;
+            let y = -0.7 + ((i * 5 % 13) as f64) * 0.10;
+            let z = 3.8 + ((i * 7 % 11) as f64) * 0.18;
+            let world = Vector3::new(x, y, z);
+            let p1 = project_world_to_pixel(
+                &world,
+                &Vector3::zeros(),
+                &Matrix3::identity(),
+                &intrinsics,
+                CameraModel::Fisheye,
+            ).expect("fisheye obs 1");
+            let p2 = project_world_to_pixel(
+                &world,
+                &(-r.transpose() * t),
+                &r.transpose(),
+                &intrinsics,
+                CameraModel::Fisheye,
+            ).expect("fisheye obs 2");
+            points.push([p1[0], p1[1], p2[0], p2[1]]);
+        }
+
+        let pose = estimate_essential_pose(&points, &intrinsics, CameraModel::Fisheye)
+            .expect("fisheye essential recovery should succeed");
+        let step_local = -pose.r.transpose() * pose.t;
+        assert!(step_local.norm() > 0.5, "fisheye essential recovery should produce a non-trivial step direction");
     }
 
     #[test]

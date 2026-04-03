@@ -58,6 +58,33 @@ Images on disk
               └───────────┘
 ```
 
+## Benchmark Matrix Runner
+
+For Milestone-2 dataset-matrix benchmarking, use:
+
+`crates/wbphotogrammetry/examples/run_dataset_matrix.py`
+
+It discovers dataset folders under a root (for example, sibling collections in
+the same folder as Toledo), runs `run_dataset_pipeline` per dataset, and writes
+an aggregate `dataset_matrix_summary.json`.
+
+Large-dataset safeguards are built in:
+
+- `--max-images-per-dataset`: frame cap via staged symlink subset
+- `--max-dataset-gb`: skip very large datasets
+- `--max-total-gb`: stop selection when cumulative dataset size exceeds budget
+- `--dry-run`: inventory/selection only, no pipeline execution
+
+Example:
+
+```bash
+python crates/wbphotogrammetry/examples/run_dataset_matrix.py \
+  --datasets-root /Users/johnlindsay/Documents/programming/Rust/drone_sfm_real_flight/datasets \
+  --out-dir target/wbphotogrammetry_dataset_matrix \
+  --profile balanced --feature-method rootsift --resolution 0.1 \
+  --max-images-per-dataset 120 --max-dataset-gb 8 --max-total-gb 20
+```
+
 ---
 
 ## Modules and Capabilities

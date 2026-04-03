@@ -27,6 +27,12 @@ METRICS: List[Tuple[str, List[str], bool]] = [
     ("dsm.vertical_rmse_m", ["dsm_stats", "vertical_rmse_m"], True),
     ("dsm.mean_local_relief_m", ["dsm_stats", "mean_local_relief_m"], False),
     ("dsm.p95_local_relief_m", ["dsm_stats", "p95_local_relief_m"], False),
+    (
+        "dsm.mvs_mean_reference_completeness_pct",
+        ["dsm_stats", "mvs_mean_reference_completeness_pct"],
+        False,
+    ),
+    ("dsm.low_confidence_cells_pct", ["dsm_stats", "low_confidence_cells_pct"], True),
     ("mosaic.coverage_pct", ["mosaic_coverage_pct"], False),
     ("qa.recommended_actions", ["qa", "recommended_actions"], True),
     ("timing.dense_s", ["timing", "dense_s"], True),

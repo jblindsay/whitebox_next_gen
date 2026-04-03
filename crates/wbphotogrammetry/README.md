@@ -451,8 +451,14 @@ cargo run --example profile_pipeline --release -- --profile balanced --feature-m
 # Inspect feature matching on a specific image pair
 cargo run --example feature_pair_probe --release -- --images-dir <dir> --left <image_a> --right <image_b> --method rootsift
 
+# Run full dataset pipeline and emit a report JSON
+cargo run --example run_dataset_pipeline --release -- --images-dir <dir> --out-dir <out_dir> --profile balanced --feature-method rootsift
+
 # Compare QA reports across profiles (requires Python 3)
 python3 examples/compare_profile_reports.py <report_fast.json> <report_survey.json>
+
+# Compare two dataset pipeline reports (quality + timing deltas)
+python3 examples/compare_dataset_reports.py --baseline <baseline_report.json> --candidate <candidate_report.json>
 
 # Batch benchmark across multiple input sets
 bash examples/run_profile_benchmark.sh

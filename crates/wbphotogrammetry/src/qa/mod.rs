@@ -364,10 +364,14 @@ mod tests {
                 connectivity: 0.91,
                 mean_matches_per_pair: 140.0,
                 mean_parallax_px: 5.5,
+                pair_attempt_count: 20,
+                pair_connected_count: 18,
+                pair_rejected_count: 2,
                 adjacent_pair_motions: Vec::new(),
                 pair_correspondences: Vec::new(),
                 failure_reasons: Vec::new(),
                 failure_codes: Vec::new(),
+                weak_pair_examples: Vec::new(),
             },
             AlignmentStats {
                 aligned_fraction: 0.95,
@@ -423,6 +427,7 @@ mod tests {
                 coverage_pct: 96.0,
                 confidence_raster_path: None,
                 support_diagnostics_path: None,
+                source_index_raster_path: None,
             },
             ProfileThresholds::for_profile(ProcessingProfile::Balanced),
         )
@@ -553,10 +558,14 @@ mod tests {
             connectivity: 0.93,
             mean_matches_per_pair: 165.0,
             mean_parallax_px: 7.4,
+            pair_attempt_count: 30,
+            pair_connected_count: 28,
+            pair_rejected_count: 2,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
         let real_like = MatchStats {
             frame_count: 14,
@@ -565,10 +574,14 @@ mod tests {
             connectivity: 0.81,
             mean_matches_per_pair: 102.0,
             mean_parallax_px: 4.1,
+            pair_attempt_count: 24,
+            pair_connected_count: 21,
+            pair_rejected_count: 3,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let alignment_synth = AlignmentStats {
@@ -663,6 +676,7 @@ mod tests {
             coverage_pct: 96.97,
             confidence_raster_path: None,
             support_diagnostics_path: None,
+            source_index_raster_path: None,
         };
         let mosaic_real_like = MosaicResult {
             ortho_path: "orthomosaic.tif".to_string(),
@@ -682,6 +696,7 @@ mod tests {
             coverage_pct: 88.89,
             confidence_raster_path: None,
             support_diagnostics_path: None,
+            source_index_raster_path: None,
         };
 
         let fast = ProfileThresholds::for_profile(ProcessingProfile::Fast);

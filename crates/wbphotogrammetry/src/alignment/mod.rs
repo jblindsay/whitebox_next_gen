@@ -3025,10 +3025,14 @@ mod tests {
             connectivity: 0.95,
             mean_matches_per_pair: 730.0,
             mean_parallax_px: 7.5,
+            pair_attempt_count: 3,
+            pair_connected_count: 3,
+            pair_rejected_count: 0,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &match_stats, CameraModel::Auto)
@@ -3060,10 +3064,14 @@ mod tests {
             connectivity: 0.05,
             mean_matches_per_pair: 1.0,
             mean_parallax_px: 0.0,
+            pair_attempt_count: 10,
+            pair_connected_count: 0,
+            pair_rejected_count: 10,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: vec!["No cross-image feature matches were verified.".to_string()],
             failure_codes: vec!["no_verified_matches".to_string()],
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &weak, CameraModel::Pinhole)
@@ -3092,10 +3100,14 @@ mod tests {
             connectivity: 0.92,
             mean_matches_per_pair: 560.0,
             mean_parallax_px: 6.8,
+            pair_attempt_count: 15,
+            pair_connected_count: 14,
+            pair_rejected_count: 1,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &strong, CameraModel::Pinhole)
@@ -3145,10 +3157,14 @@ mod tests {
             connectivity: 0.88,
             mean_matches_per_pair: 480.0,
             mean_parallax_px: 5.9,
+            pair_attempt_count: 6,
+            pair_connected_count: 5,
+            pair_rejected_count: 1,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: Vec::new(),
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &stats, CameraModel::Auto)
@@ -3220,6 +3236,9 @@ mod tests {
             connectivity: 1.0,
             mean_matches_per_pair: points.len() as f64,
             mean_parallax_px: 6.0,
+            pair_attempt_count: 1,
+            pair_connected_count: 1,
+            pair_rejected_count: 0,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: vec![PairCorrespondences {
                 left_frame_idx: 0,
@@ -3229,6 +3248,7 @@ mod tests {
             }],
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &stats, CameraModel::Pinhole)
@@ -3293,6 +3313,9 @@ mod tests {
             connectivity: 0.82,
             mean_matches_per_pair: 140.0,
             mean_parallax_px: 6.2,
+            pair_attempt_count: 4,
+            pair_connected_count: 3,
+            pair_rejected_count: 1,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: vec![
                 PairCorrespondences {
@@ -3316,6 +3339,7 @@ mod tests {
             ],
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let result = run_camera_alignment(&frames, &stats, CameraModel::Pinhole)
@@ -3388,6 +3412,9 @@ mod tests {
                 connectivity: 1.0,
                 mean_matches_per_pair: 100.0,
                 mean_parallax_px: 50.0,
+                pair_attempt_count: 1,
+                pair_connected_count: 1,
+                pair_rejected_count: 0,
                 adjacent_pair_motions: Vec::new(),
                 pair_correspondences: vec![
                     PairCorrespondences {
@@ -3399,6 +3426,7 @@ mod tests {
                 ],
                 failure_reasons: Vec::new(),
                 failure_codes: Vec::new(),
+                weak_pair_examples: Vec::new(),
             },
             &intrinsics,
         );
@@ -3461,6 +3489,9 @@ mod tests {
                 connectivity: 1.0,
                 mean_matches_per_pair: 12.0,
                 mean_parallax_px: 40.0,
+                pair_attempt_count: 1,
+                pair_connected_count: 1,
+                pair_rejected_count: 0,
                 adjacent_pair_motions: Vec::new(),
                 pair_correspondences: vec![PairCorrespondences {
                     left_frame_idx: 0,
@@ -3470,6 +3501,7 @@ mod tests {
                 }],
                 failure_reasons: Vec::new(),
                 failure_codes: Vec::new(),
+                weak_pair_examples: Vec::new(),
             },
             &intrinsics,
         );
@@ -3530,6 +3562,9 @@ mod tests {
             connectivity: 0.86,
             mean_matches_per_pair: 120.0,
             mean_parallax_px: 6.1,
+            pair_attempt_count: 6,
+            pair_connected_count: 5,
+            pair_rejected_count: 1,
             adjacent_pair_motions: Vec::new(),
             pair_correspondences: vec![PairCorrespondences {
                 left_frame_idx: 0,
@@ -3539,6 +3574,7 @@ mod tests {
             }],
             failure_reasons: Vec::new(),
             failure_codes: Vec::new(),
+            weak_pair_examples: Vec::new(),
         };
 
         let (refined, diag) = apply_loop_closure_global_optimization(

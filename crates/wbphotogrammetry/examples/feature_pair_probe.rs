@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 use image::imageops::FilterType;
 use image::{Rgb, RgbImage};
 use wbphotogrammetry::{
+    FeatureMethod,
     ingest_image_set,
-    run_feature_matching_brief,
-    run_feature_matching_orb,
     MatchStats,
+    run_feature_matching_with_method,
 };
 
 fn main() {
@@ -25,6 +25,13 @@ fn main() {
         std::process::exit(2);
     });
     let profile = get_arg(&args, "--profile").unwrap_or_else(|| "balanced".to_string());
+    let requested_method = get_arg(&args, "--method")
+        .map(|value| value.parse::<FeatureMethod>())
+        .transpose()
+        .unwrap_or_else(|e| {
+            eprintln!("invalid --method: {e}");
+            std::process::exit(2);
+        });
     let viz_dir = get_arg(&args, "--viz-dir").map(PathBuf::from);
 
     let frames = ingest_image_set(&images_dir).unwrap_or_else(|e| {
@@ -51,15 +58,6 @@ fn main() {
 
     let pair = vec![left, right];
 
-    let brief = run_feature_matching_brief(&pair, &profile).unwrap_or_else(|e| {
-        eprintln!("BRIEF matcher failed: {e}");
-        std::process::exit(1);
-    });
-    let orb = run_feature_matching_orb(&pair, &profile).unwrap_or_else(|e| {
-        eprintln!("ORB matcher failed: {e}");
-        std::process::exit(1);
-    });
-
     println!("Feature Pair Probe");
     println!("images_dir: {images_dir}");
     println!("left: {left_name}");
@@ -67,9 +65,27 @@ fn main() {
     println!("profile: {profile}");
     println!();
 
-    print_stats("BRIEF", &brief);
-    println!();
-    print_stats("ORB", &orb);
+    let mut results = Vec::new();
+    let methods: Vec<FeatureMethod> = if let Some(method) = requested_method {
+        vec![method]
+    } else {
+        vec![
+            FeatureMethod::Brief,
+            FeatureMethod::Orb,
+            FeatureMethod::Sift,
+            FeatureMethod::RootSift,
+        ]
+    };
+
+    for method in methods {
+        let stats = run_feature_matching_with_method(&pair, &profile, method).unwrap_or_else(|e| {
+            eprintln!("{} matcher failed: {e}", method.as_str());
+            std::process::exit(1);
+        });
+        print_stats(&method.as_str().to_ascii_uppercase(), &stats);
+        println!();
+        results.push((method, stats));
+    }
 
     if let Some(dir) = viz_dir {
         if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -85,22 +101,16 @@ fn main() {
             sanitize_name(&right_name)
         );
 
-        let brief_path = dir.join(format!("{stem}_brief_matches.png"));
-        let orb_path = dir.join(format!("{stem}_orb_matches.png"));
-
-        write_match_visualization(left_path, right_path, &brief, &brief_path).unwrap_or_else(|e| {
-            eprintln!("failed writing BRIEF visualization '{}': {e}", brief_path.display());
-            std::process::exit(1);
-        });
-        write_match_visualization(left_path, right_path, &orb, &orb_path).unwrap_or_else(|e| {
-            eprintln!("failed writing ORB visualization '{}': {e}", orb_path.display());
-            std::process::exit(1);
-        });
-
         println!();
         println!("[visualizations]");
-        println!("  BRIEF: {}", brief_path.display());
-        println!("  ORB:   {}", orb_path.display());
+        for (method, stats) in &results {
+            let output_path = dir.join(format!("{stem}_{}_matches.png", method.as_str()));
+            write_match_visualization(left_path, right_path, stats, &output_path).unwrap_or_else(|e| {
+                eprintln!("failed writing {} visualization '{}': {e}", method.as_str(), output_path.display());
+                std::process::exit(1);
+            });
+            println!("  {}: {}", method.as_str().to_ascii_uppercase(), output_path.display());
+        }
     }
 }
 

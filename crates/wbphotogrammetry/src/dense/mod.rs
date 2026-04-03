@@ -28,6 +28,9 @@ const MVS_SEARCH_RADIUS: i32 = 12;
 const MVS_OCCLUSION_BIN_PX: f64 = 8.0;
 const MVS_EPIPOLAR_TOL_PX: f64 = 1.25;
 const MVS_LR_CONSISTENCY_TOL_PX: i32 = 2;
+const MVS_CENSUS_RADIUS: i32 = 2;
+const MVS_HYBRID_ZNCC_WEIGHT: f64 = 0.65;
+const MVS_HYBRID_CENSUS_WEIGHT: f64 = 0.35;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -686,7 +689,7 @@ fn estimate_multiview_depth_maps(
                                 if uu <= start || vv <= start || uu >= other_img.width() as i32 - start || vv >= other_img.height() as i32 - start {
                                     continue;
                                 }
-                                let cost = patch_zncc_cost(ref_img, other_img, x, y, uu, vv, MVS_PATCH_RADIUS);
+                                let cost = patch_hybrid_cost(ref_img, other_img, x, y, uu, vv, MVS_PATCH_RADIUS);
                                 if cost < best_other_cost {
                                     best_other_cost = cost;
                                     best_other_xy = Some((uu, vv));
@@ -1144,7 +1147,7 @@ fn best_patch_match(
         if (center_left_intensity - center_right_intensity).abs() > 30.0 {
             continue;
         }
-        let score = patch_zncc_cost(left, right, xl, yl, xr, yr, patch_radius);
+        let score = patch_hybrid_cost(left, right, xl, yl, xr, yr, patch_radius);
         if score < best {
             second = best;
             best = score;
@@ -1359,6 +1362,56 @@ fn patch_zncc_cost(
     let zncc = (num / denom).clamp(-1.0, 1.0);
     // Convert to a minimization cost in [0, 1].
     0.5 * (1.0 - zncc)
+}
+
+fn patch_census_cost(
+    left: &GrayImage,
+    right: &GrayImage,
+    xl: i32,
+    yl: i32,
+    xr: i32,
+    yr: i32,
+    radius: i32,
+) -> f64 {
+    let center_l = left.get_pixel(xl as u32, yl as u32)[0] as i16;
+    let center_r = right.get_pixel(xr as u32, yr as u32)[0] as i16;
+    let mut total = 0u32;
+    let mut hamming = 0u32;
+
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let lv = left.get_pixel((xl + dx) as u32, (yl + dy) as u32)[0] as i16;
+            let rv = right.get_pixel((xr + dx) as u32, (yr + dy) as u32)[0] as i16;
+            let bit_l = lv >= center_l;
+            let bit_r = rv >= center_r;
+            if bit_l != bit_r {
+                hamming += 1;
+            }
+            total += 1;
+        }
+    }
+
+    if total == 0 {
+        return 1.0;
+    }
+    (hamming as f64 / total as f64).clamp(0.0, 1.0)
+}
+
+fn patch_hybrid_cost(
+    left: &GrayImage,
+    right: &GrayImage,
+    xl: i32,
+    yl: i32,
+    xr: i32,
+    yr: i32,
+    radius: i32,
+) -> f64 {
+    let zncc = patch_zncc_cost(left, right, xl, yl, xr, yr, radius);
+    let census = patch_census_cost(left, right, xl, yl, xr, yr, MVS_CENSUS_RADIUS.min(radius));
+    (MVS_HYBRID_ZNCC_WEIGHT * zncc + MVS_HYBRID_CENSUS_WEIGHT * census).clamp(0.0, 1.0)
 }
 
 fn build_depth_hypotheses(
@@ -2328,6 +2381,29 @@ mod tests {
         let good = patch_zncc_cost(&left, &right, 4, 4, 4, 4, 2);
         let bad = patch_zncc_cost(&left, &right, 4, 4, 5, 4, 2);
         assert!(good < bad, "ZNCC cost should be lower for matching patches");
+    }
+
+    #[test]
+    fn hybrid_cost_prefers_matching_patches() {
+        let mut left = GrayImage::new(11, 11);
+        let mut right = GrayImage::new(11, 11);
+        for y in 0..11u32 {
+            for x in 0..11u32 {
+                let v = ((x * 19 + y * 13) % 251) as u8;
+                left.put_pixel(x, y, image::Luma([v]));
+                right.put_pixel(x, y, image::Luma([v]));
+            }
+        }
+        // Corrupt an offset neighborhood to force a structurally worse candidate.
+        for y in 3..8u32 {
+            for x in 3..8u32 {
+                right.put_pixel(x + 1, y, image::Luma([0]));
+            }
+        }
+
+        let good = patch_hybrid_cost(&left, &right, 5, 5, 5, 5, 2);
+        let bad = patch_hybrid_cost(&left, &right, 5, 5, 6, 5, 2);
+        assert!(good < bad, "hybrid cost should be lower for matching patches");
     }
 
     #[test]

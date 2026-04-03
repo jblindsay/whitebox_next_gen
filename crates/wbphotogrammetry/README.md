@@ -384,8 +384,9 @@ likely to require further development.
   Dense reconstruction still has lower point density/completeness than mature
   patch-based or cost-volume MVS pipelines. In particular:
   - Only lightweight depth-map voting and front-surface (occlusion-aware)
-    selection are implemented; there is no full probabilistic fusion across
-    all views.
+    selection are implemented, with geometry-aware confidence weighting
+    (triangulation angle and baseline/depth conditioning proxy); there is no
+    full probabilistic fusion across all views.
   - Matching now uses pose-derived epipolar constraints and left-right
     consistency checks, with coarse-to-fine (two-level pyramid) guidance and
     a lightweight hybrid ZNCC+Census local cost; it still uses local patch

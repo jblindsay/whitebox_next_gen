@@ -45,6 +45,7 @@ struct MultiViewDepthSample {
     support_views: usize,
     ref_px: [f64; 2],
     ref_depth: f64,
+    geometry_quality: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -599,6 +600,7 @@ fn estimate_multiview_depth_maps(
                 let mut best_conf = 0.0_f64;
                 let mut best_support = 0usize;
                 let mut best_ref_depth = 0.0_f64;
+                let mut best_geometry_quality = 0.0_f64;
 
                 for &src_idx in &source_views {
                     let Some(src_pyr) = loaded[src_idx].as_ref() else {
@@ -697,6 +699,12 @@ fn estimate_multiview_depth_maps(
                         continue;
                     }
 
+                    let pair_geometry_quality = triangulation_geometry_quality(
+                        &alignment.poses[ref_idx],
+                        &alignment.poses[src_idx],
+                        &point_w,
+                    );
+
                     let mut support_views = 1usize;
                     let mut consistency = 0.0_f64;
                     for &other_idx in &source_views {
@@ -769,7 +777,11 @@ fn estimate_multiview_depth_maps(
                     let ratio_conf = ((m.second_cost / m.best_cost.max(1.0e-9)) - 1.0).clamp(0.0, 0.25) / 0.25;
                     let support_factor = (support_views as f64 / source_views.len().max(1) as f64).clamp(0.0, 1.0);
                     let consistency_factor = (consistency / source_views.len().max(1) as f64).clamp(0.0, 1.0);
-                    let conf = (0.45 * match_conf + 0.20 * ratio_conf + 0.20 * support_factor + 0.15 * consistency_factor)
+                    let conf = (0.35 * match_conf
+                        + 0.16 * ratio_conf
+                        + 0.16 * support_factor
+                        + 0.13 * consistency_factor
+                        + 0.20 * pair_geometry_quality)
                         .clamp(0.05, 0.98);
 
                     if conf > best_conf {
@@ -777,6 +789,7 @@ fn estimate_multiview_depth_maps(
                         best_conf = conf;
                         best_support = support_views;
                         best_ref_depth = z_ref;
+                        best_geometry_quality = pair_geometry_quality;
                     }
                 }
 
@@ -787,6 +800,7 @@ fn estimate_multiview_depth_maps(
                         support_views: best_support,
                         ref_px: [x as f64, y as f64],
                         ref_depth: best_ref_depth,
+                        geometry_quality: best_geometry_quality,
                     });
                 }
             }
@@ -864,7 +878,10 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             let support_factor = (front.support_views as f64 / MVS_MAX_SOURCE_VIEWS.max(1) as f64).clamp(0.0, 1.0);
             let vote_factor = (occlusion_votes as f64 / samples.len().max(1) as f64).clamp(0.0, 1.0);
             let mean_vote_conf = (vote_conf_sum / occlusion_votes as f64).clamp(0.0, 1.0);
-            let confidence = (mean_vote_conf * (0.55 + 0.20 * support_factor + 0.25 * vote_factor) * ref_weight)
+            let geometry_factor = front.geometry_quality.clamp(0.0, 1.0);
+            let confidence = (mean_vote_conf
+                * (0.45 + 0.18 * support_factor + 0.22 * vote_factor + 0.15 * geometry_factor)
+                * ref_weight)
                 .clamp(0.08, 0.99);
             out.push(DepthHypothesis {
                 center: front.point_world,
@@ -1453,6 +1470,39 @@ fn camera_space_depth(pose: &crate::alignment::CameraPose, point_w: &Vector3<f64
     let center = Vector3::new(pose.position[0], pose.position[1], pose.position[2]);
     let x_cam = r_w2c * (*point_w - center);
     x_cam[2]
+}
+
+fn triangulation_geometry_quality(
+    pose_a: &crate::alignment::CameraPose,
+    pose_b: &crate::alignment::CameraPose,
+    point_w: &Vector3<f64>,
+) -> f64 {
+    let ca = Vector3::new(pose_a.position[0], pose_a.position[1], pose_a.position[2]);
+    let cb = Vector3::new(pose_b.position[0], pose_b.position[1], pose_b.position[2]);
+    let va = *point_w - ca;
+    let vb = *point_w - cb;
+    let na = va.norm();
+    let nb = vb.norm();
+    if na <= 1.0e-9 || nb <= 1.0e-9 {
+        return 0.0;
+    }
+
+    let cos_angle = (va.dot(&vb) / (na * nb)).clamp(-1.0, 1.0);
+    let angle_rad = cos_angle.acos();
+    // Favor angles roughly in the 2-15 degree range for stable triangulation.
+    let angle_factor = ((angle_rad.to_degrees() - 1.5) / 12.0).clamp(0.0, 1.0);
+
+    let baseline = (cb - ca).norm();
+    let mean_depth = 0.5 * (na + nb);
+    let condition_ratio = if mean_depth > 1.0e-9 {
+        baseline / mean_depth
+    } else {
+        0.0
+    };
+    // Baseline/depth around ~0.03+ generally improves conditioning in this lightweight setup.
+    let conditioning_factor = (condition_ratio / 0.03).clamp(0.0, 1.0);
+
+    (0.65 * angle_factor + 0.35 * conditioning_factor).clamp(0.0, 1.0)
 }
 
 fn project_point_to_image_pinhole(
@@ -2484,6 +2534,7 @@ mod tests {
                     support_views: 2,
                     ref_px: [12.0, 18.0],
                     ref_depth: 3.0,
+                    geometry_quality: 0.8,
                 },
                 MultiViewDepthSample {
                     point_world: [4.0, 5.0, 6.0],
@@ -2491,6 +2542,7 @@ mod tests {
                     support_views: 1,
                     ref_px: [28.0, 30.0],
                     ref_depth: 6.0,
+                    geometry_quality: 0.7,
                 },
             ],
         }];
@@ -2512,6 +2564,7 @@ mod tests {
                     support_views: 3,
                     ref_px: [16.0, 16.0],
                     ref_depth: 4.0,
+                    geometry_quality: 0.9,
                 },
                 MultiViewDepthSample {
                     point_world: [2.1, 2.0, 7.0],
@@ -2519,6 +2572,7 @@ mod tests {
                     support_views: 3,
                     ref_px: [16.8, 16.6],
                     ref_depth: 7.0,
+                    geometry_quality: 0.9,
                 },
             ],
         }];
@@ -2655,6 +2709,38 @@ mod tests {
         let err_single = (no_multiscale.x - (x + shift)).abs();
         let err_multi = (with_multiscale.x - (x + shift)).abs();
         assert!(err_multi <= err_single, "multiscale should be at least as good as single-scale");
+    }
+
+    #[test]
+    fn geometry_quality_influences_mvs_confidence() {
+        let map_low = MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![MultiViewDepthSample {
+                point_world: [10.0, 10.0, 5.0],
+                confidence: 0.8,
+                support_views: 3,
+                ref_px: [20.0, 20.0],
+                ref_depth: 5.0,
+                geometry_quality: 0.1,
+            }],
+        };
+        let map_high = MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![MultiViewDepthSample {
+                point_world: [10.0, 10.0, 5.0],
+                confidence: 0.8,
+                support_views: 3,
+                ref_px: [20.0, 20.0],
+                ref_depth: 5.0,
+                geometry_quality: 0.95,
+            }],
+        };
+
+        let low = depth_hypotheses_from_multiview_maps(&[map_low]);
+        let high = depth_hypotheses_from_multiview_maps(&[map_high]);
+        assert_eq!(low.len(), 1);
+        assert_eq!(high.len(), 1);
+        assert!(high[0].confidence > low[0].confidence);
     }
 
     #[test]

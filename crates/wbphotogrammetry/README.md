@@ -346,9 +346,11 @@ likely to require further development.
 - Bundle adjustment still uses a simplified Levenberg–Marquardt implementation.
   It now includes iterative structure-only point refresh, coupled
   second-order camera updates, Schur-style reduced camera solves with sparse
-  block assembly, and covariance-style camera diagnostics. On very large
-  networks this is still not a full production sparse BA backend, and
-  performance should still be benchmarked per mission type.
+  block assembly, and covariance-style camera diagnostics. Synthetic and
+  Toledo real-mission A/B runs now show output parity between the sparse-PCG
+  and dense-LU reduced solve modes, but this is still not a full production
+  sparse BA backend, and no consistent runtime or memory win has yet been
+  demonstrated across mission types.
 - Intrinsic refinement now supports selective parameter freezing based on
   observation support/geometry quality, and the refinement policy is now
   user-configurable per run. The default policy remains heuristic rather than

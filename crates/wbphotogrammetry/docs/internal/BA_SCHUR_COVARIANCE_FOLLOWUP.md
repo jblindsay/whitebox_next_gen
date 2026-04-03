@@ -155,12 +155,19 @@ Alignment quality parity:
 6. Rotation sigma p95: sparse `0.4515 deg`, dense `0.4515 deg`
 7. QA status: sparse `Fail`, dense `Fail`
 
+Peak memory comparison (`/usr/bin/time -l`):
+
+1. Sparse maximum resident set size: `4,249,878,528 bytes` (~`3.96 GiB`)
+2. Dense maximum resident set size: `4,205,936,640 bytes` (~`3.92 GiB`)
+3. Sparse peak RSS delta vs dense: ~`41.9 MiB` higher
+
 Interpretation:
 
 1. Reduced solver mode does not materially change end-to-end real-mission outputs on Toledo.
 2. Alignment stage timing differs by only ~`22 ms` between sparse and dense modes on this mission.
-3. Full-pipeline runtime remains dominated by feature extraction, dense reconstruction, and mosaicking.
-4. Real-dataset quality parity is now demonstrated for the current Schur reduced solve path.
+3. Peak memory is effectively similar at mission scale, with sparse mode slightly higher on this run.
+4. Full-pipeline runtime remains dominated by feature extraction, dense reconstruction, and mosaicking.
+5. Real-dataset quality parity is now demonstrated for the current Schur reduced solve path.
 
 ## Risks
 1. Ill-conditioning in reduced camera system for weak geometry.
@@ -170,4 +177,4 @@ Interpretation:
 ## Definition of Done
 1. Schur BA path is enabled as a stable production path (with guarded fallback). (in progress: implemented and regression-tested on synthetic/targeted paths)
 2. Camera covariance diagnostics are emitted and documented. (implemented)
-3. Regression suite remains green and benchmark results are recorded. (in progress: targeted regressions, synthetic mission benchmark matrix, solver-mode A/B timing, and Toledo real-dataset parity recorded; memory comparison still pending)
+3. Regression suite remains green and benchmark results are recorded. (substantially complete: targeted regressions, synthetic mission benchmark matrix, solver-mode A/B timing, Toledo real-dataset parity, and Toledo peak-memory comparison recorded; runtime/memory superiority not demonstrated)

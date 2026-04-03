@@ -1374,46 +1374,31 @@ fn run_simplified_bundle_adjustment(
         // Optimize rotations (small-angle approximation for non-first camera)
         // only when orientation support is strong enough; otherwise keep seeded attitudes.
         if !freeze_rotation_updates {
-            for cam_idx in 1..rotations_c2w.len() {
-                let base_err = camera_observation_error_with_huber(
-                    cam_idx,
-                    &centres[cam_idx],
-                    &observations,
-                    &rotations_c2w,
-                    &intrinsics_opt,
-                    camera_model,
-                    huber_threshold,
-                    &original_centres[cam_idx],
-                    pose_prior_weights[cam_idx],
-                    pose_prior_sigma_m,
-                    pose_prior_scale_px2,
-                );
-                if !base_err.is_finite() {
-                    continue;
-                }
-
-                let mut grad_rot = Vector3::zeros();
-                let mut hdiag_rot = [1.0e-6_f64; 2];
-                // Perturbations around X and Y axes only (small-angle approximation)
-                for rot_axis in 0..2 {
-                    let mut r_pert = rotations_c2w[cam_idx];
-                    // Perturb by small rotation around axis
-                    let mut delta = Vector3::zeros();
-                    delta[rot_axis] = rot_eps;
-                    let delta_rot = Matrix3::new(
-                        1.0, -delta[2], delta[1],
-                        delta[2], 1.0, -delta[0],
-                        -delta[1], delta[0], 1.0,
-                    );
-                    r_pert = delta_rot * r_pert;
-
-                    let mut rotations_p = rotations_c2w.clone();
-                    rotations_p[cam_idx] = r_pert;
-                    let ep = camera_observation_error_with_huber(
+            if let Some(update) = apply_reduced_camera_rotation_update(
+                &centres,
+                &rotations_c2w,
+                &observations,
+                &intrinsics_opt,
+                camera_model,
+                huber_threshold,
+                &original_centres,
+                &pose_prior_weights,
+                pose_prior_sigma_m,
+                pose_prior_scale_px2,
+                lambda_rot,
+                rotation_step_cap,
+                rot_eps,
+            ) {
+                rotations_c2w = update.rotations;
+                observations = update.observations;
+                lambda_rot = update.next_lambda;
+            } else {
+                for cam_idx in 1..rotations_c2w.len() {
+                    let base_err = camera_observation_error_with_huber(
                         cam_idx,
                         &centres[cam_idx],
                         &observations,
-                        &rotations_p,
+                        &rotations_c2w,
                         &intrinsics_opt,
                         camera_model,
                         huber_threshold,
@@ -1422,185 +1407,172 @@ fn run_simplified_bundle_adjustment(
                         pose_prior_sigma_m,
                         pose_prior_scale_px2,
                     );
-
-                    let mut r_pert_neg = rotations_c2w[cam_idx];
-                    let mut delta_neg = Vector3::zeros();
-                    delta_neg[rot_axis] = -rot_eps;
-                    let delta_rot_neg = Matrix3::new(
-                        1.0, -delta_neg[2], delta_neg[1],
-                        delta_neg[2], 1.0, -delta_neg[0],
-                        -delta_neg[1], delta_neg[0], 1.0,
-                    );
-                    r_pert_neg = delta_rot_neg * r_pert_neg;
-
-                    let mut rotations_m = rotations_c2w.clone();
-                    rotations_m[cam_idx] = r_pert_neg;
-                    let em = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_m,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-
-                    if ep.is_finite() && em.is_finite() {
-                        grad_rot[rot_axis] = (ep - em) / (2.0 * rot_eps);
-                        let curvature = (ep - 2.0 * base_err + em) / (rot_eps * rot_eps);
-                        hdiag_rot[rot_axis] = curvature.abs().max(1.0e-6);
-                    }
-                }
-
-                let mut hxy_rot = 0.0_f64;
-                {
-                    let mut rotations_pp = rotations_c2w.clone();
-                    let delta_pp = Vector3::new(rot_eps, rot_eps, 0.0);
-                    let update_pp = Matrix3::new(
-                        1.0, -delta_pp[2], delta_pp[1],
-                        delta_pp[2], 1.0, -delta_pp[0],
-                        -delta_pp[1], delta_pp[0], 1.0,
-                    );
-                    rotations_pp[cam_idx] = update_pp * rotations_c2w[cam_idx];
-                    let e_pp = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_pp,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-
-                    let mut rotations_pm = rotations_c2w.clone();
-                    let delta_pm = Vector3::new(rot_eps, -rot_eps, 0.0);
-                    let update_pm = Matrix3::new(
-                        1.0, -delta_pm[2], delta_pm[1],
-                        delta_pm[2], 1.0, -delta_pm[0],
-                        -delta_pm[1], delta_pm[0], 1.0,
-                    );
-                    rotations_pm[cam_idx] = update_pm * rotations_c2w[cam_idx];
-                    let e_pm = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_pm,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-
-                    let mut rotations_mp = rotations_c2w.clone();
-                    let delta_mp = Vector3::new(-rot_eps, rot_eps, 0.0);
-                    let update_mp = Matrix3::new(
-                        1.0, -delta_mp[2], delta_mp[1],
-                        delta_mp[2], 1.0, -delta_mp[0],
-                        -delta_mp[1], delta_mp[0], 1.0,
-                    );
-                    rotations_mp[cam_idx] = update_mp * rotations_c2w[cam_idx];
-                    let e_mp = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_mp,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-
-                    let mut rotations_mm = rotations_c2w.clone();
-                    let delta_mm = Vector3::new(-rot_eps, -rot_eps, 0.0);
-                    let update_mm = Matrix3::new(
-                        1.0, -delta_mm[2], delta_mm[1],
-                        delta_mm[2], 1.0, -delta_mm[0],
-                        -delta_mm[1], delta_mm[0], 1.0,
-                    );
-                    rotations_mm[cam_idx] = update_mm * rotations_c2w[cam_idx];
-                    let e_mm = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_mm,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-
-                    if e_pp.is_finite() && e_pm.is_finite() && e_mp.is_finite() && e_mm.is_finite() {
-                        hxy_rot = ((e_pp - e_pm) - (e_mp - e_mm)) / (4.0 * rot_eps * rot_eps);
-                    }
-                }
-
-                let mut accepted = false;
-                let mut lambda_try = lambda_rot;
-                for _ in 0..5 {
-                    let mut delta = Vector3::zeros();
-                    let h00 = hdiag_rot[0] + lambda_try;
-                    let h11 = hdiag_rot[1] + lambda_try;
-                    if let Some((dx, dy)) = solve_2x2(h00, hxy_rot, hxy_rot, h11, grad_rot[0], grad_rot[1]) {
-                        delta[0] = dx.clamp(-rotation_step_cap, rotation_step_cap);
-                        delta[1] = dy.clamp(-rotation_step_cap, rotation_step_cap);
-                    } else {
-                        delta[0] = (grad_rot[0] / h00).clamp(-rotation_step_cap, rotation_step_cap);
-                        delta[1] = (grad_rot[1] / h11).clamp(-rotation_step_cap, rotation_step_cap);
-                    }
-                    if !delta.iter().all(|v| v.is_finite()) {
-                        lambda_try *= 2.0;
+                    if !base_err.is_finite() {
                         continue;
                     }
 
-                    let update_rot = Matrix3::new(
-                        1.0, -delta[2], delta[1],
-                        delta[2], 1.0, -delta[0],
-                        -delta[1], delta[0], 1.0,
-                    );
-                    let candidate_rot = update_rot * rotations_c2w[cam_idx];
+                    let mut grad_rot = Vector3::zeros();
+                    let mut hdiag_rot = [1.0e-6_f64; 2];
+                    for rot_axis in 0..2 {
+                        let mut rotations_p = rotations_c2w.clone();
+                        rotations_p[cam_idx] = small_angle_update(&rotations_c2w[cam_idx], rot_axis, rot_eps);
+                        let ep = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_p,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
 
-                    let mut rotations_candidate = rotations_c2w.clone();
-                    rotations_candidate[cam_idx] = candidate_rot;
-                    let cand_err = camera_observation_error_with_huber(
-                        cam_idx,
-                        &centres[cam_idx],
-                        &observations,
-                        &rotations_candidate,
-                        &intrinsics_opt,
-                        camera_model,
-                        huber_threshold,
-                        &original_centres[cam_idx],
-                        pose_prior_weights[cam_idx],
-                        pose_prior_sigma_m,
-                        pose_prior_scale_px2,
-                    );
-                    if cand_err.is_finite() && cand_err + 1.0e-9 < base_err {
-                        rotations_c2w[cam_idx] = candidate_rot;
-                        lambda_rot = (lambda_try * 0.7).max(1.0e-4);
-                        accepted = true;
-                        break;
+                        let mut rotations_m = rotations_c2w.clone();
+                        rotations_m[cam_idx] = small_angle_update(&rotations_c2w[cam_idx], rot_axis, -rot_eps);
+                        let em = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_m,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+
+                        if ep.is_finite() && em.is_finite() {
+                            grad_rot[rot_axis] = (ep - em) / (2.0 * rot_eps);
+                            let curvature = (ep - 2.0 * base_err + em) / (rot_eps * rot_eps);
+                            hdiag_rot[rot_axis] = curvature.abs().max(1.0e-6);
+                        }
                     }
-                    lambda_try *= 2.0;
-                }
-                if !accepted {
-                    lambda_rot = (lambda_rot * 2.0).min(1.0e6);
+
+                    let mut hxy_rot = 0.0_f64;
+                    {
+                        let mut rotations_pp = rotations_c2w.clone();
+                        let update_pp = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, rot_eps), 1, rot_eps);
+                        rotations_pp[cam_idx] = update_pp;
+                        let e_pp = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_pp,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+
+                        let mut rotations_pm = rotations_c2w.clone();
+                        let update_pm = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, rot_eps), 1, -rot_eps);
+                        rotations_pm[cam_idx] = update_pm;
+                        let e_pm = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_pm,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+
+                        let mut rotations_mp = rotations_c2w.clone();
+                        let update_mp = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, -rot_eps), 1, rot_eps);
+                        rotations_mp[cam_idx] = update_mp;
+                        let e_mp = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_mp,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+
+                        let mut rotations_mm = rotations_c2w.clone();
+                        let update_mm = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, -rot_eps), 1, -rot_eps);
+                        rotations_mm[cam_idx] = update_mm;
+                        let e_mm = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_mm,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+
+                        if e_pp.is_finite() && e_pm.is_finite() && e_mp.is_finite() && e_mm.is_finite() {
+                            hxy_rot = ((e_pp - e_pm) - (e_mp - e_mm)) / (4.0 * rot_eps * rot_eps);
+                        }
+                    }
+
+                    let mut accepted = false;
+                    let mut lambda_try = lambda_rot;
+                    for _ in 0..5 {
+                        let mut delta = Vector3::zeros();
+                        let h00 = hdiag_rot[0] + lambda_try;
+                        let h11 = hdiag_rot[1] + lambda_try;
+                        if let Some((dx, dy)) = solve_2x2(h00, hxy_rot, hxy_rot, h11, grad_rot[0], grad_rot[1]) {
+                            delta[0] = dx.clamp(-rotation_step_cap, rotation_step_cap);
+                            delta[1] = dy.clamp(-rotation_step_cap, rotation_step_cap);
+                        } else {
+                            delta[0] = (grad_rot[0] / h00).clamp(-rotation_step_cap, rotation_step_cap);
+                            delta[1] = (grad_rot[1] / h11).clamp(-rotation_step_cap, rotation_step_cap);
+                        }
+                        if !delta.iter().all(|v| v.is_finite()) {
+                            lambda_try *= 2.0;
+                            continue;
+                        }
+
+                        let candidate_rot = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, -delta[0]), 1, -delta[1]);
+                        let mut rotations_candidate = rotations_c2w.clone();
+                        rotations_candidate[cam_idx] = candidate_rot;
+                        let cand_err = camera_observation_error_with_huber(
+                            cam_idx,
+                            &centres[cam_idx],
+                            &observations,
+                            &rotations_candidate,
+                            &intrinsics_opt,
+                            camera_model,
+                            huber_threshold,
+                            &original_centres[cam_idx],
+                            pose_prior_weights[cam_idx],
+                            pose_prior_sigma_m,
+                            pose_prior_scale_px2,
+                        );
+                        if cand_err.is_finite() && cand_err + 1.0e-9 < base_err {
+                            rotations_c2w[cam_idx] = candidate_rot;
+                            lambda_rot = (lambda_try * 0.7).max(1.0e-4);
+                            accepted = true;
+                            break;
+                        }
+                        lambda_try *= 2.0;
+                    }
+                    if !accepted {
+                        lambda_rot = (lambda_rot * 2.0).min(1.0e6);
+                    }
                 }
             }
         }
@@ -1958,6 +1930,13 @@ struct ReducedCenterUpdate {
     next_lambda: f64,
 }
 
+#[derive(Debug, Clone)]
+struct ReducedRotationUpdate {
+    rotations: Vec<Matrix3<f64>>,
+    observations: Vec<BaObservation>,
+    next_lambda: f64,
+}
+
 fn apply_reduced_camera_center_update(
     centres: &[Vector3<f64>],
     rotations_c2w: &[Matrix3<f64>],
@@ -2046,6 +2025,102 @@ fn apply_reduced_camera_center_update(
         if cand_cost.is_finite() && cand_cost + 1.0e-9 < base_cost {
             return Some(ReducedCenterUpdate {
                 centres: candidate_centres,
+                observations: candidate_observations,
+                next_lambda: (lambda_try * 0.7).max(1.0e-4),
+            });
+        }
+        lambda_try *= 2.0;
+    }
+
+    None
+}
+
+fn apply_reduced_camera_rotation_update(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    observations: &[BaObservation],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    seed_centres: &[Vector3<f64>],
+    pose_prior_weights: &[f64],
+    pose_prior_sigma_m: f64,
+    pose_prior_scale_px2: f64,
+    lambda_rot: f64,
+    rotation_step_cap: f64,
+    rot_eps: f64,
+) -> Option<ReducedRotationUpdate> {
+    if rotations_c2w.len() < 3 || observations.len() < 18 {
+        return None;
+    }
+
+    let base_cost = total_observation_error_with_huber(
+        centres,
+        rotations_c2w,
+        observations,
+        intrinsics,
+        camera_model,
+        huber_threshold,
+        Some(seed_centres),
+        pose_prior_weights,
+        pose_prior_sigma_m,
+        pose_prior_scale_px2,
+    );
+    if !base_cost.is_finite() {
+        return None;
+    }
+
+    let reduced = build_reduced_camera_rotation_system(
+        centres,
+        rotations_c2w,
+        observations,
+        intrinsics,
+        camera_model,
+        huber_threshold,
+        rot_eps,
+    )?;
+    if reduced.hessian.nrows() < 2 {
+        return None;
+    }
+
+    let mut lambda_try = lambda_rot;
+    for _ in 0..5 {
+        let mut h_damped = reduced.hessian.clone();
+        for idx in 0..h_damped.nrows() {
+            h_damped[(idx, idx)] += lambda_try;
+        }
+        let rhs = -&reduced.gradient;
+        let delta = h_damped.lu().solve(&rhs)?;
+        if !delta.iter().all(|v| v.is_finite()) {
+            lambda_try *= 2.0;
+            continue;
+        }
+
+        let mut candidate_rotations = rotations_c2w.to_vec();
+        for cam_idx in 1..rotations_c2w.len() {
+            let base = reduced_camera_param_offset(cam_idx)?;
+            let dx = delta[base].clamp(-rotation_step_cap, rotation_step_cap);
+            let dy = delta[base + 1].clamp(-rotation_step_cap, rotation_step_cap);
+            let updated = small_angle_update(&small_angle_update(&rotations_c2w[cam_idx], 0, dx), 1, dy);
+            candidate_rotations[cam_idx] = updated;
+        }
+
+        let candidate_observations = back_substitute_reduced_points(observations, &reduced.point_blocks, &delta);
+        let cand_cost = total_observation_error_with_huber(
+            centres,
+            &candidate_rotations,
+            &candidate_observations,
+            intrinsics,
+            camera_model,
+            huber_threshold,
+            Some(seed_centres),
+            pose_prior_weights,
+            pose_prior_sigma_m,
+            pose_prior_scale_px2,
+        );
+        if cand_cost.is_finite() && cand_cost + 1.0e-9 < base_cost {
+            return Some(ReducedRotationUpdate {
+                rotations: candidate_rotations,
                 observations: candidate_observations,
                 next_lambda: (lambda_try * 0.7).max(1.0e-4),
             });
@@ -2176,6 +2251,118 @@ fn build_reduced_camera_system(
     })
 }
 
+fn build_reduced_camera_rotation_system(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    observations: &[BaObservation],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    rot_eps: f64,
+) -> Option<ReducedCameraSystem> {
+    if centres.len() < 2 || rotations_c2w.len() != centres.len() {
+        return None;
+    }
+    let dim = (centres.len() - 1) * 2;
+    if dim == 0 {
+        return None;
+    }
+
+    let mut hessian = DMatrix::zeros(dim, dim);
+    let mut gradient = DVector::zeros(dim);
+    let mut point_blocks = Vec::new();
+    for obs_group in group_observation_indices_by_point_id(observations) {
+        if obs_group.len() < 2 {
+            continue;
+        }
+        let point_world = observations[*obs_group.first()?].point_world;
+        let mut point_gradient = Vector3::zeros();
+        let mut point_hessian = Matrix3::zeros();
+        let mut contributions = Vec::new();
+
+        for &obs_idx in &obs_group {
+            let obs = observations.get(obs_idx)?;
+            let (residual, jac_rot, jac_point) = weighted_residual_and_jacobians_rotation(
+                obs,
+                &point_world,
+                centres,
+                rotations_c2w,
+                intrinsics,
+                camera_model,
+                huber_threshold,
+                rot_eps,
+            )?;
+
+            point_gradient += jac_point.transpose() * residual;
+            point_hessian += jac_point.transpose() * jac_point;
+            if obs.cam_idx == 0 {
+                continue;
+            }
+
+            contributions.push(ReducedPointContribution {
+                cam_idx: obs.cam_idx,
+                obs_indices: vec![obs_idx],
+                a: jac_rot.transpose() * jac_rot,
+                b: jac_rot.transpose() * jac_point,
+                g: jac_rot.transpose() * residual,
+            });
+        }
+
+        if contributions.len() < 2 {
+            continue;
+        }
+
+        for axis in 0..3 {
+            point_hessian[(axis, axis)] += 1.0e-6;
+        }
+        let Some(v_inv) = point_hessian.try_inverse() else {
+            continue;
+        };
+
+        for contribution in &contributions {
+            let offset_i = reduced_camera_param_offset(contribution.cam_idx)?;
+            accumulate_matrix2_block(&mut hessian, offset_i, offset_i, contribution.a);
+            gradient[offset_i] += contribution.g[0];
+            gradient[offset_i + 1] += contribution.g[1];
+            let reduced_grad = contribution.b * (v_inv * point_gradient);
+            gradient[offset_i] -= reduced_grad[0];
+            gradient[offset_i + 1] -= reduced_grad[1];
+        }
+
+        for left in 0..contributions.len() {
+            for right in 0..contributions.len() {
+                let offset_i = reduced_camera_param_offset(contributions[left].cam_idx)?;
+                let offset_j = reduced_camera_param_offset(contributions[right].cam_idx)?;
+                let correction = contributions[left].b * v_inv * contributions[right].b.transpose();
+                accumulate_matrix2_block(&mut hessian, offset_i, offset_j, -correction);
+            }
+        }
+
+        point_blocks.push(ReducedPointBlock {
+            point_world,
+            contributions,
+            v_inv,
+            g_point: point_gradient,
+        });
+    }
+
+    if point_blocks.is_empty() {
+        return None;
+    }
+
+    for cam_idx in 1..centres.len() {
+        let offset = reduced_camera_param_offset(cam_idx)?;
+        hessian[(offset, offset)] += 0.05;
+        hessian[(offset + 1, offset + 1)] += 0.05;
+    }
+
+    Some(ReducedCameraSystem {
+        hessian,
+        gradient,
+        point_blocks,
+    })
+}
+
 fn back_substitute_reduced_points(
     observations: &[BaObservation],
     point_blocks: &[ReducedPointBlock],
@@ -2257,6 +2444,56 @@ fn weighted_residual_and_jacobians(
     }
 
     Some((residual * sqrt_w, jac_centre, jac_point))
+}
+
+fn weighted_residual_and_jacobians_rotation(
+    observation: &BaObservation,
+    point_world: &Vector3<f64>,
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    rot_eps: f64,
+) -> Option<(Vector2<f64>, Matrix2<f64>, Matrix2x3<f64>)> {
+    let cam_idx = observation.cam_idx;
+    let centre = centres.get(cam_idx)?;
+    let rotation = rotations_c2w.get(cam_idx)?;
+    let base_pix = project_world_to_pixel(point_world, centre, rotation, intrinsics, camera_model)?;
+    let residual = base_pix - observation.obs_px;
+    let residual_norm = residual.norm();
+    let weight = huber_weight(residual_norm, huber_threshold) * observation.quality_weight;
+    if !weight.is_finite() || weight <= 0.0 {
+        return None;
+    }
+    let sqrt_w = weight.sqrt();
+    let point_eps = 0.05;
+
+    let mut jac_rot = Matrix2::zeros();
+    for axis in 0..2 {
+        let rot_plus = small_angle_update(rotation, axis, rot_eps);
+        let pix_plus = project_world_to_pixel(point_world, centre, &rot_plus, intrinsics, camera_model)?;
+        let rot_minus = small_angle_update(rotation, axis, -rot_eps);
+        let pix_minus = project_world_to_pixel(point_world, centre, &rot_minus, intrinsics, camera_model)?;
+        let deriv = (pix_plus - pix_minus) / (2.0 * rot_eps);
+        jac_rot[(0, axis)] = deriv[0] * sqrt_w;
+        jac_rot[(1, axis)] = deriv[1] * sqrt_w;
+    }
+
+    let mut jac_point = Matrix2x3::zeros();
+    for axis in 0..3 {
+        let mut plus = *point_world;
+        plus[axis] += point_eps;
+        let pix_plus = project_world_to_pixel(&plus, centre, rotation, intrinsics, camera_model)?;
+        let mut minus = *point_world;
+        minus[axis] -= point_eps;
+        let pix_minus = project_world_to_pixel(&minus, centre, rotation, intrinsics, camera_model)?;
+        let deriv = (pix_plus - pix_minus) / (2.0 * point_eps);
+        jac_point[(0, axis)] = deriv[0] * sqrt_w;
+        jac_point[(1, axis)] = deriv[1] * sqrt_w;
+    }
+
+    Some((residual * sqrt_w, jac_rot, jac_point))
 }
 
 fn reduced_camera_param_offset(cam_idx: usize) -> Option<usize> {
@@ -5023,6 +5260,81 @@ mod tests {
         assert!(covariance.supported_camera_count >= 2, "reduced solve should report covariance for multiple cameras");
         assert!(covariance.translation_sigma_p95_m.is_finite(), "translation covariance proxy should be finite");
         assert!(covariance.rotation_sigma_p95_deg.is_finite(), "rotation covariance proxy should be finite");
+    }
+
+    #[test]
+    fn reduced_camera_rotation_solve_updates_attitude_block() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1200.0,
+            fy: 1200.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
+        };
+
+        let centres = vec![
+            Vector3::new(0.0, 0.0, 10.0),
+            Vector3::new(0.8, 0.0, 10.0),
+            Vector3::new(1.6, 0.0, 10.0),
+        ];
+
+        let world_points = vec![
+            Vector3::new(-0.8, -0.5, 13.8),
+            Vector3::new(-0.3, 0.0, 14.4),
+            Vector3::new(0.2, -0.1, 14.8),
+            Vector3::new(0.7, 0.2, 15.1),
+            Vector3::new(1.2, -0.2, 15.0),
+            Vector3::new(1.7, 0.3, 15.4),
+        ];
+
+        let mut true_rotations = vec![Matrix3::identity(); 3];
+        true_rotations[1] = small_angle_update(&small_angle_update(&Matrix3::identity(), 0, 0.012), 1, -0.009);
+        true_rotations[2] = small_angle_update(&small_angle_update(&Matrix3::identity(), 0, 0.015), 1, -0.011);
+
+        let seed_rotations = vec![Matrix3::identity(); 3];
+        let mut observations = Vec::new();
+        for (point_id, point) in world_points.iter().enumerate() {
+            for cam_idx in 0..3 {
+                let obs_px = project_world_to_pixel(
+                    point,
+                    &centres[cam_idx],
+                    &true_rotations[cam_idx],
+                    &intrinsics,
+                    CameraModel::Pinhole,
+                ).expect("synthetic observation");
+                observations.push(BaObservation {
+                    cam_idx,
+                    point_id,
+                    point_world: *point,
+                    obs_px,
+                    quality_weight: 1.0,
+                });
+            }
+        }
+
+        let pose_prior_weights = vec![0.0, 0.20, 0.20];
+        let update = apply_reduced_camera_rotation_update(
+            &centres,
+            &seed_rotations,
+            &observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+            2.0,
+            &centres,
+            &pose_prior_weights,
+            6.0,
+            180.0,
+            45.0,
+            0.035,
+            0.001,
+        ).expect("reduced rotation update");
+
+        let delta_norm = (&update.rotations[1] - &seed_rotations[1]).norm()
+            + (&update.rotations[2] - &seed_rotations[2]).norm();
+        assert!(delta_norm > 1.0e-8, "reduced rotation solve should update non-anchor camera rotations");
     }
 
     #[test]

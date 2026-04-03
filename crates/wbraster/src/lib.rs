@@ -187,3 +187,11 @@ pub use packages::sentinel2_safe::{
 	Sentinel2ProductLevel,
 	Sentinel2SafePackage,
 };
+pub use packages::optical::{
+	DimapBundleProvider,
+	LandsatBundleProvider,
+	ResolvedOpticalBundle,
+	SensorBundleProvider,
+	SensorBundleRegistry,
+	Sentinel2SafeBundleProvider,
+};

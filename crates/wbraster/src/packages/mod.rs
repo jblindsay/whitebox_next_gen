@@ -2,6 +2,7 @@
 
 pub mod safe_bundle;
 pub mod sensor_bundle;
+pub mod optical;
 pub mod dimap_bundle;
 pub mod iceye_bundle;
 pub mod landsat_bundle;

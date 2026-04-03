@@ -802,22 +802,102 @@ fn recover_pose_from_essential(
     ];
 
     let mut best_pose: Option<EssentialPose> = None;
-    let mut best_positive = 0usize;
+    let mut best_metrics: Option<EssentialPoseCandidateMetrics> = None;
     for (r, tvec) in candidates {
-        let positive = count_positive_depth_points(&r, &tvec, inlier_points);
-        if positive > best_positive {
-            best_positive = positive;
-            best_pose = Some(EssentialPose {
-                r,
-                t: tvec.normalize(),
-            });
+        let t_unit = tvec.normalize();
+        let metrics = analyze_essential_pose_candidate(&r, &t_unit, inlier_points);
+        let better = match best_metrics {
+            None => true,
+            Some(best) => {
+                metrics.positive_count > best.positive_count
+                    || (metrics.positive_count == best.positive_count
+                        && metrics.reprojection_rmse < best.reprojection_rmse - 1.0e-9)
+                    || (metrics.positive_count == best.positive_count
+                        && (metrics.reprojection_rmse - best.reprojection_rmse).abs() <= 1.0e-9
+                        && metrics.upper_quartile_triangulation_angle_deg
+                            > best.upper_quartile_triangulation_angle_deg + 1.0e-9)
+            }
+        };
+        if better {
+            best_metrics = Some(metrics);
+            best_pose = Some(EssentialPose { r, t: t_unit });
         }
     }
 
-    if best_positive < 6 {
+    if best_metrics.map(|m| m.positive_count).unwrap_or(0) < 6 {
         None
     } else {
         best_pose
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EssentialPoseCandidateMetrics {
+    positive_count: usize,
+    reprojection_rmse: f64,
+    upper_quartile_triangulation_angle_deg: f64,
+}
+
+fn analyze_essential_pose_candidate(
+    r: &Matrix3<f64>,
+    t: &Vector3<f64>,
+    points: &[(Vector2<f64>, Vector2<f64>)],
+) -> EssentialPoseCandidateMetrics {
+    let centre_left = Vector3::zeros();
+    let centre_right = -r.transpose() * t;
+    let mut positive_count = 0usize;
+    let mut residual_sumsq = 0.0;
+    let mut residual_count = 0usize;
+    let mut triangulation_angles = Vec::new();
+
+    for (x1, x2) in points.iter().take(96) {
+        let Some(xw) = triangulate_point_two_view_refined(r, t, x1, x2) else {
+            continue;
+        };
+
+        let z1 = xw[2];
+        let x_cam2 = r * xw + t;
+        let z2 = x_cam2[2];
+        if z1 <= 1.0e-6 || z2 <= 1.0e-6 {
+            continue;
+        }
+        positive_count += 1;
+
+        let pred1 = Vector2::new(xw[0] / z1, xw[1] / z1);
+        let pred2 = Vector2::new(x_cam2[0] / z2, x_cam2[1] / z2);
+        let res1 = (pred1 - x1).norm();
+        let res2 = (pred2 - x2).norm();
+        if res1.is_finite() {
+            residual_sumsq += res1 * res1;
+            residual_count += 1;
+        }
+        if res2.is_finite() {
+            residual_sumsq += res2 * res2;
+            residual_count += 1;
+        }
+
+        let angle_deg = triangulation_angle_deg(&xw, &centre_left, &centre_right);
+        if angle_deg.is_finite() {
+            triangulation_angles.push(angle_deg);
+        }
+    }
+
+    triangulation_angles.sort_by(|a, b| a.total_cmp(b));
+    let upper_quartile_triangulation_angle_deg = if triangulation_angles.is_empty() {
+        0.0
+    } else {
+        triangulation_angles[(triangulation_angles.len() * 3) / 4]
+    };
+    let reprojection_rmse = if residual_count > 0 {
+        (residual_sumsq / residual_count as f64).sqrt()
+    } else {
+        f64::INFINITY
+    };
+
+    EssentialPoseCandidateMetrics {
+        positive_count,
+        reprojection_rmse,
+        upper_quartile_triangulation_angle_deg,
     }
 }
 
@@ -837,6 +917,13 @@ fn essential_pose_is_degenerate(
 
     if median < 0.35 {
         return true;
+    }
+
+    if inlier_points.len() >= 12 {
+        let homography_inliers = best_homography_inlier_count(inlier_points, (inlier_points.len().max(12) * 2).min(180), 1.0e-4);
+        if homography_inliers + 1 >= inlier_points.len() && upper_quartile < 1.5 {
+            return true;
+        }
     }
 
     let lateral_fraction = (pose.t[0] * pose.t[0] + pose.t[1] * pose.t[1]).sqrt() / pose.t.norm().max(1.0e-9);
@@ -870,11 +957,12 @@ fn ensure_rotation(mut r: Matrix3<f64>) -> Matrix3<f64> {
     r
 }
 
-fn count_positive_depth_points(
+fn triangulate_point_two_view_refined(
     r: &Matrix3<f64>,
     t: &Vector3<f64>,
-    points: &[(Vector2<f64>, Vector2<f64>)],
-) -> usize {
+    x1: &Vector2<f64>,
+    x2: &Vector2<f64>,
+) -> Option<Vector3<f64>> {
     let p1 = Matrix3x4::new(
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
@@ -886,18 +974,159 @@ fn count_positive_depth_points(
         r[(2, 0)], r[(2, 1)], r[(2, 2)], t[2],
     );
 
-    let mut count = 0usize;
-    for (x1, x2) in points.iter().take(96) {
-        if let Some(x) = triangulate_point(&p1, &p2, x1, x2) {
-            let z1 = x[2];
-            let x_cam2 = r * x + t;
-            let z2 = x_cam2[2];
-            if z1 > 1e-6 && z2 > 1e-6 {
-                count += 1;
-            }
+    let mut x = triangulate_point(&p1, &p2, x1, x2)?;
+    for _ in 0..6 {
+        let z1 = x[2];
+        let x_cam2 = r * x + t;
+        let z2 = x_cam2[2];
+        if z1.abs() <= 1.0e-9 || z2.abs() <= 1.0e-9 {
+            break;
+        }
+
+        let pred1 = Vector2::new(x[0] / z1, x[1] / z1);
+        let pred2 = Vector2::new(x_cam2[0] / z2, x_cam2[1] / z2);
+        let residual = Vector4::new(
+            x1[0] - pred1[0],
+            x1[1] - pred1[1],
+            x2[0] - pred2[0],
+            x2[1] - pred2[1],
+        );
+
+        let j1 = Matrix2x3::new(
+            1.0 / z1, 0.0, -x[0] / (z1 * z1),
+            0.0, 1.0 / z1, -x[1] / (z1 * z1),
+        );
+        let j2_cam = Matrix2x3::new(
+            1.0 / z2, 0.0, -x_cam2[0] / (z2 * z2),
+            0.0, 1.0 / z2, -x_cam2[1] / (z2 * z2),
+        );
+        let j2 = j2_cam * r;
+
+        let mut j = Matrix4x3::zeros();
+        j.row_mut(0).copy_from(&j1.row(0));
+        j.row_mut(1).copy_from(&j1.row(1));
+        j.row_mut(2).copy_from(&j2.row(0));
+        j.row_mut(3).copy_from(&j2.row(1));
+
+        let normal = j.transpose() * j + Matrix3::identity() * 1.0e-9;
+        let rhs = j.transpose() * residual;
+        let Some(delta) = normal.lu().solve(&rhs) else {
+            break;
+        };
+        if !delta.iter().all(|v| v.is_finite()) {
+            break;
+        }
+        x += delta;
+        if delta.norm() <= 1.0e-8 {
+            break;
         }
     }
-    count
+
+    if x.iter().all(|v| v.is_finite()) {
+        Some(x)
+    } else {
+        None
+    }
+}
+
+fn estimate_homography_from_correspondences(
+    points: &[(Vector2<f64>, Vector2<f64>)],
+) -> Option<Matrix3<f64>> {
+    if points.len() < 4 {
+        return None;
+    }
+
+    let (norm1, t1) = normalize_points(points.iter().map(|(p1, _)| *p1).collect::<Vec<_>>().as_slice())?;
+    let (norm2, t2) = normalize_points(points.iter().map(|(_, p2)| *p2).collect::<Vec<_>>().as_slice())?;
+
+    let mut a = DMatrix::zeros(points.len() * 2, 9);
+    for (i, (p1, p2)) in norm1.iter().zip(norm2.iter()).enumerate() {
+        let row = i * 2;
+        a[(row, 0)] = -p1.x;
+        a[(row, 1)] = -p1.y;
+        a[(row, 2)] = -1.0;
+        a[(row, 6)] = p2.x * p1.x;
+        a[(row, 7)] = p2.x * p1.y;
+        a[(row, 8)] = p2.x;
+
+        a[(row + 1, 3)] = -p1.x;
+        a[(row + 1, 4)] = -p1.y;
+        a[(row + 1, 5)] = -1.0;
+        a[(row + 1, 6)] = p2.y * p1.x;
+        a[(row + 1, 7)] = p2.y * p1.y;
+        a[(row + 1, 8)] = p2.y;
+    }
+
+    let svd = a.svd(true, true);
+    let v_t = svd.v_t?;
+    let h_vec = v_t.row(v_t.nrows() - 1);
+    let mut h_hat = Matrix3::zeros();
+    for r in 0..3 {
+        for c in 0..3 {
+            h_hat[(r, c)] = h_vec[r * 3 + c];
+        }
+    }
+
+    let t2_inv = t2.try_inverse()?;
+    let h = t2_inv * h_hat * t1;
+    let scale = if h[(2, 2)].abs() > 1.0e-12 { h[(2, 2)] } else { h.norm() };
+    if scale.abs() <= 1.0e-12 {
+        None
+    } else {
+        Some(h / scale)
+    }
+}
+
+fn homography_inliers(
+    h: &Matrix3<f64>,
+    points: &[(Vector2<f64>, Vector2<f64>)],
+    threshold: f64,
+) -> Vec<usize> {
+    let Some(h_inv) = h.try_inverse() else {
+        return Vec::new();
+    };
+
+    let mut inliers = Vec::new();
+    for (idx, (p1, p2)) in points.iter().enumerate() {
+        let hp2 = h * Vector3::new(p1.x, p1.y, 1.0);
+        let hp1 = h_inv * Vector3::new(p2.x, p2.y, 1.0);
+        if hp2[2].abs() <= 1.0e-12 || hp1[2].abs() <= 1.0e-12 {
+            continue;
+        }
+        let pred2 = Vector2::new(hp2[0] / hp2[2], hp2[1] / hp2[2]);
+        let pred1 = Vector2::new(hp1[0] / hp1[2], hp1[1] / hp1[2]);
+        let err = (pred2 - p2).norm_squared() + (pred1 - p1).norm_squared();
+        if err <= threshold {
+            inliers.push(idx);
+        }
+    }
+    inliers
+}
+
+fn best_homography_inlier_count(
+    points: &[(Vector2<f64>, Vector2<f64>)],
+    iterations: usize,
+    threshold: f64,
+) -> usize {
+    if points.len() < 4 {
+        return 0;
+    }
+
+    let mut best = 0usize;
+    for iter in 0..iterations.max(1) {
+        let Some(sample) = deterministic_sample_indices(points.len(), 4, iter as u64 + 91) else {
+            continue;
+        };
+        let sample_points: Vec<(Vector2<f64>, Vector2<f64>)> = sample.iter().map(|&i| points[i]).collect();
+        let Some(h) = estimate_homography_from_correspondences(&sample_points) else {
+            continue;
+        };
+        let count = homography_inliers(&h, points, threshold).len();
+        if count > best {
+            best = count;
+        }
+    }
+    best
 }
 
 fn triangulate_point(
@@ -5528,6 +5757,41 @@ mod tests {
                 intrinsics.fx * (p2[0] / p2[2]) + intrinsics.cx,
                 intrinsics.fy * (p2[1] / p2[2]) + intrinsics.cy,
             ]);
+        }
+
+        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
+    }
+
+    #[test]
+    fn essential_pose_rejects_homography_dominant_planar_scene() {
+        let intrinsics = CameraIntrinsics::identity(4000, 3000);
+        let yaw = 0.035_f64;
+        let r = Matrix3::new(
+            yaw.cos(), -yaw.sin(), 0.0,
+            yaw.sin(),  yaw.cos(), 0.0,
+            0.0,        0.0,       1.0,
+        );
+        let t = Vector3::new(0.22, 0.04, 0.01);
+
+        let mut points = Vec::new();
+        for row in 0..6 {
+            for col in 0..7 {
+                let x = -1.1 + col as f64 * 0.32;
+                let y = -0.8 + row as f64 * 0.26;
+                let z = 5.0;
+                let p1 = Vector3::new(x, y, z);
+                let p2 = r * p1 + t;
+                if p1[2] <= 0.2 || p2[2] <= 0.2 {
+                    continue;
+                }
+
+                points.push([
+                    intrinsics.fx * (p1[0] / p1[2]) + intrinsics.cx,
+                    intrinsics.fy * (p1[1] / p1[2]) + intrinsics.cy,
+                    intrinsics.fx * (p2[0] / p2[2]) + intrinsics.cx,
+                    intrinsics.fy * (p2[1] / p2[2]) + intrinsics.cy,
+                ]);
+            }
         }
 
         assert!(estimate_essential_pose(&points, &intrinsics).is_none());

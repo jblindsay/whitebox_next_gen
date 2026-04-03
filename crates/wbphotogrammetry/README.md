@@ -366,10 +366,12 @@ likely to require further development.
 - The loop closure optimisation uses a basic graph solver with non-adjacent
   pair constraints and robust correction-magnitude outlier rejection. It is
   not a full pose-graph SLAM formulation.
-- The essential matrix recovery is based on the 8-point normalised DLT
-  algorithm alone. It now rejects clearly weak/degenerate seeds and falls back
-  to the simpler match-driven trajectory seed, but there is still no iterative
-  triangulation refinement or richer multi-model degeneracy handling.
+- The essential matrix recovery is still centered on an 8-point normalised DLT
+  estimator. It now adds iterative two-view triangulation refinement for pose
+  candidate scoring and stronger degeneracy rejection, including
+  homography-dominant planar-scene screening, before falling back to the
+  simpler match-driven trajectory seed. It still does not implement a full
+  multi-model estimator or an alternative homography-based pose recovery path.
 
 ### Dense Surface Reconstruction
 

@@ -31,6 +31,9 @@ const MVS_LR_CONSISTENCY_TOL_PX: i32 = 2;
 const MVS_CENSUS_RADIUS: i32 = 2;
 const MVS_HYBRID_ZNCC_WEIGHT: f64 = 0.65;
 const MVS_HYBRID_CENSUS_WEIGHT: f64 = 0.35;
+const MVS_PROPAGATION_ITERS: usize = 2;
+const MVS_PROPAGATION_RADIUS_PX: f64 = 54.0;
+const MVS_PROPAGATION_SIGMA_PX: f64 = 24.0;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -807,6 +810,7 @@ fn estimate_multiview_depth_maps(
         }
 
         if !samples.is_empty() {
+            refine_multiview_samples(&mut samples);
             maps.push(MultiViewDepthMap {
                 reference_idx: ref_idx,
                 samples,
@@ -815,6 +819,73 @@ fn estimate_multiview_depth_maps(
     }
 
     maps
+}
+
+fn refine_multiview_samples(samples: &mut [MultiViewDepthSample]) {
+    if samples.len() < 4 {
+        return;
+    }
+
+    let sigma2 = MVS_PROPAGATION_SIGMA_PX * MVS_PROPAGATION_SIGMA_PX;
+    let radius2 = MVS_PROPAGATION_RADIUS_PX * MVS_PROPAGATION_RADIUS_PX;
+    for _ in 0..MVS_PROPAGATION_ITERS {
+        let prev = samples.to_vec();
+        for (i, s) in prev.iter().enumerate() {
+            let mut wsum = 0.0;
+            let mut px = 0.0;
+            let mut py = 0.0;
+            let mut pz = 0.0;
+            let mut depth_sum = 0.0;
+            let mut conf_sum = 0.0;
+            let mut geom_sum = 0.0;
+            let mut n = 0usize;
+
+            let depth_tol = (0.3 + 0.03 * s.ref_depth.abs()).clamp(0.3, 3.5);
+            for t in &prev {
+                let dx = t.ref_px[0] - s.ref_px[0];
+                let dy = t.ref_px[1] - s.ref_px[1];
+                let d2 = dx * dx + dy * dy;
+                if d2 > radius2 {
+                    continue;
+                }
+                if (t.ref_depth - s.ref_depth).abs() > depth_tol {
+                    continue;
+                }
+                let spatial = (-d2 / (2.0 * sigma2)).exp();
+                let w = spatial * (0.35 + 0.65 * t.confidence);
+                if w <= 1.0e-9 {
+                    continue;
+                }
+                wsum += w;
+                px += w * t.point_world[0];
+                py += w * t.point_world[1];
+                pz += w * t.point_world[2];
+                depth_sum += w * t.ref_depth;
+                conf_sum += w * t.confidence;
+                geom_sum += w * t.geometry_quality;
+                n += 1;
+            }
+
+            if wsum <= 1.0e-9 || n < 3 {
+                continue;
+            }
+
+            let avg_pt = [px / wsum, py / wsum, pz / wsum];
+            let avg_depth = depth_sum / wsum;
+            let avg_conf = (conf_sum / wsum).clamp(0.0, 1.0);
+            let avg_geom = (geom_sum / wsum).clamp(0.0, 1.0);
+            let blend = 0.35;
+            let updated_conf = ((1.0 - blend) * s.confidence + blend * avg_conf).clamp(0.05, 0.99);
+            samples[i].point_world = [
+                (1.0 - blend) * s.point_world[0] + blend * avg_pt[0],
+                (1.0 - blend) * s.point_world[1] + blend * avg_pt[1],
+                (1.0 - blend) * s.point_world[2] + blend * avg_pt[2],
+            ];
+            samples[i].ref_depth = ((1.0 - blend) * s.ref_depth + blend * avg_depth).max(1.0e-5);
+            samples[i].confidence = updated_conf;
+            samples[i].geometry_quality = ((1.0 - blend) * s.geometry_quality + blend * avg_geom).clamp(0.0, 1.0);
+        }
+    }
 }
 
 fn select_mvs_source_views(
@@ -2741,6 +2812,49 @@ mod tests {
         assert_eq!(low.len(), 1);
         assert_eq!(high.len(), 1);
         assert!(high[0].confidence > low[0].confidence);
+    }
+
+    #[test]
+    fn multiview_propagation_boosts_supported_low_confidence_sample() {
+        let mut samples = vec![
+            MultiViewDepthSample {
+                point_world: [0.0, 0.0, 5.0],
+                confidence: 0.92,
+                support_views: 3,
+                ref_px: [20.0, 20.0],
+                ref_depth: 5.0,
+                geometry_quality: 0.9,
+            },
+            MultiViewDepthSample {
+                point_world: [0.4, 0.1, 5.1],
+                confidence: 0.88,
+                support_views: 3,
+                ref_px: [32.0, 20.0],
+                ref_depth: 5.05,
+                geometry_quality: 0.85,
+            },
+            MultiViewDepthSample {
+                point_world: [0.1, 0.3, 4.95],
+                confidence: 0.89,
+                support_views: 3,
+                ref_px: [22.0, 31.0],
+                ref_depth: 4.98,
+                geometry_quality: 0.88,
+            },
+            MultiViewDepthSample {
+                point_world: [0.3, 0.2, 5.02],
+                confidence: 0.20,
+                support_views: 1,
+                ref_px: [26.0, 24.0],
+                ref_depth: 5.0,
+                geometry_quality: 0.25,
+            },
+        ];
+
+        let before = samples[3].confidence;
+        refine_multiview_samples(&mut samples);
+        let after = samples[3].confidence;
+        assert!(after > before, "supported low-confidence sample should be strengthened by propagation");
     }
 
     #[test]

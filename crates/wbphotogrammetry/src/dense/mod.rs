@@ -25,6 +25,8 @@ const MVS_MAX_SOURCE_VIEWS: usize = 3;
 const MVS_SAMPLE_STEP: usize = 36;
 const MVS_PATCH_RADIUS: i32 = 2;
 const MVS_SEARCH_RADIUS: i32 = 12;
+const MVS_SEARCH_RADIUS_MIN: i32 = 4;
+const MVS_SEARCH_RADIUS_MAX: i32 = 26;
 const MVS_OCCLUSION_BIN_PX: f64 = 8.0;
 const MVS_EPIPOLAR_TOL_PX: f64 = 1.25;
 const MVS_LR_CONSISTENCY_TOL_PX: i32 = 2;
@@ -566,6 +568,7 @@ fn estimate_multiview_depth_maps(
 
     let pose_count = alignment.poses.len().min(frames.len());
     let intrinsics = &alignment.stats.intrinsics;
+    let nominal_depth_m = estimate_nominal_flight_height_m(alignment).max(8.0);
     let mut loaded: Vec<Option<GrayPyramid>> = vec![None; pose_count];
     for i in 0..pose_count {
         loaded[i] = load_downsampled_gray_pyramid(&frames[i], 640);
@@ -621,6 +624,24 @@ fn estimate_multiview_depth_maps(
                         .level1
                         .as_ref()
                         .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
+                    let ref_pos = Vector3::new(
+                        alignment.poses[ref_idx].position[0],
+                        alignment.poses[ref_idx].position[1],
+                        alignment.poses[ref_idx].position[2],
+                    );
+                    let src_pos = Vector3::new(
+                        alignment.poses[src_idx].position[0],
+                        alignment.poses[src_idx].position[1],
+                        alignment.poses[src_idx].position[2],
+                    );
+                    let pair_baseline_m = (src_pos - ref_pos).norm();
+                    let search_radius_pair = adaptive_search_radius_px(
+                        ref_intr.2,
+                        pair_baseline_m,
+                        nominal_depth_m,
+                        MVS_SEARCH_RADIUS_MIN,
+                        MVS_SEARCH_RADIUS_MAX,
+                    );
                     let p_src = projection_matrix(&alignment.poses[src_idx]);
 
                     let fundamental_ref_to_src = fundamental_matrix_pinhole(
@@ -645,7 +666,7 @@ fn estimate_multiview_depth_maps(
                         y,
                         center_ref,
                         start,
-                        MVS_SEARCH_RADIUS,
+                        search_radius_pair,
                         MVS_PATCH_RADIUS,
                         fundamental_ref_to_src.as_ref(),
                         ref_pyr.level1.as_ref().map(|(img, _)| img),
@@ -680,7 +701,7 @@ fn estimate_multiview_depth_maps(
                         m.y,
                         patch_center_intensity(src_img, m.x, m.y),
                         start,
-                        MVS_SEARCH_RADIUS,
+                        search_radius_pair,
                         MVS_PATCH_RADIUS,
                         fundamental_src_to_ref.as_ref(),
                         src_pyr.level1.as_ref().map(|(img, _)| img),
@@ -925,6 +946,26 @@ fn select_mvs_source_views(
 
     scored.sort_by(|a, b| b.1.total_cmp(&a.1));
     scored.into_iter().take(max_views).map(|v| v.0).collect()
+}
+
+fn adaptive_search_radius_px(
+    fx_px: f64,
+    baseline_m: f64,
+    nominal_depth_m: f64,
+    min_radius: i32,
+    max_radius: i32,
+) -> i32 {
+    if !fx_px.is_finite() || !baseline_m.is_finite() || !nominal_depth_m.is_finite() {
+        return MVS_SEARCH_RADIUS;
+    }
+    let fx = fx_px.max(1.0);
+    let baseline = baseline_m.max(0.0);
+    let depth = nominal_depth_m.max(1.0);
+
+    // Approximate disparity scale from pinhole geometry and map it to a bounded window radius.
+    let approx_disp = fx * baseline / depth;
+    let radius = (4.0 + 0.55 * approx_disp).round() as i32;
+    radius.clamp(min_radius.max(1), max_radius.max(min_radius.max(1)))
 }
 
 fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<DepthHypothesis> {
@@ -1214,7 +1255,27 @@ fn estimate_stereo_depths_from_image_pairs(
         let left_img = &left.level0;
         let right_img = &right.level0;
         let patch_radius = 2i32;
-        let search_radius = 10i32;
+        let baseline_m = {
+            let a = Vector3::new(
+                alignment.poses[i].position[0],
+                alignment.poses[i].position[1],
+                alignment.poses[i].position[2],
+            );
+            let b = Vector3::new(
+                alignment.poses[i + 1].position[0],
+                alignment.poses[i + 1].position[1],
+                alignment.poses[i + 1].position[2],
+            );
+            (b - a).norm()
+        };
+        let nominal_depth_m = estimate_nominal_flight_height_m(alignment).max(8.0);
+        let search_radius = adaptive_search_radius_px(
+            scaled_intrinsics_left.2,
+            baseline_m,
+            nominal_depth_m,
+            MVS_SEARCH_RADIUS_MIN,
+            MVS_SEARCH_RADIUS_MAX,
+        );
         let step = 48usize;
         let mut accepted_for_pair = 0usize;
 
@@ -3062,6 +3123,19 @@ mod tests {
         let filtered = suppress_weak_isolated_hypotheses(hyps);
         assert!(filtered.iter().any(|h| (h.center[0] - 8.0).abs() < 1.0e-6));
         assert!(!filtered.iter().any(|h| (h.center[0] - 120.0).abs() < 1.0e-6));
+    }
+
+    #[test]
+    fn adaptive_search_radius_tracks_geometry_scale() {
+        let r_small = adaptive_search_radius_px(500.0, 3.0, 120.0, 4, 26);
+        let r_large_baseline = adaptive_search_radius_px(500.0, 18.0, 120.0, 4, 26);
+        let r_shallow = adaptive_search_radius_px(500.0, 10.0, 45.0, 4, 26);
+        let r_deep = adaptive_search_radius_px(500.0, 10.0, 180.0, 4, 26);
+
+        assert!(r_large_baseline >= r_small);
+        assert!(r_shallow >= r_deep);
+        assert!((4..=26).contains(&r_small));
+        assert!((4..=26).contains(&r_large_baseline));
     }
 
     #[test]

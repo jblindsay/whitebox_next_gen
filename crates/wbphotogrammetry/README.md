@@ -169,6 +169,9 @@ refines them via bundle adjustment.
 
 **Bundle adjustment:**
 - Levenberg–Marquardt optimisation with Huber loss (2 px threshold)
+- Reduced camera-center normal-equation solve with Schur-style point elimination
+  when the tie-point network is strong enough, with guarded fallback to the
+  conservative local update path on weak or degenerate systems
 - Optional intrinsic refinement: focal lengths, principal point, radial distortion
   (k₁, k₂) and tangential distortion (p₁, p₂) — enabled when the observation
   count is sufficient (≥18 per camera) and network geometry support is strong (≥85%)
@@ -187,7 +190,8 @@ constraints to reduce accumulated drift on large or closed-loop surveys.
 
 **Output statistics:** Aligned fraction, reprojection RMSE (median, P95), sparse
 point count, track-length statistics, estimated GSD, loop closure correction
-magnitude.
+magnitude, and covariance-style translation/rotation uncertainty proxies derived
+from bundle-adjustment curvature.
 
 **Key types:** `CameraPose`, `AlignmentResult`, `AlignmentStats`, `CameraIntrinsics`,
 `CameraModel`, `AlignmentOptions`, `IntrinsicsRefinementPolicy`

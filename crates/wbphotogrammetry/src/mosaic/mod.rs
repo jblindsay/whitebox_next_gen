@@ -1619,6 +1619,7 @@ mod tests {
                 ba_supported_camera_fraction: 0.0,
                 ba_observations_per_pass: Vec::new(),
                 ba_prune_thresholds_px: Vec::new(),
+                ba_camera_covariance: crate::alignment::CameraCovarianceDiagnostics::default(),
             },
         }
     }
@@ -1710,6 +1711,7 @@ mod tests {
                 ba_supported_camera_fraction: 0.0,
                 ba_observations_per_pass: Vec::new(),
                 ba_prune_thresholds_px: Vec::new(),
+                ba_camera_covariance: crate::alignment::CameraCovarianceDiagnostics::default(),
             },
         };
 

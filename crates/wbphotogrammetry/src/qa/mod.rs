@@ -399,6 +399,7 @@ mod tests {
                 ba_supported_camera_fraction: 0.0,
                 ba_observations_per_pass: Vec::new(),
                 ba_prune_thresholds_px: Vec::new(),
+                ba_camera_covariance: crate::alignment::CameraCovarianceDiagnostics::default(),
             },
             DsmStats {
                 valid_cells: 25_000,
@@ -610,6 +611,7 @@ mod tests {
             ba_supported_camera_fraction: 0.92,
             ba_observations_per_pass: vec![305, 289, 278, 272],
             ba_prune_thresholds_px: vec![5.8, 5.2, 4.9, 4.6],
+            ba_camera_covariance: crate::alignment::CameraCovarianceDiagnostics::default(),
         };
         let alignment_real_like = AlignmentStats {
             aligned_fraction: 0.86,
@@ -637,6 +639,7 @@ mod tests {
             ba_supported_camera_fraction: 0.86,
             ba_observations_per_pass: vec![266, 247, 233, 224],
             ba_prune_thresholds_px: vec![6.2, 5.5, 5.0, 4.7],
+            ba_camera_covariance: crate::alignment::CameraCovarianceDiagnostics::default(),
         };
 
         let dsm_good = DsmStats {

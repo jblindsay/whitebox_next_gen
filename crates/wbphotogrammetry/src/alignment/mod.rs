@@ -1986,6 +1986,7 @@ struct ReducedPosePointBlock {
 #[derive(Debug, Clone)]
 struct ReducedPoseSystem {
     hessian: DMatrix<f64>,
+    hessian_sparse: SparseSymmetricBlock4,
     gradient: DVector<f64>,
     point_blocks: Vec<ReducedPosePointBlock>,
 }
@@ -2045,6 +2046,135 @@ impl SparseSymmetricBlock4 {
             }
         }
         dense
+    }
+
+    fn diagonal(&self) -> DVector<f64> {
+        let mut diag = DVector::zeros(self.dim);
+        for ((row, col), block) in &self.blocks {
+            if row == col {
+                for i in 0..4 {
+                    diag[row + i] += block[(i, i)];
+                }
+            }
+        }
+        diag
+    }
+
+    fn matvec_with_damping(&self, x: &DVector<f64>, damping: f64) -> DVector<f64> {
+        let mut y = DVector::zeros(self.dim);
+        for ((row, col), block) in &self.blocks {
+            if row == col {
+                for r in 0..4 {
+                    let mut acc = 0.0;
+                    for c in 0..4 {
+                        acc += block[(r, c)] * x[col + c];
+                    }
+                    y[row + r] += acc;
+                }
+            } else {
+                for r in 0..4 {
+                    let mut acc_upper = 0.0;
+                    let mut acc_lower = 0.0;
+                    for c in 0..4 {
+                        acc_upper += block[(r, c)] * x[col + c];
+                        acc_lower += block[(c, r)] * x[row + c];
+                    }
+                    y[row + r] += acc_upper;
+                    y[col + r] += acc_lower;
+                }
+            }
+        }
+        if damping > 0.0 {
+            for i in 0..self.dim {
+                y[i] += damping * x[i];
+            }
+        }
+        y
+    }
+}
+
+fn solve_damped_sparse_pcg(
+    matrix: &SparseSymmetricBlock4,
+    gradient: &DVector<f64>,
+    damping: f64,
+    max_iters: usize,
+    tol: f64,
+) -> Option<DVector<f64>> {
+    if matrix.dim == 0 || gradient.len() != matrix.dim {
+        return None;
+    }
+
+    let dense_fallback = || {
+        let mut dense = matrix.clone().into_dense();
+        for i in 0..dense.nrows() {
+            dense[(i, i)] += damping;
+        }
+        let rhs = -gradient;
+        dense.lu().solve(&rhs)
+    };
+
+    let b = -gradient;
+    let mut x = DVector::zeros(matrix.dim);
+    let mut r = b.clone();
+    let mut diag = matrix.diagonal();
+    for i in 0..diag.len() {
+        diag[i] += damping;
+        if !diag[i].is_finite() || diag[i].abs() < 1.0e-9 {
+            diag[i] = 1.0;
+        }
+    }
+
+    let mut z = DVector::zeros(matrix.dim);
+    for i in 0..z.len() {
+        z[i] = r[i] / diag[i];
+    }
+    let mut p = z.clone();
+    let mut rz_old = r.dot(&z);
+    if !rz_old.is_finite() {
+        return dense_fallback();
+    }
+
+    let b_norm = b.norm().max(1.0);
+    let target = tol.max(1.0e-12) * b_norm;
+
+    for _ in 0..max_iters.max(1) {
+        let ap = matrix.matvec_with_damping(&p, damping);
+        let denom = p.dot(&ap);
+        if !denom.is_finite() || denom.abs() < 1.0e-12 {
+            return dense_fallback();
+        }
+        let alpha = rz_old / denom;
+        if !alpha.is_finite() {
+            return dense_fallback();
+        }
+        x += alpha * &p;
+        r -= alpha * ap;
+
+        let r_norm = r.norm();
+        if r_norm.is_finite() && r_norm <= target {
+            return Some(x);
+        }
+
+        for i in 0..z.len() {
+            z[i] = r[i] / diag[i];
+        }
+        let rz_new = r.dot(&z);
+        if !rz_new.is_finite() {
+            return dense_fallback();
+        }
+        let beta = rz_new / rz_old;
+        if !beta.is_finite() {
+            return dense_fallback();
+        }
+        p = &z + beta * p;
+        rz_old = rz_new;
+    }
+
+    let resid = (matrix.matvec_with_damping(&x, damping) + gradient).norm();
+    if resid.is_finite() && resid <= target * 2.0 {
+        Some(x)
+    } else {
+        dense_fallback()
     }
 }
 
@@ -2209,12 +2339,20 @@ fn apply_reduced_camera_pose_update(
 
     let mut lambda_try = lambda_pose;
     for _ in 0..5 {
-        let mut h_damped = reduced.hessian.clone();
-        for idx in 0..h_damped.nrows() {
-            h_damped[(idx, idx)] += lambda_try;
-        }
-        let rhs = -&reduced.gradient;
-        let delta = h_damped.lu().solve(&rhs)?;
+        let delta = solve_damped_sparse_pcg(
+            &reduced.hessian_sparse,
+            &reduced.gradient,
+            lambda_try,
+            96,
+            1.0e-8,
+        ).or_else(|| {
+            let mut h_damped = reduced.hessian.clone();
+            for idx in 0..h_damped.nrows() {
+                h_damped[(idx, idx)] += lambda_try;
+            }
+            let rhs = -&reduced.gradient;
+            h_damped.lu().solve(&rhs)
+        })?;
         if !delta.iter().all(|v| v.is_finite()) {
             lambda_try *= 2.0;
             continue;
@@ -2489,10 +2627,11 @@ fn build_reduced_camera_pose_system(
         hessian_sparse.add_diag_value(offset + 3, 0.05);
     }
 
-    let hessian = hessian_sparse.into_dense();
+    let hessian = hessian_sparse.clone().into_dense();
 
     Some(ReducedPoseSystem {
         hessian,
+        hessian_sparse,
         gradient,
         point_blocks,
     })
@@ -5891,6 +6030,48 @@ mod tests {
             + (&update.rotations[2] - &seed_rotations[2]).norm();
         assert!(center_delta > 1.0e-8, "coupled pose solve should update non-anchor camera centers");
         assert!(rotation_delta > 1.0e-8, "coupled pose solve should update non-anchor camera rotations");
+    }
+
+    #[test]
+    fn sparse_pcg_matches_dense_lu_for_block_system() {
+        let mut sparse = SparseSymmetricBlock4::new(8);
+        let block00 = Matrix4::new(
+            8.0, 0.15, 0.0, 0.0,
+            0.15, 7.5, 0.08, 0.0,
+            0.0, 0.08, 7.0, 0.12,
+            0.0, 0.0, 0.12, 6.8,
+        );
+        let block11 = Matrix4::new(
+            7.8, 0.08, 0.0, 0.0,
+            0.08, 7.2, 0.07, 0.0,
+            0.0, 0.07, 6.9, 0.07,
+            0.0, 0.0, 0.07, 6.6,
+        );
+        let off = Matrix4::new(
+            -0.06, 0.01, 0.0, 0.0,
+            0.01, -0.05, 0.005, 0.0,
+            0.0, 0.005, -0.04, 0.004,
+            0.0, 0.0, 0.004, -0.035,
+        );
+        sparse.add_block(0, 0, block00);
+        sparse.add_block(4, 4, block11);
+        sparse.add_block(0, 4, off);
+
+        let gradient = DVector::from_vec(vec![0.8, -0.4, 0.2, -0.1, -0.7, 0.3, -0.25, 0.12]);
+        let damping = 0.35;
+
+        let pcg = solve_damped_sparse_pcg(&sparse, &gradient, damping, 96, 1.0e-10)
+            .expect("pcg solve");
+
+        let mut dense = sparse.into_dense();
+        for i in 0..dense.nrows() {
+            dense[(i, i)] += damping;
+        }
+        let rhs = -&gradient;
+        let lu = dense.lu().solve(&rhs).expect("dense lu solve");
+
+        let diff = (&pcg - &lu).norm();
+        assert!(diff < 1.0e-6, "sparse pcg should match dense LU for the same damped system");
     }
 
     #[test]

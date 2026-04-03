@@ -1364,6 +1364,7 @@ fn run_simplified_bundle_adjustment(
         centres.len(),
         initial_supported_camera_fraction,
         weak_geometry_support,
+        camera_model,
     );
     let freeze_rotation_updates = weak_geometry_support && initial_supported_camera_fraction < 0.90;
     let pose_prior_sigma_m = if weak_geometry_support { 2.5 } else { 6.0 };
@@ -1877,7 +1878,7 @@ fn run_simplified_bundle_adjustment(
                 }
                 let eps = intrinsics_eps[param_idx];
                 let mut plus = intrinsics_opt.clone();
-                perturb_intrinsics_param(&mut plus, param_idx, eps);
+                perturb_intrinsics_param(&mut plus, param_idx, eps, camera_model);
                 let ep = total_observation_error_with_huber(
                     &centres,
                     &rotations_c2w,
@@ -1892,7 +1893,7 @@ fn run_simplified_bundle_adjustment(
                 );
 
                 let mut minus = intrinsics_opt.clone();
-                perturb_intrinsics_param(&mut minus, param_idx, -eps);
+                perturb_intrinsics_param(&mut minus, param_idx, -eps, camera_model);
                 let em = total_observation_error_with_huber(
                     &centres,
                     &rotations_c2w,
@@ -1933,6 +1934,7 @@ fn run_simplified_bundle_adjustment(
                     intrinsics_refine_mask,
                     image_width_hint,
                     image_height_hint,
+                    camera_model,
                 );
                 let cand_cost = total_observation_error_with_huber(
                     &centres,
@@ -2145,7 +2147,12 @@ fn run_simplified_bundle_adjustment(
     )
 }
 
-fn perturb_intrinsics_param(intrinsics: &mut CameraIntrinsics, param_idx: usize, delta: f64) {
+fn perturb_intrinsics_param(
+    intrinsics: &mut CameraIntrinsics,
+    param_idx: usize,
+    delta: f64,
+    camera_model: CameraModel,
+) {
     match param_idx {
         0 => intrinsics.fx += delta,
         1 => intrinsics.fy += delta,
@@ -2153,8 +2160,8 @@ fn perturb_intrinsics_param(intrinsics: &mut CameraIntrinsics, param_idx: usize,
         3 => intrinsics.cy += delta,
         4 => intrinsics.k1 += delta,
         5 => intrinsics.k2 += delta,
-        6 => intrinsics.p1 += delta,
-        7 => intrinsics.p2 += delta,
+        6 if camera_model != CameraModel::Fisheye => intrinsics.p1 += delta,
+        7 if camera_model != CameraModel::Fisheye => intrinsics.p2 += delta,
         _ => {}
     }
 }
@@ -3748,6 +3755,7 @@ fn apply_intrinsics_update(
     refine_mask: IntrinsicsRefineMask,
     image_width_hint: f64,
     image_height_hint: f64,
+    camera_model: CameraModel,
 ) {
     let mut deltas = [0.0_f64; 8];
     for i in 0..8 {
@@ -3781,10 +3789,10 @@ fn apply_intrinsics_update(
     if refine_mask.params[5] {
         intrinsics.k2 = (intrinsics.k2 - deltas[5]).clamp(-0.50, 0.50);
     }
-    if refine_mask.params[6] {
+    if camera_model != CameraModel::Fisheye && refine_mask.params[6] {
         intrinsics.p1 = (intrinsics.p1 - deltas[6]).clamp(-0.10, 0.10);
     }
-    if refine_mask.params[7] {
+    if camera_model != CameraModel::Fisheye && refine_mask.params[7] {
         intrinsics.p2 = (intrinsics.p2 - deltas[7]).clamp(-0.10, 0.10);
     }
 }
@@ -3796,6 +3804,7 @@ fn build_intrinsics_refine_mask(
     camera_count: usize,
     supported_camera_fraction: f64,
     weak_geometry_support: bool,
+    camera_model: CameraModel,
 ) -> IntrinsicsRefineMask {
     match intrinsics_refinement_policy {
         IntrinsicsRefinementPolicy::None => return IntrinsicsRefineMask::none(),
@@ -3811,7 +3820,16 @@ fn build_intrinsics_refine_mask(
         }
         IntrinsicsRefinementPolicy::All => {
             return IntrinsicsRefineMask {
-                params: [true, true, true, true, true, true, true, true],
+                params: [
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    camera_model != CameraModel::Fisheye,
+                    camera_model != CameraModel::Fisheye,
+                ],
             };
         }
         IntrinsicsRefinementPolicy::Auto => {}
@@ -3843,8 +3861,8 @@ fn build_intrinsics_refine_mask(
             enough_for_pp,
             enough_for_k1,
             enough_for_k2,
-            enough_for_tangential,
-            enough_for_tangential,
+            camera_model != CameraModel::Fisheye && enough_for_tangential,
+            camera_model != CameraModel::Fisheye && enough_for_tangential,
         ],
     }
 }
@@ -4271,28 +4289,29 @@ fn project_world_to_pixel(
     }
     let x = xc[0] / xc[2];
     let y = xc[1] / xc[2];
-    let (x_base, y_base) = match camera_model {
-        CameraModel::Pinhole | CameraModel::Auto => (x, y),
+    let (x_d, y_d) = match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => {
+            let r2 = x * x + y * y;
+            let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
+            let x_t = 2.0 * intrinsics.p1 * x * y
+                + intrinsics.p2 * (r2 + 2.0 * x * x);
+            let y_t = intrinsics.p1 * (r2 + 2.0 * y * y)
+                + 2.0 * intrinsics.p2 * x * y;
+            (x * radial + x_t, y * radial + y_t)
+        }
         CameraModel::Fisheye => {
-            // Equidistant fisheye: r_img = theta, preserving bearing direction.
             let r = (x * x + y * y).sqrt();
             if r <= 1.0e-12 {
                 (x, y)
             } else {
                 let theta = r.atan();
-                let scale = theta / r;
+                let theta2 = theta * theta;
+                let theta_d = theta * (1.0 + intrinsics.k1 * theta2 + intrinsics.k2 * theta2 * theta2);
+                let scale = theta_d / r;
                 (x * scale, y * scale)
             }
         }
     };
-    let r2 = x_base * x_base + y_base * y_base;
-    let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
-    let x_t = 2.0 * intrinsics.p1 * x_base * y_base
-        + intrinsics.p2 * (r2 + 2.0 * x_base * x_base);
-    let y_t = intrinsics.p1 * (r2 + 2.0 * y_base * y_base)
-        + 2.0 * intrinsics.p2 * x_base * y_base;
-    let x_d = x_base * radial + x_t;
-    let y_d = y_base * radial + y_t;
     if !x_d.is_finite() || !y_d.is_finite() {
         return None;
     }
@@ -6747,5 +6766,82 @@ mod tests {
         let du = (pin[0] - fish[0]).abs();
         let dv = (pin[1] - fish[1]).abs();
         assert!(du < 0.05 && dv < 0.05, "near-axis projection should be nearly identical");
+    }
+
+    #[test]
+    fn fisheye_projection_ignores_tangential_terms() {
+        let intrinsics_base = CameraIntrinsics {
+            fx: 1000.0,
+            fy: 1000.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.015,
+            k2: -0.002,
+            p1: 0.0,
+            p2: 0.0,
+        };
+        let intrinsics_tangential = CameraIntrinsics {
+            p1: 0.08,
+            p2: -0.06,
+            ..intrinsics_base.clone()
+        };
+        let centre = Vector3::new(0.0, 0.0, 0.0);
+        let r = Matrix3::identity();
+        let xw = Vector3::new(1.8, -0.9, 2.2);
+
+        let base = project_world_to_pixel(&xw, &centre, &r, &intrinsics_base, CameraModel::Fisheye)
+            .expect("fisheye projection");
+        let tangential = project_world_to_pixel(&xw, &centre, &r, &intrinsics_tangential, CameraModel::Fisheye)
+            .expect("fisheye projection");
+
+        assert!((base - tangential).norm() < 1.0e-9, "fisheye projection should ignore tangential Brown-Conrady terms");
+    }
+
+    #[test]
+    fn fisheye_refine_mask_keeps_tangential_params_frozen() {
+        let mask = build_intrinsics_refine_mask(
+            IntrinsicsRefinementPolicy::All,
+            true,
+            256,
+            6,
+            0.98,
+            false,
+            CameraModel::Fisheye,
+        );
+
+        assert!(mask.params[0] && mask.params[1] && mask.params[4] && mask.params[5]);
+        assert!(!mask.params[6] && !mask.params[7], "fisheye refinement should not expose pinhole tangential parameters");
+    }
+
+    #[test]
+    fn fisheye_intrinsics_update_leaves_tangential_terms_unchanged() {
+        let mut intrinsics = CameraIntrinsics {
+            fx: 1200.0,
+            fy: 1180.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.01,
+            k2: -0.002,
+            p1: 0.03,
+            p2: -0.04,
+        };
+        let p1_before = intrinsics.p1;
+        let p2_before = intrinsics.p2;
+
+        apply_intrinsics_update(
+            &mut intrinsics,
+            &[1.0, -1.0, 0.5, -0.5, 1.0, -1.0, 1.0, -1.0],
+            &[0.1, 0.1, 0.1, 0.1, 0.01, 0.01, 0.5, 0.5],
+            IntrinsicsRefineMask {
+                params: [true, true, true, true, true, true, true, true],
+            },
+            4000.0,
+            3000.0,
+            CameraModel::Fisheye,
+        );
+
+        assert_eq!(intrinsics.p1, p1_before);
+        assert_eq!(intrinsics.p2, p2_before);
+        assert!((intrinsics.k1 - 0.01).abs() > 1.0e-8 || (intrinsics.k2 + 0.002).abs() > 1.0e-8);
     }
 }

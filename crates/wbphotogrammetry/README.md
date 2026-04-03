@@ -355,11 +355,12 @@ likely to require further development.
   observation support/geometry quality, and the refinement policy is now
   user-configurable per run. The default policy remains heuristic rather than
   benchmark-calibrated per mission type.
-- Bundle adjustment now evaluates residuals with a fisheye-aware equidistant
-  projection path when the fisheye camera model is selected, but intrinsic
-  optimization still uses the pinhole-style distortion parameter set
-  (`k1/k2/p1/p2`). A dedicated fisheye calibration parameterization is not yet
-  implemented.
+- Bundle adjustment now uses a dedicated fisheye calibration path when the
+  fisheye camera model is selected: equidistant theta-polynomial distortion is
+  applied during residual evaluation and intrinsic refinement keeps the pinhole
+  tangential terms frozen. Fisheye support still does not include a richer
+  multi-parameter calibration family beyond the current `fx/fy/cx/cy/k1/k2`
+  model.
 - Camera-motion priors (smooth acceleration, constant-speed models suited to
   drone flight paths) are not implemented. The current pose priors are
   Gaussian position constraints only.

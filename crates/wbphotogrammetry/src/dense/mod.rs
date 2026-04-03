@@ -36,6 +36,8 @@ const MVS_PROPAGATION_RADIUS_PX: f64 = 54.0;
 const MVS_PROPAGATION_SIGMA_PX: f64 = 24.0;
 const MVS_HOLE_FILL_MIN_NEIGHBORS: usize = 2;
 const MVS_HOLE_FILL_CONF_SCALE: f64 = 0.72;
+const MVS_HOLE_FILL_EDGE_DEPTH_RANGE_MULTIPLIER: f64 = 2.2;
+const MVS_HOLE_FILL_EDGE_MIN_SCALE: f64 = 0.18;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -1001,7 +1003,10 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             if wsum <= 1.0e-9 {
                 continue;
             }
+            let edge_scale = hole_fill_edge_confidence_scale(&votes);
             let c = (votes.iter().map(|v| v.confidence).sum::<f64>() / votes.len() as f64 * MVS_HOLE_FILL_CONF_SCALE)
+                * edge_scale;
+            let c = c
                 .clamp(0.05, 0.90);
             out.push(DepthHypothesis {
                 center: [x / wsum, y / wsum, z / wsum],
@@ -1012,6 +1017,27 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
         out.extend(front_by_bin.into_values());
     }
     out
+}
+
+fn hole_fill_edge_confidence_scale(votes: &[DepthHypothesis]) -> f64 {
+    if votes.len() < 2 {
+        return 1.0;
+    }
+    let mut min_z = f64::INFINITY;
+    let mut max_z = f64::NEG_INFINITY;
+    let mut mean_z = 0.0;
+    for v in votes {
+        min_z = min_z.min(v.center[2]);
+        max_z = max_z.max(v.center[2]);
+        mean_z += v.center[2];
+    }
+    mean_z /= votes.len() as f64;
+
+    let depth_range = (max_z - min_z).max(0.0);
+    // Tolerance scales with local depth magnitude but stays bounded.
+    let depth_tol = (0.30 + 0.02 * mean_z.abs()).clamp(0.30, 2.8);
+    let normalized = depth_range / (MVS_HOLE_FILL_EDGE_DEPTH_RANGE_MULTIPLIER * depth_tol).max(1.0e-6);
+    (1.0 - normalized).clamp(MVS_HOLE_FILL_EDGE_MIN_SCALE, 1.0)
 }
 
 fn estimate_stereo_depths_from_pose_baselines(
@@ -2951,6 +2977,26 @@ mod tests {
 
         let hyps = depth_hypotheses_from_multiview_maps(&maps);
         assert!(hyps.len() > 4, "hole fill should create additional hypotheses");
+    }
+
+    #[test]
+    fn edge_aware_hole_fill_reduces_confidence_on_depth_breaks() {
+        let smooth_votes = vec![
+            DepthHypothesis { center: [0.0, 0.0, 10.0], confidence: 0.8 },
+            DepthHypothesis { center: [1.0, 0.0, 10.2], confidence: 0.8 },
+            DepthHypothesis { center: [0.0, 1.0, 9.9], confidence: 0.8 },
+            DepthHypothesis { center: [1.0, 1.0, 10.1], confidence: 0.8 },
+        ];
+        let edge_votes = vec![
+            DepthHypothesis { center: [0.0, 0.0, 4.0], confidence: 0.8 },
+            DepthHypothesis { center: [1.0, 0.0, 4.2], confidence: 0.8 },
+            DepthHypothesis { center: [0.0, 1.0, 16.0], confidence: 0.8 },
+            DepthHypothesis { center: [1.0, 1.0, 15.8], confidence: 0.8 },
+        ];
+
+        let smooth_scale = hole_fill_edge_confidence_scale(&smooth_votes);
+        let edge_scale = hole_fill_edge_confidence_scale(&edge_votes);
+        assert!(smooth_scale > edge_scale, "depth-discontinuous neighborhoods should be attenuated");
     }
 
     #[test]

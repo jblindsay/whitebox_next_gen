@@ -44,6 +44,9 @@ const MVS_HOLE_FILL_ITERS: usize = 2;
 const MVS_HOLE_FILL_ITER_DECAY: f64 = 0.84;
 const MVS_WEAK_ISOLATED_RADIUS_M: f64 = 7.5;
 const MVS_WEAK_ISOLATED_Z_TOL_M: f64 = 2.2;
+const MVS_LOCAL_AGREEMENT_Z_TOL_M: f64 = 1.8;
+const MVS_LOCAL_AGREEMENT_BOOST_MAX: f64 = 1.12;
+const MVS_LOCAL_AGREEMENT_ATTEN_MIN: f64 = 0.62;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -1011,12 +1014,55 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             });
         }
 
+        let keys: Vec<(i32, i32)> = front_by_bin.keys().copied().collect();
+        for key in keys {
+            let Some(base) = front_by_bin.get(&key).cloned() else {
+                continue;
+            };
+            let agreement = local_bin_agreement_scale(&front_by_bin, key, base.center[2]);
+            if let Some(v) = front_by_bin.get_mut(&key) {
+                v.confidence = (v.confidence * agreement).clamp(0.05, 0.99);
+            }
+        }
+
         let filled_bins = compute_hole_fill_bins(&front_by_bin, MVS_HOLE_FILL_ITERS);
         out.extend(filled_bins.into_values());
 
         out.extend(front_by_bin.into_values());
     }
     suppress_weak_isolated_hypotheses(out)
+}
+
+fn local_bin_agreement_scale(
+    bins: &std::collections::HashMap<(i32, i32), DepthHypothesis>,
+    key: (i32, i32),
+    z_ref: f64,
+) -> f64 {
+    let mut neighbors = 0usize;
+    let mut coherent = 0usize;
+    for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+        let nb = (key.0 + dx, key.1 + dy);
+        let Some(h) = bins.get(&nb) else {
+            continue;
+        };
+        neighbors += 1;
+        if (h.center[2] - z_ref).abs() <= MVS_LOCAL_AGREEMENT_Z_TOL_M {
+            coherent += 1;
+        }
+    }
+    if neighbors == 0 {
+        return 1.0;
+    }
+    let ratio = coherent as f64 / neighbors as f64;
+    if ratio >= 0.5 {
+        // Small boost for coherent neighborhoods.
+        let t = ((ratio - 0.5) / 0.5).clamp(0.0, 1.0);
+        1.0 + t * (MVS_LOCAL_AGREEMENT_BOOST_MAX - 1.0)
+    } else {
+        // Attenuate confidence across local depth discontinuities.
+        let t = ((0.5 - ratio) / 0.5).clamp(0.0, 1.0);
+        1.0 - t * (1.0 - MVS_LOCAL_AGREEMENT_ATTEN_MIN)
+    }
 }
 
 fn compute_hole_fill_bins(
@@ -3182,6 +3228,27 @@ mod tests {
         assert!(r_shallow >= r_deep);
         assert!((4..=26).contains(&r_small));
         assert!((4..=26).contains(&r_large_baseline));
+    }
+
+    #[test]
+    fn local_agreement_scale_boosts_coherent_and_attenuates_breaks() {
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((0, 0), DepthHypothesis { center: [0.0, 0.0, 10.0], confidence: 0.7 });
+        bins.insert((1, 0), DepthHypothesis { center: [1.0, 0.0, 10.2], confidence: 0.7 });
+        bins.insert((-1, 0), DepthHypothesis { center: [-1.0, 0.0, 9.9], confidence: 0.7 });
+        bins.insert((0, 1), DepthHypothesis { center: [0.0, 1.0, 10.1], confidence: 0.7 });
+        bins.insert((0, -1), DepthHypothesis { center: [0.0, -1.0, 10.0], confidence: 0.7 });
+
+        let coherent = local_bin_agreement_scale(&bins, (0, 0), 10.0);
+        assert!(coherent >= 1.0);
+
+        bins.insert((1, 0), DepthHypothesis { center: [1.0, 0.0, 20.0], confidence: 0.7 });
+        bins.insert((-1, 0), DepthHypothesis { center: [-1.0, 0.0, 21.0], confidence: 0.7 });
+        bins.insert((0, 1), DepthHypothesis { center: [0.0, 1.0, 19.5], confidence: 0.7 });
+        bins.insert((0, -1), DepthHypothesis { center: [0.0, -1.0, 20.5], confidence: 0.7 });
+        let broken = local_bin_agreement_scale(&bins, (0, 0), 10.0);
+        assert!(broken < 1.0);
+        assert!(broken >= MVS_LOCAL_AGREEMENT_ATTEN_MIN);
     }
 
     #[test]

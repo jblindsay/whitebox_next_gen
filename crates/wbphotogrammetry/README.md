@@ -392,9 +392,10 @@ likely to require further development.
     adaptive baseline/depth-aware search windows, and a lightweight hybrid
     ZNCC+Census local cost. Depth maps now include a confidence-pruned
     neighborhood propagation/refinement pass and iterative sparse-hole
-    hypothesis fill with edge-aware confidence attenuation, plus weak-isolated
-    hypothesis suppression. The system still uses local patch windows rather
-    than a full global correspondence optimization.
+    hypothesis fill with edge-aware confidence attenuation, local neighborhood
+    agreement calibration, plus weak-isolated hypothesis suppression. The
+    system still uses local patch windows rather than a full global
+    correspondence optimization.
   - No semi-global matching (SGM/SGM++), global cost-volume optimization, or
     learned cost volumes
 - DTM separation is a morphological low-pass filtering operation. It is not a

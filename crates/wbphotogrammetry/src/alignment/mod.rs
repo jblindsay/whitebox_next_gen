@@ -5,7 +5,7 @@
 //! quality statistics from match-network strength.
 
 use serde::{Deserialize, Serialize};
-use nalgebra::{DMatrix, DVector, Matrix2, Matrix2x3, Matrix3, Matrix3x4, Matrix4, Vector2, Vector3};
+use nalgebra::{DMatrix, DVector, Matrix2, Matrix2x3, Matrix2x4, Matrix3, Matrix3x4, Matrix4, Matrix4x3, Vector2, Vector3, Vector4};
 use std::collections::VecDeque;
 
 use crate::camera::{CameraIntrinsics, CameraModel};
@@ -1142,9 +1142,9 @@ fn run_simplified_bundle_adjustment(
     let initial_intrinsics = intrinsics.clone();
     let image_width_hint = (intrinsics.cx * 2.0).max(320.0);
     let image_height_hint = (intrinsics.cy * 2.0).max(240.0);
-    let mut lambda_center = 20.0;
-    let mut lambda_rot = 45.0;
-    let mut lambda_intr = 12.0;
+    let mut lambda_center: f64 = 20.0;
+    let mut lambda_rot: f64 = 45.0;
+    let mut lambda_intr: f64 = 12.0;
     let mut best_centres = centres.clone();
     let mut best_rotations = rotations_c2w.clone();
     let mut best_intrinsics = intrinsics_opt.clone();
@@ -1170,9 +1170,37 @@ fn run_simplified_bundle_adjustment(
     
     for pass_idx in 0..max_passes {
         passes_completed += 1;
+        let mut used_coupled_pose_update = false;
+        if !freeze_rotation_updates {
+            if let Some(update) = apply_reduced_camera_pose_update(
+                &centres,
+                &rotations_c2w,
+                &observations,
+                &intrinsics_opt,
+                camera_model,
+                huber_threshold,
+                &original_centres,
+                &pose_prior_weights,
+                pose_prior_sigma_m,
+                pose_prior_scale_px2,
+                lambda_center.max(lambda_rot),
+                center_step_cap,
+                rotation_step_cap,
+                rot_eps,
+            ) {
+                centres = update.centres;
+                rotations_c2w = update.rotations;
+                observations = update.observations;
+                lambda_center = update.next_lambda;
+                lambda_rot = update.next_lambda;
+                used_coupled_pose_update = true;
+            }
+        }
+
         // Optimize camera centers with a reduced Schur-style solve when the
         // point network supports it; otherwise fall back to the older local pass.
-        if let Some(update) = apply_reduced_camera_center_update(
+        if !used_coupled_pose_update {
+            if let Some(update) = apply_reduced_camera_center_update(
             &centres,
             &rotations_c2w,
             &observations,
@@ -1185,12 +1213,12 @@ fn run_simplified_bundle_adjustment(
             pose_prior_scale_px2,
             lambda_center,
             center_step_cap,
-        ) {
-            centres = update.centres;
-            observations = update.observations;
-            lambda_center = update.next_lambda;
-        } else {
-            for cam_idx in 1..centres.len() {
+            ) {
+                centres = update.centres;
+                observations = update.observations;
+                lambda_center = update.next_lambda;
+            } else {
+                for cam_idx in 1..centres.len() {
                 let base_err = camera_observation_error_with_huber(
                     cam_idx,
                     &centres[cam_idx],
@@ -1368,12 +1396,13 @@ fn run_simplified_bundle_adjustment(
                 if !accepted {
                     lambda_center = (lambda_center * 2.0).min(1.0e6);
                 }
+                }
             }
         }
 
         // Optimize rotations (small-angle approximation for non-first camera)
         // only when orientation support is strong enough; otherwise keep seeded attitudes.
-        if !freeze_rotation_updates {
+        if !used_coupled_pose_update && !freeze_rotation_updates {
             if let Some(update) = apply_reduced_camera_rotation_update(
                 &centres,
                 &rotations_c2w,
@@ -1937,6 +1966,38 @@ struct ReducedRotationUpdate {
     next_lambda: f64,
 }
 
+#[derive(Debug, Clone)]
+struct ReducedPosePointContribution {
+    cam_idx: usize,
+    obs_indices: Vec<usize>,
+    a: Matrix4<f64>,
+    b: Matrix4x3<f64>,
+    g: Vector4<f64>,
+}
+
+#[derive(Debug, Clone)]
+struct ReducedPosePointBlock {
+    point_world: Vector3<f64>,
+    contributions: Vec<ReducedPosePointContribution>,
+    v_inv: Matrix3<f64>,
+    g_point: Vector3<f64>,
+}
+
+#[derive(Debug, Clone)]
+struct ReducedPoseSystem {
+    hessian: DMatrix<f64>,
+    gradient: DVector<f64>,
+    point_blocks: Vec<ReducedPosePointBlock>,
+}
+
+#[derive(Debug, Clone)]
+struct ReducedPoseUpdate {
+    centres: Vec<Vector3<f64>>,
+    rotations: Vec<Matrix3<f64>>,
+    observations: Vec<BaObservation>,
+    next_lambda: f64,
+}
+
 fn apply_reduced_camera_center_update(
     centres: &[Vector3<f64>],
     rotations_c2w: &[Matrix3<f64>],
@@ -2025,6 +2086,117 @@ fn apply_reduced_camera_center_update(
         if cand_cost.is_finite() && cand_cost + 1.0e-9 < base_cost {
             return Some(ReducedCenterUpdate {
                 centres: candidate_centres,
+                observations: candidate_observations,
+                next_lambda: (lambda_try * 0.7).max(1.0e-4),
+            });
+        }
+        lambda_try *= 2.0;
+    }
+
+    None
+}
+
+fn apply_reduced_camera_pose_update(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    observations: &[BaObservation],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    seed_centres: &[Vector3<f64>],
+    pose_prior_weights: &[f64],
+    pose_prior_sigma_m: f64,
+    pose_prior_scale_px2: f64,
+    lambda_pose: f64,
+    center_step_cap: f64,
+    rotation_step_cap: f64,
+    rot_eps: f64,
+) -> Option<ReducedPoseUpdate> {
+    if centres.len() < 3 || observations.len() < 18 {
+        return None;
+    }
+
+    let base_cost = total_observation_error_with_huber(
+        centres,
+        rotations_c2w,
+        observations,
+        intrinsics,
+        camera_model,
+        huber_threshold,
+        Some(seed_centres),
+        pose_prior_weights,
+        pose_prior_sigma_m,
+        pose_prior_scale_px2,
+    );
+    if !base_cost.is_finite() {
+        return None;
+    }
+
+    let reduced = build_reduced_camera_pose_system(
+        centres,
+        rotations_c2w,
+        observations,
+        intrinsics,
+        camera_model,
+        huber_threshold,
+        seed_centres,
+        pose_prior_weights,
+        pose_prior_sigma_m,
+        pose_prior_scale_px2,
+        rot_eps,
+    )?;
+    if reduced.hessian.nrows() < 4 {
+        return None;
+    }
+
+    let mut lambda_try = lambda_pose;
+    for _ in 0..5 {
+        let mut h_damped = reduced.hessian.clone();
+        for idx in 0..h_damped.nrows() {
+            h_damped[(idx, idx)] += lambda_try;
+        }
+        let rhs = -&reduced.gradient;
+        let delta = h_damped.lu().solve(&rhs)?;
+        if !delta.iter().all(|v| v.is_finite()) {
+            lambda_try *= 2.0;
+            continue;
+        }
+
+        let mut candidate_centres = centres.to_vec();
+        let mut candidate_rotations = rotations_c2w.to_vec();
+        for cam_idx in 1..centres.len() {
+            let base = reduced_camera_pose_param_offset(cam_idx)?;
+            let d_cx = delta[base].clamp(-center_step_cap, center_step_cap);
+            let d_cy = delta[base + 1].clamp(-center_step_cap, center_step_cap);
+            let d_rx = delta[base + 2].clamp(-rotation_step_cap, rotation_step_cap);
+            let d_ry = delta[base + 3].clamp(-rotation_step_cap, rotation_step_cap);
+
+            candidate_centres[cam_idx][0] += d_cx;
+            candidate_centres[cam_idx][1] += d_cy;
+            candidate_rotations[cam_idx] = small_angle_update(
+                &small_angle_update(&rotations_c2w[cam_idx], 0, d_rx),
+                1,
+                d_ry,
+            );
+        }
+
+        let candidate_observations = back_substitute_reduced_pose_points(observations, &reduced.point_blocks, &delta);
+        let cand_cost = total_observation_error_with_huber(
+            &candidate_centres,
+            &candidate_rotations,
+            &candidate_observations,
+            intrinsics,
+            camera_model,
+            huber_threshold,
+            Some(seed_centres),
+            pose_prior_weights,
+            pose_prior_sigma_m,
+            pose_prior_scale_px2,
+        );
+        if cand_cost.is_finite() && cand_cost + 1.0e-9 < base_cost {
+            return Some(ReducedPoseUpdate {
+                centres: candidate_centres,
+                rotations: candidate_rotations,
                 observations: candidate_observations,
                 next_lambda: (lambda_try * 0.7).max(1.0e-4),
             });
@@ -2129,6 +2301,180 @@ fn apply_reduced_camera_rotation_update(
     }
 
     None
+}
+
+fn build_reduced_camera_pose_system(
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    observations: &[BaObservation],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    seed_centres: &[Vector3<f64>],
+    pose_prior_weights: &[f64],
+    pose_prior_sigma_m: f64,
+    pose_prior_scale_px2: f64,
+    rot_eps: f64,
+) -> Option<ReducedPoseSystem> {
+    if centres.len() < 2
+        || rotations_c2w.len() != centres.len()
+        || seed_centres.len() != centres.len()
+        || pose_prior_weights.len() != centres.len()
+    {
+        return None;
+    }
+
+    let dim = (centres.len() - 1) * 4;
+    if dim == 0 {
+        return None;
+    }
+
+    let mut hessian = DMatrix::zeros(dim, dim);
+    let mut gradient = DVector::zeros(dim);
+    let mut point_blocks = Vec::new();
+
+    for obs_group in group_observation_indices_by_point_id(observations) {
+        if obs_group.len() < 2 {
+            continue;
+        }
+        let point_world = observations[*obs_group.first()?].point_world;
+        let mut point_gradient = Vector3::zeros();
+        let mut point_hessian = Matrix3::zeros();
+        let mut contributions = Vec::new();
+
+        for &obs_idx in &obs_group {
+            let obs = observations.get(obs_idx)?;
+            let (residual, jac_pose, jac_point) = weighted_residual_and_jacobians_pose(
+                obs,
+                &point_world,
+                centres,
+                rotations_c2w,
+                intrinsics,
+                camera_model,
+                huber_threshold,
+                rot_eps,
+            )?;
+
+            point_gradient += jac_point.transpose() * residual;
+            point_hessian += jac_point.transpose() * jac_point;
+            if obs.cam_idx == 0 {
+                continue;
+            }
+
+            contributions.push(ReducedPosePointContribution {
+                cam_idx: obs.cam_idx,
+                obs_indices: vec![obs_idx],
+                a: jac_pose.transpose() * jac_pose,
+                b: jac_pose.transpose() * jac_point,
+                g: jac_pose.transpose() * residual,
+            });
+        }
+
+        if contributions.len() < 2 {
+            continue;
+        }
+
+        for axis in 0..3 {
+            point_hessian[(axis, axis)] += 1.0e-6;
+        }
+        let Some(v_inv) = point_hessian.try_inverse() else {
+            continue;
+        };
+
+        for contribution in &contributions {
+            let offset_i = reduced_camera_pose_param_offset(contribution.cam_idx)?;
+            accumulate_matrix4_block(&mut hessian, offset_i, offset_i, contribution.a);
+            gradient[offset_i] += contribution.g[0];
+            gradient[offset_i + 1] += contribution.g[1];
+            gradient[offset_i + 2] += contribution.g[2];
+            gradient[offset_i + 3] += contribution.g[3];
+
+            let reduced_grad = contribution.b * (v_inv * point_gradient);
+            gradient[offset_i] -= reduced_grad[0];
+            gradient[offset_i + 1] -= reduced_grad[1];
+            gradient[offset_i + 2] -= reduced_grad[2];
+            gradient[offset_i + 3] -= reduced_grad[3];
+        }
+
+        for left in 0..contributions.len() {
+            for right in 0..contributions.len() {
+                let offset_i = reduced_camera_pose_param_offset(contributions[left].cam_idx)?;
+                let offset_j = reduced_camera_pose_param_offset(contributions[right].cam_idx)?;
+                let correction = contributions[left].b * v_inv * contributions[right].b.transpose();
+                accumulate_matrix4_block(&mut hessian, offset_i, offset_j, -correction);
+            }
+        }
+
+        point_blocks.push(ReducedPosePointBlock {
+            point_world,
+            contributions,
+            v_inv,
+            g_point: point_gradient,
+        });
+    }
+
+    if point_blocks.is_empty() {
+        return None;
+    }
+
+    for cam_idx in 1..centres.len() {
+        let offset = reduced_camera_pose_param_offset(cam_idx)?;
+        let prior_weight = pose_prior_weights[cam_idx];
+        if prior_weight > 0.0 && pose_prior_sigma_m > 0.0 && pose_prior_scale_px2 > 0.0 {
+            let curvature = 2.0 * pose_prior_scale_px2 * prior_weight / (pose_prior_sigma_m * pose_prior_sigma_m);
+            hessian[(offset, offset)] += curvature;
+            hessian[(offset + 1, offset + 1)] += curvature;
+            gradient[offset] += curvature * (centres[cam_idx][0] - seed_centres[cam_idx][0]);
+            gradient[offset + 1] += curvature * (centres[cam_idx][1] - seed_centres[cam_idx][1]);
+        }
+        hessian[(offset + 2, offset + 2)] += 0.05;
+        hessian[(offset + 3, offset + 3)] += 0.05;
+    }
+
+    Some(ReducedPoseSystem {
+        hessian,
+        gradient,
+        point_blocks,
+    })
+}
+
+fn back_substitute_reduced_pose_points(
+    observations: &[BaObservation],
+    point_blocks: &[ReducedPosePointBlock],
+    delta: &DVector<f64>,
+) -> Vec<BaObservation> {
+    let mut updated = observations.to_vec();
+    for block in point_blocks {
+        let mut rhs = block.g_point;
+        let mut point_obs_indices = Vec::new();
+        for contribution in &block.contributions {
+            point_obs_indices.extend_from_slice(&contribution.obs_indices);
+            if let Some(offset) = reduced_camera_pose_param_offset(contribution.cam_idx) {
+                let dc = Vector4::new(
+                    delta[offset],
+                    delta[offset + 1],
+                    delta[offset + 2],
+                    delta[offset + 3],
+                );
+                rhs += contribution.b.transpose() * dc;
+            }
+        }
+        let mut dp = -(block.v_inv * rhs);
+        let step_norm = dp.norm();
+        if step_norm > 0.35 {
+            dp *= 0.35 / step_norm;
+        }
+        let candidate = block.point_world + dp;
+        if !candidate.iter().all(|v| v.is_finite()) {
+            continue;
+        }
+        for obs_idx in point_obs_indices {
+            if let Some(obs) = updated.get_mut(obs_idx) {
+                obs.point_world = candidate;
+            }
+        }
+    }
+    updated
 }
 
 fn build_reduced_camera_system(
@@ -2496,8 +2842,74 @@ fn weighted_residual_and_jacobians_rotation(
     Some((residual * sqrt_w, jac_rot, jac_point))
 }
 
+fn weighted_residual_and_jacobians_pose(
+    observation: &BaObservation,
+    point_world: &Vector3<f64>,
+    centres: &[Vector3<f64>],
+    rotations_c2w: &[Matrix3<f64>],
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+    huber_threshold: f64,
+    rot_eps: f64,
+) -> Option<(Vector2<f64>, Matrix2x4<f64>, Matrix2x3<f64>)> {
+    let cam_idx = observation.cam_idx;
+    let centre = centres.get(cam_idx)?;
+    let rotation = rotations_c2w.get(cam_idx)?;
+    let base_pix = project_world_to_pixel(point_world, centre, rotation, intrinsics, camera_model)?;
+    let residual = base_pix - observation.obs_px;
+    let residual_norm = residual.norm();
+    let weight = huber_weight(residual_norm, huber_threshold) * observation.quality_weight;
+    if !weight.is_finite() || weight <= 0.0 {
+        return None;
+    }
+    let sqrt_w = weight.sqrt();
+
+    let centre_eps = 0.02;
+    let point_eps = 0.05;
+    let mut jac_pose = Matrix2x4::zeros();
+    for axis in 0..2 {
+        let mut plus = *centre;
+        plus[axis] += centre_eps;
+        let pix_plus = project_world_to_pixel(point_world, &plus, rotation, intrinsics, camera_model)?;
+        let mut minus = *centre;
+        minus[axis] -= centre_eps;
+        let pix_minus = project_world_to_pixel(point_world, &minus, rotation, intrinsics, camera_model)?;
+        let deriv = (pix_plus - pix_minus) / (2.0 * centre_eps);
+        jac_pose[(0, axis)] = deriv[0] * sqrt_w;
+        jac_pose[(1, axis)] = deriv[1] * sqrt_w;
+    }
+    for (j, axis) in [0usize, 1usize].iter().enumerate() {
+        let rot_plus = small_angle_update(rotation, *axis, rot_eps);
+        let pix_plus = project_world_to_pixel(point_world, centre, &rot_plus, intrinsics, camera_model)?;
+        let rot_minus = small_angle_update(rotation, *axis, -rot_eps);
+        let pix_minus = project_world_to_pixel(point_world, centre, &rot_minus, intrinsics, camera_model)?;
+        let deriv = (pix_plus - pix_minus) / (2.0 * rot_eps);
+        jac_pose[(0, 2 + j)] = deriv[0] * sqrt_w;
+        jac_pose[(1, 2 + j)] = deriv[1] * sqrt_w;
+    }
+
+    let mut jac_point = Matrix2x3::zeros();
+    for axis in 0..3 {
+        let mut plus = *point_world;
+        plus[axis] += point_eps;
+        let pix_plus = project_world_to_pixel(&plus, centre, rotation, intrinsics, camera_model)?;
+        let mut minus = *point_world;
+        minus[axis] -= point_eps;
+        let pix_minus = project_world_to_pixel(&minus, centre, rotation, intrinsics, camera_model)?;
+        let deriv = (pix_plus - pix_minus) / (2.0 * point_eps);
+        jac_point[(0, axis)] = deriv[0] * sqrt_w;
+        jac_point[(1, axis)] = deriv[1] * sqrt_w;
+    }
+
+    Some((residual * sqrt_w, jac_pose, jac_point))
+}
+
 fn reduced_camera_param_offset(cam_idx: usize) -> Option<usize> {
     cam_idx.checked_sub(1).map(|idx| idx * 2)
+}
+
+fn reduced_camera_pose_param_offset(cam_idx: usize) -> Option<usize> {
+    cam_idx.checked_sub(1).map(|idx| idx * 4)
 }
 
 fn accumulate_matrix2_block(target: &mut DMatrix<f64>, row: usize, col: usize, block: Matrix2<f64>) {
@@ -2505,6 +2917,14 @@ fn accumulate_matrix2_block(target: &mut DMatrix<f64>, row: usize, col: usize, b
     target[(row, col + 1)] += block[(0, 1)];
     target[(row + 1, col)] += block[(1, 0)];
     target[(row + 1, col + 1)] += block[(1, 1)];
+}
+
+fn accumulate_matrix4_block(target: &mut DMatrix<f64>, row: usize, col: usize, block: Matrix4<f64>) {
+    for r in 0..4 {
+        for c in 0..4 {
+            target[(row + r, col + c)] += block[(r, c)];
+        }
+    }
 }
 
 fn group_observation_indices_by_point_id(observations: &[BaObservation]) -> Vec<Vec<usize>> {
@@ -5335,6 +5755,90 @@ mod tests {
         let delta_norm = (&update.rotations[1] - &seed_rotations[1]).norm()
             + (&update.rotations[2] - &seed_rotations[2]).norm();
         assert!(delta_norm > 1.0e-8, "reduced rotation solve should update non-anchor camera rotations");
+    }
+
+    #[test]
+    fn reduced_camera_pose_solve_updates_center_and_attitude() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1200.0,
+            fy: 1200.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
+        };
+
+        let true_centres = vec![
+            Vector3::new(0.0, 0.0, 10.0),
+            Vector3::new(0.8, 0.0, 10.0),
+            Vector3::new(1.6, 0.0, 10.0),
+        ];
+        let seed_centres = vec![
+            Vector3::new(0.0, 0.0, 10.0),
+            Vector3::new(0.92, 0.12, 10.0),
+            Vector3::new(1.74, -0.08, 10.0),
+        ];
+
+        let world_points = vec![
+            Vector3::new(-0.8, -0.5, 13.8),
+            Vector3::new(-0.3, 0.0, 14.4),
+            Vector3::new(0.2, -0.1, 14.8),
+            Vector3::new(0.7, 0.2, 15.1),
+            Vector3::new(1.2, -0.2, 15.0),
+            Vector3::new(1.7, 0.3, 15.4),
+        ];
+
+        let mut true_rotations = vec![Matrix3::identity(); 3];
+        true_rotations[1] = small_angle_update(&small_angle_update(&Matrix3::identity(), 0, 0.012), 1, -0.009);
+        true_rotations[2] = small_angle_update(&small_angle_update(&Matrix3::identity(), 0, 0.015), 1, -0.011);
+
+        let seed_rotations = vec![Matrix3::identity(); 3];
+        let mut observations = Vec::new();
+        for (point_id, point) in world_points.iter().enumerate() {
+            for cam_idx in 0..3 {
+                let obs_px = project_world_to_pixel(
+                    point,
+                    &true_centres[cam_idx],
+                    &true_rotations[cam_idx],
+                    &intrinsics,
+                    CameraModel::Pinhole,
+                ).expect("synthetic observation");
+                observations.push(BaObservation {
+                    cam_idx,
+                    point_id,
+                    point_world: *point,
+                    obs_px,
+                    quality_weight: 1.0,
+                });
+            }
+        }
+
+        let pose_prior_weights = vec![0.0, 0.20, 0.20];
+        let update = apply_reduced_camera_pose_update(
+            &seed_centres,
+            &seed_rotations,
+            &observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+            2.0,
+            &seed_centres,
+            &pose_prior_weights,
+            6.0,
+            180.0,
+            20.0,
+            0.08,
+            0.035,
+            0.001,
+        ).expect("reduced pose update");
+
+        let center_delta = (update.centres[1] - seed_centres[1]).norm()
+            + (update.centres[2] - seed_centres[2]).norm();
+        let rotation_delta = (&update.rotations[1] - &seed_rotations[1]).norm()
+            + (&update.rotations[2] - &seed_rotations[2]).norm();
+        assert!(center_delta > 1.0e-8, "coupled pose solve should update non-anchor camera centers");
+        assert!(rotation_delta > 1.0e-8, "coupled pose solve should update non-anchor camera rotations");
     }
 
     #[test]

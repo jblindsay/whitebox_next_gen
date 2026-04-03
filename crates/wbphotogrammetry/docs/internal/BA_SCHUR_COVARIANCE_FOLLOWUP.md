@@ -122,6 +122,46 @@ Notes:
 2. Differences are small and mixed across matrix sizes; no consistent runtime win is demonstrated yet.
 3. Additional repeats and real mission datasets are still needed for a stable acceptance conclusion.
 
+## Real Mission A/B Benchmark: Toledo (2026-04-03)
+
+Dataset:
+
+1. Images: `/Users/johnlindsay/Documents/programming/Rust/drone_sfm_real_flight/datasets/toledo/images`
+2. Frame count: `87`
+3. Profile: `balanced`
+4. Feature method: `rootsift`
+5. DEM resolution: `0.1 m`
+
+Command set:
+
+1. `cargo run -p wbphotogrammetry --example run_dataset_pipeline -- --images-dir /Users/johnlindsay/Documents/programming/Rust/drone_sfm_real_flight/datasets/toledo/images --out-dir target/wbphotogrammetry_toledo_ab/sparse_pcg --profile balanced --camera-model auto --resolution 0.1 --reduced-solver-mode sparse-pcg`
+2. `cargo run -p wbphotogrammetry --example run_dataset_pipeline -- --images-dir /Users/johnlindsay/Documents/programming/Rust/drone_sfm_real_flight/datasets/toledo/images --out-dir target/wbphotogrammetry_toledo_ab/dense_lu --profile balanced --camera-model auto --resolution 0.1 --reduced-solver-mode dense-lu`
+
+Timing comparison:
+
+1. Ingest: sparse `22.915 s`, dense `22.656 s`
+2. Feature: sparse `51.738 s`, dense `50.748 s`
+3. Alignment: sparse `1.260 s`, dense `1.238 s`
+4. Dense: sparse `65.975 s`, dense `66.532 s`
+5. Mosaic: sparse `113.596 s`, dense `116.140 s`
+
+Alignment quality parity:
+
+1. RMSE: sparse `2.8 px`, dense `2.8 px`
+2. Residual p95: sparse `10.2749 px`, dense `10.2749 px`
+3. BA final cost: sparse `6.7922`, dense `6.7922`
+4. Covariance supported cameras: sparse `86`, dense `86`
+5. Translation sigma p95: sparse `0.4303 m`, dense `0.4303 m`
+6. Rotation sigma p95: sparse `0.4515 deg`, dense `0.4515 deg`
+7. QA status: sparse `Fail`, dense `Fail`
+
+Interpretation:
+
+1. Reduced solver mode does not materially change end-to-end real-mission outputs on Toledo.
+2. Alignment stage timing differs by only ~`22 ms` between sparse and dense modes on this mission.
+3. Full-pipeline runtime remains dominated by feature extraction, dense reconstruction, and mosaicking.
+4. Real-dataset quality parity is now demonstrated for the current Schur reduced solve path.
+
 ## Risks
 1. Ill-conditioning in reduced camera system for weak geometry.
 2. Sparse assembly memory growth if block storage is not tightly controlled.
@@ -130,4 +170,4 @@ Notes:
 ## Definition of Done
 1. Schur BA path is enabled as a stable production path (with guarded fallback). (in progress: implemented and regression-tested on synthetic/targeted paths)
 2. Camera covariance diagnostics are emitted and documented. (implemented)
-3. Regression suite remains green and benchmark results are recorded. (in progress: targeted regressions, synthetic mission benchmark matrix, and solver-mode A/B timing recorded; memory comparison and real-dataset acceptance evidence still pending)
+3. Regression suite remains green and benchmark results are recorded. (in progress: targeted regressions, synthetic mission benchmark matrix, solver-mode A/B timing, and Toledo real-dataset parity recorded; memory comparison still pending)

@@ -390,9 +390,9 @@ likely to require further development.
   - Matching now uses pose-derived epipolar constraints and left-right
     consistency checks, with coarse-to-fine (two-level pyramid) guidance and
     a lightweight hybrid ZNCC+Census local cost. Depth maps now include a
-    confidence-pruned neighborhood propagation/refinement pass, but the system
-    still uses local patch windows rather than a full global correspondence
-    optimization.
+    confidence-pruned neighborhood propagation/refinement pass and lightweight
+    sparse-hole hypothesis fill, but the system still uses local patch windows
+    rather than a full global correspondence optimization.
   - No semi-global matching (SGM/SGM++), global cost-volume optimization, or
     learned cost volumes
 - DTM separation is a morphological low-pass filtering operation. It is not a

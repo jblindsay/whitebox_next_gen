@@ -34,6 +34,8 @@ const MVS_HYBRID_CENSUS_WEIGHT: f64 = 0.35;
 const MVS_PROPAGATION_ITERS: usize = 2;
 const MVS_PROPAGATION_RADIUS_PX: f64 = 54.0;
 const MVS_PROPAGATION_SIGMA_PX: f64 = 24.0;
+const MVS_HOLE_FILL_MIN_NEIGHBORS: usize = 2;
+const MVS_HOLE_FILL_CONF_SCALE: f64 = 0.72;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -927,13 +929,15 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
         let ref_weight = 1.0 / (1.0 + map.reference_idx as f64 * 0.02);
         let mut bins: std::collections::HashMap<(i32, i32), Vec<&MultiViewDepthSample>> =
             std::collections::HashMap::new();
+        let mut front_by_bin: std::collections::HashMap<(i32, i32), DepthHypothesis> =
+            std::collections::HashMap::new();
         for sample in &map.samples {
             let bx = (sample.ref_px[0] / MVS_OCCLUSION_BIN_PX).floor() as i32;
             let by = (sample.ref_px[1] / MVS_OCCLUSION_BIN_PX).floor() as i32;
             bins.entry((bx, by)).or_default().push(sample);
         }
 
-        for (_, mut samples) in bins {
+        for (bin_key, mut samples) in bins {
             samples.sort_by(|a, b| a.ref_depth.total_cmp(&b.ref_depth));
             let front = samples[0];
             let mut occlusion_votes = 1usize;
@@ -954,11 +958,58 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
                 * (0.45 + 0.18 * support_factor + 0.22 * vote_factor + 0.15 * geometry_factor)
                 * ref_weight)
                 .clamp(0.08, 0.99);
-            out.push(DepthHypothesis {
+            front_by_bin.insert(bin_key, DepthHypothesis {
                 center: front.point_world,
                 confidence,
             });
         }
+
+        let mut hole_votes: std::collections::HashMap<(i32, i32), Vec<DepthHypothesis>> =
+            std::collections::HashMap::new();
+        let keys: Vec<(i32, i32)> = front_by_bin.keys().copied().collect();
+        for (bx, by) in &keys {
+            let Some(src) = front_by_bin.get(&(*bx, *by)) else {
+                continue;
+            };
+            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+                let nb = (bx + dx, by + dy);
+                if front_by_bin.contains_key(&nb) {
+                    continue;
+                }
+                hole_votes.entry(nb).or_default().push(DepthHypothesis {
+                    center: src.center,
+                    confidence: src.confidence,
+                });
+            }
+        }
+
+        for (_bin, votes) in hole_votes {
+            if votes.len() < MVS_HOLE_FILL_MIN_NEIGHBORS {
+                continue;
+            }
+            let mut wsum = 0.0;
+            let mut x = 0.0;
+            let mut y = 0.0;
+            let mut z = 0.0;
+            for v in &votes {
+                let w = v.confidence.max(1.0e-6);
+                wsum += w;
+                x += w * v.center[0];
+                y += w * v.center[1];
+                z += w * v.center[2];
+            }
+            if wsum <= 1.0e-9 {
+                continue;
+            }
+            let c = (votes.iter().map(|v| v.confidence).sum::<f64>() / votes.len() as f64 * MVS_HOLE_FILL_CONF_SCALE)
+                .clamp(0.05, 0.90);
+            out.push(DepthHypothesis {
+                center: [x / wsum, y / wsum, z / wsum],
+                confidence: c,
+            });
+        }
+
+        out.extend(front_by_bin.into_values());
     }
     out
 }
@@ -2855,6 +2906,51 @@ mod tests {
         refine_multiview_samples(&mut samples);
         let after = samples[3].confidence;
         assert!(after > before, "supported low-confidence sample should be strengthened by propagation");
+    }
+
+    #[test]
+    fn sparse_hole_fill_adds_interpolated_hypotheses() {
+        // Occupy a cross around a missing center-adjacent area in bin space.
+        let maps = vec![MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![
+                MultiViewDepthSample {
+                    point_world: [8.0, 0.0, 5.0],
+                    confidence: 0.85,
+                    support_views: 3,
+                    ref_px: [12.0, 4.0], // bin (1,0)
+                    ref_depth: 5.0,
+                    geometry_quality: 0.8,
+                },
+                MultiViewDepthSample {
+                    point_world: [0.0, 8.0, 5.1],
+                    confidence: 0.86,
+                    support_views: 3,
+                    ref_px: [4.0, 12.0], // bin (0,1)
+                    ref_depth: 5.1,
+                    geometry_quality: 0.8,
+                },
+                MultiViewDepthSample {
+                    point_world: [16.0, 8.0, 4.9],
+                    confidence: 0.88,
+                    support_views: 3,
+                    ref_px: [20.0, 12.0], // bin (2,1)
+                    ref_depth: 4.9,
+                    geometry_quality: 0.8,
+                },
+                MultiViewDepthSample {
+                    point_world: [8.0, 16.0, 5.0],
+                    confidence: 0.87,
+                    support_views: 3,
+                    ref_px: [12.0, 20.0], // bin (1,2)
+                    ref_depth: 5.0,
+                    geometry_quality: 0.8,
+                },
+            ],
+        }];
+
+        let hyps = depth_hypotheses_from_multiview_maps(&maps);
+        assert!(hyps.len() > 4, "hole fill should create additional hypotheses");
     }
 
     #[test]

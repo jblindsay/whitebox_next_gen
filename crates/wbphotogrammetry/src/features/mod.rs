@@ -3674,6 +3674,118 @@ mod tests {
     }
 
     #[test]
+    fn sift_and_rootsift_match_under_photometric_perturbation() {
+        let tmp = std::env::temp_dir().join(format!(
+            "wbphotogrammetry_feature_photometric_test_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).expect("failed creating temp dir");
+
+        let left_path = tmp.join("left.png");
+        let right_path = tmp.join("right.png");
+
+        let mut left = GrayImage::new(160, 160);
+        let mut right = GrayImage::new(160, 160);
+        for y in 0..160 {
+            for x in 0..160 {
+                let checker = if ((x / 8) + (y / 8)) % 2 == 0 { 42.0 } else { 212.0 };
+                left.put_pixel(x, y, Luma([checker as u8]));
+
+                let sx = x.saturating_sub(4);
+                let sy = y.saturating_sub(3);
+                let shifted_checker = if ((sx / 8) + (sy / 8)) % 2 == 0 { 42.0 } else { 212.0 };
+                let deterministic_noise = (((x * 17 + y * 29) % 7) as f32) - 3.0;
+                let photometric = (shifted_checker * 0.90) + 12.0 + deterministic_noise;
+                let clamped = photometric.clamp(0.0, 255.0) as u8;
+                right.put_pixel(x, y, Luma([clamped]));
+            }
+        }
+
+        for y in 24..136 {
+            left.put_pixel(52, y, Luma([255]));
+            right.put_pixel(56, y, Luma([240]));
+        }
+        for x in 18..142 {
+            left.put_pixel(x, 88, Luma([0]));
+            right.put_pixel(x.saturating_add(4).min(159), 91, Luma([8]));
+        }
+
+        left.save(&left_path).expect("failed writing left frame");
+        right.save(&right_path).expect("failed writing right frame");
+
+        let frames = vec![make_frame(&left_path), make_frame(&right_path)];
+        let sift = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::Sift)
+            .expect("sift matching should succeed");
+        let rootsift = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::RootSift)
+            .expect("rootsift matching should succeed");
+
+        assert!(sift.total_keypoints > 0, "expected sift keypoints on photometric perturbation");
+        assert!(rootsift.total_keypoints > 0, "expected rootsift keypoints on photometric perturbation");
+        assert!(sift.total_matches > 0, "expected sift matches on photometric perturbation");
+        assert!(rootsift.total_matches > 0, "expected rootsift matches on photometric perturbation");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn rootsift_match_count_remains_same_order_as_sift_under_photometric_perturbation() {
+        let tmp = std::env::temp_dir().join(format!(
+            "wbphotogrammetry_feature_photometric_ratio_test_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).expect("failed creating temp dir");
+
+        let left_path = tmp.join("left.png");
+        let right_path = tmp.join("right.png");
+
+        let mut left = GrayImage::new(160, 160);
+        let mut right = GrayImage::new(160, 160);
+        for y in 0..160 {
+            for x in 0..160 {
+                let checker = if ((x / 10) + (y / 10)) % 2 == 0 { 36.0 } else { 224.0 };
+                left.put_pixel(x, y, Luma([checker as u8]));
+
+                let sx = x.saturating_sub(5);
+                let sy = y.saturating_sub(2);
+                let shifted_checker = if ((sx / 10) + (sy / 10)) % 2 == 0 { 36.0 } else { 224.0 };
+                let deterministic_noise = (((x * 31 + y * 11) % 9) as f32) - 4.0;
+                let photometric = (shifted_checker * 0.88) + 14.0 + deterministic_noise;
+                let clamped = photometric.clamp(0.0, 255.0) as u8;
+                right.put_pixel(x, y, Luma([clamped]));
+            }
+        }
+
+        for y in 30..130 {
+            left.put_pixel(46, y, Luma([255]));
+            right.put_pixel(51, y, Luma([242]));
+        }
+        for x in 24..136 {
+            left.put_pixel(x, 74, Luma([0]));
+            right.put_pixel(x.saturating_add(5).min(159), 76, Luma([6]));
+        }
+
+        left.save(&left_path).expect("failed writing left frame");
+        right.save(&right_path).expect("failed writing right frame");
+
+        let frames = vec![make_frame(&left_path), make_frame(&right_path)];
+        let sift = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::Sift)
+            .expect("sift matching should succeed");
+        let rootsift = run_feature_matching_with_method(&frames, "balanced", FeatureMethod::RootSift)
+            .expect("rootsift matching should succeed");
+
+        assert!(sift.total_matches > 0, "expected sift matches for ratio comparison");
+        assert!(rootsift.total_matches > 0, "expected rootsift matches for ratio comparison");
+        assert!(
+            rootsift.total_matches * 4 >= sift.total_matches,
+            "rootsift matches ({}) should remain in same order as sift ({}) under photometric perturbation",
+            rootsift.total_matches,
+            sift.total_matches
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn rootsift_normalization_is_scale_invariant_and_unit_l2() {
         let mut a = [0.0_f32; SIFT_DESCRIPTOR_LEN];
         let mut b = [0.0_f32; SIFT_DESCRIPTOR_LEN];

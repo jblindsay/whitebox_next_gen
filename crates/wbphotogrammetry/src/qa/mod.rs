@@ -409,6 +409,10 @@ mod tests {
                 vertical_rmse_m: 0.15,
                 mean_local_relief_m: 0.38,
                 p95_local_relief_m: 0.81,
+                mvs_reference_count: 0,
+                mvs_mean_reference_completeness_pct: 0.0,
+                mvs_min_reference_completeness_pct: 0.0,
+                low_confidence_cells_pct: 0.0,
             },
             MosaicResult {
                 ortho_path: "orthomosaic.tif".to_string(),
@@ -650,6 +654,10 @@ mod tests {
             vertical_rmse_m: 0.19,
             mean_local_relief_m: 0.47,
             p95_local_relief_m: 0.96,
+            mvs_reference_count: 6,
+            mvs_mean_reference_completeness_pct: 78.0,
+            mvs_min_reference_completeness_pct: 62.0,
+            low_confidence_cells_pct: 8.0,
         };
         let dsm_real_like = DsmStats {
             valid_cells: 22_500,
@@ -659,6 +667,10 @@ mod tests {
             vertical_rmse_m: 0.31,
             mean_local_relief_m: 0.61,
             p95_local_relief_m: 1.24,
+            mvs_reference_count: 5,
+            mvs_mean_reference_completeness_pct: 54.0,
+            mvs_min_reference_completeness_pct: 35.0,
+            low_confidence_cells_pct: 21.0,
         };
 
         let mosaic_synth = MosaicResult {

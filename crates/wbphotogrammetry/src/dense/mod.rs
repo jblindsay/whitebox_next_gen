@@ -77,6 +77,8 @@ const MVS_RESIDUAL_CONF_BOOST_MAX: f64 = 1.10;
 const MVS_RESIDUAL_CONF_ATTEN_MIN: f64 = 0.58;
 /// Max depth pull for low-confidence, high-consistency bins.
 const MVS_RESIDUAL_PULL_MAX: f64 = 0.24;
+/// Support threshold below which cells are marked in the low-confidence mask.
+const MVS_LOW_CONFIDENCE_SUPPORT_THR: f64 = 0.35;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -97,6 +99,7 @@ struct MultiViewDepthSample {
 #[derive(Debug, Clone)]
 struct MultiViewDepthMap {
     reference_idx: usize,
+    sampled_positions: usize,
     samples: Vec<MultiViewDepthSample>,
 }
 
@@ -132,6 +135,18 @@ pub struct DsmStats {
     pub mean_local_relief_m: f64,
     /// 95th percentile 3x3 neighborhood local relief in metres.
     pub p95_local_relief_m: f64,
+    /// Number of reference views contributing to MVS completeness diagnostics.
+    #[serde(default)]
+    pub mvs_reference_count: usize,
+    /// Mean per-reference depth completeness in percent (0-100).
+    #[serde(default)]
+    pub mvs_mean_reference_completeness_pct: f64,
+    /// Worst per-reference depth completeness in percent (0-100).
+    #[serde(default)]
+    pub mvs_min_reference_completeness_pct: f64,
+    /// Fraction of DSM cells flagged as low-confidence in percent (0-100).
+    #[serde(default)]
+    pub low_confidence_cells_pct: f64,
 }
 
 /// Result from the dense surface model stage.
@@ -145,6 +160,12 @@ pub struct DenseResult {
     pub support_raster_path: Option<String>,
     /// Optional per-cell dense uncertainty raster path (0-1).
     pub uncertainty_raster_path: Option<String>,
+    /// Optional binary low-confidence mask path (1 = low confidence).
+    #[serde(default)]
+    pub low_confidence_mask_path: Option<String>,
+    /// Optional per-reference depth completeness percentages (0-100).
+    #[serde(default)]
+    pub per_reference_completeness_pct: Option<Vec<f64>>,
     /// Stage statistics.
     pub stats: DsmStats,
 }
@@ -204,14 +225,18 @@ pub fn run_dense_surface_with_frames_and_dtm(
         }
         let support_path = with_suffix_before_ext(dsm_path, "_support");
         let uncertainty_path = with_suffix_before_ext(dsm_path, "_uncertainty");
+        let low_confidence_mask_path = with_suffix_before_ext(dsm_path, "_low_confidence_mask");
         raster.write(&support_path, RasterFormat::GeoTiff)?;
         raster.write(&uncertainty_path, RasterFormat::GeoTiff)?;
+        raster.write(&low_confidence_mask_path, RasterFormat::GeoTiff)?;
 
         return Ok(DenseResult {
             dsm_path: dsm_path.to_string(),
             dtm_path: dtm_path.map(|p| p.to_string()),
             support_raster_path: Some(support_path),
             uncertainty_raster_path: Some(uncertainty_path),
+            low_confidence_mask_path: Some(low_confidence_mask_path),
+            per_reference_completeness_pct: Some(Vec::new()),
             stats: DsmStats {
                 valid_cells: 0,
                 min_elevation_m: 0.0,
@@ -220,6 +245,10 @@ pub fn run_dense_surface_with_frames_and_dtm(
                 vertical_rmse_m: 0.0,
                 mean_local_relief_m: 0.0,
                 p95_local_relief_m: 0.0,
+                mvs_reference_count: 0,
+                mvs_mean_reference_completeness_pct: 0.0,
+                mvs_min_reference_completeness_pct: 0.0,
+                low_confidence_cells_pct: 0.0,
             },
         });
     }
@@ -285,6 +314,20 @@ pub fn run_dense_surface_with_frames_and_dtm(
         ],
         ..RasterConfig::default()
     });
+    let mut low_confidence_mask_raster = Raster::new(RasterConfig {
+        cols,
+        rows,
+        x_min: grid_x_min,
+        y_min: grid_y_min,
+        cell_size: resolution_m,
+        data_type: DataType::F32,
+        crs: alignment.crs.clone(),
+        metadata: vec![
+            ("stage".to_string(), "dense_surface_low_confidence_mask".to_string()),
+            ("band1".to_string(), "low_confidence_mask_1_low_0_good".to_string()),
+        ],
+        ..RasterConfig::default()
+    });
 
     let nominal_flight_height_m = estimate_nominal_flight_height_m(alignment);
     let mean_surface_z = mean_z - nominal_flight_height_m;
@@ -301,7 +344,8 @@ pub fn run_dense_surface_with_frames_and_dtm(
     
     // Integrate stereo depths from refined adjacent frame pairs (post-BA).
     // When imagery is available, use coarse patch matching and triangulation.
-    let stereo_depths = estimate_stereo_depths_from_adjacent_pairs(alignment, frames);
+    let (stereo_depths, per_reference_completeness_pct) =
+        estimate_stereo_depths_from_adjacent_pairs(alignment, frames);
     depth_hypotheses.extend(stereo_depths);
     depth_hypotheses = curate_depth_hypotheses(depth_hypotheses, mean_surface_z, estimate_pose_support_scale_m(alignment));
     let mut surface = vec![mean_surface_z; rows * cols];
@@ -367,6 +411,7 @@ pub fn run_dense_surface_with_frames_and_dtm(
     let mut max_z = f64::NEG_INFINITY;
     let mut sum_z = 0.0;
     let mut valid_cells = 0_u64;
+    let mut low_confidence_cells = 0_u64;
     for row in 0..rows {
         for col in 0..cols {
             let z = surface[row * cols + col];
@@ -378,9 +423,14 @@ pub fn run_dense_surface_with_frames_and_dtm(
             raster.set(0, row as isize, col as isize, z)?;
             let support = support_map[row * cols + col].clamp(0.0, 1.0);
             let uncertainty = uncertainty_map[row * cols + col].clamp(0.0, 1.0);
+            let low_confidence = if support < MVS_LOW_CONFIDENCE_SUPPORT_THR { 1.0 } else { 0.0 };
             support_raster.set(0, row as isize, col as isize, support)?;
             uncertainty_raster.set(0, row as isize, col as isize, uncertainty)?;
+            low_confidence_mask_raster.set(0, row as isize, col as isize, low_confidence)?;
             valid_cells += 1;
+            if low_confidence > 0.5 {
+                low_confidence_cells += 1;
+            }
             sum_z += z;
             min_z = min_z.min(z);
             max_z = max_z.max(z);
@@ -390,8 +440,10 @@ pub fn run_dense_surface_with_frames_and_dtm(
     raster.write(dsm_path, RasterFormat::GeoTiff)?;
     let support_path = with_suffix_before_ext(dsm_path, "_support");
     let uncertainty_path = with_suffix_before_ext(dsm_path, "_uncertainty");
+    let low_confidence_mask_path = with_suffix_before_ext(dsm_path, "_low_confidence_mask");
     support_raster.write(&support_path, RasterFormat::GeoTiff)?;
     uncertainty_raster.write(&uncertainty_path, RasterFormat::GeoTiff)?;
+    low_confidence_mask_raster.write(&low_confidence_mask_path, RasterFormat::GeoTiff)?;
 
     let dtm_out = if let Some(path) = dtm_path {
         let dtm = derive_dtm_from_dsm(&raster)?;
@@ -408,12 +460,21 @@ pub fn run_dense_surface_with_frames_and_dtm(
     };
     let vertical_rmse_m = estimate_vertical_rmse_m(alignment, valid_cells);
     let (mean_local_relief_m, p95_local_relief_m) = compute_local_relief_stats(&surface, rows, cols);
+    let (mvs_reference_count, mvs_mean_reference_completeness_pct, mvs_min_reference_completeness_pct) =
+        summarize_reference_completeness(&per_reference_completeness_pct);
+    let low_confidence_cells_pct = if valid_cells == 0 {
+        0.0
+    } else {
+        (low_confidence_cells as f64 / valid_cells as f64) * 100.0
+    };
 
     Ok(DenseResult {
         dsm_path: dsm_path.to_string(),
         dtm_path: dtm_out,
         support_raster_path: Some(support_path),
         uncertainty_raster_path: Some(uncertainty_path),
+        low_confidence_mask_path: Some(low_confidence_mask_path),
+        per_reference_completeness_pct: Some(per_reference_completeness_pct.clone()),
         stats: DsmStats {
             valid_cells,
             min_elevation_m: min_z,
@@ -422,8 +483,26 @@ pub fn run_dense_surface_with_frames_and_dtm(
             vertical_rmse_m,
             mean_local_relief_m,
             p95_local_relief_m,
+            mvs_reference_count,
+            mvs_mean_reference_completeness_pct,
+            mvs_min_reference_completeness_pct,
+            low_confidence_cells_pct,
         },
     })
+}
+
+fn summarize_reference_completeness(values_pct: &[f64]) -> (usize, f64, f64) {
+    if values_pct.is_empty() {
+        return (0, 0.0, 0.0);
+    }
+    let n = values_pct.len();
+    let mean = values_pct.iter().sum::<f64>() / n as f64;
+    let min = values_pct
+        .iter()
+        .copied()
+        .fold(f64::INFINITY, f64::min)
+        .clamp(0.0, 100.0);
+    (n, mean.clamp(0.0, 100.0), min)
 }
 
 fn compute_local_relief_stats(surface: &[f64], rows: usize, cols: usize) -> (f64, f64) {
@@ -578,19 +657,29 @@ fn interpolated_surface_z(
 fn estimate_stereo_depths_from_adjacent_pairs(
     alignment: &AlignmentResult,
     frames: &[ImageFrame],
-) -> Vec<DepthHypothesis> {
+) -> (Vec<DepthHypothesis>, Vec<f64>) {
     let mvs_maps = estimate_multiview_depth_maps(alignment, frames);
+    let per_reference_completeness_pct = mvs_maps
+        .iter()
+        .map(|m| {
+            if m.sampled_positions == 0 {
+                0.0
+            } else {
+                (m.samples.len() as f64 / m.sampled_positions as f64) * 100.0
+            }
+        })
+        .collect::<Vec<_>>();
     let mvs_depths = depth_hypotheses_from_multiview_maps(&mvs_maps);
     if !mvs_depths.is_empty() {
-        return mvs_depths;
+        return (mvs_depths, per_reference_completeness_pct);
     }
 
     let image_depths = estimate_stereo_depths_from_image_pairs(alignment, frames);
     if !image_depths.is_empty() {
-        return image_depths;
+        return (image_depths, Vec::new());
     }
 
-    estimate_stereo_depths_from_pose_baselines(alignment)
+    (estimate_stereo_depths_from_pose_baselines(alignment), Vec::new())
 }
 
 fn estimate_multiview_depth_maps(
@@ -627,6 +716,7 @@ fn estimate_multiview_depth_maps(
             .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
         let p_ref = projection_matrix(&alignment.poses[ref_idx]);
         let mut samples = Vec::new();
+        let mut sampled_positions = 0usize;
 
         let max_y = ref_img.height().saturating_sub((MVS_PATCH_RADIUS as u32) + 1) as i32;
         let max_x = ref_img.width().saturating_sub((MVS_PATCH_RADIUS as u32) + 1) as i32;
@@ -642,6 +732,7 @@ fn estimate_multiview_depth_maps(
             ) as i32;
             let mut x = start;
             while x < max_x {
+                sampled_positions += 1;
                 let step_x = adaptive_sample_step_px(
                     local_texture_score(ref_img, x, y, MVS_TEXTURE_SCORE_RADIUS),
                 ) as i32;
@@ -885,6 +976,7 @@ fn estimate_multiview_depth_maps(
             refine_multiview_samples(&mut samples);
             maps.push(MultiViewDepthMap {
                 reference_idx: ref_idx,
+                sampled_positions,
                 samples,
             });
         }
@@ -2945,11 +3037,22 @@ mod tests {
         let result = run_dense_surface(&alignment, 0.1, &dsm_path).expect("dense run");
         assert_eq!(result.stats.valid_cells, 0);
         assert_eq!(result.stats.vertical_rmse_m, 0.0);
+        assert!(result.low_confidence_mask_path.is_some());
+        assert_eq!(result.stats.low_confidence_cells_pct, 0.0);
 
         let raster = Raster::read(&dsm_path).expect("read written dsm");
         assert_eq!(raster.cols, 2);
         assert_eq!(raster.rows, 2);
 
+        if let Some(path) = &result.support_raster_path {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(path) = &result.uncertainty_raster_path {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(path) = &result.low_confidence_mask_path {
+            let _ = std::fs::remove_file(path);
+        }
         let _ = std::fs::remove_file(dsm_path);
     }
 
@@ -2966,11 +3069,23 @@ mod tests {
         assert!(result.stats.vertical_rmse_m > 0.0);
         assert!(result.stats.mean_local_relief_m >= 0.0);
         assert!(result.stats.p95_local_relief_m >= result.stats.mean_local_relief_m);
+        assert!(result.low_confidence_mask_path.is_some());
+        assert!(result.stats.low_confidence_cells_pct >= 0.0);
+        assert!(result.stats.low_confidence_cells_pct <= 100.0);
 
         let raster = Raster::read(&dsm_path).expect("read written dsm");
         assert!(raster.cols >= MIN_GRID_DIM);
         assert!(raster.rows >= MIN_GRID_DIM);
 
+        if let Some(path) = &result.support_raster_path {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(path) = &result.uncertainty_raster_path {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(path) = &result.low_confidence_mask_path {
+            let _ = std::fs::remove_file(path);
+        }
         let _ = std::fs::remove_file(dsm_path);
     }
 
@@ -3056,7 +3171,7 @@ mod tests {
         // Step 3 enhancement: validate that stereo depth estimation from refined poses
         // generates plausible depth hypotheses for improved surface reconstruction.
         let alignment = sample_alignment();
-        let stereo_depths = estimate_stereo_depths_from_adjacent_pairs(&alignment, &[]);
+        let (stereo_depths, completeness) = estimate_stereo_depths_from_adjacent_pairs(&alignment, &[]);
         
         // For N poses, we expect stereo depths from N-1 adjacent pairs
         // Each pair generates ~5 depth samples
@@ -3089,6 +3204,16 @@ mod tests {
                 "stereo depth Z should be within reasonable bounds of trajectory"
             );
         }
+        assert!(completeness.is_empty(), "fallback-only stereo path should not report per-reference completeness");
+    }
+
+    #[test]
+    fn completeness_summary_reports_expected_mean_and_min() {
+        let values = vec![80.0, 52.0, 71.0, 99.0];
+        let (count, mean, min) = summarize_reference_completeness(&values);
+        assert_eq!(count, 4);
+        assert!((mean - 75.5).abs() < 1.0e-9);
+        assert!((min - 52.0).abs() < 1.0e-9);
     }
 
     #[test]
@@ -3104,6 +3229,7 @@ mod tests {
     fn multiview_maps_convert_to_depth_hypotheses() {
         let maps = vec![MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 3,
             samples: vec![
                 MultiViewDepthSample {
                     point_world: [1.0, 2.0, 3.0],
@@ -3134,6 +3260,7 @@ mod tests {
     fn multiview_occlusion_voting_prefers_front_surface() {
         let maps = vec![MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 2,
             samples: vec![
                 MultiViewDepthSample {
                     point_world: [2.0, 2.0, 4.0],
@@ -3163,6 +3290,7 @@ mod tests {
     fn front_cluster_fusion_averages_near_front_samples() {
         let maps = vec![MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 3,
             samples: vec![
                 MultiViewDepthSample {
                     point_world: [1.0, 1.0, 4.0],
@@ -3329,6 +3457,7 @@ mod tests {
     fn geometry_quality_influences_mvs_confidence() {
         let map_low = MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 1,
             samples: vec![MultiViewDepthSample {
                 point_world: [10.0, 10.0, 5.0],
                 confidence: 0.8,
@@ -3340,6 +3469,7 @@ mod tests {
         };
         let map_high = MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 1,
             samples: vec![MultiViewDepthSample {
                 point_world: [10.0, 10.0, 5.0],
                 confidence: 0.8,
@@ -3405,6 +3535,7 @@ mod tests {
         // Occupy a cross around a missing center-adjacent area in bin space.
         let maps = vec![MultiViewDepthMap {
             reference_idx: 0,
+            sampled_positions: 4,
             samples: vec![
                 MultiViewDepthSample {
                     point_world: [8.0, 0.0, 5.0],

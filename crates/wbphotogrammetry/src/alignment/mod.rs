@@ -3771,6 +3771,38 @@ fn center_prior_penalty_px2(
     prior_scale_px2 * prior_weight * (dx * dx + dy * dy)
 }
 
+fn smooth_motion_prior_penalty_px2(
+    centres: &[Vector3<f64>],
+    pose_prior_weights: &[f64],
+    prior_scale_px2: f64,
+) -> f64 {
+    if centres.len() < 3 || pose_prior_weights.len() != centres.len() || prior_scale_px2 <= 0.0 {
+        return 0.0;
+    }
+
+    let mut sum = 0.0;
+    let mut n = 0usize;
+    for cam_idx in 1..(centres.len() - 1) {
+        let support_weight = pose_prior_weights[cam_idx].clamp(0.0, 1.0);
+        let local_weight = 0.18 + 0.82 * support_weight;
+        let accel = centres[cam_idx + 1] - 2.0 * centres[cam_idx] + centres[cam_idx - 1];
+        let ax = accel[0];
+        let ay = accel[1];
+        if !ax.is_finite() || !ay.is_finite() {
+            continue;
+        }
+        let accel_sq = ax * ax + ay * ay;
+        sum += prior_scale_px2 * 0.16 * local_weight * accel_sq;
+        n += 1;
+    }
+
+    if n > 0 {
+        sum / n as f64
+    } else {
+        0.0
+    }
+}
+
 fn apply_intrinsics_update(
     intrinsics: &mut CameraIntrinsics,
     grads: &[f64; 8],
@@ -3949,7 +3981,12 @@ fn total_observation_error_with_huber(
         } else {
             0.0
         };
-        observation_error + prior_error
+        let motion_prior_error = smooth_motion_prior_penalty_px2(
+            centres,
+            pose_prior_weights,
+            pose_prior_scale_px2,
+        );
+        observation_error + prior_error + motion_prior_error
     }
 }
 
@@ -4370,8 +4407,48 @@ fn unproject_pixel_to_normalized_camera_ray(
     }
 
     match camera_model {
-        CameraModel::Pinhole | CameraModel::Auto => Some(Vector2::new(x_distorted, y_distorted)),
+        CameraModel::Pinhole | CameraModel::Auto => {
+            undistort_pinhole_normalized_coords(x_distorted, y_distorted, intrinsics)
+        }
         CameraModel::Fisheye => undistort_fisheye_normalized_coords(x_distorted, y_distorted, intrinsics),
+    }
+}
+
+fn undistort_pinhole_normalized_coords(
+    x_distorted: f64,
+    y_distorted: f64,
+    intrinsics: &CameraIntrinsics,
+) -> Option<Vector2<f64>> {
+    let mut x = x_distorted;
+    let mut y = y_distorted;
+    for _ in 0..8 {
+        let r2 = x * x + y * y;
+        let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
+        if !radial.is_finite() || radial.abs() <= 1.0e-12 {
+            return None;
+        }
+        let x_t = 2.0 * intrinsics.p1 * x * y
+            + intrinsics.p2 * (r2 + 2.0 * x * x);
+        let y_t = intrinsics.p1 * (r2 + 2.0 * y * y)
+            + 2.0 * intrinsics.p2 * x * y;
+
+        let next_x = (x_distorted - x_t) / radial;
+        let next_y = (y_distorted - y_t) / radial;
+        if !next_x.is_finite() || !next_y.is_finite() {
+            return None;
+        }
+        let step = ((next_x - x) * (next_x - x) + (next_y - y) * (next_y - y)).sqrt();
+        x = next_x;
+        y = next_y;
+        if step <= 1.0e-12 {
+            break;
+        }
+    }
+
+    if x.is_finite() && y.is_finite() {
+        Some(Vector2::new(x, y))
+    } else {
+        None
     }
 }
 
@@ -7010,5 +7087,57 @@ mod tests {
         assert_eq!(intrinsics.p1, p1_before);
         assert_eq!(intrinsics.p2, p2_before);
         assert!((intrinsics.k1 - 0.01).abs() > 1.0e-8 || (intrinsics.k2 + 0.002).abs() > 1.0e-8);
+    }
+
+    #[test]
+    fn pinhole_unprojection_inverts_projected_distorted_point() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1180.0,
+            fy: 1210.0,
+            cx: 2010.0,
+            cy: 1490.0,
+            k1: -0.08,
+            k2: 0.014,
+            p1: 0.002,
+            p2: -0.0015,
+        };
+        let centre = Vector3::new(0.0, 0.0, 0.0);
+        let r = Matrix3::identity();
+        let xw = Vector3::new(0.72, -0.46, 2.35);
+        let expected = Vector2::new(xw[0] / xw[2], xw[1] / xw[2]);
+
+        let obs_px = project_world_to_pixel(&xw, &centre, &r, &intrinsics, CameraModel::Pinhole)
+            .expect("pinhole projection");
+        let recovered = unproject_pixel_to_normalized_camera_ray(
+            &obs_px,
+            &intrinsics,
+            CameraModel::Pinhole,
+        ).expect("pinhole unprojection");
+
+        assert!((recovered - expected).norm() < 1.0e-6, "pinhole unprojection should invert Brown-Conrady projection");
+    }
+
+    #[test]
+    fn smooth_motion_prior_penalty_prefers_constant_velocity_track() {
+        let straight = vec![
+            Vector3::new(0.0, 0.0, 10.0),
+            Vector3::new(1.0, 0.0, 10.0),
+            Vector3::new(2.0, 0.0, 10.0),
+            Vector3::new(3.0, 0.0, 10.0),
+            Vector3::new(4.0, 0.0, 10.0),
+        ];
+        let kinked = vec![
+            Vector3::new(0.0, 0.0, 10.0),
+            Vector3::new(1.0, 0.0, 10.0),
+            Vector3::new(2.0, 0.9, 10.0),
+            Vector3::new(3.0, 0.0, 10.0),
+            Vector3::new(4.0, 0.0, 10.0),
+        ];
+        let weights = vec![0.0, 0.5, 0.5, 0.5, 0.5];
+
+        let straight_penalty = smooth_motion_prior_penalty_px2(&straight, &weights, 180.0);
+        let kinked_penalty = smooth_motion_prior_penalty_px2(&kinked, &weights, 180.0);
+        assert!(straight_penalty <= 1.0e-12, "constant-velocity path should have near-zero smooth-motion penalty");
+        assert!(kinked_penalty > straight_penalty + 1.0, "kinked path should incur a stronger smooth-motion penalty");
     }
 }

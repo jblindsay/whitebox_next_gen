@@ -362,9 +362,10 @@ likely to require further development.
   model-aware fisheye unprojection instead of rectilinear pixel normalization.
   Fisheye support still does not include a richer multi-parameter calibration
   family beyond the current `fx/fy/cx/cy/k1/k2` model.
-- Camera-motion priors (smooth acceleration, constant-speed models suited to
-  drone flight paths) are not implemented. The current pose priors are
-  Gaussian position constraints only.
+- Camera-motion priors now include a basic constant-velocity smoothness term
+  on camera-center trajectories (alongside Gaussian position constraints).
+  Higher-order or mission-aware motion models (for example acceleration/bank
+  dynamics) are not yet implemented.
 - The loop closure optimisation uses a basic graph solver with non-adjacent
   pair constraints and robust correction-magnitude outlier rejection. It is
   not a full pose-graph SLAM formulation.

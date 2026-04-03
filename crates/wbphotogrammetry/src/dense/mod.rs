@@ -993,23 +993,54 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             let mut occlusion_votes = 1usize;
             let mut vote_conf_sum = front.confidence;
             let front_tol = (0.25 + 0.02 * front.ref_depth.abs()).clamp(0.25, 2.0);
+            let mut cluster_wsum = 0.0;
+            let mut cluster_x = 0.0;
+            let mut cluster_y = 0.0;
+            let mut cluster_z = 0.0;
+            let mut cluster_depth = 0.0;
+            let mut cluster_geom = 0.0;
+            let seed_w = (front.confidence * (0.45 + 0.55 * front.geometry_quality)).max(1.0e-6);
+            cluster_wsum += seed_w;
+            cluster_x += seed_w * front.point_world[0];
+            cluster_y += seed_w * front.point_world[1];
+            cluster_z += seed_w * front.point_world[2];
+            cluster_depth += seed_w * front.ref_depth;
+            cluster_geom += seed_w * front.geometry_quality;
             for s in samples.iter().skip(1) {
                 if (s.ref_depth - front.ref_depth).abs() <= front_tol {
                     occlusion_votes += 1;
                     vote_conf_sum += s.confidence;
+                    let w = (s.confidence * (0.45 + 0.55 * s.geometry_quality)).max(1.0e-6);
+                    cluster_wsum += w;
+                    cluster_x += w * s.point_world[0];
+                    cluster_y += w * s.point_world[1];
+                    cluster_z += w * s.point_world[2];
+                    cluster_depth += w * s.ref_depth;
+                    cluster_geom += w * s.geometry_quality;
                 }
             }
+
+            let fused_center = if cluster_wsum > 1.0e-9 {
+                [cluster_x / cluster_wsum, cluster_y / cluster_wsum, cluster_z / cluster_wsum]
+            } else {
+                front.point_world
+            };
+            let fused_geom = if cluster_wsum > 1.0e-9 {
+                (cluster_geom / cluster_wsum).clamp(0.0, 1.0)
+            } else {
+                front.geometry_quality.clamp(0.0, 1.0)
+            };
 
             let support_factor = (front.support_views as f64 / MVS_MAX_SOURCE_VIEWS.max(1) as f64).clamp(0.0, 1.0);
             let vote_factor = (occlusion_votes as f64 / samples.len().max(1) as f64).clamp(0.0, 1.0);
             let mean_vote_conf = (vote_conf_sum / occlusion_votes as f64).clamp(0.0, 1.0);
-            let geometry_factor = front.geometry_quality.clamp(0.0, 1.0);
+            let geometry_factor = fused_geom;
             let confidence = (mean_vote_conf
                 * (0.45 + 0.18 * support_factor + 0.22 * vote_factor + 0.15 * geometry_factor)
                 * ref_weight)
                 .clamp(0.08, 0.99);
             front_by_bin.insert(bin_key, DepthHypothesis {
-                center: front.point_world,
+                center: fused_center,
                 confidence,
             });
         }
@@ -2912,6 +2943,43 @@ mod tests {
         let hyps = depth_hypotheses_from_multiview_maps(&maps);
         assert_eq!(hyps.len(), 1);
         assert!((hyps[0].center[2] - 4.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn front_cluster_fusion_averages_near_front_samples() {
+        let maps = vec![MultiViewDepthMap {
+            reference_idx: 0,
+            samples: vec![
+                MultiViewDepthSample {
+                    point_world: [1.0, 1.0, 4.0],
+                    confidence: 0.9,
+                    support_views: 3,
+                    ref_px: [16.0, 16.0],
+                    ref_depth: 4.0,
+                    geometry_quality: 0.9,
+                },
+                MultiViewDepthSample {
+                    point_world: [1.0, 1.0, 4.2],
+                    confidence: 0.85,
+                    support_views: 3,
+                    ref_px: [16.2, 16.2],
+                    ref_depth: 4.2,
+                    geometry_quality: 0.85,
+                },
+                MultiViewDepthSample {
+                    point_world: [1.0, 1.0, 7.0],
+                    confidence: 0.8,
+                    support_views: 3,
+                    ref_px: [16.1, 16.1],
+                    ref_depth: 7.0,
+                    geometry_quality: 0.8,
+                },
+            ],
+        }];
+
+        let hyps = depth_hypotheses_from_multiview_maps(&maps);
+        assert_eq!(hyps.len(), 1);
+        assert!(hyps[0].center[2] > 4.0 && hyps[0].center[2] < 4.2);
     }
 
     #[test]

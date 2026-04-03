@@ -173,17 +173,35 @@ impl Default for IntrinsicsRefinementPolicy {
     }
 }
 
+/// Selects the reduced camera solve backend used in Schur-style BA updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReducedCameraSolveMode {
+    /// Prefer sparse PCG with robust dense fallback on numerical issues.
+    SparsePcg,
+    /// Force dense damped LU solve for reduced camera systems.
+    DenseLu,
+}
+
+impl Default for ReducedCameraSolveMode {
+    fn default() -> Self {
+        Self::SparsePcg
+    }
+}
+
 /// Optional controls for camera alignment and bundle adjustment behavior.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct AlignmentOptions {
     /// Intrinsics refinement policy used by bundle adjustment.
     pub intrinsics_refinement: IntrinsicsRefinementPolicy,
+    /// Reduced camera solver backend for Schur-style BA updates.
+    pub reduced_camera_solve_mode: ReducedCameraSolveMode,
 }
 
 impl Default for AlignmentOptions {
     fn default() -> Self {
         Self {
             intrinsics_refinement: IntrinsicsRefinementPolicy::Auto,
+            reduced_camera_solve_mode: ReducedCameraSolveMode::SparsePcg,
         }
     }
 }
@@ -275,6 +293,7 @@ pub fn run_camera_alignment_with_options(
         &intrinsics,
         model,
         options.intrinsics_refinement,
+        options.reduced_camera_solve_mode,
     );
     intrinsics = refined_intrinsics;
     let (positions, loop_closure_diag) = apply_loop_closure_global_optimization(
@@ -1029,6 +1048,7 @@ fn run_simplified_bundle_adjustment(
     intrinsics: &CameraIntrinsics,
     camera_model: CameraModel,
     intrinsics_refinement_policy: IntrinsicsRefinementPolicy,
+    reduced_camera_solve_mode: ReducedCameraSolveMode,
 ) -> (Vec<[f64; 3]>, Vec<[f64; 4]>, CameraIntrinsics, Vec<f64>, BaDiagnostics) {
     if positions.len() < 2 || rotations.len() != positions.len() {
         return (
@@ -1187,6 +1207,7 @@ fn run_simplified_bundle_adjustment(
                 center_step_cap,
                 rotation_step_cap,
                 rot_eps,
+                reduced_camera_solve_mode,
             ) {
                 centres = update.centres;
                 rotations_c2w = update.rotations;
@@ -2299,6 +2320,7 @@ fn apply_reduced_camera_pose_update(
     center_step_cap: f64,
     rotation_step_cap: f64,
     rot_eps: f64,
+    reduced_camera_solve_mode: ReducedCameraSolveMode,
 ) -> Option<ReducedPoseUpdate> {
     if centres.len() < 3 || observations.len() < 18 {
         return None;
@@ -2339,20 +2361,31 @@ fn apply_reduced_camera_pose_update(
 
     let mut lambda_try = lambda_pose;
     for _ in 0..5 {
-        let delta = solve_damped_sparse_pcg(
-            &reduced.hessian_sparse,
-            &reduced.gradient,
-            lambda_try,
-            96,
-            1.0e-8,
-        ).or_else(|| {
-            let mut h_damped = reduced.hessian.clone();
-            for idx in 0..h_damped.nrows() {
-                h_damped[(idx, idx)] += lambda_try;
+        let delta = match reduced_camera_solve_mode {
+            ReducedCameraSolveMode::SparsePcg => solve_damped_sparse_pcg(
+                &reduced.hessian_sparse,
+                &reduced.gradient,
+                lambda_try,
+                96,
+                1.0e-8,
+            )
+            .or_else(|| {
+                let mut h_damped = reduced.hessian.clone();
+                for idx in 0..h_damped.nrows() {
+                    h_damped[(idx, idx)] += lambda_try;
+                }
+                let rhs = -&reduced.gradient;
+                h_damped.lu().solve(&rhs)
+            }),
+            ReducedCameraSolveMode::DenseLu => {
+                let mut h_damped = reduced.hessian.clone();
+                for idx in 0..h_damped.nrows() {
+                    h_damped[(idx, idx)] += lambda_try;
+                }
+                let rhs = -&reduced.gradient;
+                h_damped.lu().solve(&rhs)
             }
-            let rhs = -&reduced.gradient;
-            h_damped.lu().solve(&rhs)
-        })?;
+        }?;
         if !delta.iter().all(|v| v.is_finite()) {
             lambda_try *= 2.0;
             continue;
@@ -5235,6 +5268,7 @@ mod tests {
 
         let options = AlignmentOptions {
             intrinsics_refinement: IntrinsicsRefinementPolicy::None,
+            reduced_camera_solve_mode: ReducedCameraSolveMode::SparsePcg,
         };
         let result = run_camera_alignment_with_options(
             &frames,
@@ -5282,6 +5316,7 @@ mod tests {
             CameraModel::Pinhole,
             AlignmentOptions {
                 intrinsics_refinement: IntrinsicsRefinementPolicy::CoreOnly,
+                reduced_camera_solve_mode: ReducedCameraSolveMode::SparsePcg,
             },
         )
         .expect("alignment should succeed");
@@ -5664,6 +5699,7 @@ mod tests {
             &intrinsics,
             CameraModel::Pinhole,
             IntrinsicsRefinementPolicy::Auto,
+            ReducedCameraSolveMode::SparsePcg,
         );
 
         // Validate that BA successfully:
@@ -5741,6 +5777,7 @@ mod tests {
             &intrinsics,
             CameraModel::Pinhole,
             IntrinsicsRefinementPolicy::Auto,
+            ReducedCameraSolveMode::SparsePcg,
         );
 
         assert!(ba_diag.observations_initial >= 12, "relaxed BA admission should preserve sparse short-sequence observations");
@@ -6022,6 +6059,7 @@ mod tests {
             0.08,
             0.035,
             0.001,
+            ReducedCameraSolveMode::SparsePcg,
         ).expect("reduced pose update");
 
         let center_delta = (update.centres[1] - seed_centres[1]).norm()
@@ -6271,6 +6309,7 @@ mod tests {
             0.08,
             0.035,
             0.001,
+            ReducedCameraSolveMode::SparsePcg,
         ).expect("reduced pose update on larger synthetic network");
 
         let updated_residuals = reprojection_residual_samples(

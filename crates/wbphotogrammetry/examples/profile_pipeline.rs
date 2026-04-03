@@ -7,7 +7,7 @@ use image::{GrayImage, Luma};
 use serde_json::json;
 use wbphotogrammetry::{
     AlignmentOptions, CameraModel, FeatureMethod, FrameMetadata, GpsCoordinate, ImageFrame,
-    IntrinsicsRefinementPolicy, run_camera_alignment_with_options, run_dense_surface,
+    IntrinsicsRefinementPolicy, ReducedCameraSolveMode, run_camera_alignment_with_options, run_dense_surface,
     run_feature_matching_with_method, run_orthomosaic,
 };
 
@@ -48,6 +48,9 @@ fn main() {
     let intrinsics_refinement = parse_intrinsics_refinement_policy(
         &parse_string_arg(&args, "--intrinsics-refinement", "auto"),
     );
+    let reduced_camera_solve_mode = parse_reduced_camera_solve_mode(
+        &parse_string_arg(&args, "--reduced-solver-mode", "sparse-pcg"),
+    );
     let resolution_m = parse_arg(&args, "--resolution", 0.12_f64);
     let json_out = parse_optional_string_arg(&args, "--json-out");
 
@@ -75,6 +78,7 @@ fn main() {
             CameraModel::Auto,
             AlignmentOptions {
                 intrinsics_refinement,
+                reduced_camera_solve_mode,
             },
         )
         .expect("alignment stage");
@@ -124,6 +128,7 @@ fn main() {
             &profile,
             feature_method,
             resolution_m,
+            reduced_camera_solve_mode,
             &tmp_root,
             &runs,
             &summary,
@@ -191,6 +196,7 @@ fn write_json_report(
     profile: &str,
     feature_method: FeatureMethod,
     resolution_m: f64,
+    reduced_camera_solve_mode: ReducedCameraSolveMode,
     tmp_root: &PathBuf,
     runs: &[RunTimes],
     summary: &PipelineSummary,
@@ -223,6 +229,7 @@ fn write_json_report(
             "profile": profile,
             "feature_method": feature_method.as_str(),
             "resolution_m": resolution_m,
+            "reduced_solver_mode": reduced_solver_mode_name(reduced_camera_solve_mode),
             "workspace": tmp_root.to_string_lossy(),
         },
         "summary": {
@@ -333,6 +340,26 @@ fn parse_intrinsics_refinement_policy(s: &str) -> IntrinsicsRefinementPolicy {
             );
             std::process::exit(2);
         }
+    }
+}
+
+fn parse_reduced_camera_solve_mode(s: &str) -> ReducedCameraSolveMode {
+    match s {
+        "sparse-pcg" => ReducedCameraSolveMode::SparsePcg,
+        "dense-lu" => ReducedCameraSolveMode::DenseLu,
+        _ => {
+            eprintln!(
+                "invalid --reduced-solver-mode: {s}. expected sparse-pcg|dense-lu"
+            );
+            std::process::exit(2);
+        }
+    }
+}
+
+fn reduced_solver_mode_name(mode: ReducedCameraSolveMode) -> &'static str {
+    match mode {
+        ReducedCameraSolveMode::SparsePcg => "sparse-pcg",
+        ReducedCameraSolveMode::DenseLu => "dense-lu",
     }
 }
 

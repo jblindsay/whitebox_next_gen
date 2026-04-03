@@ -103,6 +103,25 @@ Observed scaling notes:
 3. Mission-level benchmark matrix is now recorded for repeatable synthetic workloads.
 4. Strict Schur-vs-baseline runtime acceptance still needs an explicit runtime switch to force the old dense-only reduced solve path during the same benchmark harness.
 
+## Solver Mode A/B Benchmark (2026-04-03)
+
+Command set:
+
+1. `bash crates/wbphotogrammetry/examples/run_profile_benchmark.sh --out-dir target/wbphotogrammetry_profiles_ab/sparse_pcg --repeats 2 --profile balanced --frames 30,60,120 --resolution 0.12 --reduced-solver-mode sparse-pcg`
+2. `bash crates/wbphotogrammetry/examples/run_profile_benchmark.sh --out-dir target/wbphotogrammetry_profiles_ab/dense_lu --repeats 2 --profile balanced --frames 30,60,120 --resolution 0.12 --reduced-solver-mode dense-lu`
+
+Alignment stage mean runtime comparison:
+
+1. Small (30 frames): sparse `0.597 s`, dense `0.603 s` (sparse ~`1.0%` faster)
+2. Medium (60 frames): sparse `2.447 s`, dense `2.367 s` (sparse ~`3.4%` slower)
+3. Large (120 frames): sparse `9.702 s`, dense `9.629 s` (sparse ~`0.8%` slower)
+
+Notes:
+
+1. This provides the requested runtime-toggle A/B evidence on identical workloads.
+2. Differences are small and mixed across matrix sizes; no consistent runtime win is demonstrated yet.
+3. Additional repeats and real mission datasets are still needed for a stable acceptance conclusion.
+
 ## Risks
 1. Ill-conditioning in reduced camera system for weak geometry.
 2. Sparse assembly memory growth if block storage is not tightly controlled.
@@ -111,4 +130,4 @@ Observed scaling notes:
 ## Definition of Done
 1. Schur BA path is enabled as a stable production path (with guarded fallback). (in progress: implemented and regression-tested on synthetic/targeted paths)
 2. Camera covariance diagnostics are emitted and documented. (implemented)
-3. Regression suite remains green and benchmark results are recorded. (in progress: targeted regressions and synthetic mission benchmark matrix recorded; baseline A/B timing and memory comparison still pending)
+3. Regression suite remains green and benchmark results are recorded. (in progress: targeted regressions, synthetic mission benchmark matrix, and solver-mode A/B timing recorded; memory comparison and real-dataset acceptance evidence still pending)

@@ -6,6 +6,7 @@ use std::time::Instant;
 use serde::Serialize;
 use wbphotogrammetry::{
     AlignmentOptions, CameraModel, FeatureMethod, IntrinsicsRefinementPolicy,
+    ReducedCameraSolveMode,
     ProfileThresholds, ProcessingProfile, build_qa_report,
     ingest_image_set, run_camera_alignment_with_options, run_feature_matching_with_method,
     run_orthomosaic_with_confidence,
@@ -27,6 +28,7 @@ struct PipelineSummary {
     profile: String,
     feature_method: String,
     camera_model: String,
+    reduced_solver_mode: String,
     resolution_m: f64,
     frame_count: usize,
     outputs: PipelineOutputs,
@@ -70,6 +72,11 @@ fn main() {
             .unwrap_or_else(|| "auto".to_string())
             .as_str(),
     );
+    let reduced_camera_solve_mode = parse_reduced_camera_solve_mode(
+        optional_arg(&args, "--reduced-solver-mode")
+            .unwrap_or_else(|| "sparse-pcg".to_string())
+            .as_str(),
+    );
     let resolution_m = optional_arg(&args, "--resolution")
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or(0.12);
@@ -103,6 +110,10 @@ fn main() {
         "intrinsics_refinement: {}",
         intrinsics_refinement_name(intrinsics_refinement)
     );
+    println!(
+        "reduced_solver_mode: {}",
+        reduced_solver_mode_name(reduced_camera_solve_mode)
+    );
     println!("resolution_m: {resolution_m:.3}");
 
     let ingest_start = Instant::now();
@@ -129,6 +140,7 @@ fn main() {
         camera_model,
         AlignmentOptions {
             intrinsics_refinement,
+            reduced_camera_solve_mode,
         },
     )
     .unwrap_or_else(|e| {
@@ -182,6 +194,7 @@ fn main() {
         profile,
         feature_method: feature_method.as_str().to_string(),
         camera_model: camera_model_name(camera_model).to_string(),
+        reduced_solver_mode: reduced_solver_mode_name(reduced_camera_solve_mode).to_string(),
         resolution_m,
         frame_count: frames.len(),
         outputs: PipelineOutputs {
@@ -273,6 +286,17 @@ fn parse_intrinsics_refinement_policy(s: &str) -> IntrinsicsRefinementPolicy {
     }
 }
 
+fn parse_reduced_camera_solve_mode(s: &str) -> ReducedCameraSolveMode {
+    match s {
+        "sparse-pcg" => ReducedCameraSolveMode::SparsePcg,
+        "dense-lu" => ReducedCameraSolveMode::DenseLu,
+        _ => {
+            eprintln!("invalid --reduced-solver-mode: {s}. expected sparse-pcg|dense-lu");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn intrinsics_refinement_name(policy: IntrinsicsRefinementPolicy) -> &'static str {
     match policy {
         IntrinsicsRefinementPolicy::Auto => "auto",
@@ -280,5 +304,12 @@ fn intrinsics_refinement_name(policy: IntrinsicsRefinementPolicy) -> &'static st
         IntrinsicsRefinementPolicy::CoreOnly => "core-only",
         IntrinsicsRefinementPolicy::CoreAndRadial => "core-and-radial",
         IntrinsicsRefinementPolicy::All => "all",
+    }
+}
+
+fn reduced_solver_mode_name(mode: ReducedCameraSolveMode) -> &'static str {
+    match mode {
+        ReducedCameraSolveMode::SparsePcg => "sparse-pcg",
+        ReducedCameraSolveMode::DenseLu => "dense-lu",
     }
 }

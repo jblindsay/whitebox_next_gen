@@ -6,11 +6,13 @@ set -euo pipefail
 # Usage:
 #   ./crates/wbphotogrammetry/examples/run_profile_benchmark.sh
 #   ./crates/wbphotogrammetry/examples/run_profile_benchmark.sh --out-dir /tmp/wbprofiles --repeats 5 --profile balanced
+#   ./crates/wbphotogrammetry/examples/run_profile_benchmark.sh --reduced-solver-mode dense-lu
 
 OUT_DIR="${PWD}/target/wbphotogrammetry_profiles"
 REPEATS=3
 PROFILE="balanced"
 RESOLUTION="0.12"
+REDUCED_SOLVER_MODE="sparse-pcg"
 FRAMES=(30 60 120)
 
 while [[ $# -gt 0 ]]; do
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
       RESOLUTION="$2"
       shift 2
       ;;
+    --reduced-solver-mode)
+      REDUCED_SOLVER_MODE="$2"
+      shift 2
+      ;;
     --frames)
       IFS=',' read -r -a FRAMES <<< "$2"
       shift 2
@@ -49,6 +55,7 @@ echo "  out_dir:    $OUT_DIR"
 echo "  repeats:    $REPEATS"
 echo "  profile:    $PROFILE"
 echo "  resolution: $RESOLUTION"
+echo "  reduced_solver_mode: $REDUCED_SOLVER_MODE"
 echo "  frames:     ${FRAMES[*]}"
 
 for n in "${FRAMES[@]}"; do
@@ -60,6 +67,7 @@ echo "[benchmark] frames=$n -> $OUT_FILE"
     --repeats "$REPEATS" \
     --profile "$PROFILE" \
     --resolution "$RESOLUTION" \
+    --reduced-solver-mode "$REDUCED_SOLVER_MODE" \
     --json-out "$OUT_FILE"
 done
 

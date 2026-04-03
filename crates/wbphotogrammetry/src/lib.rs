@@ -51,6 +51,7 @@ pub use alignment::{
     AlignmentStats,
     CameraPose,
     IntrinsicsRefinementPolicy,
+    ReducedCameraSolveMode,
     run_camera_alignment,
     run_camera_alignment_with_options,
 };

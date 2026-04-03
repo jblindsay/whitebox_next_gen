@@ -430,6 +430,10 @@ likely to require further development.
 # Profile the full pipeline on a flight directory
 cargo run --example profile_pipeline --release -- --profile balanced --feature-method rootsift
 
+# A/B benchmark reduced solver mode in alignment stage
+cargo run --example profile_pipeline --release -- --profile balanced --feature-method rootsift --reduced-solver-mode sparse-pcg
+cargo run --example profile_pipeline --release -- --profile balanced --feature-method rootsift --reduced-solver-mode dense-lu
+
 # Inspect feature matching on a specific image pair
 cargo run --example feature_pair_probe --release -- --images-dir <dir> --left <image_a> --right <image_b> --method rootsift
 

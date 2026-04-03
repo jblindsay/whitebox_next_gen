@@ -22,7 +22,16 @@ use crate::ingest::ImageFrame;
 
 const MIN_GRID_DIM: usize = 4;
 const MVS_MAX_SOURCE_VIEWS: usize = 3;
-const MVS_SAMPLE_STEP: usize = 36;
+/// Minimum MVS sample step (pixels) used in high-texture image regions.
+const MVS_SAMPLE_STEP_MIN: usize = 12;
+/// Maximum MVS sample step (pixels) used in low-texture / featureless regions.
+const MVS_SAMPLE_STEP_MAX: usize = 52;
+/// Half-window radius (pixels) used when measuring local image texture.
+const MVS_TEXTURE_SCORE_RADIUS: i32 = 3;
+/// Mean gradient magnitude (0–255 scale) that maps to the minimum sampling step.
+const MVS_TEXTURE_HIGH_THRESH: f64 = 18.0;
+/// Mean gradient magnitude below which the maximum sampling step is used.
+const MVS_TEXTURE_LOW_THRESH: f64 = 4.0;
 const MVS_PATCH_RADIUS: i32 = 2;
 const MVS_SEARCH_RADIUS: i32 = 12;
 const MVS_SEARCH_RADIUS_MIN: i32 = 4;
@@ -605,8 +614,16 @@ fn estimate_multiview_depth_maps(
             continue;
         }
 
-        for y in (start..max_y).step_by(MVS_SAMPLE_STEP) {
-            for x in (start..max_x).step_by(MVS_SAMPLE_STEP) {
+        let mut y = start;
+        while y < max_y {
+            let step_y = adaptive_sample_step_px(
+                local_texture_score(ref_img, start, y, MVS_TEXTURE_SCORE_RADIUS),
+            ) as i32;
+            let mut x = start;
+            while x < max_x {
+                let step_x = adaptive_sample_step_px(
+                    local_texture_score(ref_img, x, y, MVS_TEXTURE_SCORE_RADIUS),
+                ) as i32;
                 let center_ref = patch_center_intensity(ref_img, x, y);
                 let x_ref_n = Vector2::new(
                     (x as f64 - ref_intr.0) / ref_intr.2,
@@ -838,7 +855,9 @@ fn estimate_multiview_depth_maps(
                         geometry_quality: best_geometry_quality,
                     });
                 }
+                x += step_x;
             }
+            y += step_y;
         }
 
         if !samples.is_empty() {
@@ -971,6 +990,61 @@ fn adaptive_search_radius_px(
     let approx_disp = fx * baseline / depth;
     let radius = (4.0 + 0.55 * approx_disp).round() as i32;
     radius.clamp(min_radius.max(1), max_radius.max(min_radius.max(1)))
+}
+
+/// Computes a local texture score for pixel `(x, y)` in `img` as the intensity
+/// standard deviation over a `(2·radius + 1)²` neighbourhood.
+///
+/// The score lives on the same 0–255 scale as pixel values.  Low values
+/// indicate featureless regions (sky, water, flat concrete); high values
+/// indicate strong edges and repeated texture.
+fn local_texture_score(img: &GrayImage, x: i32, y: i32, radius: i32) -> f64 {
+    let w = img.width() as i32;
+    let h = img.height() as i32;
+    let mut sum = 0.0_f64;
+    let mut sum_sq = 0.0_f64;
+    let mut count = 0u32;
+    for dy in -radius..=radius {
+        let py = y + dy;
+        if py < 0 || py >= h {
+            continue;
+        }
+        for dx in -radius..=radius {
+            let px = x + dx;
+            if px < 0 || px >= w {
+                continue;
+            }
+            let v = img.get_pixel(px as u32, py as u32).0[0] as f64;
+            sum += v;
+            sum_sq += v * v;
+            count += 1;
+        }
+    }
+    if count < 2 {
+        return 0.0;
+    }
+    let mean = sum / count as f64;
+    let variance = (sum_sq / count as f64) - mean * mean;
+    variance.max(0.0).sqrt()
+}
+
+/// Maps a local texture score to an MVS sampling step in pixels.
+///
+/// - Scores at or above [`MVS_TEXTURE_HIGH_THRESH`] yield [`MVS_SAMPLE_STEP_MIN`].
+/// - Scores at or below [`MVS_TEXTURE_LOW_THRESH`] yield [`MVS_SAMPLE_STEP_MAX`].
+/// - Scores in between are linearly interpolated.
+fn adaptive_sample_step_px(texture_score: f64) -> usize {
+    if texture_score >= MVS_TEXTURE_HIGH_THRESH {
+        MVS_SAMPLE_STEP_MIN
+    } else if texture_score <= MVS_TEXTURE_LOW_THRESH {
+        MVS_SAMPLE_STEP_MAX
+    } else {
+        let t = (texture_score - MVS_TEXTURE_LOW_THRESH)
+            / (MVS_TEXTURE_HIGH_THRESH - MVS_TEXTURE_LOW_THRESH);
+        let step = MVS_SAMPLE_STEP_MAX as f64
+            - t * (MVS_SAMPLE_STEP_MAX - MVS_SAMPLE_STEP_MIN) as f64;
+        (step.round() as usize).clamp(MVS_SAMPLE_STEP_MIN, MVS_SAMPLE_STEP_MAX)
+    }
 }
 
 fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<DepthHypothesis> {
@@ -3380,5 +3454,77 @@ mod tests {
 
         repair_low_support_cells(&mut surface, &support, rows, cols, 100.0, 0.15);
         assert!(surface[2 * cols + 2] < 110.0, "isolated low-support spike should be reduced");
+    }
+
+    #[test]
+    fn texture_score_high_gives_min_step() {
+        // Checkerboard pattern — alternating 0 and 255 — produces the maximum
+        // possible mean gradient magnitude and should saturate the upper threshold.
+        let size = 20u32;
+        let mut img = GrayImage::new(size, size);
+        for y in 0..size {
+            for x in 0..size {
+                let v = if (x + y) % 2 == 0 { 255u8 } else { 0u8 };
+                img.put_pixel(x, y, image::Luma([v]));
+            }
+        }
+        let score = local_texture_score(&img, 10, 10, MVS_TEXTURE_SCORE_RADIUS);
+        assert!(
+            score >= MVS_TEXTURE_HIGH_THRESH,
+            "checkerboard texture score {score:.2} should exceed high threshold {MVS_TEXTURE_HIGH_THRESH}"
+        );
+        assert_eq!(adaptive_sample_step_px(score), MVS_SAMPLE_STEP_MIN);
+    }
+
+    #[test]
+    fn texture_score_low_gives_max_step() {
+        // All-constant image has zero gradients everywhere.
+        let size = 20u32;
+        let img = GrayImage::from_pixel(size, size, image::Luma([128u8]));
+        let score = local_texture_score(&img, 10, 10, MVS_TEXTURE_SCORE_RADIUS);
+        assert!(
+            score <= MVS_TEXTURE_LOW_THRESH,
+            "flat image texture score {score:.2} should be below low threshold {MVS_TEXTURE_LOW_THRESH}"
+        );
+        assert_eq!(adaptive_sample_step_px(score), MVS_SAMPLE_STEP_MAX);
+    }
+
+    #[test]
+    fn texture_score_monotone_with_contrast() {
+        // Three synthetic images with increasing contrast; scores should be ordered.
+        let size = 20u32;
+        let make_contrast = |delta: u8| {
+            let mut img = GrayImage::new(size, size);
+            for y in 0..size {
+                for x in 0..size {
+                    let v = if x % 2 == 0 { 128u8.saturating_add(delta) } else { 128u8.saturating_sub(delta) };
+                    img.put_pixel(x, y, image::Luma([v]));
+                }
+            }
+            img
+        };
+        let low_contrast = make_contrast(2);
+        let mid_contrast = make_contrast(20);
+        let high_contrast = make_contrast(60);
+
+        let s_low = local_texture_score(&low_contrast, 10, 10, MVS_TEXTURE_SCORE_RADIUS);
+        let s_mid = local_texture_score(&mid_contrast, 10, 10, MVS_TEXTURE_SCORE_RADIUS);
+        let s_high = local_texture_score(&high_contrast, 10, 10, MVS_TEXTURE_SCORE_RADIUS);
+
+        assert!(s_low < s_mid, "low-contrast score {s_low:.2} should be below mid-contrast {s_mid:.2}");
+        assert!(s_mid < s_high, "mid-contrast score {s_mid:.2} should be below high-contrast {s_high:.2}");
+
+        // Higher score → smaller (or equal) step.
+        assert!(adaptive_sample_step_px(s_high) <= adaptive_sample_step_px(s_mid));
+        assert!(adaptive_sample_step_px(s_mid) <= adaptive_sample_step_px(s_low));
+    }
+
+    #[test]
+    fn adaptive_step_interpolates_between_bounds() {
+        // Midpoint score should yield a step strictly between min and max.
+        let mid_score = (MVS_TEXTURE_LOW_THRESH + MVS_TEXTURE_HIGH_THRESH) / 2.0;
+        let step = adaptive_sample_step_px(mid_score);
+        assert!(step > MVS_SAMPLE_STEP_MIN, "mid-texture step should exceed min");
+        assert!(step < MVS_SAMPLE_STEP_MAX, "mid-texture step should be below max");
     }
 }

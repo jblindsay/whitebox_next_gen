@@ -6075,6 +6075,142 @@ mod tests {
     }
 
     #[test]
+    fn reduced_camera_pose_solve_stable_on_larger_synthetic_network() {
+        let intrinsics = CameraIntrinsics {
+            fx: 1200.0,
+            fy: 1200.0,
+            cx: 2000.0,
+            cy: 1500.0,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
+        };
+
+        let camera_count = 10usize;
+        let mut true_centres = Vec::with_capacity(camera_count);
+        let mut seed_centres = Vec::with_capacity(camera_count);
+        let mut true_rotations = Vec::with_capacity(camera_count);
+        let mut seed_rotations = Vec::with_capacity(camera_count);
+
+        for i in 0..camera_count {
+            let x = 0.7 * i as f64;
+            let y = 0.08 * (0.35 * i as f64).sin();
+            let z = 10.0 + 0.02 * (0.22 * i as f64).cos();
+            true_centres.push(Vector3::new(x, y, z));
+
+            let seed_x = x + 0.10 * (0.50 * i as f64).sin();
+            let seed_y = y - 0.09 * (0.45 * i as f64).cos();
+            seed_centres.push(Vector3::new(seed_x, seed_y, z));
+
+            let yaw = 0.010 + 0.0012 * i as f64;
+            let pitch = -0.008 - 0.0010 * i as f64;
+            let mut r = Matrix3::identity();
+            r = small_angle_update(&r, 0, yaw);
+            r = small_angle_update(&r, 1, pitch);
+            true_rotations.push(r);
+
+            seed_rotations.push(Matrix3::identity());
+        }
+
+        let point_count = 64usize;
+        let mut world_points = Vec::with_capacity(point_count);
+        for i in 0..point_count {
+            let px = -1.2 + 0.22 * (i % 16) as f64;
+            let py = -0.7 + 0.20 * ((i * 5) % 9) as f64;
+            let pz = 14.0 + 0.18 * ((i * 7) % 11) as f64;
+            world_points.push(Vector3::new(px, py, pz));
+        }
+
+        let mut observations = Vec::new();
+        for (point_id, point) in world_points.iter().enumerate() {
+            for cam_idx in 0..camera_count {
+                if let Some(obs_px) = project_world_to_pixel(
+                    point,
+                    &true_centres[cam_idx],
+                    &true_rotations[cam_idx],
+                    &intrinsics,
+                    CameraModel::Pinhole,
+                ) {
+                    observations.push(BaObservation {
+                        cam_idx,
+                        point_id,
+                        point_world: *point,
+                        obs_px,
+                        quality_weight: 1.0,
+                    });
+                }
+            }
+        }
+
+        assert!(observations.len() >= camera_count * point_count / 2, "synthetic network should be well observed");
+
+        let seed_residuals = reprojection_residual_samples(
+            &seed_centres,
+            &seed_rotations,
+            &observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+        );
+        let (_, seed_p95) = residual_quantiles_from_samples(&seed_residuals);
+
+        let mut pose_prior_weights = vec![0.20; camera_count];
+        pose_prior_weights[0] = 0.0;
+        let update = apply_reduced_camera_pose_update(
+            &seed_centres,
+            &seed_rotations,
+            &observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+            2.0,
+            &seed_centres,
+            &pose_prior_weights,
+            6.0,
+            180.0,
+            20.0,
+            0.08,
+            0.035,
+            0.001,
+        ).expect("reduced pose update on larger synthetic network");
+
+        let updated_residuals = reprojection_residual_samples(
+            &update.centres,
+            &update.rotations,
+            &observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+        );
+        let (_, updated_p95) = residual_quantiles_from_samples(&updated_residuals);
+
+        assert!(updated_p95.is_finite(), "updated residual p95 should be finite");
+        assert!(updated_p95 <= seed_p95 * 2.5 + 1.0e-6, "reduced pose solve should remain stable on larger synthetic network");
+
+        for c in &update.centres {
+            assert!(c[0].is_finite() && c[1].is_finite() && c[2].is_finite(), "updated camera centers should remain finite");
+        }
+        for r in &update.rotations {
+            assert!(r.iter().all(|v| v.is_finite()), "updated camera rotations should remain finite");
+        }
+
+        let covariance = estimate_camera_covariance_diagnostics(
+            &update.centres,
+            &update.rotations,
+            &update.observations,
+            &intrinsics,
+            CameraModel::Pinhole,
+            2.0,
+            &seed_centres,
+            &pose_prior_weights,
+            6.0,
+            180.0,
+            0.001,
+        );
+        assert!(covariance.supported_camera_count >= (camera_count as u64).saturating_sub(1), "covariance diagnostics should cover most non-anchor cameras");
+        assert!(covariance.translation_sigma_p95_m.is_finite(), "translation covariance proxy should be finite");
+        assert!(covariance.rotation_sigma_p95_deg.is_finite(), "rotation covariance proxy should be finite");
+    }
+
+    #[test]
     fn loop_closure_global_optimization_reduces_lateral_drift() {
         let intrinsics = CameraIntrinsics::identity(4000, 3000);
         let positions = vec![

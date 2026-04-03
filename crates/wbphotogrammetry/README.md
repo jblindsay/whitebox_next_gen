@@ -391,7 +391,7 @@ likely to require further development.
     consistency checks, with coarse-to-fine (two-level pyramid) guidance,
     adaptive baseline/depth-aware search windows, and a lightweight hybrid
     ZNCC+Census local cost. Depth maps now include a confidence-pruned
-    neighborhood propagation/refinement pass and lightweight sparse-hole
+    neighborhood propagation/refinement pass and iterative sparse-hole
     hypothesis fill with edge-aware confidence attenuation, plus weak-isolated
     hypothesis suppression. The system still uses local patch windows rather
     than a full global correspondence optimization.

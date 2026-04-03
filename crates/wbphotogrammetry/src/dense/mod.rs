@@ -40,6 +40,8 @@ const MVS_HOLE_FILL_MIN_NEIGHBORS: usize = 2;
 const MVS_HOLE_FILL_CONF_SCALE: f64 = 0.72;
 const MVS_HOLE_FILL_EDGE_DEPTH_RANGE_MULTIPLIER: f64 = 2.2;
 const MVS_HOLE_FILL_EDGE_MIN_SCALE: f64 = 0.18;
+const MVS_HOLE_FILL_ITERS: usize = 2;
+const MVS_HOLE_FILL_ITER_DECAY: f64 = 0.84;
 const MVS_WEAK_ISOLATED_RADIUS_M: f64 = 7.5;
 const MVS_WEAK_ISOLATED_Z_TOL_M: f64 = 2.2;
 
@@ -1009,16 +1011,32 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             });
         }
 
+        let filled_bins = compute_hole_fill_bins(&front_by_bin, MVS_HOLE_FILL_ITERS);
+        out.extend(filled_bins.into_values());
+
+        out.extend(front_by_bin.into_values());
+    }
+    suppress_weak_isolated_hypotheses(out)
+}
+
+fn compute_hole_fill_bins(
+    seed_bins: &std::collections::HashMap<(i32, i32), DepthHypothesis>,
+    iterations: usize,
+) -> std::collections::HashMap<(i32, i32), DepthHypothesis> {
+    let mut known = seed_bins.clone();
+    let mut filled = std::collections::HashMap::new();
+
+    for it in 0..iterations {
         let mut hole_votes: std::collections::HashMap<(i32, i32), Vec<DepthHypothesis>> =
             std::collections::HashMap::new();
-        let keys: Vec<(i32, i32)> = front_by_bin.keys().copied().collect();
+        let keys: Vec<(i32, i32)> = known.keys().copied().collect();
         for (bx, by) in &keys {
-            let Some(src) = front_by_bin.get(&(*bx, *by)) else {
+            let Some(src) = known.get(&(*bx, *by)) else {
                 continue;
             };
             for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
                 let nb = (bx + dx, by + dy);
-                if front_by_bin.contains_key(&nb) {
+                if known.contains_key(&nb) {
                     continue;
                 }
                 hole_votes.entry(nb).or_default().push(DepthHypothesis {
@@ -1028,7 +1046,8 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             }
         }
 
-        for (_bin, votes) in hole_votes {
+        let mut added_this_iter = Vec::new();
+        for (bin, votes) in hole_votes {
             if votes.len() < MVS_HOLE_FILL_MIN_NEIGHBORS {
                 continue;
             }
@@ -1047,19 +1066,31 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
                 continue;
             }
             let edge_scale = hole_fill_edge_confidence_scale(&votes);
-            let c = (votes.iter().map(|v| v.confidence).sum::<f64>() / votes.len() as f64 * MVS_HOLE_FILL_CONF_SCALE)
-                * edge_scale;
-            let c = c
+            let iter_scale = MVS_HOLE_FILL_ITER_DECAY.powi((it as i32) + 1);
+            let c = (votes.iter().map(|v| v.confidence).sum::<f64>() / votes.len() as f64
+                * MVS_HOLE_FILL_CONF_SCALE
+                * edge_scale
+                * iter_scale)
                 .clamp(0.05, 0.90);
-            out.push(DepthHypothesis {
-                center: [x / wsum, y / wsum, z / wsum],
-                confidence: c,
-            });
+            added_this_iter.push((
+                bin,
+                DepthHypothesis {
+                    center: [x / wsum, y / wsum, z / wsum],
+                    confidence: c,
+                },
+            ));
         }
 
-        out.extend(front_by_bin.into_values());
+        if added_this_iter.is_empty() {
+            break;
+        }
+        for (bin, hyp) in added_this_iter {
+            known.insert(bin, hyp.clone());
+            filled.insert(bin, hyp);
+        }
     }
-    suppress_weak_isolated_hypotheses(out)
+
+    filled
 }
 
 fn suppress_weak_isolated_hypotheses(hypotheses: Vec<DepthHypothesis>) -> Vec<DepthHypothesis> {
@@ -3084,6 +3115,21 @@ mod tests {
 
         let hyps = depth_hypotheses_from_multiview_maps(&maps);
         assert!(hyps.len() > 4, "hole fill should create additional hypotheses");
+    }
+
+    #[test]
+    fn iterative_hole_fill_expands_beyond_single_pass() {
+        let mut seed = std::collections::HashMap::new();
+        // Corner-seeded square: pass 1 fills edge centers; pass 2 fills the center.
+        seed.insert((0, 0), DepthHypothesis { center: [0.0, 0.0, 10.0], confidence: 0.8 });
+        seed.insert((0, 2), DepthHypothesis { center: [0.0, 2.0, 10.1], confidence: 0.8 });
+        seed.insert((2, 0), DepthHypothesis { center: [2.0, 0.0, 9.9], confidence: 0.8 });
+        seed.insert((2, 2), DepthHypothesis { center: [2.0, 2.0, 10.0], confidence: 0.8 });
+
+        let one = compute_hole_fill_bins(&seed, 1);
+        let two = compute_hole_fill_bins(&seed, 2);
+        assert!(two.len() >= one.len(), "more iterations should not reduce fill coverage");
+        assert!(two.len() > one.len(), "second pass should expand fill in this cross-shaped seed layout");
     }
 
     #[test]

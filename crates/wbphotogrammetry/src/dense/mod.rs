@@ -56,6 +56,13 @@ const MVS_WEAK_ISOLATED_Z_TOL_M: f64 = 2.2;
 const MVS_LOCAL_AGREEMENT_Z_TOL_M: f64 = 1.8;
 const MVS_LOCAL_AGREEMENT_BOOST_MAX: f64 = 1.12;
 const MVS_LOCAL_AGREEMENT_ATTEN_MIN: f64 = 0.62;
+/// Depth difference (metres) beyond which two adjacent bins are treated as
+/// being on different surfaces and are not blended during regularization.
+const MVS_REGULARIZATION_DEPTH_TOL_M: f64 = 1.4;
+/// Maximum fraction by which a low-confidence bin can be pulled toward the
+/// local neighbor average during depth regularization.  High-confidence bins
+/// are pulled proportionally less; the pull scales as `(1 - confidence)`.
+const MVS_REGULARIZATION_STRENGTH: f64 = 0.30;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -1127,12 +1134,67 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             }
         }
 
-        let filled_bins = compute_hole_fill_bins(&front_by_bin, MVS_HOLE_FILL_ITERS);
+        let reg_bins = regularize_depth_bins(&front_by_bin);
+        let filled_bins = compute_hole_fill_bins(&reg_bins, MVS_HOLE_FILL_ITERS);
         out.extend(filled_bins.into_values());
 
-        out.extend(front_by_bin.into_values());
+        out.extend(reg_bins.into_values());
     }
     suppress_weak_isolated_hypotheses(out)
+}
+
+/// Applies one pass of edge-aware bilateral-style regularization to a sparse
+/// bin map of depth hypotheses.
+///
+/// For each bin the function collects its 8-connected neighbours that lie on
+/// the same surface (depth difference ≤ [`MVS_REGULARIZATION_DEPTH_TOL_M`])
+/// and computes their confidence-weighted mean depth.  The bin's own depth is
+/// then blended toward that mean by a fraction of
+/// `MVS_REGULARIZATION_STRENGTH × (1 − confidence)`: high-confidence bins
+/// barely move while low-confidence bins are pulled more strongly.  Bins near
+/// depth discontinuities receive no cross-surface influence at all.
+fn regularize_depth_bins(
+    bins: &std::collections::HashMap<(i32, i32), DepthHypothesis>,
+) -> std::collections::HashMap<(i32, i32), DepthHypothesis> {
+    let mut out = bins.clone();
+    for (&key, hyp) in bins {
+        let z_self = hyp.center[2];
+        let conf_self = hyp.confidence;
+        let mut wsum = 0.0_f64;
+        let mut wx = 0.0_f64;
+        let mut wy = 0.0_f64;
+        let mut wz = 0.0_f64;
+        for (dx, dy) in [
+            (-1, 0), (1, 0), (0, -1), (0, 1),
+            (-1, -1), (-1, 1), (1, -1), (1, 1),
+        ] {
+            let nb = (key.0 + dx, key.1 + dy);
+            let Some(nb_h) = bins.get(&nb) else {
+                continue;
+            };
+            if (nb_h.center[2] - z_self).abs() > MVS_REGULARIZATION_DEPTH_TOL_M {
+                // Depth discontinuity — do not blend across surface edges.
+                continue;
+            }
+            let w = nb_h.confidence.max(1.0e-6);
+            wsum += w;
+            wx += w * nb_h.center[0];
+            wy += w * nb_h.center[1];
+            wz += w * nb_h.center[2];
+        }
+        if wsum <= 1.0e-9 {
+            continue;
+        }
+        let pull = MVS_REGULARIZATION_STRENGTH * (1.0 - conf_self).clamp(0.0, 1.0);
+        let z_nb_mean = wz / wsum;
+        let x_nb_mean = wx / wsum;
+        let y_nb_mean = wy / wsum;
+        let entry = out.get_mut(&key).expect("key guaranteed present");
+        entry.center[0] = entry.center[0] * (1.0 - pull) + x_nb_mean * pull;
+        entry.center[1] = entry.center[1] * (1.0 - pull) + y_nb_mean * pull;
+        entry.center[2] = entry.center[2] * (1.0 - pull) + z_nb_mean * pull;
+    }
+    out
 }
 
 fn local_bin_agreement_scale(
@@ -3454,6 +3516,69 @@ mod tests {
 
         repair_low_support_cells(&mut surface, &support, rows, cols, 100.0, 0.15);
         assert!(surface[2 * cols + 2] < 110.0, "isolated low-support spike should be reduced");
+    }
+
+    #[test]
+    fn regularization_smooths_low_confidence_bin_toward_neighbors() {
+        // A 3×1 strip: two high-confidence flanking bins at z=10.0 bracketing
+        // one low-confidence bin at z=10.8 (within surface tolerance).
+        // After regularization the center bin should move closer to 10.0.
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((-1, 0), DepthHypothesis { center: [-8.0, 0.0, 10.0], confidence: 0.9 });
+        bins.insert(( 0, 0), DepthHypothesis { center: [ 0.0, 0.0, 10.8], confidence: 0.15 });
+        bins.insert(( 1, 0), DepthHypothesis { center: [ 8.0, 0.0, 10.0], confidence: 0.9 });
+
+        let reg = regularize_depth_bins(&bins);
+        let z_before = 10.8_f64;
+        let z_after = reg[&(0, 0)].center[2];
+        assert!(
+            z_after < z_before,
+            "low-confidence bin z={z_before} should be pulled toward neighbors after regularization, got {z_after}"
+        );
+    }
+
+    #[test]
+    fn regularization_preserves_high_confidence_bin() {
+        // High-confidence center bin: should barely move even with differing neighbors.
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((-1, 0), DepthHypothesis { center: [-8.0, 0.0, 10.8], confidence: 0.7 });
+        bins.insert(( 0, 0), DepthHypothesis { center: [ 0.0, 0.0, 10.0], confidence: 0.95 });
+        bins.insert(( 1, 0), DepthHypothesis { center: [ 8.0, 0.0, 10.8], confidence: 0.7 });
+
+        let reg = regularize_depth_bins(&bins);
+        let z_before = 10.0;
+        let z_after = reg[&(0, 0)].center[2];
+        let delta = (z_after - z_before).abs();
+        // With confidence=0.95 the pull is MVS_REGULARIZATION_STRENGTH*(1-0.95)=0.015 at most.
+        assert!(
+            delta < 0.05,
+            "high-confidence bin should barely move, but moved {delta:.4} m"
+        );
+    }
+
+    #[test]
+    fn regularization_does_not_cross_depth_discontinuity() {
+        // Two neighboring bins with a large depth gap (>> MVS_REGULARIZATION_DEPTH_TOL_M).
+        // Neither should be influenced by the other.
+        let mut bins = std::collections::HashMap::new();
+        bins.insert((0, 0), DepthHypothesis { center: [0.0, 0.0,  3.0], confidence: 0.2 });
+        bins.insert((1, 0), DepthHypothesis { center: [8.0, 0.0, 30.0], confidence: 0.95 });
+
+        let reg = regularize_depth_bins(&bins);
+        let z0_before = 3.0;
+        let z0_after = reg[&(0, 0)].center[2];
+        assert_eq!(
+            z0_after, z0_before,
+            "bin at depth {z0_before} should not be influenced across a {:.1}-m discontinuity",
+            (30.0_f64 - z0_before)
+        );
+        let z1_before = 30.0;
+        let z1_after = reg[&(1, 0)].center[2];
+        assert_eq!(
+            z1_after, z1_before,
+            "bin at depth {z1_before} should not be influenced across a {:.1}-m discontinuity",
+            (z1_before - z0_before)
+        );
     }
 
     #[test]

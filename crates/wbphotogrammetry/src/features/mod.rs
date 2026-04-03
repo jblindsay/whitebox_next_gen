@@ -3674,6 +3674,44 @@ mod tests {
     }
 
     #[test]
+    fn rootsift_normalization_is_scale_invariant_and_unit_l2() {
+        let mut a = [0.0_f32; SIFT_DESCRIPTOR_LEN];
+        let mut b = [0.0_f32; SIFT_DESCRIPTOR_LEN];
+        for i in 0..SIFT_DESCRIPTOR_LEN {
+            let value = ((i % 17) as f32 + 1.0) * 0.5;
+            a[i] = value;
+            b[i] = value * 13.0;
+        }
+
+        normalize_rootsift_descriptor(&mut a).expect("rootsift normalization should succeed");
+        normalize_rootsift_descriptor(&mut b).expect("rootsift normalization should succeed");
+
+        let norm_a = a.iter().map(|v| v * v).sum::<f32>().sqrt();
+        let norm_b = b.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!((norm_a - 1.0).abs() < 1.0e-4, "normalized descriptor should have unit L2 norm");
+        assert!((norm_b - 1.0).abs() < 1.0e-4, "normalized descriptor should have unit L2 norm");
+
+        let max_delta = a
+            .iter()
+            .zip(b.iter())
+            .map(|(lhs, rhs)| (lhs - rhs).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            max_delta < 1.0e-4,
+            "rootsift normalization should be scale invariant; max delta={max_delta}"
+        );
+    }
+
+    #[test]
+    fn rootsift_normalization_rejects_zero_descriptor() {
+        let mut descriptor = [0.0_f32; SIFT_DESCRIPTOR_LEN];
+        assert!(
+            normalize_rootsift_descriptor(&mut descriptor).is_none(),
+            "zero descriptor should not be normalizable"
+        );
+    }
+
+    #[test]
     fn feature_method_parser_accepts_public_names() {
         assert_eq!(FeatureMethod::from_str("brief").unwrap(), FeatureMethod::Brief);
         assert_eq!(FeatureMethod::from_str("orb").unwrap(), FeatureMethod::Orb);

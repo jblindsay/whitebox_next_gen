@@ -344,8 +344,9 @@ likely to require further development.
   estimates or a full sparse Schur-complement solve. On very large networks
   this can still limit convergence quality and speed.
 - Intrinsic refinement now supports selective parameter freezing based on
-  observation support/geometry quality, but the policy is heuristic and not
-  yet user-configurable per run.
+  observation support/geometry quality, and the refinement policy is now
+  user-configurable per run. The default policy remains heuristic rather than
+  benchmark-calibrated per mission type.
 - Bundle adjustment now evaluates residuals with a fisheye-aware equidistant
   projection path when the fisheye camera model is selected, but intrinsic
   optimization still uses the pinhole-style distortion parameter set
@@ -358,8 +359,9 @@ likely to require further development.
   pair constraints and robust correction-magnitude outlier rejection. It is
   not a full pose-graph SLAM formulation.
 - The essential matrix recovery is based on the 8-point normalised DLT
-  algorithm alone. There is no iterative triangulation refinement or
-  disambiguation of degenerate configurations (pure rotation, forward motion).
+  algorithm alone. It now rejects clearly weak/degenerate seeds and falls back
+  to the simpler match-driven trajectory seed, but there is still no iterative
+  triangulation refinement or richer multi-model degeneracy handling.
 
 ### Dense Surface Reconstruction
 

@@ -518,7 +518,7 @@ fn derive_incremental_poses_from_essential(
 
     let baseline_m = estimate_relative_baseline_m(relative_support, quality);
 
-    let mut recovered = 1usize;
+    let mut recovered_pairs = 0usize;
     for left_idx in 0..(frames.len() - 1) {
         let mut step_local = last_step_local * baseline_m;
         if let Some((essential_pose, gap)) = best_incremental_pair_pose(left_idx, match_stats, intrinsics, 3) {
@@ -530,16 +530,16 @@ fn derive_incremental_poses_from_essential(
             if gap == 1 {
                 rc2w *= essential_pose.r.transpose();
             }
+            recovered_pairs += 1;
         }
 
         c_world += rc2w * step_local;
 
         positions.push([c_world[0], c_world[1], c_world[2]]);
         rotations.push(matrix_to_quaternion(&rc2w));
-        recovered += 1;
     }
 
-    if recovered >= 2 {
+    if recovered_pairs > 0 {
         Some((positions, rotations))
     } else {
         None
@@ -609,7 +609,12 @@ fn estimate_essential_pose(points: &[[f64; 4]], intrinsics: &CameraIntrinsics) -
         .collect();
     let refined_e = estimate_essential_from_correspondences(&refined_pts).unwrap_or(best_e);
 
-    recover_pose_from_essential(&refined_e, &refined_pts)
+    let pose = recover_pose_from_essential(&refined_e, &refined_pts)?;
+    if essential_pose_is_degenerate(&pose, &refined_pts) {
+        None
+    } else {
+        Some(pose)
+    }
 }
 
 fn estimate_essential_from_correspondences(
@@ -775,6 +780,46 @@ fn recover_pose_from_essential(
     } else {
         best_pose
     }
+}
+
+fn essential_pose_is_degenerate(
+    pose: &EssentialPose,
+    inlier_points: &[(Vector2<f64>, Vector2<f64>)],
+) -> bool {
+    let parallax_deg = essential_rotated_ray_parallax_degrees(&pose.r, inlier_points);
+    if parallax_deg.is_empty() {
+        return true;
+    }
+
+    let mut sorted = parallax_deg;
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let median = sorted[sorted.len() / 2];
+    let upper_quartile = sorted[(sorted.len() * 3) / 4];
+
+    if median < 0.35 {
+        return true;
+    }
+
+    let lateral_fraction = (pose.t[0] * pose.t[0] + pose.t[1] * pose.t[1]).sqrt() / pose.t.norm().max(1.0e-9);
+    lateral_fraction < 0.18 && upper_quartile < 0.9
+}
+
+fn essential_rotated_ray_parallax_degrees(
+    r: &Matrix3<f64>,
+    inlier_points: &[(Vector2<f64>, Vector2<f64>)],
+) -> Vec<f64> {
+    let mut parallax = Vec::with_capacity(inlier_points.len().min(128));
+    for (x1, x2) in inlier_points.iter().take(128) {
+        let ray1 = Vector3::new(x1.x, x1.y, 1.0).normalize();
+        let ray2 = Vector3::new(x2.x, x2.y, 1.0).normalize();
+        let ray2_back = (r.transpose() * ray2).normalize();
+        let cos_theta = ray1.dot(&ray2_back).clamp(-1.0, 1.0);
+        let theta_deg = cos_theta.acos().to_degrees();
+        if theta_deg.is_finite() {
+            parallax.push(theta_deg);
+        }
+    }
+    parallax
 }
 
 fn ensure_rotation(mut r: Matrix3<f64>) -> Matrix3<f64> {
@@ -3950,6 +3995,71 @@ mod tests {
         let q = result.poses[1].rotation;
         let identity_like = (q[0] - 1.0).abs() < 1e-6 && q[1].abs() < 1e-6 && q[2].abs() < 1e-6 && q[3].abs() < 1e-6;
         assert!(!identity_like, "expected non-identity recovered orientation");
+    }
+
+    #[test]
+    fn essential_pose_rejects_pure_rotation_degeneracy() {
+        let intrinsics = CameraIntrinsics::identity(4000, 3000);
+        let yaw = 0.12_f64;
+        let r = Matrix3::new(
+            yaw.cos(), -yaw.sin(), 0.0,
+            yaw.sin(),  yaw.cos(), 0.0,
+            0.0,        0.0,       1.0,
+        );
+
+        let mut points = Vec::new();
+        for i in 0..28 {
+            let x = -1.2 + (i as f64) * 0.09;
+            let y = -0.7 + ((i * 7 % 13) as f64) * 0.10;
+            let z = 4.5 + ((i * 5 % 11) as f64) * 0.20;
+            let p1 = Vector3::new(x, y, z);
+            let p2 = r * p1;
+            if p1[2] <= 0.2 || p2[2] <= 0.2 {
+                continue;
+            }
+
+            points.push([
+                intrinsics.fx * (p1[0] / p1[2]) + intrinsics.cx,
+                intrinsics.fy * (p1[1] / p1[2]) + intrinsics.cy,
+                intrinsics.fx * (p2[0] / p2[2]) + intrinsics.cx,
+                intrinsics.fy * (p2[1] / p2[2]) + intrinsics.cy,
+            ]);
+        }
+
+        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
+    }
+
+    #[test]
+    fn essential_pose_rejects_near_forward_motion_degeneracy() {
+        let intrinsics = CameraIntrinsics::identity(4000, 3000);
+        let yaw = 0.01_f64;
+        let r = Matrix3::new(
+            yaw.cos(), -yaw.sin(), 0.0,
+            yaw.sin(),  yaw.cos(), 0.0,
+            0.0,        0.0,       1.0,
+        );
+        let t = Vector3::new(0.006, 0.002, 0.30);
+
+        let mut points = Vec::new();
+        for i in 0..32 {
+            let x = -0.8 + (i as f64) * 0.05;
+            let y = -0.5 + ((i * 3 % 11) as f64) * 0.08;
+            let z = 5.5 + ((i * 5 % 9) as f64) * 0.22;
+            let p1 = Vector3::new(x, y, z);
+            let p2 = r * p1 + t;
+            if p1[2] <= 0.2 || p2[2] <= 0.2 {
+                continue;
+            }
+
+            points.push([
+                intrinsics.fx * (p1[0] / p1[2]) + intrinsics.cx,
+                intrinsics.fy * (p1[1] / p1[2]) + intrinsics.cy,
+                intrinsics.fx * (p2[0] / p2[2]) + intrinsics.cx,
+                intrinsics.fy * (p2[1] / p2[2]) + intrinsics.cy,
+            ]);
+        }
+
+        assert!(estimate_essential_pose(&points, &intrinsics).is_none());
     }
 
     #[test]

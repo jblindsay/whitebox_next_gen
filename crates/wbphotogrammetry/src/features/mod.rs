@@ -1062,13 +1062,27 @@ fn extract_sift_descriptors(
         return Vec::new();
     }
 
-    let mut descriptors = Vec::new();
+    let base_max_x = base_image.width().saturating_sub(1) as f32;
+    let base_max_y = base_image.height().saturating_sub(1) as f32;
+    let mut descriptors = Vec::with_capacity(profile.max_features_per_image.saturating_mul(2));
     for (octave_idx, octave) in pyramid.iter().enumerate() {
+        let octave_scale = 2.0_f32.powi(octave_idx as i32);
+        let sigma_octave_scale = SIFT_BASE_SIGMA * octave_scale;
+        let mut sigma_by_scale_idx = Vec::with_capacity(octave.dogs.len().saturating_sub(2));
+        for scale_idx in 1..octave.dogs.len().saturating_sub(1) {
+            sigma_by_scale_idx.push(
+                sigma_octave_scale
+                    * 2.0_f32.powf(scale_idx as f32 / SIFT_SCALES_PER_OCTAVE as f32),
+            );
+        }
+
         for scale_idx in 1..octave.dogs.len().saturating_sub(1) {
             let dog = &octave.dogs[scale_idx];
             if dog.width < 17 || dog.height < 17 {
                 continue;
             }
+            let sigma = sigma_by_scale_idx[scale_idx - 1];
+            let gaussian = &octave.gaussians[scale_idx + 1];
             for y in 8..(dog.height - 8) {
                 for x in 8..(dog.width - 8) {
                     let value = dog.get(x, y);
@@ -1082,10 +1096,6 @@ fn extract_sift_descriptors(
                         continue;
                     }
 
-                    let gaussian = &octave.gaussians[scale_idx + 1];
-                    let sigma = SIFT_BASE_SIGMA
-                        * 2.0_f32.powf(scale_idx as f32 / SIFT_SCALES_PER_OCTAVE as f32)
-                        * 2.0_f32.powf(octave_idx as f32);
                     let Some((angle, response)) = sift_dominant_orientation(gaussian, x as f32, y as f32, sigma) else {
                         continue;
                     };
@@ -1102,11 +1112,8 @@ fn extract_sift_descriptors(
                         };
                     }
 
-                    let scale_to_base = 2usize.pow(octave_idx as u32) as f32;
-                    let base_x = (x as f32 * scale_to_base).round()
-                        .clamp(0.0, base_image.width().saturating_sub(1) as f32) as u32;
-                    let base_y = (y as f32 * scale_to_base).round()
-                        .clamp(0.0, base_image.height().saturating_sub(1) as f32) as u32;
+                    let base_x = (x as f32 * octave_scale).round().clamp(0.0, base_max_x) as u32;
+                    let base_y = (y as f32 * octave_scale).round().clamp(0.0, base_max_y) as u32;
                     let score = (response * 1_000.0).clamp(0.0, u32::MAX as f32) as u32;
                     descriptors.push(FloatDescriptor {
                         corner: Keypoint {
@@ -1156,7 +1163,7 @@ struct SiftOctave {
 }
 
 fn build_sift_pyramid(base: &FloatImage) -> Vec<SiftOctave> {
-    let mut octaves = Vec::new();
+    let mut octaves = Vec::with_capacity(6);
     let mut current = gaussian_blur_float(base, SIFT_BASE_SIGMA.max(0.8));
     let levels_per_octave = SIFT_SCALES_PER_OCTAVE + SIFT_EXTRA_LEVELS;
     let k = 2.0_f32.powf(1.0 / SIFT_SCALES_PER_OCTAVE as f32);
@@ -1174,10 +1181,10 @@ fn build_sift_pyramid(base: &FloatImage) -> Vec<SiftOctave> {
             sigma_prev = sigma_total;
         }
 
-        let dogs = gaussians
-            .windows(2)
-            .map(|pair| subtract_float_images(&pair[1], &pair[0]))
-            .collect::<Vec<_>>();
+        let mut dogs = Vec::with_capacity(gaussians.len().saturating_sub(1));
+        for idx in 1..gaussians.len() {
+            dogs.push(subtract_float_images(&gaussians[idx], &gaussians[idx - 1]));
+        }
         octaves.push(SiftOctave { gaussians, dogs });
 
         current = downsample_half_float_image(&octaves.last().unwrap().gaussians[SIFT_SCALES_PER_OCTAVE]);

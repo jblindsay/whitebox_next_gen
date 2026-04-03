@@ -997,14 +997,12 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
             let mut cluster_x = 0.0;
             let mut cluster_y = 0.0;
             let mut cluster_z = 0.0;
-            let mut cluster_depth = 0.0;
             let mut cluster_geom = 0.0;
             let seed_w = (front.confidence * (0.45 + 0.55 * front.geometry_quality)).max(1.0e-6);
             cluster_wsum += seed_w;
             cluster_x += seed_w * front.point_world[0];
             cluster_y += seed_w * front.point_world[1];
             cluster_z += seed_w * front.point_world[2];
-            cluster_depth += seed_w * front.ref_depth;
             cluster_geom += seed_w * front.geometry_quality;
             for s in samples.iter().skip(1) {
                 if (s.ref_depth - front.ref_depth).abs() <= front_tol {
@@ -1015,7 +1013,6 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
                     cluster_x += w * s.point_world[0];
                     cluster_y += w * s.point_world[1];
                     cluster_z += w * s.point_world[2];
-                    cluster_depth += w * s.ref_depth;
                     cluster_geom += w * s.geometry_quality;
                 }
             }

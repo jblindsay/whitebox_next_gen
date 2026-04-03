@@ -53,6 +53,13 @@ struct MultiViewDepthMap {
     samples: Vec<MultiViewDepthSample>,
 }
 
+#[derive(Debug, Clone)]
+struct GrayPyramid {
+    level0: GrayImage,
+    scale0: f64,
+    level1: Option<(GrayImage, f64)>,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct PatchMatch {
     x: i32,
@@ -549,22 +556,27 @@ fn estimate_multiview_depth_maps(
 
     let pose_count = alignment.poses.len().min(frames.len());
     let intrinsics = &alignment.stats.intrinsics;
-    let mut loaded: Vec<Option<(GrayImage, f64)>> = vec![None; pose_count];
+    let mut loaded: Vec<Option<GrayPyramid>> = vec![None; pose_count];
     for i in 0..pose_count {
-        loaded[i] = load_downsampled_gray(&frames[i], 640);
+        loaded[i] = load_downsampled_gray_pyramid(&frames[i], 640);
     }
 
     let mut maps = Vec::new();
     for ref_idx in 0..pose_count {
-        let Some((ref_img, ref_scale)) = loaded[ref_idx].as_ref() else {
+        let Some(ref_pyr) = loaded[ref_idx].as_ref() else {
             continue;
         };
+        let ref_img = &ref_pyr.level0;
         let source_views = select_mvs_source_views(alignment, ref_idx, pose_count, MVS_MAX_SOURCE_VIEWS);
         if source_views.len() < 2 {
             continue;
         }
 
-        let ref_intr = scaled_intrinsics(intrinsics, *ref_scale);
+        let ref_intr = scaled_intrinsics(intrinsics, ref_pyr.scale0);
+        let ref_intr_l1 = ref_pyr
+            .level1
+            .as_ref()
+            .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
         let p_ref = projection_matrix(&alignment.poses[ref_idx]);
         let mut samples = Vec::new();
 
@@ -589,10 +601,15 @@ fn estimate_multiview_depth_maps(
                 let mut best_ref_depth = 0.0_f64;
 
                 for &src_idx in &source_views {
-                    let Some((src_img, src_scale)) = loaded[src_idx].as_ref() else {
+                    let Some(src_pyr) = loaded[src_idx].as_ref() else {
                         continue;
                     };
-                    let src_intr = scaled_intrinsics(intrinsics, *src_scale);
+                    let src_img = &src_pyr.level0;
+                    let src_intr = scaled_intrinsics(intrinsics, src_pyr.scale0);
+                    let src_intr_l1 = src_pyr
+                        .level1
+                        .as_ref()
+                        .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
                     let p_src = projection_matrix(&alignment.poses[src_idx]);
 
                     let fundamental_ref_to_src = fundamental_matrix_pinhole(
@@ -601,6 +618,15 @@ fn estimate_multiview_depth_maps(
                         ref_intr,
                         src_intr,
                     );
+                    let fundamental_ref_to_src_l1 = match (ref_intr_l1, src_intr_l1) {
+                        (Some(ri), Some(si)) => fundamental_matrix_pinhole(
+                            &alignment.poses[ref_idx],
+                            &alignment.poses[src_idx],
+                            ri,
+                            si,
+                        ),
+                        _ => None,
+                    };
                     let Some(m) = best_patch_match(
                         ref_img,
                         src_img,
@@ -611,6 +637,9 @@ fn estimate_multiview_depth_maps(
                         MVS_SEARCH_RADIUS,
                         MVS_PATCH_RADIUS,
                         fundamental_ref_to_src.as_ref(),
+                        ref_pyr.level1.as_ref().map(|(img, _)| img),
+                        src_pyr.level1.as_ref().map(|(img, _)| img),
+                        fundamental_ref_to_src_l1.as_ref(),
                     ) else {
                         continue;
                     };
@@ -624,6 +653,15 @@ fn estimate_multiview_depth_maps(
                         src_intr,
                         ref_intr,
                     );
+                    let fundamental_src_to_ref_l1 = match (src_intr_l1, ref_intr_l1) {
+                        (Some(si), Some(ri)) => fundamental_matrix_pinhole(
+                            &alignment.poses[src_idx],
+                            &alignment.poses[ref_idx],
+                            si,
+                            ri,
+                        ),
+                        _ => None,
+                    };
                     let Some(back_m) = best_patch_match(
                         src_img,
                         ref_img,
@@ -634,6 +672,9 @@ fn estimate_multiview_depth_maps(
                         MVS_SEARCH_RADIUS,
                         MVS_PATCH_RADIUS,
                         fundamental_src_to_ref.as_ref(),
+                        src_pyr.level1.as_ref().map(|(img, _)| img),
+                        ref_pyr.level1.as_ref().map(|(img, _)| img),
+                        fundamental_src_to_ref_l1.as_ref(),
                     ) else {
                         continue;
                     };
@@ -662,10 +703,11 @@ fn estimate_multiview_depth_maps(
                         if other_idx == src_idx {
                             continue;
                         }
-                        let Some((other_img, other_scale)) = loaded[other_idx].as_ref() else {
+                        let Some(other_pyr) = loaded[other_idx].as_ref() else {
                             continue;
                         };
-                        let other_intr = scaled_intrinsics(intrinsics, *other_scale);
+                        let other_img = &other_pyr.level0;
+                        let other_intr = scaled_intrinsics(intrinsics, other_pyr.scale0);
                         let p_other = projection_matrix(&alignment.poses[other_idx]);
                         let Some((u, v)) = project_point_to_image_pinhole(
                             &alignment.poses[other_idx],
@@ -906,17 +948,25 @@ fn estimate_stereo_depths_from_image_pairs(
     let mut stereo_depths = Vec::new();
     let intrinsics = &alignment.stats.intrinsics;
     for i in 0..pair_count {
-        let left = match load_downsampled_gray(&frames[i], 640) {
+        let left = match load_downsampled_gray_pyramid(&frames[i], 640) {
             Some(v) => v,
             None => continue,
         };
-        let right = match load_downsampled_gray(&frames[i + 1], 640) {
+        let right = match load_downsampled_gray_pyramid(&frames[i + 1], 640) {
             Some(v) => v,
             None => continue,
         };
 
-        let scaled_intrinsics_left = scaled_intrinsics(intrinsics, left.1);
-        let scaled_intrinsics_right = scaled_intrinsics(intrinsics, right.1);
+        let scaled_intrinsics_left = scaled_intrinsics(intrinsics, left.scale0);
+        let scaled_intrinsics_right = scaled_intrinsics(intrinsics, right.scale0);
+        let scaled_intrinsics_left_l1 = left
+            .level1
+            .as_ref()
+            .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
+        let scaled_intrinsics_right_l1 = right
+            .level1
+            .as_ref()
+            .map(|(_, s)| scaled_intrinsics(intrinsics, *s));
         let p_left = projection_matrix(&alignment.poses[i]);
         let p_right = projection_matrix(&alignment.poses[i + 1]);
         let f_left_to_right = fundamental_matrix_pinhole(
@@ -925,15 +975,33 @@ fn estimate_stereo_depths_from_image_pairs(
             scaled_intrinsics_left,
             scaled_intrinsics_right,
         );
+        let f_left_to_right_l1 = match (scaled_intrinsics_left_l1, scaled_intrinsics_right_l1) {
+            (Some(li), Some(ri)) => fundamental_matrix_pinhole(
+                &alignment.poses[i],
+                &alignment.poses[i + 1],
+                li,
+                ri,
+            ),
+            _ => None,
+        };
         let f_right_to_left = fundamental_matrix_pinhole(
             &alignment.poses[i + 1],
             &alignment.poses[i],
             scaled_intrinsics_right,
             scaled_intrinsics_left,
         );
+        let f_right_to_left_l1 = match (scaled_intrinsics_right_l1, scaled_intrinsics_left_l1) {
+            (Some(ri), Some(li)) => fundamental_matrix_pinhole(
+                &alignment.poses[i + 1],
+                &alignment.poses[i],
+                ri,
+                li,
+            ),
+            _ => None,
+        };
 
-        let left_img = &left.0;
-        let right_img = &right.0;
+        let left_img = &left.level0;
+        let right_img = &right.level0;
         let patch_radius = 2i32;
         let search_radius = 10i32;
         let step = 48usize;
@@ -962,6 +1030,9 @@ fn estimate_stereo_depths_from_image_pairs(
                     search_radius,
                     patch_radius,
                     f_left_to_right.as_ref(),
+                    left.level1.as_ref().map(|(img, _)| img),
+                    right.level1.as_ref().map(|(img, _)| img),
+                    f_left_to_right_l1.as_ref(),
                 ) else {
                     continue;
                 };
@@ -979,6 +1050,9 @@ fn estimate_stereo_depths_from_image_pairs(
                     search_radius,
                     patch_radius,
                     f_right_to_left.as_ref(),
+                    right.level1.as_ref().map(|(img, _)| img),
+                    left.level1.as_ref().map(|(img, _)| img),
+                    f_right_to_left_l1.as_ref(),
                 ) else {
                     continue;
                 };
@@ -1021,7 +1095,7 @@ fn estimate_stereo_depths_from_image_pairs(
     stereo_depths
 }
 
-fn load_downsampled_gray(frame: &ImageFrame, max_dim: u32) -> Option<(GrayImage, f64)> {
+fn load_downsampled_gray_pyramid(frame: &ImageFrame, max_dim: u32) -> Option<GrayPyramid> {
     let image = image::open(&frame.path).ok()?;
     let gray = image.to_luma8();
     let width = gray.width();
@@ -1033,12 +1107,35 @@ fn load_downsampled_gray(frame: &ImageFrame, max_dim: u32) -> Option<(GrayImage,
         1.0
     };
     if scale >= 0.999 {
-        return Some((gray, 1.0));
+        let level1 = build_half_level(&gray, 1.0);
+        return Some(GrayPyramid {
+            level0: gray,
+            scale0: 1.0,
+            level1,
+        });
     }
     let new_w = ((width as f64 * scale).round() as u32).max(32);
     let new_h = ((height as f64 * scale).round() as u32).max(32);
     let resized = image::imageops::resize(&gray, new_w, new_h, image::imageops::FilterType::Triangle);
-    Some((resized, scale))
+    let level1 = build_half_level(&resized, scale);
+    Some(GrayPyramid {
+        level0: resized,
+        scale0: scale,
+        level1,
+    })
+}
+
+fn build_half_level(img: &GrayImage, parent_scale: f64) -> Option<(GrayImage, f64)> {
+    if img.width() < 64 || img.height() < 64 {
+        return None;
+    }
+    let new_w = (img.width() / 2).max(32);
+    let new_h = (img.height() / 2).max(32);
+    if new_w < 16 || new_h < 16 {
+        return None;
+    }
+    let resized = image::imageops::resize(img, new_w, new_h, image::imageops::FilterType::Triangle);
+    Some((resized, parent_scale * 0.5))
 }
 
 fn scaled_intrinsics(intrinsics: &crate::camera::CameraIntrinsics, scale: f64) -> (f64, f64, f64, f64) {
@@ -1109,6 +1206,77 @@ fn best_patch_match(
     search_radius: i32,
     patch_radius: i32,
     fundamental: Option<&Matrix3<f64>>,
+    left_l1: Option<&GrayImage>,
+    right_l1: Option<&GrayImage>,
+    fundamental_l1: Option<&Matrix3<f64>>,
+) -> Option<PatchMatch> {
+    if let (Some(ll1), Some(rl1)) = (left_l1, right_l1) {
+        let xl1 = (xl as f64 * 0.5).round() as i32;
+        let yl1 = (yl as f64 * 0.5).round() as i32;
+        let border1 = (border / 2).max(2);
+        let search1 = search_radius.max(2);
+        let center1 = patch_center_intensity(ll1, xl1, yl1);
+        if let Some(coarse) = best_patch_match_centered(
+            ll1,
+            rl1,
+            xl1,
+            yl1,
+            center1,
+            border1,
+            search1,
+            patch_radius,
+            fundamental_l1,
+            xl1,
+            yl1,
+        ) {
+            let cx = (coarse.x * 2).clamp(border + 1, right.width() as i32 - border - 1);
+            let cy = (coarse.y * 2).clamp(border + 1, right.height() as i32 - border - 1);
+            let refine = (search_radius / 2 + 2).max(3);
+            if let Some(refined) = best_patch_match_centered(
+                left,
+                right,
+                xl,
+                yl,
+                center_left_intensity,
+                border,
+                refine,
+                patch_radius,
+                fundamental,
+                cx,
+                cy,
+            ) {
+                return Some(refined);
+            }
+        }
+    }
+
+    best_patch_match_centered(
+        left,
+        right,
+        xl,
+        yl,
+        center_left_intensity,
+        border,
+        search_radius,
+        patch_radius,
+        fundamental,
+        xl,
+        yl,
+    )
+}
+
+fn best_patch_match_centered(
+    left: &GrayImage,
+    right: &GrayImage,
+    xl: i32,
+    yl: i32,
+    center_left_intensity: f64,
+    border: i32,
+    search_radius: i32,
+    patch_radius: i32,
+    fundamental: Option<&Matrix3<f64>>,
+    center_x: i32,
+    center_y: i32,
 ) -> Option<PatchMatch> {
     if xl <= border
         || yl <= border
@@ -1125,8 +1293,8 @@ fn best_patch_match(
             f,
             xl,
             yl,
-            xl,
-            yl,
+            center_x,
+            center_y,
             search_radius,
             right_w,
             right_h,
@@ -1136,7 +1304,7 @@ fn best_patch_match(
         Vec::new()
     };
     if candidates.is_empty() {
-        candidates = square_window_candidates(xl, yl, search_radius, right_w, right_h, border);
+        candidates = square_window_candidates(center_x, center_y, search_radius, right_w, right_h, border);
     }
 
     let mut best = f64::INFINITY;
@@ -2419,6 +2587,74 @@ mod tests {
         let candidates = epipolar_line_candidates(&f, xl, yl, xl, yl + 2, 6, 64, 64, 2);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|(_, y)| *y == yl));
+    }
+
+    #[test]
+    fn multiscale_matching_handles_larger_local_shift() {
+        let w = 80u32;
+        let h = 80u32;
+        let mut left = GrayImage::new(w, h);
+        let mut right = GrayImage::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let v = ((x * 23 + y * 11 + ((x * y) % 17)) % 253) as u8;
+                left.put_pixel(x, y, image::Luma([v]));
+                right.put_pixel(x, y, image::Luma([0]));
+            }
+        }
+
+        // Shift the image content by +8 px in x in the right image.
+        let shift = 8i32;
+        for y in 0..h as i32 {
+            for x in 0..w as i32 {
+                let xr = x + shift;
+                if xr >= 0 && xr < w as i32 {
+                    let v = left.get_pixel(x as u32, y as u32)[0];
+                    right.put_pixel(xr as u32, y as u32, image::Luma([v]));
+                }
+            }
+        }
+
+        let x = 34i32;
+        let y = 36i32;
+        let center = patch_center_intensity(&left, x, y);
+        let coarse_left = build_half_level(&left, 1.0).expect("left half-level").0;
+        let coarse_right = build_half_level(&right, 1.0).expect("right half-level").0;
+
+        let no_multiscale = best_patch_match(
+            &left,
+            &right,
+            x,
+            y,
+            center,
+            3,
+            4,
+            2,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("single-scale match");
+        let with_multiscale = best_patch_match(
+            &left,
+            &right,
+            x,
+            y,
+            center,
+            3,
+            4,
+            2,
+            None,
+            Some(&coarse_left),
+            Some(&coarse_right),
+            None,
+        )
+        .expect("multiscale match");
+
+        let err_single = (no_multiscale.x - (x + shift)).abs();
+        let err_multi = (with_multiscale.x - (x + shift)).abs();
+        assert!(err_multi <= err_single, "multiscale should be at least as good as single-scale");
     }
 
     #[test]

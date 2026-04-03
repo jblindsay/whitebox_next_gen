@@ -387,9 +387,9 @@ likely to require further development.
     selection are implemented; there is no full probabilistic fusion across
     all views.
   - Matching now uses pose-derived epipolar constraints and left-right
-    consistency checks, with a lightweight hybrid ZNCC+Census local cost; it
-    still uses local patch windows rather than a full global correspondence
-    optimization.
+    consistency checks, with coarse-to-fine (two-level pyramid) guidance and
+    a lightweight hybrid ZNCC+Census local cost; it still uses local patch
+    windows rather than a full global correspondence optimization.
   - No semi-global matching (SGM/SGM++), global cost-volume optimization, or
     learned cost volumes
 - DTM separation is a morphological low-pass filtering operation. It is not a

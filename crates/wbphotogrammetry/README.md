@@ -386,7 +386,9 @@ likely to require further development.
   - Only lightweight depth-map voting and front-surface (occlusion-aware)
     selection are implemented; there is no full probabilistic fusion across
     all views.
-  - No cross-baseline epipolar line search
+  - Matching now uses pose-derived epipolar constraints and left-right
+    consistency checks, but still uses local patch windows rather than a full
+    global correspondence optimization.
   - No semi-global matching (SGM/SGM++), Census transform, or learned cost volumes
 - DTM separation is a morphological low-pass filtering operation. It is not a
   classification-based or progressive triangulation approach and will not

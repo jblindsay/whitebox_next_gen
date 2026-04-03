@@ -26,6 +26,8 @@ const MVS_SAMPLE_STEP: usize = 36;
 const MVS_PATCH_RADIUS: i32 = 2;
 const MVS_SEARCH_RADIUS: i32 = 12;
 const MVS_OCCLUSION_BIN_PX: f64 = 8.0;
+const MVS_EPIPOLAR_TOL_PX: f64 = 1.25;
+const MVS_LR_CONSISTENCY_TOL_PX: i32 = 2;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -46,6 +48,14 @@ struct MultiViewDepthSample {
 struct MultiViewDepthMap {
     reference_idx: usize,
     samples: Vec<MultiViewDepthSample>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PatchMatch {
+    x: i32,
+    y: i32,
+    best_cost: f64,
+    second_cost: f64,
 }
 
 /// Statistics from the dense surface model stage.
@@ -582,41 +592,57 @@ fn estimate_multiview_depth_maps(
                     let src_intr = scaled_intrinsics(intrinsics, *src_scale);
                     let p_src = projection_matrix(&alignment.poses[src_idx]);
 
-                    let mut best = f64::INFINITY;
-                    let mut second = f64::INFINITY;
-                    let mut best_xy = None;
-                    for dy in -MVS_SEARCH_RADIUS..=MVS_SEARCH_RADIUS {
-                        for dx in -MVS_SEARCH_RADIUS..=MVS_SEARCH_RADIUS {
-                            let xr = x + dx;
-                            let yr = y + dy;
-                            if xr <= start || yr <= start || xr >= src_img.width() as i32 - start || yr >= src_img.height() as i32 - start {
-                                continue;
-                            }
-                            let center_src = patch_center_intensity(src_img, xr, yr);
-                            if (center_ref - center_src).abs() > 30.0 {
-                                continue;
-                            }
-                            let score = patch_zncc_cost(ref_img, src_img, x, y, xr, yr, MVS_PATCH_RADIUS);
-                            if score < best {
-                                second = best;
-                                best = score;
-                                best_xy = Some((xr, yr));
-                            } else if score < second {
-                                second = score;
-                            }
-                        }
-                    }
-
-                    let Some((xr, yr)) = best_xy else {
+                    let fundamental_ref_to_src = fundamental_matrix_pinhole(
+                        &alignment.poses[ref_idx],
+                        &alignment.poses[src_idx],
+                        ref_intr,
+                        src_intr,
+                    );
+                    let Some(m) = best_patch_match(
+                        ref_img,
+                        src_img,
+                        x,
+                        y,
+                        center_ref,
+                        start,
+                        MVS_SEARCH_RADIUS,
+                        MVS_PATCH_RADIUS,
+                        fundamental_ref_to_src.as_ref(),
+                    ) else {
                         continue;
                     };
-                    if !best.is_finite() || best > 0.42 || second / best.max(1.0e-9) < 1.03 {
+                    if !m.best_cost.is_finite() || m.best_cost > 0.42 || m.second_cost / m.best_cost.max(1.0e-9) < 1.03 {
+                        continue;
+                    }
+
+                    let fundamental_src_to_ref = fundamental_matrix_pinhole(
+                        &alignment.poses[src_idx],
+                        &alignment.poses[ref_idx],
+                        src_intr,
+                        ref_intr,
+                    );
+                    let Some(back_m) = best_patch_match(
+                        src_img,
+                        ref_img,
+                        m.x,
+                        m.y,
+                        patch_center_intensity(src_img, m.x, m.y),
+                        start,
+                        MVS_SEARCH_RADIUS,
+                        MVS_PATCH_RADIUS,
+                        fundamental_src_to_ref.as_ref(),
+                    ) else {
+                        continue;
+                    };
+                    if (back_m.x - x).abs() > MVS_LR_CONSISTENCY_TOL_PX
+                        || (back_m.y - y).abs() > MVS_LR_CONSISTENCY_TOL_PX
+                    {
                         continue;
                     }
 
                     let x_src_n = Vector2::new(
-                        (xr as f64 - src_intr.0) / src_intr.2,
-                        (yr as f64 - src_intr.1) / src_intr.3,
+                        (m.x as f64 - src_intr.0) / src_intr.2,
+                        (m.y as f64 - src_intr.1) / src_intr.3,
                     );
                     let Some(point_w) = triangulate_point(&p_ref, &p_src, &x_ref_n, &x_src_n) else {
                         continue;
@@ -694,8 +720,8 @@ fn estimate_multiview_depth_maps(
                         }
                     }
 
-                    let match_conf = ((0.032 - best) / 0.032).clamp(0.05, 1.0);
-                    let ratio_conf = ((second / best.max(1.0e-9)) - 1.0).clamp(0.0, 0.25) / 0.25;
+                    let match_conf = ((0.032 - m.best_cost) / 0.032).clamp(0.05, 1.0);
+                    let ratio_conf = ((m.second_cost / m.best_cost.max(1.0e-9)) - 1.0).clamp(0.0, 0.25) / 0.25;
                     let support_factor = (support_views as f64 / source_views.len().max(1) as f64).clamp(0.0, 1.0);
                     let consistency_factor = (consistency / source_views.len().max(1) as f64).clamp(0.0, 1.0);
                     let conf = (0.45 * match_conf + 0.20 * ratio_conf + 0.20 * support_factor + 0.15 * consistency_factor)
@@ -890,6 +916,18 @@ fn estimate_stereo_depths_from_image_pairs(
         let scaled_intrinsics_right = scaled_intrinsics(intrinsics, right.1);
         let p_left = projection_matrix(&alignment.poses[i]);
         let p_right = projection_matrix(&alignment.poses[i + 1]);
+        let f_left_to_right = fundamental_matrix_pinhole(
+            &alignment.poses[i],
+            &alignment.poses[i + 1],
+            scaled_intrinsics_left,
+            scaled_intrinsics_right,
+        );
+        let f_right_to_left = fundamental_matrix_pinhole(
+            &alignment.poses[i + 1],
+            &alignment.poses[i],
+            scaled_intrinsics_right,
+            scaled_intrinsics_left,
+        );
 
         let left_img = &left.0;
         let right_img = &right.0;
@@ -911,36 +949,39 @@ fn estimate_stereo_depths_from_image_pairs(
                     break;
                 }
                 let center_l = patch_center_intensity(left_img, x, y);
-                let mut best = f64::INFINITY;
-                let mut second = f64::INFINITY;
-                let mut best_xy = None;
-
-                for dy in -search_radius..=search_radius {
-                    for dx in -search_radius..=search_radius {
-                        let xr = x + dx;
-                        let yr = y + dy;
-                        if xr <= start || yr <= start || xr >= right_img.width() as i32 - start || yr >= right_img.height() as i32 - start {
-                            continue;
-                        }
-                        let center_r = patch_center_intensity(right_img, xr, yr);
-                        if (center_l - center_r).abs() > 28.0 {
-                            continue;
-                        }
-                        let score = patch_zncc_cost(left_img, right_img, x, y, xr, yr, patch_radius);
-                        if score < best {
-                            second = best;
-                            best = score;
-                            best_xy = Some((xr, yr));
-                        } else if score < second {
-                            second = score;
-                        }
-                    }
-                }
-
-                let Some((xr, yr)) = best_xy else {
+                let Some(m) = best_patch_match(
+                    left_img,
+                    right_img,
+                    x,
+                    y,
+                    center_l,
+                    start,
+                    search_radius,
+                    patch_radius,
+                    f_left_to_right.as_ref(),
+                ) else {
                     continue;
                 };
-                if !best.is_finite() || best > 0.44 || second / best.max(1.0e-9) < 1.04 {
+                if !m.best_cost.is_finite() || m.best_cost > 0.44 || m.second_cost / m.best_cost.max(1.0e-9) < 1.04 {
+                    continue;
+                }
+
+                let Some(back_m) = best_patch_match(
+                    right_img,
+                    left_img,
+                    m.x,
+                    m.y,
+                    patch_center_intensity(right_img, m.x, m.y),
+                    start,
+                    search_radius,
+                    patch_radius,
+                    f_right_to_left.as_ref(),
+                ) else {
+                    continue;
+                };
+                if (back_m.x - x).abs() > MVS_LR_CONSISTENCY_TOL_PX
+                    || (back_m.y - y).abs() > MVS_LR_CONSISTENCY_TOL_PX
+                {
                     continue;
                 }
 
@@ -949,8 +990,8 @@ fn estimate_stereo_depths_from_image_pairs(
                     (y as f64 - scaled_intrinsics_left.1) / scaled_intrinsics_left.3,
                 );
                 let x2n = Vector2::new(
-                    (xr as f64 - scaled_intrinsics_right.0) / scaled_intrinsics_right.2,
-                    (yr as f64 - scaled_intrinsics_right.1) / scaled_intrinsics_right.3,
+                    (m.x as f64 - scaled_intrinsics_right.0) / scaled_intrinsics_right.2,
+                    (m.y as f64 - scaled_intrinsics_right.1) / scaled_intrinsics_right.3,
                 );
                 let Some(point_w) = triangulate_point(&p_left, &p_right, &x1n, &x2n) else {
                     continue;
@@ -961,7 +1002,7 @@ fn estimate_stereo_depths_from_image_pairs(
                     continue;
                 }
 
-                let confidence = ((0.50 - best) / 0.50).clamp(0.2, 0.95);
+                let confidence = ((0.50 - m.best_cost) / 0.50).clamp(0.2, 0.95);
                 stereo_depths.push(DepthHypothesis {
                     center: [point_w[0], point_w[1], point_w[2]],
                     confidence,
@@ -1011,6 +1052,189 @@ fn projection_matrix(pose: &crate::alignment::CameraPose) -> Matrix3x4<f64> {
         r_w2c[(1, 0)], r_w2c[(1, 1)], r_w2c[(1, 2)], t[1],
         r_w2c[(2, 0)], r_w2c[(2, 1)], r_w2c[(2, 2)], t[2],
     )
+}
+
+fn fundamental_matrix_pinhole(
+    pose_left: &crate::alignment::CameraPose,
+    pose_right: &crate::alignment::CameraPose,
+    intr_left: (f64, f64, f64, f64),
+    intr_right: (f64, f64, f64, f64),
+) -> Option<Matrix3<f64>> {
+    let r1_c2w = quaternion_to_matrix(&pose_left.rotation);
+    let r2_c2w = quaternion_to_matrix(&pose_right.rotation);
+    let r1 = r1_c2w.transpose();
+    let r2 = r2_c2w.transpose();
+    let c1 = Vector3::new(pose_left.position[0], pose_left.position[1], pose_left.position[2]);
+    let c2 = Vector3::new(pose_right.position[0], pose_right.position[1], pose_right.position[2]);
+    let t1 = -(r1 * c1);
+    let t2 = -(r2 * c2);
+
+    let r21 = r2 * r1.transpose();
+    let t21 = t2 - r21 * t1;
+    let e = skew_symmetric(t21) * r21;
+
+    let k1 = Matrix3::new(
+        intr_left.2, 0.0, intr_left.0,
+        0.0, intr_left.3, intr_left.1,
+        0.0, 0.0, 1.0,
+    );
+    let k2 = Matrix3::new(
+        intr_right.2, 0.0, intr_right.0,
+        0.0, intr_right.3, intr_right.1,
+        0.0, 0.0, 1.0,
+    );
+    let k1_inv = k1.try_inverse()?;
+    let k2_inv_t = k2.try_inverse()?.transpose();
+    Some(k2_inv_t * e * k1_inv)
+}
+
+fn skew_symmetric(v: Vector3<f64>) -> Matrix3<f64> {
+    Matrix3::new(
+        0.0, -v[2], v[1],
+        v[2], 0.0, -v[0],
+        -v[1], v[0], 0.0,
+    )
+}
+
+fn best_patch_match(
+    left: &GrayImage,
+    right: &GrayImage,
+    xl: i32,
+    yl: i32,
+    center_left_intensity: f64,
+    border: i32,
+    search_radius: i32,
+    patch_radius: i32,
+    fundamental: Option<&Matrix3<f64>>,
+) -> Option<PatchMatch> {
+    if xl <= border
+        || yl <= border
+        || xl >= left.width() as i32 - border
+        || yl >= left.height() as i32 - border
+    {
+        return None;
+    }
+
+    let right_w = right.width() as i32;
+    let right_h = right.height() as i32;
+    let mut candidates = if let Some(f) = fundamental {
+        epipolar_line_candidates(
+            f,
+            xl,
+            yl,
+            xl,
+            yl,
+            search_radius,
+            right_w,
+            right_h,
+            border,
+        )
+    } else {
+        Vec::new()
+    };
+    if candidates.is_empty() {
+        candidates = square_window_candidates(xl, yl, search_radius, right_w, right_h, border);
+    }
+
+    let mut best = f64::INFINITY;
+    let mut second = f64::INFINITY;
+    let mut best_xy = None;
+    for (xr, yr) in candidates {
+        let center_right_intensity = patch_center_intensity(right, xr, yr);
+        if (center_left_intensity - center_right_intensity).abs() > 30.0 {
+            continue;
+        }
+        let score = patch_zncc_cost(left, right, xl, yl, xr, yr, patch_radius);
+        if score < best {
+            second = best;
+            best = score;
+            best_xy = Some((xr, yr));
+        } else if score < second {
+            second = score;
+        }
+    }
+
+    best_xy.map(|(x, y)| PatchMatch {
+        x,
+        y,
+        best_cost: best,
+        second_cost: second,
+    })
+}
+
+fn square_window_candidates(
+    center_x: i32,
+    center_y: i32,
+    radius: i32,
+    width: i32,
+    height: i32,
+    border: i32,
+) -> Vec<(i32, i32)> {
+    let mut candidates = Vec::new();
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            let x = center_x + dx;
+            let y = center_y + dy;
+            if x <= border || y <= border || x >= width - border || y >= height - border {
+                continue;
+            }
+            candidates.push((x, y));
+        }
+    }
+    candidates
+}
+
+fn epipolar_line_candidates(
+    fundamental: &Matrix3<f64>,
+    xl: i32,
+    yl: i32,
+    center_x: i32,
+    center_y: i32,
+    radius: i32,
+    width: i32,
+    height: i32,
+    border: i32,
+) -> Vec<(i32, i32)> {
+    let line = fundamental * nalgebra::Vector3::new(xl as f64, yl as f64, 1.0);
+    let a = line[0];
+    let b = line[1];
+    let c = line[2];
+    let norm = (a * a + b * b).sqrt();
+    if norm <= 1.0e-9 || !norm.is_finite() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    if b.abs() >= a.abs() {
+        for x in (center_x - radius)..=(center_x + radius) {
+            if x <= border || x >= width - border {
+                continue;
+            }
+            let y = ((-c - a * x as f64) / b).round() as i32;
+            if y <= border || y >= height - border {
+                continue;
+            }
+            let dist = (a * x as f64 + b * y as f64 + c).abs() / norm;
+            if dist <= MVS_EPIPOLAR_TOL_PX {
+                out.push((x, y));
+            }
+        }
+    } else {
+        for y in (center_y - radius)..=(center_y + radius) {
+            if y <= border || y >= height - border {
+                continue;
+            }
+            let x = ((-c - b * y as f64) / a).round() as i32;
+            if x <= border || x >= width - border {
+                continue;
+            }
+            let dist = (a * x as f64 + b * y as f64 + c).abs() / norm;
+            if dist <= MVS_EPIPOLAR_TOL_PX {
+                out.push((x, y));
+            }
+        }
+    }
+    out
 }
 
 fn quaternion_to_matrix(q: &[f64; 4]) -> Matrix3<f64> {
@@ -2104,6 +2328,21 @@ mod tests {
         let good = patch_zncc_cost(&left, &right, 4, 4, 4, 4, 2);
         let bad = patch_zncc_cost(&left, &right, 4, 4, 5, 4, 2);
         assert!(good < bad, "ZNCC cost should be lower for matching patches");
+    }
+
+    #[test]
+    fn epipolar_candidates_follow_expected_line() {
+        // This F yields epipolar line l' = [0, 1, -yl], i.e. y' = yl.
+        let f = Matrix3::new(
+            0.0, 0.0, 0.0,
+            0.0, 0.0, 1.0,
+            0.0, -1.0, 0.0,
+        );
+        let xl = 14;
+        let yl = 9;
+        let candidates = epipolar_line_candidates(&f, xl, yl, xl, yl + 2, 6, 64, 64, 2);
+        assert!(!candidates.is_empty());
+        assert!(candidates.iter().all(|(_, y)| *y == yl));
     }
 
     #[test]

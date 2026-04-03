@@ -2,7 +2,7 @@
 
 Date: 2026-04-03
 Owner: wbphotogrammetry (internal)
-Status: Draft execution plan
+Status: Active execution (Milestone 1 complete in code; Milestone 2 in progress)
 
 ## Goal
 
@@ -27,6 +27,50 @@ Remaining gaps to production:
 2. No benchmark-gated quality acceptance against reference datasets
 3. No guaranteed large-mission memory/runtime envelope
 4. Limited operational fallback policy and deterministic reproducibility controls
+
+## Progress Update (2026-04-03)
+
+Milestone 1 implementation status:
+
+1. Task 1 completed: adaptive texture-driven MVS sampling density
+2. Task 2 completed: local edge-aware depth-bin regularization
+3. Task 3 completed: confidence-calibrated residual refinement pass
+4. Task 4 completed: per-reference completeness metrics + low-confidence mask emission
+5. Dense tests remain green after all Task 1-4 changes
+
+Milestone 1 implementation commits:
+
+1. `4d8fcb2` (Task 1)
+2. `f4d43d3` (Task 2)
+3. `29d2c38` (Task 3)
+4. `a8cf6ba` (Task 4)
+
+Milestone 2 groundwork completed:
+
+1. Added size-aware dataset matrix runner: `examples/run_dataset_matrix.py`
+2. Added large-dataset safeguards: `--max-images-per-dataset`, `--max-dataset-gb`, `--max-total-gb`, `--dry-run`
+3. Extended dataset report comparator with new dense metrics:
+   - `dsm.mvs_mean_reference_completeness_pct`
+   - `dsm.low_confidence_cells_pct`
+
+First real dataset-matrix run (balanced, rootsift, 0.1 m, sparse-pcg):
+
+1. Command root: `/Users/johnlindsay/Documents/programming/Rust/drone_sfm_real_flight/datasets`
+2. Selection controls: `max-images-per-dataset=120`, `max-dataset-gb=8`, `max-total-gb=20`
+3. Datasets executed: 6
+4. Successful runs: 6
+5. QA status counts: Fail=5, Review=1, Pass=0
+6. Mean total runtime: 334.52 s
+7. Summary JSON: `target/wbphotogrammetry_dataset_matrix_run1/dataset_matrix_summary.json`
+
+Key observations from run1:
+
+1. Pipeline reliability is stable (0 hard failures) across all discovered datasets under size controls.
+2. Current QA thresholds remain strict for this matrix (no Pass outcomes yet).
+3. `shitan_tw` is an outlier in both runtime and low-confidence area:
+   - total runtime: 1329.03 s
+   - low_confidence_cells_pct: 33.65%
+4. Mean MVS reference completeness over run1 is generally low-to-moderate (about 9.5% to 20.1%).
 
 ## Milestone 1 (6-8 weeks): Dense Depth-Map Quality Core
 
@@ -70,6 +114,12 @@ Scope:
    - seam artifact proxy from downstream mosaic
 4. Add fallback policy table for weak geometry / poor overlap / low texture
 5. Add deterministic mode toggle for repeatability testing
+
+Current status (2026-04-03):
+
+1. Scope item 1 started and partially delivered (matrix runner + first real run)
+2. Scope item 2 started and partially delivered (comparator extended for new dense metrics)
+3. Scope items 3-5 not started
 
 Out of scope:
 
@@ -133,4 +183,4 @@ Acceptance criteria:
 
 ## Next Execution Step
 
-Implement Milestone 1 task 1: adaptive sampling-density controller based on local texture and support confidence.
+Implement Milestone 2 scope item 3: CI-ready regression gate checks for completeness, vertical error proxy statistics, and seam artifact proxy based on the new matrix summary/report outputs.

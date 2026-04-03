@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 SUPPORTED_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass
@@ -232,7 +233,13 @@ def run_one_dataset(args: argparse.Namespace, plan: DatasetPlan, matrix_out_dir:
     ]
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=str(WORKSPACE_ROOT),
+        )
     except subprocess.CalledProcessError as e:
         if stage_tmp is not None:
             stage_tmp.cleanup()

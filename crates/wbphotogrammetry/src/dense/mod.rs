@@ -38,6 +38,8 @@ const MVS_HOLE_FILL_MIN_NEIGHBORS: usize = 2;
 const MVS_HOLE_FILL_CONF_SCALE: f64 = 0.72;
 const MVS_HOLE_FILL_EDGE_DEPTH_RANGE_MULTIPLIER: f64 = 2.2;
 const MVS_HOLE_FILL_EDGE_MIN_SCALE: f64 = 0.18;
+const MVS_WEAK_ISOLATED_RADIUS_M: f64 = 7.5;
+const MVS_WEAK_ISOLATED_Z_TOL_M: f64 = 2.2;
 
 #[derive(Debug, Clone)]
 struct DepthHypothesis {
@@ -1016,7 +1018,51 @@ fn depth_hypotheses_from_multiview_maps(maps: &[MultiViewDepthMap]) -> Vec<Depth
 
         out.extend(front_by_bin.into_values());
     }
-    out
+    suppress_weak_isolated_hypotheses(out)
+}
+
+fn suppress_weak_isolated_hypotheses(hypotheses: Vec<DepthHypothesis>) -> Vec<DepthHypothesis> {
+    if hypotheses.len() < 6 {
+        return hypotheses;
+    }
+
+    let mut confs: Vec<f64> = hypotheses.iter().map(|h| h.confidence).collect();
+    confs.sort_by(|a, b| a.total_cmp(b));
+    let p25 = confs[confs.len() / 4];
+    let weak_thr = (0.90 * p25).clamp(0.06, 0.30);
+    let radius2 = MVS_WEAK_ISOLATED_RADIUS_M * MVS_WEAK_ISOLATED_RADIUS_M;
+
+    let prev = hypotheses;
+    let mut filtered = Vec::with_capacity(prev.len());
+    for (i, h) in prev.iter().enumerate() {
+        if h.confidence >= weak_thr {
+            filtered.push(h.clone());
+            continue;
+        }
+
+        let mut support_neighbors = 0usize;
+        for (j, k) in prev.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            let dx = h.center[0] - k.center[0];
+            let dy = h.center[1] - k.center[1];
+            let d2 = dx * dx + dy * dy;
+            if d2 > radius2 {
+                continue;
+            }
+            if (h.center[2] - k.center[2]).abs() > MVS_WEAK_ISOLATED_Z_TOL_M {
+                continue;
+            }
+            support_neighbors += 1;
+            if support_neighbors >= 1 {
+                filtered.push(h.clone());
+                break;
+            }
+        }
+    }
+
+    filtered
 }
 
 fn hole_fill_edge_confidence_scale(votes: &[DepthHypothesis]) -> f64 {
@@ -2997,6 +3043,25 @@ mod tests {
         let smooth_scale = hole_fill_edge_confidence_scale(&smooth_votes);
         let edge_scale = hole_fill_edge_confidence_scale(&edge_votes);
         assert!(smooth_scale > edge_scale, "depth-discontinuous neighborhoods should be attenuated");
+    }
+
+    #[test]
+    fn weak_isolated_hypotheses_are_suppressed() {
+        let hyps = vec![
+            DepthHypothesis { center: [0.0, 0.0, 10.0], confidence: 0.85 },
+            DepthHypothesis { center: [2.0, 1.0, 10.1], confidence: 0.82 },
+            DepthHypothesis { center: [4.0, 1.5, 9.9], confidence: 0.80 },
+            DepthHypothesis { center: [6.0, 2.0, 10.2], confidence: 0.78 },
+            // Weak but supported by a nearby neighbor.
+            DepthHypothesis { center: [8.0, 2.3, 10.0], confidence: 0.07 },
+            DepthHypothesis { center: [9.0, 2.5, 10.1], confidence: 0.08 },
+            // Weak and isolated; should be removed.
+            DepthHypothesis { center: [120.0, 80.0, 35.0], confidence: 0.06 },
+        ];
+
+        let filtered = suppress_weak_isolated_hypotheses(hyps);
+        assert!(filtered.iter().any(|h| (h.center[0] - 8.0).abs() < 1.0e-6));
+        assert!(!filtered.iter().any(|h| (h.center[0] - 120.0).abs() < 1.0e-6));
     }
 
     #[test]

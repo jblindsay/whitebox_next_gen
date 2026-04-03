@@ -170,9 +170,9 @@ refines them via bundle adjustment.
 **Bundle adjustment:**
 - Levenberg–Marquardt optimisation with Huber loss (2 px threshold)
 - Coupled reduced camera pose (translation + rotation) normal-equation solve
-  with Schur-style point elimination when the tie-point network is strong
-  enough, with guarded fallback to conservative local update paths on weak or
-  degenerate systems
+  with sparse block assembly and Schur-style point elimination when the
+  tie-point network is strong enough, with guarded fallback to conservative
+  local update paths on weak or degenerate systems
 - Optional intrinsic refinement: focal lengths, principal point, radial distortion
   (k₁, k₂) and tangential distortion (p₁, p₂) — enabled when the observation
   count is sufficient (≥18 per camera) and network geometry support is strong (≥85%)

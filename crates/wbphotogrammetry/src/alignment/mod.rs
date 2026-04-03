@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use nalgebra::{DMatrix, DVector, Matrix2, Matrix2x3, Matrix2x4, Matrix3, Matrix3x4, Matrix4, Matrix4x3, Vector2, Vector3, Vector4};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use crate::camera::{CameraIntrinsics, CameraModel};
 use crate::error::Result;
@@ -1991,6 +1991,64 @@ struct ReducedPoseSystem {
 }
 
 #[derive(Debug, Clone)]
+struct SparseSymmetricBlock4 {
+    dim: usize,
+    blocks: HashMap<(usize, usize), Matrix4<f64>>,
+}
+
+impl SparseSymmetricBlock4 {
+    fn new(dim: usize) -> Self {
+        Self {
+            dim,
+            blocks: HashMap::new(),
+        }
+    }
+
+    fn add_block(&mut self, row: usize, col: usize, block: Matrix4<f64>) {
+        if row <= col {
+            self.blocks
+                .entry((row, col))
+                .and_modify(|acc| *acc += block)
+                .or_insert(block);
+        } else {
+            let bt = block.transpose();
+            self.blocks
+                .entry((col, row))
+                .and_modify(|acc| *acc += bt)
+                .or_insert(bt);
+        }
+    }
+
+    fn add_diag_value(&mut self, idx: usize, value: f64) {
+        let base = (idx / 4) * 4;
+        let local = idx % 4;
+        let mut block = Matrix4::zeros();
+        block[(local, local)] = value;
+        self.add_block(base, base, block);
+    }
+
+    fn into_dense(self) -> DMatrix<f64> {
+        let mut dense = DMatrix::zeros(self.dim, self.dim);
+        for ((row, col), block) in self.blocks {
+            for r in 0..4 {
+                for c in 0..4 {
+                    dense[(row + r, col + c)] += block[(r, c)];
+                }
+            }
+            if row != col {
+                let bt = block.transpose();
+                for r in 0..4 {
+                    for c in 0..4 {
+                        dense[(col + r, row + c)] += bt[(r, c)];
+                    }
+                }
+            }
+        }
+        dense
+    }
+}
+
+#[derive(Debug, Clone)]
 struct ReducedPoseUpdate {
     centres: Vec<Vector3<f64>>,
     rotations: Vec<Matrix3<f64>>,
@@ -2329,7 +2387,7 @@ fn build_reduced_camera_pose_system(
         return None;
     }
 
-    let mut hessian = DMatrix::zeros(dim, dim);
+    let mut hessian_sparse = SparseSymmetricBlock4::new(dim);
     let mut gradient = DVector::zeros(dim);
     let mut point_blocks = Vec::new();
 
@@ -2383,7 +2441,7 @@ fn build_reduced_camera_pose_system(
 
         for contribution in &contributions {
             let offset_i = reduced_camera_pose_param_offset(contribution.cam_idx)?;
-            accumulate_matrix4_block(&mut hessian, offset_i, offset_i, contribution.a);
+            hessian_sparse.add_block(offset_i, offset_i, contribution.a);
             gradient[offset_i] += contribution.g[0];
             gradient[offset_i + 1] += contribution.g[1];
             gradient[offset_i + 2] += contribution.g[2];
@@ -2401,7 +2459,7 @@ fn build_reduced_camera_pose_system(
                 let offset_i = reduced_camera_pose_param_offset(contributions[left].cam_idx)?;
                 let offset_j = reduced_camera_pose_param_offset(contributions[right].cam_idx)?;
                 let correction = contributions[left].b * v_inv * contributions[right].b.transpose();
-                accumulate_matrix4_block(&mut hessian, offset_i, offset_j, -correction);
+                hessian_sparse.add_block(offset_i, offset_j, -correction);
             }
         }
 
@@ -2422,14 +2480,16 @@ fn build_reduced_camera_pose_system(
         let prior_weight = pose_prior_weights[cam_idx];
         if prior_weight > 0.0 && pose_prior_sigma_m > 0.0 && pose_prior_scale_px2 > 0.0 {
             let curvature = 2.0 * pose_prior_scale_px2 * prior_weight / (pose_prior_sigma_m * pose_prior_sigma_m);
-            hessian[(offset, offset)] += curvature;
-            hessian[(offset + 1, offset + 1)] += curvature;
+            hessian_sparse.add_diag_value(offset, curvature);
+            hessian_sparse.add_diag_value(offset + 1, curvature);
             gradient[offset] += curvature * (centres[cam_idx][0] - seed_centres[cam_idx][0]);
             gradient[offset + 1] += curvature * (centres[cam_idx][1] - seed_centres[cam_idx][1]);
         }
-        hessian[(offset + 2, offset + 2)] += 0.05;
-        hessian[(offset + 3, offset + 3)] += 0.05;
+        hessian_sparse.add_diag_value(offset + 2, 0.05);
+        hessian_sparse.add_diag_value(offset + 3, 0.05);
     }
+
+    let hessian = hessian_sparse.into_dense();
 
     Some(ReducedPoseSystem {
         hessian,
@@ -2917,14 +2977,6 @@ fn accumulate_matrix2_block(target: &mut DMatrix<f64>, row: usize, col: usize, b
     target[(row, col + 1)] += block[(0, 1)];
     target[(row + 1, col)] += block[(1, 0)];
     target[(row + 1, col + 1)] += block[(1, 1)];
-}
-
-fn accumulate_matrix4_block(target: &mut DMatrix<f64>, row: usize, col: usize, block: Matrix4<f64>) {
-    for r in 0..4 {
-        for c in 0..4 {
-            target[(row + r, col + c)] += block[(r, c)];
-        }
-    }
 }
 
 fn group_observation_indices_by_point_id(observations: &[BaObservation]) -> Vec<Vec<usize>> {

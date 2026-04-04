@@ -60,8 +60,10 @@ class DatasetRunResult:
     frame_count: Optional[int]
     timing_total_s: Optional[float]
     dsm_valid_cells: Optional[int]
+    dsm_vertical_rmse_m: Optional[float]
     low_confidence_cells_pct: Optional[float]
     mvs_mean_reference_completeness_pct: Optional[float]
+    mosaic_max_seam_delta: Optional[float]
     success: bool
     error: Optional[str]
 
@@ -253,8 +255,10 @@ def run_one_dataset(args: argparse.Namespace, plan: DatasetPlan, matrix_out_dir:
             frame_count=None,
             timing_total_s=None,
             dsm_valid_cells=None,
+            dsm_vertical_rmse_m=None,
             low_confidence_cells_pct=None,
             mvs_mean_reference_completeness_pct=None,
+            mosaic_max_seam_delta=None,
             success=False,
             error=(e.stderr or e.stdout or str(e)).strip()[:4000],
         )
@@ -274,8 +278,10 @@ def run_one_dataset(args: argparse.Namespace, plan: DatasetPlan, matrix_out_dir:
             frame_count=None,
             timing_total_s=None,
             dsm_valid_cells=None,
+            dsm_vertical_rmse_m=None,
             low_confidence_cells_pct=None,
             mvs_mean_reference_completeness_pct=None,
+            mosaic_max_seam_delta=None,
             success=False,
             error=(proc.stdout + "\n" + proc.stderr).strip()[-4000:],
         )
@@ -284,6 +290,7 @@ def run_one_dataset(args: argparse.Namespace, plan: DatasetPlan, matrix_out_dir:
     timing = payload.get("timing", {}) if isinstance(payload, dict) else {}
     total_s = float(timing.get("ingest_s", 0.0)) + float(timing.get("feature_s", 0.0)) + float(timing.get("alignment_s", 0.0)) + float(timing.get("dense_s", 0.0)) + float(timing.get("mosaic_s", 0.0))
     dsm = payload.get("dsm_stats", {}) if isinstance(payload, dict) else {}
+    mosaic_stats = payload.get("mosaic_stats", {}) if isinstance(payload, dict) else {}
     qa = payload.get("qa", {}) if isinstance(payload, dict) else {}
 
     return DatasetRunResult(
@@ -296,8 +303,10 @@ def run_one_dataset(args: argparse.Namespace, plan: DatasetPlan, matrix_out_dir:
         frame_count=payload.get("frame_count"),
         timing_total_s=total_s,
         dsm_valid_cells=dsm.get("valid_cells"),
+        dsm_vertical_rmse_m=dsm.get("vertical_rmse_m"),
         low_confidence_cells_pct=dsm.get("low_confidence_cells_pct"),
         mvs_mean_reference_completeness_pct=dsm.get("mvs_mean_reference_completeness_pct"),
+        mosaic_max_seam_delta=mosaic_stats.get("max_seam_delta"),
         success=True,
         error=None,
     )
@@ -316,6 +325,13 @@ def summarize_results(results: List[DatasetRunResult]) -> Dict[str, object]:
         "failed": len(failed),
         "qa_status_counts": qa_counts,
         "mean_timing_total_s": (sum(r.timing_total_s or 0.0 for r in ok) / len(ok)) if ok else 0.0,
+        "mean_mvs_reference_completeness_pct": (
+            sum((r.mvs_mean_reference_completeness_pct or 0.0) for r in ok) / len(ok)
+        ) if ok else 0.0,
+        "mean_vertical_rmse_m": (
+            sum((r.dsm_vertical_rmse_m or 0.0) for r in ok) / len(ok)
+        ) if ok else 0.0,
+        "max_mosaic_seam_delta": max((r.mosaic_max_seam_delta or 0.0) for r in ok) if ok else 0.0,
     }
 
 

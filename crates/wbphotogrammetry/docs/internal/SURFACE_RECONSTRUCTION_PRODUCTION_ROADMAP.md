@@ -52,6 +52,13 @@ Milestone 2 groundwork completed:
 3. Extended dataset report comparator with new dense metrics:
    - `dsm.mvs_mean_reference_completeness_pct`
    - `dsm.low_confidence_cells_pct`
+4. Added CI-ready matrix gate checker script:
+   - `examples/check_dataset_matrix_gates.py`
+   - enforces completeness, vertical-RMSE proxy, and seam-artifact proxy thresholds
+5. Extended matrix runner outputs for gate metrics:
+   - `results[].dsm_vertical_rmse_m`
+   - `results[].mosaic_max_seam_delta`
+   - summary aggregates `mean_vertical_rmse_m`, `max_mosaic_seam_delta`
 
 First real dataset-matrix run (balanced, rootsift, 0.1 m, sparse-pcg):
 
@@ -71,6 +78,49 @@ Key observations from run1:
    - total runtime: 1329.03 s
    - low_confidence_cells_pct: 33.65%
 4. Mean MVS reference completeness over run1 is generally low-to-moderate (about 9.5% to 20.1%).
+5. Existing run1 summary predates vertical-RMSE and seam-proxy matrix fields; gate script correctly reports these metrics as missing until matrix is rerun with updated runner.
+
+Smoke validation run for Milestone 2 item 3 (2026-04-04):
+
+1. Added reduced matrix run (`max-datasets=3`, `max-images-per-dataset=60`) at:
+   - `target/wbphotogrammetry_dataset_matrix_smoke_m2_gate/dataset_matrix_summary.json`
+2. Smoke run completed successfully: 3/3 datasets, 0 hard failures.
+3. New gate metrics are now populated end-to-end:
+   - `summary.mean_mvs_reference_completeness_pct = 14.999`
+   - `summary.mean_vertical_rmse_m = 0.1843`
+   - `summary.max_mosaic_seam_delta = 0.0528`
+4. Gate checker passes with permissive smoke thresholds, confirming CI-check plumbing is functional.
+
+Initial calibrated gate profile (2026-04-04, candidate for CI):
+
+1. `--min-successful-runs 3`
+2. `--max-failed-runs 0`
+3. `--min-mean-completeness-pct 10.0`
+4. `--max-mean-vertical-rmse-m 0.30`
+5. `--max-seam-delta 0.08`
+
+Calibration basis:
+
+1. Smoke summary metrics (`max-datasets=3`, `max-images-per-dataset=60`):
+   - mean completeness: 14.999%
+   - mean vertical RMSE: 0.1843 m
+   - max seam delta: 0.0528
+2. Initial gates are intentionally moderate to establish stable CI enforcement before tightening.
+
+Constrained full-matrix validation run (2026-04-04):
+
+1. Run path:
+   - `target/wbphotogrammetry_dataset_matrix_run2_m2_gate/dataset_matrix_summary.json`
+2. Dataset coverage: 6/6 successful, 0 hard failures.
+3. Summary metrics:
+   - mean completeness: 13.624%
+   - mean vertical RMSE: 0.5347 m
+   - max seam delta: 0.0716
+4. Gate outcome against initial profile:
+   - Fail on vertical-RMSE threshold (`0.5347 > 0.30`)
+5. Interpretation:
+   - Completeness and seam-artifact proxy are within initial bounds.
+   - Vertical error proxy remains the current blocking metric for Milestone-2 gate pass on the broader matrix.
 
 ## Milestone 1 (6-8 weeks): Dense Depth-Map Quality Core
 
@@ -115,11 +165,12 @@ Scope:
 4. Add fallback policy table for weak geometry / poor overlap / low texture
 5. Add deterministic mode toggle for repeatability testing
 
-Current status (2026-04-03):
+Current status (2026-04-04):
 
-1. Scope item 1 started and partially delivered (matrix runner + first real run)
-2. Scope item 2 started and partially delivered (comparator extended for new dense metrics)
-3. Scope items 3-5 not started
+1. Scope item 1 partially delivered (matrix runner in place; run1 and constrained run2 completed)
+2. Scope item 2 partially delivered (comparator extended for new dense metrics)
+3. Scope item 3 partially delivered (CI gate script + metric wiring complete; constrained run2 executed; current gate blocked by vertical-RMSE threshold)
+4. Scope items 4-5 not started
 
 Out of scope:
 
@@ -183,4 +234,4 @@ Acceptance criteria:
 
 ## Next Execution Step
 
-Implement Milestone 2 scope item 3: CI-ready regression gate checks for completeness, vertical error proxy statistics, and seam artifact proxy based on the new matrix summary/report outputs.
+Run one constrained full matrix pass with the updated runner and apply the initial calibrated gate profile; if stable over repeated runs, tighten thresholds incrementally per release.

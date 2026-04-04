@@ -54,6 +54,7 @@ pub use alignment::{
     ReducedCameraSolveMode,
     run_camera_alignment,
     run_camera_alignment_with_options,
+    export_camera_poses_as_geojson,
 };
 pub use dense::{DenseResult, DsmStats, run_dense_surface, run_dense_surface_with_dtm};
 pub use mosaic::{MosaicResult, SeamStats, run_orthomosaic, run_orthomosaic_with_confidence};

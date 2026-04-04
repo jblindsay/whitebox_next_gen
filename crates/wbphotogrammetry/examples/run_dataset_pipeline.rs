@@ -50,6 +50,7 @@ struct PipelineOutputs {
     ortho_path: String,
     mosaic_support_diagnostics_path: Option<String>,
     mosaic_source_index_path: Option<String>,
+    camera_poses_geojson_path: String,
 }
 
 fn main() {
@@ -99,6 +100,7 @@ fn main() {
     let ortho_path = output_dir.join(format!("{}_ortho.tif", tag));
     let confidence_path = output_dir.join(format!("{}_ortho_confidence.tif", tag));
     let report_path = output_dir.join(format!("{}_report.json", tag));
+    let camera_poses_geojson_path = output_dir.join(format!("{}_camera_poses.geojson", tag));
 
     println!("Running wbphotogrammetry dataset pipeline");
     println!("images_dir: {images_dir}");
@@ -149,6 +151,16 @@ fn main() {
     });
     let alignment_s = alignment_start.elapsed().as_secs_f64();
     println!("alignment stage done in {:.3}s", alignment_s);
+
+    // Export camera poses as GeoJSON for visual inspection
+    wbphotogrammetry::export_camera_poses_as_geojson(
+        &alignment,
+        &frames,
+        &camera_poses_geojson_path.to_string_lossy(),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("warning: failed to export camera poses geojson: {e}");
+    });
 
     let dense_start = Instant::now();
     let dense = wbphotogrammetry::dense::run_dense_surface_with_frames(
@@ -205,6 +217,7 @@ fn main() {
             ortho_path: mosaic.ortho_path.clone(),
             mosaic_support_diagnostics_path: mosaic.support_diagnostics_path.clone(),
             mosaic_source_index_path: mosaic.source_index_raster_path.clone(),
+            camera_poses_geojson_path: camera_poses_geojson_path.to_string_lossy().to_string(),
         },
         timing: PipelineTiming {
             ingest_s,
@@ -233,6 +246,7 @@ fn main() {
     println!("report: {}", report_path.display());
     println!("ortho: {}", ortho_path.display());
     println!("dsm: {}", dsm_path.display());
+    println!("camera_poses: {}", camera_poses_geojson_path.display());
     println!("qa_status: {}", summary.qa.status.as_str());
     println!("qa_actions: {}", summary.qa.recommended_actions.len());
     println!("coverage_pct: {:.2}", summary.mosaic_coverage_pct);

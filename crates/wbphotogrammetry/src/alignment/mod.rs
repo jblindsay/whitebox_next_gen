@@ -5580,6 +5580,136 @@ fn resolve_camera_model(requested: CameraModel, frames: &[ImageFrame]) -> Camera
     }
 }
 
+/// Export camera poses as GeoJSON visualization for inspection in QGIS.
+///
+/// Creates a GeoJSON FeatureCollection with:
+/// - Point features for each camera center (with metadata)
+/// - LineString for the full camera trajectory
+///
+/// This allows visual inspection of camera positions and poses before mosaic generation.
+pub fn export_camera_poses_as_geojson(
+    alignment: &AlignmentResult,
+    frames: &[ImageFrame],
+    output_path: &str,
+) -> Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+    use serde_json::Map;
+
+    let mut features = Vec::new();
+    let mut trajectory_coords: Vec<[f64; 2]> = Vec::new();
+
+    // Create point features for each camera center
+    for (idx, (pose, frame)) in alignment.poses.iter().zip(frames.iter()).enumerate() {
+        let mut props = Map::new();
+        props.insert("index".to_string(), serde_json::Value::Number(serde_json::Number::from(idx as u64)));
+        props.insert("filename".to_string(), serde_json::Value::String(
+            std::path::Path::new(&frame.path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        ));
+        if let Some(n) = serde_json::Number::from_f64(pose.position[0]) {
+            props.insert("ba_x_enu_m".to_string(), serde_json::Value::Number(n));
+        }
+        if let Some(n) = serde_json::Number::from_f64(pose.position[1]) {
+            props.insert("ba_y_enu_m".to_string(), serde_json::Value::Number(n));
+        }
+        if let Some(n) = serde_json::Number::from_f64(pose.position[2]) {
+            props.insert("ba_z_enu_m".to_string(), serde_json::Value::Number(n));
+        }
+        if let Some(n) = serde_json::Number::from_f64(pose.reprojection_error_px) {
+            props.insert("reprojection_error_px".to_string(), serde_json::Value::Number(n));
+        }
+        props.insert("image_width".to_string(), serde_json::Value::Number(serde_json::Number::from(frame.width as u64)));
+        props.insert("image_height".to_string(), serde_json::Value::Number(serde_json::Number::from(frame.height as u64)));
+        
+        // Use GPS coordinates as geometry so QGIS can display them
+        let mut geometry = None;
+        if let Some(gps) = &frame.metadata.gps {
+            if let Some(n) = serde_json::Number::from_f64(gps.lat) {
+                props.insert("gps_lat".to_string(), serde_json::Value::Number(n));
+            }
+            if let Some(n) = serde_json::Number::from_f64(gps.lon) {
+                props.insert("gps_lon".to_string(), serde_json::Value::Number(n));
+            }
+            if let Some(n) = serde_json::Number::from_f64(gps.alt) {
+                props.insert("gps_alt".to_string(), serde_json::Value::Number(n));
+            }
+            // Create point geometry using GPS (lon, lat) in WGS-84
+            geometry = Some(serde_json::json!({
+                "type": "Point",
+                "coordinates": [gps.lon, gps.lat]
+            }));
+            trajectory_coords.push([gps.lon, gps.lat]);
+        }
+
+        if let Some(geom) = geometry {
+            let feature = serde_json::json!({
+                "type": "Feature",
+                "geometry": geom,
+                "properties": props
+            });
+            features.push(feature);
+        }
+    }
+
+    // Create trajectory LineString
+    if trajectory_coords.len() >= 2 {
+        let trajectory_feature = serde_json::json!({
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": trajectory_coords,
+            },
+            "properties": {
+                "name": "Camera Trajectory",
+                "pose_count": alignment.poses.len(),
+                "rmse_px": alignment.stats.rmse_px,
+                "connectivity_fraction": alignment.stats.ba_supported_camera_fraction,
+            }
+        });
+        features.push(trajectory_feature);
+    }
+
+    // Create the FeatureCollection
+    let feature_collection = serde_json::json!({
+        "type": "FeatureCollection",
+        "crs": {
+            "type": "name",
+            "properties": {
+                "name": "EPSG:4326"
+            }
+        },
+        "features": features,
+        "properties": {
+            "dataset": "Camera Positions from Bundle Adjustment (WGS-84)",
+            "frame_count": frames.len(),
+            "aligned_fraction": alignment.stats.aligned_fraction,
+            "rmse_px": alignment.stats.rmse_px,
+            "residual_p50_px": alignment.stats.residual_p50_px,
+            "sparse_points": alignment.stats.sparse_cloud_points,
+            "ba_observations_initial": alignment.stats.ba_observations_initial,
+            "ba_observations_final": alignment.stats.ba_observations_final,
+            "ba_retention_pct": alignment.stats.ba_observation_retention_pct,
+            "ba_camera_support_fraction": alignment.stats.ba_supported_camera_fraction,
+        }
+    });
+
+    let mut file = File::create(output_path)?;
+
+    let json_str = serde_json::to_string_pretty(&feature_collection)
+        .map_err(|e| crate::error::PhotogrammetryError::Alignment(format!(
+            "failed to serialize geojson: {}",
+            e
+        )))?;
+
+    file.write_all(json_str.as_bytes())?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

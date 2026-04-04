@@ -85,6 +85,37 @@ python crates/wbphotogrammetry/examples/run_dataset_matrix.py \
   --max-images-per-dataset 120 --max-dataset-gb 8 --max-total-gb 20
 ```
 
+To enforce CI-ready regression gates from the matrix summary output, run:
+
+```bash
+python crates/wbphotogrammetry/examples/check_dataset_matrix_gates.py \
+  --summary target/wbphotogrammetry_dataset_matrix/dataset_matrix_summary.json \
+  --min-successful-runs 4 \
+  --min-mean-completeness-pct 12.0 \
+  --max-mean-vertical-rmse-m 0.35 \
+  --max-seam-delta 0.12
+```
+
+This gate script fails non-zero when configured thresholds are not met for:
+
+- MVS completeness proxy
+- Vertical error proxy
+- Seam artifact proxy
+
+Initial Milestone-2 gate profile (recommended starting point):
+
+```bash
+python crates/wbphotogrammetry/examples/check_dataset_matrix_gates.py \
+  --summary target/wbphotogrammetry_dataset_matrix/dataset_matrix_summary.json \
+  --min-successful-runs 3 \
+  --max-failed-runs 0 \
+  --min-mean-completeness-pct 10.0 \
+  --max-mean-vertical-rmse-m 0.30 \
+  --max-seam-delta 0.08
+```
+
+These thresholds are calibrated as an initial CI gate from the first smoke validation run and should be tightened as matrix quality improves.
+
 ---
 
 ## Modules and Capabilities
@@ -360,10 +391,6 @@ likely to require further development.
 - Tuning and benchmarking maturity is still in progress relative to the older
   BRIEF/ORB paths; production users should still validate method/profile
   choices on their mission types.
-- `SuperPoint` is still only an API placeholder. Learned inference, weight
-  management, and model runtime integration are not implemented.
-- SURF is intentionally not on the near-term roadmap because of continuing
-  patent risk; it should not be treated as a drop-in alternative to SIFT.
 - Cross-scale matching is not supported: ORB matches are gated to adjacent
   pyramid octaves (max difference = 2), which limits robustness when the same
   scene feature appears at very different scales in two frames.

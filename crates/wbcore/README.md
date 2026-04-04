@@ -1,5 +1,7 @@
 # wbcore
 
+**THIS CRATE IS CURRENTLY EXPERIMENTAL AND IS IN AN EARLY DEVELOPMENTAL STAGE. IT IS NOT INTENDED FOR PUBLIC USAGE AT PRESENT.**
+
 Core runtime contracts and orchestration primitives for the Whitebox backend workspace.
 
 ## Purpose

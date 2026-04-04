@@ -1,5 +1,7 @@
 # Whitebox Workflows for R
 
+**THIS CRATE IS CURRENTLY EXPERIMENTAL AND IS IN AN EARLY DEVELOPMENTAL STAGE. IT IS NOT INTENDED FOR PUBLIC USAGE AT PRESENT.**
+
 Whitebox Workflows for R is the R interface for the Whitebox backend.
 
 ## Purpose

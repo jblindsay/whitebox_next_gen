@@ -1,5 +1,7 @@
 # wblicense_core
 
+**THIS CRATE IS CURRENTLY EXPERIMENTAL AND IS IN AN EARLY DEVELOPMENTAL STAGE. IT IS NOT INTENDED FOR PUBLIC USAGE AT PRESENT.**
+
 Core licensing primitives for Whitebox Next Gen (OSS).
 
 ## Project Structure Context

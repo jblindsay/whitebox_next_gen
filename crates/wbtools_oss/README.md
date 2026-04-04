@@ -1,5 +1,7 @@
 # wbtools_oss
 
+**THIS CRATE IS CURRENTLY EXPERIMENTAL AND IS IN AN EARLY DEVELOPMENTAL STAGE. IT IS NOT INTENDED FOR PUBLIC USAGE AT PRESENT.**
+
 Open-source tool pack for the Whitebox backend runtime.
 
 ## Purpose

@@ -1,5 +1,7 @@
 # Whitebox Workflows for Python
 
+**THIS CRATE IS CURRENTLY EXPERIMENTAL AND IS IN AN EARLY DEVELOPMENTAL STAGE. IT IS NOT INTENDED FOR PUBLIC USAGE AT PRESENT.**
+
 Whitebox Workflows for Python is the Python interface for the Whitebox backend runtime.
 
 > **Tool Reference:** For a complete listing of all available tools, their parameters, and

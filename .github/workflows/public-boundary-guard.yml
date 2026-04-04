@@ -1,0 +1,23 @@
+name: public boundary guard
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  boundary-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run public boundary guard
+        run: |
+          bash scripts/check_public_boundary.sh

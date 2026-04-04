@@ -101,6 +101,40 @@ Report all blocked crates:
 bash scripts/publish_backend_dry_run.sh --continue
 ```
 
+### 3.3 Public-boundary guard (required)
+
+Before any push to mainline branches, run:
+
+```bash
+bash scripts/check_public_boundary.sh
+```
+
+This blocks changes to restricted public-sensitive paths by default:
+
+- crates/wbcore/
+- crates/wblicense_core/
+- crates/wbtools_oss/
+- crates/wbw_python/
+- crates/wbw_r/
+
+Install the local pre-push hook once per clone:
+
+```bash
+bash scripts/install_boundary_pre_push_hook.sh
+```
+
+CI also enforces this with:
+
+- .github/workflows/public-boundary-guard.yml
+
+If an emergency exception is truly required, use explicit override:
+
+```bash
+PUBLIC_BOUNDARY_OVERRIDE=I_UNDERSTAND_THIS_IS_PUBLIC bash scripts/check_public_boundary.sh
+```
+
+Any override usage should be considered a release-governance event and reviewed.
+
 ## 4. Publishing the Full Backend Set (Monorepo Release)
 
 Use this when releasing all backend crates in sequence.

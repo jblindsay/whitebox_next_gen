@@ -17,6 +17,7 @@ use nalgebra::Vector3;
 use nalgebra::{Matrix3, Matrix3x4, Vector2};
 
 use crate::alignment::AlignmentResult;
+use crate::camera::{CameraIntrinsics, CameraModel};
 use crate::error::{PhotogrammetryError, Result};
 use crate::ingest::ImageFrame;
 
@@ -710,6 +711,7 @@ fn estimate_multiview_depth_maps(
         }
 
         let ref_intr = scaled_intrinsics(intrinsics, ref_pyr.scale0);
+        let ref_intr_full = scaled_intrinsics_full(intrinsics, ref_pyr.scale0);
         let ref_intr_l1 = ref_pyr
             .level1
             .as_ref()
@@ -737,10 +739,15 @@ fn estimate_multiview_depth_maps(
                     local_texture_score(ref_img, x, y, MVS_TEXTURE_SCORE_RADIUS),
                 ) as i32;
                 let center_ref = patch_center_intensity(ref_img, x, y);
-                let x_ref_n = Vector2::new(
-                    (x as f64 - ref_intr.0) / ref_intr.2,
-                    (y as f64 - ref_intr.1) / ref_intr.3,
-                );
+                let Some(x_ref_n) = unproject_pixel_to_normalized_camera_ray(
+                    x as f64,
+                    y as f64,
+                    &ref_intr_full,
+                    alignment.stats.model,
+                ) else {
+                    x += step_x;
+                    continue;
+                };
 
                 let mut best_point: Option<Vector3<f64>> = None;
                 let mut best_conf = 0.0_f64;
@@ -754,6 +761,7 @@ fn estimate_multiview_depth_maps(
                     };
                     let src_img = &src_pyr.level0;
                     let src_intr = scaled_intrinsics(intrinsics, src_pyr.scale0);
+                    let src_intr_full = scaled_intrinsics_full(intrinsics, src_pyr.scale0);
                     let src_intr_l1 = src_pyr
                         .level1
                         .as_ref()
@@ -850,10 +858,14 @@ fn estimate_multiview_depth_maps(
                         continue;
                     }
 
-                    let x_src_n = Vector2::new(
-                        (m.x as f64 - src_intr.0) / src_intr.2,
-                        (m.y as f64 - src_intr.1) / src_intr.3,
-                    );
+                    let Some(x_src_n) = unproject_pixel_to_normalized_camera_ray(
+                        m.x as f64,
+                        m.y as f64,
+                        &src_intr_full,
+                        alignment.stats.model,
+                    ) else {
+                        continue;
+                    };
                     let Some(point_w) = triangulate_point(&p_ref, &p_src, &x_ref_n, &x_src_n) else {
                         continue;
                     };
@@ -879,12 +891,13 @@ fn estimate_multiview_depth_maps(
                             continue;
                         };
                         let other_img = &other_pyr.level0;
-                        let other_intr = scaled_intrinsics(intrinsics, other_pyr.scale0);
+                        let other_intr_full = scaled_intrinsics_full(intrinsics, other_pyr.scale0);
                         let p_other = projection_matrix(&alignment.poses[other_idx]);
-                        let Some((u, v)) = project_point_to_image_pinhole(
+                        let Some((u, v)) = project_point_to_image(
                             &alignment.poses[other_idx],
                             &point_w,
-                            other_intr,
+                            &other_intr_full,
+                            alignment.stats.model,
                         ) else {
                             continue;
                         };
@@ -917,10 +930,14 @@ fn estimate_multiview_depth_maps(
                             continue;
                         }
 
-                        let x_other_n = Vector2::new(
-                            (uo as f64 - other_intr.0) / other_intr.2,
-                            (vo as f64 - other_intr.1) / other_intr.3,
-                        );
+                        let Some(x_other_n) = unproject_pixel_to_normalized_camera_ray(
+                            uo as f64,
+                            vo as f64,
+                            &other_intr_full,
+                            alignment.stats.model,
+                        ) else {
+                            continue;
+                        };
                         let Some(retriangulated) = triangulate_point(&p_ref, &p_other, &x_ref_n, &x_other_n) else {
                             continue;
                         };
@@ -1748,14 +1765,24 @@ fn estimate_stereo_depths_from_image_pairs(
                     continue;
                 }
 
-                let x1n = Vector2::new(
-                    (x as f64 - scaled_intrinsics_left.0) / scaled_intrinsics_left.2,
-                    (y as f64 - scaled_intrinsics_left.1) / scaled_intrinsics_left.3,
-                );
-                let x2n = Vector2::new(
-                    (m.x as f64 - scaled_intrinsics_right.0) / scaled_intrinsics_right.2,
-                    (m.y as f64 - scaled_intrinsics_right.1) / scaled_intrinsics_right.3,
-                );
+                let left_intr_full = scaled_intrinsics_full(intrinsics, left.scale0);
+                let right_intr_full = scaled_intrinsics_full(intrinsics, right.scale0);
+                let Some(x1n) = unproject_pixel_to_normalized_camera_ray(
+                    x as f64,
+                    y as f64,
+                    &left_intr_full,
+                    alignment.stats.model,
+                ) else {
+                    continue;
+                };
+                let Some(x2n) = unproject_pixel_to_normalized_camera_ray(
+                    m.x as f64,
+                    m.y as f64,
+                    &right_intr_full,
+                    alignment.stats.model,
+                ) else {
+                    continue;
+                };
                 let Some(point_w) = triangulate_point(&p_left, &p_right, &x1n, &x2n) else {
                     continue;
                 };
@@ -1824,8 +1851,21 @@ fn build_half_level(img: &GrayImage, parent_scale: f64) -> Option<(GrayImage, f6
     Some((resized, parent_scale * 0.5))
 }
 
-fn scaled_intrinsics(intrinsics: &crate::camera::CameraIntrinsics, scale: f64) -> (f64, f64, f64, f64) {
+fn scaled_intrinsics(intrinsics: &CameraIntrinsics, scale: f64) -> (f64, f64, f64, f64) {
     (intrinsics.cx * scale, intrinsics.cy * scale, intrinsics.fx * scale, intrinsics.fy * scale)
+}
+
+fn scaled_intrinsics_full(intrinsics: &CameraIntrinsics, scale: f64) -> CameraIntrinsics {
+    CameraIntrinsics {
+        fx: intrinsics.fx * scale,
+        fy: intrinsics.fy * scale,
+        cx: intrinsics.cx * scale,
+        cy: intrinsics.cy * scale,
+        k1: intrinsics.k1,
+        k2: intrinsics.k2,
+        p1: intrinsics.p1,
+        p2: intrinsics.p2,
+    }
 }
 
 fn projection_matrix(pose: &crate::alignment::CameraPose) -> Matrix3x4<f64> {
@@ -2174,10 +2214,11 @@ fn triangulation_geometry_quality(
     (0.65 * angle_factor + 0.35 * conditioning_factor).clamp(0.0, 1.0)
 }
 
-fn project_point_to_image_pinhole(
+fn project_point_to_image(
     pose: &crate::alignment::CameraPose,
     point_w: &Vector3<f64>,
-    scaled_intr: (f64, f64, f64, f64),
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
 ) -> Option<(f64, f64)> {
     let r_c2w = quaternion_to_matrix(&pose.rotation);
     let r_w2c = r_c2w.transpose();
@@ -2187,15 +2228,138 @@ fn project_point_to_image_pinhole(
         return None;
     }
 
-    let xn = x_cam[0] / x_cam[2];
-    let yn = x_cam[1] / x_cam[2];
-    let u = scaled_intr.0 + scaled_intr.2 * xn;
-    let v = scaled_intr.1 + scaled_intr.3 * yn;
+    project_camera_ray_to_pixel(x_cam[0] / x_cam[2], x_cam[1] / x_cam[2], intrinsics, camera_model)
+}
+
+fn project_camera_ray_to_pixel(
+    xn: f64,
+    yn: f64,
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Option<(f64, f64)> {
+    let (x_d, y_d) = match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => {
+            let r2 = xn * xn + yn * yn;
+            let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
+            let x_t = 2.0 * intrinsics.p1 * xn * yn + intrinsics.p2 * (r2 + 2.0 * xn * xn);
+            let y_t = intrinsics.p1 * (r2 + 2.0 * yn * yn) + 2.0 * intrinsics.p2 * xn * yn;
+            (xn * radial + x_t, yn * radial + y_t)
+        }
+        CameraModel::Fisheye => {
+            let r = (xn * xn + yn * yn).sqrt();
+            if r <= 1.0e-12 {
+                (xn, yn)
+            } else {
+                let theta = r.atan();
+                let theta2 = theta * theta;
+                let theta_d = theta * (1.0 + intrinsics.k1 * theta2 + intrinsics.k2 * theta2 * theta2);
+                let scale = theta_d / r;
+                (xn * scale, yn * scale)
+            }
+        }
+    };
+    if !x_d.is_finite() || !y_d.is_finite() {
+        return None;
+    }
+    let u = intrinsics.fx * x_d + intrinsics.cx;
+    let v = intrinsics.fy * y_d + intrinsics.cy;
     if u.is_finite() && v.is_finite() {
         Some((u, v))
     } else {
         None
     }
+}
+
+fn unproject_pixel_to_normalized_camera_ray(
+    u: f64,
+    v: f64,
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Option<Vector2<f64>> {
+    let xd = (u - intrinsics.cx) / intrinsics.fx;
+    let yd = (v - intrinsics.cy) / intrinsics.fy;
+    if !xd.is_finite() || !yd.is_finite() {
+        return None;
+    }
+    match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => undistort_pinhole_normalized(xd, yd, intrinsics),
+        CameraModel::Fisheye => undistort_fisheye_normalized(xd, yd, intrinsics),
+    }
+}
+
+fn undistort_pinhole_normalized(
+    xd: f64,
+    yd: f64,
+    intrinsics: &CameraIntrinsics,
+) -> Option<Vector2<f64>> {
+    let mut x = xd;
+    let mut y = yd;
+    for _ in 0..8 {
+        let r2 = x * x + y * y;
+        let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
+        if !radial.is_finite() || radial.abs() <= 1.0e-12 {
+            return None;
+        }
+        let x_t = 2.0 * intrinsics.p1 * x * y + intrinsics.p2 * (r2 + 2.0 * x * x);
+        let y_t = intrinsics.p1 * (r2 + 2.0 * y * y) + 2.0 * intrinsics.p2 * x * y;
+        let next_x = (xd - x_t) / radial;
+        let next_y = (yd - y_t) / radial;
+        if !next_x.is_finite() || !next_y.is_finite() {
+            return None;
+        }
+        let step = ((next_x - x) * (next_x - x) + (next_y - y) * (next_y - y)).sqrt();
+        x = next_x;
+        y = next_y;
+        if step <= 1.0e-12 {
+            break;
+        }
+    }
+    Some(Vector2::new(x, y))
+}
+
+fn undistort_fisheye_normalized(
+    xd: f64,
+    yd: f64,
+    intrinsics: &CameraIntrinsics,
+) -> Option<Vector2<f64>> {
+    let radius_distorted = (xd * xd + yd * yd).sqrt();
+    if !radius_distorted.is_finite() {
+        return None;
+    }
+    if radius_distorted <= 1.0e-12 {
+        return Some(Vector2::new(xd, yd));
+    }
+
+    let theta = invert_fisheye_theta(radius_distorted, intrinsics)?;
+    let radius_rectilinear = theta.tan();
+    if !radius_rectilinear.is_finite() {
+        return None;
+    }
+    let scale = radius_rectilinear / radius_distorted;
+    Some(Vector2::new(xd * scale, yd * scale))
+}
+
+fn invert_fisheye_theta(theta_distorted: f64, intrinsics: &CameraIntrinsics) -> Option<f64> {
+    if !theta_distorted.is_finite() || theta_distorted < 0.0 {
+        return None;
+    }
+
+    let mut theta = theta_distorted.clamp(0.0, std::f64::consts::FRAC_PI_2 - 1.0e-4);
+    for _ in 0..10 {
+        let theta2 = theta * theta;
+        let theta4 = theta2 * theta2;
+        let f = theta * (1.0 + intrinsics.k1 * theta2 + intrinsics.k2 * theta4) - theta_distorted;
+        let df = 1.0 + 3.0 * intrinsics.k1 * theta2 + 5.0 * intrinsics.k2 * theta4;
+        if !f.is_finite() || !df.is_finite() || df.abs() <= 1.0e-12 {
+            return None;
+        }
+        let step = f / df;
+        theta = (theta - step).clamp(0.0, std::f64::consts::FRAC_PI_2 - 1.0e-4);
+        if step.abs() <= 1.0e-10 {
+            break;
+        }
+    }
+    Some(theta)
 }
 
 fn patch_center_intensity(img: &GrayImage, x: i32, y: i32) -> f64 {

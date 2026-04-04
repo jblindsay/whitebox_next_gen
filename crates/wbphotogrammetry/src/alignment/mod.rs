@@ -286,7 +286,9 @@ pub fn run_camera_alignment_with_options(
         aligned = essential_aligned_count;
     }
     calibrate_intrinsics_from_correspondence(&mut intrinsics, frames, &positions, match_stats);
-    let rotations = rotations_opt.unwrap_or_else(|| derive_rotations_from_positions(frames, &positions, match_stats));
+    let rotations = rotations_opt
+        .unwrap_or_else(|| derive_rotations_from_positions(frames, &positions, match_stats));
+    let rotations = normalize_rotations_for_projection_convention(rotations);
     let (positions, rotations, refined_intrinsics, residual_samples_px, ba_diag) = run_simplified_bundle_adjustment(
         &positions,
         &rotations,
@@ -314,7 +316,10 @@ pub fn run_camera_alignment_with_options(
         && ba_diag.supported_camera_fraction < 0.90
         && residual_p50_px > 18.0;
     let output_rotations: Vec<[f64; 4]> = if use_nadir_orientation_fallback {
-        vec![[1.0, 0.0, 0.0, 0.0]; positions.len()]
+        // Use nadir orientation (camera looks down, north-up image convention)
+        // rather than identity (camera looks up), which is geometrically correct
+        // for drone surveys and consistent with the mosaic standard projection path.
+        vec![[0.0, 1.0, 0.0, 0.0]; positions.len()]
     } else {
         rotations.clone()
     };
@@ -1394,14 +1399,17 @@ fn run_simplified_bundle_adjustment(
     let pose_prior_weights = build_pose_prior_weights(&observations, centres.len(), weak_geometry_support);
     let center_step_cap = if weak_geometry_support { 0.04 } else { 0.08 };
     let rotation_step_cap = if weak_geometry_support { 0.018 } else { 0.035 };
+    // Increased blend factors: the previous ultra-conservative values (0.12-0.25
+    // for positions, 0.20-0.40 for intrinsics) were discarding the vast majority
+    // of every BA pass, preventing convergence even when observations were good.
     let post_blend = if weak_geometry_support {
-        0.12
+        0.50
     } else if initial_supported_camera_fraction < 0.90 {
-        0.18
+        0.70
     } else {
-        0.25
+        0.88
     };
-    let intrinsics_blend = if weak_geometry_support { 0.20 } else { 0.40 };
+    let intrinsics_blend = if weak_geometry_support { 0.60 } else { 0.88 };
 
     // Enhanced BA: optimize camera centers and small-angle rotations
     // with robust Huber weighting for outlier trimming and triangulated structure.
@@ -3817,8 +3825,13 @@ fn apply_intrinsics_update(
         deltas[i] = grads[i] * lrs[i];
     }
 
-    deltas[0] = deltas[0].clamp(-25.0, 25.0);
-    deltas[1] = deltas[1].clamp(-25.0, 25.0);
+    // Scale the focal-length step cap proportionally to the current focal length
+    // so the BA can meaningfully correct large initial estimates (e.g. when EXIF
+    // sensor_width defaults to 13.2 mm but the true sensor is smaller).
+    let fx_step = (intrinsics.fx * 0.06).clamp(30.0, 400.0);
+    let fy_step = (intrinsics.fy * 0.06).clamp(30.0, 400.0);
+    deltas[0] = deltas[0].clamp(-fx_step, fx_step);
+    deltas[1] = deltas[1].clamp(-fy_step, fy_step);
     deltas[2] = deltas[2].clamp(-3.0, 3.0);
     deltas[3] = deltas[3].clamp(-3.0, 3.0);
     deltas[4] = deltas[4].clamp(-0.002, 0.002);
@@ -5214,19 +5227,56 @@ fn derive_rotations_from_positions(
         } else {
             0.0
         };
-        rotations.push(yaw_pitch_roll_to_quaternion(yaw, pitch, roll));
+        let q_body = yaw_pitch_roll_to_quaternion(yaw, pitch, roll);
+        // Compose with nadir flip (180° around X) so the camera looks downward.
+        // This places camera +Z toward world -Z, enabling project_world_to_pixel
+        // to see positive depth for ground features and engaging the standard
+        // (non-legacy) mosaic projection path for all GPS-derived poses.
+        rotations.push(quaternion_premultiply_nadir_flip(q_body));
     }
 
     rotations
 }
 
+/// Pre-multiply a quaternion by the 180° X-axis flip q_flip = [0, 1, 0, 0].
+/// Closed-form product [0,1,0,0] * [qw,qx,qy,qz] = [-qx, qw, -qz, qy].
+/// Converts an upward-Z camera (Z = world +Z) to a nadir/downward-Z camera
+/// (Z = world -Z) while preserving the yaw direction.
+fn quaternion_premultiply_nadir_flip(q: [f64; 4]) -> [f64; 4] {
+    let [qw, qx, qy, qz] = q;
+    let r = [-qx, qw, -qz, qy];
+    let n = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2] + r[3] * r[3]).sqrt();
+    if n > 1e-12 {
+        [r[0] / n, r[1] / n, r[2] / n, r[3] / n]
+    } else {
+        [0.0, 1.0, 0.0, 0.0]
+    }
+}
+
+fn normalize_rotations_for_projection_convention(rotations: Vec<[f64; 4]>) -> Vec<[f64; 4]> {
+    rotations
+        .into_iter()
+        .map(|q| {
+            let r_w2c = quaternion_to_matrix(&q).transpose();
+            let down_in_camera = r_w2c * Vector3::new(0.0, 0.0, -1.0);
+            if down_in_camera[2] <= 0.0 {
+                quaternion_premultiply_nadir_flip(q)
+            } else {
+                q
+            }
+        })
+        .collect()
+}
+
 fn orientation_prior_yaw_trust(prior: &OrientationPrior) -> f64 {
     match prior.source {
-        OrientationPriorSource::XmpDji => 0.82,
-        OrientationPriorSource::XmpGeneric => 0.72,
-        OrientationPriorSource::DjiMakerNote => 0.78,
-        OrientationPriorSource::ExifGpsImageDirection => 0.64,
-        OrientationPriorSource::ExifGpsTrack => 0.52,
+        // DJI XMP gimbal data comes from the drone's sensor fusion IMU+compass
+        // and is the most accurate orientation source available; trust it heavily.
+        OrientationPriorSource::XmpDji => 0.95,
+        OrientationPriorSource::XmpGeneric => 0.80,
+        OrientationPriorSource::DjiMakerNote => 0.90,
+        OrientationPriorSource::ExifGpsImageDirection => 0.72,
+        OrientationPriorSource::ExifGpsTrack => 0.60,
     }
 }
 
@@ -5444,7 +5494,14 @@ fn calibrate_intrinsics_from_correspondence(
 
     observed_px_per_m.sort_by(|a, b| a.total_cmp(b));
     let median_observed = observed_px_per_m[observed_px_per_m.len() / 2];
-    let scale = (median_observed / predicted_px_per_m).clamp(0.70, 1.45);
+    // GPS positions carry true metric scale, so the pixel/metre ratio derived from
+    // GPS baselines is a reliable focal-length signal even when the default sensor
+    // width assumption is wrong (e.g. small-sensor drones vs. the 13.2 mm default).
+    // Widen the correction window when every frame has GPS; keep it conservative
+    // for heuristic (non-GPS) baselines that may not reflect true scene scale.
+    let has_gps = frames.iter().all(|f| f.metadata.gps.is_some());
+    let (scale_lo, scale_hi) = if has_gps { (0.25, 4.0) } else { (0.70, 1.45) };
+    let scale = (median_observed / predicted_px_per_m).clamp(scale_lo, scale_hi);
 
     intrinsics.fx = (intrinsics.fx * scale).max(50.0);
     intrinsics.fy = (intrinsics.fy * scale).max(50.0);

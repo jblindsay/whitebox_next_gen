@@ -10,6 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 
 use crate::alignment::AlignmentResult;
+use crate::camera::{CameraIntrinsics, CameraModel};
 use crate::error::{PhotogrammetryError, Result};
 use crate::ingest::ImageFrame;
 
@@ -27,6 +28,11 @@ struct SourceImage {
     rgb_gain: [f64; 3],
     quality_weight: f64,
     use_legacy_projection: bool,
+    camera_model: CameraModel,
+    k1: f64,
+    k2: f64,
+    p1: f64,
+    p2: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -473,7 +479,9 @@ fn build_source_images(
         let dyn_img = image::open(&frame.path).map_err(|e| {
             PhotogrammetryError::Orthomosaic(format!("failed to read image '{}': {e}", frame.path))
         })?;
-        let rgb = dyn_img.to_rgb8();
+        // Apply EXIF image orientation (0x0112 tag) to normalize the pixel data
+        let oriented_img = frame.metadata.image_orientation.apply_to_image(dyn_img);
+        let rgb = oriented_img.to_rgb8();
         let width_px = rgb.width();
         let height_px = rgb.height();
         if width_px < 2 || height_px < 2 {
@@ -484,7 +492,6 @@ fn build_source_images(
         let quality_weight = 1.0 / (1.0 + pose.reprojection_error_px.max(0.0));
         let mean_channels = image_channel_means(&rgb);
         channel_means.push(mean_channels);
-        let use_legacy_projection = select_projection_convention_for_pose(pose.rotation);
 
         out.push(SourceImage {
             rgb,
@@ -498,7 +505,12 @@ fn build_source_images(
             cy,
             rgb_gain: [1.0, 1.0, 1.0],
             quality_weight,
-            use_legacy_projection,
+            use_legacy_projection: false,
+            camera_model: alignment.stats.model,
+            k1: alignment.stats.intrinsics.k1,
+            k2: alignment.stats.intrinsics.k2,
+            p1: alignment.stats.intrinsics.p1,
+            p2: alignment.stats.intrinsics.p2,
         });
     }
 
@@ -510,14 +522,6 @@ fn build_source_images(
     }
 
     Ok(out)
-}
-
-fn select_projection_convention_for_pose(rotation: [f64; 4]) -> bool {
-    // Evaluate camera-frame depth of the world-down direction for this pose.
-    // Positive depth indicates the alignment (+Z forward) convention is consistent.
-    // Otherwise use the legacy sign convention for deterministic compatibility.
-    let (_, _, rz_down) = rotate_vector_by_quaternion_inverse(rotation, 0.0, 0.0, -1.0);
-    rz_down <= 0.0
 }
 
 fn blend_sources_at(
@@ -783,17 +787,32 @@ fn project_world_to_image(
 
     let (rx, ry, rz) = rotate_vector_by_quaternion_inverse(source.rotation, dx, dy, dz);
 
-    let (cam_x, cam_y, cam_z) = if source.use_legacy_projection {
+    let (_legacy_x, _legacy_y, _legacy_z) = if source.use_legacy_projection {
         (rx, -ry, -rz)
     } else {
         (rx, ry, rz)
     };
+    let (cam_x, cam_y, cam_z) = (rx, ry, rz);
     if cam_z <= 1e-6 {
         return None;
     }
 
-    let px = source.fx * (cam_x / cam_z) + source.cx;
-    let py = source.fy * (cam_y / cam_z) + source.cy;
+    let intrinsics = CameraIntrinsics {
+        fx: source.fx,
+        fy: source.fy,
+        cx: source.cx,
+        cy: source.cy,
+        k1: source.k1,
+        k2: source.k2,
+        p1: source.p1,
+        p2: source.p2,
+    };
+    let (px, py) = project_camera_ray_to_pixel(
+        cam_x / cam_z,
+        cam_y / cam_z,
+        &intrinsics,
+        source.camera_model,
+    )?;
     let distance_m = (dx * dx + dy * dy + dz * dz).sqrt();
     let view_cosine = cam_z / distance_m.max(1e-6);
 
@@ -822,6 +841,46 @@ fn rotate_vector_by_quaternion_inverse(q: [f64; 4], x: f64, y: f64, z: f64) -> (
     (rx, ry, rz)
 }
 
+fn project_camera_ray_to_pixel(
+    xn: f64,
+    yn: f64,
+    intrinsics: &CameraIntrinsics,
+    camera_model: CameraModel,
+) -> Option<(f64, f64)> {
+    let (x_d, y_d) = match camera_model {
+        CameraModel::Pinhole | CameraModel::Auto => {
+            let r2 = xn * xn + yn * yn;
+            let radial = 1.0 + intrinsics.k1 * r2 + intrinsics.k2 * r2 * r2;
+            let x_t = 2.0 * intrinsics.p1 * xn * yn + intrinsics.p2 * (r2 + 2.0 * xn * xn);
+            let y_t = intrinsics.p1 * (r2 + 2.0 * yn * yn) + 2.0 * intrinsics.p2 * xn * yn;
+            (xn * radial + x_t, yn * radial + y_t)
+        }
+        CameraModel::Fisheye => {
+            let r = (xn * xn + yn * yn).sqrt();
+            if r <= 1.0e-12 {
+                (xn, yn)
+            } else {
+                let theta = r.atan();
+                let theta2 = theta * theta;
+                let theta_d = theta * (1.0 + intrinsics.k1 * theta2 + intrinsics.k2 * theta2 * theta2);
+                let scale = theta_d / r;
+                (xn * scale, yn * scale)
+            }
+        }
+    };
+    if !x_d.is_finite() || !y_d.is_finite() {
+        return None;
+    }
+
+    let u = intrinsics.fx * x_d + intrinsics.cx;
+    let v = intrinsics.fy * y_d + intrinsics.cy;
+    if u.is_finite() && v.is_finite() {
+        Some((u, v))
+    } else {
+        None
+    }
+}
+
 fn intrinsics_for_source(
     alignment: &AlignmentResult,
     frame: &ImageFrame,
@@ -842,10 +901,10 @@ fn intrinsics_for_source(
         cy = height_px as f64 * 0.5;
     }
 
-    let ref_w = (alignment.stats.intrinsics.cx * 2.0).max(1.0);
-    let ref_h = (alignment.stats.intrinsics.cy * 2.0).max(1.0);
-    let scale_x = frame.width.max(1) as f64 / ref_w;
-    let scale_y = frame.height.max(1) as f64 / ref_h;
+    let ref_w = frame.width.max(1) as f64;
+    let ref_h = frame.height.max(1) as f64;
+    let scale_x = width_px as f64 / ref_w;
+    let scale_y = height_px as f64 / ref_h;
 
     (
         (fx * scale_x).max(1.0),
@@ -1816,6 +1875,11 @@ mod tests {
             rgb_gain: [1.0, 1.0, 1.0],
             quality_weight: 1.0,
             use_legacy_projection: false,
+            camera_model: CameraModel::Pinhole,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
         };
 
         let flat = image_local_texture_score(&source, 2.0, 6.0);
@@ -1979,6 +2043,11 @@ mod tests {
             rgb_gain,
             quality_weight: 1.0,
             use_legacy_projection: false,
+            camera_model: CameraModel::Pinhole,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
         };
 
         let mut sources = vec![
@@ -2033,7 +2102,12 @@ mod tests {
             cy: 12.0,
             rgb_gain: [1.0, 1.0, 1.0],
             quality_weight: 1.0,
-              use_legacy_projection: true,
+            use_legacy_projection: true,
+            camera_model: CameraModel::Pinhole,
+            k1: 0.0,
+            k2: 0.0,
+            p1: 0.0,
+            p2: 0.0,
         };
         let sources = vec![mk_src([100, 90, 80], 0.0), mk_src([120, 99, 72], 1.2)];
 

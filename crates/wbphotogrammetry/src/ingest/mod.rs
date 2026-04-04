@@ -24,6 +24,67 @@ pub struct GpsCoordinate {
     pub alt: f64,
 }
 
+/// EXIF 0x0112 image raster orientation (how the physical image is rotated on disk).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ImageOrientation {
+    /// Normal (1): no rotation, top-left origin.
+    Normal,
+    /// Flipped horizontally (2).
+    FlipHorizontal,
+    /// Rotated 180° (3).
+    Rotate180,
+    /// Flipped vertically (4).
+    FlipVertical,
+    /// Rotated 90° CCW, then flipped horizontally (5).
+    Rotate270FlipH,
+    /// Rotated 90° CW (6).
+    Rotate90,
+    /// Rotated 90° CW, then flipped horizontally (7).
+    Rotate90FlipH,
+    /// Rotated 270° CW (8).
+    Rotate270,
+}
+
+impl ImageOrientation {
+    /// Get the oriented (output) dimensions from raw (input) pixel dimensions.
+    /// Swaps width/height for 90° and 270° rotations.
+    pub fn oriented_dimensions(&self, raw_width: u32, raw_height: u32) -> (u32, u32) {
+        match self {
+            ImageOrientation::Rotate90 | ImageOrientation::Rotate270 |
+            ImageOrientation::Rotate270FlipH | ImageOrientation::Rotate90FlipH => {
+                (raw_height, raw_width)
+            }
+            _ => (raw_width, raw_height),
+        }
+    }
+
+    /// Apply this orientation transformation to a `DynamicImage`.
+    pub fn apply_to_image(&self, img: image::DynamicImage) -> image::DynamicImage {
+        match self {
+            ImageOrientation::Normal => img,
+            ImageOrientation::FlipHorizontal => img.fliph(),
+            ImageOrientation::Rotate180 => img.rotate180(),
+            ImageOrientation::FlipVertical => img.flipv(),
+            ImageOrientation::Rotate90 => img.rotate90(),
+            ImageOrientation::Rotate270 => img.rotate270(),
+            ImageOrientation::Rotate270FlipH => {
+                let rotated = img.rotate90();
+                rotated.fliph()
+            }
+            ImageOrientation::Rotate90FlipH => {
+                let rotated = img.rotate270();
+                rotated.fliph()
+            }
+        }
+    }
+}
+
+impl Default for ImageOrientation {
+    fn default() -> Self {
+        ImageOrientation::Normal
+    }
+}
+
 /// Provenance for an optional per-frame camera attitude prior.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OrientationPriorSource {
@@ -61,12 +122,14 @@ pub struct FrameMetadata {
     pub focal_length_mm: Option<f64>,
     /// Sensor width in millimetres, if available.
     pub sensor_width_mm: Option<f64>,
-    /// Image width in pixels.
+    /// Image width in pixels *after* applying EXIF orientation correction.
     pub image_width_px: u32,
-    /// Image height in pixels.
+    /// Image height in pixels *after* applying EXIF orientation correction.
     pub image_height_px: u32,
     /// EXIF `DateTimeOriginal` string, if available.
     pub timestamp: Option<String>,
+    /// EXIF 0x0112 image raster orientation (physical rotation on disk).
+    pub image_orientation: ImageOrientation,
     /// Optional metadata-derived orientation prior.
     pub orientation_prior: Option<OrientationPrior>,
     /// Laplacian-variance blur score (higher = sharper). `None` when not computed.
@@ -139,24 +202,28 @@ pub fn ingest_image_set(images_dir: &str) -> Result<Vec<ImageFrame>> {
         }
 
         let path_str = path.to_string_lossy().to_string();
-        let (width, height) = image::image_dimensions(&path)
+        let (raw_width, raw_height) = image::image_dimensions(&path)
             .map_err(|e| crate::error::PhotogrammetryError::ImageSet(format!(
                 "failed reading dimensions for '{}': {}",
                 path_str, e
             )))?;
         let exif = read_exif_metadata(&path);
+        
+        // Apply oriented dimensions (swap for 90°/270° rotations)
+        let (oriented_width, oriented_height) = exif.image_orientation.oriented_dimensions(raw_width, raw_height);
 
         frames.push(ImageFrame {
             path: path_str,
-            width,
-            height,
+            width: oriented_width,
+            height: oriented_height,
             metadata: FrameMetadata {
                 gps: exif.gps,
                 focal_length_mm: exif.focal_length_mm,
                 sensor_width_mm: None,
-                image_width_px: width,
-                image_height_px: height,
+                image_width_px: oriented_width,
+                image_height_px: oriented_height,
                 timestamp: exif.timestamp,
+                image_orientation: exif.image_orientation,
                 orientation_prior: exif.orientation_prior,
                 blur_score: compute_blur_score(&path),
                 has_rtk_gps: exif.has_rtk_gps,
@@ -244,6 +311,7 @@ struct ExifMetadata {
     gps: Option<GpsCoordinate>,
     focal_length_mm: Option<f64>,
     timestamp: Option<String>,
+    image_orientation: ImageOrientation,
     orientation_prior: Option<OrientationPrior>,
     has_rtk_gps: bool,
 }
@@ -292,6 +360,8 @@ fn read_exif_metadata(path: &Path) -> ExifMetadata {
         .get_field(Tag::DateTimeOriginal, In::PRIMARY)
         .and_then(|f| parse_ascii_string(&f.value));
 
+    let image_orientation = parse_exif_image_orientation(&exif);
+
     let orientation_prior = parse_xmp_orientation(&raw_bytes)
         .or_else(|| parse_standard_exif_orientation(&exif))
         .or_else(|| parse_dji_makernote_orientation(&exif));
@@ -309,6 +379,7 @@ fn read_exif_metadata(path: &Path) -> ExifMetadata {
         gps,
         focal_length_mm,
         timestamp,
+        image_orientation,
         orientation_prior,
         has_rtk_gps,
     }
@@ -329,6 +400,26 @@ fn parse_ascii_string(value: &Value) -> Option<String> {
             .filter(|s| !s.is_empty()),
         _ => None,
     }
+}
+
+fn parse_exif_image_orientation(exif: &exif::Exif) -> ImageOrientation {
+    exif.get_field(Tag::Orientation, In::PRIMARY)
+        .and_then(|f| match &f.value {
+            Value::Short(v) => v.first().copied(),
+            _ => None,
+        })
+        .and_then(|tag_value| match tag_value {
+            1 => Some(ImageOrientation::Normal),
+            2 => Some(ImageOrientation::FlipHorizontal),
+            3 => Some(ImageOrientation::Rotate180),
+            4 => Some(ImageOrientation::FlipVertical),
+            5 => Some(ImageOrientation::Rotate270FlipH),
+            6 => Some(ImageOrientation::Rotate90),
+            7 => Some(ImageOrientation::Rotate90FlipH),
+            8 => Some(ImageOrientation::Rotate270),
+            _ => None,
+        })
+        .unwrap_or(ImageOrientation::Normal)
 }
 
 fn parse_standard_exif_orientation(exif: &exif::Exif) -> Option<OrientationPrior> {

@@ -91,7 +91,6 @@ Other workspace crates are open-source and developed in this monorepo, but are n
 - `wbtools_oss`
 - `wbw_python`
 - `wbw_r`
-- `wbphotogrammetry`
 
 This staged publishing model keeps the foundational backend stack available first while higher-level crates continue to stabilize.
 
@@ -115,10 +114,6 @@ graph TD
 	wbprojection --> wbtools_oss
 	wbtopology --> wbtools_oss
 	wblidar --> wbtools_oss
-
-	wbcore --> wbphotogrammetry
-	wbraster --> wbphotogrammetry
-	wbprojection --> wbphotogrammetry
 
 	wbcore --> wbw_python
 	wblicense_core --> wbw_python

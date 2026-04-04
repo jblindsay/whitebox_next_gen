@@ -18,7 +18,6 @@ non_publishable_crates=(
   wbcore
   wblicense_core
   wbtools_oss
-  wbphotogrammetry
   wbw_python
   wbw_r
 )

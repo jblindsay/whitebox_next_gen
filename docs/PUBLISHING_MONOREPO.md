@@ -38,7 +38,6 @@ Crates in this workspace that are intentionally excluded from crates.io publishi
 - wbcore
 - wblicense_core
 - wbtools_oss
-- wbphotogrammetry
 - wbw_python
 - wbw_r
 
@@ -139,7 +138,7 @@ Any override usage should be considered a release-governance event and reviewed.
 
 Use this when releasing all backend crates in sequence.
 
-Do not use this workflow for wbcore, wblicense_core, wbtools_oss, wbphotogrammetry, wbw_python, or wbw_r. Those crates are intentionally excluded from crates.io publication.
+Do not use this workflow for wbcore, wblicense_core, wbtools_oss, wbw_python, or wbw_r. Those crates are intentionally excluded from crates.io publication.
 
 ### 4.1 Publish wbgeotiff
 

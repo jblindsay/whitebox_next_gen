@@ -9,7 +9,6 @@ members = [
   "crates/wbcore",
   "crates/wblicense_core",
   "crates/wbtools_oss",
-  "crates/wbphotogrammetry",
   "crates/wbw_python",
   "crates/wbw_r",
 ]

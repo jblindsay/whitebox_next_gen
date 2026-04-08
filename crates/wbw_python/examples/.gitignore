@@ -1,0 +1,4 @@
+# Generated example outputs
+output/
+*.pyc
+__pycache__/

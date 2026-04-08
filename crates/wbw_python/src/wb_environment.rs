@@ -1993,6 +1993,43 @@ impl Bundle {
         })?;
         Ok(Raster { file_path, active_band: 0 })
     }
+
+    /// Create a true-colour (Red/Green/Blue) composite from this bundle.
+    ///
+    /// Convenience delegate — equivalent to `wbe.true_colour_composite(self.bundle_root, ...)`.
+    /// Pass the `WbEnvironment` instance explicitly since `Bundle` holds no runtime reference.
+    #[pyo3(signature = (wbe, output_path=None, callback=None))]
+    fn true_colour_composite(
+        &self,
+        wbe: &WbEnvironment,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        wbe.true_colour_composite(
+            &self.bundle_root.to_string_lossy(),
+            output_path,
+            callback,
+        )
+    }
+
+    /// Create a false-colour (NIR/Red/Green) composite from this bundle.
+    ///
+    /// Convenience delegate — equivalent to `wbe.false_colour_composite(self.bundle_root, ...)`.
+    /// For Sentinel-2, B08 (10 m) is preferred over B8A (20 m) for the NIR channel.
+    /// Pass the `WbEnvironment` instance explicitly since `Bundle` holds no runtime reference.
+    #[pyo3(signature = (wbe, output_path=None, callback=None))]
+    fn false_colour_composite(
+        &self,
+        wbe: &WbEnvironment,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        wbe.false_colour_composite(
+            &self.bundle_root.to_string_lossy(),
+            output_path,
+            callback,
+        )
+    }
 }
 
 #[pymethods]
@@ -4789,6 +4826,181 @@ impl WbEnvironment {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Sensor-bundle colour composite helpers (module-level free functions)
+// Called by WbEnvironment::true_colour_composite and false_colour_composite.
+// ---------------------------------------------------------------------------
+
+/// Resolve the (red, green, blue) band paths for a true-colour (R/G/B) composite
+/// from the given bundle root directory.  Returns `Err` for SAR families.
+fn resolve_true_colour_band_paths(
+    bundle_root: &std::path::Path,
+) -> pyo3::PyResult<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)> {
+    let sensor_bundle = open_sensor_bundle(bundle_root).map_err(|e| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!(
+            "failed to open bundle '{}': {e}",
+            bundle_root.display()
+        ))
+    })?;
+    match sensor_bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => {
+            let r = pkg.band_path("B04").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing band B04"))?;
+            let g = pkg.band_path("B03").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing band B03"))?;
+            let b = pkg.band_path("B02").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing band B02"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Landsat(pkg) => {
+            use wbraster::packages::landsat_bundle::LandsatMission;
+            let (red_key, _nir_key, green_key, blue_key) = match pkg.mission {
+                LandsatMission::Landsat8 | LandsatMission::Landsat9 => ("B4", "B5", "B3", "B2"),
+                _ => {
+                    if pkg.band_path("B5").is_some() && pkg.band_path("B4").is_some() {
+                        ("B4", "B5", "B3", "B2")
+                    } else {
+                        ("B3", "B4", "B2", "B1")
+                    }
+                }
+            };
+            let r = pkg.band_path(red_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing band {red_key}")))?;
+            let g = pkg.band_path(green_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing band {green_key}")))?;
+            let b = pkg.band_path(blue_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing band {blue_key}")))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::PlanetScope(pkg) => {
+            let r = pkg.band_path("red").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing band 'red'"))?;
+            let g = pkg.band_path("green").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing band 'green'"))?;
+            let b = pkg.band_path("blue").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing band 'blue'"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Dimap(pkg) => {
+            let r = pkg.band_path("red").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing band 'red'"))?;
+            let g = pkg.band_path("green").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing band 'green'"))?;
+            let b = pkg.band_path("blue").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing band 'blue'"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::MaxarWorldView(pkg) => {
+            let r_key = if pkg.band_path("red").is_some() { "red" } else { "RED" };
+            let g_key = if pkg.band_path("green").is_some() { "green" } else { "GREEN" };
+            let b_key = if pkg.band_path("blue").is_some() { "blue" } else { "BLUE" };
+            let r = pkg.band_path(r_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a red band"))?;
+            let g = pkg.band_path(g_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a green band"))?;
+            let b = pkg.band_path(b_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a blue band"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Safe(SafeBundle::Sentinel1(_))
+        | SensorBundle::Iceye(_)
+        | SensorBundle::Radarsat2(_)
+        | SensorBundle::Rcm(_) => Err(pyo3::exceptions::PyValueError::new_err(
+            "true_colour_composite is not supported for SAR bundle families \
+             (sentinel1_safe, iceye, radarsat2, rcm). \
+             For SAR polarization composites, read individual measurements and \
+             call create_colour_composite() directly.",
+        )),
+    }
+}
+
+/// Resolve the (red, green, blue) band paths for a false-colour (NIR/R/G) composite
+/// from the given bundle root directory.  Returns `Err` for SAR families.
+/// For Sentinel-2, B08 (10 m) is preferred over B8A (20 m) for the NIR channel.
+fn resolve_false_colour_band_paths(
+    bundle_root: &std::path::Path,
+) -> pyo3::PyResult<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)> {
+    let sensor_bundle = open_sensor_bundle(bundle_root).map_err(|e| {
+        pyo3::exceptions::PyRuntimeError::new_err(format!(
+            "failed to open bundle '{}': {e}",
+            bundle_root.display()
+        ))
+    })?;
+    match sensor_bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => {
+            let nir_key = if pkg.band_path("B08").is_some() { "B08" } else { "B8A" };
+            let r = pkg.band_path(nir_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing NIR band (B08/B8A)"))?;
+            let g = pkg.band_path("B04").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing band B04"))?;
+            let b = pkg.band_path("B03").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Sentinel-2 bundle is missing band B03"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Landsat(pkg) => {
+            use wbraster::packages::landsat_bundle::LandsatMission;
+            let (red_key, nir_key, green_key, _blue_key) = match pkg.mission {
+                LandsatMission::Landsat8 | LandsatMission::Landsat9 => ("B4", "B5", "B3", "B2"),
+                _ => {
+                    if pkg.band_path("B5").is_some() && pkg.band_path("B4").is_some() {
+                        ("B4", "B5", "B3", "B2")
+                    } else {
+                        ("B3", "B4", "B2", "B1")
+                    }
+                }
+            };
+            let r = pkg.band_path(nir_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing NIR band {nir_key}")))?;
+            let g = pkg.band_path(red_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing band {red_key}")))?;
+            let b = pkg.band_path(green_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("Landsat bundle is missing band {green_key}")))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::PlanetScope(pkg) => {
+            let nir_key = if pkg.band_path("nir").is_some() { "nir" } else { "NIR" };
+            let r = pkg.band_path(nir_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing NIR band"))?;
+            let g = pkg.band_path("red").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing band 'red'"))?;
+            let b = pkg.band_path("green").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("PlanetScope bundle is missing band 'green'"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Dimap(pkg) => {
+            let nir_key = if pkg.band_path("nir").is_some() { "nir" } else { "NIR" };
+            let r = pkg.band_path(nir_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing NIR band"))?;
+            let g = pkg.band_path("red").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing band 'red'"))?;
+            let b = pkg.band_path("green").map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("DIMAP bundle is missing band 'green'"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::MaxarWorldView(pkg) => {
+            let nir_key = if pkg.band_path("nir").is_some() { "nir" } else { "NIR" };
+            let r_key = if pkg.band_path("red").is_some()   { "red" }   else { "RED"   };
+            let g_key = if pkg.band_path("green").is_some() { "green" } else { "GREEN" };
+            let r = pkg.band_path(nir_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a NIR band"))?;
+            let g = pkg.band_path(r_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a red band"))?;
+            let b = pkg.band_path(g_key).map(|p| p.to_path_buf())
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Maxar WorldView bundle is missing a green band"))?;
+            Ok((r, g, b))
+        }
+        SensorBundle::Safe(SafeBundle::Sentinel1(_))
+        | SensorBundle::Iceye(_)
+        | SensorBundle::Radarsat2(_)
+        | SensorBundle::Rcm(_) => Err(pyo3::exceptions::PyValueError::new_err(
+            "false_colour_composite is not supported for SAR bundle families \
+             (sentinel1_safe, iceye, radarsat2, rcm). \
+             For SAR polarization composites, read individual measurements and \
+             call create_colour_composite() directly.",
+        )),
+    }
+}
+
 #[pymethods]
 impl WbEnvironment {
     #[new]
@@ -5453,6 +5665,63 @@ impl WbEnvironment {
             )));
         }
         Ok(bundle)
+    }
+
+    /// Create a true-colour (Red/Green/Blue) composite raster from a sensor bundle.
+    ///
+    /// The correct band keys are resolved automatically for the detected bundle family.
+    /// Supported families: sentinel2_safe, landsat, planetscope, dimap, maxar_worldview.
+    /// SAR families (sentinel1_safe, iceye, radarsat2, rcm) raise a ValueError.
+    #[pyo3(signature = (bundle_root, output_path=None, callback=None))]
+    fn true_colour_composite(
+        &self,
+        bundle_root: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let input_path = if std::path::Path::new(bundle_root).is_absolute() {
+            std::path::PathBuf::from(bundle_root)
+        } else {
+            self.working_directory.join(bundle_root)
+        };
+        let (red_path, green_path, blue_path) = resolve_true_colour_band_paths(&input_path)?;
+        let mut args = serde_json::Map::new();
+        args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
+        args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
+        args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_raster_tool_with_args("create_colour_composite", args, 0, callback)
+    }
+
+    /// Create a false-colour (NIR/Red/Green) composite raster from a sensor bundle.
+    ///
+    /// The correct band keys are resolved automatically for the detected bundle family.
+    /// For Sentinel-2, B08 (10 m) is preferred over B8A (20 m) for the NIR channel.
+    /// Supported families: sentinel2_safe, landsat, planetscope, dimap, maxar_worldview.
+    /// SAR families (sentinel1_safe, iceye, radarsat2, rcm) raise a ValueError.
+    #[pyo3(signature = (bundle_root, output_path=None, callback=None))]
+    fn false_colour_composite(
+        &self,
+        bundle_root: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let input_path = if std::path::Path::new(bundle_root).is_absolute() {
+            std::path::PathBuf::from(bundle_root)
+        } else {
+            self.working_directory.join(bundle_root)
+        };
+        let (red_path, green_path, blue_path) = resolve_false_colour_band_paths(&input_path)?;
+        let mut args = serde_json::Map::new();
+        args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
+        args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
+        args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_raster_tool_with_args("create_colour_composite", args, 0, callback)
     }
 
     #[pyo3(signature = (

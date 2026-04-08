@@ -81,10 +81,11 @@ python3 crates/wbw_python/examples/python_import_smoke_test.py
 |---|---|---|
 | 1 | [examples/quickstart_harmonized_api.py](examples/quickstart_harmonized_api.py) | Raster/vector/lidar metadata quickstart |
 | 2 | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) | End-to-end object read/process/write |
-| 3 | [examples/vector_attributes_harmonized_api.py](examples/vector_attributes_harmonized_api.py) | Vector schema + attribute access aliases |
-| 4 | [examples/vector_multifile_write_demo.py](examples/vector_multifile_write_demo.py) | Shapefile/MapInfo dataset-aware outputs |
-| 5 | [examples/raster_numpy_roundtrip.py](examples/raster_numpy_roundtrip.py) | 2D NumPy roundtrip |
-| 6 | [examples/raster_numpy_multiband_roundtrip.py](examples/raster_numpy_multiband_roundtrip.py) | 3D NumPy roundtrip (bands-first and rows-cols-bands) |
+| 3 | [examples/sensor_bundle_overview.py](examples/sensor_bundle_overview.py) | Supported sensor bundle families, band/measurement access, and preview outputs |
+| 4 | [examples/vector_attributes_harmonized_api.py](examples/vector_attributes_harmonized_api.py) | Vector schema + attribute access aliases |
+| 5 | [examples/vector_multifile_write_demo.py](examples/vector_multifile_write_demo.py) | Shapefile/MapInfo dataset-aware outputs |
+| 6 | [examples/raster_numpy_roundtrip.py](examples/raster_numpy_roundtrip.py) | 2D NumPy roundtrip |
+| 7 | [examples/raster_numpy_multiband_roundtrip.py](examples/raster_numpy_multiband_roundtrip.py) | 3D NumPy roundtrip (bands-first and rows-cols-bands) |
 | — | [examples/licensing_offline_example.py](examples/licensing_offline_example.py) | Offline signed entitlement startup |
 | — | [examples/licensing_floating_online_example.py](examples/licensing_floating_online_example.py) | Floating license startup |
 
@@ -109,6 +110,114 @@ print(meta.rows, meta.columns, meta.nodata)
 filled = wbe.hydrology.fill_depressions(dem)
 accum = wbe.hydrology.d8_flow_accum(filled)
 wbe.write_raster(accum, 'flow_accum.tif')
+```
+
+## Quick start examples by data type
+
+### Raster
+
+```python
+# Read and inspect
+dem = wbe.read_raster('dem.tif')
+meta = dem.metadata()
+print(f'Size: {meta.rows} x {meta.columns}, CRS: {meta.crs_epsg()}')
+
+# Apply a tool
+slope = wbe.gis.slope(dem)
+
+# Write result
+wbe.write_raster(slope, 'slope.tif')
+```
+
+### Sensor bundle (Sentinel-2)
+
+```python
+# Open a Sentinel-2 SAFE bundle
+s2 = wbe.read_sentinel2('S2A_MSIL2A_20250714T160911_N0511_R097_T17TNH_20250714T221309.SAFE')
+
+# Inspect bundle metadata
+print(s2.family)
+print(s2.tile_id(), s2.processing_level(), s2.cloud_cover_percent())
+print(s2.list_band_keys())
+
+# Read individual bands by key
+red = s2.read_band('B04')
+green = s2.read_band('B03')
+blue = s2.read_band('B02')
+
+# Build and persist composites using the bundle-aware helpers
+rgb = wbe.true_colour_composite(s2.bundle_root, output_path='sentinel2_rgb.tif')
+nir = wbe.false_colour_composite(s2.bundle_root, output_path='sentinel2_nir.tif')
+
+# Or use the Bundle convenience delegates (same result)
+rgb = s2.true_colour_composite(wbe, output_path='sentinel2_rgb.tif')
+```
+
+For a broader multi-family example, see [examples/sensor_bundle_overview.py](examples/sensor_bundle_overview.py).
+
+### Vector
+
+```python
+# Read and inspect
+roads = wbe.read_vector('roads.shp')
+schema = roads.schema()
+print(f'Geometry: {schema.geometry_type}, Fields: {len(schema.fields)}')
+
+# Access attributes
+for i in range(min(3, roads.num_records())):
+    attrs = roads.attributes(i)
+    print(f'Record {i}: {attrs}')
+
+# Process and persist
+buffered = wbe.gis.buffer_vector(roads, distance=10)
+wbe.write_vector(buffered, 'roads_buffer.shp')
+```
+
+### Lidar
+
+```python
+# Read and inspect
+las = wbe.read_lidar('survey.las')
+meta = las.metadata()
+print(f'Points: {meta.num_points}, CRS: {meta.crs_epsg()}')
+
+# Apply a tool
+norms = wbe.lidar.calculate_point_normals(las)
+
+# Write result
+wbe.write_lidar(norms, 'survey_normals.las')
+```
+
+### Progress and feedback
+
+Long-running tools can report progress via a callback function:
+
+```python
+def progress_callback(progress):
+    """Invoked by the tool as it advances."""
+    print(f'Progress: {progress.percent}% - {progress.message}')
+
+filled = wbe.hydrology.fill_depressions(dem, progress_callback=progress_callback)
+```
+
+You can also wrap progress in a more structured way (e.g., with a progress bar):
+
+```python
+from tqdm import tqdm
+
+class ProgressTracker:
+    def __init__(self):
+        self.pbar = None
+    
+    def __call__(self, progress):
+        if self.pbar is None:
+            self.pbar = tqdm(total=100, desc=progress.message)
+        self.pbar.update(progress.percent - self.pbar.n)
+        if progress.percent >= 100:
+            self.pbar.close()
+
+tracker = ProgressTracker()
+result = wbe.hydrology.fill_depressions(dem, progress_callback=tracker)
 ```
 
 ## Memory-first execution model

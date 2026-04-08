@@ -17,7 +17,17 @@ use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegi
 use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegistry as ProRegistry};
 
 mod wb_environment;
-pub use wb_environment::{Bundle, Lidar, Raster, RasterConfigs, Vector, WbEnvironment};
+pub use wb_environment::{
+    Bundle,
+    Lidar,
+    LidarMetadata,
+    Raster,
+    RasterConfigs,
+    Vector,
+    VectorMetadata,
+    WbEnvironment,
+};
+pub use wb_environment::{WbCategoryToolCallable, WbDomainNamespace, WbToolCategory};
 
 struct CompositeRegistry {
     oss: OssRegistry,
@@ -81,6 +91,8 @@ fn validate_include_pro(include_pro: bool) -> Result<(), ToolError> {
 
 pub struct PythonToolRuntime {
     runtime: RuntimeMode,
+    include_pro: bool,
+    requested_tier: LicenseTier,
 }
 
 enum RuntimeMode {
@@ -120,6 +132,8 @@ impl PythonToolRuntime {
                     .max_tier(max_tier)
                     .build(),
             ),
+            include_pro,
+            requested_tier: max_tier,
         })
     }
 
@@ -153,6 +167,8 @@ impl PythonToolRuntime {
                     .max_tier(fallback_tier)
                     .build(),
             ),
+            include_pro,
+            requested_tier: fallback_tier,
         })
     }
 
@@ -168,6 +184,8 @@ impl PythonToolRuntime {
                     .max_tier(max_tier)
                     .build(),
             ),
+            include_pro,
+            requested_tier: max_tier,
         })
     }
 
@@ -206,6 +224,8 @@ impl PythonToolRuntime {
                 },
                 capabilities,
             )),
+            include_pro,
+            requested_tier: fallback_tier,
         })
     }
 
@@ -236,14 +256,83 @@ impl PythonToolRuntime {
                 },
                 capabilities,
             )),
+            include_pro,
+            requested_tier: fallback_tier,
         })
     }
 
-    fn visible_manifests(&self) -> Vec<ToolManifest> {
+    pub fn visible_manifests(&self) -> Vec<ToolManifest> {
         match &self.runtime {
             RuntimeMode::Tier(runtime) => runtime.list_visible_manifests(),
             RuntimeMode::Entitled(runtime) => runtime.list_visible_manifests(),
         }
+    }
+
+    /// Returns every manifest in the build catalog (OSS + Pro), regardless of
+    /// the current runtime's tier or include_pro flag.  Used for `include_locked=True`
+    /// discovery queries.
+    pub fn build_catalog_manifests(&self) -> Vec<ToolManifest> {
+        let mut oss = OssRegistry::new();
+        register_default_oss_tools(&mut oss);
+        #[cfg(feature = "pro")]
+        let mut manifests = oss.manifests();
+        #[cfg(not(feature = "pro"))]
+        let manifests = oss.manifests();
+        #[cfg(feature = "pro")]
+        {
+            let mut pro = ProRegistry::new();
+            register_default_pro_tools(&mut pro);
+            manifests.extend(pro.manifests());
+        }
+        manifests
+    }
+
+    fn tool_manifest_by_id_from_build_catalog(&self, tool_id: &str) -> Option<ToolManifest> {
+        let mut oss = OssRegistry::new();
+        register_default_oss_tools(&mut oss);
+        #[cfg(feature = "pro")]
+        let mut manifests = oss.manifests();
+        #[cfg(not(feature = "pro"))]
+        let manifests = oss.manifests();
+
+        #[cfg(feature = "pro")]
+        {
+            let mut pro = ProRegistry::new();
+            register_default_pro_tools(&mut pro);
+            manifests.extend(pro.manifests());
+        }
+
+        manifests.into_iter().find(|m| m.id == tool_id)
+    }
+
+    fn handle_not_found_with_license_context(&self, tool_id: &str) -> ToolError {
+        let Some(manifest) = self.tool_manifest_by_id_from_build_catalog(tool_id) else {
+            return ToolError::NotFound(tool_id.to_string());
+        };
+
+        let required = manifest.license_tier;
+        let effective = self.effective_tier();
+        if !self.include_pro && matches!(required, LicenseTier::Pro | LicenseTier::Enterprise) {
+            return ToolError::LicenseDenied(format!(
+                "This is a PRO tool: {tool_id}. Current runtime: include_pro={}, tier={}, effective_tier={}. Reason: pro_not_included. Action: enable include_pro=True and use a valid Pro/Enterprise entitlement.",
+                self.include_pro,
+                license_tier_to_str(self.requested_tier),
+                license_tier_to_str(effective),
+            ));
+        }
+
+        if required > effective {
+            return ToolError::LicenseDenied(format!(
+                "This is a PRO tool: {tool_id}. Current runtime: include_pro={}, tier={}, effective_tier={}. Reason: tier_insufficient (requires {}). Action: use tier='{}' or higher with a valid entitlement.",
+                self.include_pro,
+                license_tier_to_str(self.requested_tier),
+                license_tier_to_str(effective),
+                license_tier_to_str(required),
+                license_tier_to_str(required),
+            ));
+        }
+
+        ToolError::NotFound(tool_id.to_string())
     }
 
     pub fn list_tools_json(&self) -> Value {
@@ -263,7 +352,11 @@ impl PythonToolRuntime {
                 tool_id: tool_id.to_string(),
                 args,
             }),
-        }?;
+        }
+        .map_err(|e| match e {
+            ToolError::NotFound(_) => self.handle_not_found_with_license_context(tool_id),
+            other => other,
+        })?;
         Ok(Value::Object(response.outputs.into_iter().collect()))
     }
 
@@ -279,7 +372,11 @@ impl PythonToolRuntime {
                 tool_id: tool_id.to_string(),
                 args,
             }),
-        }?;
+        }
+        .map_err(|e| match e {
+            ToolError::NotFound(_) => self.handle_not_found_with_license_context(tool_id),
+            other => other,
+        })?;
 
         Ok(json!({
             "tool_id": response.tool_id,
@@ -311,7 +408,11 @@ impl PythonToolRuntime {
                 },
                 progress,
             ),
-        }?;
+        }
+        .map_err(|e| match e {
+            ToolError::NotFound(_) => self.handle_not_found_with_license_context(tool_id),
+            other => other,
+        })?;
 
         Ok(json!({
             "tool_id": response.tool_id,
@@ -325,6 +426,14 @@ impl PythonToolRuntime {
             RuntimeMode::Tier(runtime) => runtime.options.max_tier,
             RuntimeMode::Entitled(runtime) => runtime.runtime().capabilities.max_tier,
         }
+    }
+}
+
+fn license_tier_to_str(tier: LicenseTier) -> &'static str {
+    match tier {
+        LicenseTier::Open => "open",
+        LicenseTier::Pro => "pro",
+        LicenseTier::Enterprise => "enterprise",
     }
 }
 
@@ -1257,7 +1366,14 @@ fn generate_wrapper_stubs_json(include_pro: bool, tier: &str, target: &str) -> P
 
     let mut stubs = serde_json::Map::new();
     for manifest in rt.visible_manifests() {
-        stubs.insert(manifest.id.clone(), Value::String(generate_wrapper_stub(&manifest, target)));
+        let mut stub = generate_wrapper_stub(&manifest, target);
+        if matches!(manifest.license_tier, LicenseTier::Pro | LicenseTier::Enterprise)
+            && matches!(target, BindingTarget::Python)
+        {
+            // Make tier visible in generated stubs so IDE hover/autocomplete surfaces it.
+            stub = format!("# [PRO] {}\n{}", manifest.id, stub);
+        }
+        stubs.insert(manifest.id.clone(), Value::String(stub));
     }
     serde_json::to_string(&Value::Object(stubs))
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
@@ -1309,10 +1425,15 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_class::<RuntimeSession>()?;
     m.add_class::<Raster>()?;
     m.add_class::<RasterConfigs>()?;
+    m.add_class::<VectorMetadata>()?;
+    m.add_class::<LidarMetadata>()?;
     m.add_class::<Bundle>()?;
     m.add_class::<Vector>()?;
     m.add_class::<Lidar>()?;
     m.add_class::<WbEnvironment>()?;
+    m.add_class::<WbToolCategory>()?;
+    m.add_class::<WbCategoryToolCallable>()?;
+    m.add_class::<WbDomainNamespace>()?;
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_options, m)?)?;

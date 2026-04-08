@@ -8,6 +8,29 @@ The API is in active modernization, with emphasis on:
 - memory-first workflows,
 - stronger interoperability with Python data tooling.
 
+## Table of contents
+
+- [Current API highlights](#current-api-highlights)
+- [Migration quick map](#migration-quick-map)
+- [Tool reference docs](#tool-reference-docs)
+- [Development install](#development-install)
+- [Quick smoke test](#quick-smoke-test)
+- [Recommended examples](#recommended-examples)
+- [Recommended API pattern](#recommended-api-pattern)
+- [Quick start examples by data type](#quick-start-examples-by-data-type)
+- [Memory-first execution model](#memory-first-execution-model)
+- [Reprojection patterns](#reprojection-patterns)
+- [NumPy interoperability](#numpy-interoperability)
+- [Rasterio interoperability](#rasterio-interoperability)
+- [GeoPandas interoperability](#geopandas-interoperability)
+- [Shapely interoperability](#shapely-interoperability)
+- [xarray/rioxarray interoperability](#xarrayrioxarray-interoperability)
+- [pyproj interoperability](#pyproj-interoperability)
+- [Licensing overview](#licensing-overview)
+- [Licensing and Pro workflows](#licensing-and-pro-workflows)
+- [Discovery APIs](#discovery-apis)
+- [IntelliSense in VS Code](#intellisense-in-vs-code)
+
 ## Current API highlights
 
 - Harmonized metadata access:
@@ -63,6 +86,18 @@ From workspace root:
 
 ```bash
 ./scripts/dev_python_install.sh
+```
+
+To build the Python extension with Pro support compiled in:
+
+```bash
+./scripts/dev_python_install.sh --pro
+```
+
+You can also enable the same behavior with an environment variable:
+
+```bash
+WBW_PYTHON_ENABLE_PRO=1 ./scripts/dev_python_install.sh
 ```
 
 This performs an editable install via maturin for the wbw_python crate.
@@ -276,6 +311,113 @@ new_dem = wb.Raster.from_numpy(arr, dem, output_path='dem_plus1.tif')
 
 Multiband workflows support both `(bands, rows, cols)` and `(rows, cols, bands)` 3D arrays.
 
+## Rasterio interoperability
+
+Rasterio interoperability is best approached through GeoTIFF exchange when you want
+to reuse Rasterio profiles, windows, masking, or block-aware I/O.
+
+```python
+import rasterio
+
+# Export a wbw raster to a Rasterio-friendly format
+wbe.write_raster(dem, 'dem_for_rasterio.tif')
+
+with rasterio.open('dem_for_rasterio.tif') as src:
+  arr = src.read(1)
+  profile = src.profile
+
+# Example Rasterio-side processing
+arr = arr * 1.05
+
+profile.update(dtype='float32', count=1)
+with rasterio.open('dem_rasterio_processed.tif', 'w', **profile) as dst:
+  dst.write(arr.astype('float32'), 1)
+
+# Bring result back into wbw_python
+dem_processed = wbe.read_raster('dem_rasterio_processed.tif')
+```
+
+## GeoPandas interoperability
+
+For vector workflows, write to a GeoPandas-friendly dataset (e.g., GeoPackage),
+process with GeoPandas/Shapely, then read back into wbw_python.
+
+```python
+import geopandas as gpd
+
+wbe.write_vector(roads, 'roads_for_gpd.gpkg')
+gdf = gpd.read_file('roads_for_gpd.gpkg')
+
+# Example GeoPandas processing
+gdf['length_m'] = gdf.length
+gdf = gdf[gdf['length_m'] > 25.0]
+
+gdf.to_file('roads_gpd_filtered.gpkg', driver='GPKG')
+roads_filtered = wbe.read_vector('roads_gpd_filtered.gpkg')
+```
+
+## Shapely interoperability
+
+Shapely integrates naturally with GeoPandas geometry columns; this is a convenient
+path for advanced geometry operations before returning data to wbw_python.
+
+```python
+import geopandas as gpd
+from shapely import simplify
+
+wbe.write_vector(streams, 'streams_for_shapely.gpkg')
+gdf = gpd.read_file('streams_for_shapely.gpkg')
+
+# Example Shapely operation
+gdf['geometry'] = gdf.geometry.apply(lambda geom: simplify(geom, tolerance=2.0))
+
+gdf.to_file('streams_simplified.gpkg', driver='GPKG')
+streams_simplified = wbe.read_vector('streams_simplified.gpkg')
+```
+
+## xarray/rioxarray interoperability
+
+Use rioxarray for labeled raster workflows (coordinates, lazy loading, xarray ops),
+then write results back to GeoTIFF for wbw_python ingestion.
+
+```python
+import rioxarray as rxr
+
+wbe.write_raster(dem, 'dem_for_xarray.tif')
+da = rxr.open_rasterio('dem_for_xarray.tif').squeeze(drop=True)
+
+# Example xarray computation
+da_smooth = da.rolling(x=3, y=3, center=True).mean()
+
+da_smooth.rio.to_raster('dem_xarray_smoothed.tif')
+dem_smoothed = wbe.read_raster('dem_xarray_smoothed.tif')
+```
+
+## pyproj interoperability
+
+Use pyproj when you need explicit CRS inspection, custom transformation pipelines,
+or CRS comparisons alongside wbw_python metadata.
+
+```python
+from pyproj import CRS
+
+src_epsg = dem.metadata().crs_epsg()
+src_crs = CRS.from_epsg(src_epsg)
+dst_crs = CRS.from_epsg(32618)
+
+print('Source:', src_crs.to_string())
+print('Destination:', dst_crs.to_string())
+
+dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_crs.to_epsg())
+```
+
+### Interoperability strategy
+
+- In-memory numeric exchange: use `to_numpy(...)` / `from_numpy(...)`.
+- Rich raster ecosystem tools: exchange via GeoTIFF (`write_raster` / `read_raster`).
+- Rich vector ecosystem tools: exchange via GeoPackage/Shapefile (`write_vector` / `read_vector`).
+- Keep wbw_python as the geoprocessing engine and use ecosystem libraries where they are strongest.
+
 ## Licensing overview
 
 The runtime supports open and licensed modes.
@@ -287,6 +429,103 @@ The runtime supports open and licensed modes.
 See:
 - [examples/licensing_offline_example.py](examples/licensing_offline_example.py)
 - [examples/licensing_floating_online_example.py](examples/licensing_floating_online_example.py)
+
+## Licensing and Pro workflows
+
+This section focuses on day-to-day patterns for integrating licensing into production
+scripts, notebooks, services, and plugin-style applications.
+
+### 1) Choose a startup mode
+
+- Open mode: best for open-tier workflows and development where Pro tools are not required.
+- Signed entitlement mode: best when users can provide a signed offline entitlement.
+- Floating license mode: best when online lease/renewal against a license provider is required.
+
+### 2) Keep initialization centralized
+
+Use a single startup function that creates and validates the environment once, then pass
+that `WbEnvironment` instance through your pipeline.  Choose the factory that matches
+your deployment:
+
+```python
+import whitebox_workflows as wb
+
+# ---- Open mode (no license required) ----
+wbe = wb.WbEnvironment()                    # include_pro=False, tier='open'
+
+# ---- Floating license (online lease) ----
+wbe = wb.WbEnvironment.from_floating_license_id(
+    floating_license_id='FLOAT-ABC-123',
+    include_pro=True,
+    provider_url='https://your-provider.example.com',
+    fallback_tier='open',          # fall back to open tools if lease fails
+    # machine_id='workstation-01', # optional hint sent to provider
+    # customer_id='cust_123',      # optional hint sent to provider
+)
+
+# ---- Signed entitlement (offline, from file) ----
+wbe = wb.WbEnvironment.from_signed_entitlement_file(
+    entitlement_file='./signed_entitlement.json',
+    public_key_kid='k1',
+    public_key_b64url='REPLACE_WITH_PROVIDER_PUBLIC_KEY',
+    include_pro=True,
+    fallback_tier='open',
+)
+
+# ---- Signed entitlement (offline, from string) ----
+wbe = wb.WbEnvironment.from_signed_entitlement_json(
+    signed_entitlement_json=my_entitlement_json_string,
+    public_key_kid='k1',
+    public_key_b64url='REPLACE_WITH_PROVIDER_PUBLIC_KEY',
+    include_pro=True,
+    fallback_tier='open',
+)
+```
+
+For complete runnable examples see:
+- [examples/licensing_offline_example.py](examples/licensing_offline_example.py)
+- [examples/licensing_floating_online_example.py](examples/licensing_floating_online_example.py)
+
+### 3) Check Pro tool visibility at startup
+
+Verify that expected Pro tools are actually available before entering a Pro workflow
+branch.  Use this as a guard when `include_pro=True` but the entitlement may have
+fallen back to open tier.
+
+```python
+pro_tools = {'raster_power', 'sar_coregistration'}   # tools that require Pro
+available = set(wbe.list_tools())
+missing = pro_tools - available
+if missing:
+    raise RuntimeError(
+        f'Pro entitlement active but required tools are missing: {sorted(missing)}'
+    )
+```
+
+### 4) Gate Pro workflows explicitly
+
+Treat Pro execution as a deliberate branch in your application logic.  Return a result
+from both sides so callers do not need to know which path was taken.
+
+```python
+def run_backscatter_correction(wbe, image, use_pro: bool):
+    if use_pro:
+        # Pro branch: full refined radiometric correction.
+        coregistered = wbe.sar_tools.sar_coregistration(image)
+        return wbe.sar_tools.refined_lee_filter(coregistered)
+    # Open fallback: basic spatial filter only.
+    return wbe.image_tools.lee_filter(image)
+```
+
+Keeping the fallback explicit makes it easy to audit which capabilities require a license
+and to test open-mode coverage in CI without a Pro entitlement.
+
+### 5) Operational recommendations
+
+- Keep secrets and signed entitlement payloads out of source control.
+- Prefer configuration-driven startup (env vars or config file) over hard-coded license values.
+- In CI, run open-mode smoke tests by default and isolate Pro tests to approved environments.
+- For long-running jobs with floating licenses, include retry and renewal-aware error handling.
 
 ## Discovery APIs
 

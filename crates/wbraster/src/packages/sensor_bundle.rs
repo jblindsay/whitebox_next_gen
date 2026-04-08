@@ -304,7 +304,8 @@ pub fn detect_sensor_bundle_family_path(path: impl AsRef<Path>) -> Result<Sensor
     }
 
     let extraction_root = extract_archive_to_temp(path)?;
-    detect_sensor_bundle_family(&extraction_root)
+    let resolved_root = resolve_extracted_bundle_root(&extraction_root)?;
+    detect_sensor_bundle_family(&resolved_root)
 }
 
 /// Open a sensor bundle from either a directory root or a supported archive
@@ -335,11 +336,37 @@ pub fn open_sensor_bundle_path(path: impl AsRef<Path>) -> Result<OpenedSensorBun
     }
 
     let extraction_root = extract_archive_to_temp(path)?;
-    let bundle = open_sensor_bundle(&extraction_root)?;
+    let resolved_root = resolve_extracted_bundle_root(&extraction_root)?;
+    let bundle = open_sensor_bundle(&resolved_root)?;
     Ok(OpenedSensorBundle {
         bundle,
         extracted_root: Some(extraction_root),
     })
+}
+
+fn resolve_extracted_bundle_root(extraction_root: &Path) -> Result<PathBuf> {
+    let detected = detect_sensor_bundle_family(extraction_root)?;
+    if detected != SensorBundleFamily::Unknown {
+        return Ok(extraction_root.to_path_buf());
+    }
+
+    let mut child_dirs = Vec::new();
+    for entry in fs::read_dir(extraction_root)? {
+        let entry = entry?;
+        let p = entry.path();
+        if p.is_dir() {
+            child_dirs.push(p);
+        }
+    }
+
+    if child_dirs.len() == 1 {
+        let child = &child_dirs[0];
+        if detect_sensor_bundle_family(child)? != SensorBundleFamily::Unknown {
+            return Ok(child.clone());
+        }
+    }
+
+    Ok(extraction_root.to_path_buf())
 }
 
 fn collect_files_recursive(root: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
@@ -662,6 +689,33 @@ WRS_ROW = 3
 
         let opened = open_sensor_bundle_path(&tgz_path).expect("open tgz bundle");
         assert!(matches!(opened.bundle, SensorBundle::Landsat(_)));
+        assert!(opened.extracted_root.is_some());
+    }
+
+    #[test]
+    fn open_sensor_bundle_path_supports_zip_with_nested_safe_root() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let zip_path = tmp.path().join("s1_safe.zip");
+
+        {
+            let file = fs::File::create(&zip_path).expect("create zip");
+            let mut zip = zip::ZipWriter::new(file);
+            let options = SimpleFileOptions::default();
+
+            zip.start_file("S1_TEST.SAFE/manifest.safe", options)
+                .expect("start manifest");
+            zip.write_all(b"<xfdu>Sentinel-1</xfdu>")
+                .expect("write manifest");
+
+            zip.start_file("S1_TEST.SAFE/measurement/test_vv.tiff", options)
+                .expect("start measurement");
+            zip.write_all(b"dummy").expect("write measurement");
+
+            zip.finish().expect("finish zip");
+        }
+
+        let opened = open_sensor_bundle_path(&zip_path).expect("open nested SAFE zip");
+        assert!(matches!(opened.bundle, SensorBundle::Safe(SafeBundle::Sentinel1(_))));
         assert!(opened.extracted_root.is_some());
     }
 }

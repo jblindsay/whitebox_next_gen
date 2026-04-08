@@ -112,6 +112,8 @@ remote sensing tools will be added to this same section as they are ported.
 - [`wbe.svm_classification`](#wbesvm_classification)
 - [`wbe.svm_regression`](#wbesvm_regression)
 - [`wbe.time_series_change_intelligence`](#wbetime_series_change_intelligence)
+- [`wbe.sar_coregistration`](#wbesar_coregistration)
+- [`wbe.sar_interferogram_coherence`](#wbesar_interferogram_coherence)
 - [`wbe.thicken_raster_line`](#wbethicken_raster_line)
 - [`wbe.terrain_corrected_optical_analytics`](#wbeterrain_corrected_optical_analytics)
 - [`wbe.total_filter`](#wbetotal_filter)
@@ -445,6 +447,112 @@ trend, count, date, confidence, summary = wbe.time_series_change_intelligence(
 
 ---
 
+### `wbe.sar_coregistration`
+
+```
+wbe.sar_coregistration(
+    reference_sar,
+    moving_sar,
+    coreg_mode="translation",
+    max_offset_px=24,
+    decimation=4,
+    min_overlap_fraction=0.20,
+    resample_method="bilinear",
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster, Raster, Raster, str, str]
+```
+
+Runs SAR pair coregistration and returns the aligned moving raster, x/y offset rasters,
+transform JSON path, and summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `reference_sar` | `Raster` | required | Reference SAR raster |
+| `moving_sar` | `Raster` | required | Moving SAR raster to align onto the reference grid |
+| `coreg_mode` | `str` | `"translation"` | Coregistration mode: `translation`, `affine`, or `local_offset_grid` |
+| `max_offset_px` | `int` | `24` | Maximum absolute pixel offset searched during alignment |
+| `decimation` | `int` | `4` | Sampling stride used during global search |
+| `min_overlap_fraction` | `float` | `0.20` | Minimum valid sampled overlap fraction |
+| `resample_method` | `str` | `"bilinear"` | Output resampling mode: `bilinear` or `nearest` |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+aligned, offset_x, offset_y, transform_json, summary = wbe.sar_coregistration(
+    reference_sar=reference,
+    moving_sar=moving,
+    coreg_mode="translation",
+    max_offset_px=24,
+)
+```
+
+---
+
+### `wbe.sar_interferogram_coherence`
+
+```
+wbe.sar_interferogram_coherence(
+    reference_sar,
+    moving_sar,
+    auto_coregister_pair=False,
+    assume_prealigned_pair=False,
+    coreg_mode="translation",
+    coreg_max_offset_px=24,
+    coreg_decimation=4,
+    coreg_min_overlap_fraction=0.20,
+    performance_profile="balanced",
+    coherence_decimation=1,
+    coherence_window=7,
+    write_interferogram=True,
+    write_coherence=True,
+    write_valid_mask=True,
+    output_prefix=None,
+    callback=None,
+) -> tuple[Raster | None, Raster | None, Raster | None, str]
+```
+
+Runs the dedicated SAR interferogram/coherence workflow and returns optional
+interferogram, coherence, and valid-mask rasters plus the summary JSON path.
+
+**Parameters**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `reference_sar` | `Raster` | required | Reference SAR raster |
+| `moving_sar` | `Raster` | required | Moving SAR raster |
+| `auto_coregister_pair` | `bool` | `False` | Invoke internal coregistration when the pair is not already aligned |
+| `assume_prealigned_pair` | `bool` | `False` | Assert that the pair is already aligned and skip auto-coregistration |
+| `coreg_mode` | `str` | `"translation"` | Coregistration handoff mode |
+| `coreg_max_offset_px` | `int` | `24` | Maximum absolute pixel offset searched during handoff |
+| `coreg_decimation` | `int` | `4` | Sampling stride used during handoff |
+| `coreg_min_overlap_fraction` | `float` | `0.20` | Minimum sampled overlap fraction required during handoff |
+| `performance_profile` | `str` | `"balanced"` | Runtime profile: `balanced` or `fast` |
+| `coherence_decimation` | `int` | `1` | Optional coherence sampling stride |
+| `coherence_window` | `int` | `7` | Odd-valued coherence window size |
+| `write_interferogram` | `bool` | `True` | Write interferogram raster output |
+| `write_coherence` | `bool` | `True` | Write coherence raster output |
+| `write_valid_mask` | `bool` | `True` | Write valid-mask raster output |
+| `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
+**Examples**
+
+```python
+interferogram, coherence, valid_mask, summary = wbe.sar_interferogram_coherence(
+    reference_sar=reference,
+    moving_sar=moving,
+    assume_prealigned_pair=True,
+    coherence_window=7,
+)
+```
+
+---
+
 ### `wbe.sar_analysis_readiness`
 
 ```
@@ -460,7 +568,7 @@ wbe.sar_analysis_readiness(
 ```
 
 Runs SAR analysis-ready preprocessing and returns calibrated backscatter,
-speckle-filtered SAR, RTC factor, optional coherence, and summary JSON path.
+speckle-filtered SAR, RTC factor, optional coherence-proxy raster, and summary JSON path.
 
 **Parameters**
 
@@ -468,7 +576,7 @@ speckle-filtered SAR, RTC factor, optional coherence, and summary JSON path.
 |------|------|---------|-------------|
 | `input_sar` | `Raster` | required | Input SAR raster |
 | `input_dem` | `Raster` | required | DEM used for terrain corrections |
-| `pair_sar` | `Raster \| None` | `None` | Optional second SAR raster used for coherence output |
+| `pair_sar` | `Raster \| None` | `None` | Optional second SAR raster used for coherence-proxy output |
 | `speckle_window` | `int` | `5` | Speckle filtering window size |
 | `z_factor` | `float` | `1.0` | Vertical exaggeration factor for terrain terms |
 | `output_prefix` | `str \| None` | `None` | Prefix for generated outputs |
@@ -477,7 +585,7 @@ speckle-filtered SAR, RTC factor, optional coherence, and summary JSON path.
 **Examples**
 
 ```python
-calibrated, speckle, rtc, coherence, summary = wbe.sar_analysis_readiness(
+calibrated, speckle, rtc, coherence_proxy, summary = wbe.sar_analysis_readiness(
     input_sar=sar_a,
     input_dem=dem,
     pair_sar=sar_b,

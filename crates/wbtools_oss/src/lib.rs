@@ -353,6 +353,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::NormalizeLidarTool));
     registry.register(Box::new(tools::HeightAboveGroundTool));
     registry.register(Box::new(tools::LidarGroundPointFilterTool));
+    registry.register(Box::new(tools::ImprovedGroundPointFilterTool));
     registry.register(Box::new(tools::FilterLidarTool));
     registry.register(Box::new(tools::ModifyLidarTool));
     registry.register(Box::new(tools::FilterLidarByReferenceSurfaceTool));
@@ -461,6 +462,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::PrincipalCurvatureDirectionTool));
     registry.register(Box::new(tools::CasoratiCurvatureTool));
     registry.register(Box::new(tools::OpennessTool));
+    registry.register(Box::new(tools::DemVoidFillingTool));
+    registry.register(Box::new(tools::MultiscaleCurvaturesTool));
     registry.register(Box::new(tools::SlopeTool));
     registry.register(Box::new(tools::AspectTool));
     registry.register(Box::new(tools::ConvergenceIndexTool));
@@ -564,6 +567,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::RasterizeStreamsTool));
     registry.register(Box::new(tools::LongProfileTool));
     registry.register(Box::new(tools::LongProfileFromPointsTool));
+    registry.register(Box::new(tools::PruneVectorStreamsTool));
+    registry.register(Box::new(tools::RiverCenterlinesTool));
+    registry.register(Box::new(tools::RidgeAndValleyVectorsTool));
     registry.register(Box::new(tools::RepairStreamVectorTopologyTool));
     registry.register(Box::new(tools::VectorStreamNetworkAnalysisTool));
     registry.register(Box::new(tools::BurnStreamsTool));

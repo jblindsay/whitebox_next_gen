@@ -6,6 +6,8 @@ mod hydrologic_index_tools;
 mod terrain_window_tools;
 mod contour_tools;
 mod openness;
+mod dem_void_filling;
+mod multiscale_curvatures;
 
 mod sky_visibility_tools;
 
@@ -113,3 +115,5 @@ pub use sky_visibility_tools::HypsometricallyTintedHillshadeTool;
 pub use sky_visibility_tools::TopoRenderTool;
 pub use sky_visibility_tools::SkylineAnalysisTool;
 pub use openness::OpennessTool;
+pub use dem_void_filling::DemVoidFillingTool;
+pub use multiscale_curvatures::MultiscaleCurvaturesTool;

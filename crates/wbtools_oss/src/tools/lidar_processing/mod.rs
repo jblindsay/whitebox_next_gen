@@ -1,5 +1,8 @@
 //! LiDAR processing tools for wbtools_oss.
 
+mod improved_ground_point_filter;
+pub use improved_ground_point_filter::ImprovedGroundPointFilterTool;
+
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::f64::consts::PI;

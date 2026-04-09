@@ -17,12 +17,14 @@ Each tool is now accessed through its data-type category:
 
 | Category accessor      | Tool types                                |
 |------------------------|-------------------------------------------|
-| `wbe.raster_tools`     | Raster analysis and processing            |
-| `wbe.vector_tools`     | Vector / attribute operations             |
-| `wbe.lidar_tools`      | LiDAR point cloud tools                   |
+| `wbe.raster`           | Raster analysis and processing            |
+| `wbe.vector`           | Vector / attribute operations             |
+| `wbe.lidar`            | LiDAR point cloud tools                   |
 | `wbe.topology`         | Topology repair and analysis              |
-| `wbe.hydrology`        | Hydrology, watersheds, stream networks    |
-| `wbe.terrain`          | Terrain / geomorphometry (core)           |
+| `wbe.hydrology`        | Hydrology and watershed analysis          |
+| `wbe.remote_sensing`   | Remote-sensing filters, enhancement, and image analytics |
+| `wbe.streams`          | Stream extraction, ordering, and analysis |
+| `wbe.terrain`          | Terrain analysis (core)                   |
 | `wbe.conversion`       | Format conversion tools                   |
 | `wbe.other`            | Miscellaneous tools                       |
 
@@ -32,20 +34,31 @@ result = wbe.slope(dem, units="degrees")
 
 # v2 (preferred)
 result = wbe.terrain.slope(dem, units="degrees")
+
+# v2 (optional subcategory browsing for autocomplete)
+result = wbe.terrain.derivatives.slope(dem=dem, units="degrees")
 ```
+
+For large categories, optional subcategories improve discoverability without
+breaking existing paths. For example:
+
+- `wbe.raster.overlay_math.*`
+- `wbe.remote_sensing.filters.*`
+- `wbe.terrain.derivatives.*`
+
+The `other` bucket remains accessible through `wbe.other` for compatibility,
+but may be omitted from `wbe.categories()` when empty.
 
 ### 2. Domain namespace access (workflow-oriented)
 
-Workflow-domain namespaces give semantically grouped cross-category access:
+Domain namespace access remains available for precision-ag workflows:
 
 | Domain accessor             | Contains                                         |
 |-----------------------------|--------------------------------------------------|
-| `wbe.remote_sensing`        | SAR, optical, multispectral remote-sensing tools |
 | `wbe.precision_agriculture` | Yield, zoning, irrigation tools                  |
-| `wbe.geomorphometry`        | Terrain morphometry tools                        |
 
 ```python
-# SAR interferogram via domain namespace
+# SAR interferogram via category namespace
 coherence = wbe.remote_sensing.sar_interferogram_coherence(ref, moving, ...)
 
 # Precision-ag yield zone via domain namespace
@@ -55,11 +68,11 @@ zones = wbe.precision_agriculture.precision_ag_yield_zone_intelligence(yield_sur
 Dynamic namespace lookup:
 ```python
 # Programmatic domain access
-ns = wbe.domain("remote_sensing")
+ns = wbe.domain("precision_agriculture")
 ns.list_tools()                # list all tools in the domain
 ns.list_tools(include_pro_markers=True)   # prefix locked tools with "[PRO]"
-tool = ns.sar_coregistration   # returns a callable
-tool(reference_sar=ref, moving_sar=mov)
+tool = ns.yield_data_conditioning_and_qa   # returns a callable
+tool(input=yield_points)
 ```
 
 ### 3. PRO tool markers
@@ -115,13 +128,13 @@ Each result dict has:
 |---------------------------------------------|-------------------------------------------------------|
 | `wbe.slope(dem)`                            | `wbe.terrain.slope(dem)`                              |
 | `wbe.fill_depressions(dem)`                 | `wbe.hydrology.fill_depressions(dem)`                 |
-| `wbe.lidar_tin_gridding(las)`               | `wbe.lidar_tools.lidar_tin_gridding(las)`             |
+| `wbe.lidar_tin_gridding(las)`               | `wbe.lidar.lidar_tin_gridding(las)`                   |
 | `wbe.sar_coregistration(ref, mov)`          | `wbe.remote_sensing.sar_coregistration(ref, mov)`     |
 | `wbe.yield_data_conditioning_and_qa(vec)`   | `wbe.precision_agriculture.yield_data_conditioning_and_qa(vec)` |
 | `wbe.list_tools()`                          | `wbe.list_tools_detailed()` (richer output)           |
 | — (not available)                           | `wbe.describe_tool("slope")`                          |
 | — (not available)                           | `wbe.search_tools("flow")`                            |
-| — (not available)                           | `wbe.domain("geomorphometry").list_tools()`           |
+| — (not available)                           | `wbe.domain("precision_agriculture").list_tools()`    |
 
 ---
 

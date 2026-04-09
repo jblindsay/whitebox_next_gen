@@ -5,6 +5,8 @@ import whitebox_workflows as wb
 wbe = wb.WbEnvironment(include_pro=True, tier='pro')
 print('yield_data_conditioning_and_qa' in set(wbe.list_tools()))
 
+wbe.lidar.individual_tree_segmentation()
+
 # wbe.vector_tools
 
 # wbe = wb.WbEnvironment()

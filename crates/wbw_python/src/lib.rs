@@ -27,7 +27,7 @@ pub use wb_environment::{
     VectorMetadata,
     WbEnvironment,
 };
-pub use wb_environment::{WbCategoryToolCallable, WbDomainNamespace, WbToolCategory};
+pub use wb_environment::{WbCategoryToolCallable, WbDomainNamespace, WbToolCategory, WbToolSubcategory};
 
 struct CompositeRegistry {
     oss: OssRegistry,
@@ -1432,6 +1432,7 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_class::<Lidar>()?;
     m.add_class::<WbEnvironment>()?;
     m.add_class::<WbToolCategory>()?;
+    m.add_class::<WbToolSubcategory>()?;
     m.add_class::<WbCategoryToolCallable>()?;
     m.add_class::<WbDomainNamespace>()?;
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;

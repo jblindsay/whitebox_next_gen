@@ -158,7 +158,7 @@ meta = dem.metadata()
 print(f'Size: {meta.rows} x {meta.columns}, CRS: {meta.crs_epsg()}')
 
 # Apply a tool
-slope = wbe.gis.slope(dem)
+slope = wbe.terrain.slope(dem)
 
 # Write result
 wbe.write_raster(slope, 'slope.tif')
@@ -266,8 +266,8 @@ Default behavior is memory-first for intermediates:
 Example:
 
 ```python
-tmp = wbe.raster_tools.sqrt(dem)
-out = wbe.raster_tools.log10(tmp)
+tmp = wbe.raster.sqrt(dem)
+out = wbe.raster.log10(tmp)
 wbe.write_raster(out, 'sqrt_log10.tif')
 ```
 
@@ -532,9 +532,31 @@ and to test open-mode coverage in CI without a Pro entitlement.
 ```python
 tools = wbe.list_tools()
 categories = wbe.categories()
+rs_tools = wbe.remote_sensing.list_tools()
 info = wbe.describe_tool('slope')
 matches = wbe.search_tools('flow accumulation')
 ```
+
+### Subcategory Browsing (Autocomplete-Friendly)
+
+Large categories expose optional subcategory groupings for easier discovery in editors:
+
+```python
+# Category -> subcategory -> tool
+out1 = wbe.remote_sensing.filters.canny_edge_detection(input='image.tif')
+out2 = wbe.raster.overlay_math.add(input1='a.tif', input2='b.tif')
+out3 = wbe.terrain.derivatives.slope(dem='dem.tif', units='degrees')
+
+# Introspection helpers
+print(wbe.remote_sensing.list_subcategories())
+print(wbe.terrain.derivatives.list_tools())
+```
+
+Compatibility note: direct category tool access still works (for example,
+`wbe.terrain.slope(...)`).
+
+`other` remains available as `wbe.other`, but `wbe.categories()` omits it when
+there are no currently visible tools in that bucket.
 
 ## IntelliSense in VS Code
 

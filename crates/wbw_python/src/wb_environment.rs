@@ -818,13 +818,20 @@ pub struct WbToolCategory {
 }
 
 #[pyclass]
+pub struct WbToolSubcategory {
+    runtime: Arc<PythonToolRuntime>,
+    category: String,
+    subcategory: String,
+}
+
+#[pyclass]
 pub struct WbCategoryToolCallable {
     runtime: Arc<PythonToolRuntime>,
     tool_id: String,
     is_pro: bool,
 }
 
-/// A tag-based domain namespace (e.g. `wbe.remote_sensing`).
+/// A tag-based domain namespace (e.g. `wbe.precision_agriculture`).
 /// Provides dynamic access to tools whose manifests contain any of the given tags.
 #[pyclass]
 pub struct WbDomainNamespace {
@@ -835,25 +842,302 @@ pub struct WbDomainNamespace {
     domain_name: String,
 }
 
-fn category_slug_from_manifest_value(category: &str) -> &'static str {
+fn category_slug_from_category_name(category: &str) -> &'static str {
     match category {
-        "Raster" => "raster_tools",
-        "Vector" => "vector_tools",
-        "Lidar" => "lidar_tools",
+        "Raster" => "raster",
+        "Vector" => "vector",
+        "Lidar" => "lidar",
         "Topology" => "topology",
         "Hydrology" => "hydrology",
+        "RemoteSensing" => "remote_sensing",
+        "Streams" => "streams",
         "Terrain" => "terrain",
         "Conversion" => "conversion",
         _ => "other",
     }
 }
 
-fn manifest_value_matches_category(manifest_value: &serde_json::Value, category_slug: &str) -> bool {
-    let primary_match = manifest_value
+fn normalized_category_name(raw_category: &str, tool_id: &str, tags: &[String]) -> String {
+    let has_tag = |needle: &str| tags.iter().any(|tag| tag.eq_ignore_ascii_case(needle));
+
+    let stream_theme = tags.iter().any(|tag| {
+        matches!(
+            tag.as_str(),
+            "stream_network" | "stream_order" | "stream_magnitude"
+        )
+    });
+    if stream_theme {
+        return "Streams".to_string();
+    }
+
+    let id = tool_id.to_ascii_lowercase();
+
+    // Dedicated remote-sensing bucket for image filtering, enhancement, and
+    // remote-sensing workflows that were previously folded into broad Raster.
+    let remote_sensing_by_tag = has_tag("remote_sensing") || has_tag("remote-sensing");
+    let remote_sensing_by_id = id.contains("canny")
+        || id.contains("corner_detection")
+        || id.contains("correct_vignetting")
+        || id.contains("change_vector_analysis")
+        || id.contains("histogram_")
+        || id.contains("contrast_stretch")
+        || id.ends_with("_filter")
+        || id.contains("_filter_")
+        || id.contains("_enhancement")
+        || id.contains("image_intake")
+        || id.contains("brdf");
+    let looks_like_gis_filter = has_tag("gis") || id.contains("features_by_area");
+    if (remote_sensing_by_tag || remote_sensing_by_id) && !looks_like_gis_filter {
+        return "RemoteSensing".to_string();
+    }
+
+    // DEM breaching/depression routing tools should surface under hydrology.
+    let hydrology_reassignment_candidate = matches!(raw_category, "Raster" | "Other" | "Hydrology");
+    if hydrology_reassignment_candidate && has_tag("hydrology") {
+        if id.contains("breach_")
+            || id.contains("fill_depressions")
+            || id.contains("fill_pits")
+            || id.contains("upslope_depression")
+            || id.contains("flow_accum")
+            || id.contains("pointer")
+        {
+            return "Hydrology".to_string();
+        }
+    }
+
+    let terrain_signature_ids = [
+        "max_anisotropy_dev_signature",
+        "max_elev_dev_signature",
+        "multiscale_roughness_signature",
+        "multiscale_std_dev_normals_signature",
+    ];
+    if terrain_signature_ids.contains(&tool_id) {
+        return "Terrain".to_string();
+    }
+
+    let terrain_reassignment_candidate = matches!(raw_category, "Raster" | "Other" | "Terrain");
+    if terrain_reassignment_candidate {
+        let slope_aspect_curvature = id.contains("slope") || id.contains("aspect") || id.contains("curvature");
+        let tagged_as_terrain_family = tags.iter().any(|tag| {
+            matches!(
+                tag.as_str(),
+                "slope" | "aspect" | "curvature" | "terrain" | "roughness" | "geomorphometry"
+            )
+        });
+        if slope_aspect_curvature || tagged_as_terrain_family || id.contains("normal_vector_angular_deviation") {
+            return "Terrain".to_string();
+        }
+    }
+
+    raw_category.to_string()
+}
+
+fn normalized_category_name_from_manifest_value(manifest_value: &serde_json::Value) -> String {
+    let raw_category = manifest_value
         .get("category")
         .and_then(serde_json::Value::as_str)
-        .map(category_slug_from_manifest_value)
-        == Some(category_slug);
+        .unwrap_or("Other");
+    let tool_id = manifest_value
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let tags: Vec<String> = manifest_value
+        .get("tags")
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    normalized_category_name(raw_category, tool_id, &tags)
+}
+
+fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static str] {
+    match category_slug {
+        "raster" => &[
+            "overlay_math",
+            "local_neighborhood",
+            "morphology",
+            "reclass_mask",
+            "distance_cost",
+        ],
+        "remote_sensing" => &[
+            "filters",
+            "enhancement_contrast",
+            "edge_feature_detection",
+            "change_detection",
+            "radiometric_correction",
+            "classification",
+        ],
+        "terrain" => &[
+            "derivatives",
+            "roughness_texture",
+            "landform_indices",
+            "multiscale_signatures",
+        ],
+        _ => &[],
+    }
+}
+
+fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, tags: &[String]) -> bool {
+    let id = tool_id.to_ascii_lowercase();
+    let has_tag = |needle: &str| tags.iter().any(|t| t.eq_ignore_ascii_case(needle));
+
+    match (category_slug, subcategory) {
+        ("raster", "overlay_math") => {
+            matches!(
+                id.as_str(),
+                "add" | "subtract" | "multiply" | "divide" | "power" | "root" | "modulo"
+            ) || id.starts_with("bool_")
+                || id.contains("overlay")
+                || id.contains("weighted_sum")
+                || has_tag("overlay")
+                || has_tag("map_algebra")
+                || has_tag("algebra")
+        }
+        ("raster", "local_neighborhood") => {
+            id.contains("focal")
+                || id.contains("neigh")
+                || id.contains("window")
+                || id.contains("kernel")
+                || has_tag("local")
+                || has_tag("neighborhood")
+        }
+        ("raster", "morphology") => {
+            id == "erosion"
+                || id == "dilation"
+                || id == "opening"
+                || id == "closing"
+                || has_tag("morphology")
+        }
+        ("raster", "reclass_mask") => {
+            id.contains("reclass")
+                || id.contains("mask")
+                || id.contains("threshold")
+                || id.contains("conditional")
+                || has_tag("reclass")
+                || has_tag("mask")
+        }
+        ("raster", "distance_cost") => {
+            id.contains("distance")
+                || id.contains("cost_")
+                || id.contains("pathway")
+                || has_tag("distance")
+                || has_tag("cost")
+        }
+        ("remote_sensing", "filters") => {
+            id.contains("filter") || has_tag("filter")
+        }
+        ("remote_sensing", "enhancement_contrast") => {
+            id.contains("contrast")
+                || id.contains("histogram")
+                || id.contains("stretch")
+                || id.contains("equalization")
+                || id.contains("gamma")
+                || has_tag("enhancement")
+        }
+        ("remote_sensing", "edge_feature_detection") => {
+            id.contains("edge")
+                || id.contains("corner")
+                || has_tag("edge_detection")
+        }
+        ("remote_sensing", "change_detection") => {
+            id.contains("change") || has_tag("change_detection")
+        }
+        ("remote_sensing", "radiometric_correction") => {
+            id.contains("radiometric")
+                || id.contains("vignetting")
+                || id.contains("atmos")
+                || id.contains("brdf")
+                || has_tag("radiometric")
+        }
+        ("remote_sensing", "classification") => {
+            id.contains("classification")
+                || id.contains("classifier")
+                || id.contains("clustering")
+                || id.contains("segmentation")
+                || has_tag("classification")
+        }
+        ("terrain", "derivatives") => {
+            id.contains("slope")
+                || id.contains("aspect")
+                || id.contains("curvature")
+                || id.contains("hillshade")
+                || id.contains("sky_view")
+                || id.contains("horizon")
+        }
+        ("terrain", "roughness_texture") => {
+            id.contains("roughness")
+                || id.contains("rugged")
+                || id.contains("texture")
+                || id.contains("normal_vector_angular_deviation")
+                || has_tag("roughness")
+        }
+        ("terrain", "landform_indices") => {
+            id.contains("wetness_index")
+                || id.contains("stream_power")
+                || id.contains("transport_index")
+                || id.contains("relative_")
+                || has_tag("landform")
+        }
+        ("terrain", "multiscale_signatures") => {
+            id.contains("multiscale") || id.ends_with("_signature")
+        }
+        _ => false,
+    }
+}
+
+fn category_tool_summaries(
+    runtime: &Arc<PythonToolRuntime>,
+    category_slug: &str,
+    subcategory: Option<&str>,
+) -> Vec<(String, bool)> {
+    runtime
+        .list_tools_json()
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| {
+            let id = v.get("id").and_then(serde_json::Value::as_str)?;
+            if !manifest_value_matches_category(&v, category_slug) {
+                return None;
+            }
+
+            if let Some(subcat) = subcategory {
+                let tags: Vec<String> = v
+                    .get("tags")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(serde_json::Value::as_str)
+                            .map(ToOwned::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !matches_subcategory(category_slug, subcat, id, &tags) {
+                    return None;
+                }
+            }
+
+            let is_pro = matches!(
+                v.get("license_tier")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("open"),
+                "Pro" | "Enterprise" | "pro" | "enterprise"
+            );
+            Some((id.to_string(), is_pro))
+        })
+        .collect()
+}
+
+fn manifest_value_matches_category(manifest_value: &serde_json::Value, category_slug: &str) -> bool {
+    let normalized_category = normalized_category_name_from_manifest_value(manifest_value);
+    let primary_match = category_slug_from_category_name(&normalized_category) == category_slug;
 
     if primary_match {
         return true;
@@ -863,6 +1147,9 @@ fn manifest_value_matches_category(manifest_value: &serde_json::Value, category_
     // preprocessing and flow-routing tools are primarily categorized as Raster
     // in manifests but are semantically hydrology tools and tagged accordingly.
     if category_slug == "hydrology" {
+        if normalized_category == "Streams" {
+            return false;
+        }
         return manifest_value
             .get("tags")
             .and_then(serde_json::Value::as_array)
@@ -908,12 +1195,14 @@ fn build_tool_info_dict(
     } else {
         "tier_insufficient"
     };
+    let raw_category = format!("{:?}", m.category);
+    let normalized_category = normalized_category_name(&raw_category, &m.id, &m.tags);
 
     let dict = PyDict::new(py);
     dict.set_item("id", &m.id)?;
     dict.set_item("display_name", &m.display_name)?;
     dict.set_item("summary", &m.summary)?;
-    dict.set_item("category", format!("{:?}", m.category))?;
+    dict.set_item("category", normalized_category)?;
     dict.set_item("license_tier", license_tier_label(m.license_tier))?;
     dict.set_item("is_pro", is_pro)?;
     dict.set_item("available_in_current_session", is_visible)?;
@@ -934,6 +1223,99 @@ fn build_tool_info_dict(
     dict.set_item("params", params?)?;
 
     Ok(dict.into_any().unbind())
+}
+
+fn build_tool_callable_doc(runtime: &Arc<PythonToolRuntime>, tool_id: &str, is_pro: bool) -> String {
+    let mut lines = Vec::new();
+    let title = if is_pro {
+        format!("[PRO] {tool_id}")
+    } else {
+        tool_id.to_string()
+    };
+    lines.push(title);
+
+    let tools_json = runtime.list_tools_json();
+    let manifest = tools_json
+        .as_array()
+        .and_then(|items| {
+            items.iter().find(|item| {
+                item.get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|id| id == tool_id)
+                    .unwrap_or(false)
+            })
+        });
+
+    if let Some(m) = manifest {
+        if let Some(display_name) = m.get("display_name").and_then(serde_json::Value::as_str) {
+            lines.push(format!("Display name: {display_name}"));
+        }
+        if let Some(summary) = m.get("summary").and_then(serde_json::Value::as_str) {
+            if !summary.trim().is_empty() {
+                lines.push(String::new());
+                lines.push(summary.trim().to_string());
+            }
+        }
+
+        lines.push(String::new());
+        lines.push("Call style: tool_name(**kwargs[, callback=...])".to_string());
+
+        let mut required_params = Vec::new();
+        let mut optional_params = Vec::new();
+        if let Some(params) = m.get("params").and_then(serde_json::Value::as_array) {
+            for p in params {
+                let Some(name) = p.get("name").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                let description = p
+                    .get("description")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .trim();
+                let rendered = if description.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{name}: {description}")
+                };
+                let required = p
+                    .get("required")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                if required {
+                    required_params.push(rendered);
+                } else {
+                    optional_params.push(rendered);
+                }
+            }
+        }
+
+        if !required_params.is_empty() {
+            lines.push(String::new());
+            lines.push("Required parameters:".to_string());
+            for p in required_params {
+                lines.push(format!("- {p}"));
+            }
+        }
+
+        if !optional_params.is_empty() {
+            lines.push(String::new());
+            lines.push("Optional parameters:".to_string());
+            for p in optional_params {
+                lines.push(format!("- {p}"));
+            }
+        }
+
+        lines.push(String::new());
+        lines.push("Return: runtime-decoded object (shape varies by tool; often dict/list/scalar).".to_string());
+    } else {
+        lines.push(String::new());
+        lines.push("Tool metadata not found in manifest registry for this session.".to_string());
+    }
+
+    lines.push(String::new());
+    lines.push("Tip: use wbe.describe_tool('<tool_id>', include_locked=True) for structured parameter metadata.".to_string());
+
+    lines.join("\n")
 }
 
 fn py_any_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
@@ -1032,31 +1414,92 @@ fn json_value_to_pyobject(py: Python<'_>, value: &serde_json::Value) -> PyResult
 
 impl WbToolCategory {
     fn tool_summaries(&self) -> Vec<(String, bool)> {
-        self.runtime
-            .list_tools_json()
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|v| {
-                let id = v.get("id").and_then(serde_json::Value::as_str)?;
-                if !manifest_value_matches_category(&v, &self.category) {
-                    return None;
+        category_tool_summaries(&self.runtime, &self.category, None)
+    }
+
+    fn subcategory_slugs(&self) -> Vec<String> {
+        known_subcategories_for_category(&self.category)
+            .iter()
+            .filter_map(|name| {
+                let has_any = !category_tool_summaries(&self.runtime, &self.category, Some(name)).is_empty();
+                if has_any {
+                    Some((*name).to_string())
+                } else {
+                    None
                 }
-                let is_pro = matches!(
-                    v.get("license_tier")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("open"),
-                    "Pro" | "Enterprise" | "pro" | "enterprise"
-                );
-                Some((id.to_string(), is_pro))
             })
             .collect()
     }
 }
 
+impl WbToolSubcategory {
+    fn tool_summaries(&self) -> Vec<(String, bool)> {
+        category_tool_summaries(&self.runtime, &self.category, Some(&self.subcategory))
+    }
+}
+
 #[pymethods]
 impl WbToolCategory {
+    fn __dir__(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.tool_summaries().into_iter().map(|(id, _)| id).collect();
+        out.extend(self.subcategory_slugs());
+        out
+    }
+
+    #[pyo3(signature = (include_pro_markers=true))]
+    fn list_tools(&self, include_pro_markers: bool) -> Vec<String> {
+        self.tool_summaries()
+            .into_iter()
+            .map(|(id, is_pro)| {
+                if include_pro_markers && is_pro {
+                    format!("[PRO] {id}")
+                } else {
+                    id
+                }
+            })
+            .collect()
+    }
+
+    fn list_subcategories(&self) -> Vec<String> {
+        self.subcategory_slugs()
+    }
+
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        if self.subcategory_slugs().iter().any(|value| value == name) {
+            let sub = WbToolSubcategory {
+                runtime: Arc::clone(&self.runtime),
+                category: self.category.clone(),
+                subcategory: name.to_string(),
+            };
+            return Ok(sub.into_pyobject(py)?.unbind().into_any());
+        }
+
+        let entry = self
+            .tool_summaries()
+            .into_iter()
+            .find(|(id, _)| id == name)
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyAttributeError, _>(format!(
+                    "tool '{}' is not available in category '{}' for this session",
+                    name, self.category
+                ))
+            })?;
+
+        let callable = WbCategoryToolCallable {
+            runtime: Arc::clone(&self.runtime),
+            tool_id: entry.0,
+            is_pro: entry.1,
+        };
+        Ok(callable.into_pyobject(py)?.unbind().into_any())
+    }
+}
+
+#[pymethods]
+impl WbToolSubcategory {
+    fn __repr__(&self) -> String {
+        format!("<WbToolSubcategory '{}.{}'>", self.category, self.subcategory)
+    }
+
     fn __dir__(&self) -> Vec<String> {
         self.tool_summaries().into_iter().map(|(id, _)| id).collect()
     }
@@ -1082,8 +1525,8 @@ impl WbToolCategory {
             .find(|(id, _)| id == name)
             .ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyAttributeError, _>(format!(
-                    "tool '{}' is not available in category '{}' for this session",
-                    name, self.category
+                    "tool '{}' is not available in subcategory '{}.{}' for this session",
+                    name, self.category, self.subcategory
                 ))
             })?;
 
@@ -1099,11 +1542,7 @@ impl WbToolCategory {
 impl WbCategoryToolCallable {
     #[getter]
     fn __doc__(&self) -> String {
-        if self.is_pro {
-            format!("[PRO] {}", self.tool_id)
-        } else {
-            self.tool_id.clone()
-        }
+        build_tool_callable_doc(&self.runtime, &self.tool_id, self.is_pro)
     }
 
     fn __repr__(&self) -> String {
@@ -5138,24 +5577,32 @@ impl WbEnvironment {
     }
 
     fn categories(&self) -> Vec<String> {
-        vec![
-            "raster_tools".to_string(),
-            "vector_tools".to_string(),
-            "lidar_tools".to_string(),
+        let mut categories = vec![
+            "raster".to_string(),
+            "vector".to_string(),
+            "lidar".to_string(),
             "topology".to_string(),
             "hydrology".to_string(),
+            "remote_sensing".to_string(),
+            "streams".to_string(),
             "terrain".to_string(),
             "conversion".to_string(),
             "other".to_string(),
-        ]
+        ];
+        if category_tool_summaries(&self.runtime, "other", None).is_empty() {
+            categories.retain(|c| c != "other");
+        }
+        categories
     }
 
     fn category(&self, name: &str) -> PyResult<WbToolCategory> {
         let normalized = name.trim().to_ascii_lowercase();
         let normalized = match normalized.as_str() {
-            "raster" => "raster_tools",
-            "vector" => "vector_tools",
-            "lidar" => "lidar_tools",
+            "raster_tools" => "raster",
+            "vector_tools" => "vector",
+            "lidar_tools" => "lidar",
+            "remote_sensing_tools" | "remote_sensing" | "remotesensing" => "remote_sensing",
+            "stream" | "streams" | "stream_network" => "streams",
             other => other,
         }
         .to_string();
@@ -5175,26 +5622,53 @@ impl WbEnvironment {
     }
 
     #[getter]
-    fn raster_tools(&self) -> WbToolCategory {
+    fn raster(&self) -> WbToolCategory {
         WbToolCategory {
             runtime: Arc::clone(&self.runtime),
-            category: "raster_tools".to_string(),
+            category: "raster".to_string(),
         }
     }
 
+    /// Compatibility alias for `raster`.
+    #[getter]
+    fn raster_tools(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "raster".to_string(),
+        }
+    }
+
+    #[getter]
+    fn vector(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "vector".to_string(),
+        }
+    }
+
+    /// Compatibility alias for `vector`.
     #[getter]
     fn vector_tools(&self) -> WbToolCategory {
         WbToolCategory {
             runtime: Arc::clone(&self.runtime),
-            category: "vector_tools".to_string(),
+            category: "vector".to_string(),
         }
     }
 
     #[getter]
+    fn lidar(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "lidar".to_string(),
+        }
+    }
+
+    /// Compatibility alias for `lidar`.
+    #[getter]
     fn lidar_tools(&self) -> WbToolCategory {
         WbToolCategory {
             runtime: Arc::clone(&self.runtime),
-            category: "lidar_tools".to_string(),
+            category: "lidar".to_string(),
         }
     }
 
@@ -5211,6 +5685,31 @@ impl WbEnvironment {
         WbToolCategory {
             runtime: Arc::clone(&self.runtime),
             category: "hydrology".to_string(),
+        }
+    }
+
+    #[getter]
+    fn remote_sensing(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "remote_sensing".to_string(),
+        }
+    }
+
+    /// Compatibility alias for `remote_sensing`.
+    #[getter]
+    fn remote_sensing_tools(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "remote_sensing".to_string(),
+        }
+    }
+
+    #[getter]
+    fn streams(&self) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: "streams".to_string(),
         }
     }
 
@@ -5240,14 +5739,10 @@ impl WbEnvironment {
 
     // ─── Domain namespace accessors ────────────────────────────────────────────
 
-    /// List the names of all built-in domain namespaces (`remote_sensing`,
-    /// `precision_agriculture`, `geomorphometry`).
+    /// List the names of all built-in domain namespaces
+    /// (`precision_agriculture`).
     fn domain_namespaces(&self) -> Vec<String> {
-        vec![
-            "remote_sensing".to_string(),
-            "precision_agriculture".to_string(),
-            "geomorphometry".to_string(),
-        ]
+        vec!["precision_agriculture".to_string()]
     }
 
     /// Return a domain namespace by name.
@@ -5256,35 +5751,15 @@ impl WbEnvironment {
     /// (e.g. `"agriculture"` ↔ `"precision_agriculture"`).
     fn domain(&self, name: &str) -> PyResult<WbDomainNamespace> {
         match name.trim().to_ascii_lowercase().replace('-', "_").as_str() {
-            "remote_sensing" | "sar" | "optical" => Ok(WbDomainNamespace {
-                runtime: Arc::clone(&self.runtime),
-                domain_tags: vec!["remote-sensing".to_string()],
-                domain_name: "remote_sensing".to_string(),
-            }),
             "precision_agriculture" | "agriculture" | "precision_ag" => Ok(WbDomainNamespace {
                 runtime: Arc::clone(&self.runtime),
                 domain_tags: vec!["agriculture".to_string(), "precision-ag".to_string()],
                 domain_name: "precision_agriculture".to_string(),
             }),
-            "geomorphometry" => Ok(WbDomainNamespace {
-                runtime: Arc::clone(&self.runtime),
-                domain_tags: vec!["geomorphometry".to_string()],
-                domain_name: "geomorphometry".to_string(),
-            }),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "unknown domain '{}'; use domain_namespaces() to list available domains",
                 name
             ))),
-        }
-    }
-
-    /// SAR / optical / multispectral remote sensing tools.
-    #[getter]
-    fn remote_sensing(&self) -> WbDomainNamespace {
-        WbDomainNamespace {
-            runtime: Arc::clone(&self.runtime),
-            domain_tags: vec!["remote-sensing".to_string()],
-            domain_name: "remote_sensing".to_string(),
         }
     }
 
@@ -5295,16 +5770,6 @@ impl WbEnvironment {
             runtime: Arc::clone(&self.runtime),
             domain_tags: vec!["agriculture".to_string(), "precision-ag".to_string()],
             domain_name: "precision_agriculture".to_string(),
-        }
-    }
-
-    /// Geomorphometry and terrain morphology tools.
-    #[getter]
-    fn geomorphometry(&self) -> WbDomainNamespace {
-        WbDomainNamespace {
-            runtime: Arc::clone(&self.runtime),
-            domain_tags: vec!["geomorphometry".to_string()],
-            domain_name: "geomorphometry".to_string(),
         }
     }
 
@@ -8467,6 +8932,7 @@ impl WbEnvironment {
         ))
     }
 
+    /// [PRO] lidar_qa_and_confidence — end-to-end LiDAR QA workflow with confidence diagnostics.
     #[pyo3(signature = (input, profile="balanced", block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, high_confidence_threshold=0.8, output_prefix=None, output_path=None, callback=None))]
     fn lidar_qa_and_confidence(
         &self,
@@ -9956,7 +10422,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("raise_walls", args, dem.active_band, callback)
     }
 
-    /// [PRO] topological_breach_burn — burn streams into a DEM and return conditioned stream, DEM, pointer, and accumulation outputs.
+    /// topological_breach_burn — burn streams into a DEM and return conditioned stream, DEM, pointer, and accumulation outputs.
     #[pyo3(signature = (dem, streams, snap_distance=0.001, output_streams_path=None, output_dem_path=None, output_dir_path=None, output_flow_accum_path=None, callback=None))]
     fn topological_breach_burn(
         &self,
@@ -10012,6 +10478,92 @@ impl WbEnvironment {
                 file_path: accum_path,
                 active_band: dem.active_band,
             },
+        ))
+    }
+
+    #[pyo3(signature = (streams, dem, threshold=2.0, snap_distance=0.001, max_ridge_cutting_height=10.0, output_path=None, callback=None))]
+    fn prune_vector_streams(
+        &self,
+        streams: &Vector,
+        dem: &Raster,
+        threshold: f64,
+        snap_distance: f64,
+        max_ridge_cutting_height: f64,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "streams".to_string(),
+            json!(streams.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("threshold".to_string(), json!(threshold));
+        args.insert("snap_distance".to_string(), json!(snap_distance));
+        args.insert(
+            "max_ridge_cutting_height".to_string(),
+            json!(max_ridge_cutting_height),
+        );
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_vector_tool_with_args("prune_vector_streams", args, callback)
+    }
+
+    #[pyo3(signature = (raster, min_length=3, search_radius=9, output_path=None, callback=None))]
+    fn river_centerlines(
+        &self,
+        raster: &Raster,
+        min_length: usize,
+        search_radius: isize,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "raster".to_string(),
+            json!(raster.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("min_length".to_string(), json!(min_length));
+        args.insert("search_radius".to_string(), json!(search_radius));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_vector_tool_with_args("river_centerlines", args, callback)
+    }
+
+    #[pyo3(signature = (dem, filter_size=11, ep_threshold=30.0, slope_threshold=0.0, min_length=20, output_ridges_path=None, output_valleys_path=None, callback=None))]
+    fn ridge_and_valley_vectors(
+        &self,
+        dem: &Raster,
+        filter_size: usize,
+        ep_threshold: f64,
+        slope_threshold: f64,
+        min_length: usize,
+        output_ridges_path: Option<&str>,
+        output_valleys_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, Vector)> {
+        let mut args = serde_json::Map::new();
+        args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("filter_size".to_string(), json!(filter_size));
+        args.insert("ep_threshold".to_string(), json!(ep_threshold));
+        args.insert("slope_threshold".to_string(), json!(slope_threshold));
+        args.insert("min_length".to_string(), json!(min_length));
+        if let Some(out) = self.resolve_output_path_for_wd(output_ridges_path) {
+            args.insert("output_ridges".to_string(), json!(out));
+        }
+        if let Some(out) = self.resolve_output_path_for_wd(output_valleys_path) {
+            args.insert("output_valleys".to_string(), json!(out));
+        }
+
+        let response = run_tool_response_with_args(&self.runtime, "ridge_and_valley_vectors", args, callback)?;
+        let ridges_path = extract_typed_output_path_by_key("ridge_and_valley_vectors", &response, "ridges_path")?;
+        let valleys_path = extract_typed_output_path_by_key("ridge_and_valley_vectors", &response, "valleys_path")?;
+
+        Ok((
+            Vector { file_path: ridges_path },
+            Vector { file_path: valleys_path },
         ))
     }
 
@@ -22758,6 +23310,36 @@ impl WbEnvironment {
             args.insert("output".to_string(), json!(out));
         }
         self._run_lidar_tool_with_args("lidar_ground_point_filter", args, callback)
+    }
+
+    #[pyo3(signature = (input, block_size=1.0, max_building_size=150.0, slope_threshold=15.0, elev_threshold=0.15, classify=false, preserve_classes=false, output_path=None, callback=None))]
+    fn improved_ground_point_filter(
+        &self,
+        input: &Lidar,
+        block_size: f64,
+        max_building_size: f64,
+        slope_threshold: f64,
+        elev_threshold: f64,
+        classify: bool,
+        preserve_classes: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Lidar> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "input".to_string(),
+            json!(input.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("block_size".to_string(), json!(block_size));
+        args.insert("max_building_size".to_string(), json!(max_building_size));
+        args.insert("slope_threshold".to_string(), json!(slope_threshold));
+        args.insert("elev_threshold".to_string(), json!(elev_threshold));
+        args.insert("classify".to_string(), json!(classify));
+        args.insert("preserve_classes".to_string(), json!(preserve_classes));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_lidar_tool_with_args("improved_ground_point_filter", args, callback)
     }
 
     #[pyo3(signature = (statement, input=None, output_path=None, callback=None))]

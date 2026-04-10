@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
-    ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
-    ToolParamSpec, ToolRunResult, ToolStability,
+    parse_optional_output_path, parse_raster_path_arg, LicenseTier, PercentCoalescer, Tool,
+    ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
+    ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
 use wbraster::{Raster, RasterFormat};
 use crate::memory_store;
@@ -216,6 +216,7 @@ impl BinaryMathOp {
 }
 
 const BINARY_MATH_PAR_CHUNK: usize = 16_384;
+const BINARY_MATH_PROGRESS_BATCH_CHUNKS: usize = 64;
 
 impl RasterAddTool {
     fn parse_input_paths(args: &ToolArgs) -> Result<(String, String), ToolError> {
@@ -341,26 +342,40 @@ impl RasterAddTool {
         let in1_values: Vec<f64> = (0..len).into_par_iter().map(|i| input1.data.get_f64(i)).collect();
         let in2_values: Vec<f64> = (0..len).into_par_iter().map(|i| input2.data.get_f64(i)).collect();
         let mut out_values = vec![input1.nodata; len];
-        out_values
-            .par_chunks_mut(BINARY_MATH_PAR_CHUNK)
-            .zip(in1_values.par_chunks(BINARY_MATH_PAR_CHUNK))
-            .zip(in2_values.par_chunks(BINARY_MATH_PAR_CHUNK))
-            .for_each(|((out_chunk, in1_chunk), in2_chunk)| {
-                for i in 0..out_chunk.len() {
-                    let z1 = in1_chunk[i];
-                    let z2 = in2_chunk[i];
-                    out_chunk[i] = if input1.is_nodata(z1) || input2.is_nodata(z2) {
-                        input1.nodata
-                    } else {
-                        op.apply(z1, z2, input1.nodata)
-                    };
-                }
-            });
-        ctx.progress.progress(0.75);
+        let total_chunks = len.div_ceil(BINARY_MATH_PAR_CHUNK).max(1);
+        let compute_progress = PercentCoalescer::new(1, 75);
+        let mut completed_chunks = 0usize;
+
+        while completed_chunks < total_chunks {
+            let batch_chunks = (total_chunks - completed_chunks).min(BINARY_MATH_PROGRESS_BATCH_CHUNKS);
+            let batch_start = completed_chunks * BINARY_MATH_PAR_CHUNK;
+            let batch_end = (batch_start + batch_chunks * BINARY_MATH_PAR_CHUNK).min(len);
+
+            out_values[batch_start..batch_end]
+                .par_chunks_mut(BINARY_MATH_PAR_CHUNK)
+                .zip(in1_values[batch_start..batch_end].par_chunks(BINARY_MATH_PAR_CHUNK))
+                .zip(in2_values[batch_start..batch_end].par_chunks(BINARY_MATH_PAR_CHUNK))
+                .for_each(|((out_chunk, in1_chunk), in2_chunk)| {
+                    for i in 0..out_chunk.len() {
+                        let z1 = in1_chunk[i];
+                        let z2 = in2_chunk[i];
+                        out_chunk[i] = if input1.is_nodata(z1) || input2.is_nodata(z2) {
+                            input1.nodata
+                        } else {
+                            op.apply(z1, z2, input1.nodata)
+                        };
+                    }
+                });
+
+            completed_chunks += batch_chunks;
+            compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
+        }
+        compute_progress.finish(ctx.progress);
 
         for (i, value) in out_values.iter().enumerate() {
             output.data.set_f64(i, *value);
         }
+        ctx.progress.progress(0.9);
 
         let output_locator = if let Some(output_path) = output_path {
             if let Some(parent) = output_path.parent() {
@@ -459,6 +474,7 @@ impl_binary_tool!(RasterSubtractTool, BinaryMathOp::Subtract);
 mod tests {
     use super::*;
     use serde_json::Value;
+    use std::sync::Mutex;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -475,6 +491,28 @@ mod tests {
 
     struct NoopProgress;
     impl wbcore::ProgressSink for NoopProgress {}
+
+    struct RecordingProgress {
+        percents: Mutex<Vec<f64>>,
+    }
+
+    impl RecordingProgress {
+        fn new() -> Self {
+            Self {
+                percents: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn percents(&self) -> Vec<f64> {
+            self.percents.lock().unwrap().clone()
+        }
+    }
+
+    impl wbcore::ProgressSink for RecordingProgress {
+        fn progress(&self, pct: f64) {
+            self.percents.lock().unwrap().push(pct);
+        }
+    }
 
     fn test_context() -> ToolContext<'static> {
         static CAPS: AllowAll = AllowAll;
@@ -532,6 +570,33 @@ mod tests {
         r.set(0, 0, 1, values[1]).unwrap();
         r.set(0, 1, 0, values[2]).unwrap();
         r.set(0, 1, 1, values[3]).unwrap();
+        r.write(path, RasterFormat::GeoTiff).unwrap();
+    }
+
+    fn write_raster_grid(path: &str, rows: usize, cols: usize) {
+        let mut r = Raster::new(RasterConfig {
+            cols,
+            rows,
+            bands: 1,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        });
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let value = if (row + col) % 19 == 0 {
+                    -5.0
+                } else {
+                    (row * cols + col) as f64
+                };
+                r.set(0, row as isize, col as isize, value).unwrap();
+            }
+        }
+
         r.write(path, RasterFormat::GeoTiff).unwrap();
     }
 
@@ -603,5 +668,40 @@ mod tests {
         assert_eq!(out.get(0, 0, 1), 24.0);
         assert_eq!(out.get(0, 1, 0), 36.0);
         assert_eq!(out.get(0, 1, 1), 48.0);
+    }
+
+    #[test]
+    fn add_progress_is_monotonic_bounded_and_completes() {
+        let td = TempDirGuard::new("progress");
+        let input1 = td.path().join("input1.tif");
+        let input2 = td.path().join("input2.tif");
+
+        write_raster_grid(input1.to_str().unwrap(), 1024, 1024);
+        write_raster_grid(input2.to_str().unwrap(), 1024, 1024);
+
+        let mut args = ToolArgs::new();
+        args.insert("input1".to_string(), json!(input1));
+        args.insert("input2".to_string(), json!(input2));
+
+        let caps = AllowAll;
+        let progress = RecordingProgress::new();
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let tool = RasterAddTool;
+        tool.run(&args, &ctx).expect("tool should run");
+
+        let percents = progress.percents();
+        assert!(!percents.is_empty(), "expected progress events");
+        assert!(percents.len() <= 101, "progress events should be bounded to percent buckets");
+
+        for w in percents.windows(2) {
+            assert!(w[1] >= w[0], "progress should be monotonic non-decreasing");
+        }
+
+        let final_pct = *percents.last().unwrap();
+        assert!((final_pct - 1.0).abs() < 1e-9, "final progress should be 100%");
     }
 }

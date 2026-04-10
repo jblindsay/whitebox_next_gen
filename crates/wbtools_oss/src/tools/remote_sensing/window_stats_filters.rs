@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
-    ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
-    ToolParamSpec, ToolRunResult, ToolStability,
+    parse_optional_output_path, parse_raster_path_arg, LicenseTier, PercentCoalescer,
+    ProgressSink, Tool, ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample,
+    ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec, ToolRunResult,
+    ToolStability,
 };
 use wbraster::{Raster, RasterFormat};
 
@@ -17,6 +18,8 @@ pub struct StandardDeviationFilterTool;
 pub struct MinimumFilterTool;
 pub struct MaximumFilterTool;
 pub struct RangeFilterTool;
+
+const WINDOW_STATS_PAR_ROW_BATCH: usize = 64;
 
 #[derive(Clone, Copy)]
 enum WindowOp {
@@ -246,6 +249,10 @@ impl MeanFilterTool {
         filter_x: usize,
         filter_y: usize,
         op: WindowOp,
+        progress: &dyn ProgressSink,
+        compute_progress: &PercentCoalescer,
+        done_rows: &mut usize,
+        total_rows: usize,
     ) -> Result<(), ToolError> {
         let rows = input.rows;
         let cols = input.cols;
@@ -282,53 +289,61 @@ impl MeanFilterTool {
                 }
             }
 
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let z_center = input.get(band, r as isize, c as isize);
-                        if input.is_nodata(z_center) {
-                            continue;
-                        }
-
-                        let y1 = (r as isize - half_y).max(0) as usize;
-                        let y2 = (r as isize + half_y).min((rows - 1) as isize) as usize;
-                        let x1 = (c as isize - half_x).max(0) as usize;
-                        let x2 = (c as isize + half_x).min((cols - 1) as isize) as usize;
-
-                        let a = y1 * stride + x1;
-                        let b = y1 * stride + (x2 + 1);
-                        let cidx = (y2 + 1) * stride + x1;
-                        let d = (y2 + 1) * stride + (x2 + 1);
-
-                        let n = (integral_count[d] + integral_count[a] - integral_count[b] - integral_count[cidx]) as f64;
-                        if n <= 0.0 {
-                            row_out[c] = 0.0;
-                            continue;
-                        }
-
-                        let sum = integral_sum[d] + integral_sum[a] - integral_sum[b] - integral_sum[cidx];
-
-                        row_out[c] = match op {
-                            WindowOp::Total => sum,
-                            WindowOp::Mean => sum / n,
-                            WindowOp::StdDev => {
-                                let sum_sq = integral_sum_sq[d] + integral_sum_sq[a] - integral_sum_sq[b] - integral_sum_sq[cidx];
-                                let variance = (sum_sq - (sum * sum) / n) / n;
-                                if variance > 0.0 { variance.sqrt() } else { 0.0 }
+            let mut row_start = 0usize;
+            while row_start < rows {
+                let row_end = (row_start + WINDOW_STATS_PAR_ROW_BATCH).min(rows);
+                let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        for c in 0..cols {
+                            let z_center = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z_center) {
+                                continue;
                             }
-                            _ => nodata,
-                        };
-                    }
-                    row_out
-                })
-                .collect();
 
-            for (r, row) in row_data.iter().enumerate() {
-                output
-                    .set_row_slice(band, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                            let y1 = (r as isize - half_y).max(0) as usize;
+                            let y2 = (r as isize + half_y).min((rows - 1) as isize) as usize;
+                            let x1 = (c as isize - half_x).max(0) as usize;
+                            let x2 = (c as isize + half_x).min((cols - 1) as isize) as usize;
+
+                            let a = y1 * stride + x1;
+                            let b = y1 * stride + (x2 + 1);
+                            let cidx = (y2 + 1) * stride + x1;
+                            let d = (y2 + 1) * stride + (x2 + 1);
+
+                            let n = (integral_count[d] + integral_count[a] - integral_count[b] - integral_count[cidx]) as f64;
+                            if n <= 0.0 {
+                                row_out[c] = 0.0;
+                                continue;
+                            }
+
+                            let sum = integral_sum[d] + integral_sum[a] - integral_sum[b] - integral_sum[cidx];
+
+                            row_out[c] = match op {
+                                WindowOp::Total => sum,
+                                WindowOp::Mean => sum / n,
+                                WindowOp::StdDev => {
+                                    let sum_sq = integral_sum_sq[d] + integral_sum_sq[a] - integral_sum_sq[b] - integral_sum_sq[cidx];
+                                    let variance = (sum_sq - (sum * sum) / n) / n;
+                                    if variance > 0.0 { variance.sqrt() } else { 0.0 }
+                                }
+                                _ => nodata,
+                            };
+                        }
+                        (r, row_out)
+                    })
+                    .collect();
+
+                for (r, row) in row_data {
+                    output
+                        .set_row_slice(band, r as isize, &row)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                    *done_rows += 1;
+                    compute_progress.emit_unit_fraction(progress, *done_rows as f64 / total_rows as f64);
+                }
+
+                row_start = row_end;
             }
         }
 
@@ -341,6 +356,10 @@ impl MeanFilterTool {
         filter_x: usize,
         filter_y: usize,
         op: WindowOp,
+        progress: &dyn ProgressSink,
+        compute_progress: &PercentCoalescer,
+        done_rows: &mut usize,
+        total_rows: usize,
     ) -> Result<(), ToolError> {
         let rows = input.rows;
         let cols = input.cols;
@@ -351,55 +370,63 @@ impl MeanFilterTool {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let z_center = input.get(band, r as isize, c as isize);
-                        if input.is_nodata(z_center) {
-                            continue;
-                        }
+            let mut row_start = 0usize;
+            while row_start < rows {
+                let row_end = (row_start + WINDOW_STATS_PAR_ROW_BATCH).min(rows);
+                let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        for c in 0..cols {
+                            let z_center = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z_center) {
+                                continue;
+                            }
 
-                        let mut min_val = f64::INFINITY;
-                        let mut max_val = f64::NEG_INFINITY;
-                        let mut has_data = false;
+                            let mut min_val = f64::INFINITY;
+                            let mut max_val = f64::NEG_INFINITY;
+                            let mut has_data = false;
 
-                        for ny in (r as isize - half_y)..=(r as isize + half_y) {
-                            for nx in (c as isize - half_x)..=(c as isize + half_x) {
-                                let zn = input.get(band, ny, nx);
-                                if input.is_nodata(zn) {
-                                    continue;
-                                }
-                                has_data = true;
-                                if zn < min_val {
-                                    min_val = zn;
-                                }
-                                if zn > max_val {
-                                    max_val = zn;
+                            for ny in (r as isize - half_y)..=(r as isize + half_y) {
+                                for nx in (c as isize - half_x)..=(c as isize + half_x) {
+                                    let zn = input.get(band, ny, nx);
+                                    if input.is_nodata(zn) {
+                                        continue;
+                                    }
+                                    has_data = true;
+                                    if zn < min_val {
+                                        min_val = zn;
+                                    }
+                                    if zn > max_val {
+                                        max_val = zn;
+                                    }
                                 }
                             }
+
+                            row_out[c] = if !has_data {
+                                0.0
+                            } else {
+                                match op {
+                                    WindowOp::Min => min_val,
+                                    WindowOp::Max => max_val,
+                                    WindowOp::Range => max_val - min_val,
+                                    _ => nodata,
+                                }
+                            };
                         }
+                        (r, row_out)
+                    })
+                    .collect();
 
-                        row_out[c] = if !has_data {
-                            0.0
-                        } else {
-                            match op {
-                                WindowOp::Min => min_val,
-                                WindowOp::Max => max_val,
-                                WindowOp::Range => max_val - min_val,
-                                _ => nodata,
-                            }
-                        };
-                    }
-                    row_out
-                })
-                .collect();
+                for (r, row) in row_data {
+                    output
+                        .set_row_slice(band, r as isize, &row)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                    *done_rows += 1;
+                    compute_progress.emit_unit_fraction(progress, *done_rows as f64 / total_rows as f64);
+                }
 
-            for (r, row) in row_data.iter().enumerate() {
-                output
-                    .set_row_slice(band, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                row_start = row_end;
             }
         }
 
@@ -415,17 +442,42 @@ impl MeanFilterTool {
         ctx.progress.info("reading input raster");
         let input = Self::load_raster(&input_path)?;
         let mut output = input.clone();
+        let total_rows = (input.rows * input.bands).max(1);
+        let mut done_rows = 0usize;
+        let compute_progress = PercentCoalescer::new(1, 90);
 
         ctx.progress.info(op.processing_message());
 
         match op {
             WindowOp::Mean | WindowOp::Total | WindowOp::StdDev => {
-                Self::run_with_integral_op(&input, &mut output, filter_x, filter_y, op)?;
+                Self::run_with_integral_op(
+                    &input,
+                    &mut output,
+                    filter_x,
+                    filter_y,
+                    op,
+                    ctx.progress,
+                    &compute_progress,
+                    &mut done_rows,
+                    total_rows,
+                )?;
             }
             WindowOp::Min | WindowOp::Max | WindowOp::Range => {
-                Self::run_with_extrema_op(&input, &mut output, filter_x, filter_y, op)?;
+                Self::run_with_extrema_op(
+                    &input,
+                    &mut output,
+                    filter_x,
+                    filter_y,
+                    op,
+                    ctx.progress,
+                    &compute_progress,
+                    &mut done_rows,
+                    total_rows,
+                )?;
             }
         }
+
+        compute_progress.finish(ctx.progress);
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
 
@@ -473,11 +525,34 @@ define_window_tool!(RangeFilterTool, WindowOp::Range);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use wbcore::{AllowAllCapabilities, ProgressSink, ToolContext};
     use wbraster::RasterConfig;
 
     struct NoopProgress;
     impl ProgressSink for NoopProgress {}
+
+    struct RecordingProgress {
+        percents: Mutex<Vec<f64>>,
+    }
+
+    impl RecordingProgress {
+        fn new() -> Self {
+            Self {
+                percents: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn percents(&self) -> Vec<f64> {
+            self.percents.lock().unwrap().clone()
+        }
+    }
+
+    impl ProgressSink for RecordingProgress {
+        fn progress(&self, pct: f64) {
+            self.percents.lock().unwrap().push(pct);
+        }
+    }
 
     fn make_ctx() -> ToolContext<'static> {
         static PROGRESS: NoopProgress = NoopProgress;
@@ -568,5 +643,39 @@ mod tests {
         let out = run_with_memory(&TotalFilterTool, &mut args, make_constant_raster(10, 10, 2.0));
         assert!((out.get(0, 5, 5) - 18.0).abs() < 1e-9);
         assert!((out.get(0, 0, 0) - 8.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mean_filter_progress_is_monotonic_bounded_and_completes() {
+        let input = make_constant_raster(1024, 1024, 10.0);
+        let input_id = memory_store::put_raster(input);
+        let mut args = ToolArgs::new();
+        args.insert(
+            "input".to_string(),
+            json!(memory_store::make_raster_memory_path(&input_id)),
+        );
+        args.insert("filter_size_x".to_string(), json!(11));
+        args.insert("filter_size_y".to_string(), json!(11));
+
+        let caps = AllowAllCapabilities;
+        let progress = RecordingProgress::new();
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let tool = MeanFilterTool;
+        let _ = tool.run(&args, &ctx).expect("mean filter should run");
+
+        let percents = progress.percents();
+        assert!(!percents.is_empty(), "expected progress events");
+        assert!(percents.len() <= 101, "progress events should be bounded to percent buckets");
+
+        for w in percents.windows(2) {
+            assert!(w[1] >= w[0], "progress should be monotonic non-decreasing");
+        }
+
+        let final_pct = *percents.last().unwrap();
+        assert!((final_pct - 1.0).abs() < 1e-9, "final progress should be 100%");
     }
 }

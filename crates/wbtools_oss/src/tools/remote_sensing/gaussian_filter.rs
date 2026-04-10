@@ -6,7 +6,7 @@ use super::color_support;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
+    parse_optional_output_path, parse_raster_path_arg, LicenseTier, PercentCoalescer, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
 };
@@ -16,6 +16,8 @@ use wbraster::{DataType, Raster, RasterFormat};
 use crate::memory_store;
 
 pub struct GaussianFilterTool;
+
+const GAUSSIAN_RGB_PROGRESS_BATCH_ROWS: usize = 64;
 
 impl GaussianFilterTool {
     fn load_raster(path: &str) -> Result<Raster, ToolError> {
@@ -241,6 +243,7 @@ impl Tool for GaussianFilterTool {
         ctx.progress.info("applying gaussian filter");
 
         let mut output = input.as_ref().clone();
+        let compute_progress = PercentCoalescer::new(1, 90);
 
         if matches!(rgb_mode, color_support::RgbMode::ThreeBand) && bands >= 3 {
             let max_val = if input.data_type == DataType::U8 { 255.0 } else { 65535.0 };
@@ -295,25 +298,29 @@ impl Tool for GaussianFilterTool {
                     }
                 });
 
-            for row_idx in 0..rows {
-                let mut row_r = vec![nodata; cols];
-                let mut row_g = vec![nodata; cols];
-                let mut row_b = vec![nodata; cols];
-                for col_idx in 0..cols {
-                    let px = out_rgb[row_idx * cols + col_idx];
-                    row_r[col_idx] = px[0];
-                    row_g[col_idx] = px[1];
-                    row_b[col_idx] = px[2];
+            for row_start in (0..rows).step_by(GAUSSIAN_RGB_PROGRESS_BATCH_ROWS) {
+                let row_end = (row_start + GAUSSIAN_RGB_PROGRESS_BATCH_ROWS).min(rows);
+                for row_idx in row_start..row_end {
+                    let mut row_r = vec![nodata; cols];
+                    let mut row_g = vec![nodata; cols];
+                    let mut row_b = vec![nodata; cols];
+                    for col_idx in 0..cols {
+                        let px = out_rgb[row_idx * cols + col_idx];
+                        row_r[col_idx] = px[0];
+                        row_g[col_idx] = px[1];
+                        row_b[col_idx] = px[2];
+                    }
+                    output
+                        .set_row_slice(0, row_idx as isize, &row_r)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {} band 0: {}", row_idx, e)))?;
+                    output
+                        .set_row_slice(1, row_idx as isize, &row_g)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {} band 1: {}", row_idx, e)))?;
+                    output
+                        .set_row_slice(2, row_idx as isize, &row_b)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {} band 2: {}", row_idx, e)))?;
                 }
-                output
-                    .set_row_slice(0, row_idx as isize, &row_r)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {} band 0: {}", row_idx, e)))?;
-                output
-                    .set_row_slice(1, row_idx as isize, &row_g)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {} band 1: {}", row_idx, e)))?;
-                output
-                    .set_row_slice(2, row_idx as isize, &row_b)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {} band 2: {}", row_idx, e)))?;
+                compute_progress.emit_unit_fraction(ctx.progress, row_end as f64 / rows.max(1) as f64);
             }
         } else {
             let packed_rgb = matches!(rgb_mode, color_support::RgbMode::Packed) && bands == 1;
@@ -376,9 +383,11 @@ impl Tool for GaussianFilterTool {
                         })?;
                 }
 
-                ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+                compute_progress.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands.max(1) as f64);
             }
         }
+
+        compute_progress.finish(ctx.progress);
 
         let output_locator = if let Some(output_path) = output_path {
             if let Some(parent) = output_path.parent() {
@@ -418,11 +427,23 @@ impl Tool for GaussianFilterTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use wbcore::{AllowAllCapabilities, ProgressSink, ToolContext};
     use wbraster::RasterConfig;
 
     struct NoopProgress;
     impl ProgressSink for NoopProgress {}
+
+    #[derive(Default)]
+    struct CaptureProgress {
+        values: Mutex<Vec<f64>>,
+    }
+
+    impl ProgressSink for CaptureProgress {
+        fn progress(&self, value: f64) {
+            self.values.lock().unwrap().push(value);
+        }
+    }
 
     fn make_ctx() -> ToolContext<'static> {
         static PROGRESS: NoopProgress = NoopProgress;
@@ -472,5 +493,68 @@ mod tests {
                 assert!((v - 42.0).abs() < 1e-9);
             }
         }
+    }
+
+    #[test]
+    fn gaussian_filter_rgb_progress_is_monotonic_and_completes() {
+        let cfg = RasterConfig {
+            rows: 96,
+            cols: 96,
+            bands: 3,
+            nodata: -9999.0,
+            data_type: DataType::U8,
+            ..Default::default()
+        };
+        let mut input = Raster::new(cfg);
+        for row in 0..96isize {
+            for col in 0..96isize {
+                let r = ((row + col) % 255) as f64;
+                let g = ((2 * row + col) % 255) as f64;
+                let b = ((row + 2 * col) % 255) as f64;
+                input.set(0, row, col, r).unwrap();
+                input.set(1, row, col, g).unwrap();
+                input.set(2, row, col, b).unwrap();
+            }
+        }
+
+        let id = memory_store::put_raster(input);
+        let input_path = memory_store::make_raster_memory_path(&id);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(input_path));
+        args.insert("sigma".to_string(), json!(1.5));
+        args.insert("treat_as_rgb".to_string(), json!(true));
+        args.insert("assume_three_band_rgb".to_string(), json!(true));
+
+        let progress = CaptureProgress::default();
+        let caps = AllowAllCapabilities;
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let _result = GaussianFilterTool.run(&args, &ctx).unwrap();
+        let values = progress.values.lock().unwrap().clone();
+
+        assert!(!values.is_empty(), "expected progress callbacks");
+        assert!(
+            values.iter().all(|v| v.is_finite() && *v >= 0.0 && *v <= 1.0),
+            "progress values must be finite and within [0, 1]"
+        );
+        for win in values.windows(2) {
+            assert!(
+                win[1] + 1.0e-12 >= win[0],
+                "progress should be monotonic: {:?}",
+                values
+            );
+        }
+        assert!(
+            values.last().copied().unwrap_or(0.0) >= 1.0 - 1.0e-9,
+            "final progress should be 100%"
+        );
+        assert!(
+            values.iter().any(|v| *v < 1.0),
+            "expected at least one intermediate progress update"
+        );
     }
 }

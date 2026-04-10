@@ -17,7 +17,7 @@ classifiers = [
 ]
 
 [tool.maturin]
-module-name = "whitebox_workflows"
+module-name = "whitebox_workflows.whitebox_workflows"
 manifest-path = "Cargo.toml"
 include = [
   "whitebox_workflows/**/*.pyi",

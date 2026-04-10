@@ -815,6 +815,7 @@ pub struct Bundle {
 pub struct WbToolCategory {
     runtime: Arc<PythonToolRuntime>,
     category: String,
+    working_directory: PathBuf,
 }
 
 #[pyclass]
@@ -822,13 +823,16 @@ pub struct WbToolSubcategory {
     runtime: Arc<PythonToolRuntime>,
     category: String,
     subcategory: String,
+    working_directory: PathBuf,
 }
 
 #[pyclass]
 pub struct WbCategoryToolCallable {
     runtime: Arc<PythonToolRuntime>,
+    category: String,
     tool_id: String,
     is_pro: bool,
+    working_directory: PathBuf,
 }
 
 /// A tag-based domain namespace (e.g. `wbe.precision_agriculture`).
@@ -1335,23 +1339,13 @@ fn py_any_to_json_value(value: &Bound<'_, PyAny>) -> PyResult<serde_json::Value>
         return Ok(json!(v));
     }
     if let Ok(r) = value.extract::<PyRef<'_, Raster>>() {
-        return Ok(json!({
-            "__wbw_type__": "raster",
-            "path": r.file_path.to_string_lossy().to_string(),
-            "band": r.active_band,
-        }));
+        return Ok(json!(r.file_path.to_string_lossy().to_string()));
     }
     if let Ok(v) = value.extract::<PyRef<'_, Vector>>() {
-        return Ok(json!({
-            "__wbw_type__": "vector",
-            "path": v.file_path.to_string_lossy().to_string(),
-        }));
+        return Ok(json!(v.file_path.to_string_lossy().to_string()));
     }
     if let Ok(v) = value.extract::<PyRef<'_, Lidar>>() {
-        return Ok(json!({
-            "__wbw_type__": "lidar",
-            "path": v.file_path.to_string_lossy().to_string(),
-        }));
+        return Ok(json!(v.file_path.to_string_lossy().to_string()));
     }
     if let Ok(v) = value.extract::<PyRef<'_, Bundle>>() {
         return Ok(json!(v.bundle_root.to_string_lossy().to_string()));
@@ -1409,6 +1403,112 @@ fn json_value_to_pyobject(py: Python<'_>, value: &serde_json::Value) -> PyResult
             }
             Ok(dict.unbind().into_any())
         }
+    }
+}
+
+fn resolve_path_against_working_directory(working_directory: &Path, value: &str) -> String {
+    if value.contains("://") {
+        return value.to_string();
+    }
+    let p = PathBuf::from(value);
+    if p.is_absolute() {
+        p.to_string_lossy().to_string()
+    } else {
+        working_directory.join(p).to_string_lossy().to_string()
+    }
+}
+
+enum DataObjectOutput {
+    Raster(Raster),
+    Vector(Vector),
+    Lidar(Lidar),
+}
+
+fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
+    let ext = Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+
+    if let Some(ext) = ext {
+        match ext.as_str() {
+            // Common raster formats in Whitebox workflows.
+            "tif" | "tiff" | "dep" | "bil" | "flt" | "sdat" | "rdc" | "asc" => {
+                return Some("raster")
+            }
+            // Common vector formats.
+            "shp" | "geojson" | "gpkg" | "json" => return Some("vector"),
+            // Common lidar formats.
+            "las" | "laz" | "zlidar" => return Some("lidar"),
+            _ => {}
+        }
+    }
+
+    match category {
+        "raster" | "hydrology" | "terrain" | "streams" | "topology" => Some("raster"),
+        "vector" => Some("vector"),
+        "lidar" => Some("lidar"),
+        _ => None,
+    }
+}
+
+fn maybe_extract_single_output_path(response: &serde_json::Value) -> Option<String> {
+    let outputs = response.get("outputs").unwrap_or(response);
+    let serde_json::Value::Object(map) = outputs else {
+        return None;
+    };
+
+    let preferred_keys = ["output", "path"];
+    for key in preferred_keys {
+        if let Some(value) = map.get(key) {
+            if let Some(path) = value.as_str() {
+                return Some(path.to_string());
+            }
+            if let Some(path) = value.get("path").and_then(serde_json::Value::as_str) {
+                return Some(path.to_string());
+            }
+        }
+    }
+
+    let mut candidate: Option<String> = None;
+    for value in map.values() {
+        let next = value
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| {
+                value
+                    .get("path")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|s| s.to_string())
+            });
+
+        if let Some(path) = next {
+            if candidate.is_some() {
+                return None;
+            }
+            candidate = Some(path);
+        }
+    }
+
+    candidate
+}
+
+fn maybe_extract_data_object_output(
+    category: &str,
+    working_directory: &Path,
+    response: &serde_json::Value,
+) -> Option<DataObjectOutput> {
+    let path = maybe_extract_single_output_path(response)?;
+    let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
+
+    match infer_data_object_kind(category, &path)? {
+        "raster" => Some(DataObjectOutput::Raster(Raster {
+            file_path: absolute,
+            active_band: 0,
+        })),
+        "vector" => Some(DataObjectOutput::Vector(Vector { file_path: absolute })),
+        "lidar" => Some(DataObjectOutput::Lidar(Lidar { file_path: absolute })),
+        _ => None,
     }
 }
 
@@ -1470,6 +1570,7 @@ impl WbToolCategory {
                 runtime: Arc::clone(&self.runtime),
                 category: self.category.clone(),
                 subcategory: name.to_string(),
+                working_directory: self.working_directory.clone(),
             };
             return Ok(sub.into_pyobject(py)?.unbind().into_any());
         }
@@ -1487,8 +1588,10 @@ impl WbToolCategory {
 
         let callable = WbCategoryToolCallable {
             runtime: Arc::clone(&self.runtime),
+            category: self.category.clone(),
             tool_id: entry.0,
             is_pro: entry.1,
+            working_directory: self.working_directory.clone(),
         };
         Ok(callable.into_pyobject(py)?.unbind().into_any())
     }
@@ -1532,8 +1635,10 @@ impl WbToolSubcategory {
 
         Ok(WbCategoryToolCallable {
             runtime: Arc::clone(&self.runtime),
+            category: self.category.clone(),
             tool_id: entry.0,
             is_pro: entry.1,
+            working_directory: self.working_directory.clone(),
         })
     }
 }
@@ -1553,12 +1658,13 @@ impl WbCategoryToolCallable {
         }
     }
 
+    #[pyo3(signature = (*args, **kwargs))]
     fn __call__(
         &self,
-        py: Python<'_>,
         args: &Bound<'_, pyo3::types::PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
+        let py = args.py();
         if !args.is_empty() {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "category tool calls only accept keyword arguments",
@@ -1578,7 +1684,20 @@ impl WbCategoryToolCallable {
                     callback = Some(v.unbind());
                     continue;
                 }
-                args_map.insert(key, py_any_to_json_value(&v)?);
+
+                let mut value = py_any_to_json_value(&v)?;
+                if (key == "output" || key == "output_path")
+                    && value.is_string()
+                {
+                    if let Some(raw) = value.as_str() {
+                        value = json!(resolve_path_against_working_directory(
+                            &self.working_directory,
+                            raw,
+                        ));
+                    }
+                }
+
+                args_map.insert(key, value);
             }
         }
 
@@ -1601,6 +1720,19 @@ impl WbCategoryToolCallable {
                 .run_tool_json_with_progress(&self.tool_id, &args_json)
                 .map_err(map_tool_error)?
         };
+
+        if let Some(data_object) = maybe_extract_data_object_output(
+            &self.category,
+            &self.working_directory,
+            &response,
+        ) {
+            return match data_object {
+                DataObjectOutput::Raster(r) => Ok(r.into_pyobject(py)?.unbind().into_any()),
+                DataObjectOutput::Vector(v) => Ok(v.into_pyobject(py)?.unbind().into_any()),
+                DataObjectOutput::Lidar(l) => Ok(l.into_pyobject(py)?.unbind().into_any()),
+            };
+        }
+
         json_value_to_pyobject(py, &response)
     }
 }
@@ -1680,8 +1812,10 @@ impl WbDomainNamespace {
         );
         Ok(WbCategoryToolCallable {
             runtime: Arc::clone(&self.runtime),
+            category: self.domain_name.clone(),
             tool_id: m.id.clone(),
             is_pro,
+            working_directory: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         })
     }
 }
@@ -4769,6 +4903,23 @@ impl Raster {
     }
 
     fn load_wbraster(&self) -> PyResult<WbRaster> {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let id = memory_store::raster_path_to_id(&raster_path).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid in-memory raster path '{}'",
+                    self.file_path.display()
+                ))
+            })?;
+
+            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory raster '{}' no longer exists",
+                    self.file_path.display()
+                ))
+            });
+        }
+
         WbRaster::read(&self.file_path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                 "failed to read raster '{}': {e}",
@@ -5263,6 +5414,14 @@ impl WbEnvironment {
             max_tier,
         }
     }
+
+    fn make_tool_category(&self, category: &str) -> WbToolCategory {
+        WbToolCategory {
+            runtime: Arc::clone(&self.runtime),
+            category: category.to_string(),
+            working_directory: self.working_directory.clone(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -5615,126 +5774,81 @@ impl WbEnvironment {
             )));
         }
 
-        Ok(WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: normalized,
-        })
+        Ok(self.make_tool_category(&normalized))
     }
 
     #[getter]
     fn raster(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "raster".to_string(),
-        }
+        self.make_tool_category("raster")
     }
 
     /// Compatibility alias for `raster`.
     #[getter]
     fn raster_tools(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "raster".to_string(),
-        }
+        self.make_tool_category("raster")
     }
 
     #[getter]
     fn vector(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "vector".to_string(),
-        }
+        self.make_tool_category("vector")
     }
 
     /// Compatibility alias for `vector`.
     #[getter]
     fn vector_tools(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "vector".to_string(),
-        }
+        self.make_tool_category("vector")
     }
 
     #[getter]
     fn lidar(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "lidar".to_string(),
-        }
+        self.make_tool_category("lidar")
     }
 
     /// Compatibility alias for `lidar`.
     #[getter]
     fn lidar_tools(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "lidar".to_string(),
-        }
+        self.make_tool_category("lidar")
     }
 
     #[getter]
     fn topology(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "topology".to_string(),
-        }
+        self.make_tool_category("topology")
     }
 
     #[getter]
     fn hydrology(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "hydrology".to_string(),
-        }
+        self.make_tool_category("hydrology")
     }
 
     #[getter]
     fn remote_sensing(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "remote_sensing".to_string(),
-        }
+        self.make_tool_category("remote_sensing")
     }
 
     /// Compatibility alias for `remote_sensing`.
     #[getter]
     fn remote_sensing_tools(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "remote_sensing".to_string(),
-        }
+        self.make_tool_category("remote_sensing")
     }
 
     #[getter]
     fn streams(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "streams".to_string(),
-        }
+        self.make_tool_category("streams")
     }
 
     #[getter]
     fn terrain(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "terrain".to_string(),
-        }
+        self.make_tool_category("terrain")
     }
 
     #[getter]
     fn conversion(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "conversion".to_string(),
-        }
+        self.make_tool_category("conversion")
     }
 
     #[getter]
     fn other(&self) -> WbToolCategory {
-        WbToolCategory {
-            runtime: Arc::clone(&self.runtime),
-            category: "other".to_string(),
-        }
+        self.make_tool_category("other")
     }
 
     // ─── Domain namespace accessors ────────────────────────────────────────────
@@ -26287,6 +26401,9 @@ mod tests {
 impl WbEnvironment {
     fn resolve_output_path_for_wd(&self, output_path: Option<&str>) -> Option<String> {
         output_path.map(|p| {
+            if p.contains("://") {
+                return p.to_string();
+            }
             let path = PathBuf::from(p);
             if path.is_absolute() {
                 path.to_string_lossy().to_string()

@@ -7,7 +7,7 @@ use wbcore::{
     LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest,
     ToolMetadata, ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{Raster, RasterFormat};
+use wbraster::{memory_store, Raster, RasterFormat};
 
 struct UnaryRasterMathSpec {
     id: &'static str,
@@ -18,16 +18,57 @@ struct UnaryRasterMathSpec {
 
 const UNARY_MATH_PAR_CHUNK: usize = 16_384;
 
-fn parse_input_output(args: &ToolArgs) -> Result<(&str, &str), ToolError> {
+fn parse_input(args: &ToolArgs) -> Result<&str, ToolError> {
     let input = args
         .get("input")
         .and_then(Value::as_str)
         .ok_or_else(|| ToolError::Validation("missing required string parameter 'input'".to_string()))?;
-    let output = args
-        .get("output")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ToolError::Validation("missing required string parameter 'output'".to_string()))?;
-    Ok((input, output))
+    Ok(input)
+}
+
+fn parse_optional_output(args: &ToolArgs) -> Result<Option<&str>, ToolError> {
+    match args.get("output") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) if s.trim().is_empty() => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.as_str())),
+        Some(_) => Err(ToolError::Validation(
+            "parameter 'output' must be a string when provided".to_string(),
+        )),
+    }
+}
+
+fn load_input_raster(path: &str) -> Result<Raster, ToolError> {
+    if memory_store::raster_is_memory_path(path) {
+        let id = memory_store::raster_path_to_id(path)
+            .ok_or_else(|| ToolError::Validation("malformed in-memory raster path".to_string()))?;
+        return memory_store::get_raster_by_id(id)
+            .ok_or_else(|| ToolError::Validation(format!("unknown in-memory raster id '{id}'")));
+    }
+
+    Raster::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))
+}
+
+fn write_or_store_output(output: Raster, output_path: Option<&str>) -> Result<String, ToolError> {
+    if let Some(output_path) = output_path {
+        if let Some(parent) = Path::new(output_path).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| ToolError::Execution(format!("failed creating output directory: {e}")))?;
+            }
+        }
+
+        let output_format = RasterFormat::for_output_path(output_path)
+            .map_err(|e| ToolError::Validation(format!("unsupported output path: {e}")))?;
+
+        output
+            .write(output_path, output_format)
+            .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))?;
+        Ok(output_path.to_string())
+    } else {
+        let id = memory_store::put_raster(output);
+        Ok(memory_store::make_raster_memory_path(&id))
+    }
 }
 
 fn metadata_for(spec: &UnaryRasterMathSpec) -> ToolMetadata {
@@ -45,8 +86,8 @@ fn metadata_for(spec: &UnaryRasterMathSpec) -> ToolMetadata {
             },
             ToolParamSpec {
                 name: "output",
-                description: "Output raster file path.",
-                required: true,
+                description: "Optional output raster file path. If omitted, the result is stored in memory.",
+                required: false,
             },
         ],
     }
@@ -75,8 +116,8 @@ fn manifest_for(spec: &UnaryRasterMathSpec) -> ToolManifest {
             },
             ToolParamDescriptor {
                 name: "output".to_string(),
-                description: "Output raster file path.".to_string(),
-                required: true,
+                description: "Optional output raster file path. If omitted, the result is stored in memory.".to_string(),
+                required: false,
             },
         ],
         defaults,
@@ -91,13 +132,13 @@ fn manifest_for(spec: &UnaryRasterMathSpec) -> ToolManifest {
 }
 
 fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-    let (input_path, output_path) = parse_input_output(args)?;
+    let input_path = parse_input(args)?;
+    let output_path = parse_optional_output(args)?;
 
     ctx.progress
         .info(&format!("running {}", spec.id));
 
-    let input = Raster::read(input_path)
-        .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
+    let input = load_input_raster(input_path)?;
     let mut output = input.clone();
 
     let len = output.data.len();
@@ -118,22 +159,14 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
         output.data.set_f64(i, *value);
     }
 
-    if let Some(parent) = Path::new(output_path).parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| ToolError::Execution(format!("failed creating output directory: {e}")))?;
-        }
-    }
-
-    let output_format = RasterFormat::for_output_path(output_path)
-        .map_err(|e| ToolError::Validation(format!("unsupported output path: {e}")))?;
-
-    output
-        .write(output_path, output_format)
-        .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))?;
+    let output_locator = write_or_store_output(output, output_path)?;
 
     let mut outputs = BTreeMap::new();
-    outputs.insert("output".to_string(), json!(output_path));
+    outputs.insert("path".to_string(), json!(output_locator.clone()));
+    outputs.insert(
+        "output".to_string(),
+        json!({"__wbw_type__": "raster", "path": output_locator, "active_band": 0}),
+    );
     outputs.insert("cells_processed".to_string(), json!(len));
     Ok(ToolRunResult { outputs })
 }
@@ -164,7 +197,8 @@ macro_rules! define_unary_tool {
             }
 
             fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-                let _ = parse_input_output(args)?;
+                let _ = parse_input(args)?;
+                let _ = parse_optional_output(args)?;
                 Ok(())
             }
 
@@ -226,7 +260,7 @@ impl Tool for RasterIsNodataTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input raster file path.", required: true },
-                ToolParamSpec { name: "output", description: "Output raster file path.", required: true },
+                ToolParamSpec { name: "output", description: "Optional output raster file path. If omitted, the result is stored in memory.", required: false },
             ],
         }
     }
@@ -254,8 +288,8 @@ impl Tool for RasterIsNodataTool {
                 },
                 ToolParamDescriptor {
                     name: "output".to_string(),
-                    description: "Output raster file path.".to_string(),
-                    required: true,
+                    description: "Optional output raster file path. If omitted, the result is stored in memory.".to_string(),
+                    required: false,
                 },
             ],
             defaults,
@@ -270,16 +304,17 @@ impl Tool for RasterIsNodataTool {
     }
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-        let _ = parse_input_output(args)?;
+        let _ = parse_input(args)?;
+        let _ = parse_optional_output(args)?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let (input_path, output_path) = parse_input_output(args)?;
+        let input_path = parse_input(args)?;
+        let output_path = parse_optional_output(args)?;
         ctx.progress.info("running is_nodata");
 
-        let input = Raster::read(input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
+        let input = load_input_raster(input_path)?;
         let mut output = input.clone();
         let len = output.data.len();
 
@@ -293,21 +328,14 @@ impl Tool for RasterIsNodataTool {
             output.data.set_f64(i, *value);
         }
 
-        if let Some(parent) = Path::new(output_path).parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| ToolError::Execution(format!("failed creating output directory: {e}")))?;
-            }
-        }
-
-        let output_format = RasterFormat::for_output_path(output_path)
-            .map_err(|e| ToolError::Validation(format!("unsupported output path: {e}")))?;
-        output
-            .write(output_path, output_format)
-            .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))?;
+        let output_locator = write_or_store_output(output, output_path)?;
 
         let mut outputs = BTreeMap::new();
-        outputs.insert("output".to_string(), json!(output_path));
+        outputs.insert("path".to_string(), json!(output_locator.clone()));
+        outputs.insert(
+            "output".to_string(),
+            json!({"__wbw_type__": "raster", "path": output_locator, "active_band": 0}),
+        );
         outputs.insert("cells_processed".to_string(), json!(len));
         Ok(ToolRunResult { outputs })
     }

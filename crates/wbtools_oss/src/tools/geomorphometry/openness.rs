@@ -3,7 +3,7 @@
 
 use rayon::prelude::*;
 use serde_json::json;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
@@ -96,6 +96,7 @@ impl OpennessCore {
 
         let input = Self::load_raster(&input_path)?;
         let rows = input.rows;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = input.cols;
         let _bands = input.bands;
         let nodata = input.nodata;
@@ -253,7 +254,7 @@ impl OpennessCore {
             neg_output
                 .set_row_slice(band, r as isize, &neg_row)
                 .map_err(|e| ToolError::Execution(format!("failed writing neg row {}: {}", r, e)))?;
-            ctx.progress.progress(r as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, r as f64 / rows as f64);
         }
 
         let pos_out_path = Self::write_or_store_output(pos_output, pos_output_path.as_ref().map(|p| p.to_str()).flatten())?;

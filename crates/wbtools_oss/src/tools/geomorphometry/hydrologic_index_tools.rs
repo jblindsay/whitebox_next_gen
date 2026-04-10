@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use serde_json::json;
 use std::collections::HashMap;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -245,6 +245,7 @@ impl HydrologicIndexCore {
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = sca.nodata;
 
         for band_idx in 0..bands {
@@ -269,7 +270,7 @@ impl HydrologicIndexCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         let output_locator = Self::write_or_store_output(output, output_path)?;
         Ok(Self::build_result(output_locator))
@@ -291,6 +292,7 @@ impl HydrologicIndexCore {
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = sca.nodata;
 
         for band_idx in 0..bands {
@@ -324,7 +326,7 @@ impl HydrologicIndexCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         let output_locator = Self::write_or_store_output(output, output_path)?;
         Ok(Self::build_result(output_locator))
@@ -343,6 +345,7 @@ impl HydrologicIndexCore {
         let rows = dem.rows;
         let cols = dem.cols;
         let bands = dem.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let dem_nodata = dem.nodata;
         let ws_nodata = watersheds.nodata;
         let mut output = dem.clone();
@@ -395,7 +398,7 @@ impl HydrologicIndexCore {
                     ToolError::Execution(format!("failed writing row {}: {}", r, e))
                 })?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;

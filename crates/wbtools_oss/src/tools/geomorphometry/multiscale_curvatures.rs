@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -734,6 +734,7 @@ impl MultiscaleCurvaturesTool {
         });
 
         let rows = input.rows as isize;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = input.cols as isize;
         let nodata = input.nodata;
         let res = ((input.cell_size_x.abs() + input.cell_size_y.abs()) / 2.0).max(f64::EPSILON);
@@ -834,7 +835,7 @@ impl MultiscaleCurvaturesTool {
                 }
 
                 completed_steps += 1.0;
-                ctx.progress.progress(completed_steps / total_steps);
+                coalescer.emit_unit_fraction(ctx.progress, completed_steps / total_steps);
             }
 
             for r in 0..rows {

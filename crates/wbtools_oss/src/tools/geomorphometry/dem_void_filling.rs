@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use serde_json::json;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
@@ -352,6 +352,7 @@ impl DemVoidFillingCore {
         }
 
         ctx.progress.info("interpolating offsets and writing output");
+        let coalescer = PercentCoalescer::new(1, 99);
 
         let out_rows: Vec<Vec<f64>> = (0..rows)
             .into_par_iter()
@@ -405,7 +406,7 @@ impl DemVoidFillingCore {
             output
                 .set_row_slice(band, r as isize, &out_rows[r])
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
-            ctx.progress.progress((r + 1) as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;

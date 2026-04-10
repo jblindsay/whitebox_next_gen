@@ -11,7 +11,7 @@ use std::path::Path;
 
 use rayon::prelude::*;
 use serde_json::json;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -281,6 +281,7 @@ impl Tool for StrahlerStreamOrderTool {
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let inflowing_vals = D8Core::inflowing_vals(esri_style);
         let mut stack = Vec::new();
+        let coalescer = PercentCoalescer::new(1, 99);
         let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing_vals);
 
         for row in 0..rows {
@@ -333,7 +334,7 @@ impl Tool for StrahlerStreamOrderTool {
                 }
             }
 
-            ctx.progress.progress(((row * cols + col) as f64) / ((rows * cols) as f64));
+            coalescer.emit_unit_fraction(ctx.progress, ((row * cols + col) as f64) / ((rows * cols) as f64));
         }
 
         Ok(D8Core::build_result(D8Core::write_or_store_output(output, output_path)?))
@@ -3369,6 +3370,7 @@ impl Tool for HortonRatiosTool {
 
         // ── Aggregate per-link statistics ────────────────────────────────────
         ctx.progress.info("aggregating link statistics");
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut link_order:  HashMap<i32, i32>  = HashMap::new();
         let mut link_length: HashMap<i32, f64>  = HashMap::new();
         let mut link_area:   HashMap<i32, f64>  = HashMap::new();
@@ -3390,7 +3392,7 @@ impl Tool for HortonRatiosTool {
                 if area > *e { *e = area; }
                 link_slope.insert(id, link_slope_raster.get(0, row as isize, col as isize));
             }
-            ctx.progress.progress(0.85 * (row + 1) as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, 0.85 * (row + 1) as f64 / rows as f64);
         }
 
         if max_order < 2 {

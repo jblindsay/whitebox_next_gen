@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -660,6 +660,7 @@ impl ProCurvatureCore {
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
+        let coalescer = PercentCoalescer::new(1, 99);
         let is_geographic = Self::raster_is_geographic(&input);
         let log_multiplier = Self::log_multiplier((dx + dy) / 2.0);
         
@@ -882,7 +883,7 @@ impl ProCurvatureCore {
                 row_idx += chunk.len().min(rows - row_idx);
             }
 
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;

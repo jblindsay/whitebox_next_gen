@@ -336,6 +336,7 @@ impl RasterAddTool {
 
         let mut output = input1.clone();
         let len = output.data.len();
+        let coalescer = PercentCoalescer::new(1, 99);
 
         ctx.progress.info(op.processing_message());
 
@@ -375,7 +376,7 @@ impl RasterAddTool {
         for (i, value) in out_values.iter().enumerate() {
             output.data.set_f64(i, *value);
         }
-        ctx.progress.progress(0.9);
+        coalescer.emit_unit_fraction(ctx.progress, 0.9);
 
         let output_locator = if let Some(output_path) = output_path {
             if let Some(parent) = output_path.parent() {

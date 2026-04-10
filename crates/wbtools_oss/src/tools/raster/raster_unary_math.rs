@@ -146,6 +146,7 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
     let len = output.data.len();
     let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
     let mut out_values = vec![input.nodata; len];
+    let coalescer = PercentCoalescer::new(1, 99);
     let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
     let compute_progress = PercentCoalescer::new(1, 75);
     let mut completed_chunks = 0usize;
@@ -173,7 +174,7 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
     for (i, value) in out_values.iter().enumerate() {
         output.data.set_f64(i, *value);
     }
-    ctx.progress.progress(0.9);
+    coalescer.emit_unit_fraction(ctx.progress, 0.9);
 
     let output_locator = write_or_store_output(output, output_path)?;
     ctx.progress.progress(1.0);
@@ -337,6 +338,7 @@ impl Tool for RasterIsNodataTool {
 
         let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
         let mut out_values = vec![0.0; len];
+        let coalescer = PercentCoalescer::new(1, 99);
         let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
         let compute_progress = PercentCoalescer::new(1, 75);
         let mut completed_chunks = 0usize;
@@ -364,7 +366,7 @@ impl Tool for RasterIsNodataTool {
         for (i, value) in out_values.iter().enumerate() {
             output.data.set_f64(i, *value);
         }
-        ctx.progress.progress(0.9);
+        coalescer.emit_unit_fraction(ctx.progress, 0.9);
 
         let output_locator = write_or_store_output(output, output_path)?;
         ctx.progress.progress(1.0);

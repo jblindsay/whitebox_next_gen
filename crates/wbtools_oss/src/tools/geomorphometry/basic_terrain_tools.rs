@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -491,6 +491,7 @@ impl TerrainCore {
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
@@ -592,7 +593,7 @@ impl TerrainCore {
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
 
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -719,6 +720,7 @@ impl TerrainCore {
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
@@ -766,7 +768,7 @@ impl TerrainCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))

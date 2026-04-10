@@ -5873,18 +5873,30 @@ impl Tool for TrendSurfaceTool {
         let min_y = input.y_min;
         let min_z = input.statistics().min;
 
+        let per_row_samples: Vec<(Vec<f64>, Vec<f64>, Vec<f64>)> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut x_row = Vec::new();
+                let mut y_row = Vec::new();
+                let mut z_row = Vec::new();
+                for col in 0..cols {
+                    let z = input.data.get_f64(row * cols + col);
+                    if !input.is_nodata(z) {
+                        x_row.push(input.col_center_x(col as isize) - min_x);
+                        y_row.push(input.row_center_y(row as isize) - min_y);
+                        z_row.push(z - min_z);
+                    }
+                }
+                (x_row, y_row, z_row)
+            })
+            .collect();
         let mut x_data = Vec::new();
         let mut y_data = Vec::new();
         let mut z_data = Vec::new();
-        for row in 0..rows {
-            for col in 0..cols {
-                let z = input.data.get_f64(row * cols + col);
-                if !input.is_nodata(z) {
-                    x_data.push(input.col_center_x(col as isize) - min_x);
-                    y_data.push(input.row_center_y(row as isize) - min_y);
-                    z_data.push(z - min_z);
-                }
-            }
+        for (x_row, y_row, z_row) in per_row_samples {
+            x_data.extend(x_row);
+            y_data.extend(y_row);
+            z_data.extend(z_row);
         }
 
         let (coeffs, r_sqr) = fit_polynomial_surface(&x_data, &y_data, &z_data, order)?;

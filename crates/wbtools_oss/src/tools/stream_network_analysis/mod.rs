@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
+use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
@@ -2583,14 +2584,30 @@ impl Tool for HortonStreamOrderTool {
         let mut far = vec![vec![0.0f64; cols]; rows];
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let mut stack = Vec::new();
+        let inflow_counts: Vec<i8> = (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
+                if streams.get(0, row as isize, col as isize) > 0.0 {
+                    D8Core::count_inflowing_cells(
+                        &streams,
+                        &pntr,
+                        row as isize,
+                        col as isize,
+                        &inflowing,
+                    )
+                } else {
+                    -1
+                }
+            })
+            .collect();
         for row in 0..rows {
             for col in 0..cols {
-                if streams.get(0, row as isize, col as isize) > 0.0 {
-                    let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
-                    num_inflowing[row][col] = c;
-                    if c == 0 {
-                        stack.push((row, col));
-                    }
+                let c = inflow_counts[row * cols + col];
+                num_inflowing[row][col] = c;
+                if c == 0 {
+                    stack.push((row, col));
                 }
             }
         }

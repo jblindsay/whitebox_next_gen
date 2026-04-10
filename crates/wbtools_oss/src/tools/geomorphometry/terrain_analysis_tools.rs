@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool,
+    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, PercentCoalescer, Tool,
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
@@ -3338,6 +3338,7 @@ impl TerrainAnalysisCore {
 
         let dx = [1isize, 1, 1, 0, -1, -1, -1, 0];
         let dy = [-1isize, 0, 1, 1, 1, 0, -1, -1];
+        let compute_progress = PercentCoalescer::new(1, 99);
 
         // Stage 2: threshold and directional local-min suppression.
         let mut thinned = vec![vec![0.0; cols]; rows];
@@ -3378,7 +3379,7 @@ impl TerrainAnalysisCore {
                     thinned[r][c] = z;
                 }
             }
-            ctx.progress.progress((r + 1) as f64 / (rows as f64 * 4.0));
+            compute_progress.emit_unit_fraction(ctx.progress, (r + 1) as f64 / (rows as f64 * 4.0));
         }
 
         // Remove singleton and simple elbow cells.
@@ -4177,6 +4178,7 @@ impl TerrainAnalysisCore {
         }
 
         let mut counts = vec![0.0; rows * cols];
+        let visibility_progress = PercentCoalescer::new(1, 99);
         for (stn_idx, (sr, sc, sz)) in station_pixels.iter().enumerate() {
             ctx.progress.info(&format!("running viewshed station {} of {}", stn_idx + 1, station_pixels.len()));
             let station_vis: Vec<Vec<f64>> = (0..rows)
@@ -4226,7 +4228,10 @@ impl TerrainAnalysisCore {
                     counts[r * cols + c] += *v;
                 }
             }
-            ctx.progress.progress((stn_idx + 1) as f64 / station_pixels.len() as f64);
+            visibility_progress.emit_unit_fraction(
+                ctx.progress,
+                (stn_idx + 1) as f64 / station_pixels.len().max(1) as f64,
+            );
         }
 
         for r in 0..rows {
@@ -4367,6 +4372,7 @@ impl TerrainAnalysisCore {
             diag_cell_size,
             cell_size_y,
         ];
+        let compute_progress = PercentCoalescer::new(1, 99);
 
         let mut pointer = vec![-2i8; rows * cols];
         for r in 0..rows {
@@ -4395,7 +4401,7 @@ impl TerrainAnalysisCore {
                 }
                 pointer[Self::idx(r, c, cols)] = dir;
             }
-            ctx.progress.progress((r + 1) as f64 / (rows as f64 * 5.0));
+            compute_progress.emit_unit_fraction(ctx.progress, (r + 1) as f64 / (rows as f64 * 5.0));
         }
 
         let is_stream = |v: f64| -> bool { !(v == streams_nodata || v == 0.0) };
@@ -4439,7 +4445,7 @@ impl TerrainAnalysisCore {
                     valleys[idx] = 1;
                 }
             }
-            ctx.progress.progress((rows + r + 1) as f64 / (rows as f64 * 5.0));
+            compute_progress.emit_unit_fraction(ctx.progress, (rows + r + 1) as f64 / (rows as f64 * 5.0));
         }
 
         let mut stack = channel_heads.clone();
@@ -4562,7 +4568,7 @@ impl TerrainAnalysisCore {
                     }
                 }
             }
-            ctx.progress.progress((rows * 4 + r + 1) as f64 / (rows as f64 * 5.0));
+            compute_progress.emit_unit_fraction(ctx.progress, (rows * 4 + r + 1) as f64 / (rows as f64 * 5.0));
         }
 
         let mut layer = wbvector::Layer::new("low_points_on_headwater_divides")

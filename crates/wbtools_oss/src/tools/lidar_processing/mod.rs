@@ -25,6 +25,7 @@ use wbcore::{
     parse_raster_path_value,
     parse_vector_path_arg,
     LicenseTier,
+    PercentCoalescer,
     Tool,
     ToolArgs,
     ToolCategory,
@@ -3385,6 +3386,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         let cell_x = output.cell_size_x;
         let cell_y = output.cell_size_y;
 
+        let compute_progress = PercentCoalescer::new(1, 99);
         let mut out_values = vec![nodata; output.data.len()];
         for row in 0..rows {
             for col in 0..cols {
@@ -3399,7 +3401,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
                     }
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
 
         for (idx, value) in out_values.iter().enumerate() {
@@ -3621,6 +3623,7 @@ impl Tool for LidarIdwInterpolationTool {
         let cell_x = output.cell_size_x;
         let cell_y = output.cell_size_y;
 
+        let compute_progress = PercentCoalescer::new(1, 99);
         let mut out_values = vec![nodata; output.data.len()];
         for row in 0..rows {
             for col in 0..cols {
@@ -3664,7 +3667,7 @@ impl Tool for LidarIdwInterpolationTool {
                     out_values[row * cols + col] = weighted_sum / sum_w;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
 
         for (idx, value) in out_values.iter().enumerate() {
@@ -4184,6 +4187,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         let y_max = output.y_max();
         let cell_x = output.cell_size_x;
         let cell_y = output.cell_size_y;
+        let compute_progress = PercentCoalescer::new(1, 99);
         let mut out_values = vec![nodata; output.data.len()];
 
         for row in 0..rows {
@@ -4240,7 +4244,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
                     }
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
 
         for (idx, value) in out_values.iter().enumerate() {
@@ -4520,13 +4524,14 @@ impl Tool for LidarSibsonInterpolationTool {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let compute_progress = PercentCoalescer::new(1, 99);
         let mut out_values = vec![nodata; output.data.len()];
         let mut completed = 0usize;
         for (row, row_values) in row_results {
             let start = row * cols;
             out_values[start..start + cols].copy_from_slice(&row_values);
             completed += 1;
-            ctx.progress.progress(completed as f64 / rows.max(1) as f64 * 0.99);
+            compute_progress.emit_unit_fraction(ctx.progress, completed as f64 / rows.max(1) as f64);
         }
 
         for (idx, value) in out_values.iter().enumerate() {
@@ -8908,7 +8913,8 @@ impl Tool for IndividualTreeDetectionTool {
         layer.add_field(wbvector::FieldDef::new("Z", wbvector::FieldType::Float));
 
         // Find tree tops using brute force neighbor search
-        for &(point_idx, x, y, z) in &eligible_pts {
+        let detect_progress = PercentCoalescer::new(40, 80);
+        for (eligible_idx, &(point_idx, x, y, z)) in eligible_pts.iter().enumerate() {
             // Calculate search radius based on height
             let radius = if z > max_height {
                 max_search_radius
@@ -8943,10 +8949,13 @@ impl Tool for IndividualTreeDetectionTool {
                     .map_err(|e| ToolError::Execution(format!("Failed to add feature: {}", e)))?;
             }
 
-            ctx.progress.progress(0.4 + 0.4 * (point_idx as f64 / eligible_pts.len() as f64));
+            detect_progress.emit_unit_fraction(
+                ctx.progress,
+                (eligible_idx + 1) as f64 / eligible_pts.len().max(1) as f64,
+            );
         }
 
-        ctx.progress.progress(0.8);
+        detect_progress.finish(ctx.progress);
 
         // Write output
         ctx.progress.info("Writing output shapefile");

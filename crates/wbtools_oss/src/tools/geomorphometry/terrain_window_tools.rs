@@ -299,7 +299,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let mut filter_size = args
@@ -646,6 +646,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -1014,7 +1015,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let dem_path = parse_raster_path_arg(args, "dem").or_else(|_| parse_raster_path_arg(args, "input"))?;
         let roads_path = parse_vector_path_arg(args, "roads_vector")
             .or_else(|_| parse_vector_path_arg(args, "road_vec"))
@@ -1382,6 +1383,7 @@ impl TerrainWindowCore {
             outputs.insert("output_dem".to_string(), json!(dem_locator));
         }
 
+        coalescer.finish(ctx.progress);
         Ok(ToolRunResult {
             outputs,
             ..Default::default()
@@ -1476,7 +1478,7 @@ impl TerrainWindowCore {
     }
 
     fn run_fill_missing_data(args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let filter_size = args
@@ -1646,6 +1648,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -1653,7 +1656,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -1905,6 +1908,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -1912,7 +1916,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -2019,6 +2023,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -2026,7 +2031,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let max_scale = args
@@ -2226,6 +2231,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -3343,7 +3349,7 @@ impl TerrainWindowCore {
         ctx: &ToolContext,
         standardize: bool,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let (filter_size_x, filter_size_y) = Self::parse_filter_sizes(args);
@@ -3406,6 +3412,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -3427,7 +3434,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let filter_size = args
@@ -3537,6 +3544,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -3544,7 +3552,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -3638,6 +3646,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -3645,7 +3654,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -3743,6 +3752,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -3772,7 +3782,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_html = parse_optional_output_path(args, "output")?
             .unwrap_or_else(|| std::env::temp_dir().join("topographic_position_animation.html"));
@@ -4020,6 +4030,7 @@ impl TerrainWindowCore {
             ],
         )?;
 
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_gif(
             output_html.to_string_lossy().to_string(),
             gif_path.to_string_lossy().to_string(),
@@ -4034,7 +4045,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let local_path = parse_raster_path_arg(args, "local")?;
         let meso_path = parse_raster_path_arg(args, "meso")?;
         let broad_path = parse_raster_path_arg(args, "broad")?;
@@ -4163,6 +4174,7 @@ impl TerrainWindowCore {
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result(output_locator))
     }
 
@@ -4170,7 +4182,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -4305,6 +4317,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -4338,7 +4351,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -4569,6 +4582,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -4817,7 +4831,7 @@ impl TerrainWindowCore {
         ctx: &ToolContext,
         elevated_mode: bool,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -4978,6 +4992,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -4999,7 +5014,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -5153,6 +5168,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -5209,7 +5225,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -5407,6 +5423,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -5643,7 +5660,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let points_path = parse_vector_path_arg(args, "points")?;
         let output_path = parse_optional_output_path(args, "output")?;
@@ -5819,6 +5836,7 @@ impl TerrainWindowCore {
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(out_path.to_string_lossy().to_string()));
+        coalescer.finish(ctx.progress);
         Ok(ToolRunResult {
             outputs,
             ..Default::default()
@@ -5829,7 +5847,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let points_path = parse_vector_path_arg(args, "points")?;
         let min_scale = args
@@ -6000,6 +6018,7 @@ impl TerrainWindowCore {
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(out_path.to_string_lossy().to_string()));
+        coalescer.finish(ctx.progress);
         Ok(ToolRunResult {
             outputs,
             ..Default::default()
@@ -6010,7 +6029,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let points_path = parse_vector_path_arg(args, "points")?;
         let min_scale = args
@@ -6191,6 +6210,7 @@ impl TerrainWindowCore {
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(out_path.to_string_lossy().to_string()));
+        coalescer.finish(ctx.progress);
         Ok(ToolRunResult {
             outputs,
             ..Default::default()
@@ -6201,7 +6221,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
@@ -6351,6 +6371,7 @@ impl TerrainWindowCore {
 
         let output_locator = Self::write_or_store_output(output_mag, output_path)?;
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
+        coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
     }
 
@@ -6358,7 +6379,7 @@ impl TerrainWindowCore {
         args: &ToolArgs,
         ctx: &ToolContext,
     ) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 100);
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = Self::parse_input(args)?;
         let points_path = parse_vector_path_arg(args, "points")?;
         let output_path = parse_optional_output_path(args, "output")?;
@@ -6500,6 +6521,7 @@ impl TerrainWindowCore {
 
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(out_path.to_string_lossy().to_string()));
+        coalescer.finish(ctx.progress);
         Ok(ToolRunResult {
             outputs,
             ..Default::default()

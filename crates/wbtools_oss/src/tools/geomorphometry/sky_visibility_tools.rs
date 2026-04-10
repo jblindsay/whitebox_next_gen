@@ -1903,18 +1903,22 @@ impl SkyVisibilityCore {
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
         let nodata_f32 = nodata as f32;
-        let mut min_z = f32::INFINITY;
-        let mut max_z = f32::NEG_INFINITY;
-        for row in 0..rows {
-            for col in 0..cols {
+        let (min_z, max_z) = (0..(rows as usize * cols as usize))
+            .into_par_iter()
+            .map(|idx| {
+                let row = (idx / cols as usize) as isize;
+                let col = (idx % cols as usize) as isize;
                 let z = dem.get(0, row, col) as f32;
                 if z == nodata_f32 {
-                    continue;
+                    (f32::INFINITY, f32::NEG_INFINITY)
+                } else {
+                    (z, z)
                 }
-                min_z = min_z.min(z);
-                max_z = max_z.max(z);
-            }
-        }
+            })
+            .reduce(
+                || (f32::INFINITY, f32::NEG_INFINITY),
+                |a, b| (a.0.min(b.0), a.1.max(b.1)),
+            );
         if !min_z.is_finite() || !max_z.is_finite() {
             return Err(ToolError::Validation(
                 "input DEM contains no valid cells".to_string(),
@@ -2892,18 +2896,22 @@ impl SkyVisibilityCore {
             z_factor = 1.0 / (111_320.0 * mid_lat.cos().abs().max(1.0e-8));
         }
 
-        let mut elev_min = f64::INFINITY;
-        let mut elev_max = f64::NEG_INFINITY;
-        for row in 0..rows {
-            for col in 0..cols {
+        let (elev_min, elev_max) = (0..(rows as usize * cols as usize))
+            .into_par_iter()
+            .map(|idx| {
+                let row = (idx / cols as usize) as isize;
+                let col = (idx % cols as usize) as isize;
                 let z = dem.get(0, row, col);
                 if z == nodata {
-                    continue;
+                    (f64::INFINITY, f64::NEG_INFINITY)
+                } else {
+                    (z, z)
                 }
-                elev_min = elev_min.min(z);
-                elev_max = elev_max.max(z);
-            }
-        }
+            })
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY),
+                |a, b| (a.0.min(b.0), a.1.max(b.1)),
+            );
         if !elev_min.is_finite() || !elev_max.is_finite() {
             return Err(ToolError::Validation(
                 "input DEM contains no valid cells".to_string(),

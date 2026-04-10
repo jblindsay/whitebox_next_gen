@@ -1,62 +1,305 @@
-# whiteboxworkflows R Package Scaffold
+# whiteboxworkflows R Package
 
-This directory contains the emerging R package layer for wbw_r.
+whiteboxworkflows is the R package layer for wbw_r.
 
-## Current state
+The package API is being modernized with emphasis on:
+- session-first ergonomics,
+- clearer discovery helpers,
+- explicit licensing startup modes,
+- practical interoperability with R spatial packages.
 
-Implemented:
+## Table of contents
 
-- Package metadata scaffold (`DESCRIPTION`, `NAMESPACE`)
-- Stable facade functions in `R/facade.R`
-- Generated wrapper layer in `R/zz_generated_wrappers.R`
-- Native Rust export layer in the `wbw_r` crate via extendr
-- Package-native shared-library build wiring in `src/`
+- [Current API highlights](#current-api-highlights)
+- [Migration quick map](#migration-quick-map)
+- [Python to R API map](#python-to-r-api-map)
+- [Development install](#development-install)
+- [Quick smoke test](#quick-smoke-test)
+- [Recommended examples](#recommended-examples)
+- [Recommended API pattern](#recommended-api-pattern)
+- [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
+- [R interoperability](#r-interoperability)
+- [Licensing overview](#licensing-overview)
+- [Discovery APIs](#discovery-apis)
+- [Tests](#tests)
 
-Still required for full polish:
+## Current API highlights
 
-- End-to-end package installation test across more than one host configuration
-- Namespace/export cleanup and package metadata polish
-- Additional ergonomic tests around the high-level session facade
+- Stable session facade:
+  - `wbw_session(...)`
+  - `wbw_tool_ids(session = ...)`
+  - `wbw_has_tool(tool_id, session = ...)`
+  - `wbw_run_tool(tool_id, args = list(), session = ...)`
+  - `wbw_run_tool_with_progress(...)`
+- First typed object entry point:
+  - `wbw_read_raster(...)`
+  - `wbw_read_vector(...)`
+  - `wbw_read_lidar(...)`
+  - `wbw_read_bundle(...)`
+  - `wbw_raster` wrapper with metadata/accessors, math methods, and raster IO helpers:
+    - metadata/accessors: `metadata()`, `file_path()`, `band_count()`, `active_band()`, `crs_epsg()`, `crs_wkt()`
+    - binary math: `add()`, `subtract()`, `multiply()`, `divide()`
+    - unary math: `abs()`, `ceil()`, `floor()`, `round()`, `square()`, `sqrt()`, `log10()`, `log2()`, `sin()`, `cos()`, `tan()`, `sinh()`, `cosh()`, `tanh()`, `exp()`, `exp2()`
+    - conversion/io: `to_array()`, `to_stars()`, `deep_copy()`, `write()`
+  - `wbw_vector` wrapper with `metadata()`, `to_terra()`, and optional `to_sf()`
+  - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `deep_copy()`, and `write()`
+  - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `read_*()` bundle data access, preview selection, and true/false-colour composite helpers
+- Discovery helpers:
+  - `wbw_search_tools(...)`
+  - `wbw_describe_tool(...)`
+- Licensing-aware startup in one API:
+  - open mode
+  - signed entitlement mode
+  - floating activation mode
+- Raster bridge helpers:
+  - `wbw_raster_to_array(...)`, `wbw_array_to_raster(...)` via `terra`
+  - `wbw_raster_to_stars(...)`, `wbw_stars_to_raster(...)` via `stars`
 
-## Current development workflow
+## Migration quick map
 
-Install the package with standard R tooling:
+| Earlier style | Current style |
+|---|---|
+| direct low-level JSON calls only | `wbw_session(...)` + helper functions |
+| direct raster path handling | `wbw_read_raster(...)` |
+| direct vector path handling | `wbw_read_vector(...)` |
+| direct lidar path handling | `wbw_read_lidar(...)` |
+| direct bundle root handling | `wbw_read_bundle(...)` |
+| `wbw_list_tools(...)` for all checks | `wbw_tool_ids(...)` and `wbw_has_tool(...)` |
+| manual metadata filtering over `wbw_list_tools(...)` | `wbw_search_tools(...)` and `wbw_describe_tool(...)` |
+| manual progress JSON parsing | `wbw_run_tool_with_progress(...)` |
+| ad hoc empty argument encoding | pass `args = list()` |
+
+## Python to R API map
+
+| Python | R target | Status |
+|---|---|---|
+| `WbEnvironment()` | `wbw_session()` | complete |
+| `list_tools()` | `wbw_list_tools()`, `wbw_tool_ids()` | complete |
+| `has_tool()` | `wbw_has_tool()` | complete |
+| `search_tools()`, `describe_tool()` | `wbw_search_tools()`, `wbw_describe_tool()` | complete |
+| `run_tool(...)` | `wbw_run_tool(..., session=)` | complete |
+| progress execution helpers | `wbw_run_tool_with_progress(..., session=)` | complete |
+| `read_raster(path)` | `wbw_read_raster(path)` | complete |
+| raster accessors (`file_path`, `band_count`, `active_band`, CRS) | same methods on `wbw_raster` | complete |
+| raster math (`add`, `subtract`, `multiply`, `divide`) | same methods on `wbw_raster` | complete |
+| common unary raster math (`abs`, `sqrt`, trig/log/exp family) | same methods on `wbw_raster` | complete |
+| `read_vector(path)` | `wbw_read_vector(path)` | complete |
+| `read_lidar(path)` | `wbw_read_lidar(path)` | complete |
+| sensor bundle reader helpers | `wbw_read_bundle()` and family-specific readers | complete |
+| bundle preview/composite helper flows | `read_preview_raster()`, `write_true_colour()`, `write_false_colour()` | complete |
+| raster S3 arithmetic operators (`+`, `-`, `*`, `/`) | `+.wbw_raster`, `-.wbw_raster`, `*.wbw_raster`, `/.wbw_raster` | complete (unary `-` gives clear error) |
+| vector attribute table read/iterate | not yet implemented — use `to_terra()` or `to_sf()` bridge | not yet implemented |
+| lidar full point-cloud array roundtrip | not yet implemented — metadata and file-backed helpers only | not yet implemented |
+
+## Development install
 
 ```bash
 R CMD INSTALL crates/wbw_r/r-package/whiteboxworkflows
 ```
 
-This now builds the `wbw_r` static library during package compilation, links it
-into the package shared library, and loads the resulting package library through
-`useDynLib(whiteboxworkflows, ...)`.
+Optional build environment variables:
 
-The installed package now exports the stable facade and low-level JSON runtime
-functions explicitly rather than exporting every generated tool wrapper into the
-attached search path. That avoids masking unrelated base and stats functions
-when the package is attached.
+- `WBW_R_PACKAGE_PRO=true` to build against the Pro runtime.
+- `WBW_R_PACKAGE_RELEASE=true` to build Rust in release mode.
 
-Optional environment variables:
+## Quick smoke test
 
-- `WBW_R_PACKAGE_PRO=true` to build against the Pro-enabled runtime.
-- `WBW_R_PACKAGE_RELEASE=true` to build the Rust library in release mode.
+```bash
+Rscript -e 'library(whiteboxworkflows); s <- wbw_session(); cat(length(wbw_tool_ids(session = s)), "\n")'
+```
 
-Note: `jsonlite` must be installed for the generated/session wrapper layer.
+## Recommended examples
+
+| Order | Script | Focus |
+|---|---|---|
+| 1 | [inst/examples/generated_session_example.R](inst/examples/generated_session_example.R) | Session and discovery |
+| 2 | [inst/examples/raster_object_quickstart.R](inst/examples/raster_object_quickstart.R) | Typed raster wrapper quickstart |
+| 3 | [inst/examples/vector_object_quickstart.R](inst/examples/vector_object_quickstart.R) | Typed vector wrapper quickstart |
+| 4 | [inst/examples/lidar_object_quickstart.R](inst/examples/lidar_object_quickstart.R) | Typed lidar wrapper quickstart |
+| 5 | [inst/examples/sensor_bundle_quickstart.R](inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
+| 6 | [inst/examples/sensor_bundle_multi_family_preview.R](inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
+| 7 | [inst/examples/raster_array_roundtrip.R](inst/examples/raster_array_roundtrip.R) | terra and stars roundtrip |
+
+## Recommended API pattern
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+
+if (!wbw_has_tool("slope", session = s)) {
+  stop("slope tool is not visible")
+}
+
+result <- wbw_run_tool(
+  "slope",
+  args = list(dem = "dem.tif", output = "slope.tif"),
+  session = s
+)
+```
+
+## Quick start examples by workflow type
+
+### Session and discovery
+
+```r
+s <- wbw_session()
+print(s)
+ids <- wbw_tool_ids(session = s)
+```
+
+### Progress-aware execution
+
+```r
+result <- wbw_run_tool_with_progress(
+  "slope",
+  args = list(dem = "dem.tif", output = "slope.tif"),
+  session = wbw_session(),
+  on_progress = function(pct, message) {
+    cat(sprintf("[%3g%%] %s\n", pct, message))
+  }
+)
+str(result$progress)
+```
+
+### Typed raster wrapper
+
+```r
+dem <- wbw_read_raster("dem.tif")
+meta <- dem$metadata()
+print(dem)
+
+arr <- dem$to_array()
+```
+
+### Typed vector wrapper
+
+```r
+roads <- wbw_read_vector("roads.gpkg")
+meta <- roads$metadata()
+print(roads)
+
+tv <- roads$to_terra()
+```
+
+### Typed lidar wrapper
+
+```r
+lidar <- wbw_read_lidar("points.las")
+meta <- lidar$metadata()
+print(lidar)
+
+copied <- lidar$deep_copy("points_copy.las", overwrite = TRUE)
+```
+
+### Sensor bundle wrapper
+
+```r
+bundle <- wbw_read_bundle("LC09_SCENE")
+meta <- bundle$metadata()
+print(bundle)
+
+band_keys <- bundle$list_band_keys()
+qa_keys <- bundle$list_qa_keys()
+
+if (length(band_keys) > 0) {
+  preview <- bundle$read_band(band_keys[[1]])
+  print(preview)
+}
+
+preview_info <- bundle$read_preview_raster()
+if (!is.null(preview_info)) {
+  print(preview_info$raster)
+}
+
+# Optional output writers when suitable channels are available in the bundle.
+# tc <- bundle$write_true_colour("true_colour.tif")
+# fc <- bundle$write_false_colour("false_colour.tif")
+```
+
+Notes:
+- `write_true_colour()` and `write_false_colour()` are physically meaningful for optical bundles (e.g., Landsat/Sentinel-2).
+- These helpers write derived raster outputs (e.g., GeoTIFF quicklooks); they do not write or mutate sensor bundle packages.
+- For SAR bundles, these helpers use pseudo-colour defaults (for example VV/VH combinations) to provide quick-look visualization.
+- Channel detection is intelligent: when called with a specific `family`, defaults are expanded by probing available keys in the bundle (bands, measurements, assets) to adapt to provider-specific naming conventions, improving robustness across SAR families.
+- Some SAR SLC products may expose measurement rasters in formats not yet supported by all downstream composite paths; `read_measurement()` remains the stable fallback.
+
+### No-argument tools
+
+```r
+# For tools with no parameters, empty args are supported.
+result <- wbw_run_tool_with_progress("tool_id_with_no_args", args = list(), session = wbw_session())
+```
+
+## R interoperability
+
+### terra bridge
+
+```r
+arr <- wbw_raster_to_array("dem.tif")
+arr2 <- arr + 1
+wbw_array_to_raster(arr2, "dem_plus1.tif", template_path = "dem.tif", overwrite = TRUE)
+```
+
+### stars bridge
+
+```r
+s <- wbw_raster_to_stars("dem.tif")
+s2 <- s + 1
+wbw_stars_to_raster(s2, "dem_plus1_stars.tif", overwrite = TRUE)
+```
+
+Install optional bridge dependencies:
+
+```r
+install.packages("terra")
+install.packages("stars")
+```
+
+## Licensing overview
+
+Startup modes:
+
+- Open mode: `wbw_session()`.
+- Signed entitlement: `wbw_session(signed_entitlement_json=..., public_key_kid=..., public_key_b64url=...)`.
+- Floating online activation: `wbw_session(floating_license_id=..., provider_url=...)`.
+
+## Discovery APIs
+
+```r
+s <- wbw_session()
+tools <- wbw_list_tools(session = s)
+ids <- wbw_tool_ids(session = s)
+has_slope <- wbw_has_tool("slope", session = s)
+matches <- wbw_search_tools("lidar")
+slope <- wbw_describe_tool("slope")
+```
+
+Family-specific bundle readers are also available when you know the expected product type:
+
+```r
+landsat <- wbw_read_landsat("LC09_SCENE")
+sentinel2 <- wbw_read_sentinel2("S2A_SCENE.SAFE")
+```
 
 ## Tests
-
-Run the package smoke tests with:
 
 ```bash
 Rscript -e 'testthat::test_local("crates/wbw_r/r-package/whiteboxworkflows")'
 ```
 
-The initial test suite validates:
+Optional real-fixture test roots:
+- `WBW_TEST_DATA_ROOT` for non-SAR real fixtures (for example Sentinel-2 SAFE samples).
+- `WBW_SAR_FIXTURE_ROOT` for SAR fixtures (for example `.../sar_fixtures`).
 
-- low-level JSON tool listing,
-- high-level session facade construction,
-- facade and direct listing consistency.
-
-## Near-term goal
-
-Validate the new package-native install/load path end to end and then tighten
-the package surface around tests, exports, and documentation.
+The current test suite (140+ passing tests) validates:
+- low-level JSON listing,
+- session facade construction and listing consistency,
+- progress helper dispatch behavior,
+- typed raster wrapper construction, metadata, accessors, write/copy, and math methods,
+- typed vector wrapper construction, metadata, and write/copy,
+- typed lidar wrapper construction, metadata, and copy helpers,
+- sensor bundle wrapper construction, band/preview access, and composite helpers,
+- SAR bundle composite path coverage,
+- raster/vector parity gate (wrapper count vs visible manifest),
+- licensing failure-path assertions (entitlement guard, invalid key, missing file, floating startup errors).

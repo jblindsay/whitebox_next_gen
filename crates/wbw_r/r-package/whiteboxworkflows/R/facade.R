@@ -295,6 +295,82 @@ wbw_progress_result_fallback <- function(tool_id, outputs) {
   list(tool_id = tool_id, outputs = outputs, progress = list())
 }
 
+#' Create a standard progress-printing callback.
+#'
+#' The returned function accepts `(pct, message)` arguments, matching
+#' `wbw_run_tool_with_progress(..., on_progress = ...)` callback shape.
+#'
+#' @param show_messages logical; when `TRUE`, non-progress message text is printed.
+#' @param min_increment integer percentage increment required before printing again.
+#' @param stream output stream/connection; defaults to `stdout()`.
+#'
+#' @return A stateful callback function.
+#' @export
+wbw_make_progress_printer <- function(show_messages = TRUE,
+                                      min_increment = 1L,
+                                      stream = stdout()) {
+  show_messages <- isTRUE(show_messages)
+  min_increment <- as.integer(min_increment)
+  if (is.na(min_increment) || min_increment < 1L) {
+    min_increment <- 1L
+  }
+
+  state <- new.env(parent = emptyenv())
+  state$last_reported <- -1L
+
+  function(pct = NA_real_, message = "") {
+    msg <- if (is.null(message)) "" else as.character(message[[1]])
+
+    if (!is.numeric(pct) || length(pct) == 0L || is.na(pct[[1]])) {
+      if (show_messages && nzchar(msg)) {
+        cat(msg, "\n", sep = "", file = stream)
+      }
+      return(invisible(NULL))
+    }
+
+    value <- as.numeric(pct[[1]])
+    if (!is.finite(value)) {
+      if (show_messages && nzchar(msg)) {
+        cat(msg, "\n", sep = "", file = stream)
+      }
+      return(invisible(NULL))
+    }
+
+    if (value <= 1.0) {
+      value <- value * 100.0
+    }
+
+    pct_int <- as.integer(base::max(0.0, base::min(100.0, base::floor(value))))
+
+    # If progress decreases, treat as a new run and restart reporting.
+    if (pct_int < state$last_reported) {
+      state$last_reported <- -1L
+    }
+
+    should_print <- (pct_int >= (state$last_reported + min_increment)) || pct_int == 100L
+    if (should_print && pct_int > state$last_reported) {
+      cat(sprintf("%d%%\n", pct_int), file = stream)
+      state$last_reported <- pct_int
+    }
+
+    invisible(NULL)
+  }
+}
+
+.wbw_default_progress_printer <- wbw_make_progress_printer()
+
+#' Built-in standard progress callback.
+#'
+#' This callback can be passed directly as `on_progress` to
+#' `wbw_run_tool_with_progress(...)`.
+#'
+#' @param pct numeric progress value in `[0, 1]` or `[0, 100]`.
+#' @param message optional status message.
+#' @export
+wbw_print_progress <- function(pct = NA_real_, message = "") {
+  .wbw_default_progress_printer(pct, message)
+}
+
 wbw_args_to_json <- function(args) {
   if (length(args) == 0L) {
     return("{}")

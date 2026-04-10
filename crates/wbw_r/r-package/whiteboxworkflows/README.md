@@ -155,11 +155,25 @@ result <- wbw_run_tool_with_progress(
   "slope",
   args = list(dem = "dem.tif", output = "slope.tif"),
   session = wbw_session(),
-  on_progress = function(pct, message) {
-    cat(sprintf("[%3g%%] %s\n", pct, message))
-  }
+  on_progress = wbw_print_progress
 )
 str(result$progress)
+```
+
+For custom verbosity, use the progress-printer factory:
+
+```r
+progress_cb <- wbw_make_progress_printer(
+  min_increment = 5,
+  show_messages = TRUE
+)
+
+result <- wbw_run_tool_with_progress(
+  "slope",
+  args = list(dem = "dem.tif", output = "slope.tif"),
+  session = wbw_session(),
+  on_progress = progress_cb
+)
 ```
 
 ### Typed raster wrapper

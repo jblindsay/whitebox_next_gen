@@ -59,6 +59,26 @@ test_that("progress-aware helper returns structured progress payload", {
   expect_equal(result$outputs$args$alpha, 1)
 })
 
+test_that("wbw_print_progress and wbw_make_progress_printer are available", {
+  expect_true(is.function(wbw_print_progress))
+  expect_true(is.function(wbw_make_progress_printer))
+})
+
+test_that("progress printer normalizes and throttles updates", {
+  out <- textConnection("captured", "w", local = TRUE)
+  on.exit(close(out), add = TRUE)
+
+  cb <- wbw_make_progress_printer(min_increment = 10, show_messages = TRUE, stream = out)
+  cb(0.12, "")
+  cb(0.19, "")
+  cb(0.26, "")
+  cb(0.26, "")
+  cb(NA_real_, "hello")
+  cb(1.0, "")
+
+  expect_equal(captured, c("12%", "26%", "hello", "100%"))
+})
+
 test_that("multi-output path results are coerced into typed raster objects", {
   skip_if_not_installed("terra")
 

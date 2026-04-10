@@ -281,11 +281,12 @@ impl Tool for StrahlerStreamOrderTool {
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let inflowing_vals = D8Core::inflowing_vals(esri_style);
         let mut stack = Vec::new();
+        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing_vals);
 
         for row in 0..rows {
             for col in 0..cols {
                 if streams.get(0, row as isize, col as isize) > 0.0 {
-                    let count = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing_vals);
+                    let count = inflow_counts[row * cols + col];
                     num_inflowing[row][col] = count;
                     if count == 0 {
                         stack.push((row, col));
@@ -579,11 +580,12 @@ fn render_profile_html(title: &str, profiles: &[(Vec<f64>, Vec<f64>)]) -> String
 
 fn stream_heads(streams: &Raster, pntr: &Raster, esri_style: bool) -> Vec<(usize, usize)> {
     let inflowing = D8Core::inflowing_vals(esri_style);
+    let inflow_counts = compute_stream_inflow_counts_parallel(pntr, streams, &inflowing);
     let mut heads = Vec::new();
     for row in 0..streams.rows {
         for col in 0..streams.cols {
             if streams.get(0, row as isize, col as isize) > 0.0
-                && D8Core::count_inflowing_cells(streams, pntr, row as isize, col as isize, &inflowing) == 0
+                && inflow_counts[row * streams.cols + col] == 0
             {
                 heads.push((row, col));
             }
@@ -1060,6 +1062,27 @@ fn grid_lengths(pntr: &Raster) -> [f64; 8] {
     [diag, cell_size_x, diag, cell_size_y, diag, cell_size_x, diag, cell_size_y]
 }
 
+fn compute_stream_inflow_counts_parallel(
+    pntr: &Raster,
+    streams: &Raster,
+    inflowing: &[f64; 8],
+) -> Vec<i8> {
+    let rows = pntr.rows;
+    let cols = pntr.cols;
+    (0..rows * cols)
+        .into_par_iter()
+        .map(|idx| {
+            let row = idx / cols;
+            let col = idx % cols;
+            if streams.get(0, row as isize, col as isize) > 0.0 {
+                D8Core::count_inflowing_cells(streams, pntr, row as isize, col as isize, inflowing)
+            } else {
+                -1
+            }
+        })
+        .collect()
+}
+
 fn compute_link_id_raster(
     pntr: &Raster,
     streams: &Raster,
@@ -1079,17 +1102,12 @@ fn compute_link_id_raster(
     let mut num_inflowing = vec![vec![-1i8; cols]; rows];
     let mut stack = Vec::new();
     let mut current_id = 1.0;
+    let inflow_counts = compute_stream_inflow_counts_parallel(pntr, streams, &inflowing);
 
     for row in 0..rows {
         for col in 0..cols {
             if streams.get(0, row as isize, col as isize) > 0.0 {
-                let c = D8Core::count_inflowing_cells(
-                    streams,
-                    pntr,
-                    row as isize,
-                    col as isize,
-                    &inflowing,
-                );
+                let c = inflow_counts[row * cols + col];
                 num_inflowing[row][col] = c;
                 if c == 0 {
                     stack.push((row, col));
@@ -1142,6 +1160,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let background = if zero_background { 0.0 } else { nodata };
             let inflowing = D8Core::inflowing_vals(esri_style);
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
 
             let mut out = streams.clone();
             out.data_type = DataType::I16;
@@ -1155,7 +1174,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                         }
                         continue;
                     }
-                    let in_count = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                    let in_count = inflow_counts[row * cols + col];
                     let has_down = downstream_cell(&pntr, row, col, &pntr_matches)
                         .map(|(rn, cn, _)| streams.get(0, rn as isize, cn as isize) > 0.0)
                         .unwrap_or(false);
@@ -1309,10 +1328,11 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let mut out_vals = vec![vec![0.0f64; cols]; rows];
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0 {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -1356,10 +1376,11 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let mut out_vals = vec![vec![0.0f64; cols]; rows];
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0 {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -1403,10 +1424,11 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let mut far = vec![vec![0.0f64; cols]; rows];
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0 {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -1491,11 +1513,12 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let mut trib_len = vec![vec![nodata; cols]; rows];
             let mut stack = Vec::new();
             let mut current_id = 1.0;
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
 
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0 {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -1580,11 +1603,12 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             out.data_type = DataType::I16;
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
 
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0 {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -1974,13 +1998,14 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
+            let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
 
             for row in 0..rows {
                 for col in 0..cols {
                     if streams.get(0, row as isize, col as isize) > 0.0
                         && streams.get(0, row as isize, col as isize) != nodata
                     {
-                        let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                        let c = inflow_counts[row * cols + col];
                         num_inflowing[row][col] = c;
                         if c == 0 {
                             stack.push((row, col));
@@ -2584,24 +2609,7 @@ impl Tool for HortonStreamOrderTool {
         let mut far = vec![vec![0.0f64; cols]; rows];
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let mut stack = Vec::new();
-        let inflow_counts: Vec<i8> = (0..rows * cols)
-            .into_par_iter()
-            .map(|idx| {
-                let row = idx / cols;
-                let col = idx % cols;
-                if streams.get(0, row as isize, col as isize) > 0.0 {
-                    D8Core::count_inflowing_cells(
-                        &streams,
-                        &pntr,
-                        row as isize,
-                        col as isize,
-                        &inflowing,
-                    )
-                } else {
-                    -1
-                }
-            })
-            .collect();
+        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
         for row in 0..rows {
             for col in 0..cols {
                 let c = inflow_counts[row * cols + col];
@@ -2727,10 +2735,11 @@ impl Tool for HackStreamOrderTool {
         let mut far = vec![vec![0.0f64; cols]; rows];
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let mut stack = Vec::new();
+        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
         for row in 0..rows {
             for col in 0..cols {
                 if streams.get(0, row as isize, col as isize) > 0.0 {
-                    let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                    let c = inflow_counts[row * cols + col];
                     num_inflowing[row][col] = c;
                     if c == 0 {
                         stack.push((row, col));
@@ -2864,10 +2873,11 @@ impl Tool for ShreveStreamMagnitudeTool {
         out.data_type = DataType::I32;
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let mut stack = Vec::new();
+        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
         for row in 0..rows {
             for col in 0..cols {
                 if streams.get(0, row as isize, col as isize) > 0.0 {
-                    let c = D8Core::count_inflowing_cells(&streams, &pntr, row as isize, col as isize, &inflowing);
+                    let c = inflow_counts[row * cols + col];
                     num_inflowing[row][col] = c;
                     if c == 0 {
                         out.set_unchecked(0, row as isize, col as isize, 1.0);

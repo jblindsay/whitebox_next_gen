@@ -11046,8 +11046,6 @@ impl Tool for SymmetricalDifferenceTool {
 
         coalescer.finish(ctx.progress);
         ctx.progress.progress(1.0);
-        coalescer.finish(ctx.progress);
-        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -11187,8 +11185,6 @@ impl Tool for UnionTool {
             coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
-        coalescer.finish(ctx.progress);
-        ctx.progress.progress(1.0);
         coalescer.finish(ctx.progress);
         ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -13343,8 +13339,6 @@ impl Tool for MergeLineSegmentsTool {
             coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
-        coalescer.finish(ctx.progress);
-        ctx.progress.progress(1.0);
         coalescer.finish(ctx.progress);
         ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;

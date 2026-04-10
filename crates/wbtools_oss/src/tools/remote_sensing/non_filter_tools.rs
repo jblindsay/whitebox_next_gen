@@ -9651,23 +9651,41 @@ impl Tool for KnnClassificationTool {
             metadata: vec![("color_interpretation".to_string(), "categorical".to_string())],
         });
 
+        let rows_usize = rows as usize;
+        let cols_usize = cols as usize;
+        let pred_rows: Result<Vec<Vec<Option<usize>>>, ToolError> = (0..rows_usize)
+            .into_par_iter()
+            .map(|row_u| {
+                let row = row_u as isize;
+                let mut out_row = vec![None; cols_usize];
+                for col_u in 0..cols_usize {
+                    let col = col_u as isize;
+                    let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col) else {
+                        continue;
+                    };
+                    let ret = tree
+                        .nearest(&feat, k, &squared_euclidean)
+                        .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
+                    if ret.is_empty() {
+                        continue;
+                    }
+                    let mut neigh_labels = Vec::<usize>::with_capacity(ret.len());
+                    for (_d, idx_ref) in ret {
+                        neigh_labels.push(y_train[*idx_ref]);
+                    }
+                    out_row[col_u] = Some(majority_label(&neigh_labels));
+                }
+                Ok(out_row)
+            })
+            .collect();
+        let pred_rows = pred_rows?;
+
         for row in 0..rows {
+            let row_preds = &pred_rows[row as usize];
             for col in 0..cols {
-                let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col) else {
-                    continue;
-                };
-                let ret = tree
-                    .nearest(&feat, k, &squared_euclidean)
-                    .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
-                if ret.is_empty() {
-                    continue;
+                if let Some(pred) = row_preds[col as usize] {
+                    let _ = output.set(0, row, col, (pred + 1) as f64);
                 }
-                let mut neigh_labels = Vec::<usize>::with_capacity(ret.len());
-                for (_d, idx_ref) in ret {
-                    neigh_labels.push(y_train[*idx_ref]);
-                }
-                let pred = majority_label(&neigh_labels);
-                let _ = output.set(0, row, col, (pred + 1) as f64);
             }
             if row % 100 == 0 {
                 ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
@@ -9795,36 +9813,59 @@ impl Tool for KnnRegressionTool {
             metadata: rasters[0].metadata.clone(),
         });
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col) else {
-                    continue;
-                };
-                let ret = tree
-                    .nearest(&feat, k, &squared_euclidean)
-                    .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
-                if ret.is_empty() {
-                    continue;
+        let rows_usize = rows as usize;
+        let cols_usize = cols as usize;
+        let nodata_out = output.nodata;
+        let pred_rows: Result<Vec<Vec<Option<f64>>>, ToolError> = (0..rows_usize)
+            .into_par_iter()
+            .map(|row_u| {
+                let row = row_u as isize;
+                let mut out_row = vec![None; cols_usize];
+                for col_u in 0..cols_usize {
+                    let col = col_u as isize;
+                    let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col)
+                    else {
+                        continue;
+                    };
+                    let ret = tree
+                        .nearest(&feat, k, &squared_euclidean)
+                        .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
+                    if ret.is_empty() {
+                        continue;
+                    }
+                    let pred = if distance_weighted {
+                        let mut sum_w = 0.0;
+                        let mut sum_y = 0.0;
+                        for (d2, idx_ref) in ret {
+                            let w = 1.0 / d2.max(1e-12);
+                            sum_w += w;
+                            sum_y += w * y_train[*idx_ref];
+                        }
+                        if sum_w > 0.0 { sum_y / sum_w } else { nodata_out }
+                    } else {
+                        let mut sum = 0.0;
+                        let mut n = 0usize;
+                        for (_d2, idx_ref) in ret {
+                            sum += y_train[*idx_ref];
+                            n += 1;
+                        }
+                        if n > 0 { sum / n as f64 } else { nodata_out }
+                    };
+                    if pred != nodata_out {
+                        out_row[col_u] = Some(pred);
+                    }
                 }
-                let pred = if distance_weighted {
-                    let mut sum_w = 0.0;
-                    let mut sum_y = 0.0;
-                    for (d2, idx_ref) in ret {
-                        let w = 1.0 / d2.max(1e-12);
-                        sum_w += w;
-                        sum_y += w * y_train[*idx_ref];
-                    }
-                    if sum_w > 0.0 { sum_y / sum_w } else { output.nodata }
-                } else {
-                    let mut sum = 0.0;
-                    let mut n = 0usize;
-                    for (_d2, idx_ref) in ret {
-                        sum += y_train[*idx_ref];
-                        n += 1;
-                    }
-                    if n > 0 { sum / n as f64 } else { output.nodata }
-                };
-                let _ = output.set(0, row, col, pred);
+                Ok(out_row)
+            })
+            .collect();
+        let pred_rows = pred_rows?;
+
+        for row in 0..rows {
+            let row_preds = &pred_rows[row as usize];
+            for col in 0..cols {
+                if let Some(pred) = row_preds[col as usize] {
+                    let _ = output.set(0, row, col, pred);
+                }
             }
             if row % 100 == 0 {
                 ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));

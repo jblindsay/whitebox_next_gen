@@ -106,6 +106,31 @@ test_that("single-output convenience path key is not misread as multi-output", {
   expect_equal(coerced, outputs)
 })
 
+test_that("memory-backed output paths are coerced into typed raster objects", {
+  outputs <- list(
+    output = list(
+      `__wbw_type__` = "raster",
+      path = "memory://raster/42",
+      active_band = 0L
+    ),
+    output2 = list(
+      `__wbw_type__` = "raster",
+      path = "memory://raster/43",
+      active_band = 0L
+    ),
+    cells_processed = 100L
+  )
+
+  coerced <- whiteboxworkflows:::wbw_coerce_tool_output(outputs)
+
+  expect_type(coerced, "list")
+  expect_length(coerced, 2L)
+  expect_true(inherits(coerced[[1]], "wbw_raster"))
+  expect_true(inherits(coerced[[2]], "wbw_raster"))
+  expect_equal(coerced[[1]]$file_path(), "memory://raster/42")
+  expect_equal(coerced[[2]]$file_path(), "memory://raster/43")
+})
+
 test_that("entitlement startup argument validation guards are enforced", {
   expect_error(
     wbw_session(

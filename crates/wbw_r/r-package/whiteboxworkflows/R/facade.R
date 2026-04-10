@@ -227,12 +227,15 @@ wbw_make_data_object_from_path <- function(kind, path, session = NULL) {
   if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
     return(NULL)
   }
-  if (startsWith(path, "memory://")) {
-    return(NULL)
-  }
 
-  normalized <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  if (!file.exists(normalized)) {
+  is_memory_path <- startsWith(path, "memory://")
+
+  normalized <- if (is_memory_path) {
+    path
+  } else {
+    normalizePath(path, winslash = "/", mustWork = FALSE)
+  }
+  if (!is_memory_path && !file.exists(normalized)) {
     return(NULL)
   }
 
@@ -306,11 +309,20 @@ wbw_require_terra <- function(call_name) {
 }
 
 wbw_raster_from_path <- function(path, session = NULL, proxy = FALSE) {
-  if (!file.exists(path)) {
+  if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
+    stop("path must be a non-empty string.", call. = FALSE)
+  }
+
+  is_memory_path <- startsWith(path, "memory://")
+  if (!is_memory_path && !file.exists(path)) {
     stop(sprintf("Raster file does not exist: %s", path), call. = FALSE)
   }
 
-  raster_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  raster_path <- if (is_memory_path) {
+    path
+  } else {
+    normalizePath(path, winslash = "/", mustWork = TRUE)
+  }
 
   .meta_cache <- NULL
   .get_meta <- function() {

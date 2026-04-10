@@ -204,29 +204,41 @@ impl Tool for NibbleTool {
         let ea_result = EuclideanAllocationTool.run(&ea_args, ctx)?;
         let ea_path = get_path(&ea_result)?;
         let mut nibbled = load_raster(&ea_path, "euclidean_allocation")?;
+        nibbled.nodata = input_nodata;
 
         if use_nodata {
-            for i in 0..band_stride {
-                let v = nibbled.data.get_f64(i);
-                if (v - (max_class + 1.0)).abs() < 1e-9 {
+            let restore_mask: Vec<bool> = (0..band_stride)
+                .into_par_iter()
+                .map(|i| {
+                    let v = nibbled.data.get_f64(i);
+                    (v - (max_class + 1.0)).abs() < 1e-9
+                })
+                .collect();
+            for (i, restore) in restore_mask.into_iter().enumerate() {
+                if restore {
                     nibbled.data.set_f64(i, input_nodata);
-                    nibbled.nodata = input_nodata;
                 }
             }
         } else {
-            for i in 0..band_stride {
-                if mask[i] == 1.0 && input_nodata_mask[i] == 1.0 {
+            let restore_mask: Vec<bool> = (0..band_stride)
+                .into_par_iter()
+                .map(|i| mask[i] == 1.0 && input_nodata_mask[i] == 1.0)
+                .collect();
+            for (i, restore) in restore_mask.into_iter().enumerate() {
+                if restore {
                     nibbled.data.set_f64(i, input_nodata);
-                    nibbled.nodata = input_nodata;
                 }
             }
         }
 
         if nibble_nodata {
-            for i in 0..band_stride {
-                if mask[i] == 0.0 && input_nodata_mask[i] == 1.0 {
+            let restore_mask: Vec<bool> = (0..band_stride)
+                .into_par_iter()
+                .map(|i| mask[i] == 0.0 && input_nodata_mask[i] == 1.0)
+                .collect();
+            for (i, restore) in restore_mask.into_iter().enumerate() {
+                if restore {
                     nibbled.data.set_f64(i, input_nodata);
-                    nibbled.nodata = input_nodata;
                 }
             }
         }

@@ -6,6 +6,7 @@
 /// - Ridge and valley vectors
 
 use serde_json::json;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -1535,16 +1536,24 @@ impl Tool for RidgeAndValleyVectorsTool {
         ridge_raster.nodata = -1.0;
         valley_raster.nodata = -1.0;
 
-        for i in 0..band_stride {
-            let ep_v = ep.data.get_f64(i);
-            let sl_v = slope.data.get_f64(i);
-            if ep.is_nodata(ep_v) || slope.is_nodata(sl_v) {
-                ridge_raster.data.set_f64(i, -1.0);
-                valley_raster.data.set_f64(i, -1.0);
-                continue;
-            }
-            ridge_raster.data.set_f64(i, if ep_v > ridge_threshold && sl_v > slope_threshold { 1.0 } else { 0.0 });
-            valley_raster.data.set_f64(i, if ep_v < ep_threshold && sl_v > slope_threshold { 1.0 } else { 0.0 });
+        let mask_values: Vec<(f64, f64)> = (0..band_stride)
+            .into_par_iter()
+            .map(|i| {
+                let ep_v = ep.data.get_f64(i);
+                let sl_v = slope.data.get_f64(i);
+                if ep.is_nodata(ep_v) || slope.is_nodata(sl_v) {
+                    (-1.0, -1.0)
+                } else {
+                    (
+                        if ep_v > ridge_threshold && sl_v > slope_threshold { 1.0 } else { 0.0 },
+                        if ep_v < ep_threshold && sl_v > slope_threshold { 1.0 } else { 0.0 },
+                    )
+                }
+            })
+            .collect();
+        for (i, (ridge_v, valley_v)) in mask_values.into_iter().enumerate() {
+            ridge_raster.data.set_f64(i, ridge_v);
+            valley_raster.data.set_f64(i, valley_v);
         }
 
         let ridge_mem = raster_mem(ridge_raster);

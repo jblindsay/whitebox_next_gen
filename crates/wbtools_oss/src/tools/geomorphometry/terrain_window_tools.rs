@@ -628,13 +628,19 @@ impl TerrainWindowCore {
         }
 
         let mut output = input.clone();
-        for row in 0..rows {
-            let mut row_data = vec![nodata as f64; cols];
-            for col in 0..cols {
-                row_data[col] = current[Self::idx(row, col, cols)] as f64;
-            }
+        let output_rows: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut row_data = vec![nodata as f64; cols];
+                for col in 0..cols {
+                    row_data[col] = current[Self::idx(row, col, cols)] as f64;
+                }
+                row_data
+            })
+            .collect();
+        for (row, row_data) in output_rows.iter().enumerate() {
             output
-                .set_row_slice(0, row as isize, &row_data)
+                .set_row_slice(0, row as isize, row_data)
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", row, e)))?;
         }
 

@@ -5897,12 +5897,18 @@ impl Tool for TrendSurfaceTool {
             crs: input.crs.clone(), metadata: input.metadata.clone(),
             ..Default::default()
         });
-        for row in 0..rows {
-            for col in 0..cols {
+        let fitted_values: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
                 let x_val = input.col_center_x(col as isize) - min_x;
                 let y_val = input.row_center_y(row as isize) - min_y;
-                output.data.set_f64(row * cols + col, eval_poly(x_val, y_val, &coeffs, order, min_z));
-            }
+                eval_poly(x_val, y_val, &coeffs, order, min_z)
+            })
+            .collect();
+        for (idx, z) in fitted_values.into_iter().enumerate() {
+            output.data.set_f64(idx, z);
         }
 
         let loc = write_or_store_output(output, output_path)?;

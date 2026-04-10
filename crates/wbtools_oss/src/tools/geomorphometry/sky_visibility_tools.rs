@@ -13,7 +13,7 @@ use rand::RngExt;
 use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -1900,6 +1900,7 @@ impl SkyVisibilityCore {
 
         let dem = Self::load_raster(&dem_path)?;
         let rows = dem.rows as isize;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
         let nodata_f32 = nodata as f32;
@@ -2089,7 +2090,7 @@ impl SkyVisibilityCore {
             output
                 .set_row_slice(0, r as isize, row)
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
-            ctx.progress.progress((r + 1) as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
 
         let out = Self::write_or_store_output(output, output_path)?;
@@ -2883,6 +2884,7 @@ impl SkyVisibilityCore {
 
         let dem = Arc::new(Self::load_raster(&dem_path)?);
         let rows = dem.rows as isize;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
 
@@ -3161,7 +3163,7 @@ impl SkyVisibilityCore {
             output
                 .set_row_slice(0, r as isize, row)
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
-            ctx.progress.progress((r + 1) as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
 
         let out = Self::write_or_store_output(output, output_path)?;
@@ -3528,6 +3530,7 @@ impl SkyVisibilityCore {
 
         let mut dem = Self::load_raster(&dem_path)?;
         let rows = dem.rows as isize;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
         let nodata_f32 = nodata as f32;
@@ -3787,7 +3790,7 @@ impl SkyVisibilityCore {
             output
                 .set_row_slice(0, r as isize, row)
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
-            ctx.progress.progress((r + 1) as f64 / rows as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (r + 1) as f64 / rows as f64);
         }
 
         let out = Self::write_or_store_output(output, output_path)?;
@@ -4184,6 +4187,7 @@ impl SkyVisibilityCore {
         let dem = Arc::new(dem);
         let mut shadow_seconds = vec![0.0_f64; (rows * cols) as usize];
         let mut total_daylight = 0.0_f64;
+        let coalescer = PercentCoalescer::new(1, 99);
 
         for bin in 0..num_bins {
             let azimuth = bin as f32 * az_fraction;
@@ -4206,7 +4210,7 @@ impl SkyVisibilityCore {
 
             entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
             if entries.first().map(|e| e.1).unwrap_or(0.0) <= 0.0 || daylight_in_bin <= 0.0 {
-                ctx.progress.progress((bin + 1) as f64 / num_bins as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (bin + 1) as f64 / num_bins as f64);
                 continue;
             }
 
@@ -4276,7 +4280,7 @@ impl SkyVisibilityCore {
                 }
 
                 let p = (bin as f64 + (row_i + 1) as f64 / rows as f64) / num_bins as f64;
-                ctx.progress.progress(p);
+                coalescer.emit_unit_fraction(ctx.progress, p);
             }
         }
 
@@ -4406,6 +4410,7 @@ impl SkyVisibilityCore {
     }
 
     fn run_skyline_analysis(args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let dem_path = Self::parse_dem_input(args)?;
         let points_path = parse_vector_path_arg(args, "points")?;
         let output_path = parse_optional_output_path(args, "output")?
@@ -4596,7 +4601,7 @@ impl SkyVisibilityCore {
             ));
 
             fid += 1;
-            ctx.progress.progress((si + 1) as f64 / stations.len() as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (si + 1) as f64 / stations.len() as f64);
         }
 
         if out_layer.features.is_empty() {

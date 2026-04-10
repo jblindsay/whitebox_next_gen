@@ -2207,6 +2207,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running circular_variance_of_aspect");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let mut values = vec![f64::NAN; rows * cols];
             for r in 0..rows {
@@ -2307,7 +2308,7 @@ impl TerrainAnalysisCore {
                     ToolError::Execution(format!("failed writing row {}: {}", r, e))
                 })?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -2380,6 +2381,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running fetch_analysis");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -2418,7 +2420,7 @@ impl TerrainAnalysisCore {
                     ToolError::Execution(format!("failed writing row {}: {}", r, e))
                 })?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -2472,6 +2474,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running find_ridges");
+            let coalescer = PercentCoalescer::new(1, 99);
             let mut grid = vec![vec![nodata; cols]; rows];
 
             let row_data: Vec<Vec<f64>> = (0..rows)
@@ -2575,7 +2578,7 @@ impl TerrainAnalysisCore {
                     ToolError::Execution(format!("failed writing row {}: {}", r, e))
                 })?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -4662,6 +4665,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running percent_elev_range");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -4698,7 +4702,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -4755,6 +4759,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running relative_topographic_position");
+            let coalescer = PercentCoalescer::new(1, 99);
             let (sum, _, count) = Self::build_integrals(&input, band);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
@@ -4806,7 +4811,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -4856,6 +4861,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running num_downslope_neighbours");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -4880,7 +4886,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -4930,6 +4936,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running num_upslope_neighbours");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -4954,7 +4961,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5007,6 +5014,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running max_downslope_elev_change");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -5036,7 +5044,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5089,6 +5097,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running max_upslope_elev_change");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -5118,7 +5127,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5171,6 +5180,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running min_downslope_elev_change");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -5200,7 +5210,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5265,6 +5275,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running elevation_percentile");
+            let coalescer = PercentCoalescer::new(1, 99);
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
                 .map(|r| {
@@ -5302,7 +5313,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5378,6 +5389,7 @@ impl TerrainAnalysisCore {
         let dx = [1isize, 1, 1, 0, -1, -1, -1, 0];
         let dy = [-1isize, 0, 1, 1, 1, 0, -1, -1];
         let lengths = [diag, cell_size_x, diag, cell_size_y, diag, cell_size_x, diag, cell_size_y];
+        let coalescer = PercentCoalescer::new(1, 99);
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
@@ -5567,7 +5579,7 @@ impl TerrainAnalysisCore {
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
 
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -5624,6 +5636,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running downslope_index");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let flow_dir: Vec<i8> = (0..rows * cols)
                 .into_par_iter()
@@ -5711,7 +5724,7 @@ impl TerrainAnalysisCore {
             for (r, row) in row_data.iter().enumerate() {
                 output.set_row_slice(band, r as isize, row).map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
     }
@@ -5766,6 +5779,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running elev_above_pit");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let flow_dir: Vec<i8> = (0..rows * cols)
                 .into_par_iter()
@@ -5831,7 +5845,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -5929,6 +5943,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running directional_relief");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
@@ -5982,7 +5997,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6144,6 +6159,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running exposure_towards_wind_flux");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let slope_aspect_rows: Vec<(Vec<f64>, Vec<f64>)> = (0..rows)
                 .into_par_iter()
@@ -6275,7 +6291,7 @@ impl TerrainAnalysisCore {
                 })?;
             }
             output.data_type = DataType::F32;
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6347,6 +6363,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running relative_aspect");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let row_data: Vec<Vec<f64>> = (0..rows)
                 .into_par_iter()
@@ -6402,7 +6419,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6485,6 +6502,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running edge_density");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let normals: Vec<Option<[f64; 3]>> = (0..rows * cols)
                 .into_par_iter()
@@ -6605,7 +6623,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6676,6 +6694,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running spherical_std_dev_of_normals");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let mut base = vec![f64::NAN; rows * cols];
             for r in 0..rows {
@@ -6735,7 +6754,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6809,6 +6828,7 @@ impl TerrainAnalysisCore {
         for band_idx in 0..bands {
             let band = band_idx as isize;
             ctx.progress.info("running average_normal_vector_angular_deviation");
+            let coalescer = PercentCoalescer::new(1, 99);
 
             let mut base = vec![f64::NAN; rows * cols];
             for r in 0..rows {
@@ -6876,7 +6896,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         Ok(Self::build_result(Self::write_or_store_output(output, output_path)?))
@@ -6966,6 +6986,7 @@ impl TerrainAnalysisCore {
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = input.nodata;
 
         for band_idx in 0..bands {
@@ -7009,7 +7030,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
@@ -7130,6 +7151,7 @@ impl TerrainAnalysisCore {
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = input.nodata;
         let is_geographic = Self::raster_is_geographic(&input);
         let base_res_x = input.cell_size_x.abs().max(f64::EPSILON);
@@ -7227,7 +7249,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
@@ -7317,6 +7339,7 @@ impl TerrainAnalysisCore {
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = input.nodata;
 
         for band_idx in 0..bands {
@@ -7368,7 +7391,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;
@@ -7481,6 +7504,7 @@ impl TerrainAnalysisCore {
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;
+        let coalescer = PercentCoalescer::new(1, 99);
         let nodata = sca.nodata;
 
         for band_idx in 0..bands {
@@ -7514,7 +7538,7 @@ impl TerrainAnalysisCore {
                     .set_row_slice(band, r as isize, row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
         }
 
         let output_locator = Self::write_or_store_output(output, output_path)?;

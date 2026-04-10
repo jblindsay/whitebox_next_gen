@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool,
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
@@ -1120,6 +1120,7 @@ impl Tool for AddPointCoordinatesToTableTool {
         output.add_field(FieldDef::new("YCOORD", FieldType::Float).width(18).precision(8));
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feature_idx, feature) in input.features.iter().enumerate() {
             let (x, y) = match &feature.geometry {
                 Some(Geometry::Point(coord)) => (coord.x, coord.y),
@@ -1141,7 +1142,7 @@ impl Tool for AddPointCoordinatesToTableTool {
             output
                 .add_feature(feature.geometry.clone(), &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
-            ctx.progress.progress((feature_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
         }
 
         write_vector_output(&output, &output_path)
@@ -1215,6 +1216,7 @@ impl Tool for CleanVectorTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feature_idx, feature) in input.features.iter().enumerate() {
             let cleaned = feature.geometry.as_ref().and_then(clean_geometry);
             if let Some(geometry) = cleaned {
@@ -1223,7 +1225,7 @@ impl Tool for CleanVectorTool {
                     .add_feature(Some(geometry), &attrs)
                     .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
             }
-            ctx.progress.progress((feature_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
         }
 
         write_vector_output(&output, &output_path)
@@ -1300,6 +1302,7 @@ impl Tool for FixDanglingArcsTool {
             .unwrap_or_else(|| derived_vector_output_path(&input_path, "fixed_dangles"));
 
         ctx.progress.info("running fix_dangling_arcs");
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = read_vector_layer(&input_path, "input")?;
         if !matches!(input.geom_type, Some(GeometryType::LineString | GeometryType::MultiLineString)) {
             return Err(ToolError::Validation(
@@ -1415,7 +1418,7 @@ impl Tool for FixDanglingArcsTool {
 
             let cleaned = dedupe_consecutive_coords(&new_points, precision);
             fixed_parts[part_id] = if cleaned.len() >= 2 { cleaned } else { part.clone() };
-            ctx.progress.progress((part_id + 1) as f64 / total_parts);
+            coalescer.emit_unit_fraction(ctx.progress, (part_id + 1) as f64 / total_parts);
         }
 
         let mut output = Layer::new(input.name.clone());
@@ -1699,6 +1702,7 @@ impl Tool for LinesToPolygonsTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feature_idx, feature) in input.features.iter().enumerate() {
             let polygon_geom = match &feature.geometry {
                 Some(Geometry::LineString(coords)) => {
@@ -1733,7 +1737,7 @@ impl Tool for LinesToPolygonsTool {
             output
                 .add_feature(Some(polygon_geom), &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
-            ctx.progress.progress((feature_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
         }
 
         write_vector_output(&output, &output_path)
@@ -2300,6 +2304,7 @@ impl Tool for RemovePolygonHolesTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feature_idx, feature) in input.features.iter().enumerate() {
             let geometry = match &feature.geometry {
                 Some(geometry) => Some(strip_polygon_holes_with_topology(geometry)?),
@@ -2309,7 +2314,7 @@ impl Tool for RemovePolygonHolesTool {
             output
                 .add_feature(geometry, &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
-            ctx.progress.progress((feature_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
         }
 
         write_vector_output(&output, &output_path)
@@ -2490,6 +2495,7 @@ impl Tool for MultipartToSinglepartTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut fid = 1i64;
         for (feat_idx, feature) in input.features.iter().enumerate() {
             if let Some(geom) = &feature.geometry {
@@ -2508,7 +2514,7 @@ impl Tool for MultipartToSinglepartTool {
                     fid += 1;
                 }
             }
-            ctx.progress.progress((feat_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feat_idx + 1) as f64 / total);
         }
 
         write_vector_output(&output, &output_path)
@@ -2620,6 +2626,7 @@ impl Tool for SinglepartToMultipartTool {
             }
 
             let total = groups.len().max(1) as f64;
+            let coalescer = PercentCoalescer::new(1, 99);
             let mut fid = 1i64;
             for (group_idx, (key_str, feat_indices)) in groups.iter().enumerate() {
                 let geom = merge_to_multi(&input, feat_indices, input_geom_type)?;
@@ -2632,7 +2639,7 @@ impl Tool for SinglepartToMultipartTool {
                     .add_feature(Some(geom), &[("FID", FieldValue::Integer(fid)), (fname, key_val)])
                     .map_err(|e| ToolError::Execution(format!("failed adding feature: {e}")))?;
                 fid += 1;
-                ctx.progress.progress((group_idx + 1) as f64 / total);
+                coalescer.emit_unit_fraction(ctx.progress, (group_idx + 1) as f64 / total);
             }
         } else {
             let all_indices: Vec<usize> = (0..input.features.len()).collect();
@@ -2762,6 +2769,7 @@ impl Tool for MergeVectorsTool {
 
         let total_features: usize = layers.iter().map(|l| l.features.len()).sum();
         let total = total_features.max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut fid = 1i64;
         let mut processed = 0usize;
 
@@ -2791,7 +2799,7 @@ impl Tool for MergeVectorsTool {
                     .map_err(|e| ToolError::Execution(format!("failed adding feature: {e}")))?;
                 fid += 1;
                 processed += 1;
-                ctx.progress.progress(processed as f64 / total);
+                coalescer.emit_unit_fraction(ctx.progress, processed as f64 / total);
             }
         }
 
@@ -2942,6 +2950,7 @@ impl Tool for VectorLinesToRasterTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feat_idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = &feature.geometry else {
                 continue;
@@ -2969,7 +2978,7 @@ impl Tool for VectorLinesToRasterTool {
                 }
             }
 
-            ctx.progress.progress((feat_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feat_idx + 1) as f64 / total);
         }
 
         write_raster_output(output, output_path, ctx)
@@ -3040,6 +3049,7 @@ impl Tool for RasterToVectorPolygonsTool {
             .unwrap_or_else(|| derived_vector_output_path(&input_path, "polygons"));
 
         ctx.progress.info("running raster_to_vector_polygons");
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = Raster::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
         if input.bands != 1 {
@@ -3352,7 +3362,7 @@ impl Tool for RasterToVectorPolygonsTool {
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
             next_fid += 1;
 
-            ctx.progress.progress(0.5 + (clump_id as f64 / total_clumps) * 0.5);
+            coalescer.emit_unit_fraction(ctx.progress, 0.5 + (clump_id as f64 / total_clumps) * 0.5);
         }
 
         write_vector_output(&output, &output_path)
@@ -3416,6 +3426,7 @@ impl Tool for RasterToVectorLinesTool {
             .unwrap_or_else(|| derived_vector_output_path(&input_path, "lines"));
 
         ctx.progress.info("running raster_to_vector_lines");
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = Raster::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
         if input.bands != 1 {
@@ -3551,7 +3562,7 @@ impl Tool for RasterToVectorLinesTool {
             } else {
                 solved_cells as f64 / active_cells as f64
             };
-            ctx.progress.progress(0.2 + trace_part * 0.8);
+            coalescer.emit_unit_fraction(ctx.progress, 0.2 + trace_part * 0.8);
         }
 
         // Catch closed loops disconnected from endpoints.
@@ -3774,6 +3785,7 @@ impl Tool for VectorPointsToRasterTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut counts: Option<Vec<f64>> = if assign.contains("mean") || assign.contains("average") {
             Some(vec![0.0; output.rows * output.cols])
         } else {
@@ -3855,7 +3867,7 @@ impl Tool for VectorPointsToRasterTool {
                 }
             }
 
-            ctx.progress.progress((feat_idx + 1) as f64 / total * 0.9);
+            coalescer.emit_unit_fraction(ctx.progress, (feat_idx + 1) as f64 / total * 0.9);
         }
 
         if let Some(n) = counts {
@@ -4928,6 +4940,7 @@ impl Tool for VectorPolygonsToRasterTool {
         }
 
         let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
         for (feat_idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = &feature.geometry else {
                 continue;
@@ -4998,7 +5011,7 @@ impl Tool for VectorPolygonsToRasterTool {
                 }
             }
 
-            ctx.progress.progress((feat_idx + 1) as f64 / total);
+            coalescer.emit_unit_fraction(ctx.progress, (feat_idx + 1) as f64 / total);
         }
 
         write_raster_output(output, output_path, ctx)

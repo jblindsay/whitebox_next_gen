@@ -2340,56 +2340,69 @@ impl SkyVisibilityCore {
         let mut base_rgba = vec![[0u8; 4]; (rows * cols) as usize];
         let mut tan_slope = vec![0.00017_f64; (rows * cols) as usize];
         let mut aspect = vec![std::f64::consts::PI; (rows * cols) as usize];
-        for row in 0..rows {
-            for col in 0..cols {
-                let idx = Self::idx(row, col, cols);
-                let zc = dem.get(0, row, col) as f32;
-                if zc == nodata_f32 {
-                    continue;
-                }
-                let p = ((zc - min_z) / elev_range).clamp(0.0, 1.0);
-                let idxf = p * p_last;
-                let i0 = idxf.floor() as usize;
-                let i1 = (i0 + 1).min(palette_vals.len() - 1);
-                let t = (idxf - i0 as f32).clamp(0.0, 1.0);
-                let (r0, g0, b0) = palette_vals[i0];
-                let (r1, g1, b1) = palette_vals[i1];
-                base_rgba[idx] = [
-                    (r0 + t * (r1 - r0)).round().clamp(0.0, 255.0) as u8,
-                    (g0 + t * (g1 - g0)).round().clamp(0.0, 255.0) as u8,
-                    (b0 + t * (b1 - b0)).round().clamp(0.0, 255.0) as u8,
-                    255,
-                ];
-
-                let z = |dr: isize, dc: isize| {
-                    let v = dem.get(0, row + dr, col + dc) as f32;
-                    if v == nodata_f32 {
-                        (zc as f64 * z_factor as f64) as f32
-                    } else {
-                        (v as f64 * z_factor as f64) as f32
+        let prep_rows: Vec<Vec<([u8; 4], f64, f64)>> = (0..rows as usize)
+            .into_par_iter()
+            .map(|row_usize| {
+                let row = row_usize as isize;
+                let mut row_out = vec![([0u8; 4], 0.00017_f64, std::f64::consts::PI); cols as usize];
+                for col in 0..cols {
+                    let zc = dem.get(0, row, col) as f32;
+                    if zc == nodata_f32 {
+                        continue;
                     }
-                };
-                let z1 = z(-1, -1) as f64;
-                let z2 = z(-1, 0) as f64;
-                let z3 = z(-1, 1) as f64;
-                let z4 = z(0, -1) as f64;
-                let z6 = z(0, 1) as f64;
-                let z7 = z(1, -1) as f64;
-                let z8 = z(1, 0) as f64;
-                let z9 = z(1, 1) as f64;
-                let dzdx = ((z3 + 2.0 * z6 + z9) - (z1 + 2.0 * z4 + z7)) / (8.0 * resx);
-                let dzdy = ((z7 + 2.0 * z8 + z9) - (z1 + 2.0 * z2 + z3)) / (8.0 * resy);
-                let ts = (dzdx * dzdx + dzdy * dzdy).sqrt().max(0.00017);
-                tan_slope[idx] = ts;
-                let mut asp = if dzdx != 0.0 {
-                    std::f64::consts::PI - (dzdy / dzdx).atan()
-                        + (std::f64::consts::FRAC_PI_2 * (dzdx / dzdx.abs()))
-                } else {
-                    std::f64::consts::PI
-                };
-                if !asp.is_finite() {
-                    asp = std::f64::consts::PI;
+                    let p = ((zc - min_z) / elev_range).clamp(0.0, 1.0);
+                    let idxf = p * p_last;
+                    let i0 = idxf.floor() as usize;
+                    let i1 = (i0 + 1).min(palette_vals.len() - 1);
+                    let t = (idxf - i0 as f32).clamp(0.0, 1.0);
+                    let (r0, g0, b0) = palette_vals[i0];
+                    let (r1, g1, b1) = palette_vals[i1];
+                    let rgba = [
+                        (r0 + t * (r1 - r0)).round().clamp(0.0, 255.0) as u8,
+                        (g0 + t * (g1 - g0)).round().clamp(0.0, 255.0) as u8,
+                        (b0 + t * (b1 - b0)).round().clamp(0.0, 255.0) as u8,
+                        255,
+                    ];
+
+                    let z = |dr: isize, dc: isize| {
+                        let v = dem.get(0, row + dr, col + dc) as f32;
+                        if v == nodata_f32 {
+                            (zc as f64 * z_factor as f64) as f32
+                        } else {
+                            (v as f64 * z_factor as f64) as f32
+                        }
+                    };
+                    let z1 = z(-1, -1) as f64;
+                    let z2 = z(-1, 0) as f64;
+                    let z3 = z(-1, 1) as f64;
+                    let z4 = z(0, -1) as f64;
+                    let z6 = z(0, 1) as f64;
+                    let z7 = z(1, -1) as f64;
+                    let z8 = z(1, 0) as f64;
+                    let z9 = z(1, 1) as f64;
+                    let dzdx = ((z3 + 2.0 * z6 + z9) - (z1 + 2.0 * z4 + z7)) / (8.0 * resx);
+                    let dzdy = ((z7 + 2.0 * z8 + z9) - (z1 + 2.0 * z2 + z3)) / (8.0 * resy);
+                    let ts = (dzdx * dzdx + dzdy * dzdy).sqrt().max(0.00017);
+                    let mut asp = if dzdx != 0.0 {
+                        std::f64::consts::PI - (dzdy / dzdx).atan()
+                            + (std::f64::consts::FRAC_PI_2 * (dzdx / dzdx.abs()))
+                    } else {
+                        std::f64::consts::PI
+                    };
+                    if !asp.is_finite() {
+                        asp = std::f64::consts::PI;
+                    }
+                    row_out[col as usize] = (rgba, ts, asp);
                 }
+                row_out
+            })
+            .collect();
+        for row in 0..rows as usize {
+            for col in 0..cols as usize {
+                let idx = Self::idx(row as isize, col as isize, cols);
+                let (rgba, ts, asp) = prep_rows[row][col];
+                base_rgba[idx] = rgba;
+                tan_slope[idx] = ts;
                 aspect[idx] = asp;
             }
         }

@@ -17,6 +17,39 @@ use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 
 use crate::memory_store;
 
+const PCA_SIMD_CHUNK: usize = 2048;
+
+fn weighted_sum_chunked(
+    inputs: &[Raster],
+    weights: &[f64],
+    nodata: f64,
+    n: usize,
+) -> Vec<f64> {
+    let mut output = vec![nodata; n];
+    output
+        .par_chunks_mut(PCA_SIMD_CHUNK)
+        .enumerate()
+        .for_each(|(chunk_idx, out_chunk)| {
+            let start = chunk_idx * PCA_SIMD_CHUNK;
+            for (i, dst) in out_chunk.iter_mut().enumerate() {
+                let idx = start + i;
+                let base = inputs[0].data.get_f64(idx);
+                if base == nodata {
+                    *dst = nodata;
+                    continue;
+                }
+                let mut sum = 0.0;
+                for (k, &w) in weights.iter().enumerate() {
+                    if w != 0.0 {
+                        sum += inputs[k].data.get_f64(idx) * w;
+                    }
+                }
+                *dst = sum;
+            }
+        });
+    output
+}
+
 fn load_raster(path: &str, param_name: &str) -> Result<Raster, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
@@ -6320,21 +6353,49 @@ impl Tool for PrincipalComponentAnalysisTool {
         }
 
         let n = rows * cols;
-        let mut total_dev = vec![0.0f64; num_images];
-        let mut covariances = vec![vec![0.0f64; num_images]; num_images];
-        for idx in 0..n {
-            for i in 0..num_images {
-                let z1 = inputs[i].data.get_f64(idx);
-                if inputs[i].is_nodata(z1) { continue; }
-                total_dev[i] += (z1 - averages[i]).powi(2);
-                for a in 0..num_images {
-                    let z2 = inputs[a].data.get_f64(idx);
-                    if !inputs[a].is_nodata(z2) {
-                        covariances[i][a] += (z1 - averages[i]) * (z2 - averages[a]);
+        let (total_dev, mut covariances) = (0..n)
+            .into_par_iter()
+            .fold(
+                || {
+                    (
+                        vec![0.0f64; num_images],
+                        vec![vec![0.0f64; num_images]; num_images],
+                    )
+                },
+                |(mut local_dev, mut local_cov), idx| {
+                    for i in 0..num_images {
+                        let z1 = inputs[i].data.get_f64(idx);
+                        if inputs[i].is_nodata(z1) {
+                            continue;
+                        }
+                        local_dev[i] += (z1 - averages[i]).powi(2);
+                        for a in 0..num_images {
+                            let z2 = inputs[a].data.get_f64(idx);
+                            if !inputs[a].is_nodata(z2) {
+                                local_cov[i][a] += (z1 - averages[i]) * (z2 - averages[a]);
+                            }
+                        }
                     }
-                }
-            }
-        }
+                    (local_dev, local_cov)
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        vec![0.0f64; num_images],
+                        vec![vec![0.0f64; num_images]; num_images],
+                    )
+                },
+                |(mut dev_a, mut cov_a), (dev_b, cov_b)| {
+                    for i in 0..num_images {
+                        dev_a[i] += dev_b[i];
+                        for a in 0..num_images {
+                            cov_a[i][a] += cov_b[i][a];
+                        }
+                    }
+                    (dev_a, cov_a)
+                },
+            );
 
         let mut corr = vec![vec![0.0f64; num_images]; num_images];
         for i in 0..num_images {
@@ -6407,18 +6468,10 @@ impl Tool for PrincipalComponentAnalysisTool {
                 crs: inputs[0].crs.clone(), metadata: inputs[0].metadata.clone(),
                 ..Default::default()
             });
-            let comp_values: Vec<f64> = (0..n)
-                .into_par_iter()
-                .map(|idx| {
-                    let v0 = inputs[0].data.get_f64(idx);
-                    if inputs[0].is_nodata(v0) {
-                        return inputs[0].nodata;
-                    }
-                    (0..num_images)
-                        .map(|k| inputs[k].data.get_f64(idx) * evec_flat[pc * num_images + k])
-                        .sum()
-                })
+            let comp_weights: Vec<f64> = (0..num_images)
+                .map(|k| evec_flat[pc * num_images + k])
                 .collect();
+            let comp_values = weighted_sum_chunked(&inputs, &comp_weights, inputs[0].nodata, n);
             for (idx, val) in comp_values.into_iter().enumerate() {
                 comp_raster.data.set_f64(idx, val);
             }
@@ -6560,18 +6613,7 @@ impl Tool for InversePcaTool {
             let comp_weights: Vec<f64> = (0..valid_comp)
                 .map(|k| eigenvectors[k].get(image_num).copied().unwrap_or(0.0))
                 .collect();
-            let out_values: Vec<f64> = (0..n)
-                .into_par_iter()
-                .map(|idx| {
-                    let v0 = inputs[0].data.get_f64(idx);
-                    if inputs[0].is_nodata(v0) {
-                        return inputs[0].nodata;
-                    }
-                    (0..valid_comp)
-                        .map(|k| inputs[k].data.get_f64(idx) * comp_weights[k])
-                        .sum()
-                })
-                .collect();
+            let out_values = weighted_sum_chunked(&inputs[..valid_comp], &comp_weights, inputs[0].nodata, n);
             for (idx, val) in out_values.into_iter().enumerate() {
                 out_raster.data.set_f64(idx, val);
             }

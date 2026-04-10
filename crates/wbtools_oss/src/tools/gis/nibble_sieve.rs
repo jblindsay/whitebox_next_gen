@@ -180,17 +180,21 @@ impl Tool for NibbleTool {
 
         let mut source = input.clone();
         let nodata_replacement = if use_nodata { max_class + 1.0 } else { 0.0 };
-        for i in 0..band_stride {
-            let v = source.data.get_f64(i);
-            if source.is_nodata(v) {
-                source.data.set_f64(i, nodata_replacement);
-            }
-        }
-
-        for i in 0..band_stride {
-            if mask[i] == 0.0 {
-                source.data.set_f64(i, 0.0);
-            }
+        let source_values: Vec<f64> = (0..band_stride)
+            .into_par_iter()
+            .map(|i| {
+                let mut v = input.data.get_f64(i);
+                if input.is_nodata(v) {
+                    v = nodata_replacement;
+                }
+                if mask[i] == 0.0 {
+                    v = 0.0;
+                }
+                v
+            })
+            .collect();
+        for (i, v) in source_values.into_iter().enumerate() {
+            source.data.set_f64(i, v);
         }
 
         ctx.progress.info("nibble: running euclidean allocation");
@@ -325,13 +329,19 @@ impl Tool for SieveTool {
 
         let mut mask_raster = area_raster.clone();
         mask_raster.nodata = -999.0;
-        for i in 0..band_stride {
-            let v = area_raster.data.get_f64(i);
-            if area_raster.is_nodata(v) || v < threshold {
-                mask_raster.data.set_f64(i, mask_raster.nodata);
-            } else {
-                mask_raster.data.set_f64(i, 1.0);
-            }
+        let mask_values: Vec<f64> = (0..band_stride)
+            .into_par_iter()
+            .map(|i| {
+                let v = area_raster.data.get_f64(i);
+                if area_raster.is_nodata(v) || v < threshold {
+                    mask_raster.nodata
+                } else {
+                    1.0
+                }
+            })
+            .collect();
+        for (i, v) in mask_values.into_iter().enumerate() {
+            mask_raster.data.set_f64(i, v);
         }
         let mask_mem = put_raster(mask_raster);
 
@@ -348,9 +358,12 @@ impl Tool for SieveTool {
         let mut sieved = load_raster(&nibble_path, "nibbled")?;
         if zero_background {
             let original = load_raster(input_path, "input")?;
-            for i in 0..band_stride {
-                let orig_v = original.data.get_f64(i);
-                if orig_v == 0.0 {
+            let zero_mask: Vec<bool> = (0..band_stride)
+                .into_par_iter()
+                .map(|i| original.data.get_f64(i) == 0.0)
+                .collect();
+            for (i, is_zero) in zero_mask.into_iter().enumerate() {
+                if is_zero {
                     sieved.data.set_f64(i, 0.0);
                 }
             }

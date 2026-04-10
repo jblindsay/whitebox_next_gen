@@ -454,12 +454,14 @@ impl PlanCurvatureTool {
 
         for b in 0..bands {
             let band = b as isize;
-            let mut src = vec![nodata; rows * cols];
-            for row in 0..rows {
-                for col in 0..cols {
-                    src[row * cols + col] = input.get(band, row as isize, col as isize);
-                }
-            }
+            let src: Vec<f64> = (0..rows * cols)
+                .into_par_iter()
+                .map(|idx| {
+                    let row = idx / cols;
+                    let col = idx % cols;
+                    input.get(band, row as isize, col as isize)
+                })
+                .collect();
 
             let result = if sigma < 1.8 {
                 // Direct Gaussian convolution for narrower scales.
@@ -492,34 +494,37 @@ impl PlanCurvatureTool {
                 }
 
                 let mut smoothed = vec![nodata; rows * cols];
-                for row in 0..rows {
-                    for col in 0..cols {
-                        let idx = row * cols + col;
-                        if src[idx] == nodata {
-                            continue;
-                        }
-
-                        let mut sum_w = 0.0;
-                        let mut sum_z = 0.0;
-                        for (dx, dy, w) in &offsets {
-                            let rr = row as isize + *dy;
-                            let cc = col as isize + *dx;
-                            if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                smoothed
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(row, row_out)| {
+                        for (col, cell_out) in row_out.iter_mut().enumerate() {
+                            let idx = row * cols + col;
+                            if src[idx] == nodata {
                                 continue;
                             }
-                            let z = src[rr as usize * cols + cc as usize];
-                            if z == nodata {
-                                continue;
-                            }
-                            sum_w += *w;
-                            sum_z += *w * z;
-                        }
 
-                        if sum_w > 0.0 {
-                            smoothed[idx] = sum_z / sum_w;
+                            let mut sum_w = 0.0;
+                            let mut sum_z = 0.0;
+                            for (dx, dy, w) in &offsets {
+                                let rr = row as isize + *dy;
+                                let cc = col as isize + *dx;
+                                if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                    continue;
+                                }
+                                let z = src[rr as usize * cols + cc as usize];
+                                if z == nodata {
+                                    continue;
+                                }
+                                sum_w += *w;
+                                sum_z += *w * z;
+                            }
+
+                            if sum_w > 0.0 {
+                                *cell_out = sum_z / sum_w;
+                            }
                         }
-                    }
-                }
+                    });
                 smoothed
             } else {
                 // Fast almost-Gaussian smoothing for broader scales.
@@ -538,7 +543,7 @@ impl PlanCurvatureTool {
                     .round() as isize;
 
                 let valid: Vec<u32> = src
-                    .iter()
+                    .par_iter()
                     .map(|&z| if z == nodata { 0 } else { 1 })
                     .collect();
                 let mut i_n = vec![0u32; rows * cols];
@@ -583,53 +588,56 @@ impl PlanCurvatureTool {
                         }
                     }
 
-                    for row in 0..rows {
-                        let mut y1 = row as isize - midpoint - 1;
-                        if y1 < 0 {
-                            y1 = 0;
-                        }
-                        let mut y2 = row as isize + midpoint;
-                        if y2 >= rows as isize {
-                            y2 = rows as isize - 1;
-                        }
-
-                        for col in 0..cols {
-                            let idx = row * cols + col;
-                            if src[idx] == nodata {
-                                next[idx] = nodata;
-                                continue;
+                    next
+                        .par_chunks_mut(cols)
+                        .enumerate()
+                        .for_each(|(row, row_out)| {
+                            let mut y1 = row as isize - midpoint - 1;
+                            if y1 < 0 {
+                                y1 = 0;
+                            }
+                            let mut y2 = row as isize + midpoint;
+                            if y2 >= rows as isize {
+                                y2 = rows as isize - 1;
                             }
 
-                            let mut x1 = col as isize - midpoint - 1;
-                            if x1 < 0 {
-                                x1 = 0;
-                            }
-                            let mut x2 = col as isize + midpoint;
-                            if x2 >= cols as isize {
-                                x2 = cols as isize - 1;
-                            }
+                            for (col, cell_out) in row_out.iter_mut().enumerate() {
+                                let idx = row * cols + col;
+                                if src[idx] == nodata {
+                                    *cell_out = nodata;
+                                    continue;
+                                }
 
-                            let y1u = y1 as usize;
-                            let y2u = y2 as usize;
-                            let x1u = x1 as usize;
-                            let x2u = x2 as usize;
+                                let mut x1 = col as isize - midpoint - 1;
+                                if x1 < 0 {
+                                    x1 = 0;
+                                }
+                                let mut x2 = col as isize + midpoint;
+                                if x2 >= cols as isize {
+                                    x2 = cols as isize - 1;
+                                }
 
-                            let num_cells = get_u32(&i_n, y2u, x2u)
-                                + get_u32(&i_n, y1u, x1u)
-                                - get_u32(&i_n, y1u, x2u)
-                                - get_u32(&i_n, y2u, x1u);
+                                let y1u = y1 as usize;
+                                let y2u = y2 as usize;
+                                let x1u = x1 as usize;
+                                let x2u = x2 as usize;
 
-                            if num_cells > 0 {
-                                let sum = get_f64(&integral, y2u, x2u)
-                                    + get_f64(&integral, y1u, x1u)
-                                    - get_f64(&integral, y1u, x2u)
-                                    - get_f64(&integral, y2u, x1u);
-                                next[idx] = sum / num_cells as f64;
-                            } else {
-                                next[idx] = 0.0;
+                                let num_cells = get_u32(&i_n, y2u, x2u)
+                                    + get_u32(&i_n, y1u, x1u)
+                                    - get_u32(&i_n, y1u, x2u)
+                                    - get_u32(&i_n, y2u, x1u);
+
+                                if num_cells > 0 {
+                                    let sum = get_f64(&integral, y2u, x2u)
+                                        + get_f64(&integral, y1u, x1u)
+                                        - get_f64(&integral, y1u, x2u)
+                                        - get_f64(&integral, y2u, x1u);
+                                    *cell_out = sum / num_cells as f64;
+                                } else {
+                                    *cell_out = 0.0;
+                                }
                             }
-                        }
-                    }
+                        });
 
                     std::mem::swap(&mut current, &mut next);
                 }

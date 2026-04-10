@@ -10,11 +10,6 @@ use wbcore::{
 use wbraster::{Raster, RasterFormat};
 use crate::memory_store;
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-#[cfg(target_arch = "x86_64")]
-use core::arch::x86_64::*;
-
 pub struct RasterAddTool;
 pub struct RasterAtan2Tool;
 pub struct RasterBoolAndTool;
@@ -222,155 +217,6 @@ impl BinaryMathOp {
 
 const BINARY_MATH_PAR_CHUNK: usize = 16_384;
 
-impl BinaryMathOp {
-    fn simd_supported(self) -> bool {
-        matches!(self, Self::Add | Self::Subtract | Self::Multiply | Self::Divide)
-    }
-}
-
-fn compute_binary_chunk_scalar(
-    op: BinaryMathOp,
-    input1_nodata: f64,
-    input2_nodata: f64,
-    in1: &[f64],
-    in2: &[f64],
-    out: &mut [f64],
-) {
-    for i in 0..out.len() {
-        let z1 = in1[i];
-        let z2 = in2[i];
-        out[i] = if z1 == input1_nodata || z2 == input2_nodata {
-            input1_nodata
-        } else {
-            op.apply(z1, z2, input1_nodata)
-        };
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "avx")]
-unsafe fn compute_binary_chunk_avx(
-    op: BinaryMathOp,
-    input1_nodata: f64,
-    input2_nodata: f64,
-    in1: &[f64],
-    in2: &[f64],
-    out: &mut [f64],
-) {
-    let len = out.len();
-    let mut i = 0usize;
-    let nodata1 = _mm256_set1_pd(input1_nodata);
-    let nodata2 = _mm256_set1_pd(input2_nodata);
-    let zero = _mm256_set1_pd(0.0);
-
-    while i + 4 <= len {
-        let a = _mm256_loadu_pd(in1.as_ptr().add(i));
-        let b = _mm256_loadu_pd(in2.as_ptr().add(i));
-        let nodata_mask1 = _mm256_cmp_pd(a, nodata1, _CMP_EQ_OQ);
-        let nodata_mask2 = _mm256_cmp_pd(b, nodata2, _CMP_EQ_OQ);
-        let mut invalid_mask = _mm256_or_pd(nodata_mask1, nodata_mask2);
-
-        let result = match op {
-            BinaryMathOp::Add => _mm256_add_pd(a, b),
-            BinaryMathOp::Subtract => _mm256_sub_pd(a, b),
-            BinaryMathOp::Multiply => _mm256_mul_pd(a, b),
-            BinaryMathOp::Divide => {
-                let zero_mask = _mm256_cmp_pd(b, zero, _CMP_EQ_OQ);
-                invalid_mask = _mm256_or_pd(invalid_mask, zero_mask);
-                _mm256_div_pd(a, b)
-            }
-            _ => unreachable!(),
-        };
-
-        let blended = _mm256_blendv_pd(result, nodata1, invalid_mask);
-        _mm256_storeu_pd(out.as_mut_ptr().add(i), blended);
-        i += 4;
-    }
-
-    if i < len {
-        compute_binary_chunk_scalar(op, input1_nodata, input2_nodata, &in1[i..], &in2[i..], &mut out[i..]);
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-unsafe fn compute_binary_chunk_neon(
-    op: BinaryMathOp,
-    input1_nodata: f64,
-    input2_nodata: f64,
-    in1: &[f64],
-    in2: &[f64],
-    out: &mut [f64],
-) {
-    let len = out.len();
-    let mut i = 0usize;
-    let nodata1 = vdupq_n_f64(input1_nodata);
-    let nodata2 = vdupq_n_f64(input2_nodata);
-    let zero = vdupq_n_f64(0.0);
-
-    while i + 2 <= len {
-        let a = vld1q_f64(in1.as_ptr().add(i));
-        let b = vld1q_f64(in2.as_ptr().add(i));
-        let nodata_mask1 = vceqq_f64(a, nodata1);
-        let nodata_mask2 = vceqq_f64(b, nodata2);
-        let mut invalid_mask = vorrq_u64(nodata_mask1, nodata_mask2);
-
-        let result = match op {
-            BinaryMathOp::Add => vaddq_f64(a, b),
-            BinaryMathOp::Subtract => vsubq_f64(a, b),
-            BinaryMathOp::Multiply => vmulq_f64(a, b),
-            BinaryMathOp::Divide => {
-                let zero_mask = vceqq_f64(b, zero);
-                invalid_mask = vorrq_u64(invalid_mask, zero_mask);
-                vdivq_f64(a, b)
-            }
-            _ => unreachable!(),
-        };
-
-        let blended = vbslq_f64(invalid_mask, nodata1, result);
-        vst1q_f64(out.as_mut_ptr().add(i), blended);
-        i += 2;
-    }
-
-    if i < len {
-        compute_binary_chunk_scalar(op, input1_nodata, input2_nodata, &in1[i..], &in2[i..], &mut out[i..]);
-    }
-}
-
-fn compute_binary_chunk(
-    op: BinaryMathOp,
-    input1_nodata: f64,
-    input2_nodata: f64,
-    in1: &[f64],
-    in2: &[f64],
-    out: &mut [f64],
-) {
-    if !op.simd_supported() || input1_nodata.is_nan() || input2_nodata.is_nan() {
-        compute_binary_chunk_scalar(op, input1_nodata, input2_nodata, in1, in2, out);
-        return;
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("avx") {
-            unsafe {
-                compute_binary_chunk_avx(op, input1_nodata, input2_nodata, in1, in2, out);
-            }
-            return;
-        }
-    }
-
-    #[cfg(target_arch = "aarch64")]
-    {
-        unsafe {
-            compute_binary_chunk_neon(op, input1_nodata, input2_nodata, in1, in2, out);
-        }
-        return;
-    }
-
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    compute_binary_chunk_scalar(op, input1_nodata, input2_nodata, in1, in2, out);
-}
-
 impl RasterAddTool {
     fn parse_input_paths(args: &ToolArgs) -> Result<(String, String), ToolError> {
         let input1 = parse_raster_path_arg(args, "input1")?;
@@ -500,7 +346,15 @@ impl RasterAddTool {
             .zip(in1_values.par_chunks(BINARY_MATH_PAR_CHUNK))
             .zip(in2_values.par_chunks(BINARY_MATH_PAR_CHUNK))
             .for_each(|((out_chunk, in1_chunk), in2_chunk)| {
-                compute_binary_chunk(op, input1.nodata, input2.nodata, in1_chunk, in2_chunk, out_chunk);
+                for i in 0..out_chunk.len() {
+                    let z1 = in1_chunk[i];
+                    let z2 = in2_chunk[i];
+                    out_chunk[i] = if input1.is_nodata(z1) || input2.is_nodata(z2) {
+                        input1.nodata
+                    } else {
+                        op.apply(z1, z2, input1.nodata)
+                    };
+                }
             });
         ctx.progress.progress(0.75);
 

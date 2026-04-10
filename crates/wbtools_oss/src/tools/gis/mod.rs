@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
-use std::sync::atomic::AtomicUsize;
 
 mod nibble_sieve;
 pub use nibble_sieve::{NibbleTool, SieveTool};
@@ -24,7 +23,7 @@ use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use rayon::prelude::*;
 use serde_json::json;
-use wbcore::{
+use wbcore::{PercentCoalescer,
     parse_optional_output_path, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext,
     ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec,
     ToolRunResult, ToolStability,
@@ -846,6 +845,7 @@ impl GisOverlayCore {
         let chunk_size = 8192usize;
 
         ctx.progress.info(op.processing_message());
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk
@@ -864,9 +864,10 @@ impl GisOverlayCore {
                 });
 
             let done = ((chunk_index + 1) * chunk_size).min(len);
-            ctx.progress.progress(done as f64 / len.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
         }
 
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -1225,6 +1226,7 @@ impl Tool for UpdateNodataCellsTool {
         let chunk_size = 8192usize;
 
         ctx.progress.info("updating nodata cells from secondary raster");
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
@@ -1238,9 +1240,10 @@ impl Tool for UpdateNodataCellsTool {
                 }
             });
             let done = ((chunk_index + 1) * chunk_size).min(len);
-            ctx.progress.progress(done as f64 / len.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
         }
 
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -3338,6 +3341,7 @@ impl Tool for PickFromListTool {
         let chunk_size = 8192usize;
 
         ctx.progress.info("selecting raster values by position");
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
@@ -3356,9 +3360,10 @@ impl Tool for PickFromListTool {
                 *dst = if rasters[raster_index].is_nodata(value) { nodata } else { value };
             });
             let done = ((chunk_index + 1) * chunk_size).min(len);
-            ctx.progress.progress(done as f64 / len.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
         }
 
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -3441,6 +3446,7 @@ impl Tool for WeightedSumTool {
         let mut out_values = vec![nodata; len];
         let chunk_size = 8192usize;
         ctx.progress.info("computing weighted sum");
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
@@ -3457,8 +3463,9 @@ impl Tool for WeightedSumTool {
                 *dst = sum;
             });
             let done = ((chunk_index + 1) * chunk_size).min(len);
-            ctx.progress.progress(done as f64 / len.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
         }
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -3594,6 +3601,7 @@ impl Tool for WeightedOverlayTool {
         let mut out_values = vec![nodata; len];
         let chunk_size = 8192usize;
         ctx.progress.info("computing weighted overlay");
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
@@ -3631,8 +3639,9 @@ impl Tool for WeightedOverlayTool {
                 *dst = total;
             });
             let done = ((chunk_index + 1) * chunk_size).min(len);
-            ctx.progress.progress(done as f64 / len.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
         }
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -3723,6 +3732,7 @@ impl Tool for AggregateRasterTool {
         let mut out_values = vec![output.nodata; total];
         let chunk_size = 4096usize;
         ctx.progress.info("aggregating raster blocks");
+        let coalescer = PercentCoalescer::new(1, 90);
         for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
             let start = chunk_index * chunk_size;
             out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
@@ -3770,8 +3780,9 @@ impl Tool for AggregateRasterTool {
                 };
             });
             let done = ((chunk_index + 1) * chunk_size).min(total);
-            ctx.progress.progress(done as f64 / total.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total.max(1) as f64);
         }
+        coalescer.finish(ctx.progress);
         for (index, value) in out_values.iter().enumerate() {
             output.data.set_f64(index, *value);
         }
@@ -7523,16 +7534,12 @@ impl Tool for ExtendVectorLinesTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::LineString);
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
             .enumerate()
             .map(|(index, feature)| {
                 let Some(geometry) = feature.geometry.as_ref() else {
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     return Ok(None);
                 };
 
@@ -7556,8 +7563,6 @@ impl Tool for ExtendVectorLinesTool {
                     }
                 };
 
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(Some(wbvector::Feature {
                     fid: if feature.fid == 0 { (index + 1) as u64 } else { feature.fid },
                     geometry: Some(out_geom),
@@ -7571,6 +7576,7 @@ impl Tool for ExtendVectorLinesTool {
             }
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -7752,16 +7758,12 @@ impl Tool for SmoothVectorsTool {
         output.crs = input.crs.clone();
         output.geom_type = input.geom_type;
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
             .enumerate()
             .map(|(index, feature)| {
                 let Some(geometry) = feature.geometry.as_ref() else {
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     return Ok(None);
                 };
 
@@ -7808,8 +7810,6 @@ impl Tool for SmoothVectorsTool {
                     )),
                 }?;
 
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(Some(wbvector::Feature {
                     fid: if feature.fid == 0 { (index + 1) as u64 } else { feature.fid },
                     geometry: Some(out_geom),
@@ -7823,6 +7823,7 @@ impl Tool for SmoothVectorsTool {
             }
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -8000,16 +8001,12 @@ impl Tool for SplitVectorLinesTool {
             }
         }
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let batch_results: Vec<Result<Vec<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
             .enumerate()
             .map(|(feature_idx, feature)| {
                 let Some(geometry) = feature.geometry.as_ref() else {
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     return Ok(Vec::new());
                 };
 
@@ -8052,8 +8049,6 @@ impl Tool for SplitVectorLinesTool {
                         });
                     }
                 }
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(feats)
             })
             .collect();
@@ -8067,6 +8062,7 @@ impl Tool for SplitVectorLinesTool {
             }
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -9533,8 +9529,6 @@ impl Tool for BufferVectorTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::Polygon);
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
@@ -9549,8 +9543,6 @@ impl Tool for BufferVectorTool {
                 } else {
                     None
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(out)
             })
             .collect();
@@ -9561,6 +9553,7 @@ impl Tool for BufferVectorTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -10953,6 +10946,7 @@ impl Tool for SymmetricalDifferenceTool {
 
         let total = (input_pieces.len() + overlay_pieces.len()).max(1);
         let mut done = 0usize;
+        let coalescer = PercentCoalescer::new(1, 90);
         let mut next_fid = 1u64;
 
         for input_piece in &input_pieces {
@@ -10984,7 +10978,7 @@ impl Tool for SymmetricalDifferenceTool {
                 next_fid += 1;
             }
             done += 1;
-            ctx.progress.progress(done as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
         for overlay_piece in &overlay_pieces {
@@ -11016,9 +11010,13 @@ impl Tool for SymmetricalDifferenceTool {
                 next_fid += 1;
             }
             done += 1;
-            ctx.progress.progress(done as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -11080,6 +11078,7 @@ impl Tool for UnionTool {
 
         let total = (input_pieces.len() + overlay_pieces.len()).max(1);
         let mut done = 0usize;
+        let coalescer = PercentCoalescer::new(1, 90);
         let mut next_fid = 1u64;
 
         for input_piece in &input_pieces {
@@ -11125,7 +11124,7 @@ impl Tool for UnionTool {
             }
 
             done += 1;
-            ctx.progress.progress(done as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
         for overlay_piece in &overlay_pieces {
@@ -11154,9 +11153,13 @@ impl Tool for UnionTool {
             }
 
             done += 1;
-            ctx.progress.progress(done as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -11581,8 +11584,6 @@ impl Tool for MinimumConvexHullTool {
 
         if individual {
             output.schema = input.schema.clone();
-            let total = input.features.len().max(1);
-            let completed = AtomicUsize::new(0);
             let results: Vec<Option<wbvector::Feature>> = input
                 .features
                 .par_iter()
@@ -11600,8 +11601,6 @@ impl Tool for MinimumConvexHullTool {
                     } else {
                         None
                     };
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     out
                 })
                 .collect();
@@ -11637,6 +11636,7 @@ impl Tool for MinimumConvexHullTool {
             });
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -11753,8 +11753,6 @@ impl Tool for MinimumBoundingBoxTool {
 
         if individual {
             output.schema = input.schema.clone();
-            let total = input.features.len().max(1);
-            let completed = AtomicUsize::new(0);
             let results: Vec<Option<wbvector::Feature>> = input
                 .features
                 .par_iter()
@@ -11775,8 +11773,6 @@ impl Tool for MinimumBoundingBoxTool {
                     } else {
                         None
                     };
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     out
                 })
                 .collect();
@@ -11814,6 +11810,7 @@ impl Tool for MinimumBoundingBoxTool {
             });
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -11917,8 +11914,6 @@ impl Tool for MinimumBoundingCircleTool {
 
         if individual {
             output.schema = input.schema.clone();
-            let total = input.features.len().max(1);
-            let completed = AtomicUsize::new(0);
             let results: Vec<Option<wbvector::Feature>> = input
                 .features
                 .par_iter()
@@ -11944,8 +11939,6 @@ impl Tool for MinimumBoundingCircleTool {
                     } else {
                         None
                     };
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     out
                 })
                 .collect();
@@ -11984,6 +11977,7 @@ impl Tool for MinimumBoundingCircleTool {
             });
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -12087,8 +12081,6 @@ impl Tool for MinimumBoundingEnvelopeTool {
 
         if individual {
             output.schema = input.schema.clone();
-            let total = input.features.len().max(1);
-            let completed = AtomicUsize::new(0);
             let results: Vec<Option<wbvector::Feature>> = input
                 .features
                 .par_iter()
@@ -12114,8 +12106,6 @@ impl Tool for MinimumBoundingEnvelopeTool {
                     } else {
                         None
                     };
-                    let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    ctx.progress.progress(done as f64 / total as f64);
                     out
                 })
                 .collect();
@@ -12172,6 +12162,7 @@ impl Tool for MinimumBoundingEnvelopeTool {
             });
         }
 
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -13229,6 +13220,7 @@ impl Tool for MergeLineSegmentsTool {
         let total = lines.len().max(1);
         let mut next_fid = 1u64;
 
+        let coalescer = PercentCoalescer::new(1, 90);
         for edge_idx in 0..lines.len() {
             if visited[edge_idx] || lines[edge_idx].coords.len() < 2 {
                 continue;
@@ -13314,9 +13306,13 @@ impl Tool for MergeLineSegmentsTool {
             }
 
             let done = visited.iter().filter(|done| **done).count();
-            ctx.progress.progress(done as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }
 
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -14971,8 +14967,6 @@ impl Tool for PolygonAreaTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<Result<f64, ToolError>> = output
             .features
             .par_iter()
@@ -14986,8 +14980,6 @@ impl Tool for PolygonAreaTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(area)
             })
             .collect();
@@ -14995,6 +14987,7 @@ impl Tool for PolygonAreaTool {
             feature.attributes.push(wbvector::FieldValue::Float(value?));
         }
 
+        ctx.progress.progress(1.0);
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
     }
@@ -15126,8 +15119,6 @@ impl Tool for PolygonPerimeterTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<Result<f64, ToolError>> = output
             .features
             .par_iter()
@@ -15141,8 +15132,6 @@ impl Tool for PolygonPerimeterTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(perimeter)
             })
             .collect();
@@ -15150,6 +15139,7 @@ impl Tool for PolygonPerimeterTool {
             feature.attributes.push(wbvector::FieldValue::Float(value?));
         }
 
+        ctx.progress.progress(1.0);
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
     }
@@ -15226,8 +15216,6 @@ impl Tool for PolygonShortAxisTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::LineString);
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
@@ -15243,8 +15231,6 @@ impl Tool for PolygonShortAxisTool {
                 } else {
                     None
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(out)
             })
             .collect();
@@ -15254,6 +15240,7 @@ impl Tool for PolygonShortAxisTool {
             }
         }
 
+        ctx.progress.progress(1.0);
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
     }
@@ -15330,8 +15317,6 @@ impl Tool for PolygonLongAxisTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::LineString);
 
-        let total = input.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
             .features
             .par_iter()
@@ -15347,8 +15332,6 @@ impl Tool for PolygonLongAxisTool {
                 } else {
                     None
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 Ok(out)
             })
             .collect();
@@ -15358,6 +15341,7 @@ impl Tool for PolygonLongAxisTool {
             }
         }
 
+        ctx.progress.progress(1.0);
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
     }
@@ -15818,8 +15802,6 @@ impl Tool for CompactnessRatioTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<f64> = output
             .features
             .par_iter()
@@ -15842,8 +15824,6 @@ impl Tool for CompactnessRatioTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 compactness
             })
             .collect();
@@ -15852,6 +15832,7 @@ impl Tool for CompactnessRatioTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -15918,8 +15899,6 @@ impl Tool for ElongationRatioTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<f64> = output
             .features
             .par_iter()
@@ -15944,8 +15923,6 @@ impl Tool for ElongationRatioTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 elongation
             })
             .collect();
@@ -15954,6 +15931,7 @@ impl Tool for ElongationRatioTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -16020,8 +15998,6 @@ impl Tool for LinearityIndexTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<f64> = output
             .features
             .par_iter()
@@ -16046,8 +16022,6 @@ impl Tool for LinearityIndexTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 linearity
             })
             .collect();
@@ -16056,6 +16030,7 @@ impl Tool for LinearityIndexTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -16122,8 +16097,6 @@ impl Tool for NarrownessIndexTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<f64> = output
             .features
             .par_iter()
@@ -16145,8 +16118,6 @@ impl Tool for NarrownessIndexTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 narrowness
             })
             .collect();
@@ -16155,6 +16126,7 @@ impl Tool for NarrownessIndexTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }
@@ -16221,8 +16193,6 @@ impl Tool for ShapeComplexityIndexVectorTool {
             output.schema = schema;
         }
 
-        let total = output.features.len().max(1);
-        let completed = AtomicUsize::new(0);
         let values: Vec<f64> = output
             .features
             .par_iter()
@@ -16247,8 +16217,6 @@ impl Tool for ShapeComplexityIndexVectorTool {
                 } else {
                     -999.0
                 };
-                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                ctx.progress.progress(done as f64 / total as f64);
                 sci
             })
             .collect();
@@ -16257,6 +16225,7 @@ impl Tool for ShapeComplexityIndexVectorTool {
         }
 
         ctx.progress.info("writing output vector");
+        ctx.progress.progress(1.0);
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
     }

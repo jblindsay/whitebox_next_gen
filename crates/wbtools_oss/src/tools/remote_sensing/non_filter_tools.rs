@@ -10009,40 +10009,60 @@ impl Tool for FuzzyKnnClassificationTool {
         });
 
         let p = 2.0 / (m - 1.0);
+        let rows_usize = rows as usize;
+        let cols_usize = cols as usize;
+        let pred_rows: Result<Vec<Vec<Option<(usize, f64)>>>, ToolError> = (0..rows_usize)
+            .into_par_iter()
+            .map(|row_u| {
+                let row = row_u as isize;
+                let mut out_row = vec![None; cols_usize];
+                for col_u in 0..cols_usize {
+                    let col = col_u as isize;
+                    let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col)
+                    else {
+                        continue;
+                    };
+                    let ret = tree
+                        .nearest(&feat, k, &squared_euclidean)
+                        .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
+                    if ret.is_empty() {
+                        continue;
+                    }
+                    let mut memb = vec![0.0; class_names.len()];
+                    let mut sum_w = 0.0;
+                    for (d2, idx_ref) in ret {
+                        let cls = y_train[*idx_ref];
+                        let w = 1.0 / d2.max(1e-12).powf(p / 2.0);
+                        memb[cls] += w;
+                        sum_w += w;
+                    }
+                    if sum_w > 0.0 {
+                        for v in &mut memb {
+                            *v /= sum_w;
+                        }
+                    }
+                    let mut best_idx = 0usize;
+                    let mut best_prob = memb[0];
+                    for i in 1..memb.len() {
+                        if memb[i] > best_prob {
+                            best_prob = memb[i];
+                            best_idx = i;
+                        }
+                    }
+                    out_row[col_u] = Some((best_idx, best_prob));
+                }
+                Ok(out_row)
+            })
+            .collect();
+        let pred_rows = pred_rows?;
+
         for row in 0..rows {
+            let row_preds = &pred_rows[row as usize];
             for col in 0..cols {
-                let Some(feat) = sample_scaled_features_at(&rasters, mode, &scalers, row, col) else {
-                    continue;
-                };
-                let ret = tree
-                    .nearest(&feat, k, &squared_euclidean)
-                    .map_err(|e| ToolError::Execution(format!("kdtree query failed: {e}")))?;
-                if ret.is_empty() {
-                    continue;
+                if let Some((best_idx, best_prob)) = row_preds[col as usize] {
+                    let _ = class_out.set(0, row, col, (best_idx + 1) as f64);
+                    let _ = prob_out.set(0, row, col, best_prob);
                 }
-                let mut memb = vec![0.0; class_names.len()];
-                let mut sum_w = 0.0;
-                for (d2, idx_ref) in ret {
-                    let cls = y_train[*idx_ref];
-                    let w = 1.0 / d2.max(1e-12).powf(p / 2.0);
-                    memb[cls] += w;
-                    sum_w += w;
-                }
-                if sum_w > 0.0 {
-                    for v in &mut memb {
-                        *v /= sum_w;
-                    }
-                }
-                let mut best_idx = 0usize;
-                let mut best_prob = memb[0];
-                for i in 1..memb.len() {
-                    if memb[i] > best_prob {
-                        best_prob = memb[i];
-                        best_idx = i;
-                    }
-                }
-                let _ = class_out.set(0, row, col, (best_idx + 1) as f64);
-                let _ = prob_out.set(0, row, col, best_prob);
             }
             if row % 100 == 0 {
                 ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));

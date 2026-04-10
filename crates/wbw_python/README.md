@@ -424,7 +424,7 @@ The runtime supports open and licensed modes.
 
 - Open mode: instantiate `WbEnvironment()` directly.
 - Signed entitlement mode: bootstrap from signed JSON or file.
-- Floating license mode: bootstrap with floating id plus provider URL.
+- Floating license mode: online provider-verified activation using `from_floating_license_id(...)`.
 
 See:
 - [examples/licensing_offline_example.py](examples/licensing_offline_example.py)
@@ -439,7 +439,7 @@ scripts, notebooks, services, and plugin-style applications.
 
 - Open mode: best for open-tier workflows and development where Pro tools are not required.
 - Signed entitlement mode: best when users can provide a signed offline entitlement.
-- Floating license mode: best when online lease/renewal against a license provider is required.
+- Floating license mode: best when you want online lease activation against the provider service.
 
 ### 2) Keep initialization centralized
 
@@ -455,13 +455,14 @@ wbe = wb.WbEnvironment()                    # include_pro=False, tier='open'
 
 # ---- Floating license (online lease) ----
 wbe = wb.WbEnvironment.from_floating_license_id(
-    floating_license_id='FLOAT-ABC-123',
-    include_pro=True,
-    provider_url='https://your-provider.example.com',
-    fallback_tier='open',          # fall back to open tools if lease fails
-    # machine_id='workstation-01', # optional hint sent to provider
-    # customer_id='cust_123',      # optional hint sent to provider
+  floating_license_id='fl_12345',
+  include_pro=True,
+  fallback_tier='open',
+  provider_url='https://license.example.com',
+  machine_id='machine-01',
+  customer_id='customer-abc',
 )
+# Tip: provider_url can also be supplied by environment variable WBW_LICENSE_PROVIDER_URL.
 
 # ---- Signed entitlement (offline, from file) ----
 wbe = wb.WbEnvironment.from_signed_entitlement_file(

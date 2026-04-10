@@ -2,6 +2,8 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use serde_json::{json, Value};
+#[cfg(feature = "pro")]
+use std::env;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use wbcore::{
@@ -148,8 +150,6 @@ impl PythonToolRuntime {
     ) -> Result<Self, ToolError> {
         validate_include_pro(include_pro)?;
 
-        let _ = (floating_license_id, provider_url, machine_id, customer_id);
-
         let mut oss = OssRegistry::new();
         register_default_oss_tools(&mut oss);
 
@@ -160,6 +160,28 @@ impl PythonToolRuntime {
         } else {
             None
         };
+
+        if include_pro {
+            let capabilities = entitlement_capabilities_from_floating_provider(
+                floating_license_id,
+                provider_url,
+                machine_id,
+                customer_id,
+            )?;
+
+            return Ok(Self {
+                runtime: RuntimeMode::Entitled(OwnedToolRuntimeWithCapabilities::new(
+                    CompositeRegistry { oss, pro },
+                    RuntimeOptions {
+                        max_tier: fallback_tier,
+                        expose_locked_tools: false,
+                    },
+                    capabilities,
+                )),
+                include_pro,
+                requested_tier: fallback_tier,
+            });
+        }
 
         Ok(Self {
             runtime: RuntimeMode::Tier(
@@ -449,6 +471,86 @@ fn entitlement_capabilities_from_json(
     let verified = verify_signed_entitlement_json(signed_entitlement_json, &key_store, current_unix())
         .map_err(map_license_error)?;
     Ok(EntitlementCapabilities::from_verified(&verified, current_unix()))
+}
+
+#[cfg(feature = "pro")]
+fn entitlement_capabilities_from_floating_provider(
+    floating_license_id: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<EntitlementCapabilities, ToolError> {
+    let base = provider_url
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_LICENSE_PROVIDER_URL").ok())
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(
+                "floating-license startup requires provider_url or WBW_LICENSE_PROVIDER_URL"
+                    .to_string(),
+            )
+        })?;
+
+    let machine = machine_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_MACHINE_ID").ok())
+        .unwrap_or_else(|| "local-machine".to_string());
+
+    let customer = customer_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_CUSTOMER_ID").ok());
+
+    let activation_url = format!("{}/api/v2/entitlements/activate-floating", base.trim_end_matches('/'));
+    let mut body = json!({
+        "floating_license_id": floating_license_id,
+        "machine_id": machine,
+        "product": "whitebox_next_gen"
+    });
+    if let Some(customer_id) = customer {
+        body["customer_id"] = Value::String(customer_id);
+    }
+
+    let activation_resp = ureq::post(&activation_url)
+        .send_json(body)
+        .map_err(|e| ToolError::LicenseDenied(format!("floating activation failed: {e}")))?;
+    let activation_json: Value = activation_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
+
+    let kid = activation_json
+        .get("kid")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ToolError::LicenseDenied("activation response missing 'kid'".to_string()))?;
+    let signed_entitlement_json = serde_json::to_string(&activation_json)
+        .map_err(|e| ToolError::LicenseDenied(format!("failed to serialize entitlement envelope: {e}")))?;
+
+    let keys_url = format!("{}/api/v2/public-keys", base.trim_end_matches('/'));
+    let keys_resp = ureq::get(&keys_url)
+        .call()
+        .map_err(|e| ToolError::LicenseDenied(format!("public-key fetch failed: {e}")))?;
+    let keys_json: Value = keys_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid public-keys response json: {e}")))?;
+
+    let public_key_b64url = keys_json
+        .get("keys")
+        .and_then(|v| v.as_array())
+        .and_then(|keys| {
+            keys.iter().find_map(|k| {
+                let k_kid = k.get("kid")?.as_str()?;
+                if k_kid == kid {
+                    k.get("public_key_b64url")?.as_str()
+                } else {
+                    None
+                }
+            })
+        })
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(format!(
+                "provider did not return public key for kid '{kid}'"
+            ))
+        })?;
+
+    entitlement_capabilities_from_json(&signed_entitlement_json, kid, public_key_b64url)
 }
 
 fn current_unix() -> u64 {
@@ -873,6 +975,11 @@ impl RuntimeSession {
         customer_id: Option<&str>,
     ) -> PyResult<Self> {
         let _ = (floating_license_id, provider_url, machine_id, customer_id);
+        if include_pro {
+            return Err(PyValueError::new_err(
+                "floating-license Pro bootstrap is unavailable in non-Pro builds; use signed entitlement in a Pro-enabled build",
+            ));
+        }
         let parsed_tier = parse_tier(fallback_tier).map_err(map_tool_error)?;
         Ok(Self {
             runtime: PythonToolRuntime::new_with_options(include_pro, parsed_tier)
@@ -1413,7 +1520,12 @@ fn whitebox_tools(
 
     #[cfg(not(feature = "pro"))]
     {
-        let _ = (floating_license_id, provider_url, machine_id, customer_id);
+        if floating_license_id.is_some() {
+            return Err(PyValueError::new_err(
+                "floating-license startup requires a Pro-enabled build and verified provider bootstrap",
+            ));
+        }
+        let _ = (provider_url, machine_id, customer_id);
         let runtime = PythonToolRuntime::new_with_options(resolved_include_pro, parsed_tier)
             .map_err(map_tool_error)?;
         Ok(WbEnvironment::from_runtime(runtime, resolved_include_pro))
@@ -1779,6 +1891,61 @@ mod tests {
         }
 
         let _ = std::fs::remove_file(state_path);
+        drop(env_guard);
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn floating_bootstrap_requires_provider_url_when_not_in_env() {
+        let env_guard = license_env_lock().lock().expect("env lock");
+        let _guard = EnvGuard::set(&[("WBW_LICENSE_PROVIDER_URL", None)]);
+
+        let err = match PythonToolRuntime::new_with_floating_license_id(
+            true,
+            LicenseTier::Open,
+            "fl_test",
+            None,
+            Some("test-machine"),
+            None,
+        ) {
+            Ok(_) => panic!("missing provider URL should be rejected"),
+            Err(err) => err,
+        };
+
+        match err {
+            ToolError::LicenseDenied(msg) => {
+                assert!(msg.contains("requires provider_url"));
+            }
+            other => panic!("expected LicenseDenied, got {other}"),
+        }
+
+        drop(env_guard);
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn floating_bootstrap_rejects_unreachable_provider() {
+        let env_guard = license_env_lock().lock().expect("env lock");
+
+        let err = match PythonToolRuntime::new_with_floating_license_id(
+            true,
+            LicenseTier::Open,
+            "fl_test",
+            Some("http://127.0.0.1:9"),
+            Some("test-machine"),
+            None,
+        ) {
+            Ok(_) => panic!("unreachable provider should be rejected"),
+            Err(err) => err,
+        };
+
+        match err {
+            ToolError::LicenseDenied(msg) => {
+                assert!(msg.contains("floating activation failed"));
+            }
+            other => panic!("expected LicenseDenied, got {other}"),
+        }
+
         drop(env_guard);
     }
 

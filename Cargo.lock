@@ -4032,6 +4032,7 @@ version = "2.0.0"
 dependencies = [
  "pyo3",
  "serde_json",
+ "ureq",
  "wbcore",
  "wblicense_core",
  "wblidar",
@@ -4048,10 +4049,14 @@ version = "2.0.0"
 dependencies = [
  "extendr-api",
  "serde_json",
+ "ureq",
  "wbcore",
  "wblicense_core",
+ "wblidar",
+ "wbraster",
  "wbtools_oss",
  "wbtools_pro",
+ "wbvector",
 ]
 
 [[package]]

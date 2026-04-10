@@ -1,4 +1,9 @@
 use serde_json::{json, Value};
+#[cfg(feature = "pro")]
+use std::env;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 use wbcore::{
     generate_wrapper_stub, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
     OwnedToolRuntimeWithCapabilities, RuntimeOptions,
@@ -7,9 +12,369 @@ use wbcore::{
 use wblicense_core::{
     verify_signed_entitlement_json, EntitlementCapabilities, LicenseError, VerificationKeyStore,
 };
+use wblidar::e57::E57Reader;
+use wblidar::las::LasReader;
+use wblidar::ply::PlyReader;
+use wblidar::{LidarFormat, PointReader};
+use wbraster::{open_sensor_bundle, open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
+use wbraster::{Raster};
+use wbvector::VectorFormat;
+use wbvector::feature::FieldType;
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
 #[cfg(feature = "pro")]
 use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegistry as ProRegistry};
+
+fn to_invalid_request<E: std::fmt::Display>(err: E) -> ToolError {
+    ToolError::InvalidRequest(err.to_string())
+}
+
+fn lidar_format_name(format: LidarFormat) -> &'static str {
+    match format {
+        LidarFormat::Las => "las",
+        LidarFormat::Laz => "laz",
+        LidarFormat::Copc => "copc",
+        LidarFormat::Ply => "ply",
+        LidarFormat::E57 => "e57",
+    }
+}
+
+fn sensor_bundle_family_name(bundle: &SensorBundle) -> &'static str {
+    match bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel1(_)) => "sentinel1_safe",
+        SensorBundle::Safe(SafeBundle::Sentinel2(_)) => "sentinel2_safe",
+        SensorBundle::Landsat(_) => "landsat",
+        SensorBundle::Iceye(_) => "iceye",
+        SensorBundle::PlanetScope(_) => "planetscope",
+        SensorBundle::Dimap(_) => "dimap",
+        SensorBundle::MaxarWorldView(_) => "maxar_worldview",
+        SensorBundle::Radarsat2(_) => "radarsat2",
+        SensorBundle::Rcm(_) => "rcm",
+    }
+}
+
+fn sensor_bundle_root_path(bundle: &SensorBundle) -> PathBuf {
+    match bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => pkg.safe_root.clone(),
+        SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => pkg.safe_root.clone(),
+        SensorBundle::Landsat(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::Iceye(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::PlanetScope(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::Dimap(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::MaxarWorldView(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::Radarsat2(pkg) => pkg.bundle_root.clone(),
+        SensorBundle::Rcm(pkg) => pkg.bundle_root.clone(),
+    }
+}
+
+fn sensor_bundle_metadata_json_value(opened: &OpenedSensorBundle, input_path: &Path) -> Value {
+    let bundle_root = sensor_bundle_root_path(&opened.bundle);
+
+    let mut base = json!({
+        "input_path": input_path.display().to_string(),
+        "bundle_root": bundle_root.display().to_string(),
+        "opened_from_archive": opened.extracted_root.is_some(),
+        "family": sensor_bundle_family_name(&opened.bundle),
+        "band_keys": Vec::<String>::new(),
+        "measurement_keys": Vec::<String>::new(),
+        "qa_keys": Vec::<String>::new(),
+        "aux_keys": Vec::<String>::new(),
+        "asset_keys": Vec::<String>::new(),
+    });
+
+    let extras = match &opened.bundle {
+        SensorBundle::Safe(SafeBundle::Sentinel2(pkg)) => json!({
+            "product_level": format!("{:?}", pkg.product_level),
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "tile_id": pkg.tile_id,
+            "cloud_cover_percent": pkg.cloud_coverage_assessment,
+            "processing_baseline": pkg.processing_baseline,
+            "band_keys": pkg.list_band_keys(),
+            "qa_keys": pkg.list_qa_keys(),
+            "aux_keys": pkg.list_aux_keys(),
+        }),
+        SensorBundle::Safe(SafeBundle::Sentinel1(pkg)) => json!({
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": pkg.polarization,
+            "polarizations": pkg.list_polarizations(),
+            "spatial_bounds": pkg.spatial_bounds,
+            "measurement_keys": pkg.list_measurement_keys(),
+        }),
+        SensorBundle::Landsat(pkg) => json!({
+            "mission": format!("{:?}", pkg.mission),
+            "processing_level": format!("{:?}", pkg.processing_level),
+            "product_id": pkg.product_id,
+            "collection_number": pkg.collection_number,
+            "acquisition_datetime_utc": match (&pkg.acquisition_date_utc, &pkg.scene_center_time_utc) {
+                (Some(d), Some(t)) => Some(format!("{d}T{t}")),
+                (Some(d), None) => Some(d.clone()),
+                _ => None,
+            },
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "path_row": pkg.path_row,
+            "band_keys": pkg.list_band_keys(),
+            "qa_keys": pkg.list_qa_keys(),
+            "aux_keys": pkg.list_aux_keys(),
+        }),
+        SensorBundle::Iceye(pkg) => json!({
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarization": pkg.polarization,
+            "polarizations": pkg.list_polarizations(),
+            "asset_keys": pkg.list_asset_keys(),
+        }),
+        SensorBundle::PlanetScope(pkg) => json!({
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "product_type": pkg.product_type,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "band_keys": pkg.list_band_keys(),
+            "qa_keys": pkg.list_qa_keys(),
+        }),
+        SensorBundle::Dimap(pkg) => json!({
+            "mission": pkg.mission,
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "processing_level": pkg.processing_level,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "band_keys": pkg.list_band_keys(),
+        }),
+        SensorBundle::MaxarWorldView(pkg) => json!({
+            "mission": pkg.satellite,
+            "scene_id": pkg.scene_id,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "cloud_cover_percent": pkg.cloud_cover_percent,
+            "band_keys": pkg.list_band_keys(),
+        }),
+        SensorBundle::Radarsat2(pkg) => json!({
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarizations": pkg.polarizations,
+            "measurement_keys": pkg.list_measurement_keys(),
+        }),
+        SensorBundle::Rcm(pkg) => json!({
+            "product_type": pkg.product_type,
+            "acquisition_datetime_utc": pkg.acquisition_datetime_utc,
+            "acquisition_mode": pkg.acquisition_mode,
+            "polarizations": pkg.polarizations,
+            "measurement_keys": pkg.list_measurement_keys(),
+        }),
+    };
+
+    if let (Some(base_obj), Some(extra_obj)) = (base.as_object_mut(), extras.as_object()) {
+        for (key, value) in extra_obj {
+            base_obj.insert(key.clone(), value.clone());
+        }
+    }
+
+    base
+}
+
+pub fn sensor_bundle_resolve_raster_path(
+    bundle_root: &str,
+    key: &str,
+    key_type: &str,
+) -> Result<String, ToolError> {
+    let bundle = open_sensor_bundle(bundle_root).map_err(to_invalid_request)?;
+    let path = match (&bundle, key_type) {
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "band") => pkg.band_path(key),
+        (SensorBundle::Landsat(pkg), "band") => pkg.band_path(key),
+        (SensorBundle::PlanetScope(pkg), "band") => pkg.band_path(key),
+        (SensorBundle::Dimap(pkg), "band") => pkg.band_path(key),
+        (SensorBundle::MaxarWorldView(pkg), "band") => pkg.band_path(key),
+
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "qa") => pkg.qa_path(key),
+        (SensorBundle::Landsat(pkg), "qa") => pkg.qa_path(key),
+        (SensorBundle::PlanetScope(pkg), "qa") => pkg.qa_path(key),
+
+        (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "aux") => pkg.aux_path(key),
+        (SensorBundle::Landsat(pkg), "aux") => pkg.aux_path(key),
+
+        (SensorBundle::Safe(SafeBundle::Sentinel1(pkg)), "measurement") => pkg.measurement_path(key),
+        (SensorBundle::Radarsat2(pkg), "measurement") => pkg.measurement_path(key),
+        (SensorBundle::Rcm(pkg), "measurement") => pkg.measurement_path(key),
+
+        (SensorBundle::Iceye(pkg), "asset") => pkg.asset_path(key),
+
+        _ => {
+            return Err(ToolError::InvalidRequest(format!(
+                "read_{} is not supported for bundle family '{}'",
+                key_type,
+                sensor_bundle_family_name(&bundle)
+            )))
+        }
+    };
+
+    let p = path.ok_or_else(|| {
+        ToolError::InvalidRequest(format!(
+            "{} key '{}' not found in bundle '{}'",
+            key_type,
+            key,
+            bundle_root
+        ))
+    })?;
+
+    Ok(p.display().to_string())
+}
+
+/// Return raster metadata as a JSON string (header-only, no pixel data loaded).
+/// Fields: path, cols, rows, bands, x_min, y_min, x_max, y_max,
+///         cell_size_x, cell_size_y, nodata, data_type, crs_wkt, crs_epsg.
+pub fn raster_metadata_json(path: &str) -> Result<String, ToolError> {
+    let raster = Raster::read(path).map_err(to_invalid_request)?;
+    let meta = json!({
+        "path": path,
+        "cols": raster.cols,
+        "rows": raster.rows,
+        "bands": raster.bands,
+        "x_min": raster.x_min,
+        "y_min": raster.y_min,
+        "x_max": raster.x_min + raster.cell_size_x * raster.cols as f64,
+        "y_max": raster.y_min + raster.cell_size_y * raster.rows as f64,
+        "cell_size_x": raster.cell_size_x,
+        "cell_size_y": raster.cell_size_y,
+        "nodata": raster.nodata,
+        "data_type": raster.data_type.as_str(),
+        "crs_wkt": raster.crs.wkt,
+        "crs_epsg": raster.crs.epsg,
+    });
+    serde_json::to_string(&meta).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Return vector layer metadata as a JSON string.
+/// Fields: path, geometry_type, feature_count, crs_wkt, crs_epsg,
+///         fields (array of {name, field_type}).
+pub fn vector_metadata_json(path: &str) -> Result<String, ToolError> {
+    let layer = wbvector::read(path).map_err(to_invalid_request)?;
+    let fields: Vec<Value> = layer.schema.fields().iter().map(|f| {
+        json!({
+            "name": f.name,
+            "field_type": match f.field_type {
+                FieldType::Integer  => "integer",
+                FieldType::Float    => "float",
+                FieldType::Text     => "text",
+                FieldType::Date     => "date",
+                FieldType::DateTime => "datetime",
+                FieldType::Boolean  => "boolean",
+                FieldType::Blob     => "blob",
+                FieldType::Json     => "json",
+            }
+        })
+    }).collect();
+    let meta = json!({
+        "path": path,
+        "geometry_type": layer.geom_type.map(|g| g.as_str()),
+        "feature_count": layer.features.len(),
+        "crs_wkt": layer.crs_wkt(),
+        "crs_epsg": layer.crs_epsg(),
+        "fields": fields,
+    });
+    serde_json::to_string(&meta).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Copy a vector file from `src` to `dst`, re-encoding in the format detected
+/// from `dst`'s file extension.  This keeps the copy entirely inside wbvector
+/// rather than round-tripping through a third-party library.
+pub fn vector_copy_to_path(src: &str, dst: &str) -> Result<(), ToolError> {
+    let src_path = Path::new(src);
+    let dst_path = Path::new(dst);
+    let layer = wbvector::read(src_path).map_err(to_invalid_request)?;
+    let fmt = VectorFormat::detect(dst_path).map_err(to_invalid_request)?;
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+    wbvector::write(&layer, dst_path, fmt).map_err(to_invalid_request)
+}
+
+pub fn sensor_bundle_metadata_json(path: &str) -> Result<String, ToolError> {
+    let bundle_path = Path::new(path);
+    let opened = open_sensor_bundle_path(bundle_path).map_err(to_invalid_request)?;
+    let meta = sensor_bundle_metadata_json_value(&opened, bundle_path);
+    serde_json::to_string(&meta).map_err(|err| ToolError::Execution(err.to_string()))
+}
+
+pub fn lidar_metadata_json(path: &str) -> Result<String, ToolError> {
+    let lidar_path = Path::new(path);
+    let file_size_bytes = std::fs::metadata(lidar_path)
+        .map_err(to_invalid_request)?
+        .len();
+    let format = LidarFormat::detect(lidar_path).map_err(to_invalid_request)?;
+
+    let meta = match format {
+        LidarFormat::Las | LidarFormat::Laz | LidarFormat::Copc => {
+            let file = File::open(lidar_path).map_err(to_invalid_request)?;
+            let reader = LasReader::new(BufReader::new(file)).map_err(to_invalid_request)?;
+            let header = reader.header();
+            let crs = reader.crs();
+
+            json!({
+                "path": lidar_path,
+                "format": lidar_format_name(format),
+                "file_size_bytes": file_size_bytes,
+                "point_count": header.point_count(),
+                "version_major": header.version_major,
+                "version_minor": header.version_minor,
+                "point_data_format_id": header.point_data_format as u8,
+                "point_data_record_length": header.point_data_record_length,
+                "system_identifier": header.system_identifier,
+                "generating_software": header.generating_software,
+                "crs_epsg": crs.and_then(|c| c.epsg),
+                "crs_wkt": crs.and_then(|c| c.wkt.clone()),
+                "bounds": {
+                    "min_x": header.min_x,
+                    "max_x": header.max_x,
+                    "min_y": header.min_y,
+                    "max_y": header.max_y,
+                    "min_z": header.min_z,
+                    "max_z": header.max_z
+                }
+            })
+        }
+        LidarFormat::Ply => {
+            let file = File::open(lidar_path).map_err(to_invalid_request)?;
+            let reader = PlyReader::new(BufReader::new(file)).map_err(to_invalid_request)?;
+            json!({
+                "path": lidar_path,
+                "format": lidar_format_name(format),
+                "file_size_bytes": file_size_bytes,
+                "point_count": reader.point_count(),
+                "crs_epsg": Value::Null,
+                "crs_wkt": Value::Null,
+                "bounds": Value::Null
+            })
+        }
+        LidarFormat::E57 => {
+            let file = File::open(lidar_path).map_err(to_invalid_request)?;
+            let reader = E57Reader::new(BufReader::new(file)).map_err(to_invalid_request)?;
+            let meta = reader.meta();
+            let crs_text = meta.coordinate_metadata.clone();
+            let crs_epsg = crs_text.as_ref().and_then(|text| {
+                wblidar::crs::epsg_from_srs_reference(text)
+                    .or_else(|| wblidar::crs::epsg_from_wkt(text))
+            });
+            let field_names: Vec<String> = meta.fields.iter().map(|field| field.name.clone()).collect();
+
+            json!({
+                "path": lidar_path,
+                "format": lidar_format_name(format),
+                "file_size_bytes": file_size_bytes,
+                "point_count": meta.record_count,
+                "name": meta.name,
+                "field_names": field_names,
+                "crs_epsg": crs_epsg,
+                "crs_wkt": crs_text,
+                "bounds": Value::Null
+            })
+        }
+    };
+
+    serde_json::to_string(&meta).map_err(|err| ToolError::Execution(err.to_string()))
+}
 
 struct CompositeRegistry {
     oss: OssRegistry,
@@ -124,6 +489,7 @@ impl RToolRuntime {
         customer_id: Option<&str>,
     ) -> Result<Self, ToolError> {
         validate_include_pro(include_pro)?;
+
         let mut oss = OssRegistry::new();
         register_default_oss_tools(&mut oss);
 
@@ -134,6 +500,26 @@ impl RToolRuntime {
         } else {
             None
         };
+
+        if include_pro {
+            let capabilities = entitlement_capabilities_from_floating_provider(
+                floating_license_id,
+                provider_url,
+                machine_id,
+                customer_id,
+            )?;
+
+            return Ok(Self {
+                runtime: RuntimeMode::Entitled(OwnedToolRuntimeWithCapabilities::new(
+                    CompositeRegistry { oss, pro },
+                    RuntimeOptions {
+                        max_tier: fallback_tier,
+                        expose_locked_tools: false,
+                    },
+                    capabilities,
+                )),
+            });
+        }
 
         let _ = (provider_url, floating_license_id, machine_id, customer_id);
 
@@ -325,6 +711,86 @@ fn entitlement_capabilities_from_json(
     Ok(EntitlementCapabilities::from_verified(&verified, current_unix()))
 }
 
+#[cfg(feature = "pro")]
+fn entitlement_capabilities_from_floating_provider(
+    floating_license_id: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<EntitlementCapabilities, ToolError> {
+    let base = provider_url
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_LICENSE_PROVIDER_URL").ok())
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(
+                "floating-license startup requires provider_url or WBW_LICENSE_PROVIDER_URL"
+                    .to_string(),
+            )
+        })?;
+
+    let machine = machine_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_MACHINE_ID").ok())
+        .unwrap_or_else(|| "local-machine".to_string());
+
+    let customer = customer_id
+        .map(|s| s.to_string())
+        .or_else(|| env::var("WBW_CUSTOMER_ID").ok());
+
+    let activation_url = format!("{}/api/v2/entitlements/activate-floating", base.trim_end_matches('/'));
+    let mut body = json!({
+        "floating_license_id": floating_license_id,
+        "machine_id": machine,
+        "product": "whitebox_next_gen"
+    });
+    if let Some(customer_id) = customer {
+        body["customer_id"] = Value::String(customer_id);
+    }
+
+    let activation_resp = ureq::post(&activation_url)
+        .send_json(body)
+        .map_err(|e| ToolError::LicenseDenied(format!("floating activation failed: {e}")))?;
+    let activation_json: Value = activation_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid activation response json: {e}")))?;
+
+    let kid = activation_json
+        .get("kid")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ToolError::LicenseDenied("activation response missing 'kid'".to_string()))?;
+    let signed_entitlement_json = serde_json::to_string(&activation_json)
+        .map_err(|e| ToolError::LicenseDenied(format!("failed to serialize entitlement envelope: {e}")))?;
+
+    let keys_url = format!("{}/api/v2/public-keys", base.trim_end_matches('/'));
+    let keys_resp = ureq::get(&keys_url)
+        .call()
+        .map_err(|e| ToolError::LicenseDenied(format!("public-key fetch failed: {e}")))?;
+    let keys_json: Value = keys_resp
+        .into_json()
+        .map_err(|e| ToolError::LicenseDenied(format!("invalid public-keys response json: {e}")))?;
+
+    let public_key_b64url = keys_json
+        .get("keys")
+        .and_then(|v| v.as_array())
+        .and_then(|keys| {
+            keys.iter().find_map(|k| {
+                let k_kid = k.get("kid")?.as_str()?;
+                if k_kid == kid {
+                    k.get("public_key_b64url")?.as_str()
+                } else {
+                    None
+                }
+            })
+        })
+        .ok_or_else(|| {
+            ToolError::LicenseDenied(format!(
+                "provider did not return public key for kid '{kid}'"
+            ))
+        })?;
+
+    entitlement_capabilities_from_json(&signed_entitlement_json, kid, public_key_b64url)
+}
+
 fn current_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -491,6 +957,27 @@ pub fn run_tool_json_with_entitlement_options(
     serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
 }
 
+pub fn run_tool_json_with_progress_entitlement_options(
+    tool_id: &str,
+    args_json: &str,
+    signed_entitlement_json: &str,
+    public_key_kid: &str,
+    public_key_b64url: &str,
+    include_pro: bool,
+    fallback_tier: &str,
+) -> Result<String, ToolError> {
+    let parsed_tier = parse_tier(fallback_tier)?;
+    let out = RToolRuntime::new_with_entitlement_json(
+        include_pro,
+        parsed_tier,
+        signed_entitlement_json,
+        public_key_kid,
+        public_key_b64url,
+    )?
+    .run_tool_json_with_progress(tool_id, args_json)?;
+    serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
 pub fn run_tool_json_with_entitlement_file_options(
     tool_id: &str,
     args_json: &str,
@@ -502,6 +989,27 @@ pub fn run_tool_json_with_entitlement_file_options(
 ) -> Result<String, ToolError> {
     let signed_entitlement_json = read_entitlement_file(entitlement_file)?;
     run_tool_json_with_entitlement_options(
+        tool_id,
+        args_json,
+        &signed_entitlement_json,
+        public_key_kid,
+        public_key_b64url,
+        include_pro,
+        fallback_tier,
+    )
+}
+
+pub fn run_tool_json_with_progress_entitlement_file_options(
+    tool_id: &str,
+    args_json: &str,
+    entitlement_file: &str,
+    public_key_kid: &str,
+    public_key_b64url: &str,
+    include_pro: bool,
+    fallback_tier: &str,
+) -> Result<String, ToolError> {
+    let signed_entitlement_json = read_entitlement_file(entitlement_file)?;
+    run_tool_json_with_progress_entitlement_options(
         tool_id,
         args_json,
         &signed_entitlement_json,
@@ -536,6 +1044,30 @@ pub fn run_tool_json_with_floating_license_id_options(
     serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
 }
 
+#[cfg(feature = "pro")]
+pub fn run_tool_json_with_progress_floating_license_id_options(
+    tool_id: &str,
+    args_json: &str,
+    floating_license_id: &str,
+    include_pro: bool,
+    fallback_tier: &str,
+    provider_url: Option<&str>,
+    machine_id: Option<&str>,
+    customer_id: Option<&str>,
+) -> Result<String, ToolError> {
+    let parsed_tier = parse_tier(fallback_tier)?;
+    let out = RToolRuntime::new_with_floating_license_id(
+        include_pro,
+        parsed_tier,
+        floating_license_id,
+        provider_url,
+        machine_id,
+        customer_id,
+    )?
+    .run_tool_json_with_progress(tool_id, args_json)?;
+    serde_json::to_string(&out).map_err(|e| ToolError::Execution(format!("serialization error: {e}")))
+}
+
 #[cfg(not(feature = "pro"))]
 pub fn run_tool_json_with_floating_license_id_options(
     tool_id: &str,
@@ -548,6 +1080,20 @@ pub fn run_tool_json_with_floating_license_id_options(
     _customer_id: Option<&str>,
 ) -> Result<String, ToolError> {
     run_tool_json_with_options(tool_id, args_json, include_pro, fallback_tier)
+}
+
+#[cfg(not(feature = "pro"))]
+pub fn run_tool_json_with_progress_floating_license_id_options(
+    tool_id: &str,
+    args_json: &str,
+    _floating_license_id: &str,
+    include_pro: bool,
+    fallback_tier: &str,
+    _provider_url: Option<&str>,
+    _machine_id: Option<&str>,
+    _customer_id: Option<&str>,
+) -> Result<String, ToolError> {
+    run_tool_json_with_progress_options(tool_id, args_json, include_pro, fallback_tier)
 }
 
 pub fn run_tool_json_with_progress_options(
@@ -805,6 +1351,11 @@ mod native_exports {
     }
 
     #[extendr]
+    fn run_tool_json_with_progress(tool_id: &str, args_json: &str) -> extendr_api::Result<String> {
+        super::run_tool_json_with_progress(tool_id, args_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn run_tool_json_with_options(
         tool_id: &str,
         args_json: &str,
@@ -812,6 +1363,17 @@ mod native_exports {
         tier: &str,
     ) -> extendr_api::Result<String> {
         super::run_tool_json_with_options(tool_id, args_json, include_pro, tier)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn run_tool_json_with_progress_options(
+        tool_id: &str,
+        args_json: &str,
+        include_pro: bool,
+        tier: &str,
+    ) -> extendr_api::Result<String> {
+        super::run_tool_json_with_progress_options(tool_id, args_json, include_pro, tier)
             .map_err(map_extendr_err)
     }
 
@@ -838,6 +1400,28 @@ mod native_exports {
     }
 
     #[extendr]
+    fn run_tool_json_with_progress_entitlement_options(
+        tool_id: &str,
+        args_json: &str,
+        signed_entitlement_json: &str,
+        public_key_kid: &str,
+        public_key_b64url: &str,
+        include_pro: bool,
+        fallback_tier: &str,
+    ) -> extendr_api::Result<String> {
+        super::run_tool_json_with_progress_entitlement_options(
+            tool_id,
+            args_json,
+            signed_entitlement_json,
+            public_key_kid,
+            public_key_b64url,
+            include_pro,
+            fallback_tier,
+        )
+        .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn run_tool_json_with_entitlement_file_options(
         tool_id: &str,
         args_json: &str,
@@ -848,6 +1432,28 @@ mod native_exports {
         fallback_tier: &str,
     ) -> extendr_api::Result<String> {
         super::run_tool_json_with_entitlement_file_options(
+            tool_id,
+            args_json,
+            entitlement_file,
+            public_key_kid,
+            public_key_b64url,
+            include_pro,
+            fallback_tier,
+        )
+        .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn run_tool_json_with_progress_entitlement_file_options(
+        tool_id: &str,
+        args_json: &str,
+        entitlement_file: &str,
+        public_key_kid: &str,
+        public_key_b64url: &str,
+        include_pro: bool,
+        fallback_tier: &str,
+    ) -> extendr_api::Result<String> {
+        super::run_tool_json_with_progress_entitlement_file_options(
             tool_id,
             args_json,
             entitlement_file,
@@ -887,8 +1493,70 @@ mod native_exports {
     }
 
     #[extendr]
+    fn run_tool_json_with_progress_floating_license_id_options(
+        tool_id: &str,
+        args_json: &str,
+        floating_license_id: &str,
+        include_pro: bool,
+        fallback_tier: &str,
+        provider_url: Nullable<String>,
+        machine_id: Nullable<String>,
+        customer_id: Nullable<String>,
+    ) -> extendr_api::Result<String> {
+        let provider_url = nullable_string_to_option(provider_url);
+        let machine_id = nullable_string_to_option(machine_id);
+        let customer_id = nullable_string_to_option(customer_id);
+        super::run_tool_json_with_progress_floating_license_id_options(
+            tool_id,
+            args_json,
+            floating_license_id,
+            include_pro,
+            fallback_tier,
+            provider_url.as_deref(),
+            machine_id.as_deref(),
+            customer_id.as_deref(),
+        )
+        .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn generate_r_wrapper_module_with_options(include_pro: bool, tier: &str) -> extendr_api::Result<String> {
         super::generate_r_wrapper_module_with_options(include_pro, tier).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_metadata_json(path: &str) -> extendr_api::Result<String> {
+        super::lidar_metadata_json(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn sensor_bundle_metadata_json(path: &str) -> extendr_api::Result<String> {
+        super::sensor_bundle_metadata_json(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn sensor_bundle_resolve_raster_path(
+        bundle_root: &str,
+        key: &str,
+        key_type: &str,
+    ) -> extendr_api::Result<String> {
+        super::sensor_bundle_resolve_raster_path(bundle_root, key, key_type)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn vector_copy_to_path(src: &str, dst: &str) -> extendr_api::Result<()> {
+        super::vector_copy_to_path(src, dst).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_metadata_json(path: &str) -> extendr_api::Result<String> {
+        super::raster_metadata_json(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn vector_metadata_json(path: &str) -> extendr_api::Result<String> {
+        super::vector_metadata_json(path).map_err(map_extendr_err)
     }
 
     extendr_module! {
@@ -899,11 +1567,22 @@ mod native_exports {
         fn list_tools_json_with_entitlement_file_options;
         fn list_tools_json_with_floating_license_id_options;
         fn run_tool_json;
+        fn run_tool_json_with_progress;
         fn run_tool_json_with_options;
+        fn run_tool_json_with_progress_options;
         fn run_tool_json_with_entitlement_options;
+        fn run_tool_json_with_progress_entitlement_options;
         fn run_tool_json_with_entitlement_file_options;
+        fn run_tool_json_with_progress_entitlement_file_options;
         fn run_tool_json_with_floating_license_id_options;
+        fn run_tool_json_with_progress_floating_license_id_options;
         fn generate_r_wrapper_module_with_options;
+        fn lidar_metadata_json;
+        fn sensor_bundle_metadata_json;
+        fn sensor_bundle_resolve_raster_path;
+        fn vector_copy_to_path;
+        fn raster_metadata_json;
+        fn vector_metadata_json;
     }
 }
 
@@ -1122,6 +1801,61 @@ mod tests {
         }
 
         let _ = std::fs::remove_file(state_path);
+        drop(env_guard);
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn floating_bootstrap_requires_provider_url_when_not_in_env() {
+        let env_guard = license_env_lock().lock().expect("env lock");
+        let _guard = EnvGuard::set(&[("WBW_LICENSE_PROVIDER_URL", None)]);
+
+        let err = match RToolRuntime::new_with_floating_license_id(
+            true,
+            LicenseTier::Open,
+            "fl_test",
+            None,
+            Some("test-machine"),
+            None,
+        ) {
+            Ok(_) => panic!("missing provider URL should be rejected"),
+            Err(err) => err,
+        };
+
+        match err {
+            ToolError::LicenseDenied(msg) => {
+                assert!(msg.contains("requires provider_url"));
+            }
+            other => panic!("expected LicenseDenied, got {other}"),
+        }
+
+        drop(env_guard);
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn floating_bootstrap_rejects_unreachable_provider() {
+        let env_guard = license_env_lock().lock().expect("env lock");
+
+        let err = match RToolRuntime::new_with_floating_license_id(
+            true,
+            LicenseTier::Open,
+            "fl_test",
+            Some("http://127.0.0.1:9"),
+            Some("test-machine"),
+            None,
+        ) {
+            Ok(_) => panic!("unreachable provider should be rejected"),
+            Err(err) => err,
+        };
+
+        match err {
+            ToolError::LicenseDenied(msg) => {
+                assert!(msg.contains("floating activation failed"));
+            }
+            other => panic!("expected LicenseDenied, got {other}"),
+        }
+
         drop(env_guard);
     }
 

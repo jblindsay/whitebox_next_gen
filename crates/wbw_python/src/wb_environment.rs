@@ -1563,6 +1563,14 @@ fn maybe_extract_data_object_outputs(
             continue;
         }
 
+        // Only count keys that are explicitly named as outputs (e.g. "output",
+        // "output1", "flow_dir_output"). The bare "path" key is a convenience
+        // locator emitted alongside "output" by many single-output tools and
+        // must NOT be counted as a separate output.
+        if !key.contains("output") {
+            continue;
+        }
+
         let path = value
             .as_str()
             .map(|s| s.to_string())
@@ -1574,13 +1582,11 @@ fn maybe_extract_data_object_outputs(
             });
 
         if let Some(path) = path {
-            if key == "path" || key.contains("output") {
-                pairs.push((key.clone(), path));
-                continue;
-            }
+            pairs.push((key.clone(), path));
+        } else {
+            // Non-data-path output value — can't safely extract a tuple.
+            return None;
         }
-
-        return None;
     }
 
     if pairs.len() < 2 {

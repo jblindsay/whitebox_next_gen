@@ -336,16 +336,38 @@ impl Tool for RasterIsNodataTool {
         let len = output.data.len();
 
         let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
-        let out_values: Vec<f64> = in_values
-            .par_iter()
-            .map(|&z| if input.is_nodata(z) { 1.0 } else { 0.0 })
-            .collect();
+        let mut out_values = vec![0.0; len];
+        let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
+        let compute_progress = PercentCoalescer::new(1, 75);
+        let mut completed_chunks = 0usize;
+
+        while completed_chunks < total_chunks {
+            let batch_chunks = (total_chunks - completed_chunks).min(UNARY_MATH_PROGRESS_BATCH_CHUNKS);
+            let batch_start = completed_chunks * UNARY_MATH_PAR_CHUNK;
+            let batch_end = (batch_start + batch_chunks * UNARY_MATH_PAR_CHUNK).min(len);
+
+            out_values[batch_start..batch_end]
+                .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
+                .zip(in_values[batch_start..batch_end].par_chunks(UNARY_MATH_PAR_CHUNK))
+                .for_each(|(out_chunk, in_chunk)| {
+                    for i in 0..out_chunk.len() {
+                        let z = in_chunk[i];
+                        out_chunk[i] = if input.is_nodata(z) { 1.0 } else { 0.0 };
+                    }
+                });
+
+            completed_chunks += batch_chunks;
+            compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
+        }
+        compute_progress.finish(ctx.progress);
 
         for (i, value) in out_values.iter().enumerate() {
             output.data.set_f64(i, *value);
         }
+        ctx.progress.progress(0.9);
 
         let output_locator = write_or_store_output(output, output_path)?;
+        ctx.progress.progress(1.0);
 
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(output_locator.clone()));
@@ -474,6 +496,37 @@ mod tests {
 
         let tool = RasterAbsTool;
         let _ = tool.run(&args, &ctx).expect("abs should run");
+
+        let percents = progress.percents();
+        assert!(!percents.is_empty(), "expected at least one progress event");
+        assert!(percents.len() <= 101, "progress events should be bounded to percent buckets");
+
+        for window in percents.windows(2) {
+            assert!(window[1] >= window[0], "progress should be monotonic non-decreasing");
+        }
+
+        let final_pct = *percents.last().unwrap();
+        assert!((final_pct - 1.0).abs() < 1e-9, "final progress should be 100%");
+    }
+
+    #[test]
+    fn is_nodata_progress_is_monotonic_and_bounded() {
+        let td = TempDirGuard::new("is_nodata_progress");
+        let input = td.path().join("input.tif");
+        write_test_raster(input.to_str().unwrap(), 1024, 1024);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(input));
+
+        let caps = AllowAll;
+        let progress = RecordingProgress::new();
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let tool = RasterIsNodataTool;
+        let _ = tool.run(&args, &ctx).expect("is_nodata should run");
 
         let percents = progress.percents();
         assert!(!percents.is_empty(), "expected at least one progress event");

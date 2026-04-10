@@ -1316,6 +1316,7 @@ impl Tool for BufferRasterTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = args
             .get("input")
             .and_then(|v| v.as_str())
@@ -1453,7 +1454,7 @@ impl Tool for BufferRasterTool {
                     }
                 }
             }
-            ctx.progress.progress((b + 1) as f64 / bands.max(1) as f64 * 0.8);
+            coalescer.emit_unit_fraction(ctx.progress, (b + 1) as f64 / bands.max(1) as f64 * 0.8);
         }
 
         let cell_size = if grid_cell_units {
@@ -1537,6 +1538,7 @@ impl Tool for ClumpTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input_path = args
             .get("input")
             .and_then(|v| v.as_str())
@@ -1622,7 +1624,7 @@ impl Tool for ClumpTool {
                     }
                 }
                 if row % 32 == 0 {
-                    ctx.progress.progress(solved as f64 / total.max(1) as f64);
+                    coalescer.emit_unit_fraction(ctx.progress, solved as f64 / total.max(1) as f64);
                 }
             }
         }
@@ -2011,6 +2013,7 @@ impl Tool for CostDistanceTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let source = load_required_raster_arg(args, "source")?;
         let cost = load_required_raster_arg(args, "cost")?;
         if !GisOverlayCore::rasters_share_grid(&source, &cost) {
@@ -2096,7 +2099,7 @@ impl Tool for CostDistanceTool {
                 }
             }
             if touched % 10000 == 0 {
-                ctx.progress.progress((touched as f64 / total.max(1) as f64).min(0.98));
+                coalescer.emit_unit_fraction(ctx.progress, (touched as f64 / total.max(1) as f64).min(0.98));
             }
         }
 
@@ -2321,6 +2324,7 @@ impl Tool for CostPathwayTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let destination = load_required_raster_arg(args, "destination")?;
         let backlink = load_required_raster_arg(args, "backlink")?;
         if !GisOverlayCore::rasters_share_grid(&destination, &backlink) {
@@ -2387,7 +2391,7 @@ impl Tool for CostPathwayTool {
                     }
                 }
             }
-            ctx.progress.progress((b + 1) as f64 / bands.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (b + 1) as f64 / bands.max(1) as f64);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -3842,6 +3846,7 @@ fn block_tool_manifest(id: &'static str, display_name: &'static str, summary: &'
 }
 
 fn run_block_extrema(args: &ToolArgs, ctx: &ToolContext, take_max: bool) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
     let points = load_vector_arg(args, "points")?;
     let field_name = args.get("field_name").and_then(|v| v.as_str());
     let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -3901,7 +3906,7 @@ fn run_block_extrema(args: &ToolArgs, ctx: &ToolContext, take_max: bool) -> Resu
             };
             output.data.set_f64(idx, next);
         }
-        ctx.progress.progress((sample_index + 1) as f64 / samples.len().max(1) as f64);
+        coalescer.emit_unit_fraction(ctx.progress, (sample_index + 1) as f64 / samples.len().max(1) as f64);
     }
 
     let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -4062,6 +4067,7 @@ impl Tool for IdwInterpolationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -4137,7 +4143,7 @@ impl Tool for IdwInterpolationTool {
                         out_values[idx] = weighted_sum / sum_w;
                     }
                 }
-                ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+                coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
             }
         }
 
@@ -4234,6 +4240,7 @@ impl Tool for NearestNeighbourInterpolationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -4277,7 +4284,7 @@ impl Tool for NearestNeighbourInterpolationTool {
                         }
                     }
                 }
-                ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+                coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
             }
         }
 
@@ -4558,6 +4565,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -4669,7 +4677,7 @@ impl Tool for NaturalNeighbourInterpolationTool {
                     out_values[row * cols + col] = weighted_sum / sum_w;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
         }
 
         for (index, value) in out_values.iter().enumerate() {
@@ -4776,6 +4784,7 @@ impl Tool for ModifiedShepardInterpolationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -4876,7 +4885,7 @@ impl Tool for ModifiedShepardInterpolationTool {
                     out_values[row * cols + col] = val / sum_weights;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
         }
 
         for (index, value) in out_values.iter().enumerate() {
@@ -4978,6 +4987,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let use_z = args.get("use_z").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -5062,7 +5072,7 @@ impl Tool for RadialBasisFunctionInterpolationTool {
                     out_values[row * cols + col] = weighted_sum / sum_w;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
         }
 
         for (index, value) in out_values.iter().enumerate() {
@@ -5151,6 +5161,7 @@ impl Tool for HeatMapTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let points = load_vector_arg(args, "points")?;
         let field_name = args.get("field_name").and_then(|v| v.as_str());
         let bandwidth = args.get("bandwidth").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -5196,7 +5207,7 @@ impl Tool for HeatMapTool {
                 }
                 out_values[row * cols + col] = density;
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
         }
 
         for (index, value) in out_values.iter().enumerate() {
@@ -5377,6 +5388,7 @@ impl Tool for RasterCellAssignmentTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let assign = args
             .get("what_to_assign")
@@ -5402,7 +5414,7 @@ impl Tool for RasterCellAssignmentTool {
                     ToolError::Execution(format!("failed assigning raster cell value: {e}"))
                 })?;
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.99);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.99);
         }
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
@@ -5796,6 +5808,7 @@ impl Tool for HexagonalGridFromRasterBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let base = load_required_raster_arg(args, "base")?;
         let width = args
             .get("width")
@@ -5836,7 +5849,7 @@ impl Tool for HexagonalGridFromRasterBaseTool {
                     wbvector::FieldValue::Integer(col),
                 ],
             });
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -5920,6 +5933,7 @@ impl Tool for HexagonalGridFromVectorBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut base = load_vector_arg(args, "base")?;
         let width = args
             .get("width")
@@ -5959,7 +5973,7 @@ impl Tool for HexagonalGridFromVectorBaseTool {
                     wbvector::FieldValue::Integer(col),
                 ],
             });
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -6056,6 +6070,7 @@ impl Tool for RectangularGridFromRasterBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let base = load_required_raster_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6102,7 +6117,7 @@ impl Tool for RectangularGridFromRasterBaseTool {
                     wbvector::FieldValue::Integer(col),
                 ],
             });
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -6205,6 +6220,7 @@ impl Tool for RectangularGridFromVectorBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let mut base = load_vector_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6251,7 +6267,7 @@ impl Tool for RectangularGridFromVectorBaseTool {
                     wbvector::FieldValue::Integer(col),
                 ],
             });
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -6321,6 +6337,7 @@ impl Tool for MapFeaturesTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let min_feature_height = args.get("min_feature_height").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let min_feature_size = args.get("min_feature_size").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
@@ -6430,7 +6447,7 @@ impl Tool for MapFeaturesTool {
             }
             processed += 1;
             if processed % 128 == 0 {
-                ctx.progress.progress(processed as f64 / total.max(1) as f64 * 0.45);
+                coalescer.emit_unit_fraction(ctx.progress, processed as f64 / total.max(1) as f64 * 0.45);
             }
         }
 
@@ -6485,7 +6502,7 @@ impl Tool for MapFeaturesTool {
                 next_clump += 1;
             }
             if row % 16 == 0 {
-                ctx.progress.progress(0.45 + (row + 1) as f64 / rows.max(1) as f64 * 0.2);
+                coalescer.emit_unit_fraction(ctx.progress, 0.45 + (row + 1) as f64 / rows.max(1) as f64 * 0.2);
             }
         }
 
@@ -6599,7 +6616,7 @@ impl Tool for MapFeaturesTool {
                 })?;
             }
             if row % 16 == 0 {
-                ctx.progress.progress(0.65 + (row + 1) as f64 / rows.max(1) as f64 * 0.34);
+                coalescer.emit_unit_fraction(ctx.progress, 0.65 + (row + 1) as f64 / rows.max(1) as f64 * 0.34);
             }
         }
 
@@ -6736,6 +6753,7 @@ impl Tool for CreatePlaneTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let base = load_required_raster_arg(args, "base")?;
         let gradient = args.get("gradient").and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(-85.0, 85.0);
         let aspect = args.get("aspect").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -6771,7 +6789,7 @@ impl Tool for CreatePlaneTool {
                     .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))?;
             }
             if row % 16 == 0 {
-                ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
             }
         }
 
@@ -6829,6 +6847,7 @@ impl Tool for CentroidRasterTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -6848,7 +6867,7 @@ impl Tool for CentroidRasterTool {
                 entry.2 += 1;
             }
             if row % 16 == 0 {
-                ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.5);
+                coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.5);
             }
         }
 
@@ -6946,6 +6965,7 @@ impl Tool for MedoidTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -7006,7 +7026,7 @@ impl Tool for MedoidTool {
                         next_fid += 1;
                     }
                 }
-                ctx.progress.progress((feature_idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
             }
         }
 
@@ -8237,6 +8257,7 @@ impl Tool for SnapEndnodesTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let snap_tolerance = args
             .get("snap_tolerance")
@@ -8325,7 +8346,7 @@ impl Tool for SnapEndnodesTool {
             for (_, j_ref) in neighbors {
                 uf_union(&mut parent, i, *j_ref);
             }
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
 
         let mut sums = HashMap::<usize, (f64, f64, usize)>::new();
@@ -8433,6 +8454,7 @@ impl Tool for VoronoiDiagramTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input_points")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -8442,7 +8464,7 @@ impl Tool for VoronoiDiagramTool {
         let total = input.features.len().max(1);
         for (idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = feature.geometry.as_ref() else {
-                ctx.progress.progress((idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
                 continue;
             };
 
@@ -8464,7 +8486,7 @@ impl Tool for VoronoiDiagramTool {
                 }
             }
 
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         if points.is_empty() {
@@ -8512,7 +8534,7 @@ impl Tool for VoronoiDiagramTool {
             push_topo_polygon_feature(&mut output, next_fid, cell, attrs);
             next_fid += 1;
 
-            ctx.progress.progress((idx + 1) as f64 / total_cells as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_cells as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -8579,6 +8601,7 @@ impl Tool for ClipRasterToPolygonTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let polygons_path = parse_required_vector_path_arg(args, "polygons")?;
         let maintain_dimensions = args
@@ -8642,7 +8665,7 @@ impl Tool for ClipRasterToPolygonTool {
         let total = polygons.len().max(1);
         for (poly_idx, (exterior, interiors)) in polygons.iter().enumerate() {
             let Some((rmin, cmin, rmax, cmax)) = polygon_bbox_pixels(&output, exterior) else {
-                ctx.progress.progress((poly_idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (poly_idx + 1) as f64 / total as f64);
                 continue;
             };
             for row in rmin..=rmax {
@@ -8664,7 +8687,7 @@ impl Tool for ClipRasterToPolygonTool {
                     }
                 }
             }
-            ctx.progress.progress((poly_idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (poly_idx + 1) as f64 / total as f64);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -8724,6 +8747,7 @@ impl Tool for ErasePolygonFromRasterTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let polygons_path = parse_required_vector_path_arg(args, "polygons")?;
         let output_path = parse_optional_output_path(args, "output")?;
@@ -8740,7 +8764,7 @@ impl Tool for ErasePolygonFromRasterTool {
         let total = polygons.len().max(1);
         for (poly_idx, (exterior, interiors)) in polygons.iter().enumerate() {
             let Some((rmin, cmin, rmax, cmax)) = polygon_bbox_pixels(&output, exterior) else {
-                ctx.progress.progress((poly_idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (poly_idx + 1) as f64 / total as f64);
                 continue;
             };
             for row in rmin..=rmax {
@@ -8758,7 +8782,7 @@ impl Tool for ErasePolygonFromRasterTool {
                     }
                 }
             }
-            ctx.progress.progress((poly_idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (poly_idx + 1) as f64 / total as f64);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -8876,6 +8900,7 @@ impl Tool for RasterAreaTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let zero_background = args
@@ -8904,7 +8929,7 @@ impl Tool for RasterAreaTool {
                     class_area[bin] += if grid_cell_units { 1.0 } else { cell_area };
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / input.rows.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / input.rows.max(1) as f64);
         }
 
         let mut output = build_output_like_raster(&input, DataType::F64);
@@ -9053,6 +9078,7 @@ impl Tool for RasterPerimeterTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let zero_background = args
@@ -9099,7 +9125,7 @@ impl Tool for RasterPerimeterTool {
                 }
                 class_perimeter[bin] += PERIMETER_LUT[pattern] * scale;
             }
-            ctx.progress.progress((row + 1) as f64 / input.rows.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / input.rows.max(1) as f64);
         }
 
         let mut output = build_output_like_raster(&input, DataType::F64);
@@ -10202,6 +10228,7 @@ impl Tool for FilterVectorFeaturesByAreaTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let threshold = args
             .get("threshold")
@@ -10230,7 +10257,7 @@ impl Tool for FilterVectorFeaturesByAreaTool {
                     next_fid += 1;
                 }
             }
-            ctx.progress.progress((idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -10308,6 +10335,7 @@ impl Tool for ExtractNodesTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -10353,7 +10381,7 @@ impl Tool for ExtractNodesTool {
                     next_fid += 1;
                 }
             }
-            ctx.progress.progress((feature_idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -10431,6 +10459,7 @@ impl Tool for CentroidVectorTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -10476,7 +10505,7 @@ impl Tool for CentroidVectorTool {
                         count += 1;
                     }
                 }
-                ctx.progress.progress((idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
             }
 
             if count > 0 {
@@ -10516,7 +10545,7 @@ impl Tool for CentroidVectorTool {
                         next_fid += 1;
                     }
                 }
-                ctx.progress.progress((idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
             }
         }
 
@@ -10619,6 +10648,7 @@ impl Tool for ExtractByAttributeTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let statement = args
             .get("statement")
@@ -10692,7 +10722,7 @@ impl Tool for ExtractByAttributeTool {
                 next_fid += 1;
             }
 
-            ctx.progress.progress((feature_idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -10802,6 +10832,7 @@ impl Tool for DissolveTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let epsilon = args
@@ -10840,7 +10871,7 @@ impl Tool for DissolveTool {
 
         for (feature_idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = feature.geometry.as_ref() else {
-                ctx.progress.progress((feature_idx + 1) as f64 / total as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
                 continue;
             };
 
@@ -10865,7 +10896,7 @@ impl Tool for DissolveTool {
                 all_polygons.extend(polygons);
             }
 
-            ctx.progress.progress((feature_idx + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
         }
 
         let mut next_fid = 1u64;
@@ -10876,7 +10907,7 @@ impl Tool for DissolveTool {
                     push_topo_polygon_feature(&mut output, next_fid, dissolved.poly, vec![field_value.clone()]);
                     next_fid += 1;
                 }
-                ctx.progress.progress((group_idx + 1) as f64 / total_groups as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (group_idx + 1) as f64 / total_groups as f64);
             }
         } else {
             for dissolved in polygon_unary_dissolve(&all_polygons, epsilon) {
@@ -12269,6 +12300,7 @@ impl Tool for FilterRasterFeaturesByAreaTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let threshold = args
             .get("threshold")
@@ -12289,7 +12321,7 @@ impl Tool for FilterRasterFeaturesByAreaTool {
             let key = value.round() as i64;
             *counts.entry(key).or_insert(0) += 1;
             if idx % 8192 == 0 {
-                ctx.progress.progress(idx as f64 / input.data.len().max(1) as f64);
+                coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
             }
         }
 
@@ -12310,7 +12342,7 @@ impl Tool for FilterRasterFeaturesByAreaTool {
             };
             output.data.set_f64(idx, out_val);
             if idx % 8192 == 0 {
-                ctx.progress.progress(idx as f64 / input.data.len().max(1) as f64);
+                coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
             }
         }
 
@@ -12413,6 +12445,7 @@ impl Tool for ReclassTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let assign_mode = args.get("assign_mode").and_then(|v| v.as_bool()).unwrap_or(false);
         let rules = parse_reclass_values_arg(args, assign_mode)?;
@@ -12440,7 +12473,7 @@ impl Tool for ReclassTool {
                 }
                 output.data.set_f64(idx, value);
                 if idx % 8192 == 0 {
-                    ctx.progress.progress(idx as f64 / input.data.len().max(1) as f64);
+                    coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
                 }
             }
         } else {
@@ -12456,7 +12489,7 @@ impl Tool for ReclassTool {
                 }
                 output.data.set_f64(idx, value);
                 if idx % 8192 == 0 {
-                    ctx.progress.progress(idx as f64 / input.data.len().max(1) as f64);
+                    coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
                 }
             }
         }
@@ -12576,6 +12609,7 @@ impl Tool for ReclassEqualIntervalTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let interval = args
             .get("interval_size")
@@ -12607,7 +12641,7 @@ impl Tool for ReclassEqualIntervalTool {
             }
             output.data.set_f64(idx, value);
             if idx % 8192 == 0 {
-                ctx.progress.progress(idx as f64 / input.data.len().max(1) as f64);
+                coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
             }
         }
 
@@ -14115,6 +14149,7 @@ impl Tool for HoleProportionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let mut output = input.clone();
@@ -14145,7 +14180,7 @@ impl Tool for HoleProportionTool {
                 }
             } else { -999.0 };
             feature.attributes.push(wbvector::FieldValue::Float(ratio));
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
@@ -14196,6 +14231,7 @@ impl Tool for PatchOrientationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let mut output = input.clone();
@@ -14212,7 +14248,7 @@ impl Tool for PatchOrientationTool {
                 .and_then(feature_orientation_deg_from_rma)
                 .unwrap_or(-999.0);
             feature.attributes.push(wbvector::FieldValue::Float(orient));
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
@@ -14263,6 +14299,7 @@ impl Tool for PerimeterAreaRatioTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let mut output = input.clone();
@@ -14279,7 +14316,7 @@ impl Tool for PerimeterAreaRatioTool {
                 if area > 0.0 { perimeter / area } else { -999.0 }
             } else { -999.0 };
             feature.attributes.push(wbvector::FieldValue::Float(value));
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
@@ -14330,6 +14367,7 @@ impl Tool for RelatedCircumscribingCircleTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let mut output = input.clone();
@@ -14365,7 +14403,7 @@ impl Tool for RelatedCircumscribingCircleTool {
                 if circ_area > 0.0 { 1.0 - area / circ_area } else { -999.0 }
             } else { -999.0 };
             feature.attributes.push(wbvector::FieldValue::Float(value));
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
@@ -14423,6 +14461,7 @@ impl Tool for DeviationFromRegionalDirectionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input")?;
         let output_path = parse_vector_path_arg(args, "output")?;
         let elongation_threshold = args.get("elongation_threshold").and_then(|v| v.as_f64()).unwrap_or(0.75);
@@ -14480,7 +14519,7 @@ impl Tool for DeviationFromRegionalDirectionTool {
                 -999.0
             };
             feature.attributes.push(wbvector::FieldValue::Float(value));
-            ctx.progress.progress((i + 1) as f64 / total as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
 
         let locator = write_vector_output(&output, output_path.trim())?;
@@ -14551,6 +14590,7 @@ impl Tool for FindPatchEdgeCellsTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let rows = input.rows;
@@ -14599,7 +14639,7 @@ impl Tool for FindPatchEdgeCellsTool {
             for (cell_idx, value) in band_vals.iter().enumerate() {
                 output.data.set_f64(b * stride + cell_idx, *value);
             }
-            ctx.progress.progress((b + 1) as f64 / bands.max(1) as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (b + 1) as f64 / bands.max(1) as f64);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -14655,6 +14695,7 @@ impl Tool for EdgeProportionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let rows = input.rows;
@@ -14695,7 +14736,7 @@ impl Tool for EdgeProportionTool {
                     num_edge[bin] += 1;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.5);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.5);
         }
 
         let mut edge_prop = vec![nodata; bins];
@@ -14728,7 +14769,7 @@ impl Tool for EdgeProportionTool {
             for col in 0..cols {
                 output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
-            ctx.progress.progress(0.5 + (row + 1) as f64 / rows.max(1) as f64 * 0.5);
+            coalescer.emit_unit_fraction(ctx.progress, 0.5 + (row + 1) as f64 / rows.max(1) as f64 * 0.5);
         }
 
         let mut table = String::from("Edge Proportion\nPatch ID\tValue\n");
@@ -14791,6 +14832,7 @@ impl Tool for RadiusOfGyrationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let rows = input.rows;
@@ -14821,7 +14863,7 @@ impl Tool for RadiusOfGyrationTool {
                 sum_row[bin] += row;
                 count[bin] += 1;
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.33);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.33);
         }
 
         let mut cx = vec![0.0f64; bins];
@@ -14849,7 +14891,7 @@ impl Tool for RadiusOfGyrationTool {
             for bin in 0..bins {
                 gyr[bin] += row_last[bin];
             }
-            ctx.progress.progress(0.33 + (row + 1) as f64 / rows.max(1) as f64 * 0.33);
+            coalescer.emit_unit_fraction(ctx.progress, 0.33 + (row + 1) as f64 / rows.max(1) as f64 * 0.33);
         }
 
         for bin in 0..bins {
@@ -14879,7 +14921,7 @@ impl Tool for RadiusOfGyrationTool {
             for col in 0..cols {
                 output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
-            ctx.progress.progress(0.66 + (row + 1) as f64 / rows.max(1) as f64 * 0.34);
+            coalescer.emit_unit_fraction(ctx.progress, 0.66 + (row + 1) as f64 / rows.max(1) as f64 * 0.34);
         }
 
         let mut table = String::from("Patch Radius of Gyration\nPatch ID\tValue\n");
@@ -15395,6 +15437,7 @@ impl Tool for ShapeComplexityIndexRasterTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let rows = input.rows;
@@ -15433,7 +15476,7 @@ impl Tool for ShapeComplexityIndexRasterTool {
                 min_col[bin] = min_col[bin].min(col as isize);
                 max_col[bin] = max_col[bin].max(col as isize);
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.4);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.4);
         }
 
         for col in 0..cols {
@@ -15449,7 +15492,7 @@ impl Tool for ShapeComplexityIndexRasterTool {
                     }
                 }
             }
-            ctx.progress.progress(0.4 + (col + 1) as f64 / cols.max(1) as f64 * 0.2);
+            coalescer.emit_unit_fraction(ctx.progress, 0.4 + (col + 1) as f64 / cols.max(1) as f64 * 0.2);
         }
 
         let mut idx_vals = vec![0.0f64; bins];
@@ -15487,7 +15530,7 @@ impl Tool for ShapeComplexityIndexRasterTool {
             for col in 0..cols {
                 output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
-            ctx.progress.progress(0.6 + (row + 1) as f64 / rows.max(1) as f64 * 0.4);
+            coalescer.emit_unit_fraction(ctx.progress, 0.6 + (row + 1) as f64 / rows.max(1) as f64 * 0.4);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -15543,6 +15586,7 @@ impl Tool for BoundaryShapeComplexityTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_required_raster_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?;
         let rows = input.rows;
@@ -15699,7 +15743,7 @@ impl Tool for BoundaryShapeComplexityTool {
                     second_longest[bin] = link_len;
                 }
             }
-            ctx.progress.progress((row + 1) as f64 / rows.max(1) as f64 * 0.8);
+            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.8);
         }
 
         for bin in 1..bins {
@@ -15733,7 +15777,7 @@ impl Tool for BoundaryShapeComplexityTool {
             for col in 0..cols {
                 output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
-            ctx.progress.progress(0.8 + (row + 1) as f64 / rows.max(1) as f64 * 0.2);
+            coalescer.emit_unit_fraction(ctx.progress, 0.8 + (row + 1) as f64 / rows.max(1) as f64 * 0.2);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -16710,6 +16754,7 @@ impl Tool for ConstructVectorTinTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "input_points")?;
         let field_name = args
             .get("field_name")
@@ -16744,7 +16789,7 @@ impl Tool for ConstructVectorTinTool {
         let total_features = input.features.len().max(1);
         for (idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = feature.geometry.as_ref() else {
-                ctx.progress.progress((idx + 1) as f64 / total_features as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
                 continue;
             };
 
@@ -16777,7 +16822,7 @@ impl Tool for ConstructVectorTinTool {
                 }
             }
 
-            ctx.progress.progress((idx + 1) as f64 / total_features as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
         }
 
         if points.len() < 3 {
@@ -16819,7 +16864,7 @@ impl Tool for ConstructVectorTinTool {
                 z_values[p3],
             );
             if max_edge_sq > max_edge_len_sq {
-                ctx.progress.progress((tri_idx + 1) as f64 / total_triangles as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (tri_idx + 1) as f64 / total_triangles as f64);
                 continue;
             }
 
@@ -16836,7 +16881,7 @@ impl Tool for ConstructVectorTinTool {
             });
 
             next_fid += 1;
-            ctx.progress.progress((tri_idx + 1) as f64 / total_triangles as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (tri_idx + 1) as f64 / total_triangles as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -16973,6 +17018,7 @@ impl Tool for VectorHexBinningTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = load_vector_arg(args, "vector_points")?;
         let width = args
             .get("width")
@@ -16985,7 +17031,7 @@ impl Tool for VectorHexBinningTool {
         let total_features = input.features.len().max(1);
         for (idx, feature) in input.features.iter().enumerate() {
             let Some(geometry) = feature.geometry.as_ref() else {
-                ctx.progress.progress((idx + 1) as f64 / total_features as f64);
+                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
                 continue;
             };
 
@@ -17000,7 +17046,7 @@ impl Tool for VectorHexBinningTool {
                 }
             }
 
-            ctx.progress.progress((idx + 1) as f64 / total_features as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
         }
 
         if points.is_empty() {
@@ -17121,7 +17167,7 @@ impl Tool for VectorHexBinningTool {
             if let Some((_, center_idx_ref)) = nearest.first() {
                 counts[**center_idx_ref] += 1;
             }
-            ctx.progress.progress((idx + 1) as f64 / total_points as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_points as f64);
         }
 
         let mut output = wbvector::Layer::new(format!("{}_hex_binning", input.name));
@@ -17153,7 +17199,7 @@ impl Tool for VectorHexBinningTool {
                     wbvector::FieldValue::Integer(counts[idx]),
                 ],
             });
-            ctx.progress.progress((idx + 1) as f64 / total_cells as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_cells as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;

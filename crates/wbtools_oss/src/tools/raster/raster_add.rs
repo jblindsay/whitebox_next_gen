@@ -336,7 +336,6 @@ impl RasterAddTool {
 
         let mut output = input1.clone();
         let len = output.data.len();
-        let coalescer = PercentCoalescer::new(1, 99);
 
         ctx.progress.info(op.processing_message());
 
@@ -344,7 +343,7 @@ impl RasterAddTool {
         let in2_values: Vec<f64> = (0..len).into_par_iter().map(|i| input2.data.get_f64(i)).collect();
         let mut out_values = vec![input1.nodata; len];
         let total_chunks = len.div_ceil(BINARY_MATH_PAR_CHUNK).max(1);
-        let compute_progress = PercentCoalescer::new(1, 75);
+        let compute_progress = PercentCoalescer::new(1, 90);
         let mut completed_chunks = 0usize;
 
         while completed_chunks < total_chunks {
@@ -376,7 +375,6 @@ impl RasterAddTool {
         for (i, value) in out_values.iter().enumerate() {
             output.data.set_f64(i, *value);
         }
-        coalescer.emit_unit_fraction(ctx.progress, 0.9);
 
         let output_locator = if let Some(output_path) = output_path {
             if let Some(parent) = output_path.parent() {

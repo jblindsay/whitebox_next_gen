@@ -21,7 +21,7 @@ use smartcore::linalg::basic::matrix::DenseMatrix;
 use smartcore::svm::svc::{SVC, SVCParameters};
 use smartcore::svm::svr::{SVR, SVRParameters};
 use smartcore::svm::Kernels;
-use wbcore::{
+use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
@@ -7680,6 +7680,7 @@ impl Tool for MinDistClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let band_paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
@@ -7709,7 +7710,7 @@ impl Tool for MinDistClassificationTool {
             ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
         })?;
 
-        ctx.progress.progress(0.05);
+        coalescer.emit_unit_fraction(ctx.progress, 0.05);
 
         let (class_names, per_class) = extract_training_polygon_pixels(&bands, &layer, &class_field)?;
         let num_classes = class_names.len();
@@ -7749,7 +7750,7 @@ impl Tool for MinDistClassificationTool {
             }
         }
 
-        ctx.progress.progress(0.15);
+        coalescer.emit_unit_fraction(ctx.progress, 0.15);
 
         // Classify each pixel.
         let nodata_val = -32768f64;
@@ -7832,7 +7833,7 @@ impl Tool for MinDistClassificationTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress(0.15 + 0.80 * (row as f64 / rows as f64));
+                coalescer.emit_unit_fraction(ctx.progress, 0.15 + 0.80 * (row as f64 / rows as f64));
             }
         }
 
@@ -7909,6 +7910,7 @@ impl Tool for ParallelepipedClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let band_paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
@@ -7933,7 +7935,7 @@ impl Tool for ParallelepipedClassificationTool {
             ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
         })?;
 
-        ctx.progress.progress(0.05);
+        coalescer.emit_unit_fraction(ctx.progress, 0.05);
 
         let (class_names, per_class) = extract_training_polygon_pixels(&bands, &layer, &class_field)?;
         let num_classes = class_names.len();
@@ -7960,7 +7962,7 @@ impl Tool for ParallelepipedClassificationTool {
         }).collect();
         class_index.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
-        ctx.progress.progress(0.15);
+        coalescer.emit_unit_fraction(ctx.progress, 0.15);
 
         let nodata_val = -32768f64;
         let mut output = Raster::new(RasterConfig {
@@ -8026,7 +8028,7 @@ impl Tool for ParallelepipedClassificationTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress(0.15 + 0.80 * (row as f64 / rows as f64));
+                coalescer.emit_unit_fraction(ctx.progress, 0.15 + 0.80 * (row as f64 / rows as f64));
             }
         }
 
@@ -8103,6 +8105,7 @@ impl Tool for CannyEdgeDetectionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let input_path = parse_raster_path_arg(args, "input")?;
         let sigma = args.get("sigma").and_then(|v| v.as_f64()).unwrap_or(0.5).max(0.15).min(20.0);
         let mut low_threshold = args.get("low_threshold").and_then(|v| v.as_f64()).unwrap_or(0.05_f64).clamp(0.0, 1.0);
@@ -8177,7 +8180,7 @@ impl Tool for CannyEdgeDetectionTool {
                 if sum > 0.0 { g_data[(row * cols_count + col) as usize] = acc / sum; }
             }
         }
-        ctx.progress.progress(0.25);
+        coalescer.emit_unit_fraction(ctx.progress, 0.25);
 
         // ── Stage 2: Sobel gradient magnitude + angle ────────────────────────
         let gget = |row: isize, col: isize| -> f64 {
@@ -8216,7 +8219,7 @@ impl Tool for CannyEdgeDetectionTool {
                 if *v != g_nd { *v = *v / max_slope * 255.0; }
             }
         }
-        ctx.progress.progress(0.50);
+        coalescer.emit_unit_fraction(ctx.progress, 0.50);
 
         // ── Stage 3: Non-maximum suppression ─────────────────────────────────
         let smget = |row: isize, col: isize| -> f64 {
@@ -8248,7 +8251,7 @@ impl Tool for CannyEdgeDetectionTool {
         }
         drop(slope_mag);
         drop(theta_data);
-        ctx.progress.progress(0.65);
+        coalescer.emit_unit_fraction(ctx.progress, 0.65);
 
         // ── Stage 4: Double threshold ─────────────────────────────────────────
         high_threshold = max_nms * high_threshold;
@@ -8269,7 +8272,7 @@ impl Tool for CannyEdgeDetectionTool {
             }
         }
         drop(nms);
-        ctx.progress.progress(0.80);
+        coalescer.emit_unit_fraction(ctx.progress, 0.80);
 
         // ── Stage 5: Hysteresis ───────────────────────────────────────────────
         let tget = |row: isize, col: isize| -> f64 {
@@ -8476,6 +8479,7 @@ impl Tool for EvaluateTrainingSitesTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let band_paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
@@ -8511,7 +8515,7 @@ impl Tool for EvaluateTrainingSitesTool {
             ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
         })?;
 
-        ctx.progress.progress(0.15);
+        coalescer.emit_unit_fraction(ctx.progress, 0.15);
         let (class_names, class_pixels) = extract_training_polygon_pixels(&bands, &layer, &class_field)?;
         if class_names.is_empty() {
             return Err(ToolError::Validation("no classes found in training data".to_string()));
@@ -8539,7 +8543,7 @@ impl Tool for EvaluateTrainingSitesTool {
                 ));
             }
             html.push_str("</table>");
-            ctx.progress.progress(0.20 + 0.75 * ((b + 1) as f64 / bands.len() as f64));
+            coalescer.emit_unit_fraction(ctx.progress, 0.20 + 0.75 * ((b + 1) as f64 / bands.len() as f64));
         }
         html.push_str("</body></html>");
 
@@ -8625,6 +8629,7 @@ impl Tool for GeneralizeWithSimilarityTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let input_path = parse_raster_path_arg(args, "input")?;
         let sim_paths = parse_raster_list_arg(args, "similarity")?;
         let min_size = args.get("min_size").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(5).max(1);
@@ -8685,7 +8690,7 @@ impl Tool for GeneralizeWithSimilarityTool {
                 }
             }
         }
-        ctx.progress.progress(0.25);
+        coalescer.emit_unit_fraction(ctx.progress, 0.25);
 
         let dims = sims.len();
         let mut zscores: Vec<Vec<f64>> = Vec::with_capacity(dims);
@@ -8801,7 +8806,7 @@ impl Tool for GeneralizeWithSimilarityTool {
             }
         }
 
-        ctx.progress.progress(0.85);
+        coalescer.emit_unit_fraction(ctx.progress, 0.85);
 
         let mut output = Raster::new(RasterConfig {
             rows: input.rows,
@@ -8901,6 +8906,7 @@ impl Tool for ImageSegmentationTool {
         let input_paths = parse_raster_list_arg(args, "inputs")?;
         let threshold = args.get("threshold").and_then(|v| v.as_f64()).unwrap_or(0.5);
         let steps = args.get("steps").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(10).max(1);
+        let coalescer = PercentCoalescer::new(1, 99);
         let min_area = args.get("min_area").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(4).max(1);
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -8933,7 +8939,7 @@ impl Tool for ImageSegmentationTool {
             }
             zscores.push(arr);
         }
-        ctx.progress.progress(0.20);
+        coalescer.emit_unit_fraction(ctx.progress, 0.20);
 
         let n8 = [(-1isize, -1isize), (-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1)];
         let threshold2 = if threshold <= 0.0 { f64::INFINITY } else { threshold * threshold };
@@ -9042,7 +9048,7 @@ impl Tool for ImageSegmentationTool {
                 seg_cells.push(cells);
                 seg_center.push(center);
             }
-            ctx.progress.progress(0.20 + 0.45 * ((b + 1) as f64 / steps as f64));
+            coalescer.emit_unit_fraction(ctx.progress, 0.20 + 0.45 * ((b + 1) as f64 / steps as f64));
         }
 
         // Fill any remaining valid, unsolved cells by nearest solved neighbor BFS.
@@ -9139,7 +9145,7 @@ impl Tool for ImageSegmentationTool {
             }
         }
 
-        ctx.progress.progress(0.90);
+        coalescer.emit_unit_fraction(ctx.progress, 0.90);
 
         let mut remap = HashMap::<isize, isize>::new();
         let mut next_label = 1isize;
@@ -9566,6 +9572,7 @@ impl Tool for KnnClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
@@ -9688,7 +9695,7 @@ impl Tool for KnnClassificationTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -9772,6 +9779,7 @@ impl Tool for KnnRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args.get("field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
@@ -9868,7 +9876,7 @@ impl Tool for KnnRegressionTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -9953,6 +9961,7 @@ impl Tool for FuzzyKnnClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
@@ -10065,7 +10074,7 @@ impl Tool for FuzzyKnnClassificationTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -10155,6 +10164,7 @@ impl Tool for RandomForestClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
@@ -10239,7 +10249,7 @@ impl Tool for RandomForestClassificationTool {
             }
 
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -10327,6 +10337,7 @@ impl Tool for RandomForestRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args
@@ -10408,7 +10419,7 @@ impl Tool for RandomForestRegressionTool {
             }
 
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -10536,6 +10547,7 @@ impl Tool for RandomForestClassificationPredictTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -10653,7 +10665,7 @@ impl Tool for RandomForestClassificationPredictTool {
             }
 
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -10777,6 +10789,7 @@ impl Tool for RandomForestRegressionPredictTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let output_path = parse_optional_output_path(args, "output")?;
 
@@ -10894,7 +10907,7 @@ impl Tool for RandomForestRegressionPredictTool {
             }
 
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);
@@ -11500,6 +11513,7 @@ impl Tool for NndClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
@@ -11626,7 +11640,7 @@ impl Tool for NndClassificationTool {
                 }
             }
             if row % 100 == 0 {
-                ctx.progress.progress((row as f64 / rows as f64).clamp(0.0, 1.0));
+                coalescer.emit_unit_fraction(ctx.progress, (row as f64 / rows as f64).clamp(0.0, 1.0));
             }
         }
         ctx.progress.progress(1.0);

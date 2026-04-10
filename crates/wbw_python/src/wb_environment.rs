@@ -1424,6 +1424,16 @@ enum DataObjectOutput {
     Lidar(Lidar),
 }
 
+impl DataObjectOutput {
+    fn into_py_any(self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match self {
+            Self::Raster(r) => Ok(r.into_pyobject(py)?.unbind().into_any()),
+            Self::Vector(v) => Ok(v.into_pyobject(py)?.unbind().into_any()),
+            Self::Lidar(l) => Ok(l.into_pyobject(py)?.unbind().into_any()),
+        }
+    }
+}
+
 fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
     let ext = Path::new(path)
         .extension()
@@ -1510,6 +1520,91 @@ fn maybe_extract_data_object_output(
         "lidar" => Some(DataObjectOutput::Lidar(Lidar { file_path: absolute })),
         _ => None,
     }
+}
+
+fn output_key_is_metadata(key: &str) -> bool {
+    matches!(key, "__wbw_type__" | "active_band" | "band" | "cells_processed")
+}
+
+fn sort_output_key(a: &str, b: &str) -> std::cmp::Ordering {
+    fn rank(key: &str) -> (u8, usize, &str) {
+        if key == "output" {
+            return (0, 0, key);
+        }
+        if let Some(rest) = key.strip_prefix("output") {
+            if let Ok(idx) = rest.parse::<usize>() {
+                return (1, idx, key);
+            }
+        }
+        if let Some((prefix, tail)) = key.rsplit_once('_') {
+            if tail == "output" {
+                return (2, 0, prefix);
+            }
+        }
+        (3, 0, key)
+    }
+
+    rank(a).cmp(&rank(b))
+}
+
+fn maybe_extract_data_object_outputs(
+    category: &str,
+    working_directory: &Path,
+    response: &serde_json::Value,
+) -> Option<Vec<DataObjectOutput>> {
+    let outputs = response.get("outputs").unwrap_or(response);
+    let serde_json::Value::Object(map) = outputs else {
+        return None;
+    };
+
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for (key, value) in map {
+        if output_key_is_metadata(key) {
+            continue;
+        }
+
+        let path = value
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| {
+                value
+                    .get("path")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|s| s.to_string())
+            });
+
+        if let Some(path) = path {
+            if key == "path" || key.contains("output") {
+                pairs.push((key.clone(), path));
+                continue;
+            }
+        }
+
+        return None;
+    }
+
+    if pairs.len() < 2 {
+        return None;
+    }
+
+    pairs.sort_by(|(ka, _), (kb, _)| sort_output_key(ka, kb));
+    let mut out: Vec<DataObjectOutput> = Vec::with_capacity(pairs.len());
+    for (_, path) in pairs {
+        let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
+        let kind = infer_data_object_kind(category, &path)?;
+        let item = match kind {
+            "raster" => DataObjectOutput::Raster(Raster {
+                file_path: absolute,
+                active_band: 0,
+            }),
+            "vector" => DataObjectOutput::Vector(Vector { file_path: absolute }),
+            "lidar" => DataObjectOutput::Lidar(Lidar { file_path: absolute }),
+            _ => return None,
+        };
+        out.push(item);
+    }
+
+    Some(out)
 }
 
 impl WbToolCategory {
@@ -1721,16 +1816,24 @@ impl WbCategoryToolCallable {
                 .map_err(map_tool_error)?
         };
 
+        if let Some(data_objects) = maybe_extract_data_object_outputs(
+            &self.category,
+            &self.working_directory,
+            &response,
+        ) {
+            let list = PyList::empty(py);
+            for item in data_objects {
+                list.append(item.into_py_any(py)?)?;
+            }
+            return Ok(list.unbind().into_any());
+        }
+
         if let Some(data_object) = maybe_extract_data_object_output(
             &self.category,
             &self.working_directory,
             &response,
         ) {
-            return match data_object {
-                DataObjectOutput::Raster(r) => Ok(r.into_pyobject(py)?.unbind().into_any()),
-                DataObjectOutput::Vector(v) => Ok(v.into_pyobject(py)?.unbind().into_any()),
-                DataObjectOutput::Lidar(l) => Ok(l.into_pyobject(py)?.unbind().into_any()),
-            };
+            return data_object.into_py_any(py);
         }
 
         json_value_to_pyobject(py, &response)

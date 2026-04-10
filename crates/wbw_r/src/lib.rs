@@ -1167,7 +1167,8 @@ pub fn generate_r_wrapper_module_with_options(
     out.push_str("    } else {\n");
     out.push_str("      out_json <- run_tool_json_with_options(tool_id, args_json, resolved_include_pro, tier)\n");
     out.push_str("    }\n");
-    out.push_str("    jsonlite::fromJSON(out_json, simplifyVector = FALSE)\n");
+    out.push_str("    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)\n");
+    out.push_str("    wbw_coerce_tool_output(out, session = session)\n");
     out.push_str("  }\n\n");
     out.push_str("  list_tools <- function() {\n");
     out.push_str("    if (!is.null(floating_license_id)) {\n");

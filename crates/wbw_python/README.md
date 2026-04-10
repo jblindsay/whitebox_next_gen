@@ -487,6 +487,12 @@ For complete runnable examples see:
 - [examples/licensing_offline_example.py](examples/licensing_offline_example.py)
 - [examples/licensing_floating_online_example.py](examples/licensing_floating_online_example.py)
 
+## Recent Checkpoints
+
+- 2026-04-10: Restored package loading by aligning the compiled module path with the package layout (`whitebox_workflows.whitebox_workflows`).
+- 2026-04-10: Restored memory-first object workflows for dynamic category calls, including object inputs, working-directory-relative outputs, memory-backed unary raster chaining, and typed single-output returns.
+- 2026-04-10: Added typed multi-output coercion for dynamic category calls so multi-output raster/vector/lidar tools return data objects instead of raw output-path dictionaries.
+
 ### 3) Check Pro tool visibility at startup
 
 Verify that expected Pro tools are actually available before entering a Pro workflow

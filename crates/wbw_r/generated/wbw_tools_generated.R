@@ -20,7 +20,8 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     } else {
       out_json <- run_tool_json_with_options(tool_id, args_json, resolved_include_pro, tier)
     }
-    jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    wbw_coerce_tool_output(out, session = session)
   }
 
   list_tools <- function() {

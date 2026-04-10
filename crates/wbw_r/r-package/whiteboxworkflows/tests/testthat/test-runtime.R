@@ -59,6 +59,53 @@ test_that("progress-aware helper returns structured progress payload", {
   expect_equal(result$outputs$args$alpha, 1)
 })
 
+test_that("multi-output path results are coerced into typed raster objects", {
+  skip_if_not_installed("terra")
+
+  path1 <- tempfile(fileext = ".tif")
+  path2 <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+  terra::values(r) <- c(1, 2, 3, 4)
+  terra::crs(r) <- "EPSG:4326"
+  terra::writeRaster(r, path1, overwrite = TRUE)
+  terra::writeRaster(r, path2, overwrite = TRUE)
+
+  outputs <- list(
+    intensity = path1,
+    hue = path2,
+    cells_processed = 4L
+  )
+
+  coerced <- whiteboxworkflows:::wbw_coerce_tool_output(outputs)
+
+  expect_type(coerced, "list")
+  expect_length(coerced, 2L)
+  expect_true(inherits(coerced[[1]], "wbw_raster"))
+  expect_true(inherits(coerced[[2]], "wbw_raster"))
+  expect_true(file.exists(coerced[[1]]$file_path()))
+  expect_true(file.exists(coerced[[2]]$file_path()))
+})
+
+test_that("single-output convenience path key is not misread as multi-output", {
+  skip_if_not_installed("terra")
+
+  path1 <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+  terra::values(r) <- c(1, 2, 3, 4)
+  terra::crs(r) <- "EPSG:4326"
+  terra::writeRaster(r, path1, overwrite = TRUE)
+
+  outputs <- list(
+    output = path1,
+    path = path1,
+    active_band = 0L
+  )
+
+  coerced <- whiteboxworkflows:::wbw_coerce_tool_output(outputs)
+
+  expect_equal(coerced, outputs)
+})
+
 test_that("entitlement startup argument validation guards are enforced", {
   expect_error(
     wbw_session(

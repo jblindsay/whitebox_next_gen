@@ -165,6 +165,129 @@ print.wbw_sensor_bundle <- function(x, ...) {
   if (is.null(x) || length(x) == 0L) y else x
 }
 
+wbw_output_key_is_metadata <- function(key) {
+  key %in% c("__wbw_type__", "active_band", "band", "cells_processed", "path")
+}
+
+wbw_output_sort_key <- function(key) {
+  if (identical(key, "output")) {
+    return("0-00000-output")
+  }
+
+  if (startsWith(key, "output")) {
+    suffix <- substring(key, nchar("output") + 1L)
+    if (nzchar(suffix) && grepl("^[0-9]+$", suffix)) {
+      return(sprintf("1-%05d-%s", as.integer(suffix), key))
+    }
+  }
+
+  if (endsWith(key, "_output")) {
+    return(sprintf("2-00000-%s", sub("_output$", "", key)))
+  }
+
+  sprintf("3-00000-%s", key)
+}
+
+wbw_extract_output_path <- function(value) {
+  if (is.character(value) && length(value) == 1L && nzchar(value)) {
+    return(value)
+  }
+
+  if (is.list(value) && !is.null(value$path) && is.character(value$path) && length(value$path) == 1L && nzchar(value$path)) {
+    return(value$path)
+  }
+
+  NULL
+}
+
+wbw_infer_data_object_kind <- function(path, value = NULL) {
+  typed_kind <- NULL
+  if (is.list(value) && !is.null(value$`__wbw_type__`) && is.character(value$`__wbw_type__`)) {
+    typed_kind <- tolower(value$`__wbw_type__`[[1]])
+  }
+  if (!is.null(typed_kind) && typed_kind %in% c("raster", "vector", "lidar")) {
+    return(typed_kind)
+  }
+
+  ext <- tolower(tools::file_ext(path))
+  if (ext %in% c("tif", "tiff", "dep", "bil", "flt", "sdat", "rdc", "asc")) {
+    return("raster")
+  }
+  if (ext %in% c("shp", "geojson", "gpkg", "json")) {
+    return("vector")
+  }
+  if (ext %in% c("las", "laz", "zlidar")) {
+    return("lidar")
+  }
+
+  NULL
+}
+
+wbw_make_data_object_from_path <- function(kind, path, session = NULL) {
+  if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
+    return(NULL)
+  }
+  if (startsWith(path, "memory://")) {
+    return(NULL)
+  }
+
+  normalized <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  if (!file.exists(normalized)) {
+    return(NULL)
+  }
+
+  switch(
+    kind,
+    raster = wbw_raster_from_path(normalized, session = session),
+    vector = wbw_vector_from_path(normalized, session = session),
+    lidar = wbw_lidar_from_path(normalized, session = session),
+    NULL
+  )
+}
+
+wbw_coerce_tool_output <- function(outputs, session = NULL) {
+  if (!is.list(outputs) || is.null(names(outputs))) {
+    return(outputs)
+  }
+
+  candidate_keys <- names(outputs)[!vapply(names(outputs), wbw_output_key_is_metadata, logical(1))]
+
+  if (length(candidate_keys) < 2L) {
+    return(outputs)
+  }
+
+  candidate_keys <- candidate_keys[order(vapply(candidate_keys, wbw_output_sort_key, character(1)))]
+  out <- vector("list", length(candidate_keys))
+
+  for (i in seq_along(candidate_keys)) {
+    key <- candidate_keys[[i]]
+    value <- outputs[[key]]
+    path <- wbw_extract_output_path(value)
+    kind <- wbw_infer_data_object_kind(path %||% "", value)
+    if (is.null(path) || is.null(kind)) {
+      if (grepl("output", key, fixed = TRUE)) {
+        return(outputs)
+      }
+      return(outputs)
+    }
+
+    obj <- wbw_make_data_object_from_path(kind, path, session = session)
+    if (is.null(obj)) {
+      return(outputs)
+    }
+    out[[i]] <- obj
+  }
+
+  out
+}
+
+wbw_coerce_progress_result <- function(result, session = NULL) {
+  if (is.list(result) && "outputs" %in% names(result)) {
+    result$outputs <- wbw_coerce_tool_output(result$outputs, session = session)
+  }
+  result
+}
+
 wbw_progress_result_fallback <- function(tool_id, outputs) {
   list(tool_id = tool_id, outputs = outputs, progress = list())
 }
@@ -1408,6 +1531,7 @@ wbw_run_tool_with_progress <- function(tool_id,
     )
   }
   result <- session$run_tool_with_progress(tool_id, args)
+  result <- wbw_coerce_progress_result(result, session = session)
   if (!is.null(on_progress) && is.function(on_progress)) {
     events <- result$progress
     if (is.list(events) && length(events) > 0L) {
@@ -1437,7 +1561,8 @@ wbw_make_entitlement_session <- function(signed_entitlement_json,
       include_pro,
       fallback_tier
     )
-    jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    wbw_coerce_tool_output(out, session = session)
   }
 
   run_tool_with_progress <- function(tool_id, args = list()) {
@@ -1454,7 +1579,8 @@ wbw_make_entitlement_session <- function(signed_entitlement_json,
       include_pro,
       fallback_tier
     )
-    jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    wbw_coerce_progress_result(out, session = session)
   }
 
   list_tools <- function() {
@@ -1491,7 +1617,8 @@ wbw_make_entitlement_file_session <- function(entitlement_file,
       include_pro,
       fallback_tier
     )
-    jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    wbw_coerce_tool_output(out, session = session)
   }
 
   run_tool_with_progress <- function(tool_id, args = list()) {
@@ -1508,7 +1635,8 @@ wbw_make_entitlement_file_session <- function(entitlement_file,
       include_pro,
       fallback_tier
     )
-    jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    out <- jsonlite::fromJSON(out_json, simplifyVector = FALSE)
+    wbw_coerce_progress_result(out, session = session)
   }
 
   list_tools <- function() {

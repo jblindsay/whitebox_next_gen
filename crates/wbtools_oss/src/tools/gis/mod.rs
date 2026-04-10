@@ -15481,21 +15481,27 @@ impl Tool for ShapeComplexityIndexRasterTool {
         let mut output = build_output_like_raster(&input, DataType::F64);
         output.nodata = -999.0;
         let out_nodata = output.nodata;
-        for row in 0..rows {
-            for col in 0..cols {
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
                 let val = input.get(0, row as isize, col as isize);
-                let out_idx = output.index(0, row as isize, col as isize).ok_or_else(|| ToolError::Execution("index out of bounds".to_string()))?;
                 if is_patch_value(val, nodata) && val >= min_val && val <= max_val {
-                    if let Some(bin) = patch_bin_index(val, min_val, bins) {
-                        output.data.set_f64(out_idx, idx_vals[bin]);
-                    } else {
-                        output.data.set_f64(out_idx, out_nodata);
-                    }
+                    patch_bin_index(val, min_val, bins)
+                        .map(|bin| idx_vals[bin])
+                        .unwrap_or(out_nodata)
                 } else if val == 0.0 {
-                    output.data.set_f64(out_idx, 0.0);
+                    0.0
                 } else {
-                    output.data.set_f64(out_idx, out_nodata);
+                    out_nodata
                 }
+            })
+            .collect();
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
             ctx.progress.progress(0.6 + (row + 1) as f64 / rows.max(1) as f64 * 0.4);
         }
@@ -15721,19 +15727,27 @@ impl Tool for BoundaryShapeComplexityTool {
         }
 
         let mut output = build_output_like_raster(&input, DataType::F64);
-        for row in 0..rows {
-            for col in 0..cols {
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
                 let z = input.get(0, row as isize, col as isize);
-                let out_idx = output.index(0, row as isize, col as isize).ok_or_else(|| ToolError::Execution("index out of bounds".to_string()))?;
                 if z != nodata && z != 0.0 {
-                    if let Some(bin) = patch_bin_index(z, min_val, bins) {
-                        output.data.set_f64(out_idx, exterior_len[bin]);
-                    }
+                    patch_bin_index(z, min_val, bins)
+                        .map(|bin| exterior_len[bin])
+                        .unwrap_or(nodata)
                 } else if z == 0.0 {
-                    output.data.set_f64(out_idx, 0.0);
+                    0.0
                 } else {
-                    output.data.set_f64(out_idx, nodata);
+                    nodata
                 }
+            })
+            .collect();
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
             ctx.progress.progress(0.8 + (row + 1) as f64 / rows.max(1) as f64 * 0.2);
         }

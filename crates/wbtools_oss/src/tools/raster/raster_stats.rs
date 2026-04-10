@@ -6053,11 +6053,15 @@ impl Tool for TrendSurfaceVectorPointsTool {
         let x_offset = min_x;
         let y_offset = min_y;
         let z_offset = min_z;
-        for i in 0..x_pts.len() {
-            x_pts[i] -= x_offset;
-            y_pts[i] -= y_offset;
-            z_pts[i] -= z_offset;
-        }
+        x_pts
+            .par_iter_mut()
+            .zip(y_pts.par_iter_mut())
+            .zip(z_pts.par_iter_mut())
+            .for_each(|((x, y), z)| {
+                *x -= x_offset;
+                *y -= y_offset;
+                *z -= z_offset;
+            });
 
         let (coeffs, r_sqr) = fit_polynomial_surface(&x_pts, &y_pts, &z_pts, order)?;
 

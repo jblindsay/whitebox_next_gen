@@ -2623,13 +2623,21 @@ impl Tool for HortonStreamOrderTool {
             }
         }
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let is_outlet = streams.get(0, row as isize, col as isize) > 0.0
+        let outlet_flags: Vec<bool> = (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
+                streams.get(0, row as isize, col as isize) > 0.0
                     && downstream_cell(&pntr, row, col, &pntr_matches)
                         .map(|(rn, cn, _)| streams.get(0, rn as isize, cn as isize) <= 0.0)
-                        .unwrap_or(true);
-                if !is_outlet {
+                        .unwrap_or(true)
+            })
+            .collect();
+
+        for row in 0..rows {
+            for col in 0..cols {
+                if !outlet_flags[row * cols + col] {
                     continue;
                 }
                 let outlet_order = out.get(0, row as isize, col as isize);

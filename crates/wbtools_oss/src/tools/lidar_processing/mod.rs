@@ -4617,6 +4617,7 @@ impl Tool for LidarBlockMaximumTool {
             ctx.progress.info("batch mode: scanning working directory for lidar files");
             let files = find_lidar_files()?;
             let total = files.len().max(1);
+            let coalescer = PercentCoalescer::new(1, 99);
             let outputs = files
                 .into_par_iter()
                 .map(|input| {
@@ -4634,7 +4635,7 @@ impl Tool for LidarBlockMaximumTool {
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            ctx.progress.progress((outputs.len() as f64 / total as f64).min(1.0));
+            coalescer.emit_unit_fraction(ctx.progress, (outputs.len() as f64 / total as f64).min(1.0));
             build_batch_placeholder_raster_result(outputs)
         }
     }
@@ -4713,6 +4714,7 @@ impl Tool for LidarBlockMinimumTool {
             ctx.progress.info("batch mode: scanning working directory for lidar files");
             let files = find_lidar_files()?;
             let total = files.len().max(1);
+            let coalescer = PercentCoalescer::new(1, 99);
             let outputs = files
                 .into_par_iter()
                 .map(|input| {
@@ -4730,7 +4732,7 @@ impl Tool for LidarBlockMinimumTool {
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            ctx.progress.progress((outputs.len() as f64 / total as f64).min(1.0));
+            coalescer.emit_unit_fraction(ctx.progress, (outputs.len() as f64 / total as f64).min(1.0));
             build_batch_placeholder_raster_result(outputs)
         }
     }
@@ -8870,11 +8872,12 @@ impl Tool for IndividualTreeDetectionTool {
             .map_err(|e| ToolError::Execution(format!("Failed to read input LiDAR: {}", e)))?;
 
         let n_points = cloud.points.len();
+        let coalescer = PercentCoalescer::new(1, 99);
         if n_points == 0 {
             return Err(ToolError::Execution("Input LiDAR has no points".to_string()));
         }
 
-        ctx.progress.progress(0.2);
+        coalescer.emit_unit_fraction(ctx.progress, 0.2);
 
         // Filter eligible points and build KdTree
         ctx.progress.info("Building spatial index and filtering points");
@@ -8902,7 +8905,7 @@ impl Tool for IndividualTreeDetectionTool {
             ));
         }
 
-        ctx.progress.progress(0.4);
+        coalescer.emit_unit_fraction(ctx.progress, 0.4);
 
         // Create output layer
         ctx.progress.info("Identifying tree tops");
@@ -9483,6 +9486,7 @@ impl Tool for AsciiToLasTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    let coalescer = PercentCoalescer::new(1, 99);
         let input_paths = parse_ascii_inputs_arg(args)?;
         let pattern = args
             .get("pattern")
@@ -9592,7 +9596,7 @@ impl Tool for AsciiToLasTool {
                 ))
             })?;
             outputs.push(out_path.to_string_lossy().to_string());
-            ctx.progress.progress((file_idx + 1) as f64 / input_paths.len() as f64);
+            coalescer.emit_unit_fraction(ctx.progress, (file_idx + 1) as f64 / input_paths.len() as f64);
         }
 
         if outputs.len() == 1 {

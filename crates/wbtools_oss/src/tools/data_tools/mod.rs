@@ -2185,6 +2185,7 @@ impl Tool for RasterToVectorPointsTool {
             .unwrap_or_else(|| derived_vector_output_path(&input_path, "points"));
 
         ctx.progress.info("running raster_to_vector_points");
+        let coalescer = PercentCoalescer::new(1, 99);
         let input = Raster::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
         if input.bands != 1 {
@@ -2225,7 +2226,7 @@ impl Tool for RasterToVectorPointsTool {
                     .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
                 next_fid += 1;
             }
-            ctx.progress.progress((row as f64 + 1.0) / total_rows);
+            coalescer.emit_unit_fraction(ctx.progress, (row as f64 + 1.0) / total_rows);
         }
 
         write_vector_output(&output, &output_path)
@@ -3107,7 +3108,7 @@ impl Tool for RasterToVectorPolygonsTool {
                 }
                 clump_val += 1;
             }
-            ctx.progress.progress((row as f64 + 1.0) / rows.max(1) as f64 * 0.25);
+            coalescer.emit_unit_fraction(ctx.progress, (row as f64 + 1.0) / rows.max(1) as f64 * 0.25);
         }
 
         let half_x = input.cell_size_x / 2.0;
@@ -3153,7 +3154,7 @@ impl Tool for RasterToVectorPolygonsTool {
                     segments.push(PolygonTraceSegment { p1, p2, value: z });
                 }
             }
-            ctx.progress.progress(0.25 + (row as f64 + 1.0) / rows.max(1) as f64 * 0.25);
+            coalescer.emit_unit_fraction(ctx.progress, 0.25 + (row as f64 + 1.0) / rows.max(1) as f64 * 0.25);
         }
 
         let mut rings_by_clump: Vec<Vec<Vec<(f64, f64)>>> = vec![Vec::new(); clump_val as usize];
@@ -3468,7 +3469,7 @@ impl Tool for RasterToVectorLinesTool {
                     queue.push_back((row, col));
                 }
             }
-            ctx.progress.progress((row as f64 + 1.0) / rows.max(1) as f64 * 0.2);
+            coalescer.emit_unit_fraction(ctx.progress, (row as f64 + 1.0) / rows.max(1) as f64 * 0.2);
         }
 
         let mut output = Layer::new(
@@ -4101,6 +4102,7 @@ impl Tool for RemoveRasterPolygonHolesTool {
         }
 
         let rows = input.rows as isize;
+        let coalescer = PercentCoalescer::new(1, 99);
         let cols = input.cols as isize;
         let is_bg = |v: f64| input.is_nodata(v) || v == 0.0;
 
@@ -4165,7 +4167,7 @@ impl Tool for RemoveRasterPolygonHolesTool {
                 clump_touches_edge.push(touches_edge);
                 next_label += 1;
             }
-            ctx.progress.progress((row as f64 + 1.0) / rows.max(1) as f64 * 0.35);
+            coalescer.emit_unit_fraction(ctx.progress, (row as f64 + 1.0) / rows.max(1) as f64 * 0.35);
         }
 
         let mut output = input.clone();

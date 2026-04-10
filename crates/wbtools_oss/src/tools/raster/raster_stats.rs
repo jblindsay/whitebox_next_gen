@@ -4,6 +4,7 @@ use evalexpr::{build_operator_tree, ContextWithMutableVariables, DefaultNumericT
 use nalgebra::{DMatrix, DVector};
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
+use rayon::prelude::*;
 use rand::seq::SliceRandom;
 use rand::RngExt;
 use serde_json::json;
@@ -6406,14 +6407,20 @@ impl Tool for PrincipalComponentAnalysisTool {
                 crs: inputs[0].crs.clone(), metadata: inputs[0].metadata.clone(),
                 ..Default::default()
             });
-            for idx in 0..n {
-                let v0 = inputs[0].data.get_f64(idx);
-                if inputs[0].is_nodata(v0) {
-                    comp_raster.data.set_f64(idx, inputs[0].nodata);
-                    continue;
-                }
-                let z: f64 = (0..num_images).map(|k| inputs[k].data.get_f64(idx) * evec_flat[pc * num_images + k]).sum();
-                comp_raster.data.set_f64(idx, z);
+            let comp_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let v0 = inputs[0].data.get_f64(idx);
+                    if inputs[0].is_nodata(v0) {
+                        return inputs[0].nodata;
+                    }
+                    (0..num_images)
+                        .map(|k| inputs[k].data.get_f64(idx) * evec_flat[pc * num_images + k])
+                        .sum()
+                })
+                .collect();
+            for (idx, val) in comp_values.into_iter().enumerate() {
+                comp_raster.data.set_f64(idx, val);
             }
             let comp_path = output_path.as_ref().map(|_| base_parent.join(format!("{}_comp{}.{}", base_stem, a + 1, base_ext)));
             let loc = write_or_store_output(comp_raster, comp_path)?;
@@ -6549,18 +6556,24 @@ impl Tool for InversePcaTool {
                 crs: inputs[0].crs.clone(), metadata: inputs[0].metadata.clone(),
                 ..Default::default()
             });
-            for idx in 0..n {
-                let v0 = inputs[0].data.get_f64(idx);
-                if inputs[0].is_nodata(v0) {
-                    out_raster.data.set_f64(idx, inputs[0].nodata);
-                    continue;
-                }
-                let z: f64 = (0..num_comp.min(eigenvectors.len())).map(|k| {
-                    if image_num < eigenvectors[k].len() {
-                        inputs[k].data.get_f64(idx) * eigenvectors[k][image_num]
-                    } else { 0.0 }
-                }).sum();
-                out_raster.data.set_f64(idx, z);
+            let valid_comp = num_comp.min(eigenvectors.len());
+            let comp_weights: Vec<f64> = (0..valid_comp)
+                .map(|k| eigenvectors[k].get(image_num).copied().unwrap_or(0.0))
+                .collect();
+            let out_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let v0 = inputs[0].data.get_f64(idx);
+                    if inputs[0].is_nodata(v0) {
+                        return inputs[0].nodata;
+                    }
+                    (0..valid_comp)
+                        .map(|k| inputs[k].data.get_f64(idx) * comp_weights[k])
+                        .sum()
+                })
+                .collect();
+            for (idx, val) in out_values.into_iter().enumerate() {
+                out_raster.data.set_f64(idx, val);
             }
             let img_path = output_path.as_ref().map(|_| base_parent.join(format!("{}_img{}.{}", base_stem, image_num + 1, base_ext)));
             let loc = write_or_store_output(out_raster, img_path)?;

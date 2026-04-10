@@ -1,4 +1,5 @@
 use serde_json::json;
+use rayon::prelude::*;
 use wbcore::{
     parse_optional_output_path, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
@@ -138,33 +139,42 @@ impl Tool for NibbleTool {
         let input_nodata = input.nodata;
 
         let band_stride = rows * cols;
-        let mut mask = vec![0.0f64; rows * cols];
-        for row in 0..rows {
-            for col in 0..cols {
-                let idx = row * cols + col;
+        let mask: Vec<f64> = (0..band_stride)
+            .into_par_iter()
+            .map(|idx| {
                 let mv = mask_raw.data.get_f64(idx);
                 if !mask_raw.is_nodata(mv) && mv != 0.0 {
-                    mask[idx] = 1.0;
+                    1.0
+                } else {
+                    0.0
                 }
-            }
-        }
+            })
+            .collect();
 
-        let mut input_nodata_mask = vec![0.0f64; band_stride];
-        for i in 0..band_stride {
-            let v = input.data.get_f64(i);
-            if input.is_nodata(v) {
-                input_nodata_mask[i] = 1.0;
-            }
-        }
+        let input_nodata_mask: Vec<f64> = (0..band_stride)
+            .into_par_iter()
+            .map(|i| {
+                let v = input.data.get_f64(i);
+                if input.is_nodata(v) {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
+            .collect();
 
         let max_class = {
-            let mut m = f64::NEG_INFINITY;
-            for i in 0..band_stride {
-                let v = input.data.get_f64(i);
-                if !input.is_nodata(v) && v > m {
-                    m = v;
-                }
-            }
+            let m = (0..band_stride)
+                .into_par_iter()
+                .map(|i| {
+                    let v = input.data.get_f64(i);
+                    if !input.is_nodata(v) {
+                        v
+                    } else {
+                        f64::NEG_INFINITY
+                    }
+                })
+                .reduce(|| f64::NEG_INFINITY, f64::max);
             if m == f64::NEG_INFINITY { 0.0 } else { m }
         };
 

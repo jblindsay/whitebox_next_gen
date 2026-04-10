@@ -2,6 +2,7 @@ use std::cmp;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
+use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
     parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
@@ -378,51 +379,61 @@ fn raster_contour_layer(
         return Err(ToolError::Validation("input raster must have at least 2 rows and 2 cols".to_string()));
     }
 
-    let mut segments = Vec::<Segment>::new();
     let half_x = raster.cell_size_x * 0.5;
     let half_y = raster.cell_size_y * 0.5;
+    let segments: Vec<Segment> = (0..(raster.rows - 1))
+        .into_par_iter()
+        .map(|row| {
+            let mut row_segments = Vec::<Segment>::new();
+            for col in 0..(raster.cols - 1) {
+                let z00 = raster.get(0, row as isize, col as isize);
+                let z10 = raster.get(0, row as isize, (col + 1) as isize);
+                let z11 = raster.get(0, (row + 1) as isize, (col + 1) as isize);
+                let z01 = raster.get(0, (row + 1) as isize, col as isize);
+                if raster.is_nodata(z00)
+                    || raster.is_nodata(z10)
+                    || raster.is_nodata(z11)
+                    || raster.is_nodata(z01)
+                {
+                    continue;
+                }
 
-    for row in 0..(raster.rows - 1) {
-        for col in 0..(raster.cols - 1) {
-            let z00 = raster.get(0, row as isize, col as isize);
-            let z10 = raster.get(0, row as isize, (col + 1) as isize);
-            let z11 = raster.get(0, (row + 1) as isize, (col + 1) as isize);
-            let z01 = raster.get(0, (row + 1) as isize, col as isize);
-            if raster.is_nodata(z00) || raster.is_nodata(z10) || raster.is_nodata(z11) || raster.is_nodata(z01) {
-                continue;
+                let min_z = z00.min(z10.min(z11.min(z01)));
+                let max_z = z00.max(z10.max(z11.max(z01)));
+                let Some((lower, upper)) = parse_contour_levels(min_z, max_z, interval, base) else {
+                    continue;
+                };
+
+                let cx = raster.col_center_x(col as isize);
+                let cy = raster.row_center_y(row as isize);
+                let p00 = Coord::xy(cx - half_x, cy + half_y);
+                let p10 = Coord::xy(cx + half_x, cy + half_y);
+                let p11 = Coord::xy(cx + half_x, cy - half_y);
+                let p01 = Coord::xy(cx - half_x, cy - half_y);
+
+                for level_idx in lower..=upper {
+                    let z = base + level_idx as f64 * interval;
+                    let cell_segments = marching_segments_for_cell(
+                        p00.clone(),
+                        p10.clone(),
+                        p11.clone(),
+                        p01.clone(),
+                        z00,
+                        z10,
+                        z11,
+                        z01,
+                        level_idx,
+                        z,
+                    );
+                    row_segments.extend(cell_segments);
+                }
             }
-
-            let min_z = z00.min(z10.min(z11.min(z01)));
-            let max_z = z00.max(z10.max(z11.max(z01)));
-            let Some((lower, upper)) = parse_contour_levels(min_z, max_z, interval, base) else {
-                continue;
-            };
-
-            let cx = raster.col_center_x(col as isize);
-            let cy = raster.row_center_y(row as isize);
-            let p00 = Coord::xy(cx - half_x, cy + half_y);
-            let p10 = Coord::xy(cx + half_x, cy + half_y);
-            let p11 = Coord::xy(cx + half_x, cy - half_y);
-            let p01 = Coord::xy(cx - half_x, cy - half_y);
-
-            for level_idx in lower..=upper {
-                let z = base + level_idx as f64 * interval;
-                let cell_segments = marching_segments_for_cell(
-                    p00.clone(),
-                    p10.clone(),
-                    p11.clone(),
-                    p01.clone(),
-                    z00,
-                    z10,
-                    z11,
-                    z01,
-                    level_idx,
-                    z,
-                );
-                segments.extend(cell_segments);
-            }
-        }
-    }
+            row_segments
+        })
+        .reduce(Vec::new, |mut a, mut b| {
+            a.append(&mut b);
+            a
+        });
 
     let eps = (raster.cell_size_x.abs() + raster.cell_size_y.abs()).max(1.0) * 1.0e-9;
     let mut lines = chain_segments(&segments, eps);
@@ -566,75 +577,86 @@ fn points_contour_layer(
         f64::INFINITY
     };
 
-    let mut segments = Vec::<Segment>::new();
-    for t in &tri.triangles {
-        let p1 = t[0];
-        let p2 = t[1];
-        let p3 = t[2];
-        let a = &tri.points[p1];
-        let b = &tri.points[p2];
-        let c = &tri.points[p3];
-        let pa = Coord::xy(a.x, a.y);
-        let pb = Coord::xy(b.x, b.y);
-        let pc = Coord::xy(c.x, c.y);
+    let segments: Vec<Segment> = tri
+        .triangles
+        .par_iter()
+        .try_fold(
+            Vec::new,
+            |mut local_segments, t| -> Result<Vec<Segment>, ToolError> {
+                let p1 = t[0];
+                let p2 = t[1];
+                let p3 = t[2];
+                let a = &tri.points[p1];
+                let b = &tri.points[p2];
+                let c = &tri.points[p3];
+                let pa = Coord::xy(a.x, a.y);
+                let pb = Coord::xy(b.x, b.y);
+                let pc = Coord::xy(c.x, c.y);
 
-        let z1 = *z_lookup
-            .get(&endpoint_key(&pa, 1.0e-9))
-            .ok_or_else(|| ToolError::Execution("failed mapping triangulation vertex elevation".to_string()))?;
-        let z2 = *z_lookup
-            .get(&endpoint_key(&pb, 1.0e-9))
-            .ok_or_else(|| ToolError::Execution("failed mapping triangulation vertex elevation".to_string()))?;
-        let z3 = *z_lookup
-            .get(&endpoint_key(&pc, 1.0e-9))
-            .ok_or_else(|| ToolError::Execution("failed mapping triangulation vertex elevation".to_string()))?;
+                let z1 = *z_lookup.get(&endpoint_key(&pa, 1.0e-9)).ok_or_else(|| {
+                    ToolError::Execution("failed mapping triangulation vertex elevation".to_string())
+                })?;
+                let z2 = *z_lookup.get(&endpoint_key(&pb, 1.0e-9)).ok_or_else(|| {
+                    ToolError::Execution("failed mapping triangulation vertex elevation".to_string())
+                })?;
+                let z3 = *z_lookup.get(&endpoint_key(&pc, 1.0e-9)).ok_or_else(|| {
+                    ToolError::Execution("failed mapping triangulation vertex elevation".to_string())
+                })?;
 
-        let d12 = (pa.x - pb.x).powi(2) + (pa.y - pb.y).powi(2);
-        let d23 = (pb.x - pc.x).powi(2) + (pb.y - pc.y).powi(2);
-        let d13 = (pa.x - pc.x).powi(2) + (pa.y - pc.y).powi(2);
-        if d12.max(d23.max(d13)) > max_edge2 {
-            continue;
-        }
-
-        let min_z = z1.min(z2.min(z3));
-        let max_z = z1.max(z2.max(z3));
-        let Some((lower, upper)) = parse_contour_levels(min_z, max_z, interval, base) else {
-            continue;
-        };
-
-        for level_idx in lower..=upper {
-            let z = base + level_idx as f64 * interval;
-            let mut ints = Vec::<Coord>::new();
-            if let Some(p) = interpolate_edge(pa.clone(), z1, pb.clone(), z2, z) {
-                ints.push(p);
-            }
-            if let Some(p) = interpolate_edge(pb.clone(), z2, pc.clone(), z3, z) {
-                ints.push(p);
-            }
-            if let Some(p) = interpolate_edge(pa.clone(), z1, pc.clone(), z3, z) {
-                ints.push(p);
-            }
-            // Deduplicate triangle-vertex intersections.
-            let mut unique = Vec::<Coord>::new();
-            let eps = 1.0e-9;
-            for p in ints {
-                if !unique.iter().any(|u| {
-                    let dx = u.x - p.x;
-                    let dy = u.y - p.y;
-                    (dx * dx + dy * dy).sqrt() <= eps
-                }) {
-                    unique.push(p);
+                let d12 = (pa.x - pb.x).powi(2) + (pa.y - pb.y).powi(2);
+                let d23 = (pb.x - pc.x).powi(2) + (pb.y - pc.y).powi(2);
+                let d13 = (pa.x - pc.x).powi(2) + (pa.y - pc.y).powi(2);
+                if d12.max(d23.max(d13)) > max_edge2 {
+                    return Ok(local_segments);
                 }
-            }
-            if unique.len() == 2 {
-                segments.push(Segment {
-                    a: unique[0].clone(),
-                    b: unique[1].clone(),
-                    level_idx,
-                    z,
-                });
-            }
-        }
-    }
+
+                let min_z = z1.min(z2.min(z3));
+                let max_z = z1.max(z2.max(z3));
+                let Some((lower, upper)) = parse_contour_levels(min_z, max_z, interval, base) else {
+                    return Ok(local_segments);
+                };
+
+                for level_idx in lower..=upper {
+                    let z = base + level_idx as f64 * interval;
+                    let mut ints = Vec::<Coord>::new();
+                    if let Some(p) = interpolate_edge(pa.clone(), z1, pb.clone(), z2, z) {
+                        ints.push(p);
+                    }
+                    if let Some(p) = interpolate_edge(pb.clone(), z2, pc.clone(), z3, z) {
+                        ints.push(p);
+                    }
+                    if let Some(p) = interpolate_edge(pa.clone(), z1, pc.clone(), z3, z) {
+                        ints.push(p);
+                    }
+                    // Deduplicate triangle-vertex intersections.
+                    let mut unique = Vec::<Coord>::new();
+                    let eps = 1.0e-9;
+                    for p in ints {
+                        if !unique.iter().any(|u| {
+                            let dx = u.x - p.x;
+                            let dy = u.y - p.y;
+                            (dx * dx + dy * dy).sqrt() <= eps
+                        }) {
+                            unique.push(p);
+                        }
+                    }
+                    if unique.len() == 2 {
+                        local_segments.push(Segment {
+                            a: unique[0].clone(),
+                            b: unique[1].clone(),
+                            level_idx,
+                            z,
+                        });
+                    }
+                }
+
+                Ok(local_segments)
+            },
+        )
+        .try_reduce(Vec::new, |mut a, mut b| {
+            a.append(&mut b);
+            Ok(a)
+        })?;
 
     let mut lines = chain_segments(&segments, 1.0e-9);
 

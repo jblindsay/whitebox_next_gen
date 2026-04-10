@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[cfg(target_arch = "aarch64")]
+use core::arch::aarch64::*;
+#[cfg(target_arch = "x86_64")]
+use core::arch::x86_64::*;
 use rayon::prelude::*;
 use serde_json::{json, Value};
 use wbcore::{
@@ -14,6 +18,139 @@ struct UnaryRasterMathSpec {
     display_name: &'static str,
     summary: &'static str,
     op: fn(f64) -> f64,
+}
+
+const UNARY_MATH_PAR_CHUNK: usize = 16_384;
+
+impl UnaryRasterMathSpec {
+    fn simd_supported(&self) -> bool {
+        matches!(
+            self.id,
+            "abs"
+                | "square"
+                | "negate"
+                | "increment"
+                | "decrement"
+                | "reciprocal"
+                | "to_degrees"
+                | "to_radians"
+        )
+    }
+}
+
+fn compute_unary_chunk_scalar(spec: &UnaryRasterMathSpec, nodata: f64, input: &[f64], output: &mut [f64]) {
+    for i in 0..output.len() {
+        let z = input[i];
+        output[i] = if z == nodata { nodata } else { (spec.op)(z) };
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx")]
+unsafe fn compute_unary_chunk_avx(
+    spec: &UnaryRasterMathSpec,
+    nodata: f64,
+    input: &[f64],
+    output: &mut [f64],
+) {
+    let len = output.len();
+    let mut i = 0usize;
+    let nodata_v = _mm256_set1_pd(nodata);
+    let one = _mm256_set1_pd(1.0);
+    let deg = _mm256_set1_pd(180.0 / std::f64::consts::PI);
+    let rad = _mm256_set1_pd(std::f64::consts::PI / 180.0);
+    let sign_mask = _mm256_set1_pd(-0.0);
+    let zero = _mm256_set1_pd(0.0);
+
+    while i + 4 <= len {
+        let a = _mm256_loadu_pd(input.as_ptr().add(i));
+        let nodata_mask = _mm256_cmp_pd(a, nodata_v, _CMP_EQ_OQ);
+        let result = match spec.id {
+            "abs" => _mm256_andnot_pd(sign_mask, a),
+            "square" => _mm256_mul_pd(a, a),
+            "negate" => _mm256_sub_pd(zero, a),
+            "increment" => _mm256_add_pd(a, one),
+            "decrement" => _mm256_sub_pd(a, one),
+            "reciprocal" => _mm256_div_pd(one, a),
+            "to_degrees" => _mm256_mul_pd(a, deg),
+            "to_radians" => _mm256_mul_pd(a, rad),
+            _ => unreachable!(),
+        };
+        let blended = _mm256_blendv_pd(result, nodata_v, nodata_mask);
+        _mm256_storeu_pd(output.as_mut_ptr().add(i), blended);
+        i += 4;
+    }
+
+    if i < len {
+        compute_unary_chunk_scalar(spec, nodata, &input[i..], &mut output[i..]);
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+unsafe fn compute_unary_chunk_neon(
+    spec: &UnaryRasterMathSpec,
+    nodata: f64,
+    input: &[f64],
+    output: &mut [f64],
+) {
+    let len = output.len();
+    let mut i = 0usize;
+    let nodata_v = vdupq_n_f64(nodata);
+    let one = vdupq_n_f64(1.0);
+    let deg = vdupq_n_f64(180.0 / std::f64::consts::PI);
+    let rad = vdupq_n_f64(std::f64::consts::PI / 180.0);
+    let zero = vdupq_n_f64(0.0);
+
+    while i + 2 <= len {
+        let a = vld1q_f64(input.as_ptr().add(i));
+        let nodata_mask = vceqq_f64(a, nodata_v);
+        let result = match spec.id {
+            "abs" => vabsq_f64(a),
+            "square" => vmulq_f64(a, a),
+            "negate" => vsubq_f64(zero, a),
+            "increment" => vaddq_f64(a, one),
+            "decrement" => vsubq_f64(a, one),
+            "reciprocal" => vdivq_f64(one, a),
+            "to_degrees" => vmulq_f64(a, deg),
+            "to_radians" => vmulq_f64(a, rad),
+            _ => unreachable!(),
+        };
+        let blended = vbslq_f64(nodata_mask, nodata_v, result);
+        vst1q_f64(output.as_mut_ptr().add(i), blended);
+        i += 2;
+    }
+
+    if i < len {
+        compute_unary_chunk_scalar(spec, nodata, &input[i..], &mut output[i..]);
+    }
+}
+
+fn compute_unary_chunk(spec: &UnaryRasterMathSpec, nodata: f64, input: &[f64], output: &mut [f64]) {
+    if !spec.simd_supported() || nodata.is_nan() {
+        compute_unary_chunk_scalar(spec, nodata, input, output);
+        return;
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx") {
+            unsafe {
+                compute_unary_chunk_avx(spec, nodata, input, output);
+            }
+            return;
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        unsafe {
+            compute_unary_chunk_neon(spec, nodata, input, output);
+        }
+        return;
+    }
+
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    compute_unary_chunk_scalar(spec, nodata, input, output);
 }
 
 fn parse_input_output(args: &ToolArgs) -> Result<(&str, &str), ToolError> {
@@ -99,25 +236,15 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
     let mut output = input.clone();
 
     let len = output.data.len();
-    let chunk_size = 8192usize;
     let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
     let mut out_values = vec![input.nodata; len];
-
-    for (chunk_idx, (in_chunk, out_chunk)) in in_values
-        .chunks(chunk_size)
-        .zip(out_values.chunks_mut(chunk_size))
-        .enumerate()
-    {
-        out_chunk
-            .par_iter_mut()
-            .zip(in_chunk.par_iter().copied())
-            .for_each(|(dst, z)| {
-                *dst = if input.is_nodata(z) { input.nodata } else { (spec.op)(z) };
-            });
-
-        let done = ((chunk_idx + 1) * chunk_size).min(len);
-        ctx.progress.progress(done as f64 / len.max(1) as f64);
-    }
+    out_values
+        .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
+        .zip(in_values.par_chunks(UNARY_MATH_PAR_CHUNK))
+        .for_each(|(out_chunk, in_chunk)| {
+            compute_unary_chunk(spec, input.nodata, in_chunk, out_chunk);
+        });
+    ctx.progress.progress(0.75);
 
     for (i, value) in out_values.iter().enumerate() {
         output.data.set_f64(i, *value);

@@ -6059,12 +6059,18 @@ impl Tool for TrendSurfaceVectorPointsTool {
             cell_size, nodata: -32768.0, data_type: DataType::F32,
             ..Default::default()
         });
-        for row in 0..out_rows {
-            for col in 0..out_cols {
+        let fitted_values: Vec<f64> = (0..out_rows * out_cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / out_cols;
+                let col = idx % out_cols;
                 let x_val = output.col_center_x(col as isize) - x_offset;
                 let y_val = output.row_center_y(row as isize) - y_offset;
-                output.data.set_f64(row * out_cols + col, eval_poly(x_val, y_val, &coeffs, order, z_offset));
-            }
+                eval_poly(x_val, y_val, &coeffs, order, z_offset)
+            })
+            .collect();
+        for (idx, z) in fitted_values.into_iter().enumerate() {
+            output.data.set_f64(idx, z);
         }
 
         let loc = write_or_store_output(output, output_path)?;

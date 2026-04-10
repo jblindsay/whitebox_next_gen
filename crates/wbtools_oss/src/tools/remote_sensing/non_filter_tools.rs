@@ -7767,59 +7767,67 @@ impl Tool for MinDistClassificationTool {
             metadata: vec![],
         });
 
-        let labels: Vec<Option<usize>> = (0..(rows * cols_count) as usize)
+        let rows_usize = rows as usize;
+        let cols_usize = cols_count as usize;
+        let labels_by_row: Vec<Vec<Option<usize>>> = (0..rows_usize)
             .into_par_iter()
-            .map(|idx| {
-                let row = idx as isize / cols_count;
-                let col = idx as isize % cols_count;
-
+            .map(|row| {
+                let mut row_labels = vec![None; cols_usize];
                 let mut pixel = vec![0f64; num_bands];
-                for b in 0..num_bands {
-                    let z = bands[b].get(0, row, col);
-                    if bands[b].is_nodata(z) {
-                        return None;
-                    }
-                    pixel[b] = z;
-                }
+                for col in 0..cols_usize {
+                    let row_i = row as isize;
+                    let col_i = col as isize;
 
-                let mut min_dist = f64::INFINITY;
-                let mut min_class = num_classes;
-                for c in 0..num_classes {
-                    let d: f64 = pixel
-                        .iter()
-                        .enumerate()
-                        .map(|(b, &v)| (v - class_mean[c][b]).powi(2))
-                        .sum::<f64>()
-                        .sqrt();
-                    if d < min_dist {
-                        min_dist = d;
-                        min_class = c;
+                    let mut is_nodata = false;
+                    for b in 0..num_bands {
+                        let z = bands[b].get(0, row_i, col_i);
+                        if bands[b].is_nodata(z) {
+                            is_nodata = true;
+                            break;
+                        }
+                        pixel[b] = z;
                     }
-                }
+                    if is_nodata {
+                        continue;
+                    }
 
-                if min_class < num_classes {
-                    if dist_threshold.is_finite() {
-                        let std = class_stddev[min_class];
-                        let zscore = if std > 0.0 {
-                            (min_dist - class_mean_dist[min_class]) / std
-                        } else {
-                            0.0
-                        };
-                        if zscore >= dist_threshold {
-                            return None;
+                    let mut min_dist = f64::INFINITY;
+                    let mut min_class = num_classes;
+                    for c in 0..num_classes {
+                        let d: f64 = pixel
+                            .iter()
+                            .enumerate()
+                            .map(|(b, &v)| (v - class_mean[c][b]).powi(2))
+                            .sum::<f64>()
+                            .sqrt();
+                        if d < min_dist {
+                            min_dist = d;
+                            min_class = c;
                         }
                     }
-                    Some(min_class)
-                } else {
-                    None
+
+                    if min_class < num_classes {
+                        if dist_threshold.is_finite() {
+                            let std = class_stddev[min_class];
+                            let zscore = if std > 0.0 {
+                                (min_dist - class_mean_dist[min_class]) / std
+                            } else {
+                                0.0
+                            };
+                            if zscore >= dist_threshold {
+                                continue;
+                            }
+                        }
+                        row_labels[col] = Some(min_class);
+                    }
                 }
+                row_labels
             })
             .collect();
 
         for row in 0..rows {
-            let base = (row * cols_count) as usize;
             for col in 0..cols_count {
-                if let Some(class_idx) = labels[base + col as usize] {
+                if let Some(class_idx) = labels_by_row[row as usize][col as usize] {
                     let _ = output.set(0, row, col, (class_idx + 1) as f64);
                 }
             }
@@ -7969,41 +7977,51 @@ impl Tool for ParallelepipedClassificationTool {
             metadata: vec![],
         });
 
-        let labels: Vec<Option<usize>> = (0..(rows * cols_count) as usize)
+        let rows_usize = rows as usize;
+        let cols_usize = cols_count as usize;
+        let labels_by_row: Vec<Vec<Option<usize>>> = (0..rows_usize)
             .into_par_iter()
-            .map(|idx| {
-                let row = idx as isize / cols_count;
-                let col = idx as isize % cols_count;
-
+            .map(|row| {
+                let mut row_labels = vec![None; cols_usize];
                 let mut pixel = vec![0f64; num_bands];
-                for b in 0..num_bands {
-                    let z = bands[b].get(0, row, col);
-                    if bands[b].is_nodata(z) {
-                        return None;
-                    }
-                    pixel[b] = z;
-                }
+                for col in 0..cols_usize {
+                    let row_i = row as isize;
+                    let col_i = col as isize;
 
-                for &(c, _) in &class_index {
-                    let mut inside = true;
+                    let mut is_nodata = false;
                     for b in 0..num_bands {
-                        if pixel[b] < class_min[c][b] || pixel[b] > class_max[c][b] {
-                            inside = false;
+                        let z = bands[b].get(0, row_i, col_i);
+                        if bands[b].is_nodata(z) {
+                            is_nodata = true;
+                            break;
+                        }
+                        pixel[b] = z;
+                    }
+                    if is_nodata {
+                        continue;
+                    }
+
+                    for &(c, _) in &class_index {
+                        let mut inside = true;
+                        for b in 0..num_bands {
+                            if pixel[b] < class_min[c][b] || pixel[b] > class_max[c][b] {
+                                inside = false;
+                                break;
+                            }
+                        }
+                        if inside {
+                            row_labels[col] = Some(c);
                             break;
                         }
                     }
-                    if inside {
-                        return Some(c);
-                    }
                 }
-                None
+                row_labels
             })
             .collect();
 
         for row in 0..rows {
-            let base = (row * cols_count) as usize;
             for col in 0..cols_count {
-                if let Some(class_idx) = labels[base + col as usize] {
+                if let Some(class_idx) = labels_by_row[row as usize][col as usize] {
                     let _ = output.set(0, row, col, (class_idx + 1) as f64);
                 }
             }

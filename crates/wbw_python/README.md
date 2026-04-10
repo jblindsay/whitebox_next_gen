@@ -228,11 +228,33 @@ wbe.write_lidar(norms, 'survey_normals.las')
 Long-running tools can report progress via a callback function:
 
 ```python
-def progress_callback(progress):
-    """Invoked by the tool as it advances."""
-    print(f'Progress: {progress.percent}% - {progress.message}')
+filled = wbe.hydrology.fill_depressions(
+  input_dem=dem.file_path,
+  callback=wb.callbacks.print_progress,
+)
+```
 
-filled = wbe.hydrology.fill_depressions(input_dem=dem.file_path, callback=progress_callback)
+You can also import the root-level alias:
+
+```python
+filled = wbe.hydrology.fill_depressions(
+  input_dem=dem.file_path,
+  callback=wb.print_progress,
+)
+```
+
+For custom verbosity, use the callback factory:
+
+```python
+progress_cb = wb.callbacks.make_progress_printer(
+  min_increment=5,
+  show_messages=True,
+)
+
+filled = wbe.hydrology.fill_depressions(
+  input_dem=dem.file_path,
+  callback=progress_cb,
+)
 ```
 
 You can also wrap progress in a more structured way (e.g., with a progress bar):

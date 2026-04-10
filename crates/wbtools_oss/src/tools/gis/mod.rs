@@ -14572,12 +14572,15 @@ impl Tool for FindPatchEdgeCellsTool {
         }
 
         for b in 0..bands {
-            for row in 0..rows {
-                for col in 0..cols {
-                    let idx = b * stride + row * cols + col;
+            let band_vals: Vec<f64> = (0..stride)
+                .into_par_iter()
+                .map(|cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let idx = b * stride + cell_idx;
                     let z = input.data.get_f64(idx);
                     if !is_patch_value(z, nodata) {
-                        continue;
+                        return nodata;
                     }
                     let mut is_edge = false;
                     for n in 0..8 {
@@ -14594,8 +14597,11 @@ impl Tool for FindPatchEdgeCellsTool {
                             break;
                         }
                     }
-                    output.data.set_f64(idx, if is_edge { z } else { 0.0 });
-                }
+                    if is_edge { z } else { 0.0 }
+                })
+                .collect();
+            for (cell_idx, value) in band_vals.iter().enumerate() {
+                output.data.set_f64(b * stride + cell_idx, *value);
             }
             ctx.progress.progress((b + 1) as f64 / bands.max(1) as f64);
         }
@@ -14707,16 +14713,24 @@ impl Tool for EdgeProportionTool {
         for idx in 0..output.data.len() {
             output.data.set_f64(idx, nodata);
         }
-        for row in 0..rows {
-            for col in 0..cols {
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
                 let z = input.get(0, row as isize, col as isize);
                 if !is_patch_value(z, nodata) {
-                    continue;
+                    return nodata;
                 }
-                if let Some(bin) = patch_bin_index(z, min_val, bins) {
-                    let idx = output.index(0, row as isize, col as isize).ok_or_else(|| ToolError::Execution("index out of bounds".to_string()))?;
-                    output.data.set_f64(idx, edge_prop[bin]);
-                }
+                patch_bin_index(z, min_val, bins)
+                    .map(|bin| edge_prop[bin])
+                    .unwrap_or(nodata)
+            })
+            .collect();
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
             ctx.progress.progress(0.5 + (row + 1) as f64 / rows.max(1) as f64 * 0.5);
         }

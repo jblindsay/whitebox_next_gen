@@ -4,8 +4,9 @@ use std::path::Path;
 use rayon::prelude::*;
 use serde_json::{json, Value};
 use wbcore::{
-    LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest,
-    ToolMetadata, ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
+    LicenseTier, PercentCoalescer, Tool, ToolArgs, ToolCategory, ToolContext, ToolError,
+    ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec, ToolRunResult,
+    ToolStability,
 };
 use wbraster::{memory_store, Raster, RasterFormat};
 
@@ -17,6 +18,7 @@ struct UnaryRasterMathSpec {
 }
 
 const UNARY_MATH_PAR_CHUNK: usize = 16_384;
+const UNARY_MATH_PROGRESS_BATCH_CHUNKS: usize = 64;
 
 fn parse_input(args: &ToolArgs) -> Result<&str, ToolError> {
     let input = args
@@ -144,22 +146,37 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
     let len = output.data.len();
     let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
     let mut out_values = vec![input.nodata; len];
-    out_values
-        .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
-        .zip(in_values.par_chunks(UNARY_MATH_PAR_CHUNK))
-        .for_each(|(out_chunk, in_chunk)| {
-            for i in 0..out_chunk.len() {
-                let z = in_chunk[i];
-                out_chunk[i] = if input.is_nodata(z) { input.nodata } else { (spec.op)(z) };
-            }
-        });
-    ctx.progress.progress(0.75);
+    let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
+    let compute_progress = PercentCoalescer::new(1, 75);
+    let mut completed_chunks = 0usize;
+
+    while completed_chunks < total_chunks {
+        let batch_chunks = (total_chunks - completed_chunks).min(UNARY_MATH_PROGRESS_BATCH_CHUNKS);
+        let batch_start = completed_chunks * UNARY_MATH_PAR_CHUNK;
+        let batch_end = (batch_start + batch_chunks * UNARY_MATH_PAR_CHUNK).min(len);
+
+        out_values[batch_start..batch_end]
+            .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
+            .zip(in_values[batch_start..batch_end].par_chunks(UNARY_MATH_PAR_CHUNK))
+            .for_each(|(out_chunk, in_chunk)| {
+                for i in 0..out_chunk.len() {
+                    let z = in_chunk[i];
+                    out_chunk[i] = if input.is_nodata(z) { input.nodata } else { (spec.op)(z) };
+                }
+            });
+
+        completed_chunks += batch_chunks;
+        compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
+    }
+    compute_progress.finish(ctx.progress);
 
     for (i, value) in out_values.iter().enumerate() {
         output.data.set_f64(i, *value);
     }
+    ctx.progress.progress(0.9);
 
     let output_locator = write_or_store_output(output, output_path)?;
+    ctx.progress.progress(1.0);
 
     let mut outputs = BTreeMap::new();
     outputs.insert("path".to_string(), json!(output_locator.clone()));
@@ -338,5 +355,135 @@ impl Tool for RasterIsNodataTool {
         );
         outputs.insert("cells_processed".to_string(), json!(len));
         Ok(ToolRunResult { outputs })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use wbcore::{CapabilityProvider, ProgressSink};
+    use wbraster::{DataType, RasterConfig};
+
+    struct AllowAll;
+
+    impl CapabilityProvider for AllowAll {
+        fn has_tool_access(&self, _tool_id: &'static str, _tier: LicenseTier) -> bool {
+            true
+        }
+    }
+
+    struct RecordingProgress {
+        percents: Mutex<Vec<f64>>,
+    }
+
+    impl RecordingProgress {
+        fn new() -> Self {
+            Self {
+                percents: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn percents(&self) -> Vec<f64> {
+            self.percents.lock().unwrap().clone()
+        }
+    }
+
+    impl ProgressSink for RecordingProgress {
+        fn progress(&self, pct: f64) {
+            self.percents.lock().unwrap().push(pct);
+        }
+    }
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            let path = std::env::temp_dir().join(format!(
+                "wbtools_oss_unary_{}_{}_{}",
+                prefix,
+                std::process::id(),
+                nanos
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn write_test_raster(path: &str, rows: usize, cols: usize) {
+        let mut r = Raster::new(RasterConfig {
+            cols,
+            rows,
+            bands: 1,
+            x_min: 0.0,
+            y_min: 0.0,
+            cell_size: 1.0,
+            nodata: -9999.0,
+            data_type: DataType::F32,
+            ..Default::default()
+        });
+
+        for row in 0..rows {
+            for col in 0..cols {
+                let value = if (row + col) % 17 == 0 {
+                    -1.0
+                } else {
+                    (row * cols + col) as f64
+                };
+                r.set(0, row as isize, col as isize, value).unwrap();
+            }
+        }
+
+        r.write(path, RasterFormat::GeoTiff).unwrap();
+    }
+
+    #[test]
+    fn abs_progress_is_monotonic_and_bounded() {
+        let td = TempDirGuard::new("abs_progress");
+        let input = td.path().join("input.tif");
+        write_test_raster(input.to_str().unwrap(), 1024, 1024);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(input));
+
+        let caps = AllowAll;
+        let progress = RecordingProgress::new();
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let tool = RasterAbsTool;
+        let _ = tool.run(&args, &ctx).expect("abs should run");
+
+        let percents = progress.percents();
+        assert!(!percents.is_empty(), "expected at least one progress event");
+        assert!(percents.len() <= 101, "progress events should be bounded to percent buckets");
+
+        for window in percents.windows(2) {
+            assert!(window[1] >= window[0], "progress should be monotonic non-decreasing");
+        }
+
+        let final_pct = *percents.last().unwrap();
+        assert!((final_pct - 1.0).abs() < 1e-9, "final progress should be 100%");
     }
 }

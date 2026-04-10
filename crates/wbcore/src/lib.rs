@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 pub mod tool_args_ext;
@@ -72,6 +73,60 @@ pub trait CapabilityProvider: Send + Sync {
 pub trait ProgressSink: Send + Sync {
     fn info(&self, _msg: &str) {}
     fn progress(&self, _pct: f64) {}
+}
+
+/// Coalesces progress into integer-percent buckets and emits each bucket at most once.
+///
+/// This is designed for parallel loops: workers can call `emit_unit_fraction` frequently,
+/// while actual callback emissions remain bounded and monotonic.
+pub struct PercentCoalescer {
+    min_bucket: usize,
+    max_bucket: usize,
+    next_bucket: AtomicUsize,
+}
+
+impl PercentCoalescer {
+    pub fn new(min_bucket: usize, max_bucket: usize) -> Self {
+        assert!(min_bucket <= max_bucket, "min_bucket must be <= max_bucket");
+        assert!(max_bucket <= 100, "max_bucket must be <= 100");
+        Self {
+            min_bucket,
+            max_bucket,
+            next_bucket: AtomicUsize::new(min_bucket),
+        }
+    }
+
+    pub fn emit_unit_fraction(&self, sink: &dyn ProgressSink, fraction01: f64) {
+        let clamped = fraction01.clamp(0.0, 1.0);
+        let span = self.max_bucket.saturating_sub(self.min_bucket);
+        let target = self.min_bucket + ((clamped * span as f64).floor() as usize);
+        self.emit_to_bucket(sink, target);
+    }
+
+    pub fn finish(&self, sink: &dyn ProgressSink) {
+        self.emit_to_bucket(sink, self.max_bucket);
+    }
+
+    fn emit_to_bucket(&self, sink: &dyn ProgressSink, mut target: usize) {
+        if target > self.max_bucket {
+            target = self.max_bucket;
+        }
+
+        loop {
+            let next = self.next_bucket.load(Ordering::Relaxed);
+            if next > target || next > self.max_bucket {
+                break;
+            }
+
+            if self
+                .next_bucket
+                .compare_exchange(next, next + 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                sink.progress((next as f64) / 100.0);
+            }
+        }
+    }
 }
 
 pub struct ToolContext<'a> {
@@ -709,5 +764,27 @@ mod tests {
         let r = generate_wrapper_stub(&manifest, BindingTarget::R);
         assert!(py.starts_with("def demo_add"));
         assert!(r.starts_with("demo_add <- function"));
+    }
+
+    #[test]
+    fn percent_coalescer_emits_each_bucket_once() {
+        let sink = RecordingProgressSink::new();
+        let c = PercentCoalescer::new(1, 5);
+
+        c.emit_unit_fraction(&sink, 0.0);
+        c.emit_unit_fraction(&sink, 0.4);
+        c.emit_unit_fraction(&sink, 1.0);
+        c.finish(&sink);
+
+        let events = sink.take_events();
+        let percents: Vec<f64> = events
+            .into_iter()
+            .filter_map(|e| match e {
+                ProgressEvent::Percent(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(percents, vec![0.01, 0.02, 0.03, 0.04, 0.05]);
     }
 }

@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
-    ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
-    ToolParamSpec, ToolRunResult, ToolStability,
+    parse_optional_output_path, parse_raster_path_arg, LicenseTier, PercentCoalescer, Tool,
+    ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
+    ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
 use wbraster::{Raster, RasterFormat};
 
@@ -15,6 +15,8 @@ pub struct MedianFilterTool;
 pub struct PercentileFilterTool;
 pub struct MajorityFilterTool;
 pub struct DiversityFilterTool;
+
+const RANK_FILTER_PAR_ROW_BATCH: usize = 64;
 
 #[derive(Clone, Copy)]
 enum RankOp {
@@ -275,127 +277,143 @@ impl MedianFilterTool {
         let half_x = (filter_x / 2) as isize;
         let half_y = (filter_y / 2) as isize;
 
+        let total_rows = (rows * bands).max(1);
+        let mut done_rows = 0usize;
+        let compute_progress = PercentCoalescer::new(1, 90);
+
         for band_idx in 0..bands {
             let band = band_idx as isize;
 
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    let mut bins = Vec::<i64>::with_capacity(filter_x * filter_y);
+            let mut row_start = 0usize;
+            while row_start < rows {
+                let row_end = (row_start + RANK_FILTER_PAR_ROW_BATCH).min(rows);
+                let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        let mut bins = Vec::<i64>::with_capacity(filter_x * filter_y);
 
-                    for c in 0..cols {
-                        let center = input.get(band, r as isize, c as isize);
-                        if input.is_nodata(center) {
-                            continue;
-                        }
+                        for c in 0..cols {
+                            let center = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(center) {
+                                continue;
+                            }
 
-                        bins.clear();
-                        let center_bin_rank = if matches!(op, RankOp::Percentile) {
-                            Some((center * multiplier_rank).floor() as i64)
-                        } else {
-                            None
-                        };
-                        let mut count = 0usize;
-                        let mut n_less = 0usize;
+                            bins.clear();
+                            let center_bin_rank = if matches!(op, RankOp::Percentile) {
+                                Some((center * multiplier_rank).floor() as i64)
+                            } else {
+                                None
+                            };
+                            let mut count = 0usize;
+                            let mut n_less = 0usize;
 
-                        for ny in (r as isize - half_y)..=(r as isize + half_y) {
-                            for nx in (c as isize - half_x)..=(c as isize + half_x) {
-                                let z = input.get(band, ny, nx);
-                                if input.is_nodata(z) {
-                                    continue;
-                                }
-                                match op {
-                                    RankOp::Median => {
-                                        bins.push((z * multiplier_rank).floor() as i64);
+                            for ny in (r as isize - half_y)..=(r as isize + half_y) {
+                                for nx in (c as isize - half_x)..=(c as isize + half_x) {
+                                    let z = input.get(band, ny, nx);
+                                    if input.is_nodata(z) {
+                                        continue;
                                     }
-                                    RankOp::Percentile => {
-                                        let q = (z * multiplier_rank).floor() as i64;
-                                        if q < center_bin_rank.unwrap() {
-                                            n_less += 1;
+                                    match op {
+                                        RankOp::Median => {
+                                            bins.push((z * multiplier_rank).floor() as i64);
                                         }
-                                        count += 1;
-                                    }
-                                    RankOp::Majority => {
-                                        bins.push((z * 100.0).floor() as i64);
-                                    }
-                                    RankOp::Diversity => {
-                                        bins.push((z * 1000.0).floor() as i64);
-                                    }
-                                }
-                            }
-                        }
-
-                        if (matches!(op, RankOp::Percentile) && count == 0)
-                            || (!matches!(op, RankOp::Percentile) && bins.is_empty())
-                        {
-                            row_out[c] = 0.0;
-                            continue;
-                        }
-
-                        row_out[c] = match op {
-                            RankOp::Median => {
-                                bins.sort_unstable();
-                                bins[bins.len() / 2] as f64 / multiplier_rank
-                            }
-                            RankOp::Percentile => {
-                                n_less as f64 / count as f64 * 100.0
-                            }
-                            RankOp::Majority => {
-                                bins.sort_unstable();
-                                let mut mode_bin = bins[0];
-                                let mut mode_freq = 1usize;
-                                let mut run_bin = bins[0];
-                                let mut run_freq = 1usize;
-
-                                for &bin in bins.iter().skip(1) {
-                                    if bin == run_bin {
-                                        run_freq += 1;
-                                    } else {
-                                        if run_freq > mode_freq {
-                                            mode_freq = run_freq;
-                                            mode_bin = run_bin;
+                                        RankOp::Percentile => {
+                                            let q = (z * multiplier_rank).floor() as i64;
+                                            if q < center_bin_rank.unwrap() {
+                                                n_less += 1;
+                                            }
+                                            count += 1;
                                         }
-                                        run_bin = bin;
-                                        run_freq = 1;
+                                        RankOp::Majority => {
+                                            bins.push((z * 100.0).floor() as i64);
+                                        }
+                                        RankOp::Diversity => {
+                                            bins.push((z * 1000.0).floor() as i64);
+                                        }
                                     }
                                 }
-
-                                if run_freq > mode_freq {
-                                    mode_bin = run_bin;
-                                }
-
-                                mode_bin as f64 / 100.0
                             }
-                            RankOp::Diversity => {
-                                bins.sort_unstable();
-                                let mut unique = 1usize;
-                                let mut prev = bins[0];
-                                for &bin in bins.iter().skip(1) {
-                                    if bin != prev {
-                                        unique += 1;
-                                        prev = bin;
+
+                            if (matches!(op, RankOp::Percentile) && count == 0)
+                                || (!matches!(op, RankOp::Percentile) && bins.is_empty())
+                            {
+                                row_out[c] = 0.0;
+                                continue;
+                            }
+
+                            row_out[c] = match op {
+                                RankOp::Median => {
+                                    bins.sort_unstable();
+                                    bins[bins.len() / 2] as f64 / multiplier_rank
+                                }
+                                RankOp::Percentile => {
+                                    n_less as f64 / count as f64 * 100.0
+                                }
+                                RankOp::Majority => {
+                                    bins.sort_unstable();
+                                    let mut mode_bin = bins[0];
+                                    let mut mode_freq = 1usize;
+                                    let mut run_bin = bins[0];
+                                    let mut run_freq = 1usize;
+
+                                    for &bin in bins.iter().skip(1) {
+                                        if bin == run_bin {
+                                            run_freq += 1;
+                                        } else {
+                                            if run_freq > mode_freq {
+                                                mode_freq = run_freq;
+                                                mode_bin = run_bin;
+                                            }
+                                            run_bin = bin;
+                                            run_freq = 1;
+                                        }
                                     }
+
+                                    if run_freq > mode_freq {
+                                        mode_bin = run_bin;
+                                    }
+
+                                    mode_bin as f64 / 100.0
                                 }
-                                unique as f64
-                            }
-                        };
-                    }
+                                RankOp::Diversity => {
+                                    bins.sort_unstable();
+                                    let mut unique = 1usize;
+                                    let mut prev = bins[0];
+                                    for &bin in bins.iter().skip(1) {
+                                        if bin != prev {
+                                            unique += 1;
+                                            prev = bin;
+                                        }
+                                    }
+                                    unique as f64
+                                }
+                            };
+                        }
 
-                    row_out
-                })
-                .collect();
+                        (r, row_out)
+                    })
+                    .collect();
 
-            for (r, row) in row_data.iter().enumerate() {
-                output
-                    .set_row_slice(band, r as isize, row)
-                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                for (r, row) in row_data {
+                    output
+                        .set_row_slice(band, r as isize, &row)
+                        .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                    done_rows += 1;
+                    compute_progress.emit_unit_fraction(
+                        ctx.progress,
+                        done_rows as f64 / total_rows as f64,
+                    );
+                }
+
+                row_start = row_end;
             }
-
-            ctx.progress.progress((band_idx + 1) as f64 / bands as f64);
         }
 
+        compute_progress.finish(ctx.progress);
+
         let output_locator = Self::write_or_store_output(output, output_path)?;
+        ctx.progress.progress(1.0);
         let mut outputs = BTreeMap::new();
         outputs.insert("__wbw_type__".to_string(), json!("raster"));
         outputs.insert("path".to_string(), json!(output_locator));
@@ -438,11 +456,34 @@ define_rank_tool!(DiversityFilterTool, RankOp::Diversity);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use wbcore::{AllowAllCapabilities, ProgressSink, ToolContext};
     use wbraster::RasterConfig;
 
     struct NoopProgress;
     impl ProgressSink for NoopProgress {}
+
+    struct RecordingProgress {
+        percents: Mutex<Vec<f64>>,
+    }
+
+    impl RecordingProgress {
+        fn new() -> Self {
+            Self {
+                percents: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn percents(&self) -> Vec<f64> {
+            self.percents.lock().unwrap().clone()
+        }
+    }
+
+    impl ProgressSink for RecordingProgress {
+        fn progress(&self, pct: f64) {
+            self.percents.lock().unwrap().push(pct);
+        }
+    }
 
     fn make_ctx() -> ToolContext<'static> {
         static PROGRESS: NoopProgress = NoopProgress;
@@ -504,5 +545,40 @@ mod tests {
         let div = run_with_memory(&DiversityFilterTool, &mut args, make_constant_raster(20, 20, 5.0));
         assert!(pct.get(0, 10, 10).abs() < 1e-9);
         assert!((div.get(0, 10, 10) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn median_filter_progress_is_monotonic_bounded_and_completes() {
+        let input = make_constant_raster(1024, 1024, 7.0);
+        let input_id = memory_store::put_raster(input);
+        let mut args = ToolArgs::new();
+        args.insert(
+            "input".to_string(),
+            json!(memory_store::make_raster_memory_path(&input_id)),
+        );
+        args.insert("filter_size_x".to_string(), json!(11));
+        args.insert("filter_size_y".to_string(), json!(11));
+        args.insert("sig_digits".to_string(), json!(2));
+
+        let caps = AllowAllCapabilities;
+        let progress = RecordingProgress::new();
+        let ctx = ToolContext {
+            progress: &progress,
+            capabilities: &caps,
+        };
+
+        let tool = MedianFilterTool;
+        let _ = tool.run(&args, &ctx).expect("median filter should run");
+
+        let percents = progress.percents();
+        assert!(!percents.is_empty(), "expected progress events");
+        assert!(percents.len() <= 101, "progress events should be bounded to percent buckets");
+
+        for w in percents.windows(2) {
+            assert!(w[1] >= w[0], "progress should be monotonic non-decreasing");
+        }
+
+        let final_pct = *percents.last().unwrap();
+        assert!((final_pct - 1.0).abs() < 1e-9, "final progress should be 100%");
     }
 }

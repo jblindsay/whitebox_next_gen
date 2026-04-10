@@ -7816,14 +7816,15 @@ impl Tool for MinDistClassificationTool {
             })
             .collect();
 
-        for (idx, class_opt) in labels.into_iter().enumerate() {
-            if let Some(class_idx) = class_opt {
-                let row = idx as isize / cols_count;
-                let col = idx as isize % cols_count;
-                let _ = output.set(0, row, col, (class_idx + 1) as f64);
+        for row in 0..rows {
+            let base = (row * cols_count) as usize;
+            for col in 0..cols_count {
+                if let Some(class_idx) = labels[base + col as usize] {
+                    let _ = output.set(0, row, col, (class_idx + 1) as f64);
+                }
             }
-            if idx % ((cols_count as usize) * 100).max(cols_count as usize) == 0 {
-                ctx.progress.progress(0.15 + 0.80 * (idx as f64 / (rows * cols_count) as f64));
+            if row % 100 == 0 {
+                ctx.progress.progress(0.15 + 0.80 * (row as f64 / rows as f64));
             }
         }
 
@@ -7968,18 +7969,21 @@ impl Tool for ParallelepipedClassificationTool {
             metadata: vec![],
         });
 
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let mut is_nodata = false;
+        let labels: Vec<Option<usize>> = (0..(rows * cols_count) as usize)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx as isize / cols_count;
+                let col = idx as isize % cols_count;
+
                 let mut pixel = vec![0f64; num_bands];
                 for b in 0..num_bands {
                     let z = bands[b].get(0, row, col);
-                    if bands[b].is_nodata(z) { is_nodata = true; break; }
+                    if bands[b].is_nodata(z) {
+                        return None;
+                    }
                     pixel[b] = z;
                 }
-                if is_nodata { continue; }
 
-                // Assign to the first (smallest-volume) class whose box contains the pixel.
                 for &(c, _) in &class_index {
                     let mut inside = true;
                     for b in 0..num_bands {
@@ -7989,9 +7993,18 @@ impl Tool for ParallelepipedClassificationTool {
                         }
                     }
                     if inside {
-                        let _ = output.set(0, row, col, (c + 1) as f64);
-                        break;
+                        return Some(c);
                     }
+                }
+                None
+            })
+            .collect();
+
+        for row in 0..rows {
+            let base = (row * cols_count) as usize;
+            for col in 0..cols_count {
+                if let Some(class_idx) = labels[base + col as usize] {
+                    let _ = output.set(0, row, col, (class_idx + 1) as f64);
                 }
             }
             if row % 100 == 0 {

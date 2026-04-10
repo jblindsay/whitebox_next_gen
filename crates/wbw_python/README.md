@@ -181,11 +181,11 @@ green = s2.read_band('B03')
 blue = s2.read_band('B02')
 
 # Build and persist composites using the bundle-aware helpers
-rgb = wbe.true_colour_composite(s2.bundle_root, output_path='sentinel2_rgb.tif')
-nir = wbe.false_colour_composite(s2.bundle_root, output_path='sentinel2_nir.tif')
+rgb = wbe.true_colour_composite(s2.bundle_root, output='sentinel2_rgb.tif')
+nir = wbe.false_colour_composite(s2.bundle_root, output='sentinel2_nir.tif')
 
 # Or use the Bundle convenience delegates (same result)
-rgb = s2.true_colour_composite(wbe, output_path='sentinel2_rgb.tif')
+rgb = s2.true_colour_composite(wbe, output='sentinel2_rgb.tif')
 ```
 
 For a broader multi-family example, see [examples/sensor_bundle_overview.py](examples/sensor_bundle_overview.py).
@@ -232,7 +232,7 @@ def progress_callback(progress):
     """Invoked by the tool as it advances."""
     print(f'Progress: {progress.percent}% - {progress.message}')
 
-filled = wbe.hydrology.fill_depressions(dem, progress_callback=progress_callback)
+filled = wbe.hydrology.fill_depressions(input_dem=dem.file_path, callback=progress_callback)
 ```
 
 You can also wrap progress in a more structured way (e.g., with a progress bar):
@@ -252,7 +252,7 @@ class ProgressTracker:
             self.pbar.close()
 
 tracker = ProgressTracker()
-result = wbe.hydrology.fill_depressions(dem, progress_callback=tracker)
+result = wbe.hydrology.fill_depressions(input_dem=dem.file_path, callback=tracker)
 ```
 
 ## Memory-first execution model

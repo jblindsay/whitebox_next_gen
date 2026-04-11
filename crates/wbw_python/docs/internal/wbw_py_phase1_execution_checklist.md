@@ -4,7 +4,7 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## 1) API Idiom Consolidation
 
-- [ ] Publish canonical API style guide for preferred naming and patterns.
+- [x] Publish canonical API style guide for preferred naming and patterns.
 - [x] Document preferred metadata method usage (`metadata()` over legacy aliases).
 - [x] Build compatibility alias inventory (preferred / compatibility / deprecate-later).
 - [x] Remove highest-confusion redundant aliases while pre-release.
@@ -35,7 +35,7 @@ This is a compact implementation checklist derived from the broader usability an
 
 - [x] Add a WbW-R parity decision note to each substantial WbW-Py API change.
 - [x] Maintain a parity ledger (`parallel now`, `parallel later`, `Python-only`).
-- [ ] Prioritize parallelization for naming/discovery/workflow convention changes.
+- [x] Prioritize parallelization for naming/discovery/workflow convention changes.
 
 ## Near-Term Milestones
 
@@ -47,7 +47,7 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## Milestone B
 
-- [ ] Complete canonical style guide and compatibility inventory.
+- [x] Complete canonical style guide and compatibility inventory.
 - [x] Add intent-based discovery sections.
 - [x] Add first round of interop behavior documentation.
 - [x] Complete initial WbW-R parity ledger for Phase 1/2 changes.

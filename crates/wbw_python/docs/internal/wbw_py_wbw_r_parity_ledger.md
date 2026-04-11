@@ -44,3 +44,23 @@ Status values:
 - WbW-R parity: `parallel now`.
 - Rationale: shared conceptual documentation structure will reduce cross-language confusion and support a unified manual-generation workflow.
 - Proposed WbW-R action: add an R-facing interoperability matrix with equivalent bridge categories and preservation/drift semantics.
+
+## Priority Focus (Naming/Discovery/Workflow)
+
+This section explicitly prioritizes cross-language alignment categories.
+
+1. Naming conventions: `parallel now`
+- Priority: High
+- Scope: metadata accessor names and vector attribute read/write method families.
+
+2. Discovery conventions: `parallel now`
+- Priority: High
+- Scope: category/namespace discoverability structure and top-level docs/stub guidance.
+
+3. Workflow conventions: `parallel now`
+- Priority: Medium-High
+- Scope: object-first recommended patterns and interoperability copy-boundary guidance.
+
+4. Category alias removals: `parallel later`
+- Priority: Medium
+- Scope: final cleanup of category alias surfaces where language ergonomics differ.

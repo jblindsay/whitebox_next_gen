@@ -20,6 +20,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added an interoperability round-trip smoke test script with optional dependency
   gating for NumPy, Rasterio, GeoPandas/Shapely, and pyproj pathways:
   - `examples/interop_roundtrip_smoke_test.py`
+- Added an internal canonical API style guide for preferred naming patterns,
+  namespace usage, and cross-language parity process:
+  - `docs/internal/wbw_py_canonical_api_style_guide.md`
 
 ### Changed
 - Started Phase 1 documentation cleanup by adding a "Preferred API conventions" section to `README.md`.
@@ -38,3 +41,4 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a README interoperability behavior matrix and copy-vs-view guidance to support
   future user-manual generation from README source content.
 - Added README run guidance for the new interoperability smoke test and its optional dependencies.
+- Expanded the WbW-Py/WbW-R parity ledger with an explicit priority focus section for naming, discovery, and workflow convention alignment.

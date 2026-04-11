@@ -19,6 +19,8 @@ The API is in active modernization, with emphasis on:
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by data type](#quick-start-examples-by-data-type)
 - [Raster output controls](#raster-output-controls)
+- [Vector output controls](#vector-output-controls)
+- [Lidar output controls](#lidar-output-controls)
 - [Memory-first execution model](#memory-first-execution-model)
 - [Reprojection patterns](#reprojection-patterns)
 - [NumPy interoperability](#numpy-interoperability)
@@ -343,6 +345,63 @@ wbe.write_vector(buffered, 'roads_buffer.shp')
 wbe.write_vector(buffered, 'roads_buffer')  # writes roads_buffer.gpkg
 ```
 
+## Vector output controls
+
+`WbEnvironment.write_vector(...)`, `WbEnvironment.read_vector(...)`, and
+`WbEnvironment.read_vectors(...)` accept optional `options` dictionaries.
+
+Supported keys:
+
+- `strict_format_options` (`True`/`False`): when `True`, using format-specific
+  vector options on non-matching formats raises an error.
+- `geoparquet` (dict): GeoParquet write controls.
+  - `compression`: `none`, `snappy`, `gzip`, `lz4`, `zstd`, `brotli`
+  - `max_rows_per_group`
+  - `data_page_size_limit`
+  - `write_batch_size`
+  - `data_page_row_count_limit`
+- `osmpbf` (dict): OSM PBF read controls.
+  - `highways_only` (`True`/`False`)
+  - `named_ways_only` (`True`/`False`)
+  - `polygons_only` (`True`/`False`)
+  - `include_tag_keys` (list of strings)
+
+Notes:
+
+- GeoParquet options are applied only when writing `.parquet` outputs.
+- OSM PBF options are applied only when reading `.osm.pbf` inputs.
+- When `strict_format_options=False`, non-applicable vector options are ignored.
+
+### Common vector option profiles
+
+```python
+# 1) GeoParquet write with explicit compression/row-group controls
+wbe.write_vector(
+  roads,
+  'roads.parquet',
+  options={
+    'strict_format_options': True,
+    'geoparquet': {
+      'compression': 'zstd',
+      'max_rows_per_group': 250000,
+      'write_batch_size': 8192,
+    },
+  },
+)
+
+# 2) OSM PBF read with filtering controls
+roads_from_osm = wbe.read_vector(
+  'region.osm.pbf',
+  options={
+    'osmpbf': {
+      'highways_only': True,
+      'named_ways_only': True,
+      'include_tag_keys': ['name', 'highway', 'maxspeed'],
+    },
+  },
+)
+```
+
 ### Lidar
 
 ```python
@@ -380,6 +439,55 @@ wbe.write_lidar(
     'laz': {
       'chunk_size': 25000,
       'compression_level': 7,
+    },
+  },
+)
+```
+
+## Lidar output controls
+
+`WbEnvironment.write_lidar(...)` accepts optional `options` dictionaries.
+
+Supported keys:
+
+- `laz` (dict): LAZ write controls.
+  - `chunk_size` (positive integer)
+  - `compression_level` (`0`-`9`)
+- `copc` (dict): COPC write controls.
+  - `max_points_per_node` (positive integer)
+  - `max_depth` (positive integer)
+  - `node_point_ordering`: `auto`, `morton`, `hilbert`
+
+Notes:
+
+- LAZ options are applied when writing `.laz` outputs.
+- COPC options are applied when writing `.copc.laz` outputs.
+- Non-applicable lidar options are ignored for other output formats.
+
+### Common lidar option profiles
+
+```python
+# 1) LAZ write with tuned compression/chunking
+wbe.write_lidar(
+  norms,
+  'survey_normals.laz',
+  options={
+    'laz': {
+      'chunk_size': 25000,
+      'compression_level': 7,
+    },
+  },
+)
+
+# 2) COPC write with octree controls
+wbe.write_lidar(
+  norms,
+  'survey_normals.copc.laz',
+  options={
+    'copc': {
+      'max_points_per_node': 75000,
+      'max_depth': 8,
+      'node_point_ordering': 'hilbert',
     },
   },
 )

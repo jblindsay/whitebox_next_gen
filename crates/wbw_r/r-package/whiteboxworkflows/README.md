@@ -19,6 +19,8 @@ The package API is being modernized with emphasis on:
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
 - [Raster output controls](#raster-output-controls)
+- [Vector output controls](#vector-output-controls)
+- [Lidar output controls](#lidar-output-controls)
 - [Extensionless defaults](#extensionless-defaults)
 - [R interoperability](#r-interoperability)
 - [Supported file formats](#supported-file-formats)
@@ -381,6 +383,70 @@ tv <- roads$to_terra()
 roads$write("roads_copy") # writes roads_copy.gpkg
 ```
 
+## Vector output controls
+
+Vector reads/writes can be controlled through:
+
+- `wbw_write_vector(...)`
+- `session$write_vector(...)`
+- `wbw_vector$write(...)`
+- `wbw_read_vector(...)`
+- `session$read_vector(...)`
+
+Write/read options are passed with `options = list(...)`.
+
+Supported keys:
+
+- `strict_format_options` (`TRUE`/`FALSE`): when `TRUE`, using
+  format-specific vector options on non-matching formats raises an error.
+- `geoparquet` (list): GeoParquet write controls.
+  - `compression`: `none`, `snappy`, `gzip`, `lz4`, `zstd`, `brotli`
+  - `max_rows_per_group`
+  - `data_page_size_limit`
+  - `write_batch_size`
+  - `data_page_row_count_limit`
+- `osmpbf` (list): OSM PBF read controls.
+  - `highways_only` (`TRUE`/`FALSE`)
+  - `named_ways_only` (`TRUE`/`FALSE`)
+  - `polygons_only` (`TRUE`/`FALSE`)
+  - `include_tag_keys` (character vector)
+
+Notes:
+
+- GeoParquet options are applied only when writing `.parquet` outputs.
+- OSM PBF options are applied only when reading `.osm.pbf` inputs.
+- When `strict_format_options = FALSE`, non-applicable options are ignored.
+
+### Common vector option profiles
+
+```r
+# 1) GeoParquet write with explicit compression/row-group controls
+wbw_write_vector(
+  roads,
+  "roads.parquet",
+  options = list(
+    strict_format_options = TRUE,
+    geoparquet = list(
+      compression = "zstd",
+      max_rows_per_group = 250000L,
+      write_batch_size = 8192L
+    )
+  )
+)
+
+# 2) OSM PBF read with filtering controls
+roads_from_osm <- wbw_read_vector(
+  "region.osm.pbf",
+  options = list(
+    osmpbf = list(
+      highways_only = TRUE,
+      named_ways_only = TRUE,
+      include_tag_keys = c("name", "highway", "maxspeed")
+    )
+  )
+)
+```
+
 ### Typed lidar wrapper
 
 ```r
@@ -413,6 +479,59 @@ lidar$write(
     laz = list(
       chunk_size = 25000L,
       compression_level = 7L
+    )
+  )
+)
+```
+
+## Lidar output controls
+
+Lidar writes can be controlled through:
+
+- `wbw_lidar$write(...)`
+
+Write options are passed with `options = list(...)`.
+
+Supported keys:
+
+- `laz` (list): LAZ write controls.
+  - `chunk_size` (positive integer)
+  - `compression_level` (`0`-`9`)
+- `copc` (list): COPC write controls.
+  - `max_points_per_node` (positive integer)
+  - `max_depth` (positive integer)
+  - `node_point_ordering`: `auto`, `morton`, `hilbert`
+
+Notes:
+
+- LAZ options are applied when writing `.laz` outputs.
+- COPC options are applied when writing `.copc.laz` outputs.
+- Non-applicable lidar options are ignored for other output formats.
+
+### Common lidar option profiles
+
+```r
+# 1) LAZ write with tuned compression/chunking
+lidar$write(
+  "points_copy.laz",
+  overwrite = TRUE,
+  options = list(
+    laz = list(
+      chunk_size = 25000L,
+      compression_level = 7L
+    )
+  )
+)
+
+# 2) COPC write with octree controls
+lidar$write(
+  "points_copy.copc.laz",
+  overwrite = TRUE,
+  options = list(
+    copc = list(
+      max_points_per_node = 75000L,
+      max_depth = 8L,
+      node_point_ordering = "hilbert"
     )
   )
 )

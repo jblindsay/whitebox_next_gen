@@ -18,6 +18,7 @@ The API is in active modernization, with emphasis on:
 - [Recommended examples](#recommended-examples)
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by data type](#quick-start-examples-by-data-type)
+- [Raster output controls](#raster-output-controls)
 - [Memory-first execution model](#memory-first-execution-model)
 - [Reprojection patterns](#reprojection-patterns)
 - [NumPy interoperability](#numpy-interoperability)
@@ -26,6 +27,7 @@ The API is in active modernization, with emphasis on:
 - [Shapely interoperability](#shapely-interoperability)
 - [xarray/rioxarray interoperability](#xarrayrioxarray-interoperability)
 - [pyproj interoperability](#pyproj-interoperability)
+- [Supported file formats](#supported-file-formats)
 - [Licensing overview](#licensing-overview)
 - [Licensing and Pro workflows](#licensing-and-pro-workflows)
 - [Discovery APIs](#discovery-apis)
@@ -160,8 +162,138 @@ print(f'Size: {meta.rows} x {meta.columns}, CRS: {meta.crs_epsg()}')
 # Apply a tool
 slope = wbe.terrain.slope(dem)
 
-# Write result
-wbe.write_raster(slope, 'slope.tif')
+# Write result (default GeoTIFF behavior uses backend defaults)
+wbe.write_raster(slope, 'slope_default.tif')
+
+# Extensionless path defaults to COG-style GeoTIFF
+wbe.write_raster(slope, 'slope_default')  # writes slope_default.tif
+
+# Write with explicit GeoTIFF/COG controls
+wbe.write_raster(
+  slope,
+  'slope_cog.tif',
+  options={
+    'compress': True,
+    'strict_format_options': True,
+    'geotiff': {
+      'compression': 'deflate',
+      'bigtiff': False,
+      'layout': 'cog',
+      'tile_size': 512,
+    },
+  },
+)
+
+# Batch write with one option profile
+wbe.write_rasters(
+  [slope],
+  ['slope_tiled.tif'],
+  options={
+    'compress': False,
+    'geotiff': {
+      'layout': 'tiled',
+      'tile_width': 256,
+      'tile_height': 256,
+    },
+  },
+)
+```
+
+## Raster output controls
+
+`WbEnvironment.write_raster(...)` and `WbEnvironment.write_rasters(...)` accept an
+`options` dictionary for output control.
+
+Supported keys:
+
+- `compress` (`True`/`False`): convenience toggle for GeoTIFF compression.
+  - `True` maps to `deflate`.
+  - `False` maps to uncompressed GeoTIFF.
+- `strict_format_options` (`True`/`False`): when `True`, using GeoTIFF options on
+  non-GeoTIFF outputs raises an error.
+- `geotiff` (dict): GeoTIFF/COG-specific controls.
+  - `compression`: `none`, `deflate`, `lzw`, `packbits`, `jpeg`, `webp`, `jpegxl`
+  - `bigtiff`: `True` or `False`
+  - `layout`: `standard`, `stripped`, `tiled`, `cog`
+  - `rows_per_strip` (for `stripped`)
+  - `tile_width`, `tile_height` (for `tiled`)
+  - `tile_size` (for `cog`)
+
+Notes:
+
+- For GeoTIFF outputs (`.tif`, `.tiff`), options are applied directly.
+- For non-GeoTIFF outputs, GeoTIFF-specific options are ignored unless
+  `strict_format_options=True`.
+- Backend GeoTIFF default compression is Deflate when no explicit override is
+  provided.
+
+- If no output extension is provided (for example `"my_file"`),
+  `write_raster(...)` defaults to COG-style GeoTIFF output at
+  `"my_file.tif"`.
+
+### Common output profiles
+
+```python
+# 1) Standard GeoTIFF (default backend behavior)
+wbe.write_raster(result, 'out_standard.tif')
+
+# 2) Explicit stripped GeoTIFF
+wbe.write_raster(
+  result,
+  'out_stripped.tif',
+  options={
+    'geotiff': {
+      'layout': 'stripped',
+      'rows_per_strip': 32,
+    },
+  },
+)
+
+# 3) Explicit tiled GeoTIFF
+wbe.write_raster(
+  result,
+  'out_tiled.tif',
+  options={
+    'geotiff': {
+      'layout': 'tiled',
+      'tile_width': 256,
+      'tile_height': 256,
+    },
+  },
+)
+
+# 4) Cloud-Optimized GeoTIFF (COG)
+wbe.write_raster(
+  result,
+  'out_cog.tif',
+  options={
+    'compress': True,
+    'geotiff': {
+      'layout': 'cog',
+      'tile_size': 512,
+      'bigtiff': False,
+    },
+  },
+)
+```
+
+### Extensionless defaults (all data objects)
+
+When `output_path` has no extension:
+
+- `write_raster(...)` writes COG-style GeoTIFF to `*.tif`
+- `write_vector(...)` writes GeoPackage to `*.gpkg`
+- `write_lidar(...)` writes COPC to `*.copc.laz`
+
+`write_lidar(...)` also accepts optional per-format write controls through
+`options={...}`.
+
+Examples:
+
+```python
+wbe.write_raster(raster, 'my_file')  # my_file.tif (COG-style default)
+wbe.write_vector(vector, 'my_file')  # my_file.gpkg
+wbe.write_lidar(lidar, 'my_file')    # my_file.copc.laz
 ```
 
 ### Sensor bundle (Sentinel-2)
@@ -206,6 +338,9 @@ for i in range(min(3, roads.num_records())):
 # Process and persist
 buffered = wbe.gis.buffer_vector(roads, distance=10)
 wbe.write_vector(buffered, 'roads_buffer.shp')
+
+# Extensionless path defaults to GeoPackage
+wbe.write_vector(buffered, 'roads_buffer')  # writes roads_buffer.gpkg
 ```
 
 ### Lidar
@@ -221,6 +356,33 @@ norms = wbe.lidar.calculate_point_normals(las)
 
 # Write result
 wbe.write_lidar(norms, 'survey_normals.las')
+
+# Extensionless path defaults to COPC
+wbe.write_lidar(norms, 'survey_normals')  # writes survey_normals.copc.laz
+
+# Optional format-specific write controls
+wbe.write_lidar(
+  norms,
+  'survey_normals.copc.laz',
+  options={
+    'copc': {
+      'max_points_per_node': 75000,
+      'max_depth': 8,
+      'node_point_ordering': 'hilbert',
+    },
+  },
+)
+
+wbe.write_lidar(
+  norms,
+  'survey_normals.laz',
+  options={
+    'laz': {
+      'chunk_size': 25000,
+      'compression_level': 7,
+    },
+  },
+)
 ```
 
 ### Progress and feedback
@@ -485,6 +647,79 @@ dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_crs.to_epsg())
 - Rich raster ecosystem tools: exchange via GeoTIFF (`write_raster` / `read_raster`).
 - Rich vector ecosystem tools: exchange via GeoPackage/Shapefile (`write_vector` / `read_vector`).
 - Keep wbw_python as the geoprocessing engine and use ecosystem libraries where they are strongest.
+
+## Supported file formats
+
+The Python API format support comes from backend crates:
+
+- Raster formats come from [`wbraster`](../wbraster).
+- Vector formats come from [`wbvector`](../wbvector).
+- LiDAR formats come from [`wblidar`](../wblidar).
+
+### Raster (via wbraster)
+
+Read/write support includes:
+
+- GeoTIFF / BigTIFF / COG (`.tif`, `.tiff`)
+- JPEG2000 / GeoJP2 (`.jp2`)
+- GeoPackage raster (`.gpkg`)
+- ENVI (`.hdr` with sidecar data files)
+- ER Mapper (`.ers`)
+- Esri ASCII (`.asc`, `.grd`)
+- Esri Binary Grid (`.adf` workspace)
+- GRASS ASCII (`.asc`, `.txt`)
+- Idrisi (`.rdc`, `.rst`)
+- PCRaster (`.map`)
+- SAGA (`.sgrd`, `.sdat`)
+- Surfer GRD (`.grd`)
+- Zarr (`.zarr`)
+
+#### Satellite sensor bundles (read-only)
+
+`wbraster` also supports read-only satellite sensor bundle ingestion. These are
+package-level readers (bundle metadata + band/measurement/asset resolution), not
+generic raster write targets.
+
+Supported bundle families:
+
+- Sentinel-2 SAFE
+- Sentinel-1 SAFE
+- Landsat Collection bundles
+- ICEYE bundles
+- PlanetScope bundles
+- SPOT/Pleiades DIMAP bundles
+- Maxar/WorldView bundles
+- RADARSAT-2 bundles
+- RCM bundles
+
+### Vector (via wbvector)
+
+Read/write support includes:
+
+- Shapefile (`.shp` + sidecars)
+- GeoPackage (`.gpkg`)
+- GeoJSON (`.geojson`)
+- FlatGeobuf (`.fgb`)
+- GML (`.gml`)
+- GPX (`.gpx`)
+- KML (`.kml`)
+- MapInfo Interchange (`.mif` + `.mid`)
+
+Additional feature-gated formats in `wbvector`:
+
+- GeoParquet (`.parquet`)
+- KMZ (`.kmz`)
+- OSM PBF (`.osm.pbf`, read-only)
+
+### LiDAR (via wblidar)
+
+Read/write support includes:
+
+- LAS
+- LAZ
+- COPC
+- PLY
+- E57
 
 ## Licensing overview
 

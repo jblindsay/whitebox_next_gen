@@ -71,6 +71,59 @@ whitebox_tools <- function(floating_license_id = NULL,
       wbw_progress_result_fallback(tool_id, session$run_tool(tool_id, args))
     }
   }
+
+  session$write_raster <- function(raster,
+                                   output_path,
+                                   options = NULL,
+                                   compress = NULL,
+                                   strict_format_options = FALSE) {
+    wbw_write_raster(
+      raster = raster,
+      output_path = output_path,
+      options = options,
+      compress = compress,
+      strict_format_options = strict_format_options,
+      session = session
+    )
+  }
+
+  session$write_rasters <- function(rasters,
+                                    output_paths,
+                                    options = NULL,
+                                    compress = NULL,
+                                    strict_format_options = FALSE) {
+    wbw_write_rasters(
+      rasters = rasters,
+      output_paths = output_paths,
+      options = options,
+      compress = compress,
+      strict_format_options = strict_format_options,
+      session = session
+    )
+  }
+
+  session$write_vector <- function(vector,
+                                   output_path,
+                                   options = NULL,
+                                   strict_format_options = FALSE) {
+    wbw_write_vector(
+      vector = vector,
+      output_path = output_path,
+      options = options,
+      strict_format_options = strict_format_options,
+      session = session
+    )
+  }
+
+  session$read_vector <- function(path, options = NULL, strict_format_options = FALSE) {
+    wbw_read_vector(
+      path = path,
+      options = options,
+      strict_format_options = strict_format_options,
+      session = session
+    )
+  }
+
   class(session) <- unique(c("wbw_session", class(session)))
   session
 }
@@ -401,6 +454,176 @@ wbw_args_to_json <- function(args) {
   jsonlite::toJSON(args, auto_unbox = TRUE, null = "null")
 }
 
+wbw_merge_write_options <- function(options = NULL,
+                                    compress = NULL,
+                                    strict_format_options = FALSE) {
+  if (is.null(options)) {
+    options <- list()
+  }
+  if (!is.list(options)) {
+    stop("options must be a list or NULL.", call. = FALSE)
+  }
+
+  if (!is.null(compress)) {
+    if (!is.logical(compress) || length(compress) != 1L || is.na(compress)) {
+      stop("compress must be TRUE/FALSE when provided.", call. = FALSE)
+    }
+    options$compress <- isTRUE(compress)
+  }
+
+  if (!is.logical(strict_format_options) || length(strict_format_options) != 1L || is.na(strict_format_options)) {
+    stop("strict_format_options must be TRUE/FALSE.", call. = FALSE)
+  }
+  options$strict_format_options <- isTRUE(strict_format_options)
+  options
+}
+
+wbw_merge_vector_options <- function(options = NULL,
+                                     strict_format_options = FALSE) {
+  if (is.null(options)) {
+    options <- list()
+  }
+  if (!is.list(options)) {
+    stop("options must be a list or NULL.", call. = FALSE)
+  }
+  if (!is.logical(strict_format_options) || length(strict_format_options) != 1L || is.na(strict_format_options)) {
+    stop("strict_format_options must be TRUE/FALSE.", call. = FALSE)
+  }
+  options$strict_format_options <- isTRUE(strict_format_options)
+  options
+}
+
+wbw_path_has_extension <- function(path) {
+  ext <- tools::file_ext(path)
+  is.character(ext) && length(ext) == 1L && nzchar(ext)
+}
+
+wbw_apply_default_output_extension <- function(path, kind = c("raster", "vector", "lidar")) {
+  kind <- match.arg(kind)
+  if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
+    stop("path must be a non-empty string.", call. = FALSE)
+  }
+
+  if (wbw_path_has_extension(path)) {
+    return(list(path = path, extension_was_missing = FALSE))
+  }
+
+  suffix <- switch(
+    kind,
+    raster = ".tif",
+    vector = ".gpkg",
+    lidar = ".copc.laz"
+  )
+
+  list(path = paste0(path, suffix), extension_was_missing = TRUE)
+}
+
+wbw_raster_source_path <- function(raster) {
+  if (!inherits(raster, "wbw_raster")) {
+    stop("raster must be a wbw_raster object.", call. = FALSE)
+  }
+
+  if (!is.null(raster$file_path) && is.function(raster$file_path)) {
+    return(raster$file_path())
+  }
+
+  if (!is.null(raster$path) && is.character(raster$path) && length(raster$path) == 1L) {
+    return(raster$path)
+  }
+
+  stop("Unable to resolve source path for raster object.", call. = FALSE)
+}
+
+#' Write a raster to disk with optional GeoTIFF/COG controls.
+#'
+#' @export
+wbw_write_raster <- function(raster,
+                             output_path,
+                             options = NULL,
+                             compress = NULL,
+                             strict_format_options = FALSE,
+                             session = NULL) {
+  src <- wbw_raster_source_path(raster)
+  opts <- wbw_merge_write_options(
+    options = options,
+    compress = compress,
+    strict_format_options = strict_format_options
+  )
+
+  resolved <- wbw_apply_default_output_extension(output_path, kind = "raster")
+  output_path_resolved <- resolved$path
+
+  if (isTRUE(resolved$extension_was_missing)) {
+    if (is.null(opts$geotiff)) {
+      opts$geotiff <- list()
+    }
+    if (is.null(opts$geotiff$layout)) {
+      opts$geotiff$layout <- "cog"
+    }
+  }
+
+  opts_json <- jsonlite::toJSON(opts, auto_unbox = TRUE, null = "null")
+
+  raster_write_with_options_json(src, output_path_resolved, opts_json)
+  wbw_raster_from_path(output_path_resolved, session = session)
+}
+
+#' Write multiple rasters to disk with optional GeoTIFF/COG controls.
+#'
+#' @export
+wbw_write_rasters <- function(rasters,
+                              output_paths,
+                              options = NULL,
+                              compress = NULL,
+                              strict_format_options = FALSE,
+                              session = NULL) {
+  if (!is.list(rasters)) {
+    stop("rasters must be a list of wbw_raster objects.", call. = FALSE)
+  }
+  if (!is.character(output_paths)) {
+    stop("output_paths must be a character vector.", call. = FALSE)
+  }
+  if (length(rasters) != length(output_paths)) {
+    stop("rasters and output_paths must have the same length.", call. = FALSE)
+  }
+
+  out <- vector("list", length(rasters))
+  for (i in seq_along(rasters)) {
+    out[[i]] <- wbw_write_raster(
+      raster = rasters[[i]],
+      output_path = output_paths[[i]],
+      options = options,
+      compress = compress,
+      strict_format_options = strict_format_options,
+      session = session
+    )
+  }
+  out
+}
+
+#' Write a vector to disk with optional format-specific controls.
+#'
+#' @export
+wbw_write_vector <- function(vector,
+                             output_path,
+                             options = NULL,
+                             strict_format_options = FALSE,
+                             session = NULL) {
+  if (!inherits(vector, "wbw_vector")) {
+    stop("vector must be a wbw_vector object.", call. = FALSE)
+  }
+  src <- vector$path
+  resolved <- wbw_apply_default_output_extension(output_path, kind = "vector")
+  output_path_resolved <- resolved$path
+  opts <- wbw_merge_vector_options(
+    options = options,
+    strict_format_options = strict_format_options
+  )
+  opts_json <- jsonlite::toJSON(opts, auto_unbox = TRUE, null = "null")
+  written <- vector_copy_with_options_json(src, output_path_resolved, opts_json)
+  wbw_vector_from_path(written, session = session)
+}
+
 wbw_require_terra <- function(call_name) {
   if (!requireNamespace("terra", quietly = TRUE)) {
     stop(sprintf("%s requires the 'terra' package.", call_name), call. = FALSE)
@@ -653,8 +876,22 @@ wbw_raster_from_path <- function(path, session = NULL, proxy = FALSE) {
     wbw_raster_from_path(output_path, session = session)
   }
 
-  write <- function(output_path, overwrite = FALSE) {
-    deep_copy(output_path, overwrite = overwrite)
+  write <- function(output_path,
+                    overwrite = FALSE,
+                    options = NULL,
+                    compress = NULL,
+                    strict_format_options = FALSE) {
+    if (isTRUE(overwrite) && file.exists(output_path)) {
+      unlink(output_path)
+    }
+    wbw_write_raster(
+      raster = obj,
+      output_path = output_path,
+      options = options,
+      compress = compress,
+      strict_format_options = strict_format_options,
+      session = session
+    )
   }
 
   obj <- new.env(parent = emptyenv())
@@ -717,12 +954,25 @@ wbw_raster_from_path <- function(path, session = NULL, proxy = FALSE) {
   e1$divide(e2)
 }
 
-wbw_vector_from_path <- function(path, session = NULL) {
+wbw_vector_from_path <- function(path,
+                                 session = NULL,
+                                 read_options = NULL,
+                                 strict_format_options = FALSE) {
   if (!file.exists(path)) {
     stop(sprintf("Vector file does not exist: %s", path), call. = FALSE)
   }
 
   vector_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+
+  if (!is.null(read_options)) {
+    opts <- wbw_merge_vector_options(
+      options = read_options,
+      strict_format_options = strict_format_options
+    )
+    opts_json <- jsonlite::toJSON(opts, auto_unbox = TRUE, null = "null")
+    tmp_out <- tempfile(pattern = "wbw_vector_read_", fileext = ".gpkg")
+    vector_path <- vector_copy_with_options_json(vector_path, tmp_out, opts_json)
+  }
 
   .meta_cache <- NULL
   .get_meta <- function() {
@@ -769,16 +1019,35 @@ wbw_vector_from_path <- function(path, session = NULL) {
     sf::st_read(vector_path, quiet = TRUE)
   }
 
-  deep_copy <- function(output_path, overwrite = FALSE) {
+  deep_copy <- function(output_path,
+                        overwrite = FALSE,
+                        options = NULL,
+                        strict_format_options = FALSE) {
     if (!is.character(output_path) || length(output_path) != 1L || !nzchar(output_path)) {
       stop("output_path must be a non-empty string.", call. = FALSE)
     }
-    vector_copy_to_path(vector_path, output_path)
-    wbw_vector_from_path(output_path, session = session)
+    if (isTRUE(overwrite) && file.exists(output_path)) {
+      unlink(output_path)
+    }
+    wbw_write_vector(
+      vector = obj,
+      output_path = output_path,
+      options = options,
+      strict_format_options = strict_format_options,
+      session = session
+    )
   }
 
-  write <- function(output_path, overwrite = FALSE) {
-    deep_copy(output_path, overwrite = overwrite)
+  write <- function(output_path,
+                    overwrite = FALSE,
+                    options = NULL,
+                    strict_format_options = FALSE) {
+    deep_copy(
+      output_path,
+      overwrite = overwrite,
+      options = options,
+      strict_format_options = strict_format_options
+    )
   }
 
   obj <- new.env(parent = emptyenv())
@@ -1149,21 +1418,32 @@ wbw_lidar_from_path <- function(path, session = NULL) {
       stop("output_path must be a non-empty string.", call. = FALSE)
     }
 
-    output_dir <- dirname(output_path)
+    resolved <- wbw_apply_default_output_extension(output_path, kind = "lidar")
+    resolved_path <- resolved$path
+
+    output_dir <- dirname(resolved_path)
     if (!dir.exists(output_dir)) {
       dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
     }
 
-    copied <- file.copy(lidar_path, output_path, overwrite = overwrite)
-    if (!isTRUE(copied)) {
-      stop(sprintf("Failed to copy lidar to %s", output_path), call. = FALSE)
+    if (file.exists(resolved_path) && !isTRUE(overwrite)) {
+      stop(sprintf("Failed to copy lidar to %s (exists; set overwrite=TRUE)", resolved_path), call. = FALSE)
+    }
+    if (file.exists(resolved_path) && isTRUE(overwrite)) {
+      unlink(resolved_path)
     }
 
-    wbw_lidar_from_path(output_path, session = session)
+    options_json <- "{}"
+    if (!is.null(options)) {
+      options_json <- jsonlite::toJSON(options, auto_unbox = TRUE)
+    }
+
+    copied_path <- lidar_write_with_options_json(lidar_path, resolved_path, options_json)
+    wbw_lidar_from_path(copied_path, session = session)
   }
 
-  write <- function(output_path, overwrite = FALSE) {
-    deep_copy(output_path, overwrite = overwrite)
+  write <- function(output_path, overwrite = FALSE, options = NULL) {
+    deep_copy(output_path, overwrite = overwrite, options = options)
   }
 
   obj <- new.env(parent = emptyenv())
@@ -1464,8 +1744,16 @@ wbw_read_raster <- function(path, session = NULL, proxy = FALSE) {
 }
 
 #' @export
-wbw_read_vector <- function(path, session = NULL) {
-  wbw_vector_from_path(path, session = session)
+wbw_read_vector <- function(path,
+                            options = NULL,
+                            strict_format_options = FALSE,
+                            session = NULL) {
+  wbw_vector_from_path(
+    path,
+    session = session,
+    read_options = options,
+    strict_format_options = strict_format_options
+  )
 }
 
 #' @export

@@ -258,6 +258,40 @@ vector_copy_to_path <- function(src, dst) {
   .Call("wrap__vector_copy_to_path", src, dst, PACKAGE = "whiteboxworkflows")
 }
 
+vector_copy_with_options_json <- function(src, dst, options_json) {
+  .Call(
+    "wrap__vector_copy_with_options_json",
+    src,
+    dst,
+    options_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+lidar_copy_to_path <- function(src, dst) {
+  .Call("wrap__lidar_copy_to_path", src, dst, PACKAGE = "whiteboxworkflows")
+}
+
+lidar_write_with_options_json <- function(src, dst, options_json) {
+  .Call(
+    "wrap__lidar_write_with_options_json",
+    src,
+    dst,
+    options_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+raster_write_with_options_json <- function(src, dst, options_json) {
+  .Call(
+    "wrap__raster_write_with_options_json",
+    src,
+    dst,
+    options_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
 raster_metadata_json <- function(path) {
   .Call("wrap__raster_metadata_json", path, PACKAGE = "whiteboxworkflows")
 }

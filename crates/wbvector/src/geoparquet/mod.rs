@@ -59,6 +59,7 @@ impl Default for GeoParquetWriteOptions {
 }
 
 impl GeoParquetWriteOptions {
+    /// Create default GeoParquet write options.
     pub fn new() -> Self {
         Self::default()
     }
@@ -89,26 +90,31 @@ impl GeoParquetWriteOptions {
             .with_compression(Compression::UNCOMPRESSED)
     }
 
+    /// Set maximum number of rows per row group.
     pub fn with_max_rows_per_group(mut self, value: usize) -> Self {
         self.max_rows_per_group = value.max(1);
         self
     }
 
+    /// Set best-effort data page size limit in bytes.
     pub fn with_data_page_size_limit(mut self, value: usize) -> Self {
         self.data_page_size_limit = value.max(1);
         self
     }
 
+    /// Set internal write batch size.
     pub fn with_write_batch_size(mut self, value: usize) -> Self {
         self.write_batch_size = value.max(1);
         self
     }
 
+    /// Set best-effort maximum row count per data page.
     pub fn with_data_page_row_count_limit(mut self, value: usize) -> Self {
         self.data_page_row_count_limit = value.max(1);
         self
     }
 
+    /// Set Parquet compression codec for all output columns.
     pub fn with_compression(mut self, compression: Compression) -> Self {
         self.compression = compression;
         self

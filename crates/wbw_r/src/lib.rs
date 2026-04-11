@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use parquet::basic::Compression as ParquetCompression;
 #[cfg(feature = "pro")]
 use std::env;
 use std::fs::File;
@@ -15,9 +16,16 @@ use wblicense_core::{
 use wblidar::e57::E57Reader;
 use wblidar::las::LasReader;
 use wblidar::ply::PlyReader;
-use wblidar::{LidarFormat, PointReader};
+use wblidar::{
+    CopcWriteOptions,
+    LazWriteOptions,
+    LidarFormat,
+    LidarWriteOptions,
+    PointCloud,
+    PointReader,
+};
 use wbraster::{open_sensor_bundle, open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
-use wbraster::{Raster};
+use wbraster::{GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions, Raster, RasterFormat};
 use wbvector::VectorFormat;
 use wbvector::feature::FieldType;
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
@@ -26,6 +34,594 @@ use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegi
 
 fn to_invalid_request<E: std::fmt::Display>(err: E) -> ToolError {
     ToolError::InvalidRequest(err.to_string())
+}
+
+#[derive(Debug, Clone, Default)]
+struct OsmPbfReadControls {
+    highways_only: Option<bool>,
+    named_ways_only: Option<bool>,
+    polygons_only: Option<bool>,
+    include_tag_keys: Option<Vec<String>>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct VectorReadControls {
+    strict_format_options: bool,
+    osmpbf: OsmPbfReadControls,
+}
+
+impl VectorReadControls {
+    fn has_osmpbf_controls(&self) -> bool {
+        self.osmpbf.has_fields
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct GeoParquetWriteControls {
+    max_rows_per_group: Option<usize>,
+    data_page_size_limit: Option<usize>,
+    write_batch_size: Option<usize>,
+    data_page_row_count_limit: Option<usize>,
+    compression: Option<ParquetCompression>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct VectorWriteControls {
+    strict_format_options: bool,
+    geoparquet: GeoParquetWriteControls,
+}
+
+impl VectorWriteControls {
+    fn has_geoparquet_controls(&self) -> bool {
+        self.geoparquet.has_fields
+    }
+}
+
+fn parse_parquet_compression(name: &str) -> Option<ParquetCompression> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "none" | "off" | "uncompressed" => Some(ParquetCompression::UNCOMPRESSED),
+        "snappy" => Some(ParquetCompression::SNAPPY),
+        "gzip" | "gz" => Some(ParquetCompression::GZIP(Default::default())),
+        "lz4" | "lz4_raw" => Some(ParquetCompression::LZ4_RAW),
+        "zstd" | "zstandard" => Some(ParquetCompression::ZSTD(Default::default())),
+        "brotli" | "br" => Some(ParquetCompression::BROTLI(Default::default())),
+        _ => None,
+    }
+}
+
+fn parse_usize_option(
+    obj: &serde_json::Map<String, Value>,
+    key: &str,
+    label: &str,
+) -> Result<Option<usize>, ToolError> {
+    let Some(v) = obj.get(key) else {
+        return Ok(None);
+    };
+    let n = v.as_u64().ok_or_else(|| {
+        ToolError::InvalidRequest(format!("{label} must be a positive integer"))
+    })?;
+    if n == 0 {
+        return Err(ToolError::InvalidRequest(format!("{label} must be greater than 0")));
+    }
+    Ok(Some(n as usize))
+}
+
+fn parse_vector_read_controls(options: &Value) -> Result<VectorReadControls, ToolError> {
+    if options.is_null() {
+        return Ok(VectorReadControls::default());
+    }
+
+    let obj = options.as_object().ok_or_else(|| {
+        ToolError::InvalidRequest("vector options must be a JSON object".to_string())
+    })?;
+
+    let strict_format_options = match obj.get("strict_format_options") {
+        Some(Value::Bool(v)) => *v,
+        Some(Value::Null) | None => false,
+        Some(other) => {
+            return Err(ToolError::InvalidRequest(format!(
+                "options.strict_format_options must be a boolean when provided, got: {other}"
+            )))
+        }
+    };
+
+    let mut osmpbf = OsmPbfReadControls::default();
+    if let Some(osm_val) = obj.get("osmpbf") {
+        let osm_obj = osm_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.osmpbf must be a JSON object".to_string())
+        })?;
+        osmpbf.has_fields = !osm_obj.is_empty();
+
+        if let Some(v) = osm_obj.get("highways_only") {
+            osmpbf.highways_only = Some(v.as_bool().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.osmpbf.highways_only must be a boolean".to_string(),
+                )
+            })?);
+        }
+        if let Some(v) = osm_obj.get("named_ways_only") {
+            osmpbf.named_ways_only = Some(v.as_bool().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.osmpbf.named_ways_only must be a boolean".to_string(),
+                )
+            })?);
+        }
+        if let Some(v) = osm_obj.get("polygons_only") {
+            osmpbf.polygons_only = Some(v.as_bool().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.osmpbf.polygons_only must be a boolean".to_string(),
+                )
+            })?);
+        }
+        if let Some(v) = osm_obj.get("include_tag_keys") {
+            let arr = v.as_array().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.osmpbf.include_tag_keys must be an array of strings".to_string(),
+                )
+            })?;
+            let mut keys = Vec::with_capacity(arr.len());
+            for item in arr {
+                let s = item.as_str().ok_or_else(|| {
+                    ToolError::InvalidRequest(
+                        "options.osmpbf.include_tag_keys must contain only strings".to_string(),
+                    )
+                })?;
+                if !s.trim().is_empty() {
+                    keys.push(s.to_string());
+                }
+            }
+            osmpbf.include_tag_keys = if keys.is_empty() { None } else { Some(keys) };
+        }
+    }
+
+    Ok(VectorReadControls {
+        strict_format_options,
+        osmpbf,
+    })
+}
+
+fn parse_vector_write_controls(options: &Value) -> Result<VectorWriteControls, ToolError> {
+    if options.is_null() {
+        return Ok(VectorWriteControls::default());
+    }
+
+    let obj = options.as_object().ok_or_else(|| {
+        ToolError::InvalidRequest("vector options must be a JSON object".to_string())
+    })?;
+
+    let strict_format_options = match obj.get("strict_format_options") {
+        Some(Value::Bool(v)) => *v,
+        Some(Value::Null) | None => false,
+        Some(other) => {
+            return Err(ToolError::InvalidRequest(format!(
+                "options.strict_format_options must be a boolean when provided, got: {other}"
+            )))
+        }
+    };
+
+    let mut geoparquet = GeoParquetWriteControls::default();
+    if let Some(gpq_val) = obj.get("geoparquet") {
+        let gpq_obj = gpq_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.geoparquet must be a JSON object".to_string())
+        })?;
+        geoparquet.has_fields = !gpq_obj.is_empty();
+
+        geoparquet.max_rows_per_group =
+            parse_usize_option(gpq_obj, "max_rows_per_group", "options.geoparquet.max_rows_per_group")?;
+        geoparquet.data_page_size_limit =
+            parse_usize_option(gpq_obj, "data_page_size_limit", "options.geoparquet.data_page_size_limit")?;
+        geoparquet.write_batch_size =
+            parse_usize_option(gpq_obj, "write_batch_size", "options.geoparquet.write_batch_size")?;
+        geoparquet.data_page_row_count_limit = parse_usize_option(
+            gpq_obj,
+            "data_page_row_count_limit",
+            "options.geoparquet.data_page_row_count_limit",
+        )?;
+
+        if let Some(v) = gpq_obj.get("compression") {
+            let name = v.as_str().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.geoparquet.compression must be a string".to_string(),
+                )
+            })?;
+            geoparquet.compression = Some(parse_parquet_compression(name).ok_or_else(|| {
+                ToolError::InvalidRequest(format!(
+                    "unsupported geoparquet.compression '{name}'. Expected one of: none, snappy, gzip, lz4, zstd, brotli"
+                ))
+            })?);
+        }
+    }
+
+    Ok(VectorWriteControls {
+        strict_format_options,
+        geoparquet,
+    })
+}
+
+fn read_vector_with_controls(
+    src_path: &Path,
+    src_format: VectorFormat,
+    controls: &VectorReadControls,
+) -> Result<wbvector::Layer, ToolError> {
+    if controls.has_osmpbf_controls() && src_format != VectorFormat::OsmPbf {
+        if controls.strict_format_options {
+            return Err(ToolError::InvalidRequest(
+                "OSM PBF-specific read options were provided for a non-OSM source path"
+                    .to_string(),
+            ));
+        }
+        return wbvector::read(src_path).map_err(to_invalid_request);
+    }
+
+    if src_format == VectorFormat::OsmPbf {
+        let mut opts = wbvector::osmpbf::OsmPbfReadOptions::new();
+        if let Some(v) = controls.osmpbf.highways_only {
+            opts = opts.with_highways_only(v);
+        }
+        if let Some(v) = controls.osmpbf.named_ways_only {
+            opts = opts.with_named_ways_only(v);
+        }
+        if let Some(v) = controls.osmpbf.polygons_only {
+            opts = opts.with_polygons_only(v);
+        }
+        if let Some(ref keys) = controls.osmpbf.include_tag_keys {
+            opts = opts.with_include_tag_keys(keys.clone());
+        }
+        return wbvector::osmpbf::read_with_options(src_path, &opts).map_err(to_invalid_request);
+    }
+
+    wbvector::read(src_path).map_err(to_invalid_request)
+}
+
+fn write_vector_with_controls(
+    layer: &wbvector::Layer,
+    dst_path: &Path,
+    dst_format: VectorFormat,
+    controls: &VectorWriteControls,
+) -> Result<(), ToolError> {
+    if controls.has_geoparquet_controls() && dst_format != VectorFormat::GeoParquet {
+        if controls.strict_format_options {
+            return Err(ToolError::InvalidRequest(
+                "GeoParquet-specific write options were provided for a non-Parquet output path"
+                    .to_string(),
+            ));
+        }
+        return wbvector::write(layer, dst_path, dst_format).map_err(to_invalid_request);
+    }
+
+    if dst_format == VectorFormat::GeoParquet {
+        let mut opts = wbvector::geoparquet::GeoParquetWriteOptions::new();
+        if let Some(v) = controls.geoparquet.max_rows_per_group {
+            opts = opts.with_max_rows_per_group(v);
+        }
+        if let Some(v) = controls.geoparquet.data_page_size_limit {
+            opts = opts.with_data_page_size_limit(v);
+        }
+        if let Some(v) = controls.geoparquet.write_batch_size {
+            opts = opts.with_write_batch_size(v);
+        }
+        if let Some(v) = controls.geoparquet.data_page_row_count_limit {
+            opts = opts.with_data_page_row_count_limit(v);
+        }
+        if let Some(v) = controls.geoparquet.compression {
+            opts = opts.with_compression(v);
+        }
+        return wbvector::geoparquet::write_with_options(layer, dst_path, &opts)
+            .map_err(to_invalid_request);
+    }
+
+    wbvector::write(layer, dst_path, dst_format).map_err(to_invalid_request)
+}
+
+#[derive(Debug, Clone, Default)]
+struct GeoTiffWriteControls {
+    compression: Option<GeoTiffCompression>,
+    bigtiff: Option<bool>,
+    layout: Option<GeoTiffLayout>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct RasterWriteControls {
+    compress: Option<bool>,
+    strict_format_options: bool,
+    geotiff: GeoTiffWriteControls,
+}
+
+impl RasterWriteControls {
+    fn has_geotiff_controls(&self) -> bool {
+        self.compress.is_some() || self.geotiff.has_fields
+    }
+
+    fn geotiff_options(&self) -> Option<GeoTiffWriteOptions> {
+        let compression = self
+            .geotiff
+            .compression
+            .or_else(|| match self.compress {
+                Some(true) => Some(GeoTiffCompression::Deflate),
+                Some(false) => Some(GeoTiffCompression::None),
+                None => None,
+            });
+        let bigtiff = self.geotiff.bigtiff;
+        let layout = self.geotiff.layout;
+
+        if compression.is_none() && bigtiff.is_none() && layout.is_none() {
+            None
+        } else {
+            Some(GeoTiffWriteOptions {
+                compression,
+                bigtiff,
+                layout,
+            })
+        }
+    }
+}
+
+fn parse_geotiff_compression(name: &str) -> Option<GeoTiffCompression> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "none" | "off" | "uncompressed" => Some(GeoTiffCompression::None),
+        "deflate" | "zip" => Some(GeoTiffCompression::Deflate),
+        "lzw" => Some(GeoTiffCompression::Lzw),
+        "packbits" | "pack_bits" => Some(GeoTiffCompression::PackBits),
+        "jpeg" => Some(GeoTiffCompression::Jpeg),
+        "webp" | "web_p" => Some(GeoTiffCompression::WebP),
+        "jpegxl" | "jpeg_xl" | "jxl" => Some(GeoTiffCompression::JpegXl),
+        _ => None,
+    }
+}
+
+fn parse_geotiff_layout(layout_name: &str, geotiff_obj: &serde_json::Map<String, Value>) -> Result<GeoTiffLayout, ToolError> {
+    let get_u32 = |keys: &[&str]| -> Option<u32> {
+        for key in keys {
+            if let Some(v) = geotiff_obj.get(*key).and_then(Value::as_u64) {
+                if let Ok(parsed) = u32::try_from(v) {
+                    return Some(parsed);
+                }
+            }
+        }
+        None
+    };
+
+    match layout_name.trim().to_ascii_lowercase().as_str() {
+        "standard" => Ok(GeoTiffLayout::Standard),
+        "stripped" | "striped" => {
+            let rows_per_strip = get_u32(&["rows_per_strip"]).unwrap_or(1);
+            Ok(GeoTiffLayout::Stripped { rows_per_strip })
+        }
+        "tiled" => {
+            let tile_width = get_u32(&["tile_width", "tile_size"]).unwrap_or(512);
+            let tile_height = get_u32(&["tile_height", "tile_size"]).unwrap_or(tile_width);
+            Ok(GeoTiffLayout::Tiled { tile_width, tile_height })
+        }
+        "cog" => {
+            let tile_size = get_u32(&["tile_size", "cog_tile_size"]).unwrap_or(512);
+            Ok(GeoTiffLayout::Cog { tile_size })
+        }
+        other => Err(ToolError::InvalidRequest(format!(
+            "unsupported geotiff.layout '{other}'. Expected one of: standard, stripped, tiled, cog"
+        ))),
+    }
+}
+
+fn parse_raster_write_controls(options: &Value) -> Result<RasterWriteControls, ToolError> {
+    if options.is_null() {
+        return Ok(RasterWriteControls::default());
+    }
+
+    let obj = options.as_object().ok_or_else(|| {
+        ToolError::InvalidRequest("write options must be a JSON object".to_string())
+    })?;
+
+    let compress = match obj.get("compress") {
+        Some(Value::Bool(v)) => Some(*v),
+        Some(Value::Null) | None => None,
+        Some(other) => {
+            return Err(ToolError::InvalidRequest(format!(
+                "options.compress must be a boolean when provided, got: {other}"
+            )))
+        }
+    };
+
+    let strict_format_options = match obj.get("strict_format_options") {
+        Some(Value::Bool(v)) => *v,
+        Some(Value::Null) | None => false,
+        Some(other) => {
+            return Err(ToolError::InvalidRequest(format!(
+                "options.strict_format_options must be a boolean when provided, got: {other}"
+            )))
+        }
+    };
+
+    let mut geotiff = GeoTiffWriteControls::default();
+    if let Some(gt_val) = obj.get("geotiff") {
+        let gt_obj = gt_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.geotiff must be a JSON object".to_string())
+        })?;
+
+        geotiff.has_fields = !gt_obj.is_empty();
+
+        if let Some(v) = gt_obj.get("compression") {
+            let name = v.as_str().ok_or_else(|| {
+                ToolError::InvalidRequest("options.geotiff.compression must be a string".to_string())
+            })?;
+            geotiff.compression = Some(parse_geotiff_compression(name).ok_or_else(|| {
+                ToolError::InvalidRequest(format!(
+                    "unsupported geotiff.compression '{name}'. Expected one of: none, deflate, lzw, packbits, jpeg, webp, jpegxl"
+                ))
+            })?);
+        }
+
+        if let Some(v) = gt_obj.get("bigtiff") {
+            geotiff.bigtiff = Some(v.as_bool().ok_or_else(|| {
+                ToolError::InvalidRequest("options.geotiff.bigtiff must be a boolean".to_string())
+            })?);
+        }
+
+        if let Some(v) = gt_obj.get("layout") {
+            let layout_name = v.as_str().ok_or_else(|| {
+                ToolError::InvalidRequest("options.geotiff.layout must be a string".to_string())
+            })?;
+            geotiff.layout = Some(parse_geotiff_layout(layout_name, gt_obj)?);
+        }
+    }
+
+    Ok(RasterWriteControls {
+        compress,
+        strict_format_options,
+        geotiff,
+    })
+}
+
+fn write_raster_with_controls(raster: &Raster, dst: &Path, output_format: RasterFormat, controls: &RasterWriteControls) -> Result<(), ToolError> {
+    if output_format != RasterFormat::GeoTiff && controls.has_geotiff_controls() {
+        if controls.strict_format_options {
+            return Err(ToolError::InvalidRequest(
+                "GeoTIFF-specific write options were provided for a non-GeoTIFF output path".to_string(),
+            ));
+        }
+        return raster.write(dst, output_format).map_err(to_invalid_request);
+    }
+
+    if output_format == RasterFormat::GeoTiff {
+        if let Some(opts) = controls.geotiff_options() {
+            return raster
+                .write_geotiff_with_options(dst, &opts)
+                .map_err(to_invalid_request);
+        }
+    }
+
+    raster.write(dst, output_format).map_err(to_invalid_request)
+}
+
+#[derive(Debug, Clone, Default)]
+struct LazWriteControls {
+    chunk_size: Option<u32>,
+    compression_level: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CopcWriteControls {
+    max_points_per_node: Option<usize>,
+    max_depth: Option<u32>,
+    node_point_ordering: Option<wblidar::copc::CopcNodePointOrdering>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct LidarWriteControls {
+    laz: LazWriteControls,
+    copc: CopcWriteControls,
+}
+
+impl LidarWriteControls {
+    fn to_wblidar_options(&self) -> LidarWriteOptions {
+        LidarWriteOptions {
+            laz: LazWriteOptions {
+                chunk_size: self.laz.chunk_size,
+                compression_level: self.laz.compression_level,
+            },
+            copc: CopcWriteOptions {
+                max_points_per_node: self.copc.max_points_per_node,
+                max_depth: self.copc.max_depth,
+                node_point_ordering: self.copc.node_point_ordering,
+            },
+        }
+    }
+}
+
+fn parse_node_point_ordering(name: &str) -> Result<wblidar::copc::CopcNodePointOrdering, ToolError> {
+    use wblidar::copc::CopcNodePointOrdering;
+    match name.trim().to_ascii_lowercase().as_str() {
+        "auto" => Ok(CopcNodePointOrdering::Auto),
+        "morton" => Ok(CopcNodePointOrdering::Morton),
+        "hilbert" => Ok(CopcNodePointOrdering::Hilbert),
+        other => Err(ToolError::InvalidRequest(format!(
+            "unsupported node_point_ordering '{}'. Expected one of: auto, morton, hilbert",
+            other
+        ))),
+    }
+}
+
+fn parse_lidar_write_controls(options: &Value) -> Result<LidarWriteControls, ToolError> {
+    if options.is_null() {
+        return Ok(LidarWriteControls::default());
+    }
+
+    let obj = options.as_object().ok_or_else(|| {
+        ToolError::InvalidRequest("write options must be a JSON object".to_string())
+    })?;
+
+    let mut laz = LazWriteControls::default();
+    if let Some(laz_val) = obj.get("laz") {
+        let laz_obj = laz_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.laz must be a JSON object".to_string())
+        })?;
+
+        if let Some(v) = laz_obj.get("chunk_size") {
+            let chunk_size = v.as_u64().ok_or_else(|| {
+                ToolError::InvalidRequest("options.laz.chunk_size must be a positive integer".to_string())
+            })?;
+            if chunk_size == 0 {
+                return Err(ToolError::InvalidRequest(
+                    "options.laz.chunk_size must be greater than 0".to_string(),
+                ));
+            }
+            laz.chunk_size = Some(chunk_size as u32);
+        }
+
+        if let Some(v) = laz_obj.get("compression_level") {
+            let compression_level = v.as_u64().ok_or_else(|| {
+                ToolError::InvalidRequest("options.laz.compression_level must be a positive integer".to_string())
+            })?;
+            if compression_level > 9 {
+                return Err(ToolError::InvalidRequest(
+                    "options.laz.compression_level must be in range 0-9".to_string(),
+                ));
+            }
+            laz.compression_level = Some(compression_level as u32);
+        }
+    }
+
+    let mut copc = CopcWriteControls::default();
+    if let Some(copc_val) = obj.get("copc") {
+        let copc_obj = copc_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.copc must be a JSON object".to_string())
+        })?;
+
+        if let Some(v) = copc_obj.get("max_points_per_node") {
+            let max_points_per_node = v.as_u64().ok_or_else(|| {
+                ToolError::InvalidRequest("options.copc.max_points_per_node must be a positive integer".to_string())
+            })?;
+            if max_points_per_node == 0 {
+                return Err(ToolError::InvalidRequest(
+                    "options.copc.max_points_per_node must be greater than 0".to_string(),
+                ));
+            }
+            copc.max_points_per_node = Some(max_points_per_node as usize);
+        }
+
+        if let Some(v) = copc_obj.get("max_depth") {
+            let max_depth = v.as_u64().ok_or_else(|| {
+                ToolError::InvalidRequest("options.copc.max_depth must be a positive integer".to_string())
+            })?;
+            if max_depth == 0 {
+                return Err(ToolError::InvalidRequest(
+                    "options.copc.max_depth must be greater than 0".to_string(),
+                ));
+            }
+            copc.max_depth = Some(max_depth as u32);
+        }
+
+        if let Some(v) = copc_obj.get("node_point_ordering") {
+            let ordering_name = v.as_str().ok_or_else(|| {
+                ToolError::InvalidRequest("options.copc.node_point_ordering must be a string".to_string())
+            })?;
+            copc.node_point_ordering = Some(parse_node_point_ordering(ordering_name)?);
+        }
+    }
+
+    Ok(LidarWriteControls { laz, copc })
 }
 
 fn lidar_format_name(format: LidarFormat) -> &'static str {
@@ -279,16 +875,163 @@ pub fn vector_metadata_json(path: &str) -> Result<String, ToolError> {
 /// from `dst`'s file extension.  This keeps the copy entirely inside wbvector
 /// rather than round-tripping through a third-party library.
 pub fn vector_copy_to_path(src: &str, dst: &str) -> Result<(), ToolError> {
+    vector_copy_with_options_json(src, dst, "{}")?;
+    Ok(())
+}
+
+/// Copy or transcode a vector file from `src` to `dst` using JSON read/write options.
+///
+/// Supported options:
+/// - `strict_format_options`: bool
+/// - `osmpbf` (read side):
+///   - `highways_only`: bool
+///   - `named_ways_only`: bool
+///   - `polygons_only`: bool
+///   - `include_tag_keys`: [string]
+/// - `geoparquet` (write side):
+///   - `max_rows_per_group`: integer
+///   - `data_page_size_limit`: integer
+///   - `write_batch_size`: integer
+///   - `data_page_row_count_limit`: integer
+///   - `compression`: none|snappy|gzip|lz4|zstd|brotli
+pub fn vector_copy_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<String, ToolError> {
+    let options_value: Value = serde_json::from_str(options_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
+    let read_controls = parse_vector_read_controls(&options_value)?;
+    let write_controls = parse_vector_write_controls(&options_value)?;
+
     let src_path = Path::new(src);
-    let dst_path = Path::new(dst);
-    let layer = wbvector::read(src_path).map_err(to_invalid_request)?;
-    let fmt = VectorFormat::detect(dst_path).map_err(to_invalid_request)?;
+    let mut dst_path = PathBuf::from(dst);
+    let missing_ext = dst_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().is_empty())
+        .unwrap_or(true);
+    if missing_ext {
+        dst_path.set_extension("gpkg");
+    }
+
     if let Some(parent) = dst_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
         }
     }
-    wbvector::write(&layer, dst_path, fmt).map_err(to_invalid_request)
+
+    let src_fmt = VectorFormat::detect(src_path).map_err(to_invalid_request)?;
+    let dst_fmt = VectorFormat::detect(&dst_path).map_err(to_invalid_request)?;
+
+    let layer = read_vector_with_controls(src_path, src_fmt, &read_controls)?;
+    write_vector_with_controls(&layer, &dst_path, dst_fmt, &write_controls)?;
+
+    Ok(dst_path.display().to_string())
+}
+
+/// Copy or transcode a lidar file from `src` to `dst`.
+///
+/// When `dst` has no extension, `.copc.laz` is appended and output is written
+/// as COPC.
+pub fn lidar_copy_to_path(src: &str, dst: &str) -> Result<String, ToolError> {
+    let src_path = Path::new(src);
+    let mut dst_path = PathBuf::from(dst);
+    let missing_ext = dst_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().is_empty())
+        .unwrap_or(true);
+
+    if missing_ext {
+        dst_path = PathBuf::from(format!("{}.copc.laz", dst_path.to_string_lossy()));
+    }
+
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+
+    if src_path == dst_path {
+        return Ok(dst_path.display().to_string());
+    }
+
+    if missing_ext {
+        let cloud = PointCloud::read(src_path).map_err(to_invalid_request)?;
+        cloud
+            .write_as(&dst_path, LidarFormat::Copc)
+            .map_err(to_invalid_request)?;
+    } else {
+        std::fs::copy(src_path, &dst_path).map_err(to_invalid_request)?;
+    }
+
+    Ok(dst_path.display().to_string())
+}
+
+/// Write a lidar point cloud from `src` to `dst` using JSON write options.
+///
+/// The `options_json` object supports:
+/// - `laz`: {`chunk_size`: positive integer, `compression_level`: 0-9}
+/// - `copc`: {`max_points_per_node`: positive integer, `max_depth`: positive integer, `node_point_ordering`: auto|morton|hilbert}
+///
+pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<String, ToolError> {
+    let options_value: Value = serde_json::from_str(options_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
+    let controls = parse_lidar_write_controls(&options_value)?;
+
+    let src_path = Path::new(src);
+    let mut dst_path = PathBuf::from(dst);
+    let missing_ext = dst_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().is_empty())
+        .unwrap_or(true);
+
+    if missing_ext {
+        dst_path = PathBuf::from(format!("{}.copc.laz", dst_path.to_string_lossy()));
+    }
+
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+
+    let cloud = PointCloud::read(src_path).map_err(to_invalid_request)?;
+    let output_format = LidarFormat::detect(&dst_path).map_err(to_invalid_request)?;
+    let write_options = controls.to_wblidar_options();
+    wblidar::write_with_options(&cloud, &dst_path, output_format, &write_options)
+        .map_err(to_invalid_request)?;
+
+    Ok(dst_path.display().to_string())
+}
+
+/// Write a raster from `src` to `dst` using JSON write options.
+///
+/// The `options_json` object supports:
+/// - `compress`: bool
+/// - `strict_format_options`: bool
+/// - `geotiff`: {
+///     `compression`: none|deflate|lzw|packbits|jpeg|webp|jpegxl,
+///     `bigtiff`: bool,
+///     `layout`: standard|stripped|tiled|cog,
+///     `rows_per_strip`, `tile_width`, `tile_height`, `tile_size`
+///   }
+pub fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<(), ToolError> {
+    let options_value: Value = serde_json::from_str(options_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
+    let controls = parse_raster_write_controls(&options_value)?;
+
+    let src_path = Path::new(src);
+    let dst_path = Path::new(dst);
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+
+    let output_format = RasterFormat::for_output_path(dst)
+        .map_err(to_invalid_request)?;
+
+    let raster = Raster::read(src_path).map_err(to_invalid_request)?;
+    write_raster_with_controls(&raster, dst_path, output_format, &controls)
 }
 
 pub fn sensor_bundle_metadata_json(path: &str) -> Result<String, ToolError> {
@@ -1551,6 +2294,26 @@ mod native_exports {
     }
 
     #[extendr]
+    fn vector_copy_with_options_json(src: &str, dst: &str, options_json: &str) -> extendr_api::Result<String> {
+        super::vector_copy_with_options_json(src, dst, options_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_copy_to_path(src: &str, dst: &str) -> extendr_api::Result<String> {
+        super::lidar_copy_to_path(src, dst).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -> extendr_api::Result<String> {
+        super::lidar_write_with_options_json(src, dst, options_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) -> extendr_api::Result<()> {
+        super::raster_write_with_options_json(src, dst, options_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn raster_metadata_json(path: &str) -> extendr_api::Result<String> {
         super::raster_metadata_json(path).map_err(map_extendr_err)
     }
@@ -1582,6 +2345,10 @@ mod native_exports {
         fn sensor_bundle_metadata_json;
         fn sensor_bundle_resolve_raster_path;
         fn vector_copy_to_path;
+        fn vector_copy_with_options_json;
+        fn lidar_copy_to_path;
+        fn lidar_write_with_options_json;
+        fn raster_write_with_options_json;
         fn raster_metadata_json;
         fn vector_metadata_json;
     }

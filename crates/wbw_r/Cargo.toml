@@ -15,10 +15,11 @@ pro = ["dep:wbtools_pro"]
 wbcore = { path = "../wbcore" }
 wblicense_core = { path = "../wblicense_core" }
 wbraster = { path = "../wbraster" }
-wbvector = { path = "../wbvector" }
+wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }
 wbtools_oss = { path = "../wbtools_oss" }
 wblidar = { path = "../wblidar" }
 wbtools_pro = { path = "../../../wbtools_pro", optional = true }
 serde_json.workspace = true
+parquet = "54"
 extendr-api = "0.8.1"
 ureq = { version = "2.12.1", features = ["json"] }

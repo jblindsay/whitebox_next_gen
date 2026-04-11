@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::json;
+use serde_json::Value as JsonValue;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -21,6 +22,10 @@ use wbraster::{
     SafeBundle,
     open_sensor_bundle,
     open_sensor_bundle_path,
+    GeoTiffCompression,
+    GeoTiffLayout,
+    GeoTiffWriteOptions,
+    RasterFormat,
 };
 use wblidar::reproject::{
     LidarReprojectOptions,
@@ -218,6 +223,326 @@ fn prj_sidecar_path(path: &Path) -> PathBuf {
     path.with_extension("prj")
 }
 
+#[derive(Debug, Clone, Default)]
+struct GeoTiffWriteControls {
+    compression: Option<GeoTiffCompression>,
+    bigtiff: Option<bool>,
+    layout: Option<GeoTiffLayout>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct RasterWriteControls {
+    compress: Option<bool>,
+    strict_format_options: bool,
+    geotiff: GeoTiffWriteControls,
+}
+
+impl RasterWriteControls {
+    fn has_geotiff_controls(&self) -> bool {
+        self.compress.is_some() || self.geotiff.has_fields
+    }
+
+    fn geotiff_options(&self) -> Option<GeoTiffWriteOptions> {
+        let compression = self
+            .geotiff
+            .compression
+            .or_else(|| match self.compress {
+                Some(true) => Some(GeoTiffCompression::Deflate),
+                Some(false) => Some(GeoTiffCompression::None),
+                None => None,
+            });
+        let bigtiff = self.geotiff.bigtiff;
+        let layout = self.geotiff.layout;
+
+        if compression.is_none() && bigtiff.is_none() && layout.is_none() {
+            None
+        } else {
+            Some(GeoTiffWriteOptions {
+                compression,
+                bigtiff,
+                layout,
+            })
+        }
+    }
+}
+
+fn parse_geotiff_compression(name: &str) -> Option<GeoTiffCompression> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "none" | "off" | "uncompressed" => Some(GeoTiffCompression::None),
+        "deflate" | "zip" => Some(GeoTiffCompression::Deflate),
+        "lzw" => Some(GeoTiffCompression::Lzw),
+        "packbits" | "pack_bits" => Some(GeoTiffCompression::PackBits),
+        "jpeg" => Some(GeoTiffCompression::Jpeg),
+        "webp" | "web_p" => Some(GeoTiffCompression::WebP),
+        "jpegxl" | "jpeg_xl" | "jxl" => Some(GeoTiffCompression::JpegXl),
+        _ => None,
+    }
+}
+
+fn parse_geo_tiff_layout(layout_name: &str, geotiff_obj: &serde_json::Map<String, JsonValue>) -> PyResult<GeoTiffLayout> {
+    let get_u32 = |keys: &[&str]| -> Option<u32> {
+        for key in keys {
+            if let Some(v) = geotiff_obj.get(*key).and_then(JsonValue::as_u64) {
+                if let Ok(parsed) = u32::try_from(v) {
+                    return Some(parsed);
+                }
+            }
+        }
+        None
+    };
+
+    match layout_name.trim().to_ascii_lowercase().as_str() {
+        "standard" => Ok(GeoTiffLayout::Standard),
+        "stripped" | "striped" => {
+            let rows_per_strip = get_u32(&["rows_per_strip"]).unwrap_or(1);
+            Ok(GeoTiffLayout::Stripped { rows_per_strip })
+        }
+        "tiled" => {
+            let tile_width = get_u32(&["tile_width", "tile_size"]).unwrap_or(512);
+            let tile_height = get_u32(&["tile_height", "tile_size"]).unwrap_or(tile_width);
+            Ok(GeoTiffLayout::Tiled {
+                tile_width,
+                tile_height,
+            })
+        }
+        "cog" => {
+            let tile_size = get_u32(&["tile_size", "cog_tile_size"]).unwrap_or(512);
+            Ok(GeoTiffLayout::Cog { tile_size })
+        }
+        other => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Unsupported geotiff.layout '{other}'. Expected one of: standard, stripped, tiled, cog"
+        ))),
+    }
+}
+
+fn parse_raster_write_controls(options: Option<JsonValue>) -> PyResult<RasterWriteControls> {
+    let Some(options) = options else {
+        return Ok(RasterWriteControls::default());
+    };
+
+    let obj = options.as_object().ok_or_else(|| {
+        PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+            "write options must be a dict-like mapping",
+        )
+    })?;
+
+    let compress = match obj.get("compress") {
+        Some(JsonValue::Bool(v)) => Some(*v),
+        Some(JsonValue::Null) | None => None,
+        Some(other) => {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                "options.compress must be a bool when provided, got: {other}"
+            )))
+        }
+    };
+
+    let strict_format_options = match obj.get("strict_format_options") {
+        Some(JsonValue::Bool(v)) => *v,
+        Some(JsonValue::Null) | None => false,
+        Some(other) => {
+            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                "options.strict_format_options must be a bool when provided, got: {other}"
+            )))
+        }
+    };
+
+    let mut geotiff = GeoTiffWriteControls::default();
+    if let Some(gt_val) = obj.get("geotiff") {
+        let gt_obj = gt_val.as_object().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "options.geotiff must be a dict-like mapping",
+            )
+        })?;
+
+        geotiff.has_fields = !gt_obj.is_empty();
+
+        if let Some(v) = gt_obj.get("compression") {
+            let name = v.as_str().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.geotiff.compression must be a string",
+                )
+            })?;
+            geotiff.compression = Some(parse_geotiff_compression(name).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Unsupported geotiff.compression '{name}'. Expected one of: none, deflate, lzw, packbits, jpeg, webp, jpegxl"
+                ))
+            })?);
+        }
+
+        if let Some(v) = gt_obj.get("bigtiff") {
+            geotiff.bigtiff = Some(v.as_bool().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.geotiff.bigtiff must be a bool",
+                )
+            })?);
+        }
+
+        if let Some(v) = gt_obj.get("layout") {
+            let layout_name = v.as_str().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.geotiff.layout must be a string",
+                )
+            })?;
+            geotiff.layout = Some(parse_geo_tiff_layout(layout_name, gt_obj)?);
+        }
+    }
+
+    Ok(RasterWriteControls {
+        compress,
+        strict_format_options,
+        geotiff,
+    })
+}
+
+fn write_wbraster_with_controls(
+    raster: &WbRaster,
+    out_path: &Path,
+    output_format: RasterFormat,
+    controls: &RasterWriteControls,
+) -> PyResult<()> {
+    let has_geotiff_controls = controls.has_geotiff_controls();
+    if output_format != RasterFormat::GeoTiff && has_geotiff_controls {
+        if controls.strict_format_options {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "GeoTIFF-specific write options were provided for a non-GeoTIFF output path",
+            ));
+        }
+        raster.write(out_path, output_format).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to write raster: {e}"))
+        })?;
+        return Ok(());
+    }
+
+    if output_format == RasterFormat::GeoTiff {
+        if let Some(opts) = controls.geotiff_options() {
+            raster
+                .write_geotiff_with_options(out_path, &opts)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "Failed to write GeoTIFF with options: {e}"
+                    ))
+                })?;
+            return Ok(());
+        }
+    }
+
+    raster.write(out_path, output_format).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to write raster: {e}"))
+    })
+}
+
+fn resolved_output_path(working_directory: &Path, output_path: &str) -> PathBuf {
+    if Path::new(output_path).is_absolute() {
+        PathBuf::from(output_path)
+    } else {
+        working_directory.join(output_path)
+    }
+}
+
+fn path_has_extension(path: &Path) -> bool {
+    path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| !ext.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn write_raster_with_controls_for_env(
+    working_directory: &Path,
+    verbose: bool,
+    raster: &Raster,
+    output_path: &str,
+    controls: &RasterWriteControls,
+    remove_after_write: bool,
+) -> PyResult<()> {
+    let mut out_path = resolved_output_path(working_directory, output_path);
+    let missing_extension = !path_has_extension(&out_path);
+    if missing_extension {
+        out_path.set_extension("tif");
+    }
+
+    let mut effective_controls = controls.clone();
+    if missing_extension && effective_controls.geotiff.layout.is_none() {
+        effective_controls.geotiff.has_fields = true;
+        effective_controls.geotiff.layout = Some(GeoTiffLayout::Cog { tile_size: 512 });
+    }
+
+    let output_format = RasterFormat::for_output_path(&out_path.to_string_lossy()).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "Unable to infer output format for '{}': {e}",
+            out_path.display()
+        ))
+    })?;
+
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "Failed to create output directory: {e}"
+            ))
+        })?;
+    }
+
+    if verbose {
+        println!("Writing raster to: {}", out_path.display());
+    }
+
+    let raster_path = raster.file_path.to_string_lossy();
+    let is_memory_backed = memory_store::raster_is_memory_path(&raster_path);
+    let requires_reencode = output_format == RasterFormat::GeoTiff && effective_controls.geotiff_options().is_some();
+
+    if output_format != RasterFormat::GeoTiff
+        && effective_controls.has_geotiff_controls()
+        && effective_controls.strict_format_options
+    {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "GeoTIFF-specific write options were provided for a non-GeoTIFF output path",
+        ));
+    }
+
+    if is_memory_backed {
+        let id = memory_store::raster_path_to_id(&raster_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid in-memory raster path: {}",
+                raster.file_path.display()
+            ))
+        })?;
+
+        let stored = memory_store::get_raster_by_id(id).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
+                "Raster not found in memory store: {}",
+                raster.file_path.display()
+            ))
+        })?;
+
+        write_wbraster_with_controls(&stored, &out_path, output_format, &effective_controls)?;
+
+        if remove_after_write {
+            memory_store::remove_raster_by_id(id);
+        }
+    } else if raster.file_path != out_path && !requires_reencode {
+        std::fs::copy(&raster.file_path, &out_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "Failed to write raster: {e}"
+            ))
+        })?;
+    } else {
+        let source = WbRaster::read(&raster.file_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "Failed to read source raster '{}': {e}",
+                raster.file_path.display()
+            ))
+        })?;
+        write_wbraster_with_controls(&source, &out_path, output_format, &effective_controls)?;
+    }
+
+    if verbose {
+        println!("Raster saved to: {}", out_path.display());
+    }
+
+    Ok(())
+}
+
 fn read_prj_sidecar(path: &Path) -> PyResult<Option<String>> {
     let prj = prj_sidecar_path(path);
     if !prj.exists() {
@@ -284,7 +609,7 @@ fn infer_epsg_from_crs_text(text: &str, strict: bool) -> Option<u32> {
 
 fn detect_vector_output_format(path: &Path) -> PyResult<VectorFormat> {
     if path.extension().is_none() {
-        return Ok(VectorFormat::Shapefile);
+        return Ok(VectorFormat::GeoPackage);
     }
 
     VectorFormat::detect(path).map_err(|e| {
@@ -363,8 +688,6 @@ fn py_any_to_field_value(value: &Bound<'_, PyAny>, expected_type: FieldType) -> 
         FieldType::Float => {
             if let Ok(v) = value.extract::<f64>() {
                 Ok(FieldValue::Float(v))
-            } else if let Ok(v) = value.extract::<i64>() {
-                Ok(FieldValue::Float(v as f64))
             } else {
                 Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                     "expected a float-compatible value",
@@ -4969,6 +5292,41 @@ impl Lidar {
 
         Ok(Lidar { file_path: out_path })
     }
+
+    #[pyo3(signature = (dst, options_json=None))]
+    fn write_to_path(&self, dst: &str, options_json: Option<&str>) -> PyResult<Lidar> {
+        use wbw_r;
+        
+        let opts_json = options_json.unwrap_or("{}");
+        let result_path = wbw_r::lidar_write_with_options_json(
+            self.file_path.to_string_lossy().as_ref(),
+            dst,
+            opts_json,
+        ).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write lidar to '{}': {e}",
+                dst
+            ))
+        })?;
+
+        Ok(Lidar { file_path: PathBuf::from(result_path) })
+    }
+
+    fn copy_to_path(&self, dst: &str) -> PyResult<Lidar> {
+        use wbw_r;
+        
+        let result_path = wbw_r::lidar_copy_to_path(
+            self.file_path.to_string_lossy().as_ref(),
+            dst,
+        ).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to copy lidar to '{}': {e}",
+                dst
+            ))
+        })?;
+
+        Ok(Lidar { file_path: PathBuf::from(result_path) })
+    }
 }
 
 impl Raster {
@@ -6146,7 +6504,12 @@ impl WbEnvironment {
     }
 
     /// Read a single vector file.
-    fn read_vector(&self, file_name: &str) -> PyResult<Vector> {
+    ///
+    /// `options` may include:
+    /// - `osmpbf`: {`highways_only`, `named_ways_only`, `polygons_only`, `include_tag_keys`}
+    /// - `strict_format_options`: bool
+    #[pyo3(signature = (file_name, options=None))]
+    fn read_vector(&self, file_name: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Vector> {
         let path = if Path::new(file_name).is_absolute() {
             PathBuf::from(file_name)
         } else {
@@ -6157,6 +6520,37 @@ impl WbEnvironment {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
                 format!("Vector file not found: {}", path.display()),
             ));
+        }
+
+        if let Some(opts) = options {
+            let options_json = py_any_to_json_value(opts)?.to_string();
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("vector");
+            let millis = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let out_path = self
+                .working_directory
+                .join(format!("{stem}_read_options_{millis}.gpkg"));
+
+            let written = wbw_r::vector_copy_with_options_json(
+                path.to_string_lossy().as_ref(),
+                out_path.to_string_lossy().as_ref(),
+                &options_json,
+            )
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "Failed to read vector '{}' with options: {e}",
+                    path.display()
+                ))
+            })?;
+
+            return Ok(Vector {
+                file_path: PathBuf::from(written),
+            });
         }
 
         Ok(Vector { file_path: path })
@@ -6194,12 +6588,17 @@ impl WbEnvironment {
     }
 
     /// Read multiple vector files at once.
-    #[pyo3(signature = (file_names, parallel=true))]
-    fn read_vectors(&self, file_names: Vec<String>, parallel: bool) -> PyResult<Vec<Vector>> {
+    #[pyo3(signature = (file_names, parallel=true, options=None))]
+    fn read_vectors(
+        &self,
+        file_names: Vec<String>,
+        parallel: bool,
+        options: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Vec<Vector>> {
         let _ = parallel;
         file_names
             .into_iter()
-            .map(|name| self.read_vector(&name))
+            .map(|name| self.read_vector(&name, options))
             .collect()
     }
 
@@ -6707,72 +7106,74 @@ impl WbEnvironment {
         Ok(results)
     }
 
-    /// Write a raster to file
-    #[pyo3(signature = (raster, output_path, compress=false, remove_after_write=false))]
+    /// Write a raster to file.
+    ///
+    /// `options` is a dict with optional keys:
+    /// - `compress`: bool
+    /// - `strict_format_options`: bool
+    /// - `geotiff`: dict containing
+    ///   - `compression`: one of none|deflate|lzw|packbits|jpeg|webp|jpegxl
+    ///   - `bigtiff`: bool
+    ///   - `layout`: one of standard|stripped|tiled|cog
+    ///   - `rows_per_strip`, `tile_width`, `tile_height`, `tile_size`
+    #[pyo3(signature = (raster, output_path, options=None, remove_after_write=false))]
     fn write_raster(
         &self,
         raster: &Raster,
         output_path: &str,
-        compress: bool,
+        options: Option<&Bound<'_, PyAny>>,
         remove_after_write: bool,
     ) -> PyResult<()> {
-        let _ = compress;
-        let out_path = if Path::new(output_path).is_absolute() {
-            PathBuf::from(output_path)
+        let controls = if let Some(opts) = options {
+            parse_raster_write_controls(Some(py_any_to_json_value(opts)?))?
         } else {
-            self.working_directory.join(output_path)
+            RasterWriteControls::default()
         };
 
-        // Create parent directory if needed
-        if let Some(parent) = out_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to create output directory: {e}"
-                ))
-            })?;
+        write_raster_with_controls_for_env(
+            &self.working_directory,
+            self.verbose,
+            raster,
+            output_path,
+            &controls,
+            remove_after_write,
+        )
+    }
+
+    /// Write a list of rasters using the same options.
+    #[pyo3(signature = (rasters, output_paths, options=None, remove_after_write=false))]
+    fn write_rasters(
+        &self,
+        py: Python<'_>,
+        rasters: Vec<Py<Raster>>,
+        output_paths: Vec<String>,
+        options: Option<&Bound<'_, PyAny>>,
+        remove_after_write: bool,
+    ) -> PyResult<()> {
+        if rasters.len() != output_paths.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "rasters and output_paths must have the same length (got {} rasters and {} output paths)",
+                rasters.len(),
+                output_paths.len()
+            )));
         }
 
-        if self.verbose {
-            println!("Writing raster to: {}", out_path.display());
-        }
+        let controls = if let Some(opts) = options {
+            parse_raster_write_controls(Some(py_any_to_json_value(opts)?))?
+        } else {
+            RasterWriteControls::default()
+        };
 
-        let raster_path = raster.file_path.to_string_lossy();
-        let is_memory_backed = memory_store::raster_is_memory_path(&raster_path);
-
-        if is_memory_backed {
-            let id = memory_store::raster_path_to_id(&raster_path).ok_or_else(|| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Invalid in-memory raster path: {}",
-                    raster.file_path.display()
-                ))
-            })?;
-
-            let stored = memory_store::get_raster_by_id(id).ok_or_else(|| {
-                PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
-                    "Raster not found in memory store: {}",
-                    raster.file_path.display()
-                ))
-            })?;
-
-            stored.write_auto(&out_path).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to write raster: {e}"
-                ))
-            })?;
-
-            if remove_after_write {
-                memory_store::remove_raster_by_id(id);
-            }
-        } else if raster.file_path != out_path {
-            std::fs::copy(&raster.file_path, &out_path).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to write raster: {e}"
-                ))
-            })?;
-        }
-
-        if self.verbose {
-            println!("Raster saved to: {}", out_path.display());
+        for (py_raster, output_path) in rasters.iter().zip(output_paths.iter()) {
+            let raster_ref = py_raster.borrow(py);
+            write_raster_with_controls_for_env(
+                &self.working_directory,
+                self.verbose,
+                &raster_ref,
+                output_path,
+                &controls,
+                remove_after_write,
+            )?;
         }
 
         Ok(())
@@ -6806,12 +7207,26 @@ impl WbEnvironment {
     }
 
     /// Write a vector object to file.
-    fn write_vector(&self, vector: &Vector, output_path: &str) -> PyResult<()> {
-        let out_path = if Path::new(output_path).is_absolute() {
+    ///
+    /// `options` may include:
+    /// - `geoparquet`: {`max_rows_per_group`, `data_page_size_limit`, `write_batch_size`, `data_page_row_count_limit`, `compression`}
+    /// - `strict_format_options`: bool
+    #[pyo3(signature = (vector, output_path, options=None))]
+    fn write_vector(
+        &self,
+        vector: &Vector,
+        output_path: &str,
+        options: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let mut out_path = if Path::new(output_path).is_absolute() {
             PathBuf::from(output_path)
         } else {
             self.working_directory.join(output_path)
         };
+
+        if !path_has_extension(&out_path) {
+            out_path.set_extension("gpkg");
+        }
 
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -6821,9 +7236,18 @@ impl WbEnvironment {
             })?;
         }
 
-        let layer = read_vector_layer_for_python(vector)?;
-        let format = detect_vector_output_format(&out_path)?;
-        wbvector::write(&layer, &out_path, format).map_err(|e| {
+        let options_json = if let Some(opts) = options {
+            py_any_to_json_value(opts)?.to_string()
+        } else {
+            "{}".to_string()
+        };
+
+        wbw_r::vector_copy_with_options_json(
+            vector.file_path.to_string_lossy().as_ref(),
+            out_path.to_string_lossy().as_ref(),
+            &options_json,
+        )
+        .map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                 "Failed to write vector '{}': {e}",
                 out_path.display()
@@ -6834,12 +7258,27 @@ impl WbEnvironment {
     }
 
     /// Write a LiDAR object to file.
-    fn write_lidar(&self, lidar: &Lidar, output_path: &str) -> PyResult<()> {
-        let out_path = if Path::new(output_path).is_absolute() {
+    ///
+    /// `options` may include:
+    /// - `laz`: {`chunk_size`, `compression_level`}
+    /// - `copc`: {`max_points_per_node`, `max_depth`, `node_point_ordering`}
+    #[pyo3(signature = (lidar, output_path, options=None))]
+    fn write_lidar(
+        &self,
+        lidar: &Lidar,
+        output_path: &str,
+        options: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let mut out_path = if Path::new(output_path).is_absolute() {
             PathBuf::from(output_path)
         } else {
             self.working_directory.join(output_path)
         };
+
+        let missing_extension = !path_has_extension(&out_path);
+        if missing_extension {
+            out_path = PathBuf::from(format!("{}.copc.laz", out_path.to_string_lossy()));
+        }
 
         if let Some(parent) = out_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -6849,10 +7288,22 @@ impl WbEnvironment {
             })?;
         }
 
+        let options_json = if let Some(opts) = options {
+            py_any_to_json_value(opts)?.to_string()
+        } else {
+            "{}".to_string()
+        };
+
         if lidar.file_path != out_path {
-            std::fs::copy(&lidar.file_path, &out_path).map_err(|e| {
+            wbw_r::lidar_write_with_options_json(
+                lidar.file_path.to_string_lossy().as_ref(),
+                out_path.to_string_lossy().as_ref(),
+                &options_json,
+            )
+            .map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to write lidar: {e}"
+                    "Failed to write lidar '{}': {e}",
+                    out_path.display()
                 ))
             })?;
         }
@@ -25962,7 +26413,7 @@ mod tests {
         let env = WbEnvironment::new(false, "open").unwrap();
 
         let shp_out = td.path().join("roads.shp");
-        env.write_vector(&source, shp_out.to_string_lossy().as_ref()).unwrap();
+        env.write_vector(&source, shp_out.to_string_lossy().as_ref(), None).unwrap();
         assert!(shp_out.exists());
         assert!(shp_out.with_extension("dbf").exists());
         assert!(shp_out.with_extension("shx").exists());
@@ -25977,7 +26428,7 @@ mod tests {
         assert!(shp_copy.with_extension("shx").exists());
 
         let mif_out = td.path().join("roads.mif");
-        env.write_vector(&source, mif_out.to_string_lossy().as_ref()).unwrap();
+        env.write_vector(&source, mif_out.to_string_lossy().as_ref(), None).unwrap();
         assert!(mif_out.exists());
         assert!(mif_out.with_extension("mid").exists());
 
@@ -26253,7 +26704,7 @@ mod tests {
         let tmp = env.add(&r1, &r2, None, None).unwrap();
         assert!(tmp.is_memory_backed());
 
-        env.write_raster(&tmp, out_path.to_string_lossy().as_ref(), false, true)
+        env.write_raster(&tmp, out_path.to_string_lossy().as_ref(), None, true)
             .unwrap();
 
         assert!(out_path.exists());

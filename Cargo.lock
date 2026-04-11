@@ -3905,7 +3905,7 @@ dependencies = [
 
 [[package]]
 name = "wblidar"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rayon",
  "reqwest",
@@ -4042,6 +4042,7 @@ dependencies = [
  "wbtools_oss",
  "wbtools_pro",
  "wbvector",
+ "wbw_r",
 ]
 
 [[package]]
@@ -4049,6 +4050,7 @@ name = "wbw_r"
 version = "2.0.0"
 dependencies = [
  "extendr-api",
+ "parquet",
  "serde_json",
  "ureq",
  "wbcore",

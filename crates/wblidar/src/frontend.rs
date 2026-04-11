@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read};
 use std::path::Path;
 
-use crate::copc::{CopcReader, CopcWriter, CopcWriterConfig};
+use crate::copc::{CopcNodePointOrdering, CopcReader, CopcWriter, CopcWriterConfig};
 use crate::crs::Crs;
 use crate::e57::{E57Reader, E57Writer, E57WriterConfig};
 use crate::io::{PointReader, PointWriter};
@@ -45,6 +45,35 @@ pub struct ReadDiagnostics {
     pub point14_partial_expected_points: u64,
 }
 
+/// Optional format-specific write controls used by LiDAR output helpers.
+#[derive(Debug, Clone, Default)]
+pub struct LidarWriteOptions {
+    /// LAZ-specific write controls.
+    pub laz: LazWriteOptions,
+    /// COPC-specific write controls.
+    pub copc: CopcWriteOptions,
+}
+
+/// Optional write controls for LAZ output.
+#[derive(Debug, Clone, Default)]
+pub struct LazWriteOptions {
+    /// LAZ points-per-chunk value.
+    pub chunk_size: Option<u32>,
+    /// LAZ compression tuning level in the range 0-9.
+    pub compression_level: Option<u32>,
+}
+
+/// Optional write controls for COPC output.
+#[derive(Debug, Clone, Default)]
+pub struct CopcWriteOptions {
+    /// Maximum points kept in a node before subdivision.
+    pub max_points_per_node: Option<usize>,
+    /// Maximum octree depth.
+    pub max_depth: Option<u32>,
+    /// Point ordering policy within nodes.
+    pub node_point_ordering: Option<CopcNodePointOrdering>,
+}
+
 impl PointCloud {
     /// Read a point cloud from `path`, auto-detecting format.
     ///
@@ -68,6 +97,29 @@ impl PointCloud {
     /// Returns an error if the file cannot be created or encoded.
     pub fn write_as<P: AsRef<Path>>(&self, path: P, format: LidarFormat) -> Result<()> {
         write(self, path, format)
+    }
+
+    /// Write this point cloud to `path`, inferring output format from extension
+    /// and applying optional format-specific write controls.
+    ///
+    /// # Errors
+    /// Returns an error when extension-based format detection fails or encoding fails.
+    pub fn write_with_options<P: AsRef<Path>>(&self, path: P, options: &LidarWriteOptions) -> Result<()> {
+        write_auto_with_options(self, path, options)
+    }
+
+    /// Write this point cloud to `path` in an explicitly selected format,
+    /// applying optional format-specific write controls.
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be created or encoded.
+    pub fn write_as_with_options<P: AsRef<Path>>(
+        &self,
+        path: P,
+        format: LidarFormat,
+        options: &LidarWriteOptions,
+    ) -> Result<()> {
+        write_with_options(self, path, format, options)
     }
 
     /// Assign a CRS to this point cloud using an EPSG code.
@@ -342,6 +394,27 @@ pub fn write<P: AsRef<Path>>(cloud: &PointCloud, path: P, format: LidarFormat) -
     }
 }
 
+/// Write a point cloud to `path` in a specified format, applying optional
+/// format-specific write controls.
+///
+/// # Errors
+/// Returns an error if writing or finalization fails.
+pub fn write_with_options<P: AsRef<Path>>(
+    cloud: &PointCloud,
+    path: P,
+    format: LidarFormat,
+    options: &LidarWriteOptions,
+) -> Result<()> {
+    let path = path.as_ref();
+    match format {
+        LidarFormat::Las => write_las(cloud, path),
+        LidarFormat::Laz => write_laz_with_options(cloud, path, &options.laz),
+        LidarFormat::Copc => write_copc_with_options(cloud, path, &options.copc),
+        LidarFormat::Ply => write_ply(cloud, path),
+        LidarFormat::E57 => write_e57(cloud, path),
+    }
+}
+
 /// Write a point cloud to `path`, inferring output format from extension.
 ///
 /// # Errors
@@ -356,6 +429,27 @@ pub fn write_auto<P: AsRef<Path>>(cloud: &PointCloud, path: P) -> Result<()> {
         ),
     })?;
     write(cloud, path, format)
+}
+
+/// Write a point cloud to `path`, inferring output format from extension,
+/// and applying optional format-specific write controls.
+///
+/// # Errors
+/// Returns an error when extension-based format detection fails or writing fails.
+pub fn write_auto_with_options<P: AsRef<Path>>(
+    cloud: &PointCloud,
+    path: P,
+    options: &LidarWriteOptions,
+) -> Result<()> {
+    let path = path.as_ref();
+    let format = detect_by_extension(path).ok_or_else(|| Error::InvalidValue {
+        field: "format",
+        detail: format!(
+            "unable to infer output format from extension for path: {}",
+            path.display()
+        ),
+    })?;
+    write_with_options(cloud, path, format, options)
 }
 
 fn detect_by_extension(path: &Path) -> Option<LidarFormat> {
@@ -388,19 +482,42 @@ fn write_las(cloud: &PointCloud, path: &Path) -> Result<()> {
 }
 
 fn write_laz(cloud: &PointCloud, path: &Path) -> Result<()> {
+    write_laz_with_options(cloud, path, &LazWriteOptions::default())
+}
+
+fn write_laz_with_options(cloud: &PointCloud, path: &Path, options: &LazWriteOptions) -> Result<()> {
     let out = BufWriter::new(File::create(path)?);
     let mut cfg = LazWriterConfig::default();
     cfg.las = default_las_config(cloud);
     cfg.las.crs = cloud.crs.clone();
+    if let Some(chunk_size) = options.chunk_size {
+        cfg.chunk_size = chunk_size;
+    }
+    if let Some(compression_level) = options.compression_level {
+        cfg.compression_level = compression_level;
+    }
     let mut writer = LazWriter::new(out, cfg)?;
     writer.write_all_points(&cloud.points)?;
     writer.finish()
 }
 
 fn write_copc(cloud: &PointCloud, path: &Path) -> Result<()> {
+    write_copc_with_options(cloud, path, &CopcWriteOptions::default())
+}
+
+fn write_copc_with_options(cloud: &PointCloud, path: &Path, options: &CopcWriteOptions) -> Result<()> {
     let out = BufWriter::new(File::create(path)?);
     let mut cfg = default_copc_config(cloud);
     cfg.las.crs = cloud.crs.clone();
+    if let Some(max_points_per_node) = options.max_points_per_node {
+        cfg.max_points_per_node = max_points_per_node;
+    }
+    if let Some(max_depth) = options.max_depth {
+        cfg.max_depth = max_depth;
+    }
+    if let Some(node_point_ordering) = options.node_point_ordering {
+        cfg.node_point_ordering = node_point_ordering;
+    }
     let mut writer = CopcWriter::new(out, cfg);
     writer.write_all_points(&cloud.points)?;
     writer.finish()

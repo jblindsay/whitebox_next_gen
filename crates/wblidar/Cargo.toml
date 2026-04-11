@@ -1,6 +1,6 @@
 [package]
 name = "wblidar"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "High-performance library for reading and writing LiDAR point cloud data (LAS, LAZ, COPC, PLY, E57)"

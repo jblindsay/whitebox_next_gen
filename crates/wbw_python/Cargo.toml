@@ -19,8 +19,9 @@ wbtools_oss = { path = "../wbtools_oss" }
 wbtools_pro = { path = "../../../wbtools_pro", optional = true }
 wbraster = { path = "../wbraster" }
 wbprojection = { path = "../wbprojection" }
-wbvector = { path = "../wbvector" }
+wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }
 wblidar = { path = "../wblidar" }
+wbw_r = { path = "../wbw_r" }
 serde_json.workspace = true
 pyo3 = { version = "0.28.2", features = ["macros"] }
 ureq = { version = "2.12.1", features = ["json"] }

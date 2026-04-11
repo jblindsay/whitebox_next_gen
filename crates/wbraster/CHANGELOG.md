@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
-## [Unreleased]
+## [0.1.1] - 2026-04-11
+
 ### Added
 - Expanded Sentinel SAFE package support:
   - Sentinel-1: acquisition datetime parsing, spatial bounds parsing, canonical subswath-safe keying, calibration LUT parsing/interpolation, thermal noise LUT parsing/interpolation, calibrated and noise-corrected read helpers, dB-output helpers.
@@ -72,14 +73,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - rejecting zero-dimension array shapes,
   - rejecting mismatched array-rank vs chunk-shape-rank metadata.
 - Added Zarr v2 writer chunk-row/chunk-col controls via metadata keys (`zarr_chunk_rows`, `zarr_chunk_cols`) while keeping backward-compatible defaults.
-
-### Changed
-- Updated README with SAFE and non-SAFE bundle examples, including unified detection/opening workflows.
-- Configured `zip` dependency for pure-Rust operation (`default-features = false`, `features = ["deflate"]`) to avoid `bzip2-sys`/`lzma-sys` native dependencies from default feature sets.
-- Stabilized `memory_store` unit tests by serializing tests that mutate the shared global in-memory raster store.
-
-## [0.1.1] - 2026-03-31
-### Added
 - Added in-place parallel fill APIs:
   - `RasterData::par_fill_with(Fn(usize) -> f64)`
   - `Raster::par_fill_with(Fn(usize) -> f64)`
@@ -90,6 +83,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `put_raster_arc(Arc<Raster>)`
   - `get_raster_arc_by_id(&str)`
   - `get_raster_arc_by_path(&str)`
+
+### Changed
+- Updated README with SAFE and non-SAFE bundle examples, including unified detection/opening workflows.
+- Configured `zip` dependency for pure-Rust operation (`default-features = false`, `features = ["deflate"]`) to avoid `bzip2-sys`/`lzma-sys` native dependencies from default feature sets.
+- Stabilized `memory_store` unit tests by serializing tests that mutate the shared global in-memory raster store.
+- Raster write throughput improves for GeoTIFF/COG outputs through wbgeotiff's
+  parallel strip/tile chunk encoding path.
 
 ## [0.1.0] - 2026-03-31
 ### Added

@@ -35,25 +35,30 @@ pub struct OsmPbfReadOptions {
 }
 
 impl OsmPbfReadOptions {
+    /// Create default OSM PBF read options.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Keep only ways tagged as highways.
     pub fn with_highways_only(mut self, yes: bool) -> Self {
         self.highways_only = yes;
         self
     }
 
+    /// Keep only ways with a non-empty name tag.
     pub fn with_named_ways_only(mut self, yes: bool) -> Self {
         self.named_ways_only = yes;
         self
     }
 
+    /// Keep only polygonal features.
     pub fn with_polygons_only(mut self, yes: bool) -> Self {
         self.polygons_only = yes;
         self
     }
 
+    /// Restrict retained tags to the provided key allow-list.
     pub fn with_include_tag_keys<I, S>(mut self, keys: I) -> Self
     where
         I: IntoIterator<Item = S>,

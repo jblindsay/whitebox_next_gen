@@ -18,7 +18,10 @@ The package API is being modernized with emphasis on:
 - [Recommended examples](#recommended-examples)
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
+- [Raster output controls](#raster-output-controls)
+- [Extensionless defaults](#extensionless-defaults)
 - [R interoperability](#r-interoperability)
+- [Supported file formats](#supported-file-formats)
 - [Licensing overview](#licensing-overview)
 - [Discovery APIs](#discovery-apis)
 - [Tests](#tests)
@@ -231,6 +234,138 @@ meta <- dem$metadata()
 print(dem)
 
 arr <- dem$to_array()
+
+# Default write behavior
+dem$write("dem_copy.tif", overwrite = TRUE)
+
+# Extensionless path defaults to COG-style GeoTIFF
+dem$write("dem_copy", overwrite = TRUE) # writes dem_copy.tif
+
+# Write with explicit GeoTIFF/COG controls
+dem$write(
+  "dem_cog.tif",
+  overwrite = TRUE,
+  options = list(
+    compress = TRUE,
+    strict_format_options = TRUE,
+    geotiff = list(
+      compression = "deflate",
+      bigtiff = FALSE,
+      layout = "cog",
+      tile_size = 512
+    )
+  )
+)
+
+# Session-level writer helpers
+s <- wbw_session()
+s$write_raster(
+  dem,
+  "dem_tiled.tif",
+  options = list(
+    geotiff = list(
+      layout = "tiled",
+      tile_width = 256,
+      tile_height = 256
+    )
+  )
+)
+```
+
+## Raster output controls
+
+Raster writes can be controlled through:
+
+- `wbw_write_raster(...)`
+- `wbw_write_rasters(...)`
+- `session$write_raster(...)`
+- `session$write_rasters(...)`
+- `wbw_raster$write(...)`
+
+Write options are passed with `options = list(...)`.
+
+Supported keys:
+
+- `compress` (`TRUE`/`FALSE`): convenience GeoTIFF compression toggle.
+  - `TRUE` maps to `deflate`.
+  - `FALSE` maps to uncompressed GeoTIFF.
+- `strict_format_options` (`TRUE`/`FALSE`): when `TRUE`, using GeoTIFF options
+  with non-GeoTIFF output paths raises an error.
+- `geotiff` (list): GeoTIFF/COG-specific controls.
+  - `compression`: `none`, `deflate`, `lzw`, `packbits`, `jpeg`, `webp`, `jpegxl`
+  - `bigtiff`: `TRUE` or `FALSE`
+  - `layout`: `standard`, `stripped`, `tiled`, `cog`
+  - `rows_per_strip` (for `stripped`)
+  - `tile_width`, `tile_height` (for `tiled`)
+  - `tile_size` (for `cog`)
+
+Notes:
+
+- For `.tif`/`.tiff` outputs, GeoTIFF options are applied.
+- For non-GeoTIFF outputs, GeoTIFF options are ignored unless
+  `strict_format_options = TRUE`.
+- Backend GeoTIFF default compression is Deflate unless explicitly overridden.
+
+### Common output profiles
+
+```r
+# 1) Standard GeoTIFF (default backend behavior)
+wbw_write_raster(dem, "out_standard.tif")
+
+# 2) Explicit stripped GeoTIFF
+wbw_write_raster(
+  dem,
+  "out_stripped.tif",
+  options = list(
+    geotiff = list(
+      layout = "stripped",
+      rows_per_strip = 32
+    )
+  )
+)
+
+# 3) Explicit tiled GeoTIFF
+wbw_write_raster(
+  dem,
+  "out_tiled.tif",
+  options = list(
+    geotiff = list(
+      layout = "tiled",
+      tile_width = 256,
+      tile_height = 256
+    )
+  )
+)
+
+# 4) Cloud-Optimized GeoTIFF (COG)
+wbw_write_raster(
+  dem,
+  "out_cog.tif",
+  options = list(
+    compress = TRUE,
+    geotiff = list(
+      layout = "cog",
+      tile_size = 512,
+      bigtiff = FALSE
+    )
+  )
+)
+```
+
+### Extensionless defaults
+
+When `output_path` has no extension:
+
+- `wbw_write_raster(...)` writes COG-style GeoTIFF to `*.tif`
+- `wbw_vector$write(...)` writes GeoPackage to `*.gpkg`
+- `wbw_lidar$write(...)` writes COPC to `*.copc.laz`
+
+Examples:
+
+```r
+wbw_write_raster(dem, "my_file")      # my_file.tif (COG-style default)
+roads$write("my_file")                # my_file.gpkg
+lidar$write("my_file", overwrite=TRUE) # my_file.copc.laz
 ```
 
 ### Typed vector wrapper
@@ -241,6 +376,9 @@ meta <- roads$metadata()
 print(roads)
 
 tv <- roads$to_terra()
+
+# Extensionless path defaults to GeoPackage
+roads$write("roads_copy") # writes roads_copy.gpkg
 ```
 
 ### Typed lidar wrapper
@@ -251,6 +389,33 @@ meta <- lidar$metadata()
 print(lidar)
 
 copied <- lidar$deep_copy("points_copy.las", overwrite = TRUE)
+
+# Extensionless path defaults to COPC
+lidar$write("points_copy", overwrite = TRUE) # writes points_copy.copc.laz
+
+# Optional format-specific write controls
+lidar$write(
+  "points_copy.copc.laz",
+  overwrite = TRUE,
+  options = list(
+    copc = list(
+      max_points_per_node = 75000L,
+      max_depth = 8L,
+      node_point_ordering = "hilbert"
+    )
+  )
+)
+
+lidar$write(
+  "points_copy.laz",
+  overwrite = TRUE,
+  options = list(
+    laz = list(
+      chunk_size = 25000L,
+      compression_level = 7L
+    )
+  )
+)
 ```
 
 ### Sensor bundle wrapper
@@ -316,6 +481,79 @@ Install optional bridge dependencies:
 install.packages("terra")
 install.packages("stars")
 ```
+
+## Supported file formats
+
+whiteboxworkflows file format support comes from backend crates:
+
+- Raster formats come from [`wbraster`](../../../wbraster).
+- Vector formats come from [`wbvector`](../../../wbvector).
+- LiDAR formats come from [`wblidar`](../../../wblidar).
+
+### Raster (via wbraster)
+
+Read/write support includes:
+
+- GeoTIFF / BigTIFF / COG (`.tif`, `.tiff`)
+- JPEG2000 / GeoJP2 (`.jp2`)
+- GeoPackage raster (`.gpkg`)
+- ENVI (`.hdr` with sidecar data files)
+- ER Mapper (`.ers`)
+- Esri ASCII (`.asc`, `.grd`)
+- Esri Binary Grid (`.adf` workspace)
+- GRASS ASCII (`.asc`, `.txt`)
+- Idrisi (`.rdc`, `.rst`)
+- PCRaster (`.map`)
+- SAGA (`.sgrd`, `.sdat`)
+- Surfer GRD (`.grd`)
+- Zarr (`.zarr`)
+
+#### Satellite sensor bundles (read-only)
+
+`wbraster` also supports read-only satellite sensor bundle ingestion. These are
+package-level readers (bundle metadata + band/measurement/asset resolution), not
+generic raster write targets.
+
+Supported bundle families:
+
+- Sentinel-2 SAFE
+- Sentinel-1 SAFE
+- Landsat Collection bundles
+- ICEYE bundles
+- PlanetScope bundles
+- SPOT/Pleiades DIMAP bundles
+- Maxar/WorldView bundles
+- RADARSAT-2 bundles
+- RCM bundles
+
+### Vector (via wbvector)
+
+Read/write support includes:
+
+- Shapefile (`.shp` + sidecars)
+- GeoPackage (`.gpkg`)
+- GeoJSON (`.geojson`)
+- FlatGeobuf (`.fgb`)
+- GML (`.gml`)
+- GPX (`.gpx`)
+- KML (`.kml`)
+- MapInfo Interchange (`.mif` + `.mid`)
+
+Additional feature-gated formats in `wbvector`:
+
+- GeoParquet (`.parquet`)
+- KMZ (`.kmz`)
+- OSM PBF (`.osm.pbf`, read-only)
+
+### LiDAR (via wblidar)
+
+Read/write support includes:
+
+- LAS
+- LAZ
+- COPC
+- PLY
+- E57
 
 ## Licensing overview
 

@@ -35,7 +35,20 @@ pub mod point;
 pub mod reproject;
 
 pub use error::{Error, Result};
-pub use frontend::{read, read_with_diagnostics, write, write_auto, LidarFormat, PointCloud, ReadDiagnostics};
+pub use frontend::{
+	read,
+	read_with_diagnostics,
+	write,
+	write_auto,
+	write_auto_with_options,
+	write_with_options,
+	CopcWriteOptions,
+	LazWriteOptions,
+	LidarFormat,
+	LidarWriteOptions,
+	PointCloud,
+	ReadDiagnostics,
+};
 pub use crs::Crs;
 pub use point::{Color, ExtraBytes, GpsTime, PointRecord, Rgb16, WaveformPacket};
 pub use io::{PointReader, PointWriter, SeekableReader};

@@ -66,7 +66,8 @@ Execution plan:
     - binary math: `add()`, `subtract()`, `multiply()`, `divide()`
     - unary math: `abs()`, `ceil()`, `floor()`, `round()`, `square()`, `sqrt()`, `log10()`, `log2()`, `sin()`, `cos()`, `tan()`, `sinh()`, `cosh()`, `tanh()`, `exp()`, `exp2()`
     - conversion/io: `to_array()`, `to_stars()`, `deep_copy()`, `write()`
-  - `wbw_vector` wrapper with `metadata()`, `to_terra()`, and optional `to_sf()`
+  - `wbw_vector` wrapper with `metadata()`, `schema()`, `attributes()`, `attribute()` for reads
+    and `update_attributes()`, `update_attribute()`, `add_field()` for writes; plus `to_terra()` and optional `to_sf()`
   - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `deep_copy()`, and `write()`
   - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `key_summary()`, `has_key()`, `resolve_key()`, `read_any()`, `read_*()`, preview selection, and true/false-colour composite helpers
 - Discovery helpers:
@@ -121,7 +122,8 @@ Notes:
 | sensor bundle reader helpers | `wbw_read_bundle()` and family-specific readers | complete |
 | bundle preview/composite helper flows | `read_preview_raster()`, `write_true_colour()`, `write_false_colour()` | complete |
 | raster S3 arithmetic operators (`+`, `-`, `*`, `/`) | `+.wbw_raster`, `-.wbw_raster`, `*.wbw_raster`, `/.wbw_raster` | complete (unary `-` gives clear error) |
-| vector attribute table read/iterate | not yet implemented — use `to_terra()` or `to_sf()` bridge | not yet implemented |
+| `Vector.schema()`, `Vector.attributes()`, `Vector.attribute()` | same methods on `wbw_vector` | complete |
+| `Vector.update_attributes()`, `Vector.update_attribute()`, `Vector.add_field()` | same methods on `wbw_vector` | complete |
 | lidar full point-cloud array roundtrip | not yet implemented — metadata and file-backed helpers only | not yet implemented |
 
 ## Tool reference docs

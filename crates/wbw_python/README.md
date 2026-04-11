@@ -236,7 +236,7 @@ wbe.write_raster(accum, 'flow_accum.tif')
 # Read and inspect
 dem = wbe.read_raster('dem.tif')
 meta = dem.metadata()
-print(f'Size: {meta.rows} x {meta.columns}, CRS: {meta.crs_epsg()}')
+print(f'Size: {meta.rows} x {meta.columns}, CRS: {meta.epsg_code}')
 
 # Apply a tool
 slope = wbe.terrain.slope(dem)
@@ -492,7 +492,7 @@ roads_from_osm = wbe.read_vector(
 # Read and inspect
 las = wbe.read_lidar('survey.las')
 meta = las.metadata()
-print(f'Points: {meta.num_points}, CRS: {meta.crs_epsg()}')
+print(f'Points: {meta.num_points}, CRS: {meta.crs_epsg}')
 
 # Apply a tool
 norms = wbe.lidar.calculate_point_normals(las)
@@ -749,7 +749,7 @@ dem_utm = wbe.reproject_raster(
 ### Reprojection best practices
 
 - **Preserve precision**: Use high-precision resampling (`'bilinear'` or `'cubic'`) for continuous data; `'nearest'` for categorical.
-- **Verify CRS**: Always inspect `crs_epsg()` before and after reprojection to confirm the transform.
+- **Verify CRS**: Always inspect metadata CRS values before and after reprojection to confirm the transform.
 - **CRS mismatch**: If input CRS is unknown or incorrect, call `set_crs_epsg()` before reprojection.
 - **Memory-first chaining**: Reprojection returns memory-backed objects; persist with `write_raster` or `write_vector`.
 - **Coordinate order**: EPSG defines lat/lon order; Whitebox always uses lon/lat internal. Transforms are applied automatically.
@@ -921,7 +921,7 @@ or CRS comparisons alongside wbw_python metadata.
 ```python
 from pyproj import CRS
 
-src_epsg = dem.metadata().crs_epsg()
+src_epsg = dem.metadata().epsg_code
 src_crs = CRS.from_epsg(src_epsg)
 dst_crs = CRS.from_epsg(32618)
 
@@ -949,7 +949,7 @@ This table summarizes current Phase 1 behavior for common ecosystem bridges.
 | GeoPandas | `write_vector(...)` -> `gpd.read_file(...)` -> `read_vector(...)` | Geometry + CRS preserved by container format (recommended: GPKG) | Tabular attributes round-trip through file driver support | File-based copy boundary |
 | Shapely | Through GeoPandas geometry workflows | Geometry handled by GeoPandas/Shapely object model | Attributes managed by GeoPandas dataframe columns | In-memory object copies under GeoPandas/Shapely semantics |
 | xarray/rioxarray | `write_raster(...)` -> `rxr.open_rasterio(...)` -> `.rio.to_raster(...)` -> `read_raster(...)` | CRS/transform preserved through rioxarray raster metadata | N/A (raster exchange) | File-based copy boundary; xarray ops may create derived arrays |
-| pyproj | `metadata().crs_epsg()` with `pyproj.CRS`/transform tools | CRS interpretation and transform pipelines handled by pyproj | N/A (CRS utility interoperability) | No raster/vector payload transfer unless combined with file exchange |
+| pyproj | `metadata().epsg_code` with `pyproj.CRS`/transform tools | CRS interpretation and transform pipelines handled by pyproj | N/A (CRS utility interoperability) | No raster/vector payload transfer unless combined with file exchange |
 
 ### Interoperability copy-vs-view notes
 

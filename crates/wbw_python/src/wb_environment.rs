@@ -7151,6 +7151,30 @@ impl WbEnvironment {
         json_value_to_pyobject(py, &parsed)
     }
 
+    /// Reproject a single XY point from one EPSG code to another.
+    #[pyo3(signature = (x, y, src_epsg, dst_epsg))]
+    fn projection_reproject_point(
+        &self,
+        py: Python<'_>,
+        x: f64,
+        y: f64,
+        src_epsg: u32,
+        dst_epsg: u32,
+    ) -> PyResult<Py<PyAny>> {
+        let out_json = wbw_r::projection_reproject_point_json(x, y, src_epsg, dst_epsg)
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Failed to reproject point from EPSG:{src_epsg} to EPSG:{dst_epsg}: {e}"
+                ))
+            })?;
+        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by projection_reproject_point_json: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+
     /// Return whether two WKT geometries intersect.
     fn topology_intersects_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
         wbw_r::topology_intersects_wkt(a_wkt, b_wkt).map_err(|e| {
@@ -7183,6 +7207,69 @@ impl WbEnvironment {
         wbw_r::topology_touches_wkt(a_wkt, b_wkt).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Failed topology touches check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries are disjoint.
+    fn topology_disjoint_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_disjoint_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology disjoint check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries cross.
+    fn topology_crosses_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_crosses_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology crosses check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries overlap.
+    fn topology_overlaps_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_overlaps_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology overlaps check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether geometry A covers geometry B.
+    fn topology_covers_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_covers_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology covers check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether geometry A is covered by geometry B.
+    fn topology_covered_by_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_covered_by_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology covered_by check: {e}"
+            ))
+        })
+    }
+
+    /// Return DE-9IM relate matrix for two WKT geometries.
+    fn topology_relate_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<String> {
+        wbw_r::topology_relate_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology relate operation: {e}"
+            ))
+        })
+    }
+
+    /// Return planar geometry distance for two WKT geometries.
+    fn topology_distance_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<f64> {
+        wbw_r::topology_distance_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology distance operation: {e}"
             ))
         })
     }

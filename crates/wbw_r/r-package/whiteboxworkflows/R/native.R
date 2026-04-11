@@ -318,6 +318,17 @@ projection_reproject_points_json <- function(points_json, src_epsg, dst_epsg) {
   )
 }
 
+projection_reproject_point_json <- function(x, y, src_epsg, dst_epsg) {
+  .Call(
+    "wrap__projection_reproject_point_json",
+    x,
+    y,
+    src_epsg,
+    dst_epsg,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
 topology_intersects_wkt <- function(a_wkt, b_wkt) {
   .Call("wrap__topology_intersects_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
 }
@@ -332,6 +343,34 @@ topology_within_wkt <- function(a_wkt, b_wkt) {
 
 topology_touches_wkt <- function(a_wkt, b_wkt) {
   .Call("wrap__topology_touches_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_disjoint_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_disjoint_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_crosses_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_crosses_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_overlaps_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_overlaps_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_covers_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_covers_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_covered_by_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_covered_by_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_relate_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_relate_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_distance_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_distance_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
 }
 
 topology_is_valid_polygon_wkt <- function(wkt) {

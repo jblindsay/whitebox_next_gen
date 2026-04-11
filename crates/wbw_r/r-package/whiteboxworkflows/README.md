@@ -546,6 +546,7 @@ The package now includes focused projection helpers:
 - `wbw_projection_to_ogc_wkt(epsg)`
 - `wbw_projection_identify_epsg(crs_text)`
 - `wbw_projection_reproject_points(points, src_epsg, dst_epsg)`
+- `wbw_projection_reproject_point(x, y, src_epsg, dst_epsg)`
 
 Session equivalents are also available:
 
@@ -563,6 +564,7 @@ pts <- data.frame(
 )
 
 pts_utm18 <- wbw_projection_reproject_points(pts, src_epsg = 4326, dst_epsg = 32618)
+pt_utm18 <- wbw_projection_reproject_point(-79.3832, 43.6532, src_epsg = 4326, dst_epsg = 32618)
 ```
 
 ## Topology utilities
@@ -573,6 +575,13 @@ WKT-oriented topology helpers are exposed at package level and via session metho
 - `wbw_topology_contains_wkt(a_wkt, b_wkt)`
 - `wbw_topology_within_wkt(a_wkt, b_wkt)`
 - `wbw_topology_touches_wkt(a_wkt, b_wkt)`
+- `wbw_topology_disjoint_wkt(a_wkt, b_wkt)`
+- `wbw_topology_crosses_wkt(a_wkt, b_wkt)`
+- `wbw_topology_overlaps_wkt(a_wkt, b_wkt)`
+- `wbw_topology_covers_wkt(a_wkt, b_wkt)`
+- `wbw_topology_covered_by_wkt(a_wkt, b_wkt)`
+- `wbw_topology_relate_wkt(a_wkt, b_wkt)`
+- `wbw_topology_distance_wkt(a_wkt, b_wkt)`
 - `wbw_topology_is_valid_polygon_wkt(wkt)`
 - `wbw_topology_make_valid_polygon_wkt(wkt, epsilon = 1e-9)`
 - `wbw_topology_buffer_wkt(wkt, distance)`
@@ -583,6 +592,8 @@ b <- "POINT(5 5)"
 
 wbw_topology_contains_wkt(a, b)
 wbw_topology_intersects_wkt(a, b)
+wbw_topology_relate_wkt(a, b)
+wbw_topology_distance_wkt(a, b)
 
 invalid <- "POLYGON((0 0,4 4,4 0,0 4,0 0))"
 fixed <- wbw_topology_make_valid_polygon_wkt(invalid)

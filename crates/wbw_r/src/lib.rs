@@ -31,11 +31,18 @@ use wbtopology::{
     buffer_linestring,
     buffer_point,
     buffer_polygon,
+    covered_by,
+    covers,
     contains,
+    crosses,
+    disjoint,
     from_wkt,
+    geometry_distance,
     intersects,
     is_valid_polygon,
     make_valid_polygon,
+    overlaps,
+    relate,
     to_wkt,
     touches,
     within,
@@ -951,6 +958,22 @@ pub fn projection_reproject_points_json(
     serde_json::to_string(&out).map_err(|e| ToolError::Execution(e.to_string()))
 }
 
+/// Reproject a single XY point across EPSG codes.
+///
+/// Output JSON format: `{"x": <number>, "y": <number>}`
+pub fn projection_reproject_point_json(
+    x: f64,
+    y: f64,
+    src_epsg: u32,
+    dst_epsg: u32,
+) -> Result<String, ToolError> {
+    let src = Crs::from_epsg(src_epsg).map_err(to_invalid_request)?;
+    let dst = Crs::from_epsg(dst_epsg).map_err(to_invalid_request)?;
+    let (tx, ty) = src.transform_to(x, y, &dst).map_err(to_invalid_request)?;
+    serde_json::to_string(&json!({"x": tx, "y": ty}))
+        .map_err(|e| ToolError::Execution(e.to_string()))
+}
+
 fn topology_parse_wkt_pair(a_wkt: &str, b_wkt: &str) -> Result<(Geometry, Geometry), ToolError> {
     let a = from_wkt(a_wkt).map_err(to_invalid_request)?;
     let b = from_wkt(b_wkt).map_err(to_invalid_request)?;
@@ -979,6 +1002,48 @@ pub fn topology_within_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> 
 pub fn topology_touches_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
     let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
     Ok(touches(&a, &b))
+}
+
+/// Return whether two WKT geometries are disjoint.
+pub fn topology_disjoint_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(disjoint(&a, &b))
+}
+
+/// Return whether two WKT geometries cross.
+pub fn topology_crosses_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(crosses(&a, &b))
+}
+
+/// Return whether two WKT geometries overlap.
+pub fn topology_overlaps_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(overlaps(&a, &b))
+}
+
+/// Return whether geometry A covers geometry B.
+pub fn topology_covers_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(covers(&a, &b))
+}
+
+/// Return whether geometry A is covered by geometry B.
+pub fn topology_covered_by_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(covered_by(&a, &b))
+}
+
+/// Return the DE-9IM matrix string for two WKT geometries.
+pub fn topology_relate_wkt(a_wkt: &str, b_wkt: &str) -> Result<String, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(relate(&a, &b).as_str9())
+}
+
+/// Return planar geometry distance for two WKT geometries.
+pub fn topology_distance_wkt(a_wkt: &str, b_wkt: &str) -> Result<f64, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(geometry_distance(&a, &b))
 }
 
 /// Validate a polygon (or multipolygon) WKT.
@@ -2516,6 +2581,20 @@ mod native_exports {
     }
 
     #[extendr]
+    fn projection_reproject_point_json(
+        x: f64,
+        y: f64,
+        src_epsg: i32,
+        dst_epsg: i32,
+    ) -> extendr_api::Result<String> {
+        if src_epsg <= 0 || dst_epsg <= 0 {
+            return Err("src_epsg and dst_epsg must be positive integers".into());
+        }
+        super::projection_reproject_point_json(x, y, src_epsg as u32, dst_epsg as u32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn topology_intersects_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
         super::topology_intersects_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
     }
@@ -2533,6 +2612,41 @@ mod native_exports {
     #[extendr]
     fn topology_touches_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
         super::topology_touches_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_disjoint_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_disjoint_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_crosses_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_crosses_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_overlaps_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_overlaps_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_covers_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_covers_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_covered_by_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_covered_by_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_relate_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<String> {
+        super::topology_relate_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_distance_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<f64> {
+        super::topology_distance_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
     }
 
     #[extendr]
@@ -2581,10 +2695,18 @@ mod native_exports {
         fn projection_to_ogc_wkt;
         fn projection_identify_epsg;
         fn projection_reproject_points_json;
+        fn projection_reproject_point_json;
         fn topology_intersects_wkt;
         fn topology_contains_wkt;
         fn topology_within_wkt;
         fn topology_touches_wkt;
+        fn topology_disjoint_wkt;
+        fn topology_crosses_wkt;
+        fn topology_overlaps_wkt;
+        fn topology_covers_wkt;
+        fn topology_covered_by_wkt;
+        fn topology_relate_wkt;
+        fn topology_distance_wkt;
         fn topology_is_valid_polygon_wkt;
         fn topology_make_valid_polygon_wkt;
         fn topology_buffer_wkt;

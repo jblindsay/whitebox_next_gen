@@ -136,6 +136,10 @@ whitebox_tools <- function(floating_license_id = NULL,
     wbw_projection_reproject_points(points, src_epsg, dst_epsg)
   }
 
+  session$projection_reproject_point <- function(x, y, src_epsg, dst_epsg) {
+    wbw_projection_reproject_point(x, y, src_epsg, dst_epsg)
+  }
+
   session$topology_intersects_wkt <- function(a_wkt, b_wkt) {
     wbw_topology_intersects_wkt(a_wkt, b_wkt)
   }
@@ -150,6 +154,34 @@ whitebox_tools <- function(floating_license_id = NULL,
 
   session$topology_touches_wkt <- function(a_wkt, b_wkt) {
     wbw_topology_touches_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_disjoint_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_disjoint_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_crosses_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_crosses_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_overlaps_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_overlaps_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_covers_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_covers_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_covered_by_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_covered_by_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_relate_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_relate_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_distance_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_distance_wkt(a_wkt, b_wkt)
   }
 
   session$topology_is_valid_polygon_wkt <- function(wkt) {
@@ -327,6 +359,19 @@ wbw_projection_reproject_points <- function(points, src_epsg, dst_epsg) {
   as.data.frame(out)
 }
 
+#' Reproject a single XY point between EPSG codes.
+#'
+#' @export
+wbw_projection_reproject_point <- function(x, y, src_epsg, dst_epsg) {
+  src_epsg_int <- as.integer(src_epsg)
+  dst_epsg_int <- as.integer(dst_epsg)
+  if (is.na(src_epsg_int) || src_epsg_int <= 0L || is.na(dst_epsg_int) || dst_epsg_int <= 0L) {
+    stop("src_epsg and dst_epsg must be positive integers.", call. = FALSE)
+  }
+  out_json <- projection_reproject_point_json(as.numeric(x), as.numeric(y), src_epsg_int, dst_epsg_int)
+  jsonlite::fromJSON(out_json, simplifyVector = TRUE)
+}
+
 #' Return whether two WKT geometries intersect.
 #'
 #' @export
@@ -353,6 +398,55 @@ wbw_topology_within_wkt <- function(a_wkt, b_wkt) {
 #' @export
 wbw_topology_touches_wkt <- function(a_wkt, b_wkt) {
   topology_touches_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether two WKT geometries are disjoint.
+#'
+#' @export
+wbw_topology_disjoint_wkt <- function(a_wkt, b_wkt) {
+  topology_disjoint_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether two WKT geometries cross.
+#'
+#' @export
+wbw_topology_crosses_wkt <- function(a_wkt, b_wkt) {
+  topology_crosses_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether two WKT geometries overlap.
+#'
+#' @export
+wbw_topology_overlaps_wkt <- function(a_wkt, b_wkt) {
+  topology_overlaps_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether geometry A covers geometry B.
+#'
+#' @export
+wbw_topology_covers_wkt <- function(a_wkt, b_wkt) {
+  topology_covers_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether geometry A is covered by geometry B.
+#'
+#' @export
+wbw_topology_covered_by_wkt <- function(a_wkt, b_wkt) {
+  topology_covered_by_wkt(a_wkt, b_wkt)
+}
+
+#' Return DE-9IM relate matrix for two WKT geometries.
+#'
+#' @export
+wbw_topology_relate_wkt <- function(a_wkt, b_wkt) {
+  topology_relate_wkt(a_wkt, b_wkt)
+}
+
+#' Return planar geometry distance for two WKT geometries.
+#'
+#' @export
+wbw_topology_distance_wkt <- function(a_wkt, b_wkt) {
+  topology_distance_wkt(a_wkt, b_wkt)
 }
 
 #' Validate polygon or multipolygon WKT.

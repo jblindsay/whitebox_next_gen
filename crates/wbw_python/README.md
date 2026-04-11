@@ -648,6 +648,7 @@ wbe.write_vector(roads_utm, 'roads_utm.shp')
 - `projection_to_ogc_wkt(epsg)`
 - `projection_identify_epsg(crs_text)`
 - `projection_reproject_points(points, src_epsg, dst_epsg)`
+- `projection_reproject_point(x, y, src_epsg, dst_epsg)`
 
 ```python
 # EPSG -> WKT
@@ -662,6 +663,9 @@ pts_wgs84 = [
   {'x': -73.5673, 'y': 45.5017},
 ]
 pts_utm18 = wbe.projection_reproject_points(pts_wgs84, src_epsg=4326, dst_epsg=32618)
+
+# Single-point convenience helper
+pt_utm18 = wbe.projection_reproject_point(-79.3832, 43.6532, src_epsg=4326, dst_epsg=32618)
 ```
 
 ## Topology utilities
@@ -672,6 +676,13 @@ pts_utm18 = wbe.projection_reproject_points(pts_wgs84, src_epsg=4326, dst_epsg=3
 - `topology_contains_wkt(a_wkt, b_wkt)`
 - `topology_within_wkt(a_wkt, b_wkt)`
 - `topology_touches_wkt(a_wkt, b_wkt)`
+- `topology_disjoint_wkt(a_wkt, b_wkt)`
+- `topology_crosses_wkt(a_wkt, b_wkt)`
+- `topology_overlaps_wkt(a_wkt, b_wkt)`
+- `topology_covers_wkt(a_wkt, b_wkt)`
+- `topology_covered_by_wkt(a_wkt, b_wkt)`
+- `topology_relate_wkt(a_wkt, b_wkt)`
+- `topology_distance_wkt(a_wkt, b_wkt)`
 - `topology_is_valid_polygon_wkt(wkt)`
 - `topology_make_valid_polygon_wkt(wkt, epsilon=1e-9)`
 - `topology_buffer_wkt(wkt, distance)`
@@ -682,6 +693,8 @@ b = 'POINT(5 5)'
 
 print(wbe.topology_contains_wkt(a, b))
 print(wbe.topology_intersects_wkt(a, b))
+print(wbe.topology_relate_wkt(a, b))
+print(wbe.topology_distance_wkt(a, b))
 
 invalid = 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
 fixed = wbe.topology_make_valid_polygon_wkt(invalid)

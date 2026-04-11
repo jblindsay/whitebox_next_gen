@@ -2573,3 +2573,126 @@ wbw_stars_to_raster <- function(x, output_path, overwrite = FALSE) {
   stars::write_stars(x, output_path)
   invisible(output_path)
 }
+
+#' Get all available tool categories.
+#'
+#' Returns a character vector of unique tool categories.
+#'
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @export
+wbw_get_all_categories <- function(session = NULL) {
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+  tools <- session$list_tools()
+  categories <- unique(sapply(tools, function(x) x$category %||% "Other"))
+  sort(categories)
+}
+
+#' Get tools organized by category.
+#'
+#' Lists all tools, organized by category with their display names and descriptions.
+#'
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A named list where each element is a category containing a data frame
+#'         of tool id, display_name, and summary.
+#'
+#' @export
+wbw_list_tools_by_category <- function(session = NULL) {
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+  tools <- session$list_tools()
+  categories <- wbw_get_all_categories(session)
+
+  result <- list()
+
+  for (cat in categories) {
+    cat_tools <- Filter(function(x) (x$category %||% "Other") == cat, tools)
+    tool_data <- data.frame(
+      id = sapply(cat_tools, function(x) x$id),
+      display_name = sapply(cat_tools, function(x) x$display_name %||% ""),
+      summary = sapply(cat_tools, function(x) x$summary %||% ""),
+      license_tier = sapply(cat_tools, function(x) x$license_tier %||% "Open"),
+      stability = sapply(cat_tools, function(x) x$stability %||% ""),
+      row.names = NULL,
+      stringsAsFactors = FALSE
+    )
+    result[[cat]] <- tool_data
+  }
+
+  result
+}
+
+#' Get tools in a specific category.
+#'
+#' Returns a data frame of all tools in the specified category.
+#'
+#' @param category The category name (e.g., "Raster", "Vector", "Lidar").
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A data frame with columns: id, display_name, summary, license_tier, stability.
+#'
+#' @export
+wbw_tools_in_category <- function(category, session = NULL) {
+  if (!is.character(category) || length(category) != 1L) {
+    stop("category must be a single string.", call. = FALSE)
+  }
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+  tools <- session$list_tools()
+  cat_tools <- Filter(function(x) (x$category %||% "Other") == category, tools)
+
+  if (length(cat_tools) == 0L) {
+    available <- paste(wbw_get_all_categories(session), collapse = ", ")
+    stop(
+      sprintf(
+        "Category '%s' not found. Available categories: %s",
+        category,
+        available
+      ),
+      call. = FALSE
+    )
+  }
+
+  data.frame(
+    id = sapply(cat_tools, function(x) x$id),
+    display_name = sapply(cat_tools, function(x) x$display_name %||% ""),
+    summary = sapply(cat_tools, function(x) x$summary %||% ""),
+    license_tier = sapply(cat_tools, function(x) x$license_tier %||% "Open"),
+    stability = sapply(cat_tools, function(x) x$stability %||% ""),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Show tool category summary.
+#'
+#' Displays counts and statistics for each tool category.
+#'
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A data frame with category name and tool count.
+#'
+#' @export
+wbw_category_summary <- function(session = NULL) {
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+  tools <- session$list_tools()
+  categories <- wbw_get_all_categories(session)
+
+  counts <- sapply(categories, function(cat) {
+    length(Filter(function(x) (x$category %||% "Other") == cat, tools))
+  })
+
+  data.frame(
+    category = names(counts),
+    tool_count = as.integer(counts),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}

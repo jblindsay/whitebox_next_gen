@@ -7274,6 +7274,38 @@ impl WbEnvironment {
         })
     }
 
+    /// Compute a topology relation summary between two vector features.
+    ///
+    /// Returns a dictionary with predicate booleans, DE-9IM relation matrix,
+    /// and planar distance.
+    #[pyo3(signature = (a_vector, a_feature_index, b_vector, b_feature_index))]
+    fn topology_vector_feature_relation(
+        &self,
+        py: Python<'_>,
+        a_vector: &Vector,
+        a_feature_index: usize,
+        b_vector: &Vector,
+        b_feature_index: usize,
+    ) -> PyResult<Py<PyAny>> {
+        let out_json = wbw_r::topology_vector_feature_relation_json(
+            a_vector.file_path.to_string_lossy().as_ref(),
+            a_feature_index,
+            b_vector.file_path.to_string_lossy().as_ref(),
+            b_feature_index,
+        )
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology vector-feature relation operation: {e}"
+            ))
+        })?;
+        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by topology_vector_feature_relation_json: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+
     /// Validate polygon or multipolygon WKT.
     fn topology_is_valid_polygon_wkt(&self, wkt: &str) -> PyResult<bool> {
         wbw_r::topology_is_valid_polygon_wkt(wkt).map_err(|e| {

@@ -683,6 +683,7 @@ pt_utm18 = wbe.projection_reproject_point(-79.3832, 43.6532, src_epsg=4326, dst_
 - `topology_covered_by_wkt(a_wkt, b_wkt)`
 - `topology_relate_wkt(a_wkt, b_wkt)`
 - `topology_distance_wkt(a_wkt, b_wkt)`
+- `topology_vector_feature_relation(a_vector, a_feature_index, b_vector, b_feature_index)`
 - `topology_is_valid_polygon_wkt(wkt)`
 - `topology_make_valid_polygon_wkt(wkt, epsilon=1e-9)`
 - `topology_buffer_wkt(wkt, distance)`
@@ -699,6 +700,10 @@ print(wbe.topology_distance_wkt(a, b))
 invalid = 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
 fixed = wbe.topology_make_valid_polygon_wkt(invalid)
 buf = wbe.topology_buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+
+# Compare specific features directly from vector objects
+roads_rel = wbe.topology_vector_feature_relation(roads, 0, roads, 1)
+print(roads_rel['intersects'], roads_rel['distance'], roads_rel['relate'])
 ```
 
 ## NumPy interoperability

@@ -184,6 +184,10 @@ whitebox_tools <- function(floating_license_id = NULL,
     wbw_topology_distance_wkt(a_wkt, b_wkt)
   }
 
+  session$topology_vector_feature_relation <- function(a_vector, a_feature_index, b_vector, b_feature_index) {
+    wbw_topology_vector_feature_relation(a_vector, a_feature_index, b_vector, b_feature_index)
+  }
+
   session$topology_is_valid_polygon_wkt <- function(wkt) {
     wbw_topology_is_valid_polygon_wkt(wkt)
   }
@@ -447,6 +451,39 @@ wbw_topology_relate_wkt <- function(a_wkt, b_wkt) {
 #' @export
 wbw_topology_distance_wkt <- function(a_wkt, b_wkt) {
   topology_distance_wkt(a_wkt, b_wkt)
+}
+
+#' Compute topology relation summary between two vector features.
+#'
+#' `a_vector` and `b_vector` may be `wbw_vector` objects or file paths.
+#' Returns a list containing predicate booleans, distance, and DE-9IM matrix.
+#'
+#' @export
+wbw_topology_vector_feature_relation <- function(a_vector, a_feature_index, b_vector, b_feature_index) {
+  a_path <- if (inherits(a_vector, "wbw_vector")) {
+    a_vector$path
+  } else if (is.character(a_vector) && length(a_vector) == 1L && nzchar(a_vector)) {
+    a_vector
+  } else {
+    stop("a_vector must be a wbw_vector object or file path string.", call. = FALSE)
+  }
+
+  b_path <- if (inherits(b_vector, "wbw_vector")) {
+    b_vector$path
+  } else if (is.character(b_vector) && length(b_vector) == 1L && nzchar(b_vector)) {
+    b_vector
+  } else {
+    stop("b_vector must be a wbw_vector object or file path string.", call. = FALSE)
+  }
+
+  a_idx <- as.integer(a_feature_index)
+  b_idx <- as.integer(b_feature_index)
+  if (is.na(a_idx) || a_idx < 0L || is.na(b_idx) || b_idx < 0L) {
+    stop("a_feature_index and b_feature_index must be integers >= 0.", call. = FALSE)
+  }
+
+  out_json <- topology_vector_feature_relation_json(a_path, a_idx, b_path, b_idx)
+  jsonlite::fromJSON(out_json, simplifyVector = TRUE)
 }
 
 #' Validate polygon or multipolygon WKT.

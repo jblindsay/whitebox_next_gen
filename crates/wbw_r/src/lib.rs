@@ -1046,6 +1046,58 @@ pub fn topology_distance_wkt(a_wkt: &str, b_wkt: &str) -> Result<f64, ToolError>
     Ok(geometry_distance(&a, &b))
 }
 
+fn topology_read_feature_geometry_as_wkt(path: &str, feature_index: usize) -> Result<String, ToolError> {
+    let layer = wbvector::read(path).map_err(to_invalid_request)?;
+    let feature = layer.features.get(feature_index).ok_or_else(|| {
+        ToolError::InvalidRequest(format!(
+            "feature_index {feature_index} out of range for '{}'(feature_count={})",
+            path,
+            layer.features.len()
+        ))
+    })?;
+    let geom = feature.geometry.as_ref().ok_or_else(|| {
+        ToolError::InvalidRequest(format!(
+            "feature_index {feature_index} in '{}' has no geometry",
+            path
+        ))
+    })?;
+    Ok(geom.to_wkt())
+}
+
+/// Compute topology relation summary between two vector features.
+///
+/// Returns JSON containing DE-9IM matrix, planar distance, and common predicate booleans.
+pub fn topology_vector_feature_relation_json(
+    a_path: &str,
+    a_feature_index: usize,
+    b_path: &str,
+    b_feature_index: usize,
+) -> Result<String, ToolError> {
+    let a_wkt = topology_read_feature_geometry_as_wkt(a_path, a_feature_index)?;
+    let b_wkt = topology_read_feature_geometry_as_wkt(b_path, b_feature_index)?;
+    let (a, b) = topology_parse_wkt_pair(&a_wkt, &b_wkt)?;
+
+    let summary = json!({
+        "a_path": a_path,
+        "a_feature_index": a_feature_index,
+        "b_path": b_path,
+        "b_feature_index": b_feature_index,
+        "relate": relate(&a, &b).as_str9(),
+        "distance": geometry_distance(&a, &b),
+        "intersects": intersects(&a, &b),
+        "contains": contains(&a, &b),
+        "within": within(&a, &b),
+        "touches": touches(&a, &b),
+        "disjoint": disjoint(&a, &b),
+        "crosses": crosses(&a, &b),
+        "overlaps": overlaps(&a, &b),
+        "covers": covers(&a, &b),
+        "covered_by": covered_by(&a, &b),
+    });
+
+    serde_json::to_string(&summary).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
 /// Validate a polygon (or multipolygon) WKT.
 pub fn topology_is_valid_polygon_wkt(wkt: &str) -> Result<bool, ToolError> {
     let g = from_wkt(wkt).map_err(to_invalid_request)?;
@@ -2650,6 +2702,25 @@ mod native_exports {
     }
 
     #[extendr]
+    fn topology_vector_feature_relation_json(
+        a_path: &str,
+        a_feature_index: i32,
+        b_path: &str,
+        b_feature_index: i32,
+    ) -> extendr_api::Result<String> {
+        if a_feature_index < 0 || b_feature_index < 0 {
+            return Err("feature indices must be >= 0".into());
+        }
+        super::topology_vector_feature_relation_json(
+            a_path,
+            a_feature_index as usize,
+            b_path,
+            b_feature_index as usize,
+        )
+        .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn topology_is_valid_polygon_wkt(wkt: &str) -> extendr_api::Result<bool> {
         super::topology_is_valid_polygon_wkt(wkt).map_err(map_extendr_err)
     }
@@ -2707,6 +2778,7 @@ mod native_exports {
         fn topology_covered_by_wkt;
         fn topology_relate_wkt;
         fn topology_distance_wkt;
+        fn topology_vector_feature_relation_json;
         fn topology_is_valid_polygon_wkt;
         fn topology_make_valid_polygon_wkt;
         fn topology_buffer_wkt;

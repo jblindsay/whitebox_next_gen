@@ -373,6 +373,17 @@ topology_distance_wkt <- function(a_wkt, b_wkt) {
   .Call("wrap__topology_distance_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
 }
 
+topology_vector_feature_relation_json <- function(a_path, a_feature_index, b_path, b_feature_index) {
+  .Call(
+    "wrap__topology_vector_feature_relation_json",
+    a_path,
+    a_feature_index,
+    b_path,
+    b_feature_index,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
 topology_is_valid_polygon_wkt <- function(wkt) {
   .Call("wrap__topology_is_valid_polygon_wkt", wkt, PACKAGE = "whiteboxworkflows")
 }

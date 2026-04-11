@@ -582,6 +582,7 @@ WKT-oriented topology helpers are exposed at package level and via session metho
 - `wbw_topology_covered_by_wkt(a_wkt, b_wkt)`
 - `wbw_topology_relate_wkt(a_wkt, b_wkt)`
 - `wbw_topology_distance_wkt(a_wkt, b_wkt)`
+- `wbw_topology_vector_feature_relation(a_vector, a_feature_index, b_vector, b_feature_index)`
 - `wbw_topology_is_valid_polygon_wkt(wkt)`
 - `wbw_topology_make_valid_polygon_wkt(wkt, epsilon = 1e-9)`
 - `wbw_topology_buffer_wkt(wkt, distance)`
@@ -598,6 +599,12 @@ wbw_topology_distance_wkt(a, b)
 invalid <- "POLYGON((0 0,4 4,4 0,0 4,0 0))"
 fixed <- wbw_topology_make_valid_polygon_wkt(invalid)
 buf <- wbw_topology_buffer_wkt("LINESTRING(0 0, 10 0)", 1.5)
+
+# Compare specific features directly from vector objects
+rel <- wbw_topology_vector_feature_relation(roads, 0, roads, 1)
+rel$intersects
+rel$distance
+rel$relate
 ```
 
 ### Sensor bundle wrapper

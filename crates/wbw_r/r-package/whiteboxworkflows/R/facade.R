@@ -124,6 +124,46 @@ whitebox_tools <- function(floating_license_id = NULL,
     )
   }
 
+  session$projection_to_ogc_wkt <- function(epsg) {
+    wbw_projection_to_ogc_wkt(epsg)
+  }
+
+  session$projection_identify_epsg <- function(crs_text) {
+    wbw_projection_identify_epsg(crs_text)
+  }
+
+  session$projection_reproject_points <- function(points, src_epsg, dst_epsg) {
+    wbw_projection_reproject_points(points, src_epsg, dst_epsg)
+  }
+
+  session$topology_intersects_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_intersects_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_contains_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_contains_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_within_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_within_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_touches_wkt <- function(a_wkt, b_wkt) {
+    wbw_topology_touches_wkt(a_wkt, b_wkt)
+  }
+
+  session$topology_is_valid_polygon_wkt <- function(wkt) {
+    wbw_topology_is_valid_polygon_wkt(wkt)
+  }
+
+  session$topology_make_valid_polygon_wkt <- function(wkt, epsilon = 1e-9) {
+    wbw_topology_make_valid_polygon_wkt(wkt, epsilon = epsilon)
+  }
+
+  session$topology_buffer_wkt <- function(wkt, distance) {
+    wbw_topology_buffer_wkt(wkt, distance)
+  }
+
   class(session) <- unique(c("wbw_session", class(session)))
   session
 }
@@ -220,6 +260,124 @@ print.wbw_sensor_bundle <- function(x, ...) {
 
 wbw_output_key_is_metadata <- function(key) {
   key %in% c("__wbw_type__", "active_band", "band", "cells_processed", "path")
+}
+
+#' Convert EPSG code to OGC WKT text.
+#'
+#' @export
+wbw_projection_to_ogc_wkt <- function(epsg) {
+  epsg_int <- as.integer(epsg)
+  if (is.na(epsg_int) || epsg_int <= 0L) {
+    stop("epsg must be a positive integer.", call. = FALSE)
+  }
+  projection_to_ogc_wkt(epsg_int)
+}
+
+#' Identify EPSG code from CRS/WKT text.
+#'
+#' Returns `NULL` when no EPSG match is available.
+#'
+#' @export
+wbw_projection_identify_epsg <- function(crs_text) {
+  if (!is.character(crs_text) || length(crs_text) != 1L || !nzchar(crs_text)) {
+    stop("crs_text must be a non-empty string.", call. = FALSE)
+  }
+  epsg <- projection_identify_epsg(crs_text)
+  if (is.null(epsg) || length(epsg) == 0L) {
+    return(NULL)
+  }
+  as.integer(epsg)
+}
+
+#' Reproject XY points between EPSG codes.
+#'
+#' `points` may be a data.frame with `x` and `y` columns, or a list of
+#' point lists containing numeric `x` and `y` entries.
+#'
+#' @export
+wbw_projection_reproject_points <- function(points, src_epsg, dst_epsg) {
+  src_epsg_int <- as.integer(src_epsg)
+  dst_epsg_int <- as.integer(dst_epsg)
+  if (is.na(src_epsg_int) || src_epsg_int <= 0L || is.na(dst_epsg_int) || dst_epsg_int <= 0L) {
+    stop("src_epsg and dst_epsg must be positive integers.", call. = FALSE)
+  }
+
+  points_payload <- NULL
+  if (is.data.frame(points)) {
+    if (!("x" %in% names(points)) || !("y" %in% names(points))) {
+      stop("points data.frame must contain 'x' and 'y' columns.", call. = FALSE)
+    }
+    points_payload <- lapply(seq_len(nrow(points)), function(i) {
+      list(x = as.numeric(points$x[[i]]), y = as.numeric(points$y[[i]]))
+    })
+  } else if (is.list(points)) {
+    points_payload <- lapply(points, function(pt) {
+      if (!is.list(pt) || is.null(pt$x) || is.null(pt$y)) {
+        stop("each point must contain numeric 'x' and 'y'.", call. = FALSE)
+      }
+      list(x = as.numeric(pt$x), y = as.numeric(pt$y))
+    })
+  } else {
+    stop("points must be a data.frame or list of points.", call. = FALSE)
+  }
+
+  points_json <- jsonlite::toJSON(points_payload, auto_unbox = TRUE, null = "null")
+  out_json <- projection_reproject_points_json(points_json, src_epsg_int, dst_epsg_int)
+  out <- jsonlite::fromJSON(out_json, simplifyVector = TRUE)
+  as.data.frame(out)
+}
+
+#' Return whether two WKT geometries intersect.
+#'
+#' @export
+wbw_topology_intersects_wkt <- function(a_wkt, b_wkt) {
+  topology_intersects_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether WKT geometry A contains geometry B.
+#'
+#' @export
+wbw_topology_contains_wkt <- function(a_wkt, b_wkt) {
+  topology_contains_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether WKT geometry A is within geometry B.
+#'
+#' @export
+wbw_topology_within_wkt <- function(a_wkt, b_wkt) {
+  topology_within_wkt(a_wkt, b_wkt)
+}
+
+#' Return whether two WKT geometries touch.
+#'
+#' @export
+wbw_topology_touches_wkt <- function(a_wkt, b_wkt) {
+  topology_touches_wkt(a_wkt, b_wkt)
+}
+
+#' Validate polygon or multipolygon WKT.
+#'
+#' @export
+wbw_topology_is_valid_polygon_wkt <- function(wkt) {
+  topology_is_valid_polygon_wkt(wkt)
+}
+
+#' Repair polygon or multipolygon WKT.
+#'
+#' Returns repaired geometry as MULTIPOLYGON WKT.
+#'
+#' @export
+wbw_topology_make_valid_polygon_wkt <- function(wkt, epsilon = 1e-9) {
+  topology_make_valid_polygon_wkt(wkt, as.numeric(epsilon))
+}
+
+#' Buffer point/linestring/polygon WKT.
+#'
+#' Returns buffered geometry as POLYGON WKT.
+#'
+#' @export
+wbw_topology_buffer_wkt <- function(wkt, distance) {
+  topology_buffer_wkt(wkt, as.numeric(distance))
 }
 
 wbw_output_sort_key <- function(key) {

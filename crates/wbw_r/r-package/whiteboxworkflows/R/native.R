@@ -299,3 +299,49 @@ raster_metadata_json <- function(path) {
 vector_metadata_json <- function(path) {
   .Call("wrap__vector_metadata_json", path, PACKAGE = "whiteboxworkflows")
 }
+
+projection_to_ogc_wkt <- function(epsg) {
+  .Call("wrap__projection_to_ogc_wkt", epsg, PACKAGE = "whiteboxworkflows")
+}
+
+projection_identify_epsg <- function(crs_text) {
+  .Call("wrap__projection_identify_epsg", crs_text, PACKAGE = "whiteboxworkflows")
+}
+
+projection_reproject_points_json <- function(points_json, src_epsg, dst_epsg) {
+  .Call(
+    "wrap__projection_reproject_points_json",
+    points_json,
+    src_epsg,
+    dst_epsg,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+topology_intersects_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_intersects_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_contains_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_contains_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_within_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_within_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_touches_wkt <- function(a_wkt, b_wkt) {
+  .Call("wrap__topology_touches_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_is_valid_polygon_wkt <- function(wkt) {
+  .Call("wrap__topology_is_valid_polygon_wkt", wkt, PACKAGE = "whiteboxworkflows")
+}
+
+topology_make_valid_polygon_wkt <- function(wkt, epsilon) {
+  .Call("wrap__topology_make_valid_polygon_wkt", wkt, epsilon, PACKAGE = "whiteboxworkflows")
+}
+
+topology_buffer_wkt <- function(wkt, distance) {
+  .Call("wrap__topology_buffer_wkt", wkt, distance, PACKAGE = "whiteboxworkflows")
+}

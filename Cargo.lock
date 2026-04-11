@@ -4056,9 +4056,11 @@ dependencies = [
  "wbcore",
  "wblicense_core",
  "wblidar",
+ "wbprojection",
  "wbraster",
  "wbtools_oss",
  "wbtools_pro",
+ "wbtopology",
  "wbvector",
 ]
 

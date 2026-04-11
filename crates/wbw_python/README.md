@@ -23,6 +23,8 @@ The API is in active modernization, with emphasis on:
 - [Lidar output controls](#lidar-output-controls)
 - [Memory-first execution model](#memory-first-execution-model)
 - [Reprojection patterns](#reprojection-patterns)
+- [Projection utilities](#projection-utilities)
+- [Topology utilities](#topology-utilities)
 - [NumPy interoperability](#numpy-interoperability)
 - [Rasterio interoperability](#rasterio-interoperability)
 - [GeoPandas interoperability](#geopandas-interoperability)
@@ -638,6 +640,53 @@ wbe.write_vector(roads_utm, 'roads_utm.shp')
 - **CRS mismatch**: If input CRS is unknown or incorrect, call `set_crs_epsg()` before reprojection.
 - **Memory-first chaining**: Reprojection returns memory-backed objects; persist with `write_raster` or `write_vector`.
 - **Coordinate order**: EPSG defines lat/lon order; Whitebox always uses lon/lat internal. Transforms are applied automatically.
+
+## Projection utilities
+
+`WbEnvironment` now exposes lightweight CRS helpers for common projection tasks:
+
+- `projection_to_ogc_wkt(epsg)`
+- `projection_identify_epsg(crs_text)`
+- `projection_reproject_points(points, src_epsg, dst_epsg)`
+
+```python
+# EPSG -> WKT
+wkt_3857 = wbe.projection_to_ogc_wkt(3857)
+
+# WKT/CRS text -> EPSG (or None)
+epsg = wbe.projection_identify_epsg(wkt_3857)
+
+# Reproject XY points (list[dict])
+pts_wgs84 = [
+  {'x': -79.3832, 'y': 43.6532},
+  {'x': -73.5673, 'y': 45.5017},
+]
+pts_utm18 = wbe.projection_reproject_points(pts_wgs84, src_epsg=4326, dst_epsg=32618)
+```
+
+## Topology utilities
+
+`WbEnvironment` also exposes narrow WKT-focused topology helpers:
+
+- `topology_intersects_wkt(a_wkt, b_wkt)`
+- `topology_contains_wkt(a_wkt, b_wkt)`
+- `topology_within_wkt(a_wkt, b_wkt)`
+- `topology_touches_wkt(a_wkt, b_wkt)`
+- `topology_is_valid_polygon_wkt(wkt)`
+- `topology_make_valid_polygon_wkt(wkt, epsilon=1e-9)`
+- `topology_buffer_wkt(wkt, distance)`
+
+```python
+a = 'POLYGON((0 0,10 0,10 10,0 10,0 0))'
+b = 'POINT(5 5)'
+
+print(wbe.topology_contains_wkt(a, b))
+print(wbe.topology_intersects_wkt(a, b))
+
+invalid = 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
+fixed = wbe.topology_make_valid_polygon_wkt(invalid)
+buf = wbe.topology_buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+```
 
 ## NumPy interoperability
 

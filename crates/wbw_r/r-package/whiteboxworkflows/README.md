@@ -21,6 +21,8 @@ The package API is being modernized with emphasis on:
 - [Raster output controls](#raster-output-controls)
 - [Vector output controls](#vector-output-controls)
 - [Lidar output controls](#lidar-output-controls)
+- [Projection utilities](#projection-utilities)
+- [Topology utilities](#topology-utilities)
 - [Extensionless defaults](#extensionless-defaults)
 - [R interoperability](#r-interoperability)
 - [Supported file formats](#supported-file-formats)
@@ -535,6 +537,56 @@ lidar$write(
     )
   )
 )
+```
+
+## Projection utilities
+
+The package now includes focused projection helpers:
+
+- `wbw_projection_to_ogc_wkt(epsg)`
+- `wbw_projection_identify_epsg(crs_text)`
+- `wbw_projection_reproject_points(points, src_epsg, dst_epsg)`
+
+Session equivalents are also available:
+
+- `session$projection_to_ogc_wkt(...)`
+- `session$projection_identify_epsg(...)`
+- `session$projection_reproject_points(...)`
+
+```r
+wkt_3857 <- wbw_projection_to_ogc_wkt(3857)
+epsg <- wbw_projection_identify_epsg(wkt_3857)
+
+pts <- data.frame(
+  x = c(-79.3832, -73.5673),
+  y = c(43.6532, 45.5017)
+)
+
+pts_utm18 <- wbw_projection_reproject_points(pts, src_epsg = 4326, dst_epsg = 32618)
+```
+
+## Topology utilities
+
+WKT-oriented topology helpers are exposed at package level and via session methods:
+
+- `wbw_topology_intersects_wkt(a_wkt, b_wkt)`
+- `wbw_topology_contains_wkt(a_wkt, b_wkt)`
+- `wbw_topology_within_wkt(a_wkt, b_wkt)`
+- `wbw_topology_touches_wkt(a_wkt, b_wkt)`
+- `wbw_topology_is_valid_polygon_wkt(wkt)`
+- `wbw_topology_make_valid_polygon_wkt(wkt, epsilon = 1e-9)`
+- `wbw_topology_buffer_wkt(wkt, distance)`
+
+```r
+a <- "POLYGON((0 0,10 0,10 10,0 10,0 0))"
+b <- "POINT(5 5)"
+
+wbw_topology_contains_wkt(a, b)
+wbw_topology_intersects_wkt(a, b)
+
+invalid <- "POLYGON((0 0,4 4,4 0,0 4,0 0))"
+fixed <- wbw_topology_make_valid_polygon_wkt(invalid)
+buf <- wbw_topology_buffer_wkt("LINESTRING(0 0, 10 0)", 1.5)
 ```
 
 ### Sensor bundle wrapper

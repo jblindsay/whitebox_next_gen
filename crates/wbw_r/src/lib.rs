@@ -24,8 +24,25 @@ use wblidar::{
     PointCloud,
     PointReader,
 };
+use wbprojection::{epsg_from_srs_reference, identify_epsg_from_wkt, to_ogc_wkt, Crs};
 use wbraster::{open_sensor_bundle, open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
 use wbraster::{GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions, Raster, RasterFormat};
+use wbtopology::{
+    buffer_linestring,
+    buffer_point,
+    buffer_polygon,
+    contains,
+    from_wkt,
+    intersects,
+    is_valid_polygon,
+    make_valid_polygon,
+    to_wkt,
+    touches,
+    within,
+    BufferOptions,
+    Coord,
+    Geometry,
+};
 use wbvector::VectorFormat;
 use wbvector::feature::FieldType;
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
@@ -869,6 +886,151 @@ pub fn vector_metadata_json(path: &str) -> Result<String, ToolError> {
         "fields": fields,
     });
     serde_json::to_string(&meta).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Convert an EPSG code to OGC WKT.
+pub fn projection_to_ogc_wkt(epsg: u32) -> Result<String, ToolError> {
+    to_ogc_wkt(epsg).map_err(to_invalid_request)
+}
+
+/// Identify an EPSG code from WKT or CRS text, when possible.
+pub fn projection_identify_epsg(crs_text: &str) -> Result<Option<u32>, ToolError> {
+    let trimmed = crs_text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    if let Some(code) = identify_epsg_from_wkt(trimmed) {
+        return Ok(Some(code));
+    }
+
+    if let Some(code) = epsg_from_srs_reference(trimmed) {
+        return Ok(Some(code));
+    }
+
+    Ok(None)
+}
+
+/// Reproject a list of XY points across EPSG codes.
+///
+/// Input JSON format: `[{"x": <number>, "y": <number>}, ...]`
+/// Output JSON format: same as input with transformed coordinates.
+pub fn projection_reproject_points_json(
+    points_json: &str,
+    src_epsg: u32,
+    dst_epsg: u32,
+) -> Result<String, ToolError> {
+    let points_value: Value = serde_json::from_str(points_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid points JSON: {e}")))?;
+    let points = points_value.as_array().ok_or_else(|| {
+        ToolError::InvalidRequest("points_json must be an array of objects with x and y".to_string())
+    })?;
+
+    let src = Crs::from_epsg(src_epsg).map_err(to_invalid_request)?;
+    let dst = Crs::from_epsg(dst_epsg).map_err(to_invalid_request)?;
+
+    let mut out = Vec::with_capacity(points.len());
+    for (idx, point) in points.iter().enumerate() {
+        let obj = point.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest(format!(
+                "points_json[{idx}] must be an object with numeric x and y"
+            ))
+        })?;
+        let x = obj
+            .get("x")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| ToolError::InvalidRequest(format!("points_json[{idx}].x must be a number")))?;
+        let y = obj
+            .get("y")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| ToolError::InvalidRequest(format!("points_json[{idx}].y must be a number")))?;
+        let (tx, ty) = src.transform_to(x, y, &dst).map_err(to_invalid_request)?;
+        out.push(json!({"x": tx, "y": ty}));
+    }
+
+    serde_json::to_string(&out).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+fn topology_parse_wkt_pair(a_wkt: &str, b_wkt: &str) -> Result<(Geometry, Geometry), ToolError> {
+    let a = from_wkt(a_wkt).map_err(to_invalid_request)?;
+    let b = from_wkt(b_wkt).map_err(to_invalid_request)?;
+    Ok((a, b))
+}
+
+/// Return whether two WKT geometries intersect.
+pub fn topology_intersects_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(intersects(&a, &b))
+}
+
+/// Return whether geometry A contains geometry B.
+pub fn topology_contains_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(contains(&a, &b))
+}
+
+/// Return whether geometry A is within geometry B.
+pub fn topology_within_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(within(&a, &b))
+}
+
+/// Return whether two WKT geometries touch at boundaries.
+pub fn topology_touches_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, ToolError> {
+    let (a, b) = topology_parse_wkt_pair(a_wkt, b_wkt)?;
+    Ok(touches(&a, &b))
+}
+
+/// Validate a polygon (or multipolygon) WKT.
+pub fn topology_is_valid_polygon_wkt(wkt: &str) -> Result<bool, ToolError> {
+    let g = from_wkt(wkt).map_err(to_invalid_request)?;
+    match g {
+        Geometry::Polygon(poly) => Ok(is_valid_polygon(&poly)),
+        Geometry::MultiPolygon(polys) => Ok(polys.iter().all(is_valid_polygon)),
+        _ => Err(ToolError::InvalidRequest(
+            "topology_is_valid_polygon_wkt requires POLYGON or MULTIPOLYGON WKT".to_string(),
+        )),
+    }
+}
+
+/// Repair polygon WKT and return repaired geometry as WKT.
+pub fn topology_make_valid_polygon_wkt(wkt: &str, epsilon: f64) -> Result<String, ToolError> {
+    let g = from_wkt(wkt).map_err(to_invalid_request)?;
+    match g {
+        Geometry::Polygon(poly) => {
+            let repaired = make_valid_polygon(&poly, epsilon);
+            Ok(to_wkt(&Geometry::MultiPolygon(repaired)))
+        }
+        Geometry::MultiPolygon(polys) => {
+            let mut repaired = Vec::new();
+            for poly in polys {
+                repaired.extend(make_valid_polygon(&poly, epsilon));
+            }
+            Ok(to_wkt(&Geometry::MultiPolygon(repaired)))
+        }
+        _ => Err(ToolError::InvalidRequest(
+            "topology_make_valid_polygon_wkt requires POLYGON or MULTIPOLYGON WKT".to_string(),
+        )),
+    }
+}
+
+/// Buffer WKT geometry and return buffered polygon WKT.
+pub fn topology_buffer_wkt(wkt: &str, distance: f64) -> Result<String, ToolError> {
+    let g = from_wkt(wkt).map_err(to_invalid_request)?;
+    let options = BufferOptions::default();
+    let buffered = match g {
+        Geometry::Point(pt) => buffer_point(Coord::xy(pt.x, pt.y), distance, options),
+        Geometry::LineString(ls) => buffer_linestring(&ls, distance, options),
+        Geometry::Polygon(poly) => buffer_polygon(&poly, distance, options),
+        _ => {
+            return Err(ToolError::InvalidRequest(
+                "topology_buffer_wkt currently supports POINT, LINESTRING, and POLYGON WKT"
+                    .to_string(),
+            ))
+        }
+    };
+
+    Ok(to_wkt(&Geometry::Polygon(buffered)))
 }
 
 /// Copy a vector file from `src` to `dst`, re-encoding in the format detected
@@ -2323,6 +2485,71 @@ mod native_exports {
         super::vector_metadata_json(path).map_err(map_extendr_err)
     }
 
+    #[extendr]
+    fn projection_to_ogc_wkt(epsg: i32) -> extendr_api::Result<String> {
+        if epsg <= 0 {
+            return Err("epsg must be a positive integer".into());
+        }
+        super::projection_to_ogc_wkt(epsg as u32).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn projection_identify_epsg(crs_text: &str) -> extendr_api::Result<Nullable<i32>> {
+        let code = super::projection_identify_epsg(crs_text).map_err(map_extendr_err)?;
+        Ok(match code {
+            Some(value) => Nullable::NotNull(value as i32),
+            None => Nullable::Null,
+        })
+    }
+
+    #[extendr]
+    fn projection_reproject_points_json(
+        points_json: &str,
+        src_epsg: i32,
+        dst_epsg: i32,
+    ) -> extendr_api::Result<String> {
+        if src_epsg <= 0 || dst_epsg <= 0 {
+            return Err("src_epsg and dst_epsg must be positive integers".into());
+        }
+        super::projection_reproject_points_json(points_json, src_epsg as u32, dst_epsg as u32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_intersects_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_intersects_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_contains_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_contains_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_within_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_within_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_touches_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_touches_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_is_valid_polygon_wkt(wkt: &str) -> extendr_api::Result<bool> {
+        super::topology_is_valid_polygon_wkt(wkt).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_make_valid_polygon_wkt(wkt: &str, epsilon: f64) -> extendr_api::Result<String> {
+        super::topology_make_valid_polygon_wkt(wkt, epsilon).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn topology_buffer_wkt(wkt: &str, distance: f64) -> extendr_api::Result<String> {
+        super::topology_buffer_wkt(wkt, distance).map_err(map_extendr_err)
+    }
+
     extendr_module! {
         mod wbw_r;
         fn list_tools_json;
@@ -2351,6 +2578,16 @@ mod native_exports {
         fn raster_write_with_options_json;
         fn raster_metadata_json;
         fn vector_metadata_json;
+        fn projection_to_ogc_wkt;
+        fn projection_identify_epsg;
+        fn projection_reproject_points_json;
+        fn topology_intersects_wkt;
+        fn topology_contains_wkt;
+        fn topology_within_wkt;
+        fn topology_touches_wkt;
+        fn topology_is_valid_polygon_wkt;
+        fn topology_make_valid_polygon_wkt;
+        fn topology_buffer_wkt;
     }
 }
 

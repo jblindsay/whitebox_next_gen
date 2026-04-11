@@ -153,8 +153,8 @@ pub fn read(path: &str) -> Result<Raster> {
     };
 
     let nodata = tiff.no_data().unwrap_or(-9999.0);
-    let data_type = map_data_type(tiff.sample_format(), tiff.bits_per_sample())?;
-    let data = read_native_data(&tiff, data_type, rows * cols, bands)?;
+    let mut data_type = map_data_type(tiff.sample_format(), tiff.bits_per_sample())?;
+    let mut data = read_native_data(&tiff, data_type, rows * cols, bands)?;
     let photometric = tiff.photometric();
 
     let mut metadata = vec![
@@ -174,6 +174,41 @@ pub fn read(path: &str) -> Result<Raster> {
     ];
     if let Some(v) = metadata_bool_from_name(tiff.compression().name()) {
         metadata.push(("geotiff_is_cog_candidate".into(), v.to_string()));
+    }
+
+    let mut total_scale = 1.0f64;
+    let mut total_offset = 0.0f64;
+    let mut applied_transform = false;
+
+    if let Some(vt) = tiff.value_transform() {
+        total_scale *= vt.scale;
+        total_offset = total_offset * vt.scale + vt.offset;
+        metadata.push(("geotiff_value_scale".into(), vt.scale.to_string()));
+        metadata.push(("geotiff_value_offset".into(), vt.offset.to_string()));
+        applied_transform = true;
+    }
+
+    if let Some(vertical_scale) = vertical_units_to_meters_factor(&tiff) {
+        if (vertical_scale - 1.0).abs() > f64::EPSILON {
+            total_scale *= vertical_scale;
+            total_offset *= vertical_scale;
+            metadata.push((
+                "geotiff_vertical_units_to_meters_scale".into(),
+                vertical_scale.to_string(),
+            ));
+            metadata.push(("values_normalized_to_vertical_meters".into(), "true".into()));
+            applied_transform = true;
+        }
+    }
+
+    if applied_transform
+        && ((total_scale - 1.0).abs() > f64::EPSILON || total_offset.abs() > f64::EPSILON)
+    {
+        data = apply_linear_value_transform(data, nodata, total_scale, total_offset);
+        data_type = DataType::F64;
+        metadata.push(("geotiff_values_normalized".into(), "true".into()));
+        metadata.push(("geotiff_values_total_scale".into(), total_scale.to_string()));
+        metadata.push(("geotiff_values_total_offset".into(), total_offset.to_string()));
     }
 
     let cfg = RasterConfig {
@@ -393,6 +428,40 @@ fn metadata_bool_from_name(name: &str) -> Option<bool> {
         "none" => Some(false),
         _ => None,
     }
+}
+
+fn vertical_units_to_meters_factor(tiff: &gt::GeoTiff) -> Option<f64> {
+    let keys = tiff.geo_keys()?;
+    let gt::geo_keys::GeoKeyValue::Short(unit_code) =
+        keys.get(gt::geo_keys::key::VerticalUnitsGeoKey)?
+    else {
+        return None;
+    };
+
+    // EPSG unit codes commonly used in GeoTIFF GeoKeys.
+    let factor = match *unit_code {
+        9001 => 1.0,                // metre
+        9002 => 0.3048,             // foot (international)
+        9003 => 1200.0 / 3937.0,    // US survey foot
+        _ => return None,
+    };
+    Some(factor)
+}
+
+fn apply_linear_value_transform(data: RasterData, nodata: f64, scale: f64, offset: f64) -> RasterData {
+    let nodata_is_nan = nodata.is_nan();
+    let mut out = data.to_f64_vec();
+    for value in &mut out {
+        let is_nodata = if nodata_is_nan {
+            value.is_nan()
+        } else {
+            (*value - nodata).abs() <= f64::EPSILON
+        };
+        if !is_nodata {
+            *value = *value * scale + offset;
+        }
+    }
+    RasterData::F64(out)
 }
 
 fn interleave_band_major<T: Copy>(data: &[T], npix: usize, bands: usize) -> Vec<T> {

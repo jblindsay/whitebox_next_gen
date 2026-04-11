@@ -77,10 +77,23 @@ pub struct GeoTiff {
     info: ImageInfo,
     geo_transform: Option<GeoTransform>,
     geo_keys: Option<GeoKeyDirectory>,
+    value_transform: Option<ValueTransform>,
     /// True if the source file was BigTIFF (64-bit offsets).
     pub is_bigtiff: bool,
     /// The raw bytes of the file, loaded fully into memory for random access.
     data: Vec<u8>,
+}
+
+/// Optional linear value transform associated with raster samples.
+///
+/// This is intended for metadata-defined conversions such as
+/// `physical_value = raw_value * scale + offset`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ValueTransform {
+    /// Multiplicative scale term.
+    pub scale: f64,
+    /// Additive offset term.
+    pub offset: f64,
 }
 
 impl GeoTiff {
@@ -113,8 +126,9 @@ impl GeoTiff {
         let info = Self::parse_image_info(&ifd)?;
         let geo_transform = Self::parse_geo_transform(&ifd);
         let geo_keys = Self::parse_geo_keys(&ifd)?;
+        let value_transform = Self::parse_value_transform(&ifd);
 
-        Ok(Self { info, geo_transform, geo_keys, is_bigtiff, data })
+        Ok(Self { info, geo_transform, geo_keys, value_transform, is_bigtiff, data })
     }
 
     // ── IFD parsing helpers ───────────────────────────────────────────────────
@@ -253,6 +267,102 @@ impl GeoTiff {
         None
     }
 
+    fn parse_value_transform(ifd: &Ifd) -> Option<ValueTransform> {
+        let metadata = ifd
+            .get(tag::GdalMetadata)
+            .and_then(|e| e.value.as_str().map(|s| s.to_owned()).or_else(|| {
+                e.value
+                    .as_bytes()
+                    .map(|b| String::from_utf8_lossy(b).to_string())
+            }));
+
+        let metadata = metadata?;
+
+        let scale = Self::parse_named_numeric(&metadata, &[
+            "scale",
+            "scalefactor",
+            "scale_factor",
+            "multiplicative_factor",
+        ])
+        .unwrap_or(1.0);
+        let offset = Self::parse_named_numeric(&metadata, &[
+            "offset",
+            "add_offset",
+            "data_offset",
+        ])
+        .unwrap_or(0.0);
+
+        if !scale.is_finite() || !offset.is_finite() {
+            return None;
+        }
+
+        if (scale - 1.0).abs() <= f64::EPSILON && offset.abs() <= f64::EPSILON {
+            return None;
+        }
+
+        Some(ValueTransform { scale, offset })
+    }
+
+    fn parse_named_numeric(text: &str, names: &[&str]) -> Option<f64> {
+        for name in names {
+            if let Some(v) = Self::parse_xml_item_value(text, name) {
+                return Some(v);
+            }
+            if let Some(v) = Self::parse_token_value(text, name) {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    fn parse_xml_item_value(text: &str, name: &str) -> Option<f64> {
+        let lower = text.to_ascii_lowercase();
+        let name_attr_double = format!("name=\"{}\"", name);
+        let name_attr_single = format!("name='{}'", name);
+
+        let mut cursor = 0usize;
+        while let Some(rel_start) = lower[cursor..].find("<item") {
+            let start = cursor + rel_start;
+            let rel_tag_end = lower[start..].find('>')?;
+            let tag_end = start + rel_tag_end;
+            let rel_close = lower[tag_end + 1..].find("</item>")?;
+            let close = tag_end + 1 + rel_close;
+
+            let header = &lower[start..=tag_end];
+            if header.contains(&name_attr_double) || header.contains(&name_attr_single) {
+                let value_text = text[tag_end + 1..close].trim();
+                if let Ok(v) = value_text.parse::<f64>() {
+                    return Some(v);
+                }
+            }
+
+            cursor = close + "</item>".len();
+        }
+        None
+    }
+
+    fn parse_token_value(text: &str, name: &str) -> Option<f64> {
+        let lower_name = name.to_ascii_lowercase();
+        for token in text.split(|c: char| c.is_whitespace() || c == ';' || c == ',' || c == '|') {
+            if token.is_empty() {
+                continue;
+            }
+
+            let token_lower = token.to_ascii_lowercase();
+            if let Some(value) = token_lower.strip_prefix(&(lower_name.clone() + "=")) {
+                if let Ok(v) = value.trim_matches(|c| c == '"' || c == '\'' || c == '\0').parse::<f64>() {
+                    return Some(v);
+                }
+            }
+            if let Some(value) = token_lower.strip_prefix(&(lower_name.clone() + ":")) {
+                if let Ok(v) = value.trim_matches(|c| c == '"' || c == '\'' || c == '\0').parse::<f64>() {
+                    return Some(v);
+                }
+            }
+        }
+        None
+    }
+
     fn parse_no_data_text(text: &str) -> Option<f64> {
         let cleaned = text.trim_matches(|c: char| c.is_whitespace() || c == '\0');
         if cleaned.is_empty() {
@@ -320,6 +430,14 @@ impl GeoTiff {
     /// EPSG code derived from the GeoKey directory.
     pub fn epsg(&self) -> Option<u16> {
         self.geo_keys.as_ref()?.epsg()
+    }
+
+    /// Optional linear value transform parsed from GDAL metadata.
+    ///
+    /// When present, data consumers may apply:
+    /// `physical_value = raw_value * scale + offset`.
+    pub fn value_transform(&self) -> Option<ValueTransform> {
+        self.value_transform
     }
 
     /// Bounding box in geographic / projected coordinates.
@@ -660,6 +778,24 @@ mod tests {
         let buf = make_tiff(Compression::None);
         let tiff = GeoTiff::from_bytes(&buf).unwrap();
         assert_eq!(tiff.epsg(), Some(4326));
+    }
+
+    #[test]
+    fn parse_scale_offset_from_gdal_xml_metadata() {
+        let xml = "<GDALMetadata><Item name=\"scale\" sample=\"0\">0.1</Item><Item name=\"offset\" sample=\"0\">5</Item></GDALMetadata>";
+        let scale = GeoTiff::parse_named_numeric(xml, &["scale"]).unwrap();
+        let offset = GeoTiff::parse_named_numeric(xml, &["offset"]).unwrap();
+        assert!((scale - 0.1).abs() < 1e-12);
+        assert!((offset - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn parse_scale_offset_from_key_value_tokens() {
+        let text = "SCALE=0.25 OFFSET=-12";
+        let scale = GeoTiff::parse_named_numeric(text, &["scale"]).unwrap();
+        let offset = GeoTiff::parse_named_numeric(text, &["offset"]).unwrap();
+        assert!((scale - 0.25).abs() < 1e-12);
+        assert!((offset + 12.0).abs() < 1e-12);
     }
 
     #[test]

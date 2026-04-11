@@ -85,6 +85,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `get_raster_arc_by_path(&str)`
 
 ### Changed
+- GeoTIFF reads now apply metadata-defined linear value transforms
+  (`value = raw * scale + offset`) when present, and normalize known vertical
+  GeoKey units (international foot / US survey foot) to meters in-memory.
+  Transformed GeoTIFF reads are materialized as `f64` raster data.
 - Updated README with SAFE and non-SAFE bundle examples, including unified detection/opening workflows.
 - Configured `zip` dependency for pure-Rust operation (`default-features = false`, `features = ["deflate"]`) to avoid `bzip2-sys`/`lzma-sys` native dependencies from default feature sets.
 - Stabilized `memory_store` unit tests by serializing tests that mutate the shared global in-memory raster store.

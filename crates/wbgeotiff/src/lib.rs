@@ -71,7 +71,7 @@ pub use tags::Compression;
 pub use error::{GeoTiffError, Result};
 pub use geo_keys::{GeoKeyDirectory, ModelType, RasterType};
 pub use ifd::TiffVariant;
-pub use reader::GeoTiff;
+pub use reader::{GeoTiff, ValueTransform};
 pub use tags::{PhotometricInterpretation, PlanarConfig, SampleFormat};
 pub use types::GeoTransform;
 pub use writer::{GeoTiffWriter, WriteLayout};

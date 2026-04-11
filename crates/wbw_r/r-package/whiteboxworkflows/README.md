@@ -17,6 +17,7 @@ The package API is being modernized with emphasis on:
 - [Quick smoke test](#quick-smoke-test)
 - [Recommended examples](#recommended-examples)
 - [Recommended API pattern](#recommended-api-pattern)
+- [Preferred vs removed APIs](#preferred-vs-removed-apis)
 - [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
 - [Raster output controls](#raster-output-controls)
 - [Vector output controls](#vector-output-controls)
@@ -25,6 +26,7 @@ The package API is being modernized with emphasis on:
 - [Topology utilities](#topology-utilities)
 - [Extensionless defaults](#extensionless-defaults)
 - [R interoperability](#r-interoperability)
+- [Interoperability behavior matrix](#interoperability-behavior-matrix)
 - [Supported file formats](#supported-file-formats)
 - [Licensing overview](#licensing-overview)
 - [Discovery APIs](#discovery-apis)
@@ -51,10 +53,14 @@ The package API is being modernized with emphasis on:
   - `wbw_vector` wrapper with `metadata()`, `schema()`, `attributes()`, `attribute()` for reads
     and `update_attributes()`, `update_attribute()`, `add_field()` for writes; plus `to_terra()` and optional `to_sf()`
   - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `deep_copy()`, and `write()`
-  - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `read_*()` bundle data access, preview selection, and true/false-colour composite helpers
-- Discovery helpers:
+  - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `key_summary()`, `has_key()`, `resolve_key()`, `read_any()`, `read_*()` bundle data access, preview selection, and true/false-colour composite helpers
+- Discovery helpers (by keyword or category):
   - `wbw_search_tools(...)`
   - `wbw_describe_tool(...)`
+  - `wbw_get_all_categories()`: list all tool categories
+  - `wbw_category_summary()`: show tool count per category
+  - `wbw_tools_in_category(category)`: get tools in a specific category
+  - `wbw_list_tools_by_category()`: list all tools organized by category
 - Licensing-aware startup in one API:
   - open mode
   - signed entitlement mode
@@ -72,8 +78,8 @@ The package API is being modernized with emphasis on:
 | direct vector path handling | `wbw_read_vector(...)` |
 | direct lidar path handling | `wbw_read_lidar(...)` |
 | direct bundle root handling | `wbw_read_bundle(...)` |
-| `wbw_list_tools(...)` for all checks | `wbw_tool_ids(...)` and `wbw_has_tool(...)` |
-| manual metadata filtering over `wbw_list_tools(...)` | `wbw_search_tools(...)` and `wbw_describe_tool(...)` |
+| `wbw_list_tools(...)` (removed) | `wbw_tool_ids(...)` and `wbw_has_tool(...)` |
+| manual metadata filtering over `wbw_list_tools(...)` (removed) | `wbw_search_tools(...)` and `wbw_describe_tool(...)` |
 | manual progress JSON parsing | `wbw_run_tool_with_progress(...)` |
 | ad hoc empty argument encoding | pass `args = list()` |
 
@@ -82,7 +88,7 @@ The package API is being modernized with emphasis on:
 | Python | R target | Status |
 |---|---|---|
 | `WbEnvironment()` | `wbw_session()` | complete |
-| `list_tools()` | `wbw_list_tools()`, `wbw_tool_ids()` | complete |
+| `list_tools()` | `wbw_tool_ids()` | complete |
 | `has_tool()` | `wbw_has_tool()` | complete |
 | `search_tools()`, `describe_tool()` | `wbw_search_tools()`, `wbw_describe_tool()` | complete |
 | `run_tool(...)` | `wbw_run_tool(..., session=)` | complete |
@@ -121,15 +127,18 @@ Rscript -e 'library(whiteboxworkflows); s <- wbw_session(); cat(length(wbw_tool_
 
 | Order | Script | Focus |
 |---|---|---|
-| 1 | [inst/examples/generated_session_example.R](inst/examples/generated_session_example.R) | Session and discovery |
-| 2 | [inst/examples/raster_object_quickstart.R](inst/examples/raster_object_quickstart.R) | Typed raster wrapper quickstart |
-| 3 | [inst/examples/vector_object_quickstart.R](inst/examples/vector_object_quickstart.R) | Typed vector wrapper quickstart |
-| 4 | [inst/examples/lidar_object_quickstart.R](inst/examples/lidar_object_quickstart.R) | Typed lidar wrapper quickstart |
-| 5 | [inst/examples/sensor_bundle_quickstart.R](inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
-| 6 | [inst/examples/sensor_bundle_multi_family_preview.R](inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
-| 7 | [inst/examples/raster_array_roundtrip.R](inst/examples/raster_array_roundtrip.R) | terra and stars roundtrip |
+| 1 | [inst/examples/golden_path_workflows.R](inst/examples/golden_path_workflows.R) | Canonical end-to-end workflow (session, discovery, typed objects, optional bundle flow) |
+| 2 | [inst/examples/generated_session_example.R](inst/examples/generated_session_example.R) | Session and discovery |
+| 3 | [inst/examples/raster_object_quickstart.R](inst/examples/raster_object_quickstart.R) | Typed raster wrapper quickstart |
+| 4 | [inst/examples/vector_object_quickstart.R](inst/examples/vector_object_quickstart.R) | Typed vector wrapper quickstart |
+| 5 | [inst/examples/lidar_object_quickstart.R](inst/examples/lidar_object_quickstart.R) | Typed lidar wrapper quickstart |
+| 6 | [inst/examples/sensor_bundle_quickstart.R](inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
+| 7 | [inst/examples/sensor_bundle_multi_family_preview.R](inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
+| 8 | [inst/examples/raster_array_roundtrip.R](inst/examples/raster_array_roundtrip.R) | terra and stars roundtrip |
 
 ## Recommended API pattern
+
+For a single copy-paste starting point, use [inst/examples/golden_path_workflows.R](inst/examples/golden_path_workflows.R).
 
 ```r
 library(whiteboxworkflows)
@@ -147,6 +156,25 @@ result <- wbw_run_tool(
 )
 ```
 
+## Preferred vs removed APIs
+
+Preferred workflow APIs (Phase 4 golden path):
+
+- session lifecycle: `wbw_session(...)`
+- discovery checks: `wbw_tool_ids(...)`, `wbw_has_tool(...)`
+- execution: `wbw_run_tool(...)`, `wbw_run_tool_with_progress(...)`
+- typed data reads: `wbw_read_raster(...)`, `wbw_read_vector(...)`, `wbw_read_lidar(...)`, `wbw_read_bundle(...)`
+
+Removed APIs in Phase 4:
+
+- `whitebox_tools(...)`: removed; use `wbw_session(...)`.
+- `wbw_list_tools(...)`: removed; use `wbw_tool_ids(...)`, `wbw_search_tools(...)`, and `wbw_describe_tool(...)`.
+
+Guidance:
+
+- New scripts should prefer the golden-path API set above.
+- Legacy scripts using removed APIs must be updated to the preferred API set.
+
 ## Quick start examples by workflow type
 
 ### Session and discovery
@@ -156,6 +184,40 @@ s <- wbw_session()
 print(s)
 ids <- wbw_tool_ids(session = s)
 ```
+
+### Category-based tool discovery
+
+Tools are organized into categories. Use category functions to explore available tools:
+
+```r
+# View all categories and tool counts
+summary <- wbw_category_summary()
+print(summary)
+
+# Get list of all categories
+categories <- wbw_get_all_categories()
+print(categories)
+
+# List all Raster tools
+raster_tools <- wbw_tools_in_category("Raster")
+print(head(raster_tools, 10))
+
+# Get all tools organized by category (returns named list)
+all_by_category <- wbw_list_tools_by_category()
+
+# Access tools in a specific category
+hydrology_tools <- all_by_category$Hydrology
+print(hydrology_tools)
+```
+
+**Available categories:**
+- `Raster` (382 tools): cell-by-cell raster operations, filtering, math, transformations
+- `Vector` (58 tools): geometry operations, attribute manipulation, overlay analysis
+- `Lidar` (65 tools): point cloud processing, filtering, statistics
+- `Hydrology` (24 tools): watershed and hydrologic analysis
+- `Terrain` (6 tools): hillshade, aspect, visibility analysis
+- `Conversion` (27 tools): format and data type conversions
+- `Other` (4 tools): miscellaneous tools
 
 ### Progress-aware execution
 
@@ -645,6 +707,12 @@ print(bundle)
 
 band_keys <- bundle$list_band_keys()
 qa_keys <- bundle$list_qa_keys()
+summary <- bundle$key_summary()
+
+# Key lookup helpers across band/measurement/qa/aux/asset
+bundle$has_key("B02")
+resolved <- bundle$resolve_key("B02")
+any_raster <- bundle$read_any("B02")
 
 if (length(band_keys) > 0) {
   preview <- bundle$read_band(band_keys[[1]])
@@ -667,6 +735,7 @@ Notes:
 - For SAR bundles, these helpers use pseudo-colour defaults (for example VV/VH combinations) to provide quick-look visualization.
 - Channel detection is intelligent: when called with a specific `family`, defaults are expanded by probing available keys in the bundle (bands, measurements, assets) to adapt to provider-specific naming conventions, improving robustness across SAR families.
 - Some SAR SLC products may expose measurement rasters in formats not yet supported by all downstream composite paths; `read_measurement()` remains the stable fallback.
+- `resolve_key()` returns both resolved key text and key type, which is useful when a candidate might map to multiple key domains.
 
 ### No-argument tools
 
@@ -676,6 +745,11 @@ result <- wbw_run_tool_with_progress("tool_id_with_no_args", args = list(), sess
 ```
 
 ## R interoperability
+
+- Matrix/array-style raster exchange: use `wbw_raster$to_array()`, `wbw_raster_to_array()`, and `wbw_array_to_raster()`.
+- Native multidimensional raster objects: use `wbw_raster$to_stars()`, `wbw_raster_to_stars()`, and `wbw_stars_to_raster()`.
+- Rich vector ecosystem tooling: use `wbw_vector$to_terra()` or `wbw_vector$to_sf()` and persist through stable formats when round-tripping.
+- Keep Whitebox as the geoprocessing engine and exchange data at explicit, verified boundaries.
 
 ### terra bridge
 
@@ -699,6 +773,29 @@ Install optional bridge dependencies:
 install.packages("terra")
 install.packages("stars")
 ```
+
+## Interoperability behavior matrix
+
+This table summarizes current R-facing interoperability behavior for common bridge patterns.
+
+| Bridge | Entry points | What is preserved | What can drift | Copy/view notes | Verification checklist |
+|---|---|---|---|---|---|
+| Base array / `terra` array bridge | `wbw_raster$to_array()`, `wbw_raster_to_array()`, `wbw_array_to_raster(x, template_path=...)` | Numeric cell values; template raster geospatial context on import | Type coercion, `NA`/nodata representation, dropped band labels if you coerce arrays manually | Materialized array copy at the boundary | Verify dimensions, nodata, selected sample values, and min/max ranges |
+| `stars` | `wbw_raster$to_stars()`, `wbw_raster_to_stars()`, `wbw_stars_to_raster()` | CRS, transform, extent, and grid structure through `stars` metadata | Lazy/proxy evaluation choices, attribute naming, value type changes after downstream transforms | File-backed or proxy-backed boundary depending on how `stars` is loaded | Verify CRS, dimensions, nodata, and a few representative cell values after round-trip |
+| `terra` vector | `wbw_vector$to_terra()` plus `wbw_write_vector()` / `wbw_read_vector()` for persistence | Geometry, CRS, and attributes as supported by the source/target driver | Field type coercion, width/precision limits, factor-like handling by downstream packages | Read into an in-memory `SpatVector`; persistence is an explicit file boundary | Verify feature count, CRS, field names/types, and sample attribute values |
+| `sf` | `wbw_vector$to_sf()` plus `sf::st_write()` / `wbw_read_vector()` when round-tripping | Geometry, CRS, and attributes as supported by the chosen driver | Driver-specific schema coercion, string width limits, geometry casting/simplification from downstream edits | In-memory `sf` object copy; round-trip persists through a file boundary | Verify feature count, CRS, geometry type, and sample attribute values |
+| Stable file exchange | `wbw_raster$write()`, `wbw_write_raster()`, `wbw_vector$write()`, `wbw_write_vector()`, then re-read with `wbw_read_*()` | Backend-managed metadata and data layout for supported formats | Format-specific constraints such as GeoTIFF dtype limits or Shapefile field naming/width rules | Explicit file copy boundary by design | Prefer `.tif` for raster and `.gpkg` for vector; verify metadata immediately after re-ingest |
+
+### Interoperability copy-vs-view notes
+
+- Treat all ecosystem boundaries as copy boundaries unless proxy/lazy behavior is explicitly documented.
+- `wbw_raster$to_stars(proxy = TRUE)` can defer cell reads, but metadata should still be validated before chaining analysis.
+- Prefer stable exchange containers when lossless round-trip matters: `.tif` for raster and `.gpkg` for vector.
+- Re-check `metadata()`, `schema()`, or representative values after round-trips before continuing analysis.
+- LiDAR currently has native wbw read/write workflows but no first-class R ecosystem bridge at the same maturity level as raster/vector.
+
+Engineering detail note:
+- A deeper internal matrix with follow-up test and documentation targets is tracked in `../../docs/internal/wbw_r_interop_behavior_matrix.md`.
 
 ## Supported file formats
 
@@ -785,7 +882,6 @@ Startup modes:
 
 ```r
 s <- wbw_session()
-tools <- wbw_list_tools(session = s)
 ids <- wbw_tool_ids(session = s)
 has_slope <- wbw_has_tool("slope", session = s)
 matches <- wbw_search_tools("lidar")

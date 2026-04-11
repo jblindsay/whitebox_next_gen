@@ -1,4 +1,4 @@
-//! Zarr v3 support (filesystem store, MVP subset).
+//! Zarr v3 support (filesystem store focus).
 
 use std::fs::{self, File};
 use std::io::{Read, Write};

@@ -72,7 +72,7 @@ No. `wbraster` is developed primarily to support Whitebox, but it is not restric
 - Not a raster processing or analysis library (filtering, terrain analysis, histogram operations belong in Whitebox tooling).
 - Not a rendering or visualization engine.
 - Not a remote sensing pipeline (radiometric correction, band math, and similar operations belong in the tooling layer).
-- Not a distributed or chunked processing framework (Zarr MVP support is focused on local filesystem stores).
+- Not a distributed or chunked processing framework (Zarr support is currently focused on local filesystem stores).
 
 ## Installation
 
@@ -192,7 +192,7 @@ cargo run --example raster_basics
 | **PCRaster** | `.map` | ✓ | ✓ | CSF parser + value-scale aware writer (`UINT1`/`INT4`/`REAL4`/`REAL8`) |
 | **SAGA GIS Binary** | `.sgrd` / `.sdat` | ✓ | ✓ | All SAGA data types; row-flip handled |
 | **Surfer GRD** | `.grd` | ✓ | ✓ | Reads DSAA (ASCII) + DSRB (Surfer 7); writes DSAA by default, DSRB with `surfer_format=dsrb` |
-| **Zarr v2/v3 (MVP)** | `.zarr` | ✓ | ✓ | 2D + 3D (`band,y,x`) chunked arrays |
+| **Zarr v2/v3** | `.zarr` | ✓ | ✓ | 2D + 3D (`band,y,x`) chunked arrays |
 
 ### SAFE Bundle Support
 
@@ -659,7 +659,7 @@ These links are useful for obtaining legal/public sample scenes for local smoke 
 | PCRaster | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
 | SAGA GIS Binary | – | ✓ | – | Reads/writes optional `.prj` sidecar WKT (metadata key `saga_prj_text`, legacy alias `saga_prj_wkt`) |
 | Surfer GRD | – | ~ | – | Reads/writes optional `.prj` sidecar; WKT is used when `.prj` content is WKT-like |
-| Zarr v2/v3 (MVP) | ✓ | ✓ | ✓ | Uses metadata keys (`crs_epsg`/`epsg`, `crs_wkt`/`spatial_ref`, `crs_proj4`/`proj4`) |
+| Zarr v2/v3 | ✓ | ✓ | ✓ | Uses metadata keys (`crs_epsg`/`epsg`, `crs_wkt`/`spatial_ref`, `crs_proj4`/`proj4`) |
 
 Legend: `✓` supported, `–` not currently supported, `~` limited/custom representation.
 

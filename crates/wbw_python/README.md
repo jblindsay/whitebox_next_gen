@@ -257,6 +257,10 @@ filled = wbe.hydrology.fill_depressions(
 )
 ```
 
+The standard callback also parses percentages embedded in message text when an
+explicit numeric progress field is missing (for example:
+`"Progress (loop 1 of 2): 50%"`).
+
 You can also wrap progress in a more structured way (e.g., with a progress bar):
 
 ```python

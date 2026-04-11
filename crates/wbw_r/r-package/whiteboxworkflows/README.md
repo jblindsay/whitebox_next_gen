@@ -176,6 +176,10 @@ result <- wbw_run_tool_with_progress(
 )
 ```
 
+The built-in printer also handles messages that contain embedded percentages
+when a numeric `pct` value is missing (for example:
+`"Progress (loop 1 of 2): 50%"`).
+
 ### Typed raster wrapper
 
 ```r

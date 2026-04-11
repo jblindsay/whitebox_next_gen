@@ -672,64 +672,66 @@ dem_utm = wbe.reproject_raster(
 
 `WbEnvironment` now exposes lightweight CRS helpers for common projection tasks:
 
-- `projection_to_ogc_wkt(epsg)`
-- `projection_identify_epsg(crs_text)`
-- `projection_reproject_points(points, src_epsg, dst_epsg)`
-- `projection_reproject_point(x, y, src_epsg, dst_epsg)`
+- `wbe.projection.to_ogc_wkt(epsg)`
+- `wbe.projection.identify_epsg(crs_text)`
+- `wbe.projection.reproject_points(points, src_epsg, dst_epsg)`
+- `wbe.projection.reproject_point(x, y, src_epsg, dst_epsg)`
 
 ```python
 # EPSG -> WKT
-wkt_3857 = wbe.projection_to_ogc_wkt(3857)
+wkt_3857 = wbe.projection.to_ogc_wkt(3857)
 
 # WKT/CRS text -> EPSG (or None)
-epsg = wbe.projection_identify_epsg(wkt_3857)
+epsg = wbe.projection.identify_epsg(wkt_3857)
 
 # Reproject XY points (list[dict])
 pts_wgs84 = [
   {'x': -79.3832, 'y': 43.6532},
   {'x': -73.5673, 'y': 45.5017},
 ]
-pts_utm18 = wbe.projection_reproject_points(pts_wgs84, src_epsg=4326, dst_epsg=32618)
+pts_utm18 = wbe.projection.reproject_points(pts_wgs84, src_epsg=4326, dst_epsg=32618)
 
 # Single-point convenience helper
-pt_utm18 = wbe.projection_reproject_point(-79.3832, 43.6532, src_epsg=4326, dst_epsg=32618)
+pt_utm18 = wbe.projection.reproject_point(-79.3832, 43.6532, src_epsg=4326, dst_epsg=32618)
 ```
 
 ## Topology utilities
 
 `WbEnvironment` also exposes narrow WKT-focused topology helpers:
 
-- `topology_intersects_wkt(a_wkt, b_wkt)`
-- `topology_contains_wkt(a_wkt, b_wkt)`
-- `topology_within_wkt(a_wkt, b_wkt)`
-- `topology_touches_wkt(a_wkt, b_wkt)`
-- `topology_disjoint_wkt(a_wkt, b_wkt)`
-- `topology_crosses_wkt(a_wkt, b_wkt)`
-- `topology_overlaps_wkt(a_wkt, b_wkt)`
-- `topology_covers_wkt(a_wkt, b_wkt)`
-- `topology_covered_by_wkt(a_wkt, b_wkt)`
-- `topology_relate_wkt(a_wkt, b_wkt)`
-- `topology_distance_wkt(a_wkt, b_wkt)`
-- `topology_vector_feature_relation(a_vector, a_feature_index, b_vector, b_feature_index)`
-- `topology_is_valid_polygon_wkt(wkt)`
-- `topology_make_valid_polygon_wkt(wkt, epsilon=1e-9)`
-- `topology_buffer_wkt(wkt, distance)`
+- `wbe.topology.intersects_wkt(a_wkt, b_wkt)`
+- `wbe.topology.contains_wkt(a_wkt, b_wkt)`
+- `wbe.topology.within_wkt(a_wkt, b_wkt)`
+- `wbe.topology.touches_wkt(a_wkt, b_wkt)`
+- `wbe.topology.disjoint_wkt(a_wkt, b_wkt)`
+- `wbe.topology.crosses_wkt(a_wkt, b_wkt)`
+- `wbe.topology.overlaps_wkt(a_wkt, b_wkt)`
+- `wbe.topology.covers_wkt(a_wkt, b_wkt)`
+- `wbe.topology.covered_by_wkt(a_wkt, b_wkt)`
+- `wbe.topology.relate_wkt(a_wkt, b_wkt)`
+- `wbe.topology.distance_wkt(a_wkt, b_wkt)`
+- `wbe.topology.vector_feature_relation(a_vector, a_feature_index, b_vector, b_feature_index)`
+- `wbe.topology.is_valid_polygon_wkt(wkt)`
+- `wbe.topology.make_valid_polygon_wkt(wkt, epsilon=1e-9)`
+- `wbe.topology.buffer_wkt(wkt, distance)`
+
+Tool-category access remains available via `wbe.topology_tools` (or `wbe.category('topology')`).
 
 ```python
 a = 'POLYGON((0 0,10 0,10 10,0 10,0 0))'
 b = 'POINT(5 5)'
 
-print(wbe.topology_contains_wkt(a, b))
-print(wbe.topology_intersects_wkt(a, b))
-print(wbe.topology_relate_wkt(a, b))
-print(wbe.topology_distance_wkt(a, b))
+print(wbe.topology.contains_wkt(a, b))
+print(wbe.topology.intersects_wkt(a, b))
+print(wbe.topology.relate_wkt(a, b))
+print(wbe.topology.distance_wkt(a, b))
 
 invalid = 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
-fixed = wbe.topology_make_valid_polygon_wkt(invalid)
-buf = wbe.topology_buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+fixed = wbe.topology.make_valid_polygon_wkt(invalid)
+buf = wbe.topology.buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
 
 # Compare specific features directly from vector objects
-roads_rel = wbe.topology_vector_feature_relation(roads, 0, roads, 1)
+roads_rel = wbe.topology.vector_feature_relation(roads, 0, roads, 1)
 print(roads_rel['intersects'], roads_rel['distance'], roads_rel['relate'])
 ```
 

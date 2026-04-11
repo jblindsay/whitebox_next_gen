@@ -28,6 +28,8 @@ pub use wb_environment::{
     Vector,
     VectorMetadata,
     WbEnvironment,
+    WbProjectionNamespace,
+    WbTopologyNamespace,
 };
 pub use wb_environment::{WbCategoryToolCallable, WbDomainNamespace, WbToolCategory, WbToolSubcategory};
 
@@ -1543,6 +1545,8 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_class::<Vector>()?;
     m.add_class::<Lidar>()?;
     m.add_class::<WbEnvironment>()?;
+    m.add_class::<WbProjectionNamespace>()?;
+    m.add_class::<WbTopologyNamespace>()?;
     m.add_class::<WbToolCategory>()?;
     m.add_class::<WbToolSubcategory>()?;
     m.add_class::<WbCategoryToolCallable>()?;

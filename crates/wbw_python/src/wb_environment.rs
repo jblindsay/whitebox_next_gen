@@ -5857,6 +5857,246 @@ fn parse_lidar_failure_policy(value: &str) -> PyResult<LidarTransformFailurePoli
 /// A Whitebox Environment for simplified tool access.
 /// This provides a more Pythonic API similar to whitebox_workflows.
 #[pyclass]
+pub struct WbProjectionNamespace {}
+
+#[pymethods]
+impl WbProjectionNamespace {
+    /// Convert an EPSG code to OGC WKT.
+    fn to_ogc_wkt(&self, epsg: u32) -> PyResult<String> {
+        wbw_r::projection_to_ogc_wkt(epsg).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to resolve EPSG {epsg} to OGC WKT: {e}"
+            ))
+        })
+    }
+
+    /// Identify an EPSG code from CRS/WKT text, when available.
+    fn identify_epsg(&self, crs_text: &str) -> PyResult<Option<u32>> {
+        wbw_r::projection_identify_epsg(crs_text).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to identify EPSG from CRS text: {e}"
+            ))
+        })
+    }
+
+    /// Reproject a list of XY points from one EPSG code to another.
+    ///
+    /// `points` should be a list of dicts, e.g. `[{"x": -79.4, "y": 43.7}]`.
+    #[pyo3(signature = (points, src_epsg, dst_epsg))]
+    fn reproject_points(
+        &self,
+        py: Python<'_>,
+        points: &Bound<'_, PyAny>,
+        src_epsg: u32,
+        dst_epsg: u32,
+    ) -> PyResult<Py<PyAny>> {
+        let points_value = py_any_to_json_value(points)?;
+        let points_json = points_value.to_string();
+        let out_json = wbw_r::projection_reproject_points_json(&points_json, src_epsg, dst_epsg)
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Failed to reproject points from EPSG:{src_epsg} to EPSG:{dst_epsg}: {e}"
+                ))
+            })?;
+        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by projection_reproject_points_json: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+
+    /// Reproject a single XY point from one EPSG code to another.
+    #[pyo3(signature = (x, y, src_epsg, dst_epsg))]
+    fn reproject_point(
+        &self,
+        py: Python<'_>,
+        x: f64,
+        y: f64,
+        src_epsg: u32,
+        dst_epsg: u32,
+    ) -> PyResult<Py<PyAny>> {
+        let out_json = wbw_r::projection_reproject_point_json(x, y, src_epsg, dst_epsg)
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Failed to reproject point from EPSG:{src_epsg} to EPSG:{dst_epsg}: {e}"
+                ))
+            })?;
+        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by projection_reproject_point_json: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+}
+
+#[pyclass]
+pub struct WbTopologyNamespace {}
+
+#[pymethods]
+impl WbTopologyNamespace {
+    /// Return whether two WKT geometries intersect.
+    fn intersects_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_intersects_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology intersection check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether WKT geometry A contains geometry B.
+    fn contains_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_contains_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology contains check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether WKT geometry A is within geometry B.
+    fn within_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_within_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology within check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries touch.
+    fn touches_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_touches_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology touches check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries are disjoint.
+    fn disjoint_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_disjoint_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology disjoint check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries cross.
+    fn crosses_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_crosses_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology crosses check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether two WKT geometries overlap.
+    fn overlaps_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_overlaps_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology overlaps check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether geometry A covers geometry B.
+    fn covers_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_covers_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology covers check: {e}"
+            ))
+        })
+    }
+
+    /// Return whether geometry A is covered by geometry B.
+    fn covered_by_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_covered_by_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology covered_by check: {e}"
+            ))
+        })
+    }
+
+    /// Return DE-9IM relate matrix for two WKT geometries.
+    fn relate_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<String> {
+        wbw_r::topology_relate_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology relate operation: {e}"
+            ))
+        })
+    }
+
+    /// Return planar geometry distance for two WKT geometries.
+    fn distance_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<f64> {
+        wbw_r::topology_distance_wkt(a_wkt, b_wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology distance operation: {e}"
+            ))
+        })
+    }
+
+    /// Compute a topology relation summary between two vector features.
+    ///
+    /// Returns a dictionary with predicate booleans, DE-9IM relation matrix,
+    /// and planar distance.
+    #[pyo3(signature = (a_vector, a_feature_index, b_vector, b_feature_index))]
+    fn vector_feature_relation(
+        &self,
+        py: Python<'_>,
+        a_vector: &Vector,
+        a_feature_index: usize,
+        b_vector: &Vector,
+        b_feature_index: usize,
+    ) -> PyResult<Py<PyAny>> {
+        let out_json = wbw_r::topology_vector_feature_relation_json(
+            a_vector.file_path.to_string_lossy().as_ref(),
+            a_feature_index,
+            b_vector.file_path.to_string_lossy().as_ref(),
+            b_feature_index,
+        )
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology vector-feature relation operation: {e}"
+            ))
+        })?;
+        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by topology_vector_feature_relation_json: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+
+    /// Validate polygon or multipolygon WKT.
+    fn is_valid_polygon_wkt(&self, wkt: &str) -> PyResult<bool> {
+        wbw_r::topology_is_valid_polygon_wkt(wkt).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed polygon validity check: {e}"
+            ))
+        })
+    }
+
+    /// Repair polygon or multipolygon WKT and return valid WKT.
+    #[pyo3(signature = (wkt, epsilon=1.0e-9))]
+    fn make_valid_polygon_wkt(&self, wkt: &str, epsilon: f64) -> PyResult<String> {
+        wbw_r::topology_make_valid_polygon_wkt(wkt, epsilon).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed polygon make-valid operation: {e}"
+            ))
+        })
+    }
+
+    /// Buffer point/linestring/polygon WKT and return buffered polygon WKT.
+    fn buffer_wkt(&self, wkt: &str, distance: f64) -> PyResult<String> {
+        wbw_r::topology_buffer_wkt(wkt, distance).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed topology buffer operation: {e}"
+            ))
+        })
+    }
+}
+
+#[pyclass]
 pub struct WbEnvironment {
     runtime: Arc<PythonToolRuntime>,
     working_directory: PathBuf,
@@ -6275,7 +6515,17 @@ impl WbEnvironment {
     }
 
     #[getter]
-    fn topology(&self) -> WbToolCategory {
+    fn projection(&self) -> WbProjectionNamespace {
+        WbProjectionNamespace {}
+    }
+
+    #[getter]
+    fn topology(&self) -> WbTopologyNamespace {
+        WbTopologyNamespace {}
+    }
+
+    #[getter]
+    fn topology_tools(&self) -> WbToolCategory {
         self.make_tool_category("topology")
     }
 
@@ -7104,234 +7354,6 @@ impl WbEnvironment {
             results.push(out);
         }
         Ok(results)
-    }
-
-    /// Convert an EPSG code to OGC WKT.
-    fn projection_to_ogc_wkt(&self, epsg: u32) -> PyResult<String> {
-        wbw_r::projection_to_ogc_wkt(epsg).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed to resolve EPSG {epsg} to OGC WKT: {e}"
-            ))
-        })
-    }
-
-    /// Identify an EPSG code from CRS/WKT text, when available.
-    fn projection_identify_epsg(&self, crs_text: &str) -> PyResult<Option<u32>> {
-        wbw_r::projection_identify_epsg(crs_text).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed to identify EPSG from CRS text: {e}"
-            ))
-        })
-    }
-
-    /// Reproject a list of XY points from one EPSG code to another.
-    ///
-    /// `points` should be a list of dicts, e.g. `[{"x": -79.4, "y": 43.7}]`.
-    #[pyo3(signature = (points, src_epsg, dst_epsg))]
-    fn projection_reproject_points(
-        &self,
-        py: Python<'_>,
-        points: &Bound<'_, PyAny>,
-        src_epsg: u32,
-        dst_epsg: u32,
-    ) -> PyResult<Py<PyAny>> {
-        let points_value = py_any_to_json_value(points)?;
-        let points_json = points_value.to_string();
-        let out_json = wbw_r::projection_reproject_points_json(&points_json, src_epsg, dst_epsg)
-            .map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Failed to reproject points from EPSG:{src_epsg} to EPSG:{dst_epsg}: {e}"
-                ))
-            })?;
-        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Invalid JSON returned by projection_reproject_points_json: {e}"
-            ))
-        })?;
-        json_value_to_pyobject(py, &parsed)
-    }
-
-    /// Reproject a single XY point from one EPSG code to another.
-    #[pyo3(signature = (x, y, src_epsg, dst_epsg))]
-    fn projection_reproject_point(
-        &self,
-        py: Python<'_>,
-        x: f64,
-        y: f64,
-        src_epsg: u32,
-        dst_epsg: u32,
-    ) -> PyResult<Py<PyAny>> {
-        let out_json = wbw_r::projection_reproject_point_json(x, y, src_epsg, dst_epsg)
-            .map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Failed to reproject point from EPSG:{src_epsg} to EPSG:{dst_epsg}: {e}"
-                ))
-            })?;
-        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Invalid JSON returned by projection_reproject_point_json: {e}"
-            ))
-        })?;
-        json_value_to_pyobject(py, &parsed)
-    }
-
-    /// Return whether two WKT geometries intersect.
-    fn topology_intersects_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_intersects_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology intersection check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether WKT geometry A contains geometry B.
-    fn topology_contains_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_contains_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology contains check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether WKT geometry A is within geometry B.
-    fn topology_within_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_within_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology within check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether two WKT geometries touch.
-    fn topology_touches_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_touches_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology touches check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether two WKT geometries are disjoint.
-    fn topology_disjoint_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_disjoint_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology disjoint check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether two WKT geometries cross.
-    fn topology_crosses_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_crosses_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology crosses check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether two WKT geometries overlap.
-    fn topology_overlaps_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_overlaps_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology overlaps check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether geometry A covers geometry B.
-    fn topology_covers_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_covers_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology covers check: {e}"
-            ))
-        })
-    }
-
-    /// Return whether geometry A is covered by geometry B.
-    fn topology_covered_by_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_covered_by_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology covered_by check: {e}"
-            ))
-        })
-    }
-
-    /// Return DE-9IM relate matrix for two WKT geometries.
-    fn topology_relate_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<String> {
-        wbw_r::topology_relate_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology relate operation: {e}"
-            ))
-        })
-    }
-
-    /// Return planar geometry distance for two WKT geometries.
-    fn topology_distance_wkt(&self, a_wkt: &str, b_wkt: &str) -> PyResult<f64> {
-        wbw_r::topology_distance_wkt(a_wkt, b_wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology distance operation: {e}"
-            ))
-        })
-    }
-
-    /// Compute a topology relation summary between two vector features.
-    ///
-    /// Returns a dictionary with predicate booleans, DE-9IM relation matrix,
-    /// and planar distance.
-    #[pyo3(signature = (a_vector, a_feature_index, b_vector, b_feature_index))]
-    fn topology_vector_feature_relation(
-        &self,
-        py: Python<'_>,
-        a_vector: &Vector,
-        a_feature_index: usize,
-        b_vector: &Vector,
-        b_feature_index: usize,
-    ) -> PyResult<Py<PyAny>> {
-        let out_json = wbw_r::topology_vector_feature_relation_json(
-            a_vector.file_path.to_string_lossy().as_ref(),
-            a_feature_index,
-            b_vector.file_path.to_string_lossy().as_ref(),
-            b_feature_index,
-        )
-        .map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology vector-feature relation operation: {e}"
-            ))
-        })?;
-        let parsed: JsonValue = serde_json::from_str(&out_json).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Invalid JSON returned by topology_vector_feature_relation_json: {e}"
-            ))
-        })?;
-        json_value_to_pyobject(py, &parsed)
-    }
-
-    /// Validate polygon or multipolygon WKT.
-    fn topology_is_valid_polygon_wkt(&self, wkt: &str) -> PyResult<bool> {
-        wbw_r::topology_is_valid_polygon_wkt(wkt).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed polygon validity check: {e}"
-            ))
-        })
-    }
-
-    /// Repair polygon or multipolygon WKT and return valid WKT.
-    #[pyo3(signature = (wkt, epsilon=1.0e-9))]
-    fn topology_make_valid_polygon_wkt(&self, wkt: &str, epsilon: f64) -> PyResult<String> {
-        wbw_r::topology_make_valid_polygon_wkt(wkt, epsilon).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed polygon make-valid operation: {e}"
-            ))
-        })
-    }
-
-    /// Buffer point/linestring/polygon WKT and return buffered polygon WKT.
-    fn topology_buffer_wkt(&self, wkt: &str, distance: f64) -> PyResult<String> {
-        wbw_r::topology_buffer_wkt(wkt, distance).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Failed topology buffer operation: {e}"
-            ))
-        })
     }
 
     /// Write a raster to file.

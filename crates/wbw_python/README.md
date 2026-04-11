@@ -625,12 +625,39 @@ artifacts, reducing unnecessary disk writes.
 ```python
 dst_epsg = 32618
 
-dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_epsg)
+dem_utm = wbe.reproject_raster(
+  dem,
+  dst_epsg=dst_epsg,
+  resample='bilinear',
+)
 roads = wbe.read_vector('roads.shp')
 roads_utm = wbe.reproject_vector(roads, dst_epsg=dst_epsg)
 
 wbe.write_raster(dem_utm, 'dem_utm.tif')
 wbe.write_vector(roads_utm, 'roads_utm.shp')
+```
+
+### Raster reprojection controls
+
+`wbe.reproject_raster(...)` accepts several optional controls beyond `dst_epsg`.
+Most commonly used:
+
+- `resample`: `nearest`, `bilinear`, `cubic`, `average`
+- `cols`, `rows`: force output grid shape
+- `x_res`, `y_res`: force output cell size
+- `extent`: `(xmin, ymin, xmax, ymax)` output extent
+- `nodata_policy`, `antimeridian_policy`, `grid_size_policy`, `destination_footprint`
+
+Example:
+
+```python
+dem_utm = wbe.reproject_raster(
+  dem,
+  dst_epsg=32618,
+  resample='cubic',
+  x_res=10.0,
+  y_res=10.0,
+)
 ```
 
 ### Reprojection best practices
@@ -813,7 +840,7 @@ dst_crs = CRS.from_epsg(32618)
 print('Source:', src_crs.to_string())
 print('Destination:', dst_crs.to_string())
 
-dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_crs.to_epsg())
+dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_crs.to_epsg(), resample='bilinear')
 ```
 
 ### Interoperability strategy

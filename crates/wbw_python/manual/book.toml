@@ -1,0 +1,10 @@
+[book]
+title = "Whitebox Workflows for Python User Manual"
+authors = ["Whitebox Team"]
+language = "en"
+multilingual = false
+src = "src"
+
+[output.html]
+default-theme = "light"
+git-repository-url = ""

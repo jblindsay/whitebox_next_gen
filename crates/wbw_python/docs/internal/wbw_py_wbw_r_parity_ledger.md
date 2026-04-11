@@ -45,6 +45,13 @@ Status values:
 - Rationale: shared conceptual documentation structure will reduce cross-language confusion and support a unified manual-generation workflow.
 - Proposed WbW-R action: add an R-facing interoperability matrix with equivalent bridge categories and preservation/drift semantics.
 
+7. Implement WbW-Py-aligned vector attribute API on wbw_vector (schema, attributes, update_attributes, add_field)
+- WbW-Py decision: canonical naming established in Phase 1 (schema(), attributes(), attribute() for reads; update_attributes(), update_attribute(), add_field() for writes).
+- WbW-R parity: `parallel now` — COMPLETED in commit 8dae1d5.
+- Rationale: vector attribute access was previously marked "not yet implemented" in R, relying on terra/sf bridges. Implementing canonical naming methods achieves parity with WbW-Py and improves ergonomics for R users.
+- Completed WbW-R action: implemented full vector attribute read/write methods on wbw_vector wrapper using terra bridge internally; updated README with examples and Python-R API map; marked vector attribute access as complete in parity table.
+- Notes: uses `to_terra()` internally for attribute manipulation; all write operations persist immediately to file.
+
 ## Priority Focus (Naming/Discovery/Workflow)
 
 This section explicitly prioritizes cross-language alignment categories.
@@ -52,6 +59,9 @@ This section explicitly prioritizes cross-language alignment categories.
 1. Naming conventions: `parallel now`
 - Priority: High
 - Scope: metadata accessor names and vector attribute read/write method families.
+- WbW-Py Status: ✅ COMPLETE (metadata(), canonical vector methods implemented)
+- WbW-R Status: ✅ COMPLETE (commit 8dae1d5; vector attribute API fully aligned)
+- Next: minor alignment on category naming if needed
 
 2. Discovery conventions: `parallel now`
 - Priority: High

@@ -45,3 +45,4 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added a canonical workflows section in README with five preferred workflow patterns and one reference example per workflow.
 - Added "recommended vs advanced" guidance notes beside raster/vector/lidar option-dense sections to make default-vs-expert paths explicit.
 - Activated a docs/examples canonical-path gate through the internal style-guide acceptance checklist and tracked it as complete in the Phase 1 checklist.
+- Phase 1 WbW-R parallelization milestone: implemented WbW-Py aligned vector attribute API on `wbw_vector` wrapper (schema(), attributes(), attribute(), update_attributes(), update_attribute(), add_field()) in WbW-R commit 8dae1d5; completed naming conventions `parallel now` priority.

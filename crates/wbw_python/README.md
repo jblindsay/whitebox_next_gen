@@ -132,8 +132,6 @@ Notes:
 
 Design and migration notes:
 - [docs/v2_migration_guide.md](docs/v2_migration_guide.md)
-- [docs/data_object_api_harmonization_proposal.md](docs/data_object_api_harmonization_proposal.md)
-- [docs/api_redesign_rfc_draft.md](docs/api_redesign_rfc_draft.md)
 
 ## Development install
 

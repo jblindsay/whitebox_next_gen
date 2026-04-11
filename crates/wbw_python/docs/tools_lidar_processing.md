@@ -18,7 +18,7 @@ LiDAR processing tools consume point-cloud datasets (LAS/LAZ/COPC/PLY/E57 via wb
 - Phase 2: LiDAR-to-LiDAR processing tools.
 - Phase 3: LiDAR-to-vector and specialized diagnostics/analysis tools.
 
-The canonical checklist and status are tracked in [lidar_parity_checklist.md](lidar_parity_checklist.md).
+Current migration status and canonical API guidance are tracked in [v2_migration_guide.md](v2_migration_guide.md) and [internal/wbw_py_wbw_r_parity_ledger.md](internal/wbw_py_wbw_r_parity_ledger.md).
 
 ## CRS Policy (Required)
 

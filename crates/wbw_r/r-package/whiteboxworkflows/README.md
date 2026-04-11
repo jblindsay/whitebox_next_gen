@@ -180,6 +180,49 @@ The built-in printer also handles messages that contain embedded percentages
 when a numeric `pct` value is missing (for example:
 `"Progress (loop 1 of 2): 50%"`).
 
+For a custom callback, `on_progress` receives normalized `(pct, message)` values
+from the event stream. A defensive pattern is:
+
+```r
+progress_tracker <- local({
+  last <- -1L
+  function(pct = NA_real_, message = "") {
+    msg <- if (is.null(message)) "" else as.character(message[[1]])
+
+    if (!is.numeric(pct) || length(pct) == 0L || is.na(pct[[1]])) {
+      m <- regexpr("(-?[0-9]+(\\.[0-9]+)?)\\s*%", msg, perl = TRUE)
+      if (m[[1]] >= 0L) {
+        token <- regmatches(msg, m)
+        pct <- as.numeric(sub("%.*$", "", token))
+      } else {
+        pct <- NA_real_
+      }
+    }
+
+    if (is.numeric(pct) && length(pct) > 0L && !is.na(pct[[1]])) {
+      value <- as.numeric(pct[[1]])
+      if (value <= 1.0) value <- value * 100.0
+      pct_int <- as.integer(max(0, min(100, floor(value))))
+      if (pct_int > last) {
+        cat(sprintf("%d%%\n", pct_int))
+        last <<- pct_int
+      }
+    }
+
+    if (nzchar(msg)) {
+      cat(msg, "\n", sep = "")
+    }
+  }
+})
+
+result <- wbw_run_tool_with_progress(
+  "slope",
+  args = list(dem = "dem.tif", output = "slope.tif"),
+  session = wbw_session(),
+  on_progress = progress_tracker
+)
+```
+
 ### Typed raster wrapper
 
 ```r

@@ -261,21 +261,63 @@ The standard callback also parses percentages embedded in message text when an
 explicit numeric progress field is missing (for example:
 `"Progress (loop 1 of 2): 50%"`).
 
-You can also wrap progress in a more structured way (e.g., with a progress bar):
+You can also wrap progress in a more structured way (e.g., with a progress bar).
+If you implement your own callback, handle all event payload shapes
+(JSON string, dictionary, or object attributes):
 
 ```python
+import json
+import re
 from tqdm import tqdm
 
+PERCENT_IN_MESSAGE = re.compile(r"(-?\d+(?:\.\d+)?)\s*%")
+
+def normalize_event(event):
+  parsed = event
+  if isinstance(event, str):
+    try:
+      parsed = json.loads(event)
+    except json.JSONDecodeError:
+      return None, None, event
+
+  if isinstance(parsed, dict):
+    return parsed.get("type"), parsed.get("percent"), parsed.get("message")
+
+  return (
+    getattr(parsed, "type", None),
+    getattr(parsed, "percent", None),
+    getattr(parsed, "message", None),
+  )
+
+def infer_percent_from_message(message):
+  if message is None:
+    return None
+  m = PERCENT_IN_MESSAGE.search(str(message))
+  return float(m.group(1)) if m else None
+
 class ProgressTracker:
-    def __init__(self):
-        self.pbar = None
-    
-    def __call__(self, progress):
-        if self.pbar is None:
-            self.pbar = tqdm(total=100, desc=progress.message)
-        self.pbar.update(progress.percent - self.pbar.n)
-        if progress.percent >= 100:
-            self.pbar.close()
+  def __init__(self):
+    self.pbar = tqdm(total=100, desc="Running")
+    self.last = 0
+
+  def __call__(self, event):
+    event_type, raw_percent, message = normalize_event(event)
+    if raw_percent is None and message:
+      raw_percent = infer_percent_from_message(message)
+
+    if event_type == "progress" and raw_percent is not None:
+      percent = float(raw_percent)
+      if percent <= 1.0:
+        percent *= 100.0
+      pct = max(0, min(100, int(percent)))
+      self.pbar.update(max(0, pct - self.last))
+      self.last = max(self.last, pct)
+
+    if message:
+      self.pbar.set_postfix_str(str(message), refresh=False)
+
+    if self.last >= 100:
+      self.pbar.close()
 
 tracker = ProgressTracker()
 result = wbe.hydrology.fill_depressions(input_dem=dem.file_path, callback=tracker)

@@ -13,6 +13,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `docs/internal/wbw_py_alias_inventory.md`
 - Added an initial WbW-Py/WbW-R parity ledger with explicit per-change decisions:
   - `docs/internal/wbw_py_wbw_r_parity_ledger.md`
+- Added an internal interoperability behavior matrix covering preservation/drift semantics,
+  copy boundaries, and verification guidance across NumPy, Rasterio, GeoPandas,
+  Shapely, xarray/rioxarray, and pyproj:
+  - `docs/internal/wbw_py_interop_behavior_matrix.md`
 
 ### Changed
 - Started Phase 1 documentation cleanup by adding a "Preferred API conventions" section to `README.md`.
@@ -28,3 +32,5 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `WbEnvironment` category property aliases `*_tools` for raster/vector/lidar/remote_sensing (use canonical category properties)
 - Added intent-driven README entry points for common tasks (read/process/write/reproject/interop) to improve first-use discovery.
 - Expanded top-level `.pyi` guidance comments for `WbEnvironment` categories and utility namespaces (`projection`, `topology`, `topology_tools`) and dynamic category usage.
+- Added a README interoperability behavior matrix and copy-vs-view guidance to support
+  future user-manual generation from README source content.

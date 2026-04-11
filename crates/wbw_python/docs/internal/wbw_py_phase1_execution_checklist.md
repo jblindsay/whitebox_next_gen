@@ -19,9 +19,9 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## 3) Interoperability Tightening
 
-- [ ] Write metadata-preservation matrix for NumPy/rasterio/GeoPandas/Shapely/xarray/pyproj bridges.
+- [x] Write metadata-preservation matrix for NumPy/rasterio/GeoPandas/Shapely/xarray/pyproj bridges.
 - [ ] Add round-trip smoke tests for priority interop pathways.
-- [ ] Document copy-vs-view behavior and expected memory implications per conversion.
+- [x] Document copy-vs-view behavior and expected memory implications per conversion.
 - [ ] Normalize argument naming across conversion helpers where feasible.
 
 ## 4) Happy-Path Standardization
@@ -49,7 +49,7 @@ This is a compact implementation checklist derived from the broader usability an
 
 - [ ] Complete canonical style guide and compatibility inventory.
 - [x] Add intent-based discovery sections.
-- [ ] Add first round of interop behavior documentation.
+- [x] Add first round of interop behavior documentation.
 - [x] Complete initial WbW-R parity ledger for Phase 1/2 changes.
 
 ## Milestone C

@@ -33,6 +33,7 @@ The API is in active modernization, with emphasis on:
 - [Shapely interoperability](#shapely-interoperability)
 - [xarray/rioxarray interoperability](#xarrayrioxarray-interoperability)
 - [pyproj interoperability](#pyproj-interoperability)
+- [Interoperability behavior matrix](#interoperability-behavior-matrix)
 - [Supported file formats](#supported-file-formats)
 - [Licensing overview](#licensing-overview)
 - [Licensing and Pro workflows](#licensing-and-pro-workflows)
@@ -898,6 +899,29 @@ dem_utm = wbe.reproject_raster(dem, dst_epsg=dst_crs.to_epsg(), resample='biline
 - Rich raster ecosystem tools: exchange via GeoTIFF (`write_raster` / `read_raster`).
 - Rich vector ecosystem tools: exchange via GeoPackage/Shapefile (`write_vector` / `read_vector`).
 - Keep wbw_python as the geoprocessing engine and use ecosystem libraries where they are strongest.
+
+## Interoperability behavior matrix
+
+This table summarizes current Phase 1 behavior for common ecosystem bridges.
+
+| Bridge | Primary path | Spatial metadata handling | Attribute/CRS handling | Copy vs view behavior |
+|---|---|---|---|---|
+| NumPy | `Raster.to_numpy()` / `Raster.from_numpy()` | Array carries values only; georeferencing comes from `base` raster in `from_numpy` | N/A (raster array exchange) | Materialized array copy on export/import boundary |
+| Rasterio | `write_raster(...)` -> `rasterio.open(...)` -> `read_raster(...)` | GeoTIFF metadata persists via file profile/transform/CRS | N/A (raster exchange) | File-based copy boundary |
+| GeoPandas | `write_vector(...)` -> `gpd.read_file(...)` -> `read_vector(...)` | Geometry + CRS preserved by container format (recommended: GPKG) | Tabular attributes round-trip through file driver support | File-based copy boundary |
+| Shapely | Through GeoPandas geometry workflows | Geometry handled by GeoPandas/Shapely object model | Attributes managed by GeoPandas dataframe columns | In-memory object copies under GeoPandas/Shapely semantics |
+| xarray/rioxarray | `write_raster(...)` -> `rxr.open_rasterio(...)` -> `.rio.to_raster(...)` -> `read_raster(...)` | CRS/transform preserved through rioxarray raster metadata | N/A (raster exchange) | File-based copy boundary; xarray ops may create derived arrays |
+| pyproj | `metadata().crs_epsg()` with `pyproj.CRS`/transform tools | CRS interpretation and transform pipelines handled by pyproj | N/A (CRS utility interoperability) | No raster/vector payload transfer unless combined with file exchange |
+
+### Interoperability copy-vs-view notes
+
+- `to_numpy()` returns a materialized NumPy array intended for safe downstream mutation.
+- `from_numpy()` writes array values into a new raster using the provided base raster for geospatial context.
+- File-based ecosystem bridges (Rasterio, GeoPandas, rioxarray) are explicit copy boundaries by design.
+- When lossless round-trip behavior matters, prefer stable containers (`.tif` for raster, `.gpkg` for vector) and verify metadata after re-ingest with `metadata()`.
+
+Engineering detail note:
+- A deeper internal matrix with follow-up test/documentation targets is tracked in `docs/internal/wbw_py_interop_behavior_matrix.md`.
 
 ## Supported file formats
 

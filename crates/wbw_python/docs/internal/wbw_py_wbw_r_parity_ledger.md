@@ -38,3 +38,9 @@ Status values:
 - WbW-R parity: `Python-only`.
 - Rationale: this is an implementation detail for transition convenience and not part of preferred user-facing style.
 - Proposed WbW-R action: none required unless an equivalent transition shim is needed.
+
+6. Add interoperability behavior matrix and copy-boundary guidance to user-facing docs
+- WbW-Py decision: added README matrix plus internal detailed matrix source.
+- WbW-R parity: `parallel now`.
+- Rationale: shared conceptual documentation structure will reduce cross-language confusion and support a unified manual-generation workflow.
+- Proposed WbW-R action: add an R-facing interoperability matrix with equivalent bridge categories and preservation/drift semantics.

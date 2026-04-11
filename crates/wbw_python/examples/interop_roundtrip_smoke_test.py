@@ -161,8 +161,8 @@ def pyproj_crs_smoke(reference_raster: wb.Raster | None, result: SmokeResult) ->
         result.skip_case("pyproj_crs", "no raster CRS source available")
         return
 
-    epsg = reference_raster.metadata().crs_epsg()
-    if epsg is None:
+    epsg = reference_raster.metadata().epsg_code
+    if epsg is None or epsg == 0:
         result.skip_case("pyproj_crs", "raster metadata did not provide EPSG")
         return
 

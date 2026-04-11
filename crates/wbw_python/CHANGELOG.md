@@ -44,3 +44,4 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Expanded the WbW-Py/WbW-R parity ledger with an explicit priority focus section for naming, discovery, and workflow convention alignment.
 - Added a canonical workflows section in README with five preferred workflow patterns and one reference example per workflow.
 - Added "recommended vs advanced" guidance notes beside raster/vector/lidar option-dense sections to make default-vs-expert paths explicit.
+- Activated a docs/examples canonical-path gate through the internal style-guide acceptance checklist and tracked it as complete in the Phase 1 checklist.

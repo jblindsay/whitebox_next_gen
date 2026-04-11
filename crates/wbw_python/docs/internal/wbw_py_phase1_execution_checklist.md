@@ -29,7 +29,7 @@ This is a compact implementation checklist derived from the broader usability an
 - [x] Define 5 canonical workflows (raster, vector, lidar, reprojection, interop-first).
 - [x] Provide one preferred end-to-end example per workflow.
 - [x] Add "recommended vs advanced" notes beside option-dense examples.
-- [ ] Add a checklist gate for new docs/examples: "does this follow the canonical path?"
+- [x] Add a checklist gate for new docs/examples: "does this follow the canonical path?"
 
 ## 5) WbW-R Parallelization Review
 

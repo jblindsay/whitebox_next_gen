@@ -30,6 +30,7 @@ png = "0.17"
 zune-core = "0.5"
 zune-jpegxl = "0.5"
 jxl-oxide = "0.12"
+rayon = "1"
 
 [dev-dependencies]
 tempfile = "3"

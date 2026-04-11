@@ -12,6 +12,8 @@ use std::mem;
 use std::path::Path;
 use std::slice;
 
+use rayon::prelude::*;
+
 use super::compression;
 use super::error::{GeoTiffError, Result};
 use super::geo_keys::{GeoKeyBuilder, GeoKeyDirectory};
@@ -341,14 +343,17 @@ impl GeoTiffWriter {
         let rps = rows_per_strip.min(self.height) as usize;
         let num_strips = (self.height as usize + rps - 1) / rps;
 
-        let mut chunks = Vec::with_capacity(num_strips);
-        for s in 0..num_strips {
+        let chunks: Result<Vec<Vec<u8>>> = (0..num_strips)
+            .into_par_iter()
+            .map(|s| {
             let row_start = s * rps;
             let row_end = (row_start + rps).min(self.height as usize);
             let raw = &pixel_bytes[row_start * row_bytes..row_end * row_bytes];
             let chunk_h = (row_end - row_start) as u32;
-            chunks.push(self.compress_chunk(raw, self.width, chunk_h, spp)?);
-        }
+            self.compress_chunk(raw, self.width, chunk_h, spp)
+            })
+            .collect();
+        let chunks = chunks?;
 
         Ok((chunks, ChunkLayout::Stripped { rows_per_strip: rps as u32 }))
     }
@@ -372,10 +377,12 @@ impl GeoTiffWriter {
         let tiles_y = (h + th - 1) / th;
         let tile_raw_bytes = tw * th * spp * bps_b;
 
-        let mut chunks = Vec::with_capacity(tiles_x * tiles_y);
-
-        for ty in 0..tiles_y {
-            for tx in 0..tiles_x {
+        let num_tiles = tiles_x * tiles_y;
+        let chunks: Result<Vec<Vec<u8>>> = (0..num_tiles)
+            .into_par_iter()
+            .map(|tile_index| {
+                let ty = tile_index / tiles_x;
+                let tx = tile_index % tiles_x;
                 let img_x0 = tx * tw;
                 let img_y0 = ty * th;
                 let copy_w = tw.min(w - img_x0);
@@ -390,9 +397,10 @@ impl GeoTiffWriter {
                     tile[dst_off..dst_off + len]
                         .copy_from_slice(&pixel_bytes[src_off..src_off + len]);
                 }
-                chunks.push(self.compress_chunk(&tile, tile_width, tile_height, spp)?);
-            }
-        }
+                self.compress_chunk(&tile, tile_width, tile_height, spp)
+            })
+            .collect();
+        let chunks = chunks?;
 
         Ok((chunks, ChunkLayout::Tiled { tile_width, tile_height }))
     }

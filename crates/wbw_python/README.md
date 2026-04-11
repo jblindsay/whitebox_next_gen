@@ -201,7 +201,7 @@ wbe.write_rasters(
 )
 ```
 
-## Raster output controls
+### Raster output controls
 
 `WbEnvironment.write_raster(...)` and `WbEnvironment.write_rasters(...)` accept an
 `options` dictionary for output control.
@@ -345,7 +345,7 @@ wbe.write_vector(buffered, 'roads_buffer.shp')
 wbe.write_vector(buffered, 'roads_buffer')  # writes roads_buffer.gpkg
 ```
 
-## Vector output controls
+### Vector output controls
 
 `WbEnvironment.write_vector(...)`, `WbEnvironment.read_vector(...)`, and
 `WbEnvironment.read_vectors(...)` accept optional `options` dictionaries.
@@ -444,7 +444,7 @@ wbe.write_lidar(
 )
 ```
 
-## Lidar output controls
+### Lidar output controls
 
 `WbEnvironment.write_lidar(...)` accepts optional `options` dictionaries.
 

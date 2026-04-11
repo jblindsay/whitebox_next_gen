@@ -14,7 +14,14 @@ result <- wbw_run_tool(
 print(result)
 ```
 
-Planned expansion:
-- Session lifecycle patterns.
-- Discovery checks before execution.
-- Memory-first versus explicit output workflows.
+## What to Read Next
+
+- Session lifecycle and discovery: [Session and Discovery](./session-and-discovery.md)
+- Progress callbacks and execution patterns: [Tool Execution and Progress](./tool-execution-and-progress.md)
+- End-to-end workflow scripts: [Script Index](./script-index.md)
+
+## Quick-Start Conventions
+
+- Prefer explicit `wbw_session(...)` construction in scripts.
+- Validate tool visibility before long-running pipelines.
+- Persist outputs deliberately and re-open typed objects for verification.

@@ -1296,6 +1296,123 @@ wbw_vector_from_path <- function(path,
 
   metadata <- function() .get_meta()
 
+  schema <- function() {
+    meta <- metadata()
+    data.frame(
+      name = meta$fields,
+      type = meta$field_types,
+      row.names = NULL,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  attributes <- function(feature_index) {
+    if (!is.numeric(feature_index) || length(feature_index) != 1L || feature_index < 1) {
+      stop(
+        "feature_index must be a positive integer.",
+        call. = FALSE
+      )
+    }
+    tidx <- as.integer(feature_index)
+    terra_vec <- to_terra()
+    if (tidx > terra::nrow(terra_vec)) {
+      stop(
+        sprintf("feature_index %d exceeds feature count %d", tidx, terra::nrow(terra_vec)),
+        call. = FALSE
+      )
+    }
+    as.list(terra::values(terra_vec[tidx, ], as.data.frame = TRUE)[[1]])
+  }
+
+  attribute <- function(feature_index, field_name) {
+    if (!is.character(field_name) || length(field_name) != 1L) {
+      stop("field_name must be a single string.", call. = FALSE)
+    }
+    attrs <- attributes(feature_index)
+    if (!(field_name %in% names(attrs))) {
+      stop(
+        sprintf("field '%s' not found in feature schema", field_name),
+        call. = FALSE
+      )
+    }
+    attrs[[field_name]]
+  }
+
+  update_attributes <- function(feature_index, values_dict) {
+    if (!is.list(values_dict)) {
+      stop("values_dict must be a named list.", call. = FALSE)
+    }
+    wbw_require_terra("wbw_vector$update_attributes()")
+    terra_vec <- to_terra()
+    tidx <- as.integer(feature_index)
+    if (tidx > terra::nrow(terra_vec)) {
+      stop(
+        sprintf("feature_index %d exceeds feature count %d", tidx, terra::nrow(terra_vec)),
+        call. = FALSE
+      )
+    }
+
+    # Update fields via terra
+    for (field_name in names(values_dict)) {
+      terra_vec[[field_name]][tidx] <- values_dict[[field_name]]
+    }
+
+    # Write back to file
+    deep_copy(vector_path, overwrite = TRUE)
+    invisible(NULL)
+  }
+
+  update_attribute <- function(feature_index, field_name, value) {
+    if (!is.character(field_name) || length(field_name) != 1L) {
+      stop("field_name must be a single string.", call. = FALSE)
+    }
+    update_attributes(feature_index, setNames(list(value), field_name))
+  }
+
+  add_field <- function(field_name, field_type = "text", default_value = NA) {
+    if (!is.character(field_name) || length(field_name) != 1L) {
+      stop("field_name must be a single string.", call. = FALSE)
+    }
+    valid_types <- c("integer", "float", "text", "date", "datetime", "boolean", "blob", "json")
+    if (!(field_type %in% valid_types)) {
+      stop(
+        sprintf(
+          "field_type must be one of: %s, got '%s'",
+          paste(valid_types, collapse = ", "),
+          field_type
+        ),
+        call. = FALSE
+      )
+    }
+
+    wbw_require_terra("wbw_vector$add_field()")
+    terra_vec <- to_terra()
+
+    # Map wbw field type to R type for terra
+    r_type <- switch(field_type,
+      "integer" = 0L,
+      "float" = 0.0,
+      "text" = "",
+      "date" = NA_character_,
+      "datetime" = NA_character_,
+      "boolean" = NA,
+      "blob" = NA_character_,
+      "json" = NA_character_,
+      NA
+    )
+
+    # Add field via terra with default value
+    if (is.na(default_value)) {
+      terra_vec[[field_name]] <- r_type
+    } else {
+      terra_vec[[field_name]] <- default_value
+    }
+
+    # Write back to file
+    deep_copy(vector_path, overwrite = TRUE)
+    invisible(NULL)
+  }
+
   to_terra <- function() {
     wbw_require_terra("wbw_vector$to_terra()")
     terra::vect(vector_path)
@@ -1343,6 +1460,12 @@ wbw_vector_from_path <- function(path,
   obj$path <- vector_path
   obj$session <- session
   obj$metadata <- metadata
+  obj$schema <- schema
+  obj$attributes <- attributes
+  obj$attribute <- attribute
+  obj$update_attributes <- update_attributes
+  obj$update_attribute <- update_attribute
+  obj$add_field <- add_field
   obj$to_terra <- to_terra
   obj$to_sf <- to_sf
   obj$deep_copy <- deep_copy

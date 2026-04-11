@@ -48,7 +48,8 @@ The package API is being modernized with emphasis on:
     - binary math: `add()`, `subtract()`, `multiply()`, `divide()`
     - unary math: `abs()`, `ceil()`, `floor()`, `round()`, `square()`, `sqrt()`, `log10()`, `log2()`, `sin()`, `cos()`, `tan()`, `sinh()`, `cosh()`, `tanh()`, `exp()`, `exp2()`
     - conversion/io: `to_array()`, `to_stars()`, `deep_copy()`, `write()`
-  - `wbw_vector` wrapper with `metadata()`, `to_terra()`, and optional `to_sf()`
+  - `wbw_vector` wrapper with `metadata()`, `schema()`, `attributes()`, `attribute()` for reads
+    and `update_attributes()`, `update_attribute()`, `add_field()` for writes; plus `to_terra()` and optional `to_sf()`
   - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `deep_copy()`, and `write()`
   - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `read_*()` bundle data access, preview selection, and true/false-colour composite helpers
 - Discovery helpers:
@@ -95,7 +96,8 @@ The package API is being modernized with emphasis on:
 | sensor bundle reader helpers | `wbw_read_bundle()` and family-specific readers | complete |
 | bundle preview/composite helper flows | `read_preview_raster()`, `write_true_colour()`, `write_false_colour()` | complete |
 | raster S3 arithmetic operators (`+`, `-`, `*`, `/`) | `+.wbw_raster`, `-.wbw_raster`, `*.wbw_raster`, `/.wbw_raster` | complete (unary `-` gives clear error) |
-| vector attribute table read/iterate | not yet implemented — use `to_terra()` or `to_sf()` bridge | not yet implemented |
+| `Vector.schema()`, `Vector.attributes()`, `Vector.attribute()` | same methods on `wbw_vector` | complete |
+| `Vector.update_attributes()`, `Vector.update_attribute()`, `Vector.add_field()` | same methods on `wbw_vector` | complete |
 | lidar full point-cloud array roundtrip | not yet implemented — metadata and file-backed helpers only | not yet implemented |
 
 ## Development install
@@ -379,11 +381,38 @@ roads <- wbw_read_vector("roads.gpkg")
 meta <- roads$metadata()
 print(roads)
 
-tv <- roads$to_terra()
+# Harmonized attribute access (WbW-Py aligned API)
+schema <- roads$schema()  # Get field names and types
+print(schema)
 
-# Extensionless path defaults to GeoPackage
-roads$write("roads_copy") # writes roads_copy.gpkg
+# Read attributes
+first_feature_attrs <- roads$attributes(1)  # All attributes for feature 1
+road_name <- roads$attribute(1, "name")     # Single attribute value
+
+# Write attributes (modifies file)
+roads$update_attribute(1, "name", "Main Street")
+roads$update_attributes(2, list(name = "Oak Road", speed_limit = 50))
+roads$add_field("traffic_count", field_type = "integer", default_value = 0)
+
+# Convert to terra/sf for advanced operations
+tv <- roads$to_terra()
+sf_obj <- roads$to_sf()
+
+# Write output (defaults to GeoPackage for extensionless path)
+roads$write("roads_copy", overwrite = TRUE) # writes roads_copy.gpkg
 ```
+
+**Vector attribute API notes:**
+
+- `schema()`: Returns a data.frame with `name` and `type` columns.
+- `attributes(feature_index)`: Returns a named list of all attribute values for a feature.
+- `attribute(feature_index, field_name)`: Returns a single attribute value.
+- `update_attributes(feature_index, values_dict)`: Updates multiple attributes and persists to file.
+- `update_attribute(feature_index, field_name, value)`: Updates a single attribute and persists.
+- `add_field(field_name, field_type, default_value=NA)`: Adds a new field to all features.
+  - Supported `field_type` values: `integer`, `float`, `text`, `date`, `datetime`, `boolean`, `blob`, `json`
+
+All attribute modifications persist immediately to the underlying file.
 
 ## Vector output controls
 

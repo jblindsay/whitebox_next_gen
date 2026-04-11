@@ -12,6 +12,8 @@
 - [Working with Sensor Bundles](./working-with-sensor-bundles.md)
 - [Output Controls](./output-controls.md)
 - [Reprojection and CRS](./reprojection-and-crs.md)
+- [Supported Utilities](./supported-utilities.md)
+- [Topology Utilities](./topology-utilities.md)
 - [Interoperability](./interoperability.md)
 - [Licensing](./licensing.md)
 - [API Reference Strategy](./api-reference-strategy.md)

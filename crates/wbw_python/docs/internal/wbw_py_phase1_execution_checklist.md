@@ -20,7 +20,7 @@ This is a compact implementation checklist derived from the broader usability an
 ## 3) Interoperability Tightening
 
 - [x] Write metadata-preservation matrix for NumPy/rasterio/GeoPandas/Shapely/xarray/pyproj bridges.
-- [ ] Add round-trip smoke tests for priority interop pathways.
+- [x] Add round-trip smoke tests for priority interop pathways.
 - [x] Document copy-vs-view behavior and expected memory implications per conversion.
 - [ ] Normalize argument naming across conversion helpers where feasible.
 

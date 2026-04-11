@@ -162,6 +162,19 @@ This performs an editable install via maturin for the wbw_python crate.
 python3 crates/wbw_python/examples/python_import_smoke_test.py
 ```
 
+Interoperability-focused smoke test (optional dependencies):
+
+```bash
+python3 crates/wbw_python/examples/interop_roundtrip_smoke_test.py
+```
+
+Optional packages used when available:
+- `numpy`
+- `rasterio`
+- `geopandas`
+- `shapely`
+- `pyproj`
+
 ## Recommended examples
 
 **Suggested run order for new users:**

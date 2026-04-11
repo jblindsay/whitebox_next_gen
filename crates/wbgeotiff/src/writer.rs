@@ -5,9 +5,12 @@
 
 #![allow(dead_code)]
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
+use std::mem;
 use std::path::Path;
+use std::slice;
 
 use super::compression;
 use super::error::{GeoTiffError, Result};
@@ -18,6 +21,54 @@ use super::types::GeoTransform;
 
 /// Always write little-endian.
 const BO: ByteOrder = ByteOrder::LittleEndian;
+const WRITE_BUFFER_CAPACITY: usize = 1 << 20;
+
+trait LeByteEncode {
+    const WIDTH: usize;
+
+    fn append_le_bytes(&self, out: &mut Vec<u8>);
+}
+
+macro_rules! impl_le_byte_encode {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl LeByteEncode for $t {
+                const WIDTH: usize = mem::size_of::<$t>();
+
+                fn append_le_bytes(&self, out: &mut Vec<u8>) {
+                    out.extend_from_slice(&self.to_le_bytes());
+                }
+            }
+        )+
+    };
+}
+
+impl_le_byte_encode!(u8, i8, u16, i16, u32, i32, u64, i64, f32, f64);
+
+#[inline]
+fn slice_as_le_bytes<T: LeByteEncode>(data: &[T]) -> Cow<'_, [u8]> {
+    #[cfg(target_endian = "little")]
+    {
+        Cow::Borrowed(unsafe {
+            slice::from_raw_parts(data.as_ptr() as *const u8, mem::size_of_val(data))
+        })
+    }
+
+    #[cfg(not(target_endian = "little"))]
+    {
+        let mut out = Vec::with_capacity(data.len() * T::WIDTH);
+        for value in data {
+            value.append_le_bytes(&mut out);
+        }
+        Cow::Owned(out)
+    }
+}
+
+#[inline]
+fn new_output_writer<P: AsRef<Path>>(path: P) -> Result<BufWriter<File>> {
+    let file = File::create(path).map_err(GeoTiffError::Io)?;
+    Ok(BufWriter::with_capacity(WRITE_BUFFER_CAPACITY, file))
+}
 
 // ── WriteLayout ───────────────────────────────────────────────────────────────
 
@@ -159,78 +210,79 @@ impl GeoTiffWriter {
     pub fn write_u8<P: AsRef<Path>>(mut self, path: P, data: &[u8]) -> Result<()> {
         self.bits_per_sample = 8; self.sample_format = SampleFormat::Uint;
         self.validate(data.len())?;
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), data)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_i8<P: AsRef<Path>>(mut self, path: P, data: &[i8]) -> Result<()> {
         self.bits_per_sample = 8; self.sample_format = SampleFormat::Int;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().map(|v| *v as u8).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_u16<P: AsRef<Path>>(mut self, path: P, data: &[u16]) -> Result<()> {
         self.bits_per_sample = 16; self.sample_format = SampleFormat::Uint;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_u32<P: AsRef<Path>>(mut self, path: P, data: &[u32]) -> Result<()> {
         self.bits_per_sample = 32; self.sample_format = SampleFormat::Uint;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_u64<P: AsRef<Path>>(mut self, path: P, data: &[u64]) -> Result<()> {
         self.bits_per_sample = 64; self.sample_format = SampleFormat::Uint;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_i16<P: AsRef<Path>>(mut self, path: P, data: &[i16]) -> Result<()> {
         self.bits_per_sample = 16; self.sample_format = SampleFormat::Int;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_i32<P: AsRef<Path>>(mut self, path: P, data: &[i32]) -> Result<()> {
         self.bits_per_sample = 32; self.sample_format = SampleFormat::Int;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_i64<P: AsRef<Path>>(mut self, path: P, data: &[i64]) -> Result<()> {
         self.bits_per_sample = 64; self.sample_format = SampleFormat::Int;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_f32<P: AsRef<Path>>(mut self, path: P, data: &[f32]) -> Result<()> {
         self.bits_per_sample = 32; self.sample_format = SampleFormat::IeeeFloat;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     pub fn write_f64<P: AsRef<Path>>(mut self, path: P, data: &[f64]) -> Result<()> {
         self.bits_per_sample = 64; self.sample_format = SampleFormat::IeeeFloat;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(BufWriter::new(File::create(path).map_err(GeoTiffError::Io)?), &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(new_output_writer(path)?, bytes.as_ref())
     }
 
     /// Write f32 data into any `Write + Seek` (useful for in-memory buffers / COG).
     pub fn write_f32_to_writer<W: Write + Seek>(mut self, w: W, data: &[f32]) -> Result<()> {
         self.bits_per_sample = 32; self.sample_format = SampleFormat::IeeeFloat;
         self.validate(data.len())?;
-        let bytes: Vec<u8> = data.iter().flat_map(|v| v.to_le_bytes()).collect();
-        self.write_raw(w, &bytes)
+        let bytes = slice_as_le_bytes(data);
+        self.write_raw(w, bytes.as_ref())
     }
 
     // ── Validation ────────────────────────────────────────────────────────────

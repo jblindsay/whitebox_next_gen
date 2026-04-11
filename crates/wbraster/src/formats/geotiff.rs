@@ -395,8 +395,25 @@ fn metadata_bool_from_name(name: &str) -> Option<bool> {
     }
 }
 
+fn interleave_band_major<T: Copy>(data: &[T], npix: usize, bands: usize) -> Vec<T> {
+    if bands <= 1 {
+        return data.to_vec();
+    }
+
+    let mut out = Vec::with_capacity(data.len());
+    for p in 0..npix {
+        for b in 0..bands {
+            out.push(data[b * npix + p]);
+        }
+    }
+    out
+}
+
 fn raster_to_chunky_u8(r: &Raster) -> Vec<u8> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_u8() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -413,6 +430,9 @@ fn raster_to_chunky_u8(r: &Raster) -> Vec<u8> {
 
 fn raster_to_chunky_i8(r: &Raster) -> Vec<i8> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_i8() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -429,6 +449,9 @@ fn raster_to_chunky_i8(r: &Raster) -> Vec<i8> {
 
 fn raster_to_chunky_u16(r: &Raster) -> Vec<u16> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_u16() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -445,6 +468,9 @@ fn raster_to_chunky_u16(r: &Raster) -> Vec<u16> {
 
 fn raster_to_chunky_i16(r: &Raster) -> Vec<i16> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_i16() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -461,6 +487,9 @@ fn raster_to_chunky_i16(r: &Raster) -> Vec<i16> {
 
 fn raster_to_chunky_u32(r: &Raster) -> Vec<u32> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_u32() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -477,6 +506,9 @@ fn raster_to_chunky_u32(r: &Raster) -> Vec<u32> {
 
 fn raster_to_chunky_i32(r: &Raster) -> Vec<i32> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_i32() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -493,16 +525,11 @@ fn raster_to_chunky_i32(r: &Raster) -> Vec<i32> {
 
 fn raster_to_chunky_u64(r: &Raster) -> Vec<u64> {
     let npix = r.rows * r.cols;
-    let mut out = Vec::with_capacity(npix * r.bands);
     if let Some(data) = r.data_u64() {
-        for p in 0..npix {
-            for b in 0..r.bands {
-                out.push(data[b * npix + p]);
-            }
-        }
-        return out;
+        return interleave_band_major(data, npix, r.bands);
     }
 
+    let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
         let col = p % r.cols;
@@ -518,16 +545,11 @@ fn raster_to_chunky_u64(r: &Raster) -> Vec<u64> {
 
 fn raster_to_chunky_i64(r: &Raster) -> Vec<i64> {
     let npix = r.rows * r.cols;
-    let mut out = Vec::with_capacity(npix * r.bands);
     if let Some(data) = r.data_i64() {
-        for p in 0..npix {
-            for b in 0..r.bands {
-                out.push(data[b * npix + p]);
-            }
-        }
-        return out;
+        return interleave_band_major(data, npix, r.bands);
     }
 
+    let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
         let col = p % r.cols;
@@ -543,6 +565,9 @@ fn raster_to_chunky_i64(r: &Raster) -> Vec<i64> {
 
 fn raster_to_chunky_f32(r: &Raster) -> Vec<f32> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_f32() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -559,6 +584,9 @@ fn raster_to_chunky_f32(r: &Raster) -> Vec<f32> {
 
 fn raster_to_chunky_f64(r: &Raster) -> Vec<f64> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_f64() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -575,32 +603,62 @@ fn raster_to_chunky_f64(r: &Raster) -> Vec<f64> {
 
 fn write_with_writer(writer: gt::GeoTiffWriter, path: &str, raster: &Raster) -> Result<()> {
     match raster.data_type {
+        DataType::I8 if raster.bands == 1 => writer
+            .write_i8(path, raster.data_i8().expect("i8 raster data"))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::I8 => writer
             .write_i8(path, &raster_to_chunky_i8(raster))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::U8 if raster.bands == 1 => writer
+            .write_u8(path, raster.data_u8().expect("u8 raster data"))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::U8 => writer
             .write_u8(path, &raster_to_chunky_u8(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::U16 if raster.bands == 1 => writer
+            .write_u16(path, raster.data_u16().expect("u16 raster data"))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::U16 => writer
             .write_u16(path, &raster_to_chunky_u16(raster))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::U32 if raster.bands == 1 => writer
+            .write_u32(path, raster.data_u32().expect("u32 raster data"))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::U32 => writer
             .write_u32(path, &raster_to_chunky_u32(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::I16 if raster.bands == 1 => writer
+            .write_i16(path, raster.data_i16().expect("i16 raster data"))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::I16 => writer
             .write_i16(path, &raster_to_chunky_i16(raster))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::I32 if raster.bands == 1 => writer
+            .write_i32(path, raster.data_i32().expect("i32 raster data"))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::I32 => writer
             .write_i32(path, &raster_to_chunky_i32(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::U64 if raster.bands == 1 => writer
+            .write_u64(path, raster.data_u64().expect("u64 raster data"))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::U64 => writer
             .write_u64(path, &raster_to_chunky_u64(raster))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::I64 if raster.bands == 1 => writer
+            .write_i64(path, raster.data_i64().expect("i64 raster data"))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::I64 => writer
             .write_i64(path, &raster_to_chunky_i64(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::F32 if raster.bands == 1 => writer
+            .write_f32(path, raster.data_f32().expect("f32 raster data"))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::F32 => writer
             .write_f32(path, &raster_to_chunky_f32(raster))
+            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::F64 if raster.bands == 1 => writer
+            .write_f64(path, raster.data_f64().expect("f64 raster data"))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
         DataType::F64 => writer
             .write_f64(path, &raster_to_chunky_f64(raster))
@@ -610,32 +668,62 @@ fn write_with_writer(writer: gt::GeoTiffWriter, path: &str, raster: &Raster) -> 
 
 fn write_with_cog(writer: gt::CogWriter, path: &str, raster: &Raster) -> Result<()> {
     match raster.data_type {
+        DataType::I8 if raster.bands == 1 => writer
+            .write_i8(path, raster.data_i8().expect("i8 raster data"))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::I8 => writer
             .write_i8(path, &raster_to_chunky_i8(raster))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::U8 if raster.bands == 1 => writer
+            .write_u8(path, raster.data_u8().expect("u8 raster data"))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::U8 => writer
             .write_u8(path, &raster_to_chunky_u8(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::U16 if raster.bands == 1 => writer
+            .write_u16(path, raster.data_u16().expect("u16 raster data"))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::U16 => writer
             .write_u16(path, &raster_to_chunky_u16(raster))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::U32 if raster.bands == 1 => writer
+            .write_u32(path, raster.data_u32().expect("u32 raster data"))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::U32 => writer
             .write_u32(path, &raster_to_chunky_u32(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::I16 if raster.bands == 1 => writer
+            .write_i16(path, raster.data_i16().expect("i16 raster data"))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::I16 => writer
             .write_i16(path, &raster_to_chunky_i16(raster))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::I32 if raster.bands == 1 => writer
+            .write_i32(path, raster.data_i32().expect("i32 raster data"))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::I32 => writer
             .write_i32(path, &raster_to_chunky_i32(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::U64 if raster.bands == 1 => writer
+            .write_u64(path, raster.data_u64().expect("u64 raster data"))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::U64 => writer
             .write_u64(path, &raster_to_chunky_u64(raster))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::I64 if raster.bands == 1 => writer
+            .write_i64(path, raster.data_i64().expect("i64 raster data"))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::I64 => writer
             .write_i64(path, &raster_to_chunky_i64(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::F32 if raster.bands == 1 => writer
+            .write_f32(path, raster.data_f32().expect("f32 raster data"))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::F32 => writer
             .write_f32(path, &raster_to_chunky_f32(raster))
+            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::F64 if raster.bands == 1 => writer
+            .write_f64(path, raster.data_f64().expect("f64 raster data"))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
         DataType::F64 => writer
             .write_f64(path, &raster_to_chunky_f64(raster))

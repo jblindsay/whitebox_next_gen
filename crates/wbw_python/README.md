@@ -44,7 +44,6 @@ The API is in active modernization, with emphasis on:
   - `Raster.metadata()`
   - `Vector.metadata()`
   - `Lidar.metadata()`
-- Backward compatibility remains for `Raster.configs()`.
 - Vector attribute readability aliases:
   - `schema()`, `attributes()`, `attribute()`
   - `update_attributes()`, `update_attribute()`, `add_field()`
@@ -61,13 +60,13 @@ Use these conventions as the default style for new code:
   - `Raster.metadata()`
   - `Vector.metadata()`
   - `Lidar.metadata()`
-2. Treat compatibility aliases as legacy paths in new examples:
-  - Prefer `metadata()` over `configs()`.
-  - Prefer vector aliases such as `schema()`/`attributes()`/`attribute()` over older `get_*` names.
+2. Use canonical vector attribute methods:
+  - `schema()`/`attributes()`/`attribute()` for reads.
+  - `update_attributes()`/`update_attribute()`/`add_field()` for writes.
 3. Use explicit namespaces for utility functions and avoid flat helper patterns:
   - `wbe.projection.*` for CRS/projection utilities.
   - `wbe.topology.*` for geometry/topology utilities.
-  - `wbe.topology_tools` (or `wbe.category('topology')`) for topology tool-category access.
+  - `wbe.topology_tools` for topology tool-category access.
 4. Prefer object-first workflows:
   - `read_*` -> inspect `metadata()` -> run category tools -> `write_*`.
 5. Use strict output controls when reproducibility matters:
@@ -75,11 +74,10 @@ Use these conventions as the default style for new code:
 
 ## Migration quick map
 
-Common updates from legacy style to the harmonized API:
+Common updates from removed legacy style to the canonical API:
 
 | Legacy style | Current style |
 |---|---|
-| `r.configs()` | `r.metadata()` |
 | `v.attribute_fields()` | `v.schema()` |
 | `v.get_attributes(i)` | `v.attributes(i)` |
 | `v.get_attribute(i, field)` | `v.attribute(i, field)` |
@@ -88,8 +86,8 @@ Common updates from legacy style to the harmonized API:
 | `v.add_attribute_field(...)` | `v.add_field(...)` |
 
 Notes:
-- Legacy method names remain available for compatibility.
-- New aliases are intended to improve readability and consistency across object types.
+- Removed pre-release aliases were dropped to reduce API ambiguity.
+- Canonical methods improve readability and consistency across object types.
 
 ## Tool reference docs
 

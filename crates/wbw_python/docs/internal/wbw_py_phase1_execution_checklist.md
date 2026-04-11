@@ -6,9 +6,9 @@ This is a compact implementation checklist derived from the broader usability an
 
 - [ ] Publish canonical API style guide for preferred naming and patterns.
 - [x] Document preferred metadata method usage (`metadata()` over legacy aliases).
-- [ ] Build compatibility alias inventory (preferred / compatibility / deprecate-later).
-- [ ] Remove highest-confusion redundant aliases while pre-release.
-- [ ] Add explicit list of intentionally retained temporary aliases.
+- [x] Build compatibility alias inventory (preferred / compatibility / deprecate-later).
+- [x] Remove highest-confusion redundant aliases while pre-release.
+- [x] Add explicit list of intentionally retained temporary aliases.
 
 ## 2) Discovery and IntelliSense
 
@@ -33,8 +33,8 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## 5) WbW-R Parallelization Review
 
-- [ ] Add a WbW-R parity decision note to each substantial WbW-Py API change.
-- [ ] Maintain a parity ledger (`parallel now`, `parallel later`, `Python-only`).
+- [x] Add a WbW-R parity decision note to each substantial WbW-Py API change.
+- [x] Maintain a parity ledger (`parallel now`, `parallel later`, `Python-only`).
 - [ ] Prioritize parallelization for naming/discovery/workflow convention changes.
 
 ## Near-Term Milestones
@@ -50,10 +50,10 @@ This is a compact implementation checklist derived from the broader usability an
 - [ ] Complete canonical style guide and compatibility inventory.
 - [ ] Add intent-based discovery sections.
 - [ ] Add first round of interop behavior documentation.
-- [ ] Complete initial WbW-R parity ledger for Phase 1/2 changes.
+- [x] Complete initial WbW-R parity ledger for Phase 1/2 changes.
 
 ## Milestone C
 
 - [ ] Ship golden-path workflow examples.
-- [ ] Finalize pre-release alias removals for redundant paths.
+- [x] Finalize pre-release alias removals for redundant paths.
 - [ ] Reassess usability score after Phase 1/2 changes.

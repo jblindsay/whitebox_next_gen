@@ -3125,7 +3125,7 @@ impl Raster {
             .to_string()
     }
 
-    fn configs(&self) -> PyResult<RasterConfigs> {
+    fn metadata(&self) -> PyResult<RasterConfigs> {
         let r = self.load_wbraster()?;
         let s = r.statistics();
         Ok(RasterConfigs {
@@ -3142,10 +3142,6 @@ impl Raster {
             maximum: s.max,
             epsg_code: 0,
         })
-    }
-
-    fn metadata(&self) -> PyResult<RasterConfigs> {
-        self.configs()
     }
 
     #[pyo3(signature = (band=None, dtype=None, all_bands=false))]
@@ -4772,14 +4768,6 @@ impl Vector {
     }
 
     fn attributes(&self, py: Python<'_>, feature_index: usize) -> PyResult<Py<PyAny>> {
-        self.get_attributes(py, feature_index)
-    }
-
-    fn attribute(&self, py: Python<'_>, feature_index: usize, field_name: &str) -> PyResult<Py<PyAny>> {
-        self.get_attribute(py, feature_index, field_name)
-    }
-
-    fn get_attributes(&self, py: Python<'_>, feature_index: usize) -> PyResult<Py<PyAny>> {
         let layer = read_vector_layer_for_python(self)?;
         let feature = layer.features.get(feature_index).ok_or_else(|| {
             PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
@@ -4797,7 +4785,7 @@ impl Vector {
         Ok(out.unbind().into_any())
     }
 
-    fn get_attribute(&self, py: Python<'_>, feature_index: usize, field_name: &str) -> PyResult<Py<PyAny>> {
+    fn attribute(&self, py: Python<'_>, feature_index: usize, field_name: &str) -> PyResult<Py<PyAny>> {
         let layer = read_vector_layer_for_python(self)?;
         let idx = layer
             .schema
@@ -4819,7 +4807,7 @@ impl Vector {
         field_value_to_pyobject(py, value)
     }
 
-    fn set_attribute(
+    fn update_attribute(
         &self,
         feature_index: usize,
         field_name: &str,
@@ -4848,16 +4836,7 @@ impl Vector {
         write_vector_layer_for_python(self, &layer)
     }
 
-    fn update_attribute(
-        &self,
-        feature_index: usize,
-        field_name: &str,
-        value: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
-        self.set_attribute(feature_index, field_name, value)
-    }
-
-    fn set_attributes(&self, feature_index: usize, values: &Bound<'_, PyDict>) -> PyResult<()> {
+    fn update_attributes(&self, feature_index: usize, values: &Bound<'_, PyDict>) -> PyResult<()> {
         let mut layer = read_vector_layer_for_python(self)?;
         let mut updates: Vec<(usize, FieldValue)> = Vec::new();
 
@@ -4893,12 +4872,8 @@ impl Vector {
         write_vector_layer_for_python(self, &layer)
     }
 
-    fn update_attributes(&self, feature_index: usize, values: &Bound<'_, PyDict>) -> PyResult<()> {
-        self.set_attributes(feature_index, values)
-    }
-
     #[pyo3(signature = (name, field_type="text", nullable=true, width=0, precision=0, default_value=None))]
-    fn add_attribute_field(
+    fn add_field(
         &self,
         name: &str,
         field_type: &str,
@@ -4939,19 +4914,6 @@ impl Vector {
         }
 
         write_vector_layer_for_python(self, &layer)
-    }
-
-    #[pyo3(signature = (name, field_type="text", nullable=true, width=0, precision=0, default_value=None))]
-    fn add_field(
-        &self,
-        name: &str,
-        field_type: &str,
-        nullable: bool,
-        width: usize,
-        precision: usize,
-        default_value: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<()> {
-        self.add_attribute_field(name, field_type, nullable, width, precision, default_value)
     }
 
     #[pyo3(signature = (
@@ -6486,31 +6448,13 @@ impl WbEnvironment {
         self.make_tool_category("raster")
     }
 
-    /// Compatibility alias for `raster`.
-    #[getter]
-    fn raster_tools(&self) -> WbToolCategory {
-        self.make_tool_category("raster")
-    }
-
     #[getter]
     fn vector(&self) -> WbToolCategory {
         self.make_tool_category("vector")
     }
 
-    /// Compatibility alias for `vector`.
-    #[getter]
-    fn vector_tools(&self) -> WbToolCategory {
-        self.make_tool_category("vector")
-    }
-
     #[getter]
     fn lidar(&self) -> WbToolCategory {
-        self.make_tool_category("lidar")
-    }
-
-    /// Compatibility alias for `lidar`.
-    #[getter]
-    fn lidar_tools(&self) -> WbToolCategory {
         self.make_tool_category("lidar")
     }
 
@@ -6536,12 +6480,6 @@ impl WbEnvironment {
 
     #[getter]
     fn remote_sensing(&self) -> WbToolCategory {
-        self.make_tool_category("remote_sensing")
-    }
-
-    /// Compatibility alias for `remote_sensing`.
-    #[getter]
-    fn remote_sensing_tools(&self) -> WbToolCategory {
         self.make_tool_category("remote_sensing")
     }
 

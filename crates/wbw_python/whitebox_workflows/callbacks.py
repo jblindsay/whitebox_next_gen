@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any, TextIO
+
+
+_PERCENT_IN_MESSAGE_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*%")
 
 
 def _normalize_event(event: Any) -> tuple[str | None, Any, str | None] | None:
@@ -60,6 +64,14 @@ class ProgressPrinter:
         event_type, raw_percent, message = normalized
 
         if event_type != "progress" or raw_percent is None:
+            if raw_percent is None and message:
+                inferred = _infer_percent_from_message(message)
+                if inferred is not None:
+                    self._emit_percent(inferred)
+                    if self.show_messages:
+                        print(message, file=self.stream)
+                    return
+
             if self.show_messages:
                 if message:
                     print(message, file=self.stream)
@@ -76,6 +88,10 @@ class ProgressPrinter:
                 print(message, file=self.stream)
             return
 
+        self._emit_percent(percent)
+
+    def _emit_percent(self, raw_percent: float) -> None:
+        percent = float(raw_percent)
         if percent <= 1.0:
             percent *= 100.0
         percent_int = max(0, min(100, int(percent)))
@@ -91,6 +107,17 @@ class ProgressPrinter:
         if should_print and percent_int > self._last_reported_percent:
             print(f"{percent_int}%", file=self.stream)
             self._last_reported_percent = percent_int
+
+
+def _infer_percent_from_message(message: Any) -> float | None:
+    text = str(message)
+    match = _PERCENT_IN_MESSAGE_RE.search(text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
 
 
 def make_progress_printer(

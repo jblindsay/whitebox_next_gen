@@ -74,9 +74,10 @@ test_that("progress printer normalizes and throttles updates", {
   cb(0.26, "")
   cb(0.26, "")
   cb(NA_real_, "hello")
+  cb(NA_real_, "Progress (loop 1 of 2): 50%")
   cb(1.0, "")
 
-  expect_equal(captured, c("12%", "26%", "hello", "100%"))
+  expect_equal(captured, c("12%", "26%", "hello", "50%", "Progress (loop 1 of 2): 50%", "100%"))
 })
 
 test_that("multi-output path results are coerced into typed raster objects", {

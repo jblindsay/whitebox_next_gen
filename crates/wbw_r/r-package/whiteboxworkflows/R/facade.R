@@ -318,21 +318,20 @@ wbw_make_progress_printer <- function(show_messages = TRUE,
   state <- new.env(parent = emptyenv())
   state$last_reported <- -1L
 
-  function(pct = NA_real_, message = "") {
-    msg <- if (is.null(message)) "" else as.character(message[[1]])
-
-    if (!is.numeric(pct) || length(pct) == 0L || is.na(pct[[1]])) {
-      if (show_messages && nzchar(msg)) {
-        cat(msg, "\n", sep = "", file = stream)
-      }
-      return(invisible(NULL))
+  infer_percent_from_message <- function(msg) {
+    if (!nzchar(msg)) {
+      return(NA_real_)
     }
+    m <- regexpr("(-?[0-9]+(\\.[0-9]+)?)\\s*%", msg, perl = TRUE)
+    if (m[[1]] < 0L) {
+      return(NA_real_)
+    }
+    token <- regmatches(msg, m)
+    as.numeric(sub("%.*$", "", token))
+  }
 
-    value <- as.numeric(pct[[1]])
+  emit_percent <- function(value) {
     if (!is.finite(value)) {
-      if (show_messages && nzchar(msg)) {
-        cat(msg, "\n", sep = "", file = stream)
-      }
       return(invisible(NULL))
     }
 
@@ -354,6 +353,30 @@ wbw_make_progress_printer <- function(show_messages = TRUE,
     }
 
     invisible(NULL)
+  }
+
+  function(pct = NA_real_, message = "") {
+    msg <- if (is.null(message)) "" else as.character(message[[1]])
+
+    if (!is.numeric(pct) || length(pct) == 0L || is.na(pct[[1]])) {
+      inferred <- infer_percent_from_message(msg)
+      if (!is.na(inferred)) {
+        emit_percent(inferred)
+      }
+      if (show_messages && nzchar(msg)) {
+        cat(msg, "\n", sep = "", file = stream)
+      }
+      return(invisible(NULL))
+    }
+
+    value <- as.numeric(pct[[1]])
+    if (!is.finite(value)) {
+      if (show_messages && nzchar(msg)) {
+        cat(msg, "\n", sep = "", file = stream)
+      }
+      return(invisible(NULL))
+    }
+    emit_percent(value)
   }
 }
 

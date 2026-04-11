@@ -18,6 +18,8 @@ The plan focuses on four areas:
 3. Optimize for discoverability in IDEs, not just completeness in docs.
 4. Treat interoperability as a first-class product requirement, not a side feature.
 5. Reduce choice overload by establishing one preferred pattern for common tasks.
+6. Prioritize API clarity over backward compatibility while WbW-Py remains pre-release.
+7. For public-facing API changes, evaluate whether a corresponding WbW-R change should be made.
 
 ## 1. Reduce Competing API Idioms
 
@@ -34,7 +36,7 @@ This increases cognitive load, especially for new users trying to infer the "rig
 
 ### Goal
 
-Make one style feel clearly preferred, while retaining compatibility for older code.
+Make one style clearly preferred and remove redundant paths aggressively while pre-release.
 
 ### Actions
 
@@ -43,13 +45,13 @@ Make one style feel clearly preferred, while retaining compatibility for older c
    - Explicitly classify APIs as preferred, compatibility, or legacy.
 
 2. Introduce "preferred API" markers in docs and stubs.
-   - Mark compatibility aliases as supported but non-primary.
+   - Mark compatibility aliases as temporary where they still exist.
    - Ensure examples always use the preferred path.
 
 3. Audit overlapping methods and group them into migration buckets.
    - Keep: preferred methods that improve readability and consistency.
-   - Soft-deprecate: aliases that are redundant but still heavily used.
-   - Remove later: methods that create namespace ambiguity or poor ergonomics.
+   - Remove now (pre-release): aliases that are redundant and add confusion.
+   - Keep temporarily: only aliases needed to reduce active churn during in-flight work.
 
 4. Rationalize output options into typed conceptual groups.
    - Separate general output controls, raster/GeoTIFF controls, vector controls, and lidar controls more explicitly.
@@ -71,6 +73,27 @@ Make one style feel clearly preferred, while retaining compatibility for older c
 1. A new user can identify the preferred API path without reading migration notes.
 2. The number of equally-valid ways to do a common task is visibly reduced.
 3. Most examples use one coherent idiom end-to-end.
+
+## Cross-Language Alignment (WbW-Py and WbW-R)
+
+### Goal
+
+Ensure major usability and naming improvements in WbW-Py are intentionally assessed for WbW-R alignment.
+
+### Actions
+
+1. Add a "WbW-R parity impact" note to each substantial WbW-Py API change proposal.
+2. Tag changes as:
+   - parallel now (should be implemented in WbW-R immediately),
+   - parallel later (same direction, delayed implementation),
+   - Python-only (intentionally language-specific ergonomics).
+3. Maintain a lightweight parity ledger listing decisions and rationale.
+4. Prioritize parallelization for naming, discovery, and core workflow conventions.
+
+### Success Criteria
+
+1. No major WbW-Py API UX change ships without an explicit WbW-R parity decision.
+2. The two APIs trend toward conceptual consistency while still respecting language idioms.
 
 ## 2. Make Discovery Effortless
 

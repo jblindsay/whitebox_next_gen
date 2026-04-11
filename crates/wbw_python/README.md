@@ -11,6 +11,7 @@ The API is in active modernization, with emphasis on:
 ## Table of contents
 
 - [Current API highlights](#current-api-highlights)
+- [Preferred API conventions](#preferred-api-conventions)
 - [Migration quick map](#migration-quick-map)
 - [Tool reference docs](#tool-reference-docs)
 - [Development install](#development-install)
@@ -51,6 +52,26 @@ The API is in active modernization, with emphasis on:
 - Raster and NumPy bridge:
   - `Raster.to_numpy(...)`
   - `Raster.from_numpy(...)`
+
+## Preferred API conventions
+
+Use these conventions as the default style for new code:
+
+1. Prefer harmonized metadata methods:
+  - `Raster.metadata()`
+  - `Vector.metadata()`
+  - `Lidar.metadata()`
+2. Treat compatibility aliases as legacy paths in new examples:
+  - Prefer `metadata()` over `configs()`.
+  - Prefer vector aliases such as `schema()`/`attributes()`/`attribute()` over older `get_*` names.
+3. Use explicit namespaces for utility functions and avoid flat helper patterns:
+  - `wbe.projection.*` for CRS/projection utilities.
+  - `wbe.topology.*` for geometry/topology utilities.
+  - `wbe.topology_tools` (or `wbe.category('topology')`) for topology tool-category access.
+4. Prefer object-first workflows:
+  - `read_*` -> inspect `metadata()` -> run category tools -> `write_*`.
+5. Use strict output controls when reproducibility matters:
+  - Set `strict_format_options=True` and explicit format/layout/compression options.
 
 ## Migration quick map
 

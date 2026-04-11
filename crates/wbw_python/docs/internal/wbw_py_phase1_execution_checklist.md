@@ -26,9 +26,9 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## 4) Happy-Path Standardization
 
-- [ ] Define 5 canonical workflows (raster, vector, lidar, reprojection, interop-first).
-- [ ] Provide one preferred end-to-end example per workflow.
-- [ ] Add "recommended vs advanced" notes beside option-dense examples.
+- [x] Define 5 canonical workflows (raster, vector, lidar, reprojection, interop-first).
+- [x] Provide one preferred end-to-end example per workflow.
+- [x] Add "recommended vs advanced" notes beside option-dense examples.
 - [ ] Add a checklist gate for new docs/examples: "does this follow the canonical path?"
 
 ## 5) WbW-R Parallelization Review
@@ -54,6 +54,6 @@ This is a compact implementation checklist derived from the broader usability an
 
 ## Milestone C
 
-- [ ] Ship golden-path workflow examples.
+- [x] Ship golden-path workflow examples.
 - [x] Finalize pre-release alias removals for redundant paths.
 - [ ] Reassess usability score after Phase 1/2 changes.

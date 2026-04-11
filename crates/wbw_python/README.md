@@ -18,6 +18,7 @@ The API is in active modernization, with emphasis on:
 - [Development install](#development-install)
 - [Quick smoke test](#quick-smoke-test)
 - [Recommended examples](#recommended-examples)
+- [Canonical workflows](#canonical-workflows)
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by data type](#quick-start-examples-by-data-type)
 - [Raster output controls](#raster-output-controls)
@@ -197,6 +198,19 @@ Run from this directory:
 python examples/quickstart_harmonized_api.py
 ```
 
+## Canonical workflows
+
+The following five workflows are the preferred foundation for new user docs and examples.
+Each includes one end-to-end reference script.
+
+| Workflow | Preferred pattern | End-to-end example |
+|---|---|---|
+| Raster analysis | `read_raster` -> tools via `wbe.raster`/`wbe.terrain`/`wbe.hydrology` -> `write_raster` | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) |
+| Vector attribute and geometry processing | `read_vector` -> `schema`/`attributes`/`update_*` -> `write_vector` | [examples/vector_attributes_harmonized_api.py](examples/vector_attributes_harmonized_api.py) |
+| Lidar processing | `read_lidar` -> tools via `wbe.lidar` -> `write_lidar` | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) |
+| Reprojection pipeline | `reproject_raster`/`reproject_vector`/`reproject_lidar` -> targeted write | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) |
+| Interop-first exchange | wbw object -> ecosystem bridge -> wbw object re-ingest | [examples/interop_roundtrip_smoke_test.py](examples/interop_roundtrip_smoke_test.py) |
+
 ## Recommended API pattern
 
 ```python
@@ -268,6 +282,10 @@ wbe.write_rasters(
 
 `WbEnvironment.write_raster(...)` and `WbEnvironment.write_rasters(...)` accept an
 `options` dictionary for output control.
+
+Recommended vs advanced:
+- Recommended: begin with default write behavior or minimal `compress`/`layout` settings.
+- Advanced: use `strict_format_options=True` and explicit codec/layout/tile controls when exact output reproducibility is required.
 
 Supported keys:
 
@@ -413,6 +431,9 @@ wbe.write_vector(buffered, 'roads_buffer')  # writes roads_buffer.gpkg
 `WbEnvironment.write_vector(...)`, `WbEnvironment.read_vector(...)`, and
 `WbEnvironment.read_vectors(...)` accept optional `options` dictionaries.
 
+Recommended vs advanced:
+- Recommended: rely on extension-driven defaults and add only minimal format options.
+- Advanced: enable `strict_format_options=True` and tune GeoParquet/OSM-specific controls for reproducibility and performance.
 Supported keys:
 
 - `strict_format_options` (`True`/`False`): when `True`, using format-specific
@@ -510,6 +531,10 @@ wbe.write_lidar(
 ### Lidar output controls
 
 `WbEnvironment.write_lidar(...)` accepts optional `options` dictionaries.
+
+Recommended vs advanced:
+- Recommended: use default write behavior for `.las`/`.laz`/`.copc.laz` unless specific delivery constraints apply.
+- Advanced: tune LAZ chunk/compression and COPC octree controls for large-scene optimization and deterministic packaging.
 
 Supported keys:
 

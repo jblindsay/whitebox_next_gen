@@ -44,7 +44,7 @@ log = "0.4"
 rayon = "1.10"
 wide = "1.2"
 wbprojection = { path = "../wbprojection", version = "0.1.0" }
-wbgeotiff = { path = "../wbgeotiff", version = "0.1.0" }
+wbgeotiff = { path = "../wbgeotiff", version = "0.1.1" }
 
 [dev-dependencies]
 criterion = "0.5"

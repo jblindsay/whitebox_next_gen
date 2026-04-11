@@ -13,9 +13,9 @@ test_that("low-level JSON listing returns visible tools", {
 })
 
 test_that("session facade lists tools", {
-  session <- whitebox_tools()
+  session <- wbw_session()
   tools <- session$list_tools()
-  facade_tools <- wbw_list_tools()
+  facade_tools <- wbw_tool_ids(session = session)
 
   expect_true(is.environment(session))
   expect_true(is.function(session$list_tools))
@@ -23,6 +23,11 @@ test_that("session facade lists tools", {
   expect_type(tools, "list")
   expect_gt(length(tools), 0L)
   expect_equal(length(facade_tools), length(tools))
+})
+
+test_that("legacy compatibility APIs are removed", {
+  expect_error(whitebox_tools(), "removed in Phase 4")
+  expect_error(wbw_list_tools(), "removed in Phase 4")
 })
 
 test_that("wbw_session exposes idiomatic helpers", {
@@ -435,6 +440,105 @@ test_that("wbw_vector write and deep_copy methods work", {
   expect_true(inherits(written, "wbw_vector"))
 })
 
+test_that("raster array bridge round-trip preserves grid metadata and values", {
+  skip_if_not_installed("terra")
+
+  path <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 3, xmin = 10, xmax = 13, ymin = 20, ymax = 22)
+  terra::values(r) <- matrix(c(1, 2, 3, 4, 5, 6), nrow = 2, byrow = TRUE)
+  terra::crs(r) <- "EPSG:4326"
+  terra::writeRaster(r, path, overwrite = TRUE)
+
+  x <- wbw_read_raster(path)
+  arr <- x$to_array()
+  arr_shifted <- arr + 10
+
+  out_path <- tempfile(fileext = ".tif")
+  wbw_array_to_raster(arr_shifted, out_path, template_path = path, overwrite = TRUE)
+  y <- wbw_read_raster(out_path)
+  arr_out <- y$to_array()
+
+  expect_equal(dim(arr_out), c(2, 3))
+  expect_equal(as.integer(y$crs_epsg()), 4326L)
+  expect_equal(as.numeric(arr_out[1, 1]), 11)
+  expect_equal(as.numeric(arr_out[2, 3]), 16)
+})
+
+test_that("stars bridge round-trip preserves raster metadata and values", {
+  skip_if_not_installed("terra")
+  skip_if_not_installed("stars")
+
+  path <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+  terra::values(r) <- c(1, 2, 3, 4)
+  terra::crs(r) <- "EPSG:3857"
+  terra::writeRaster(r, path, overwrite = TRUE)
+
+  x <- wbw_read_raster(path)
+  s <- x$to_stars()
+  s_shifted <- s + 5
+
+  out_path <- tempfile(fileext = ".tif")
+  wbw_stars_to_raster(s_shifted, out_path, overwrite = TRUE)
+  y <- wbw_read_raster(out_path)
+  arr_out <- y$to_array()
+
+  expect_equal(dim(arr_out), c(2, 2))
+  expect_equal(as.integer(y$crs_epsg()), 3857L)
+  expect_equal(as.numeric(arr_out[1, 1]), 6)
+  expect_equal(as.numeric(arr_out[2, 2]), 9)
+})
+
+test_that("terra vector bridge round-trip preserves schema and attributes", {
+  skip_if_not_installed("terra")
+
+  path <- tempfile(fileext = ".gpkg")
+  coords <- rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0, 0))
+  v <- terra::vect(coords, type = "polygons")
+  terra::values(v) <- data.frame(id = 1L, name = "parcel_a")
+  terra::crs(v) <- "EPSG:4326"
+  terra::writeVector(v, path, overwrite = TRUE)
+
+  x <- wbw_read_vector(path)
+  tv <- x$to_terra()
+  values_df <- terra::values(tv)
+  values_df$name[[1]] <- "parcel_b"
+  terra::values(tv) <- values_df
+
+  out_path <- tempfile(fileext = ".gpkg")
+  terra::writeVector(tv, out_path, overwrite = TRUE)
+  y <- wbw_read_vector(out_path)
+
+  expect_equal(y$metadata()$feature_count, 1L)
+  expect_true(all(c("id", "name") %in% y$metadata()$fields))
+  expect_equal(y$attribute(1, "name"), "parcel_b")
+})
+
+test_that("sf vector bridge round-trip preserves feature count and CRS", {
+  skip_if_not_installed("terra")
+  skip_if_not_installed("sf")
+
+  path <- tempfile(fileext = ".gpkg")
+  coords <- rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0, 0))
+  v <- terra::vect(coords, type = "polygons")
+  terra::values(v) <- data.frame(id = 1L, zone = "alpha")
+  terra::crs(v) <- "EPSG:4326"
+  terra::writeVector(v, path, overwrite = TRUE)
+
+  x <- wbw_read_vector(path)
+  sfx <- x$to_sf()
+  sfx$zone[[1]] <- "beta"
+
+  out_path <- tempfile(fileext = ".gpkg")
+  sf::st_write(sfx, out_path, delete_dsn = TRUE, quiet = TRUE)
+  y <- wbw_read_vector(out_path)
+
+  expect_equal(y$metadata()$feature_count, 1L)
+  expect_true(all(c("id", "zone") %in% y$metadata()$fields))
+  expect_equal(as.integer(y$metadata()$crs_epsg), 4326L)
+  expect_equal(y$attribute(1, "zone"), "beta")
+})
+
 test_that("discovery helpers search and describe tools", {
   slope <- wbw_describe_tool("slope")
   expect_true(is.list(slope))
@@ -443,6 +547,37 @@ test_that("discovery helpers search and describe tools", {
   matches <- wbw_search_tools("slope")
   expect_true(is.list(matches))
   expect_true(any(vapply(matches, function(t) identical(t$id, "slope"), logical(1))))
+})
+
+test_that("category discovery helpers expose organized tool metadata", {
+  categories <- wbw_get_all_categories()
+  expect_type(categories, "character")
+  expect_gt(length(categories), 0L)
+  expect_true(any(categories == "Raster"))
+
+  summary <- wbw_category_summary()
+  expect_s3_class(summary, "data.frame")
+  expect_true(all(c("category", "tool_count") %in% names(summary)))
+  expect_true(any(summary$category == "Raster"))
+  expect_true(all(summary$tool_count >= 0L))
+
+  by_category <- wbw_list_tools_by_category()
+  expect_type(by_category, "list")
+  expect_true("Raster" %in% names(by_category))
+  expect_s3_class(by_category$Raster, "data.frame")
+  expect_true(all(c("id", "display_name", "summary", "license_tier", "stability") %in% names(by_category$Raster)))
+
+  raster_tools <- wbw_tools_in_category("Raster")
+  expect_s3_class(raster_tools, "data.frame")
+  expect_true(nrow(raster_tools) > 0L)
+  expect_true(all(c("id", "display_name", "summary", "license_tier", "stability") %in% names(raster_tools)))
+})
+
+test_that("category discovery helpers reject unknown categories", {
+  expect_error(
+    wbw_tools_in_category("DefinitelyNotARealCategory"),
+    "Available categories"
+  )
 })
 
 test_that("wbw_read_lidar returns typed lidar wrapper", {
@@ -557,6 +692,22 @@ test_that("wbw_read_bundle returns typed sensor bundle wrapper", {
   expect_true("B2" %in% x$list_band_keys())
   expect_true("QA_PIXEL" %in% x$list_qa_keys())
   expect_true("SAA" %in% x$list_aux_keys())
+
+  key_summary <- x$key_summary()
+  expect_s3_class(key_summary, "data.frame")
+  expect_true(all(c("key_type", "key_count", "has_any") %in% names(key_summary)))
+  expect_true(any(key_summary$key_type == "band" & key_summary$key_count >= 4L))
+
+  expect_true(x$has_key("B2"))
+  expect_true(x$has_key("B02"))
+  expect_false(x$has_key("DOES_NOT_EXIST"))
+
+  resolved_b2 <- x$resolve_key("B02")
+  expect_equal(resolved_b2$key, "B2")
+  expect_equal(resolved_b2$key_type, "band")
+
+  b2_any <- x$read_any("B02")
+  expect_true(inherits(b2_any, "wbw_raster"))
 
   b2 <- x$read_band("B2")
   qa <- x$read_qa_layer("QA_PIXEL")

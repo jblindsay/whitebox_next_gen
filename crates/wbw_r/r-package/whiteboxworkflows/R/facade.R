@@ -1,4 +1,4 @@
-whitebox_tools <- function(floating_license_id = NULL,
+wbw_build_session <- function(floating_license_id = NULL,
                            include_pro = NULL,
                            tier = "open",
                            signed_entitlement_json = NULL,
@@ -215,7 +215,7 @@ wbw_session <- function(floating_license_id = NULL,
                         provider_url = NULL,
                         machine_id = NULL,
                         customer_id = NULL) {
-  whitebox_tools(
+  wbw_build_session(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
     tier = tier,
@@ -226,6 +226,13 @@ wbw_session <- function(floating_license_id = NULL,
     provider_url = provider_url,
     machine_id = machine_id,
     customer_id = customer_id
+  )
+}
+
+whitebox_tools <- function(...) {
+  stop(
+    "whitebox_tools() was removed in Phase 4. Use wbw_session() instead.",
+    call. = FALSE
   )
 }
 
@@ -1321,7 +1328,8 @@ wbw_vector_from_path <- function(path,
         call. = FALSE
       )
     }
-    as.list(terra::values(terra_vec[tidx, ], as.data.frame = TRUE)[[1]])
+    values_df <- terra::values(terra_vec[tidx, ], as.data.frame = TRUE)
+    as.list(values_df[1, , drop = FALSE])
   }
 
   attribute <- function(feature_index, field_name) {
@@ -1825,9 +1833,12 @@ wbw_lidar_from_path <- function(path, session = NULL) {
     basename(lidar_path)
   }
 
-  deep_copy <- function(output_path, overwrite = FALSE) {
+  deep_copy <- function(output_path, overwrite = FALSE, options = NULL) {
     if (!is.character(output_path) || length(output_path) != 1L || !nzchar(output_path)) {
       stop("output_path must be a non-empty string.", call. = FALSE)
+    }
+    if (!is.null(options) && !is.list(options)) {
+      stop("options must be a list or NULL.", call. = FALSE)
     }
 
     resolved <- wbw_apply_default_output_extension(output_path, kind = "lidar")
@@ -1845,9 +1856,10 @@ wbw_lidar_from_path <- function(path, session = NULL) {
       unlink(resolved_path)
     }
 
-    options_json <- "{}"
-    if (!is.null(options)) {
-      options_json <- jsonlite::toJSON(options, auto_unbox = TRUE)
+    options_json <- if (is.null(options) || length(options) == 0L) {
+      "{}"
+    } else {
+      jsonlite::toJSON(options, auto_unbox = TRUE, null = "null")
     }
 
     copied_path <- lidar_write_with_options_json(lidar_path, resolved_path, options_json)
@@ -1910,6 +1922,52 @@ wbw_sensor_bundle_from_path <- function(path, session = NULL) {
 
   list_asset_keys <- function() {
     metadata()$asset_keys %||% list()
+  }
+
+  key_summary <- function() {
+    counts <- c(
+      band = length(list_band_keys()),
+      measurement = length(list_measurement_keys()),
+      qa = length(list_qa_keys()),
+      aux = length(list_aux_keys()),
+      asset = length(list_asset_keys())
+    )
+
+    data.frame(
+      key_type = names(counts),
+      key_count = as.integer(counts),
+      has_any = as.logical(counts > 0L),
+      row.names = NULL,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  resolve_key <- function(key, key_types = c("band", "measurement", "qa", "aux", "asset")) {
+    if (!is.character(key) || length(key) != 1L || !nzchar(key)) {
+      stop("key must be a non-empty string.", call. = FALSE)
+    }
+    key_types <- as.character(key_types)
+    if (length(key_types) == 0L) {
+      stop("key_types must contain at least one key type.", call. = FALSE)
+    }
+
+    resolved <- wbw_bundle_pick_channel_key(obj, c(key), key_types = key_types)
+    if (is.null(resolved)) {
+      stop(
+        sprintf("Unable to locate key '%s' in key types: %s", key, paste(key_types, collapse = ", ")),
+        call. = FALSE
+      )
+    }
+    resolved
+  }
+
+  has_key <- function(key, key_types = c("band", "measurement", "qa", "aux", "asset")) {
+    !is.null(wbw_bundle_pick_channel_key(obj, c(key), key_types = as.character(key_types)))
+  }
+
+  read_any <- function(key, key_types = c("band", "measurement", "qa", "aux", "asset")) {
+    resolved <- resolve_key(key, key_types = key_types)
+    wbw_bundle_read_by_type(obj, resolved$key, resolved$key_type)
   }
 
   read_band <- function(key) {
@@ -2021,6 +2079,10 @@ wbw_sensor_bundle_from_path <- function(path, session = NULL) {
   obj$list_qa_keys <- list_qa_keys
   obj$list_aux_keys <- list_aux_keys
   obj$list_asset_keys <- list_asset_keys
+  obj$key_summary <- key_summary
+  obj$resolve_key <- resolve_key
+  obj$has_key <- has_key
+  obj$read_any <- read_any
   obj$read_band <- read_band
   obj$read_measurement <- read_measurement
   obj$read_qa_layer <- read_qa_layer
@@ -2041,17 +2103,17 @@ wbw_sensor_bundle_from_path <- function(path, session = NULL) {
   obj
 }
 
-wbw_list_tools <- function(floating_license_id = NULL,
-                           include_pro = NULL,
-                           tier = "open",
-                           signed_entitlement_json = NULL,
-                           entitlement_file = NULL,
-                           public_key_kid = NULL,
-                           public_key_b64url = NULL,
-                           provider_url = NULL,
-                           machine_id = NULL,
-                           customer_id = NULL) {
-  session <- whitebox_tools(
+wbw_collect_tools <- function(floating_license_id = NULL,
+                              include_pro = NULL,
+                              tier = "open",
+                              signed_entitlement_json = NULL,
+                              entitlement_file = NULL,
+                              public_key_kid = NULL,
+                              public_key_b64url = NULL,
+                              provider_url = NULL,
+                              machine_id = NULL,
+                              customer_id = NULL) {
+  session <- wbw_build_session(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
     tier = tier,
@@ -2064,6 +2126,13 @@ wbw_list_tools <- function(floating_license_id = NULL,
     customer_id = customer_id
   )
   session$list_tools()
+}
+
+wbw_list_tools <- function(...) {
+  stop(
+    "wbw_list_tools() was removed in Phase 4. Use wbw_tool_ids(), wbw_search_tools(), or wbw_describe_tool().",
+    call. = FALSE
+  )
 }
 
 #' @export
@@ -2079,7 +2148,7 @@ wbw_describe_tool <- function(tool_id,
                               provider_url = NULL,
                               machine_id = NULL,
                               customer_id = NULL) {
-  tools <- wbw_list_tools(
+  tools <- wbw_collect_tools(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
     tier = tier,
@@ -2120,7 +2189,7 @@ wbw_search_tools <- function(query,
     return(list())
   }
 
-  tools <- wbw_list_tools(
+  tools <- wbw_collect_tools(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
     tier = tier,
@@ -2236,7 +2305,7 @@ wbw_tool_ids <- function(session = NULL,
                          machine_id = NULL,
                          customer_id = NULL) {
   if (is.null(session)) {
-    session <- whitebox_tools(
+    session <- wbw_build_session(
       floating_license_id = floating_license_id,
       include_pro = include_pro,
       tier = tier,
@@ -2296,7 +2365,7 @@ wbw_run_tool <- function(tool_id,
                          machine_id = NULL,
                          customer_id = NULL) {
   if (is.null(session)) {
-    session <- whitebox_tools(
+    session <- wbw_build_session(
       floating_license_id = floating_license_id,
       include_pro = include_pro,
       tier = tier,
@@ -2328,7 +2397,7 @@ wbw_run_tool_with_progress <- function(tool_id,
                                        customer_id = NULL,
                                        on_progress = NULL) {
   if (is.null(session)) {
-    session <- whitebox_tools(
+    session <- wbw_build_session(
       floating_license_id = floating_license_id,
       include_pro = include_pro,
       tier = tier,

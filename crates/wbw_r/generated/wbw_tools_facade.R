@@ -6,12 +6,12 @@
 
 source("crates/wbw_r/generated/wbw_tools_generated.R")
 
-whitebox_tools <- function(floating_license_id = NULL,
-                           include_pro = NULL,
-                           tier = "open",
-                           provider_url = NULL,
-                           machine_id = NULL,
-                           customer_id = NULL) {
+wbw_session <- function(floating_license_id = NULL,
+                        include_pro = NULL,
+                        tier = "open",
+                        provider_url = NULL,
+                        machine_id = NULL,
+                        customer_id = NULL) {
   wbw_make_session(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
@@ -22,21 +22,23 @@ whitebox_tools <- function(floating_license_id = NULL,
   )
 }
 
+whitebox_tools <- function(...) {
+  stop(
+    "whitebox_tools() was removed in Phase 4. Use wbw_session() instead.",
+    call. = FALSE
+  )
+}
+
 wbw_list_tools <- function(floating_license_id = NULL,
                            include_pro = NULL,
                            tier = "open",
                            provider_url = NULL,
                            machine_id = NULL,
                            customer_id = NULL) {
-  session <- whitebox_tools(
-    floating_license_id = floating_license_id,
-    include_pro = include_pro,
-    tier = tier,
-    provider_url = provider_url,
-    machine_id = machine_id,
-    customer_id = customer_id
+  stop(
+    "wbw_list_tools() was removed in Phase 4. Use wbw_tool_ids(), wbw_search_tools(), or wbw_describe_tool().",
+    call. = FALSE
   )
-  session$list_tools()
 }
 
 wbw_run_tool <- function(tool_id,
@@ -47,7 +49,7 @@ wbw_run_tool <- function(tool_id,
                          provider_url = NULL,
                          machine_id = NULL,
                          customer_id = NULL) {
-  session <- whitebox_tools(
+  session <- wbw_session(
     floating_license_id = floating_license_id,
     include_pro = include_pro,
     tier = tier,

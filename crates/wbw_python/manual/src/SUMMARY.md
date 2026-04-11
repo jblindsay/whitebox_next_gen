@@ -2,6 +2,7 @@
 
 - [Overview](./overview.md)
 - [Installation and Setup](./installation-and-setup.md)
+- [Build and Preview](./build-and-preview.md)
 - [Quick Start](./quick-start.md)
 - [Environment and Discovery](./environment-and-discovery.md)
 - [Tool Execution and Progress](./tool-execution-and-progress.md)

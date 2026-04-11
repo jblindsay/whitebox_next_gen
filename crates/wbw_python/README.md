@@ -12,6 +12,7 @@ The API is in active modernization, with emphasis on:
 
 - [Current API highlights](#current-api-highlights)
 - [Preferred API conventions](#preferred-api-conventions)
+- [Intent-driven entry points](#intent-driven-entry-points)
 - [Migration quick map](#migration-quick-map)
 - [Tool reference docs](#tool-reference-docs)
 - [Development install](#development-install)
@@ -71,6 +72,33 @@ Use these conventions as the default style for new code:
   - `read_*` -> inspect `metadata()` -> run category tools -> `write_*`.
 5. Use strict output controls when reproducibility matters:
   - Set `strict_format_options=True` and explicit format/layout/compression options.
+
+## Intent-driven entry points
+
+If you are starting from a task instead of an API name, use these jump points:
+
+- Read data into objects:
+  - [Quick start examples by data type](#quick-start-examples-by-data-type)
+  - [Recommended API pattern](#recommended-api-pattern)
+- Run terrain/hydrology workflows:
+  - [Recommended API pattern](#recommended-api-pattern)
+  - [Tool reference docs](#tool-reference-docs)
+- Write outputs with explicit controls:
+  - [Raster output controls](#raster-output-controls)
+  - [Vector output controls](#vector-output-controls)
+  - [Lidar output controls](#lidar-output-controls)
+- Reproject raster/vector/lidar data:
+  - [Reprojection patterns](#reprojection-patterns)
+- Use CRS and geometry utilities:
+  - [Projection utilities](#projection-utilities)
+  - [Topology utilities](#topology-utilities)
+- Bridge to Python ecosystem tooling:
+  - [NumPy interoperability](#numpy-interoperability)
+  - [Rasterio interoperability](#rasterio-interoperability)
+  - [GeoPandas interoperability](#geopandas-interoperability)
+  - [Shapely interoperability](#shapely-interoperability)
+  - [xarray/rioxarray interoperability](#xarrayrioxarray-interoperability)
+  - [pyproj interoperability](#pyproj-interoperability)
 
 ## Migration quick map
 

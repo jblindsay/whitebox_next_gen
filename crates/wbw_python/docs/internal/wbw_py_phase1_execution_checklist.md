@@ -14,8 +14,8 @@ This is a compact implementation checklist derived from the broader usability an
 
 - [x] Add explicit "preferred API conventions" section to README.
 - [x] Improve `.pyi` inline guidance for key preferred methods and namespaces.
-- [ ] Add intent-driven quick links in README for common tasks.
-- [ ] Expand top-level namespace docstrings in stubs for tool categories and utility namespaces.
+- [x] Add intent-driven quick links in README for common tasks.
+- [x] Expand top-level namespace docstrings in stubs for tool categories and utility namespaces.
 
 ## 3) Interoperability Tightening
 
@@ -48,7 +48,7 @@ This is a compact implementation checklist derived from the broader usability an
 ## Milestone B
 
 - [ ] Complete canonical style guide and compatibility inventory.
-- [ ] Add intent-based discovery sections.
+- [x] Add intent-based discovery sections.
 - [ ] Add first round of interop behavior documentation.
 - [x] Complete initial WbW-R parity ledger for Phase 1/2 changes.
 

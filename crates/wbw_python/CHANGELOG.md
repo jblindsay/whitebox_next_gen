@@ -26,3 +26,5 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   - `Vector.set_attributes()` / `Vector.set_attribute()` (use `update_attributes()` / `update_attribute()`)
   - `Vector.add_attribute_field()` (use `add_field()`)
   - `WbEnvironment` category property aliases `*_tools` for raster/vector/lidar/remote_sensing (use canonical category properties)
+- Added intent-driven README entry points for common tasks (read/process/write/reproject/interop) to improve first-use discovery.
+- Expanded top-level `.pyi` guidance comments for `WbEnvironment` categories and utility namespaces (`projection`, `topology`, `topology_tools`) and dynamic category usage.

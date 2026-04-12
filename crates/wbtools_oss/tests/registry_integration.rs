@@ -235,6 +235,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"route_event_split"));
     assert!(ids.contains(&"route_event_merge"));
     assert!(ids.contains(&"route_event_overlay"));
+    assert!(ids.contains(&"route_measure_qa"));
     assert!(ids.contains(&"route_calibrate"));
     assert!(ids.contains(&"route_recalibrate"));
     assert!(ids.contains(&"vector_summary_statistics"));
@@ -2360,6 +2361,187 @@ fn route_event_overlay_respects_min_overlap_length() {
 
     let _ = std::fs::remove_file(&primary_path);
     let _ = std::fs::remove_file(&overlay_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_measure_qa_detects_gaps_overlaps_non_monotonic_and_duplicates() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_measure_qa_issues");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+
+    for (from_m, to_m) in [(0.0, 2.0), (3.0, 5.0), (4.0, 6.0), (4.0, 6.0), (1.0, 1.5)] {
+        events
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(from_m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("from_m", FieldValue::Float(from_m)),
+                    ("to_m", FieldValue::Float(to_m)),
+                ],
+            )
+            .expect("add event feature");
+    }
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("route_measure_qa", &args, &context(&caps))
+        .expect("route_measure_qa run");
+
+    let out = wbvector::read(&out_path).expect("read qa diagnostics");
+    assert!(!out.features.is_empty());
+    let issue_idx = out.schema.field_index("ISSUE_TYPE").expect("ISSUE_TYPE field");
+
+    let mut seen_gap = false;
+    let mut seen_overlap = false;
+    let mut seen_non_monotonic = false;
+    let mut seen_duplicate = false;
+    for feature in &out.features {
+        let issue_type = match &feature.attributes[issue_idx] {
+            FieldValue::Text(v) => v.as_str(),
+            other => panic!("expected ISSUE_TYPE text, got {:?}", other),
+        };
+        if issue_type == "gap" {
+            seen_gap = true;
+        }
+        if issue_type == "overlap" {
+            seen_overlap = true;
+        }
+        if issue_type == "non_monotonic" {
+            seen_non_monotonic = true;
+        }
+        if issue_type == "duplicate_measure" {
+            seen_duplicate = true;
+        }
+    }
+    assert!(seen_gap, "expected gap issue");
+    assert!(seen_overlap, "expected overlap issue");
+    assert!(seen_non_monotonic, "expected non_monotonic issue");
+    assert!(seen_duplicate, "expected duplicate_measure issue");
+
+    let gap_count = result
+        .outputs
+        .get("gap_count")
+        .and_then(|v| v.as_u64())
+        .expect("gap_count output");
+    let overlap_count = result
+        .outputs
+        .get("overlap_count")
+        .and_then(|v| v.as_u64())
+        .expect("overlap_count output");
+    let non_monotonic_count = result
+        .outputs
+        .get("non_monotonic_count")
+        .and_then(|v| v.as_u64())
+        .expect("non_monotonic_count output");
+    let duplicate_count = result
+        .outputs
+        .get("duplicate_measure_count")
+        .and_then(|v| v.as_u64())
+        .expect("duplicate_measure_count output");
+
+    assert!(gap_count >= 1);
+    assert!(overlap_count >= 1);
+    assert!(non_monotonic_count >= 1);
+    assert!(duplicate_count >= 1);
+
+    let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_measure_qa_returns_zero_counts_for_clean_sequence() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_measure_qa_clean");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+
+    for (from_m, to_m) in [(0.0, 2.0), (2.0, 4.0), (4.0, 7.0)] {
+        events
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(from_m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("from_m", FieldValue::Float(from_m)),
+                    ("to_m", FieldValue::Float(to_m)),
+                ],
+            )
+            .expect("add event feature");
+    }
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("route_measure_qa", &args, &context(&caps))
+        .expect("route_measure_qa run");
+
+    let out = wbvector::read(&out_path).expect("read qa diagnostics");
+    assert_eq!(out.features.len(), 0);
+    assert_eq!(result.outputs.get("gap_count").and_then(|v| v.as_u64()).unwrap_or(999), 0);
+    assert_eq!(
+        result
+            .outputs
+            .get("overlap_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(999),
+        0
+    );
+    assert_eq!(
+        result
+            .outputs
+            .get("non_monotonic_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(999),
+        0
+    );
+    assert_eq!(
+        result
+            .outputs
+            .get("duplicate_measure_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(999),
+        0
+    );
+
+    let _ = std::fs::remove_file(&events_path);
     let _ = std::fs::remove_file(&out_path);
 }
 

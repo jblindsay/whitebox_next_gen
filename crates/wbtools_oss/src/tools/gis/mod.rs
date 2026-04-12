@@ -175,6 +175,7 @@ pub struct RouteEventLinesFromLayerTool;
 pub struct RouteEventSplitTool;
 pub struct RouteEventMergeTool;
 pub struct RouteEventOverlayTool;
+pub struct RouteMeasureQaTool;
 pub struct RouteCalibrateTool;
 pub struct RouteRecalibrateTool;
 pub struct VectorSummaryStatisticsTool;
@@ -22044,6 +22045,337 @@ impl Tool for RouteEventOverlayTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteMeasureQaTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_measure_qa",
+            display_name: "Route Measure QA",
+            summary: "Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "events", description: "Input event layer containing route intervals.", required: true },
+                ToolParamSpec { name: "route_field", description: "Route identifier field.", required: true },
+                ToolParamSpec { name: "from_measure_field", description: "Interval start field.", required: true },
+                ToolParamSpec { name: "to_measure_field", description: "Interval end field.", required: true },
+                ToolParamSpec { name: "gap_tolerance", description: "Gap tolerance (default 0.0).", required: false },
+                ToolParamSpec { name: "overlap_tolerance", description: "Overlap tolerance (default 0.0).", required: false },
+                ToolParamSpec { name: "output", description: "Output QA diagnostics layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("events".to_string(), json!("events.gpkg"));
+        defaults.insert("route_field".to_string(), json!("route_id"));
+        defaults.insert("from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("gap_tolerance".to_string(), json!(0.0));
+        defaults.insert("overlap_tolerance".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("route_measure_qa.gpkg"));
+
+        ToolManifest {
+            id: "route_measure_qa".to_string(),
+            display_name: "Route Measure QA".to_string(),
+            summary: "Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "events".to_string(), description: "Input event layer containing route intervals.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_field".to_string(), description: "Route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Interval start field.".to_string(), required: true },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Interval end field.".to_string(), required: true },
+                ToolParamDescriptor { name: "gap_tolerance".to_string(), description: "Gap tolerance (default 0.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "overlap_tolerance".to_string(), description: "Overlap tolerance (default 0.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output QA diagnostics layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_measure_qa_basic".to_string(),
+                description: "Generates route-measure diagnostics for interval event data.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "qa".to_string(), "diagnostics".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let route_field = parse_string_arg(args, "route_field")?;
+        let from_field = parse_string_arg(args, "from_measure_field")?;
+        let to_field = parse_string_arg(args, "to_measure_field")?;
+        if events.schema.field_index(route_field).is_none() {
+            return Err(ToolError::Validation(format!("route_field '{}' not found in events schema", route_field)));
+        }
+        if events.schema.field_index(from_field).is_none() {
+            return Err(ToolError::Validation(format!("from_measure_field '{}' not found in events schema", from_field)));
+        }
+        if events.schema.field_index(to_field).is_none() {
+            return Err(ToolError::Validation(format!("to_measure_field '{}' not found in events schema", to_field)));
+        }
+        let _ = parse_optional_f64_arg(args, "gap_tolerance").unwrap_or(0.0);
+        let _ = parse_optional_f64_arg(args, "overlap_tolerance").unwrap_or(0.0);
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let route_field = parse_string_arg(args, "route_field")?;
+        let from_field = parse_string_arg(args, "from_measure_field")?;
+        let to_field = parse_string_arg(args, "to_measure_field")?;
+        let gap_tolerance = parse_optional_f64_arg(args, "gap_tolerance").unwrap_or(0.0).max(0.0);
+        let overlap_tolerance = parse_optional_f64_arg(args, "overlap_tolerance").unwrap_or(0.0).max(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let route_idx = events
+            .schema
+            .field_index(route_field)
+            .ok_or_else(|| ToolError::Execution("route_field missing unexpectedly".to_string()))?;
+        let from_idx = events
+            .schema
+            .field_index(from_field)
+            .ok_or_else(|| ToolError::Execution("from_measure_field missing unexpectedly".to_string()))?;
+        let to_idx = events
+            .schema
+            .field_index(to_field)
+            .ok_or_else(|| ToolError::Execution("to_measure_field missing unexpectedly".to_string()))?;
+
+        #[derive(Clone)]
+        struct QaRec {
+            fid: u64,
+            from_m: f64,
+            to_m: f64,
+            input_order: usize,
+        }
+
+        let mut by_route = HashMap::<String, Vec<QaRec>>::new();
+        for (order, feature) in events.features.iter().enumerate() {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("event feature {} has empty route id", feature.fid)));
+            }
+            let from_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from measure", feature.fid)))?;
+            let to_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to measure", feature.fid)))?;
+
+            by_route
+                .entry(route_key)
+                .or_insert_with(Vec::new)
+                .push(QaRec {
+                    fid: feature.fid,
+                    from_m,
+                    to_m,
+                    input_order: order,
+                });
+        }
+
+        let mut output = wbvector::Layer::new("route_measure_qa");
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = events.crs.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("ROUTE_ID", wbvector::FieldType::Text));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("ISSUE_TYPE", wbvector::FieldType::Text));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SEVERITY", wbvector::FieldType::Text));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FROM_MEAS", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("TO_MEAS", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("DETAIL", wbvector::FieldType::Text));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FEATURE_FID", wbvector::FieldType::Integer));
+
+        let mut next_fid = 1u64;
+        let mut gap_count = 0usize;
+        let mut overlap_count = 0usize;
+        let mut non_monotonic_count = 0usize;
+        let mut duplicate_measure_count = 0usize;
+        let mut route_level_details = Vec::<serde_json::Value>::new();
+
+        for (route_key, recs) in by_route.iter_mut() {
+            let mut route_gap = 0usize;
+            let mut route_overlap = 0usize;
+            let mut route_non_monotonic = 0usize;
+            let mut route_duplicate = 0usize;
+
+            recs.sort_by(|a, b| a.input_order.cmp(&b.input_order));
+            let mut last_from_input = f64::NEG_INFINITY;
+            for rec in recs.iter() {
+                if rec.from_m < last_from_input - 1.0e-12 {
+                    non_monotonic_count += 1;
+                    route_non_monotonic += 1;
+                    output.features.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                        attributes: vec![
+                            wbvector::FieldValue::Text(route_key.clone()),
+                            wbvector::FieldValue::Text("non_monotonic".to_string()),
+                            wbvector::FieldValue::Text("warning".to_string()),
+                            wbvector::FieldValue::Float(rec.from_m),
+                            wbvector::FieldValue::Float(rec.to_m),
+                            wbvector::FieldValue::Text(format!(
+                                "from_measure {} is less than prior from_measure {} in input sequence",
+                                rec.from_m,
+                                last_from_input
+                            )),
+                            wbvector::FieldValue::Integer(rec.fid as i64),
+                        ],
+                    });
+                    next_fid += 1;
+                }
+                last_from_input = rec.from_m;
+
+                if rec.to_m < rec.from_m - 1.0e-12 {
+                    non_monotonic_count += 1;
+                    route_non_monotonic += 1;
+                    output.features.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                        attributes: vec![
+                            wbvector::FieldValue::Text(route_key.clone()),
+                            wbvector::FieldValue::Text("descending_interval".to_string()),
+                            wbvector::FieldValue::Text("error".to_string()),
+                            wbvector::FieldValue::Float(rec.from_m),
+                            wbvector::FieldValue::Float(rec.to_m),
+                            wbvector::FieldValue::Text("to_measure is less than from_measure".to_string()),
+                            wbvector::FieldValue::Integer(rec.fid as i64),
+                        ],
+                    });
+                    next_fid += 1;
+                }
+            }
+
+            recs.sort_by(|a, b| {
+                let ord = a.from_m.total_cmp(&b.from_m);
+                if ord == std::cmp::Ordering::Equal {
+                    a.to_m.total_cmp(&b.to_m)
+                } else {
+                    ord
+                }
+            });
+
+            let mut prev_end: Option<f64> = None;
+            let mut prev_interval: Option<(f64, f64)> = None;
+            for rec in recs.iter() {
+                if let Some((pf, pt)) = prev_interval {
+                    if (rec.from_m - pf).abs() <= 1.0e-12 && (rec.to_m - pt).abs() <= 1.0e-12 {
+                        duplicate_measure_count += 1;
+                        route_duplicate += 1;
+                        output.features.push(wbvector::Feature {
+                            fid: next_fid,
+                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                            attributes: vec![
+                                wbvector::FieldValue::Text(route_key.clone()),
+                                wbvector::FieldValue::Text("duplicate_measure".to_string()),
+                                wbvector::FieldValue::Text("warning".to_string()),
+                                wbvector::FieldValue::Float(rec.from_m),
+                                wbvector::FieldValue::Float(rec.to_m),
+                                wbvector::FieldValue::Text("duplicate interval with same from/to measures".to_string()),
+                                wbvector::FieldValue::Integer(rec.fid as i64),
+                            ],
+                        });
+                        next_fid += 1;
+                    }
+                }
+
+                if let Some(prev) = prev_end {
+                    if rec.from_m > prev + gap_tolerance + 1.0e-12 {
+                        gap_count += 1;
+                        route_gap += 1;
+                        output.features.push(wbvector::Feature {
+                            fid: next_fid,
+                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                            attributes: vec![
+                                wbvector::FieldValue::Text(route_key.clone()),
+                                wbvector::FieldValue::Text("gap".to_string()),
+                                wbvector::FieldValue::Text("warning".to_string()),
+                                wbvector::FieldValue::Float(prev),
+                                wbvector::FieldValue::Float(rec.from_m),
+                                wbvector::FieldValue::Text("gap between consecutive intervals".to_string()),
+                                wbvector::FieldValue::Integer(rec.fid as i64),
+                            ],
+                        });
+                        next_fid += 1;
+                    }
+                    if rec.from_m < prev - overlap_tolerance - 1.0e-12 {
+                        overlap_count += 1;
+                        route_overlap += 1;
+                        output.features.push(wbvector::Feature {
+                            fid: next_fid,
+                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                            attributes: vec![
+                                wbvector::FieldValue::Text(route_key.clone()),
+                                wbvector::FieldValue::Text("overlap".to_string()),
+                                wbvector::FieldValue::Text("error".to_string()),
+                                wbvector::FieldValue::Float(rec.from_m),
+                                wbvector::FieldValue::Float(prev),
+                                wbvector::FieldValue::Text("overlap between consecutive intervals".to_string()),
+                                wbvector::FieldValue::Integer(rec.fid as i64),
+                            ],
+                        });
+                        next_fid += 1;
+                    }
+                }
+
+                prev_end = Some(match prev_end {
+                    Some(prev) => prev.max(rec.to_m),
+                    None => rec.to_m,
+                });
+                prev_interval = Some((rec.from_m, rec.to_m));
+            }
+
+            route_level_details.push(json!({
+                "route_id": route_key,
+                "gap_count": route_gap,
+                "overlap_count": route_overlap,
+                "non_monotonic_count": route_non_monotonic,
+                "duplicate_measure_count": route_duplicate,
+            }));
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator));
+        outputs.insert("route_count".to_string(), json!(by_route.len()));
+        outputs.insert("event_count".to_string(), json!(events.features.len()));
+        outputs.insert("gap_count".to_string(), json!(gap_count));
+        outputs.insert("overlap_count".to_string(), json!(overlap_count));
+        outputs.insert("non_monotonic_count".to_string(), json!(non_monotonic_count));
+        outputs.insert("duplicate_measure_count".to_string(), json!(duplicate_measure_count));
+        outputs.insert("route_level_details".to_string(), json!(route_level_details));
+        Ok(ToolRunResult { outputs })
     }
 }
 

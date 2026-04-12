@@ -444,6 +444,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::RouteEventSplitTool));
     registry.register(Box::new(tools::RouteEventMergeTool));
     registry.register(Box::new(tools::RouteEventOverlayTool));
+    registry.register(Box::new(tools::RouteMeasureQaTool));
     registry.register(Box::new(tools::RouteCalibrateTool));
     registry.register(Box::new(tools::RouteRecalibrateTool));
     registry.register(Box::new(tools::DensifyFeaturesTool));

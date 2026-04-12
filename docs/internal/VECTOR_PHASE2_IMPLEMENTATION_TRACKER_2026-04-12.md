@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 2 (Topology Rule Engine + Linear Referencing Core)
-Status: In Progress (Stream A-D Complete; Stream E Pending)
+Status: In Progress (Stream A-D Complete; Stream E Core Implemented)
 
 ## Scope Anchors
 
@@ -47,9 +47,9 @@ Phase 2 planned outcomes:
 - [x] Add integration tests for overlapping and disjoint event intervals.
 
 ### Stream E: Route-Measure QA
-- [ ] Implement gap and overlap diagnostics.
-- [ ] Implement monotonicity and duplicate-measure checks.
-- [ ] Add report output schema for governance workflows.
+- [x] Implement gap and overlap diagnostics.
+- [x] Implement monotonicity and duplicate-measure checks.
+- [x] Add report output schema for governance workflows.
 - [ ] Add cookbook examples and wrapper parity notes.
 
 ## Suggested Execution Order
@@ -169,4 +169,18 @@ Phase 2 planned outcomes:
 		- `cargo test -p wbtools_oss --test registry_integration route_event_merge_skips_overlaps_in_skip_mode` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration route_event_overlay_respects_min_overlap_length` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-12: **STREAM E CORE (ROUTE MEASURE QA)**: Implemented and validated `route_measure_qa`.
+	- Added `route_measure_qa` diagnostics tool for route-measure governance checks.
+	- Implemented issue detection for gaps, overlaps, non-monotonic input order, descending intervals, and duplicate measures.
+	- Added standardized diagnostics output fields: `ROUTE_ID`, `ISSUE_TYPE`, `SEVERITY`, `FROM_MEAS`, `TO_MEAS`, `DETAIL`, `FEATURE_FID`.
+	- Added summary/report outputs in tool result: `route_count`, `event_count`, `gap_count`, `overlap_count`, `non_monotonic_count`, `duplicate_measure_count`, `route_level_details`.
+	- Added default tool export and registry registration.
+	- Added integration tests:
+		- `route_measure_qa_detects_gaps_overlaps_non_monotonic_and_duplicates`
+		- `route_measure_qa_returns_zero_counts_for_clean_sequence`
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_measure_qa_detects_gaps_overlaps_non_monotonic_and_duplicates` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_measure_qa_returns_zero_counts_for_clean_sequence` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
 

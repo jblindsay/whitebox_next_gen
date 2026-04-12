@@ -508,6 +508,7 @@ pub use gis::RouteEventLinesFromLayerTool;
 pub use gis::RouteEventSplitTool;
 pub use gis::RouteEventMergeTool;
 pub use gis::RouteEventOverlayTool;
+pub use gis::RouteMeasureQaTool;
 pub use gis::RouteCalibrateTool;
 pub use gis::RouteRecalibrateTool;
 pub use gis::DensifyFeaturesTool;

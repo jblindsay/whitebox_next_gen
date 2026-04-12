@@ -8740,7 +8740,7 @@ impl Tool for IsobasinsTool {
 					continue; // stays -2
 				}
 				let mut best_dir = -1i8;
-				let mut best_slope = f64::MIN;
+				let mut best_slope = 0.0f64;
 				for k in 0..8 {
 					let rn = r as isize + DY[k];
 					let cn = c as isize + DX[k];
@@ -8752,6 +8752,7 @@ impl Tool for IsobasinsTool {
 						continue;
 					}
 					let slope = (z0 - zn) / lens[k];
+					// Only allow strictly downhill flow directions; otherwise keep pit/flat (-1).
 					if slope > best_slope {
 						best_slope = slope;
 						best_dir = k as i8;

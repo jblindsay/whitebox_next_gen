@@ -176,7 +176,13 @@
                         <h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
 <p>This chapter covers schema inspection, feature iteration, attribute reads/writes,
 and persistence workflows.</p>
+<p>Vector processing is often more about data contracts than geometry mechanics.
+Schemas, field types, and attribute consistency determine whether downstream
+analysis remains trustworthy. The patterns below emphasize validating structure
+first, then applying deterministic edits, then persisting to stable interchange
+formats for downstream tools.</p>
 <h2 id="read-and-inspect"><a class="header" href="#read-and-inspect">Read and Inspect</a></h2>
+<p>This step establishes the schema contract your downstream edits depend on.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -187,6 +193,7 @@ print(schema)
 print('features:', roads.feature_count())
 </code></pre>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
+<p>Use feature iteration for inspections, QA checks, or bespoke attribute rules.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -199,6 +206,8 @@ for i in range(n):
     print(i, attrs)
 </code></pre>
 <h2 id="read-and-update-attribute-table"><a class="header" href="#read-and-update-attribute-table">Read and Update Attribute Table</a></h2>
+<p>This example demonstrates single-field updates, grouped updates, and schema
+extension in one controlled sequence.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -218,6 +227,8 @@ v.update_attributes(1, {'speed': 50, 'class': 'collector'})
 v.add_field('reviewed', field_type='bool', default_value=False)
 </code></pre>
 <h2 id="persist-vector-outputs"><a class="header" href="#persist-vector-outputs">Persist Vector Outputs</a></h2>
+<p>This pattern shows both default extension behavior and explicit format control
+for reproducibility.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -239,7 +250,40 @@ wbe.write_vector(buffered, 'roads_buffer.parquet', options={
 <li>Prefer <code>update_attributes()</code> for grouped edits to a feature.</li>
 <li>Re-read and validate after major writes, especially when switching formats.</li>
 </ul>
-
+<h2 id="vector-object-method-reference"><a class="header" href="#vector-object-method-reference">Vector Object Method Reference</a></h2>
+<p>Common simple properties such as <code>file_path</code> and <code>file_name</code> are omitted here so
+the tables stay focused on callable <code>Vector</code> methods.</p>
+<h3 id="schema-and-attribute-access"><a class="header" href="#schema-and-attribute-access">Schema and Attribute Access</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>schema</code></td><td>Return the vector schema, including field structure and geometry information.</td></tr>
+<tr><td><code>feature_count</code></td><td>Report how many features are present.</td></tr>
+<tr><td><code>attribute_fields</code>, <code>attribute_field_names</code></td><td>Inspect available attribute fields by full definition or by field name list.</td></tr>
+<tr><td><code>attribute</code></td><td>Read a single field value from one feature.</td></tr>
+<tr><td><code>attributes</code></td><td>Read all attribute values for one feature as a grouped record.</td></tr>
+<tr><td><code>add_field</code></td><td>Add a new attribute field to the dataset schema.</td></tr>
+<tr><td><code>update_attribute</code></td><td>Update one field in one feature.</td></tr>
+<tr><td><code>update_attributes</code></td><td>Update multiple fields in one feature at once.</td></tr>
+</tbody></table>
+</div>
+<h3 id="file-metadata-and-copying"><a class="header" href="#file-metadata-and-copying">File, Metadata, and Copying</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return <code>VectorMetadata</code> describing file state, CRS, and feature count.</td></tr>
+<tr><td><code>absolute_path</code></td><td>Resolve the vector to an absolute file path string.</td></tr>
+<tr><td><code>parent_directory</code></td><td>Return the containing directory path.</td></tr>
+<tr><td><code>exists</code></td><td>Check whether the backing dataset exists on disk.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information.</td></tr>
+<tr><td><code>get_file_size_in_bytes</code>, <code>get_last_modified_unix_seconds</code></td><td>Inspect filesystem metadata for reporting or audit logs.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a copied vector dataset to a derived or explicit output path.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-geometry-safe-persistence"><a class="header" href="#crs-and-geometry-safe-persistence">CRS and Geometry-Safe Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect CRS metadata as WKT text or EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving feature coordinates.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata so it can be assigned again explicitly.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the vector dataset with explicit failure, topology, and antimeridian policies.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

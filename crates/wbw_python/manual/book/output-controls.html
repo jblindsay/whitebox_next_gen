@@ -175,6 +175,11 @@
                     <main>
                         <h1 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h1>
 <p>This chapter documents output controls for raster, vector, and lidar writes in WbW-Py.</p>
+<p>Output settings are where reproducibility becomes explicit. Defaults are useful
+for fast iteration, but production workflows should pin format, compression, and
+layout choices so outputs remain comparable across runs and environments. Treat
+this chapter as the policy layer for how artifacts are written, named, and
+validated.</p>
 <h2 id="general-principles"><a class="header" href="#general-principles">General Principles</a></h2>
 <ul>
 <li>Start with default output behavior unless you need strict reproducibility.</li>
@@ -184,6 +189,8 @@ to fail instead of silently ignoring options.</li>
 </ul>
 <h2 id="raster-output-controls"><a class="header" href="#raster-output-controls">Raster Output Controls</a></h2>
 <p><code>write_raster(...)</code> and <code>write_rasters(...)</code> support an <code>options</code> dictionary.</p>
+<p>Use this when output layout and compression are part of a reproducibility or
+distribution requirement.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -207,6 +214,8 @@ wbe.write_raster(
 )
 </code></pre>
 <h3 id="common-raster-profiles"><a class="header" href="#common-raster-profiles">Common Raster Profiles</a></h3>
+<p>These profiles illustrate common tradeoffs between compatibility and read
+performance.</p>
 <pre><code class="language-python"># Stripped GeoTIFF
 wbe.write_raster(r, 'out_stripped.tif', options={
     'geotiff': {'layout': 'stripped', 'rows_per_strip': 32},
@@ -219,6 +228,7 @@ wbe.write_raster(r, 'out_tiled.tif', options={
 </code></pre>
 <h2 id="vector-output-controls"><a class="header" href="#vector-output-controls">Vector Output Controls</a></h2>
 <p><code>write_vector(...)</code> supports format-specific options.</p>
+<p>Use strict format options in production so incompatible settings fail fast.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -243,6 +253,8 @@ wbe.write_vector(
 </code></pre>
 <h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
 <p><code>write_lidar(...)</code> supports LAZ and COPC option blocks.</p>
+<p>Choose LAZ for compact archives and COPC when cloud-native spatial access is
+important.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -263,6 +275,8 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
 })
 </code></pre>
 <h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
+<p>Extensionless writes are useful in prototyping, but pin extensions in production
+for deterministic artifact naming.</p>
 <p>When no extension is provided:</p>
 <ul>
 <li>raster -&gt; <code>.tif</code> (COG-style GeoTIFF default)</li>

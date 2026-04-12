@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html" class="active"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html" class="active"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,7 +176,13 @@
                         <h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
 <p>This chapter covers schema inspection, feature iteration, attribute reads/writes,
 and persistence workflows.</p>
+<p>Reliable vector workflows depend on stable schema and attribute contracts as much
+as geometry itself. The patterns in this chapter emphasize inspecting structure
+early, applying deterministic edits, and validating outputs after persistence so
+downstream analysis remains predictable.</p>
 <h2 id="read-and-inspect"><a class="header" href="#read-and-inspect">Read and Inspect</a></h2>
+<p>Begin with schema and metadata inspection so edits are grounded in the actual
+field model.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
@@ -185,10 +191,11 @@ print(schema)
 print(v$metadata())
 </code></pre>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
+<p>Use this for quality checks, custom filters, and record-level diagnostics.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
-count &lt;- v$num_records()
+count &lt;- v$metadata()$feature_count
 
 for (i in seq_len(count)) {
   attrs &lt;- v$attributes(i)
@@ -197,6 +204,8 @@ for (i in seq_len(count)) {
 }
 </code></pre>
 <h2 id="read-and-update-attribute-table"><a class="header" href="#read-and-update-attribute-table">Read and Update Attribute Table</a></h2>
+<p>This example combines common edit actions: single-value updates, grouped updates,
+and field creation.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
@@ -209,6 +218,7 @@ v$update_attributes(2, list(speed = 50, class = 'collector'))
 v$add_field('reviewed', field_type = 'integer', default_value = 0)
 </code></pre>
 <h2 id="persist-vector-outputs"><a class="header" href="#persist-vector-outputs">Persist Vector Outputs</a></h2>
+<p>This pattern demonstrates tool-driven persistence and post-write verification.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -229,7 +239,30 @@ print(buffered$metadata())
 <li>Use <code>update_attributes()</code> for grouped feature edits.</li>
 <li>Re-read output files to validate schema and values after writes.</li>
 </ul>
-
+<h2 id="vector-object-method-reference"><a class="header" href="#vector-object-method-reference">Vector Object Method Reference</a></h2>
+<h3 id="metadata-and-structure"><a class="header" href="#metadata-and-structure">Metadata and Structure</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return vector metadata (geometry type, feature count, CRS, fields).</td></tr>
+<tr><td><code>schema</code></td><td>Return field names and types as a data frame.</td></tr>
+<tr><td><code>path</code></td><td>Return backing vector path.</td></tr>
+<tr><td><code>to_terra</code>, <code>to_sf</code></td><td>Convert to <code>terra</code>/<code>sf</code> objects for ecosystem workflows.</td></tr>
+</tbody></table>
+</div>
+<h3 id="attribute-access-and-edits"><a class="header" href="#attribute-access-and-edits">Attribute Access and Edits</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>attributes</code></td><td>Return all attribute values for one feature index.</td></tr>
+<tr><td><code>attribute</code></td><td>Return one field value for one feature index.</td></tr>
+<tr><td><code>update_attributes</code></td><td>Update multiple fields for one feature index.</td></tr>
+<tr><td><code>update_attribute</code></td><td>Update one field for one feature index.</td></tr>
+<tr><td><code>add_field</code></td><td>Add a new field with declared type and default value.</td></tr>
+</tbody></table>
+</div>
+<h3 id="persistence"><a class="header" href="#persistence">Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>deep_copy</code></td><td>Copy vector to a new path with optional write options.</td></tr>
+<tr><td><code>write</code></td><td>Write vector to a new output path.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

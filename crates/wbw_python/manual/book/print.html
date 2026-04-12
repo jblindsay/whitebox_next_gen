@@ -176,6 +176,43 @@
                     <main>
                         <h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
 <p>This manual is the long-form user guide for the WbW-Py API.</p>
+<p>WbW-Py (Whitebox Workflows for Python) is the Python frontend to Whitebox Next
+Gen, exposing a high-performance geospatial engine for raster, vector, lidar,
+and sensor-bundle workflows through a Pythonic API.</p>
+<p>Whitebox is a long-running geospatial project that began in academia and has
+evolved into a broad analysis platform with particular strength in
+geomorphometry, hydrological analysis, lidar processing, and remote sensing.
+Whitebox Next Gen is the current Rust-based major iteration, designed to pair
+high performance with modern APIs.</p>
+<p>Within that architecture, WbW-Py is the user-facing orchestration layer for
+Python users. It is intended for three common use cases:</p>
+<ul>
+<li>exploratory research notebooks and small scripts,</li>
+<li>reproducible batch workflows in production pipelines,</li>
+<li>integration with the broader Python geospatial ecosystem.</li>
+</ul>
+<p>This manual balances beginner accessibility with reference-grade detail:</p>
+<ul>
+<li>beginner friendly: clear chapter flow and runnable examples,</li>
+<li>canonical reference: explicit patterns, boundary conditions, and validation
+guidance aligned with backend capabilities.</li>
+</ul>
+<h2 id="how-to-use-this-manual"><a class="header" href="#how-to-use-this-manual">How to Use This Manual</a></h2>
+<p>This guide is designed for practitioners who want to move from exploratory scripts
+to reliable, repeatable geospatial pipelines. The examples are intentionally
+script-first, but each chapter also communicates design intent: when to keep data
+in memory, when to persist to disk, and how to validate each processing stage.</p>
+<p>Readers get the best results by following chapters in order the first time,
+then using the script index as a task-oriented lookup once the core patterns are
+familiar.</p>
+<p>When adapting examples, treat each script as a template with four parts:</p>
+<ol>
+<li>session or environment setup,</li>
+<li>data intake,</li>
+<li>transformation chain,</li>
+<li>validation and persistence.</li>
+</ol>
+<p>This structure helps keep your own scripts consistent as they grow.</p>
 <p>Goals:</p>
 <ul>
 <li>Comprehensive API coverage.</li>
@@ -188,29 +225,57 @@
 <li>Each chapter should include at least one complete end-to-end script.</li>
 <li>Tool-specific parameter details are linked to tool reference docs where needed.</li>
 </ul>
+<h2 id="common-pitfalls-and-validation"><a class="header" href="#common-pitfalls-and-validation">Common Pitfalls and Validation</a></h2>
+<ul>
+<li>Confirm inputs exist and have the expected CRS/schema/metadata before running long workflows.</li>
+<li>Prefer explicit output names and formats for reproducibility, especially in batch scripts.</li>
+<li>Re-open and inspect outputs after major steps to validate assumptions before chaining more tools.</li>
+<li>For performance-sensitive runs, start with a small representative subset, then scale to full data.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="installation-and-setup"><a class="header" href="#installation-and-setup">Installation and Setup</a></h1>
+<p>Installation is intentionally separated from workflow chapters so failures are
+detected early and diagnosed in isolation. The smoke tests here are not just
+"does import work" checks; they confirm that bindings, core runtime components,
+and representative interop pathways are all healthy on your machine.</p>
+<p>For team environments, treat this chapter as a baseline validation checklist
+before onboarding scripts or CI jobs.</p>
 <h2 id="development-install"><a class="header" href="#development-install">Development Install</a></h2>
+<p>Use this path for local development or source-based testing. It installs the
+package and links the Python layer with the current workspace backend.</p>
 <pre><code class="language-bash">./scripts/dev_python_install.sh
 </code></pre>
 <h2 id="pro-build"><a class="header" href="#pro-build">Pro Build</a></h2>
+<p>Use this path when testing environments that include optional pro-enabled
+capabilities.</p>
 <pre><code class="language-bash">./scripts/dev_python_install.sh --pro
 </code></pre>
 <h2 id="smoke-tests"><a class="header" href="#smoke-tests">Smoke Tests</a></h2>
+<p>Run both smoke tests before starting deeper debugging. The first validates
+import and startup; the second checks an interop roundtrip so I/O boundaries are
+confirmed.</p>
 <pre><code class="language-bash">python3 crates/wbw_python/examples/python_import_smoke_test.py
 python3 crates/wbw_python/examples/interop_roundtrip_smoke_test.py
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="build-and-preview"><a class="header" href="#build-and-preview">Build and Preview</a></h1>
 <p>This manual is structured as an mdBook project.</p>
+<p>Treat documentation builds as part of normal engineering hygiene. A clean build
+confirms that chapter links, code fences, and chapter ordering remain coherent
+as examples evolve. Live preview is especially useful when refining conceptual
+text, because it helps ensure headings and narrative pacing stay readable.</p>
 <h2 id="install-mdbook"><a class="header" href="#install-mdbook">Install mdBook</a></h2>
 <pre><code class="language-bash">cargo install mdbook
 </code></pre>
 <h2 id="build-the-manual"><a class="header" href="#build-the-manual">Build the Manual</a></h2>
+<p>Run a full build when editing chapter structure, links, or long conceptual
+sections.</p>
 <p>From repository root:</p>
 <pre><code class="language-bash">cd crates/wbw_python/manual
 mdbook build
 </code></pre>
 <p>Generated HTML is written to <code>book/</code>.</p>
 <h2 id="live-preview"><a class="header" href="#live-preview">Live Preview</a></h2>
+<p>Use live preview while refining wording and section flow in narrative-heavy
+chapters.</p>
 <pre><code class="language-bash">cd crates/wbw_python/manual
 mdbook serve --open
 </code></pre>
@@ -221,6 +286,15 @@ mdbook serve --open
 <li>Link chapter recipes to concrete scripts listed in the script index.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<p>This chapter gives you the shortest path to a successful first run. Think of it
+as a minimal "vertical slice": create an environment, load a dataset, run a
+tool, and write output. The goal is to verify that your runtime, paths, and
+basic mental model are all working before you invest in larger workflows.</p>
+<p>After this first pass, the rest of the manual progressively explains why each
+step matters and how to make the same pattern robust for production scripts.</p>
+<p>The example below demonstrates the default object-first workflow pattern. It
+reads a DEM, runs a hydrological tool, and writes an output raster. If this
+runs successfully, your environment and core processing path are functioning.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -229,6 +303,8 @@ filled = wbe.hydrology.fill_depressions(dem)
 wbe.write_raster(filled, "dem_filled.tif")
 </code></pre>
 <h2 id="what-to-read-next"><a class="header" href="#what-to-read-next">What to Read Next</a></h2>
+<p>These chapters deepen the same lifecycle shown above: discovery before
+execution, explicit progress handling, and script catalogs for adaptation.</p>
 <ul>
 <li>Session setup and tool visibility: <a href="./environment-and-discovery.html">Environment and Discovery</a></li>
 <li>Execution callbacks and progress: <a href="./tool-execution-and-progress.html">Tool Execution and Progress</a></li>
@@ -242,7 +318,14 @@ wbe.write_raster(filled, "dem_filled.tif")
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="environment-and-discovery"><a class="header" href="#environment-and-discovery">Environment and Discovery</a></h1>
 <p>This chapter covers environment lifecycle and tool discovery patterns.</p>
+<p>Environment setup is where workflow reliability begins. By explicitly creating
+and configuring a runtime environment, you make script behavior predictable
+across machines and sessions. Discovery APIs then let you verify capability
+before execution, which avoids long-running failures caused by missing tools,
+unexpected categories, or version mismatches.</p>
 <h2 id="create-and-configure-environment"><a class="header" href="#create-and-configure-environment">Create and Configure Environment</a></h2>
+<p>This example establishes an explicit runtime configuration. In production
+scripts, this is where you set working directory and verbosity policy.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -253,6 +336,8 @@ print(wbe.version())
 print(wbe.license_type())
 </code></pre>
 <h2 id="namespace-discovery"><a class="header" href="#namespace-discovery">Namespace Discovery</a></h2>
+<p>Use discovery to understand available capability before writing long workflows
+or generating dynamic tooling UIs.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -262,6 +347,7 @@ print('domains:', wbe.domain_namespaces())
 print('terrain tools sample:', wbe.terrain.list_tools()[:15])
 </code></pre>
 <h2 id="search-and-describe-tools"><a class="header" href="#search-and-describe-tools">Search and Describe Tools</a></h2>
+<p>This pattern is useful when you know a task but not the exact tool identifier.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -274,6 +360,8 @@ desc = wbe.describe_tool('slope')
 print(desc)
 </code></pre>
 <h2 id="validate-tool-availability"><a class="header" href="#validate-tool-availability">Validate Tool Availability</a></h2>
+<p>Use hard checks like this in batch scripts so failures occur immediately, before
+expensive processing begins.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -299,9 +387,104 @@ if missing:
 <li><code>wbe.category(name)</code></li>
 <li><code>wbe.domain(name)</code></li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
+<h2 id="wbenvironment-method-reference"><a class="header" href="#wbenvironment-method-reference">WbEnvironment Method Reference</a></h2>
+<p>This reference lists callable <code>WbEnvironment</code> methods with brief descriptions.
+Special Python dunder methods are intentionally omitted.</p>
+<h3 id="constructors"><a class="header" href="#constructors">Constructors</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>from_floating_license_id</code></td><td>Create an environment using a floating license identifier and provider settings.</td></tr>
+<tr><td><code>from_signed_entitlement_file</code></td><td>Create an environment from a signed entitlement file and public-key metadata.</td></tr>
+<tr><td><code>from_signed_entitlement_json</code></td><td>Create an environment from signed entitlement JSON and public-key metadata.</td></tr>
+</tbody></table>
+</div>
+<h3 id="runtime-and-licensing"><a class="header" href="#runtime-and-licensing">Runtime and Licensing</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>version</code></td><td>Return the Whitebox runtime version string.</td></tr>
+<tr><td><code>license_type</code></td><td>Return the active license mode (for example <code>open</code>, floating, or entitlement-backed).</td></tr>
+<tr><td><code>license_info</code></td><td>Return detailed license status information for diagnostics.</td></tr>
+</tbody></table>
+</div>
+<h3 id="discovery-and-introspection"><a class="header" href="#discovery-and-introspection">Discovery and Introspection</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>list_tools</code></td><td>Return all available tool IDs visible in the current environment.</td></tr>
+<tr><td><code>categories</code></td><td>Return the list of top-level tool categories.</td></tr>
+<tr><td><code>category</code></td><td>Return a category namespace object by name.</td></tr>
+<tr><td><code>domain_namespaces</code></td><td>Return available domain namespace names.</td></tr>
+<tr><td><code>domain</code></td><td>Return a domain namespace object by name.</td></tr>
+<tr><td><code>describe_tool</code></td><td>Return metadata and parameter details for a specific tool ID.</td></tr>
+<tr><td><code>search_tools</code></td><td>Search tools by keyword or phrase.</td></tr>
+<tr><td><code>list_tools_detailed</code></td><td>Return expanded metadata for all visible tools.</td></tr>
+</tbody></table>
+</div>
+<h3 id="core-data-readers"><a class="header" href="#core-data-readers">Core Data Readers</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_raster</code></td><td>Read one raster into a <code>Raster</code> object.</td></tr>
+<tr><td><code>read_vector</code></td><td>Read one vector dataset into a <code>Vector</code> object.</td></tr>
+<tr><td><code>read_lidar</code></td><td>Read one lidar dataset into a <code>Lidar</code> object.</td></tr>
+<tr><td><code>read_rasters</code></td><td>Read multiple rasters, optionally in parallel.</td></tr>
+<tr><td><code>read_vectors</code></td><td>Read multiple vectors, optionally in parallel.</td></tr>
+<tr><td><code>read_lidars</code></td><td>Read multiple lidar datasets, optionally in parallel.</td></tr>
+</tbody></table>
+</div>
+<h3 id="sensor-bundle-readers-and-composites"><a class="header" href="#sensor-bundle-readers-and-composites">Sensor Bundle Readers and Composites</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_bundle</code></td><td>Auto-detect and read a supported sensor bundle.</td></tr>
+<tr><td><code>read_landsat</code></td><td>Read a Landsat bundle with family-specific parsing.</td></tr>
+<tr><td><code>read_sentinel2</code></td><td>Read a Sentinel-2 SAFE bundle.</td></tr>
+<tr><td><code>read_sentinel1</code></td><td>Read a Sentinel-1 SAFE bundle.</td></tr>
+<tr><td><code>read_planetscope</code></td><td>Read a PlanetScope bundle.</td></tr>
+<tr><td><code>read_iceye</code></td><td>Read an ICEYE bundle.</td></tr>
+<tr><td><code>read_dimap</code></td><td>Read a DIMAP bundle.</td></tr>
+<tr><td><code>read_maxar_worldview</code></td><td>Read a Maxar/WorldView bundle.</td></tr>
+<tr><td><code>read_radarsat2</code></td><td>Read a RADARSAT-2 bundle.</td></tr>
+<tr><td><code>read_rcm</code></td><td>Read a RADARSAT Constellation Mission (RCM) bundle.</td></tr>
+<tr><td><code>true_colour_composite</code></td><td>Build a true-colour composite raster from a bundle source.</td></tr>
+<tr><td><code>false_colour_composite</code></td><td>Build a false-colour composite raster from a bundle source.</td></tr>
+</tbody></table>
+</div>
+<h3 id="reprojection-helpers"><a class="header" href="#reprojection-helpers">Reprojection Helpers</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>reproject_raster</code></td><td>Reproject one raster with explicit resampling and grid controls.</td></tr>
+<tr><td><code>reproject_vector</code></td><td>Reproject one vector dataset with policy controls.</td></tr>
+<tr><td><code>reproject_lidar</code></td><td>Reproject one lidar dataset with transform and failure controls.</td></tr>
+<tr><td><code>reproject_rasters</code></td><td>Batch reproject multiple rasters.</td></tr>
+<tr><td><code>reproject_vectors</code></td><td>Batch reproject multiple vector datasets.</td></tr>
+<tr><td><code>reproject_lidars</code></td><td>Batch reproject multiple lidar datasets.</td></tr>
+</tbody></table>
+</div>
+<h3 id="writers-and-raster-memory-management"><a class="header" href="#writers-and-raster-memory-management">Writers and Raster-Memory Management</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>write_raster</code></td><td>Write one raster to disk with optional format options.</td></tr>
+<tr><td><code>write_rasters</code></td><td>Write multiple rasters to disk in one call.</td></tr>
+<tr><td><code>remove_raster_from_memory</code></td><td>Drop a specific memory-backed raster from the environment cache.</td></tr>
+<tr><td><code>clear_raster_memory</code></td><td>Clear all memory-backed rasters tracked by the environment.</td></tr>
+<tr><td><code>raster_memory_count</code></td><td>Return the count of memory-backed rasters currently tracked.</td></tr>
+<tr><td><code>raster_memory_bytes</code></td><td>Return the estimated bytes used by tracked memory-backed rasters.</td></tr>
+<tr><td><code>write_vector</code></td><td>Write one vector dataset to disk with optional format options.</td></tr>
+<tr><td><code>write_lidar</code></td><td>Write one lidar dataset to disk with optional format options.</td></tr>
+<tr><td><code>write_text</code></td><td>Write plain text content to a file path.</td></tr>
+</tbody></table>
+</div>
+<h3 id="key-environment-properties"><a class="header" href="#key-environment-properties">Key Environment Properties</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Property</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>working_directory</code></td><td>Default working directory used for relative paths.</td></tr>
+<tr><td><code>verbose</code></td><td>Controls environment/runtime status output emitted by the bindings.</td></tr>
+<tr><td><code>max_procs</code></td><td>Maximum process count used by eligible parallel operations.</td></tr>
+<tr><td><code>projection</code></td><td>Namespace for CRS and coordinate transformation helper methods.</td></tr>
+<tr><td><code>topology</code></td><td>Namespace for geometry-topology helper methods.</td></tr>
+<tr><td><code>hydrology</code>, <code>terrain</code>, <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>remote_sensing</code>, <code>conversion</code>, <code>topology_tools</code></td><td>Typed category namespaces for tool discovery and execution.</td></tr>
+<tr><td><code>other</code>, <code>precision_agriculture</code>, <code>streams</code></td><td>Additional category/domain namespaces available in the environment.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
 <p>This chapter documents execution styles and progress handling.</p>
+<p>Execution style affects both correctness and maintainability. Object-first calls
+are concise for in-memory workflows, while path-first calls can be clearer in
+batch pipelines and audit logs. Progress callbacks are operational tools, not
+just UI niceties: they support observability, timeout policies, and better
+failure triage in long geoprocessing runs.</p>
 <h2 id="object-first-execution"><a class="header" href="#object-first-execution">Object-First Execution</a></h2>
+<p>Use object-first execution when your script is primarily in-memory and you want
+concise dataflow between steps.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -312,6 +495,8 @@ accum = wbe.hydrology.d8_flow_accum(filled)
 wbe.write_raster(accum, 'accum.tif')
 </code></pre>
 <h2 id="path-first-execution"><a class="header" href="#path-first-execution">Path-First Execution</a></h2>
+<p>Use path-first execution when you need explicit artifact paths for auditability,
+handoffs to external tools, or checkpointed batch runs.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -323,6 +508,7 @@ result = wbe.hydrology.fill_depressions(
 print(result)
 </code></pre>
 <h2 id="basic-progress-callback"><a class="header" href="#basic-progress-callback">Basic Progress Callback</a></h2>
+<p>Use a simple callback for interactive runs where immediate feedback is enough.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -334,6 +520,8 @@ filled = wbe.hydrology.fill_depressions(
 )
 </code></pre>
 <h2 id="custom-progress-callback"><a class="header" href="#custom-progress-callback">Custom Progress Callback</a></h2>
+<p>Use a custom callback when integrating with logs, dashboards, job schedulers, or
+failure retry logic.</p>
 <pre><code class="language-python">import json
 import re
 
@@ -361,6 +549,7 @@ def on_progress(event):
 # Use: callback=on_progress
 </code></pre>
 <h2 id="recommended-execution-pattern"><a class="header" href="#recommended-execution-pattern">Recommended Execution Pattern</a></h2>
+<p>Treat this as the default operational template for robust scripts.</p>
 <ol>
 <li>Validate required tools.</li>
 <li>Run tool chain memory-first.</li>
@@ -370,7 +559,14 @@ def on_progress(event):
 <div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-rasters"><a class="header" href="#working-with-rasters">Working with Rasters</a></h1>
 <p>This chapter documents practical raster workflows in WbW-Py with emphasis on
 inspection, iteration, modification, and persistence.</p>
+<p>Raster workflows usually alternate between high-performance tool operations and
+targeted custom logic. The important concept is to choose the lowest-cost path
+for each step: use backend tools for heavy transformations, and reserve
+NumPy-level iteration for domain-specific adjustments that tools do not expose
+directly.</p>
 <h2 id="raster-lifecycle"><a class="header" href="#raster-lifecycle">Raster Lifecycle</a></h2>
+<p>This lifecycle helps you separate inspection from transformation so assumptions
+about CRS, resolution, and nodata are explicit before heavy operations.</p>
 <p>Typical lifecycle:</p>
 <ol>
 <li>Read raster.</li>
@@ -389,6 +585,8 @@ print('EPSG:', meta.epsg_code)
 print('NoData:', meta.nodata)
 </code></pre>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
+<p>Use this pattern only when tool methods or vectorized operations cannot express
+your custom rule directly.</p>
 <p>For cell-level logic, convert to NumPy and iterate safely.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
@@ -408,6 +606,8 @@ for row in range(rows):
                 a[row, col] = 0.0
 </code></pre>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
+<p>This example shows the common pattern of deriving a new raster while preserving
+georeferencing context from a base raster.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -423,6 +623,8 @@ wbe.write_raster(out, 'dem_scaled_cog.tif', options={
 })
 </code></pre>
 <h2 id="multi-band-iteration"><a class="header" href="#multi-band-iteration">Multi-Band Iteration</a></h2>
+<p>Use this structure when per-band logic differs or when your transform depends on
+band-specific rules.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
 
@@ -442,6 +644,8 @@ for b in range(bands):
 wb.Raster.from_numpy(arr, rgb, output_path='multiband_clamped.tif')
 </code></pre>
 <h2 id="tool-first-raster-processing"><a class="header" href="#tool-first-raster-processing">Tool-First Raster Processing</a></h2>
+<p>This is the preferred pattern for scale: run optimized tools first, then apply
+targeted custom fixes only where necessary.</p>
 <p>Use tools for most heavy computation, then iterate only where custom logic is needed.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -464,10 +668,109 @@ wbe.write_raster(slope_fixed, 'slope_fixed.tif')
 <li>Use tool methods (<code>wbe.hydrology.*</code>, <code>wbe.raster.*</code>, <code>wbe.terrain.*</code>) for large transforms.</li>
 <li>Persist only final outputs where possible to keep memory-first workflows efficient.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
+<h2 id="raster-object-method-reference"><a class="header" href="#raster-object-method-reference">Raster Object Method Reference</a></h2>
+<p>The tables below focus on callable <code>Raster</code> methods. Common simple properties
+such as <code>file_path</code>, <code>file_name</code>, <code>active_band</code>, and <code>band_count</code> are omitted
+from the tables to keep the reference readable.</p>
+<h3 id="construction-conversion-and-summary"><a class="header" href="#construction-conversion-and-summary">Construction, Conversion, and Summary</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>from_numpy</code></td><td>Create a raster from a NumPy array while inheriting grid geometry from a base raster.</td></tr>
+<tr><td><code>band</code></td><td>Return a band-specific raster view for multiband data.</td></tr>
+<tr><td><code>to_numpy</code></td><td>Export the active band or all bands to NumPy for custom numeric work.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a full raster copy to a derived or explicit output path.</td></tr>
+<tr><td><code>new_from_other</code>, <code>new_from_other_with_data</code></td><td>Create a new raster that inherits geometry from another raster, optionally with a new data buffer.</td></tr>
+<tr><td><code>metadata</code></td><td>Return the <code>RasterConfigs</code> summary for rows, columns, resolution, bounds, and nodata.</td></tr>
+<tr><td><code>calculate_clip_values</code></td><td>Calculate percentile-based lower and upper clip values.</td></tr>
+<tr><td><code>calculate_mean</code>, <code>calculate_mean_and_stdev</code></td><td>Compute simple raster summary statistics.</td></tr>
+<tr><td><code>normalize</code></td><td>Produce a normalized raster suitable for display or downstream scaling steps.</td></tr>
+<tr><td><code>reinitialize_values</code></td><td>Reset all cells to a single constant value.</td></tr>
+<tr><td><code>update_min_max</code></td><td>Recompute cached minimum and maximum values after edits.</td></tr>
+<tr><td><code>num_cells</code>, <code>num_valid_cells</code></td><td>Report total cell count and valid-cell count.</td></tr>
+<tr><td><code>size_of</code>, <code>get_data_size_in_bytes</code></td><td>Report approximate in-memory or backing-data size.</td></tr>
+<tr><td><code>is_memory_backed</code></td><td>Indicate whether the raster is currently memory-backed.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information for reporting or output naming.</td></tr>
+</tbody></table>
+</div>
+<h3 id="grid-navigation-and-direct-editing"><a class="header" href="#grid-navigation-and-direct-editing">Grid Navigation and Direct Editing</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>get_value</code>, <code>set_value</code></td><td>Read or write an individual cell value.</td></tr>
+<tr><td><code>get_row_data</code>, <code>set_row_data</code></td><td>Read or replace an entire row of raster values.</td></tr>
+<tr><td><code>increment</code>, <code>decrement</code></td><td>Add to or subtract from a single cell value.</td></tr>
+<tr><td><code>increment_row_data</code>, <code>decrement_row_data</code></td><td>Add to or subtract from every value in a row.</td></tr>
+<tr><td><code>is_cell_nodata</code></td><td>Check whether a specific cell is nodata.</td></tr>
+<tr><td><code>get_row_from_y</code>, <code>get_y_from_row</code></td><td>Convert between world Y coordinates and raster row indices.</td></tr>
+<tr><td><code>get_column_from_x</code>, <code>get_x_from_column</code></td><td>Convert between world X coordinates and raster column indices.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-reprojection"><a class="header" href="#crs-and-reprojection">CRS and Reprojection</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect the raster CRS as WKT text or inferred/declared EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving the raster grid.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata when it is known to be wrong or must be re-assigned.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the raster with explicit control over resampling, extent, resolution, and grid policies.</td></tr>
+<tr><td><code>reproject_nearest</code>, <code>reproject_bilinear</code></td><td>Reproject with a fixed resampling method for common nearest-neighbour or bilinear cases.</td></tr>
+<tr><td><code>reproject_to_match_grid</code></td><td>Reproject onto the exact grid geometry of a target raster.</td></tr>
+<tr><td><code>reproject_to_match_resolution</code></td><td>Reproject while matching the cell resolution of a reference raster.</td></tr>
+<tr><td><code>reproject_to_match_resolution_in_epsg</code></td><td>Reproject to a target EPSG while borrowing cell resolution from a reference raster.</td></tr>
+</tbody></table>
+</div>
+<h3 id="unary-math-and-numeric-transforms"><a class="header" href="#unary-math-and-numeric-transforms">Unary Math and Numeric Transforms</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>abs</code></td><td>Absolute value transform.</td></tr>
+<tr><td><code>acos</code>, <code>arccos</code></td><td>Inverse cosine transform.</td></tr>
+<tr><td><code>acosh</code></td><td>Inverse hyperbolic cosine transform.</td></tr>
+<tr><td><code>asin</code>, <code>arcsin</code></td><td>Inverse sine transform.</td></tr>
+<tr><td><code>asinh</code></td><td>Inverse hyperbolic sine transform.</td></tr>
+<tr><td><code>atan</code>, <code>arctan</code></td><td>Inverse tangent transform.</td></tr>
+<tr><td><code>atanh</code></td><td>Inverse hyperbolic tangent transform.</td></tr>
+<tr><td><code>cbrt</code></td><td>Cube-root transform.</td></tr>
+<tr><td><code>ceil</code>, <code>floor</code>, <code>round</code>, <code>trunc</code></td><td>Standard rounding-family transforms.</td></tr>
+<tr><td><code>clamp</code></td><td>Limit values to a minimum and maximum range.</td></tr>
+<tr><td><code>cos</code>, <code>cosh</code>, <code>sin</code>, <code>sinh</code>, <code>tan</code>, <code>tanh</code></td><td>Trigonometric and hyperbolic transforms.</td></tr>
+<tr><td><code>degrees</code>, <code>to_degrees</code>, <code>radians</code>, <code>to_radians</code></td><td>Convert angular units between radians and degrees.</td></tr>
+<tr><td><code>exp</code>, <code>exp2</code>, <code>expm1</code></td><td>Exponential transforms.</td></tr>
+<tr><td><code>ln</code>, <code>log10</code>, <code>log1p</code>, <code>log2</code></td><td>Natural-log and common logarithmic transforms.</td></tr>
+<tr><td><code>neg</code>, <code>signum</code>, <code>sqrt</code>, <code>square</code>, <code>recip</code></td><td>Negation, sign extraction, square root, squaring, and reciprocal transforms.</td></tr>
+<tr><td><code>is_finite</code>, <code>is_infinite</code>, <code>is_nan</code>, <code>is_nodata</code></td><td>Build masks from numeric validity tests.</td></tr>
+<tr><td><code>logical_not</code>, <code>logical_not_in_place</code>, <code>not_</code></td><td>Logical-not style mask inversion.</td></tr>
+</tbody></table>
+</div>
+<h3 id="binary-arithmetic-and-comparisons"><a class="header" href="#binary-arithmetic-and-comparisons">Binary Arithmetic and Comparisons</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>add</code>, <code>add_in_place</code></td><td>Add another raster or scalar, either to a new raster or in place.</td></tr>
+<tr><td><code>sub</code>, <code>subtract</code>, <code>sub_in_place</code></td><td>Subtract another raster or scalar.</td></tr>
+<tr><td><code>mul</code>, <code>multiply</code>, <code>mul_in_place</code></td><td>Multiply by another raster or scalar.</td></tr>
+<tr><td><code>div</code>, <code>divide</code>, <code>div_in_place</code></td><td>Divide by another raster or scalar.</td></tr>
+<tr><td><code>pow</code>, <code>power</code>, <code>pow_in_place</code></td><td>Raise values to a raster/scalar power.</td></tr>
+<tr><td><code>atan2</code></td><td>Compute two-argument arctangent from paired raster/scalar inputs.</td></tr>
+<tr><td><code>min</code>, <code>max</code></td><td>Compute cellwise minima or maxima.</td></tr>
+<tr><td><code>eq</code>, <code>eq_in_place</code></td><td>Equality comparison.</td></tr>
+<tr><td><code>ne</code>, <code>ne_in_place</code></td><td>Inequality comparison.</td></tr>
+<tr><td><code>gt</code>, <code>gt_in_place</code></td><td>Greater-than comparison.</td></tr>
+<tr><td><code>ge</code>, <code>ge_in_place</code></td><td>Greater-than-or-equal comparison.</td></tr>
+<tr><td><code>lt</code>, <code>lt_in_place</code></td><td>Less-than comparison.</td></tr>
+<tr><td><code>le</code>, <code>le_in_place</code></td><td>Less-than-or-equal comparison.</td></tr>
+</tbody></table>
+</div>
+<h3 id="logical-combination"><a class="header" href="#logical-combination">Logical Combination</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>and_</code></td><td>Bitwise-style cellwise AND combination.</td></tr>
+<tr><td><code>or_</code></td><td>Bitwise-style cellwise OR combination.</td></tr>
+<tr><td><code>xor_</code></td><td>Bitwise-style cellwise XOR combination.</td></tr>
+<tr><td><code>logical_and</code>, <code>logical_and_in_place</code></td><td>Logical AND for boolean or mask rasters.</td></tr>
+<tr><td><code>logical_or</code>, <code>logical_or_in_place</code></td><td>Logical OR for boolean or mask rasters.</td></tr>
+<tr><td><code>logical_xor</code>, <code>logical_xor_in_place</code></td><td>Logical XOR for boolean or mask rasters.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
 <p>This chapter covers schema inspection, feature iteration, attribute reads/writes,
 and persistence workflows.</p>
+<p>Vector processing is often more about data contracts than geometry mechanics.
+Schemas, field types, and attribute consistency determine whether downstream
+analysis remains trustworthy. The patterns below emphasize validating structure
+first, then applying deterministic edits, then persisting to stable interchange
+formats for downstream tools.</p>
 <h2 id="read-and-inspect"><a class="header" href="#read-and-inspect">Read and Inspect</a></h2>
+<p>This step establishes the schema contract your downstream edits depend on.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -478,6 +781,7 @@ print(schema)
 print('features:', roads.feature_count())
 </code></pre>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
+<p>Use feature iteration for inspections, QA checks, or bespoke attribute rules.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -490,6 +794,8 @@ for i in range(n):
     print(i, attrs)
 </code></pre>
 <h2 id="read-and-update-attribute-table"><a class="header" href="#read-and-update-attribute-table">Read and Update Attribute Table</a></h2>
+<p>This example demonstrates single-field updates, grouped updates, and schema
+extension in one controlled sequence.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -509,6 +815,8 @@ v.update_attributes(1, {'speed': 50, 'class': 'collector'})
 v.add_field('reviewed', field_type='bool', default_value=False)
 </code></pre>
 <h2 id="persist-vector-outputs"><a class="header" href="#persist-vector-outputs">Persist Vector Outputs</a></h2>
+<p>This pattern shows both default extension behavior and explicit format control
+for reproducibility.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -530,10 +838,50 @@ wbe.write_vector(buffered, 'roads_buffer.parquet', options={
 <li>Prefer <code>update_attributes()</code> for grouped edits to a feature.</li>
 <li>Re-read and validate after major writes, especially when switching formats.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
+<h2 id="vector-object-method-reference"><a class="header" href="#vector-object-method-reference">Vector Object Method Reference</a></h2>
+<p>Common simple properties such as <code>file_path</code> and <code>file_name</code> are omitted here so
+the tables stay focused on callable <code>Vector</code> methods.</p>
+<h3 id="schema-and-attribute-access"><a class="header" href="#schema-and-attribute-access">Schema and Attribute Access</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>schema</code></td><td>Return the vector schema, including field structure and geometry information.</td></tr>
+<tr><td><code>feature_count</code></td><td>Report how many features are present.</td></tr>
+<tr><td><code>attribute_fields</code>, <code>attribute_field_names</code></td><td>Inspect available attribute fields by full definition or by field name list.</td></tr>
+<tr><td><code>attribute</code></td><td>Read a single field value from one feature.</td></tr>
+<tr><td><code>attributes</code></td><td>Read all attribute values for one feature as a grouped record.</td></tr>
+<tr><td><code>add_field</code></td><td>Add a new attribute field to the dataset schema.</td></tr>
+<tr><td><code>update_attribute</code></td><td>Update one field in one feature.</td></tr>
+<tr><td><code>update_attributes</code></td><td>Update multiple fields in one feature at once.</td></tr>
+</tbody></table>
+</div>
+<h3 id="file-metadata-and-copying"><a class="header" href="#file-metadata-and-copying">File, Metadata, and Copying</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return <code>VectorMetadata</code> describing file state, CRS, and feature count.</td></tr>
+<tr><td><code>absolute_path</code></td><td>Resolve the vector to an absolute file path string.</td></tr>
+<tr><td><code>parent_directory</code></td><td>Return the containing directory path.</td></tr>
+<tr><td><code>exists</code></td><td>Check whether the backing dataset exists on disk.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information.</td></tr>
+<tr><td><code>get_file_size_in_bytes</code>, <code>get_last_modified_unix_seconds</code></td><td>Inspect filesystem metadata for reporting or audit logs.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a copied vector dataset to a derived or explicit output path.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-geometry-safe-persistence"><a class="header" href="#crs-and-geometry-safe-persistence">CRS and Geometry-Safe Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect CRS metadata as WKT text or EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving feature coordinates.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata so it can be assigned again explicitly.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the vector dataset with explicit failure, topology, and antimeridian policies.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
 <p>This chapter documents lidar workflows in WbW-Py, including file-backed processing,
 metadata checks, and output controls.</p>
+<p>Lidar datasets are typically large enough that memory strategy becomes a primary
+design concern. The core pattern in this chapter is to combine file-backed
+objects, vectorized column operations, and chunked processing so scripts scale
+from small validation tiles to production-scale point clouds without rewriting
+your workflow model.</p>
 <h2 id="baseline-workflow"><a class="header" href="#baseline-workflow">Baseline Workflow</a></h2>
+<p>This baseline confirms read, inspect, transform, and write in a single lidar
+path before introducing chunking complexity.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -556,6 +904,8 @@ still not the primary API path.</p>
 <li>Perform vectorized filtering/classification edits in NumPy.</li>
 <li>Write updates with <code>Lidar.from_numpy(...)</code>.</li>
 </ol>
+<p>The example below reclassifies points using a simple mask to illustrate the
+pattern without domain-specific classification logic.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 import numpy as np
 
@@ -576,6 +926,8 @@ edited = wb.Lidar.from_numpy(
 print('points:', edited.point_count)
 </code></pre>
 <h2 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h2>
+<p>Use these options when you need to tune compression and structure for storage,
+cloud access, or downstream compatibility.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -605,6 +957,7 @@ full point matrix in memory.</p>
 <li>Apply vectorized edits per chunk.</li>
 <li>Write edited chunks with <code>Lidar.from_numpy_chunks(...)</code>.</li>
 </ol>
+<p>Use this pattern whenever full-matrix reads risk exhausting memory.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -640,8 +993,45 @@ process each chunk as it is decoded. In callback mode, no list is returned.</p>
 <li>Prefer COPC output for large datasets and cloud streaming scenarios.</li>
 <li>Keep raw source lidar immutable; write derived products to new files.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
+<h2 id="lidar-object-method-reference"><a class="header" href="#lidar-object-method-reference">Lidar Object Method Reference</a></h2>
+<p>Common simple properties such as <code>file_path</code>, <code>file_name</code>, and <code>point_count</code>
+are omitted here so the tables stay focused on callable <code>Lidar</code> methods and the
+most important array-processing workflows.</p>
+<h3 id="array-and-chunk-workflows"><a class="header" href="#array-and-chunk-workflows">Array and Chunk Workflows</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>to_numpy</code></td><td>Export selected point fields as a 2D NumPy array.</td></tr>
+<tr><td><code>to_numpy_chunks</code></td><td>Stream selected point fields as chunked NumPy arrays for large clouds.</td></tr>
+<tr><td><code>from_numpy</code></td><td>Build a new lidar file by applying a full 2D NumPy array back onto a base cloud.</td></tr>
+<tr><td><code>from_numpy_chunks</code></td><td>Build a new lidar file from an iterable of chunked NumPy arrays.</td></tr>
+</tbody></table>
+</div>
+<h3 id="file-metadata-and-copying-1"><a class="header" href="#file-metadata-and-copying-1">File, Metadata, and Copying</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return <code>LidarMetadata</code> for path, file state, and CRS information.</td></tr>
+<tr><td><code>absolute_path</code></td><td>Resolve the cloud to an absolute file path string.</td></tr>
+<tr><td><code>parent_directory</code></td><td>Return the containing directory path.</td></tr>
+<tr><td><code>exists</code></td><td>Check whether the backing lidar file exists.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information.</td></tr>
+<tr><td><code>get_file_size_in_bytes</code>, <code>get_last_modified_unix_seconds</code></td><td>Inspect filesystem metadata for reporting or audit logs.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a copied lidar dataset to a new path.</td></tr>
+<tr><td><code>copy_to_path</code></td><td>Copy the lidar dataset to an explicit destination.</td></tr>
+<tr><td><code>write_to_path</code></td><td>Persist the lidar dataset with optional format-specific write options.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-coordinate-management"><a class="header" href="#crs-and-coordinate-management">CRS and Coordinate Management</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect CRS metadata as WKT text or EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving point coordinates.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata when it is wrong or unknown.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the point cloud with explicit 3D-transform and failure-policy controls.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
 <p>This chapter documents supported sensor bundle families and common workflows.</p>
+<p>Bundle APIs abstract away family-specific packaging details so you can focus on
+analysis intent: identify useful channels, inspect quality assets, and produce
+consistent derived outputs. The conceptual goal is to normalize early-stage
+ingestion across heterogeneous providers while preserving enough provenance to
+keep downstream interpretation defensible.</p>
 <h2 id="supported-families"><a class="header" href="#supported-families">Supported Families</a></h2>
 <ul>
 <li>Generic auto-detect: <code>read_bundle(...)</code></li>
@@ -656,6 +1046,8 @@ process each chunk as it is decoded. In callback mode, no list is returned.</p>
 <li>RCM: <code>read_rcm(...)</code></li>
 </ul>
 <h2 id="common-inspection-pattern"><a class="header" href="#common-inspection-pattern">Common Inspection Pattern</a></h2>
+<p>Start with this inspection sequence to quickly understand what content is
+available before choosing analysis-specific channels.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -668,24 +1060,32 @@ print('qa:', b.list_qa_keys())
 print('assets:', b.list_asset_keys())
 </code></pre>
 <h2 id="family-specific-examples"><a class="header" href="#family-specific-examples">Family-Specific Examples</a></h2>
+<p>These examples show the same workflow shape across different providers: load,
+inspect keys, read representative channels, then generate a preview or derived
+artifact.</p>
 <h3 id="sentinel-2"><a class="header" href="#sentinel-2">Sentinel-2</a></h3>
+<p>Use this when building optical workflows from known band identifiers.</p>
 <pre><code class="language-python">s2 = wbe.read_sentinel2('S2_SCENE.SAFE')
 red = s2.read_band('B04')
 nir = s2.read_band('B08')
 rgb = s2.true_colour_composite(wbe, output_path='s2_true_colour.tif')
 </code></pre>
 <h3 id="landsat"><a class="header" href="#landsat">Landsat</a></h3>
+<p>Use this when scene metadata and quality indicators are part of ingestion logic.</p>
 <pre><code class="language-python">ls = wbe.read_landsat('LC09_SCENE')
 print(ls.processing_level(), ls.cloud_cover_percent())
 preview = ls.read_band(ls.list_band_keys()[0])
 </code></pre>
 <h3 id="sentinel-1--sar-families"><a class="header" href="#sentinel-1--sar-families">Sentinel-1 / SAR Families</a></h3>
+<p>Use this for SAR measurement inspection and quick visual QA composites.</p>
 <pre><code class="language-python">s1 = wbe.read_sentinel1('S1_SCENE.SAFE')
 print(s1.polarizations())
 meas = s1.read_measurement(s1.list_measurement_keys()[0])
 false_colour = s1.false_colour_composite(wbe, output_path='s1_false_colour.tif')
 </code></pre>
 <h3 id="planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm"><a class="header" href="#planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm">PlanetScope / ICEYE / DIMAP / Maxar-WorldView / RADARSAT-2 / RCM</a></h3>
+<p>This loop pattern is useful for multi-provider pipelines that need consistent
+intake checks.</p>
 <pre><code class="language-python">for loader, path in [
     (wbe.read_planetscope, 'PLANETSCOPE_SCENE'),
     (wbe.read_iceye, 'ICEYE_SCENE'),
@@ -705,8 +1105,50 @@ false_colour = s1.false_colour_composite(wbe, output_path='s1_false_colour.tif')
 <li>Build previews/composites for QA.</li>
 <li>Persist derived rasters and document source family + key choices.</li>
 </ol>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="output-controls-1"><a class="header" href="#output-controls-1">Output Controls</a></h1>
+<h2 id="sensor-bundle-object-method-reference"><a class="header" href="#sensor-bundle-object-method-reference">Sensor Bundle Object Method Reference</a></h2>
+<p>Common bundle properties such as <code>family</code> and <code>bundle_root</code> are omitted here so
+the tables stay focused on callable <code>Bundle</code> methods.</p>
+<h3 id="key-discovery-and-data-access"><a class="header" href="#key-discovery-and-data-access">Key Discovery and Data Access</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>list_band_keys</code></td><td>List spectral or image-band keys exposed by the bundle.</td></tr>
+<tr><td><code>list_measurement_keys</code></td><td>List measurement-layer keys, commonly used in SAR families.</td></tr>
+<tr><td><code>list_qa_keys</code></td><td>List quality-assurance layer keys.</td></tr>
+<tr><td><code>list_asset_keys</code></td><td>List auxiliary assets packaged with the bundle.</td></tr>
+<tr><td><code>list_aux_keys</code></td><td>List auxiliary layers that are not primary bands or measurements.</td></tr>
+<tr><td><code>read_band</code></td><td>Read a band by key as a raster object.</td></tr>
+<tr><td><code>read_measurement</code></td><td>Read a measurement layer by key as a raster object.</td></tr>
+<tr><td><code>read_qa_layer</code></td><td>Read a QA layer by key as a raster object.</td></tr>
+<tr><td><code>read_asset</code></td><td>Read a named asset from the bundle.</td></tr>
+<tr><td><code>read_aux_layer</code></td><td>Read an auxiliary layer by key.</td></tr>
+</tbody></table>
+</div>
+<h3 id="scene-and-platform-metadata"><a class="header" href="#scene-and-platform-metadata">Scene and Platform Metadata</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata_json</code></td><td>Return the bundle metadata payload as JSON text.</td></tr>
+<tr><td><code>mission</code>, <code>product_type</code>, <code>processing_level</code>, <code>processing_baseline</code></td><td>Inspect the provider, product family, and processing lineage.</td></tr>
+<tr><td><code>scene_id</code>, <code>tile_id</code>, <code>collection_number</code>, <code>path_row</code></td><td>Inspect scene identifiers used for cataloging and lineage.</td></tr>
+<tr><td><code>acquisition_datetime_utc</code>, <code>acquisition_mode</code></td><td>Inspect when and how the scene was acquired.</td></tr>
+<tr><td><code>cloud_cover_percent</code></td><td>Report cloud cover when the bundle family exposes it.</td></tr>
+<tr><td><code>polarization</code>, <code>polarizations</code></td><td>Inspect single-polarization or multi-polarization SAR metadata.</td></tr>
+<tr><td><code>look_direction</code>, <code>orbit_direction</code></td><td>Inspect platform look and orbit geometry.</td></tr>
+<tr><td><code>incidence_angle_near_deg</code>, <code>incidence_angle_far_deg</code>, <code>off_nadir_angle_deg</code>, <code>view_angle_deg</code></td><td>Inspect sensor/view geometry angles.</td></tr>
+<tr><td><code>sun_azimuth_deg</code>, <code>sun_elevation_deg</code>, <code>sun_zenith_deg</code></td><td>Inspect solar geometry for optical scenes.</td></tr>
+<tr><td><code>pixel_spacing_range_m</code>, <code>pixel_spacing_azimuth_m</code></td><td>Inspect SAR-oriented pixel spacing metadata.</td></tr>
+<tr><td><code>spatial_bounds</code></td><td>Return spatial footprint bounds for the scene.</td></tr>
+</tbody></table>
+</div>
+<h3 id="derived-preview-products"><a class="header" href="#derived-preview-products">Derived Preview Products</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>true_colour_composite</code></td><td>Build a true-colour preview raster when the bundle family supports it.</td></tr>
+<tr><td><code>false_colour_composite</code></td><td>Build a false-colour preview raster for quick QA or analysis setup.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="output-controls-1"><a class="header" href="#output-controls-1">Output Controls</a></h1>
 <p>This chapter documents output controls for raster, vector, and lidar writes in WbW-Py.</p>
+<p>Output settings are where reproducibility becomes explicit. Defaults are useful
+for fast iteration, but production workflows should pin format, compression, and
+layout choices so outputs remain comparable across runs and environments. Treat
+this chapter as the policy layer for how artifacts are written, named, and
+validated.</p>
 <h2 id="general-principles"><a class="header" href="#general-principles">General Principles</a></h2>
 <ul>
 <li>Start with default output behavior unless you need strict reproducibility.</li>
@@ -716,6 +1158,8 @@ to fail instead of silently ignoring options.</li>
 </ul>
 <h2 id="raster-output-controls"><a class="header" href="#raster-output-controls">Raster Output Controls</a></h2>
 <p><code>write_raster(...)</code> and <code>write_rasters(...)</code> support an <code>options</code> dictionary.</p>
+<p>Use this when output layout and compression are part of a reproducibility or
+distribution requirement.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -739,6 +1183,8 @@ wbe.write_raster(
 )
 </code></pre>
 <h3 id="common-raster-profiles"><a class="header" href="#common-raster-profiles">Common Raster Profiles</a></h3>
+<p>These profiles illustrate common tradeoffs between compatibility and read
+performance.</p>
 <pre><code class="language-python"># Stripped GeoTIFF
 wbe.write_raster(r, 'out_stripped.tif', options={
     'geotiff': {'layout': 'stripped', 'rows_per_strip': 32},
@@ -751,6 +1197,7 @@ wbe.write_raster(r, 'out_tiled.tif', options={
 </code></pre>
 <h2 id="vector-output-controls"><a class="header" href="#vector-output-controls">Vector Output Controls</a></h2>
 <p><code>write_vector(...)</code> supports format-specific options.</p>
+<p>Use strict format options in production so incompatible settings fail fast.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -775,6 +1222,8 @@ wbe.write_vector(
 </code></pre>
 <h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
 <p><code>write_lidar(...)</code> supports LAZ and COPC option blocks.</p>
+<p>Choose LAZ for compact archives and COPC when cloud-native spatial access is
+important.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -795,6 +1244,8 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
 })
 </code></pre>
 <h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
+<p>Extensionless writes are useful in prototyping, but pin extensions in production
+for deterministic artifact naming.</p>
 <p>When no extension is provided:</p>
 <ul>
 <li>raster -&gt; <code>.tif</code> (COG-style GeoTIFF default)</li>
@@ -815,7 +1266,13 @@ wbe.write_lidar(l, 'my_lidar')
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
 <p>This chapter covers raster, vector, and lidar reprojection in WbW-Py.</p>
+<p>CRS handling is a semantic correctness issue, not just a metadata preference.
+When coordinate assumptions are wrong, analyses may still run but yield invalid
+spatial conclusions. The patterns here emphasize explicit source/destination CRS
+checks, controlled reprojection settings, and immediate post-transform
+verification before any downstream computation.</p>
 <h2 id="crs-inspection"><a class="header" href="#crs-inspection">CRS Inspection</a></h2>
+<p>Run this first to verify assumptions before any reprojection call.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -827,7 +1284,41 @@ print('raster epsg:', dem.metadata().epsg_code)
 print('vector epsg:', roads.metadata().crs_epsg)
 print('lidar epsg:', las.metadata().crs_epsg)
 </code></pre>
+<h2 id="assigning-projection-metadata"><a class="header" href="#assigning-projection-metadata">Assigning Projection Metadata</a></h2>
+<p>Use CRS assignment only when the coordinates are already in the correct
+coordinate system but the file metadata is missing or wrong. Assignment does
+not move coordinates; it only changes the declared CRS. If you need to change
+the coordinate values themselves, use the reprojection methods shown later in
+this chapter.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem_without_crs.tif')
+roads = wbe.read_vector('roads_without_crs.gpkg')
+las = wbe.read_lidar('survey_without_crs.las')
+
+# Assign by EPSG when you know the coordinates already use that CRS.
+dem.set_crs_epsg(26917)
+roads.set_crs_epsg(26917)
+
+# Assign by WKT when that is the CRS information you have available.
+utm_wkt = wbe.projection.to_ogc_wkt(26917)
+las.set_crs_wkt(utm_wkt)
+
+print('raster epsg after assignment:', dem.crs_epsg())
+print('vector epsg after assignment:', roads.crs_epsg())
+print('lidar epsg after assignment:', las.crs_epsg())
+
+# If metadata is wrong rather than missing, clear it before reassigning.
+roads.clear_crs()
+roads.set_crs_epsg(26917)
+</code></pre>
+<p>This pattern is especially useful for legacy rasters, sidecar-free vector
+exports, and lidar files that have correct coordinates but incomplete CRS
+metadata.</p>
 <h2 id="raster-reprojection"><a class="header" href="#raster-reprojection">Raster Reprojection</a></h2>
+<p>This example shows continuous-surface reprojection with explicit resampling and
+resolution controls.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -844,6 +1335,8 @@ dem_utm = wbe.reproject_raster(
 wbe.write_raster(dem_utm, 'dem_utm_10m.tif')
 </code></pre>
 <h2 id="vector-reprojection"><a class="header" href="#vector-reprojection">Vector Reprojection</a></h2>
+<p>This pattern is appropriate when geometry validity and failure policy need to be
+explicit.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -859,6 +1352,8 @@ roads_utm = wbe.reproject_vector(
 wbe.write_vector(roads_utm, 'roads_utm.gpkg')
 </code></pre>
 <h2 id="lidar-reprojection"><a class="header" href="#lidar-reprojection">Lidar Reprojection</a></h2>
+<p>Use explicit lidar reprojection settings to avoid silent dimensional or policy
+defaults.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -874,6 +1369,8 @@ las_utm = wbe.reproject_lidar(
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
 </code></pre>
 <h2 id="projection-utility-namespace"><a class="header" href="#projection-utility-namespace">Projection Utility Namespace</a></h2>
+<p>This namespace is useful for CRS diagnostics and point-level coordinate
+transform tasks outside full dataset reprojection.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -894,7 +1391,29 @@ print(pts_utm)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
 <p>This chapter covers topology helper methods available under <code>wbe.topology</code>.</p>
+<p>Topology utilities are best used as fast, script-level geometry checks and
+diagnostics. They answer questions like:</p>
+<ul>
+<li>Do these two geometries intersect, touch, or overlap?</li>
+<li>Is this polygon valid before a downstream operation?</li>
+<li>What is the exact DE-9IM relationship between two geometries?</li>
+</ul>
+<p>These methods are lightweight and ideal for validation gates. For large-scale
+overlay workflows and heavy production geometry processing, prefer dedicated
+vector tools in <code>wbe.vector.*</code>.</p>
+<h2 id="topology-workflow-pattern"><a class="header" href="#topology-workflow-pattern">Topology Workflow Pattern</a></h2>
+<p>A robust pattern for topology-aware scripts is:</p>
+<ol>
+<li>Validate CRS compatibility first.</li>
+<li>Run quick topology predicates to detect obvious incompatibilities.</li>
+<li>Repair invalid geometries if required.</li>
+<li>Re-check relationships after repairs.</li>
+<li>Continue into heavier vector analysis only after topology checks pass.</li>
+</ol>
+<p>This keeps failures early and localized, which is usually easier to debug than
+finding topology issues deep into a long processing chain.</p>
 <h2 id="wkt-predicate-checks"><a class="header" href="#wkt-predicate-checks">WKT Predicate Checks</a></h2>
+<p>Use predicate checks for fast boolean decisions in filters and QA gates.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -905,8 +1424,12 @@ pt = 'POINT(5 5)'
 print('contains:', wbe.topology.contains_wkt(poly, pt))
 print('intersects:', wbe.topology.intersects_wkt(poly, pt))
 print('within:', wbe.topology.within_wkt(pt, poly))
+print('touches:', wbe.topology.touches_wkt(poly, pt))
+print('disjoint:', wbe.topology.disjoint_wkt(poly, pt))
 </code></pre>
 <h2 id="relationship-and-distance"><a class="header" href="#relationship-and-distance">Relationship and Distance</a></h2>
+<p>Use <code>relate_wkt</code> when a simple predicate is not enough and you need the full
+topological relationship signature.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -917,7 +1440,12 @@ b = 'LINESTRING(0 1, 10 1)'
 print('distance:', wbe.topology.distance_wkt(a, b))
 print('relate:', wbe.topology.relate_wkt(a, b))
 </code></pre>
+<p>The DE-9IM string returned by <code>relate_wkt</code> is useful for rule-based quality
+checks in advanced pipelines, especially when business logic depends on exact
+boundary/interior behavior.</p>
 <h2 id="geometry-validation-and-repair"><a class="header" href="#geometry-validation-and-repair">Geometry Validation and Repair</a></h2>
+<p>Validation and repair are especially useful before overlays, dissolves, and
+buffer-heavy workflows where invalid rings can cause downstream failures.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -931,6 +1459,8 @@ print('fixed:', fixed)
 buf = wbe.topology.buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
 print('buffer:', buf)
 </code></pre>
+<p>When repairing, prefer writing repaired geometries to new outputs and keeping
+source data immutable for auditability.</p>
 <h2 id="feature-to-feature-relation"><a class="header" href="#feature-to-feature-relation">Feature-to-Feature Relation</a></h2>
 <p>For vector feature comparisons, use <code>vector_feature_relation(...)</code>.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
@@ -941,13 +1471,41 @@ roads = wbe.read_vector('roads.gpkg')
 rel = wbe.topology.vector_feature_relation(roads, 0, roads, 1)
 print(rel)
 </code></pre>
+<p>For batch validation across many feature pairs, call this in a controlled loop
+and log results with feature IDs for traceable QA reports.</p>
+<h2 id="topology-namespace-method-reference"><a class="header" href="#topology-namespace-method-reference">Topology Namespace Method Reference</a></h2>
+<p>The table below summarizes the core <code>wbe.topology</code> methods.</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>intersects_wkt</code></td><td>Return <code>True</code> when two geometries share any portion of space.</td></tr>
+<tr><td><code>contains_wkt</code></td><td>Return <code>True</code> when geometry A strictly contains geometry B.</td></tr>
+<tr><td><code>within_wkt</code></td><td>Return <code>True</code> when geometry A is strictly within geometry B.</td></tr>
+<tr><td><code>touches_wkt</code></td><td>Return <code>True</code> when geometries meet at boundaries but interiors do not overlap.</td></tr>
+<tr><td><code>disjoint_wkt</code></td><td>Return <code>True</code> when geometries have no spatial intersection.</td></tr>
+<tr><td><code>crosses_wkt</code></td><td>Return <code>True</code> when geometries cross with dimensional reduction behavior.</td></tr>
+<tr><td><code>overlaps_wkt</code></td><td>Return <code>True</code> when same-dimension geometries partially overlap.</td></tr>
+<tr><td><code>covers_wkt</code></td><td>Return <code>True</code> when geometry A covers geometry B including boundary cases.</td></tr>
+<tr><td><code>covered_by_wkt</code></td><td>Return <code>True</code> when geometry A is covered by geometry B including boundary cases.</td></tr>
+<tr><td><code>relate_wkt</code></td><td>Return DE-9IM relationship text for exact topology-rule evaluation.</td></tr>
+<tr><td><code>distance_wkt</code></td><td>Return shortest distance between two geometries.</td></tr>
+<tr><td><code>is_valid_polygon_wkt</code></td><td>Check polygon validity before topology-sensitive workflows.</td></tr>
+<tr><td><code>make_valid_polygon_wkt</code></td><td>Repair an invalid polygon WKT representation.</td></tr>
+<tr><td><code>buffer_wkt</code></td><td>Build a buffered geometry from WKT and distance.</td></tr>
+<tr><td><code>vector_feature_relation</code></td><td>Evaluate topology relation between indexed features in vector datasets.</td></tr>
+</tbody></table>
+</div>
 <h2 id="practical-guidance"><a class="header" href="#practical-guidance">Practical Guidance</a></h2>
 <ul>
 <li>Use topology utilities for fast geometry checks in validation pipelines.</li>
 <li>For complex overlays and production transforms, prefer vector tool workflows.</li>
+<li>Keep CRS explicit before topology checks; mismatched CRS can produce plausible but wrong relations.</li>
+<li>Use <code>relate_wkt</code> when QA rules depend on exact boundary/interior semantics.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
 <p>This chapter summarizes practical format support exposed through WbW-Py.</p>
+<p>Format support influences interoperability, performance, and long-term archive
+strategy. Read/write capability is only one part of the decision; you should
+also consider ecosystem compatibility, compression behavior, and whether a given
+format is best used as an interchange artifact or as an internal working format.</p>
 <p>Backend support comes from core crates:</p>
 <ul>
 <li>Raster: <code>wbraster</code></li>
@@ -955,14 +1513,23 @@ print(rel)
 <li>Lidar: <code>wblidar</code></li>
 </ul>
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
-<p>Commonly used raster formats include:</p>
-<ul>
-<li>GeoTIFF / BigTIFF / COG (<code>.tif</code>, <code>.tiff</code>)</li>
-<li>JPEG2000 / GeoJP2 (<code>.jp2</code>)</li>
-<li>GeoPackage raster (<code>.gpkg</code>)</li>
-<li>ENVI (<code>.hdr</code> with sidecar data)</li>
-<li>ER Mapper (<code>.ers</code>)</li>
-</ul>
+<p>Exhaustive raster format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_raster</code>)</th><th>Write (<code>write_raster</code>)</th><th>Common extensions / path rules</th></tr></thead><tbody>
+<tr><td>Esri ASCII Grid</td><td>Yes</td><td>Yes</td><td><code>.asc</code> (and <code>.grd</code> when detected as ASCII)</td></tr>
+<tr><td>Esri Binary Grid workspace</td><td>Yes</td><td>Backend-only</td><td>Esri Binary workspace directory (<code>hdr.adf</code> + <code>w001001.adf</code>) or <code>.adf</code></td></tr>
+<tr><td>GRASS ASCII Raster</td><td>Yes</td><td>Yes</td><td><code>.txt</code> / <code>.asc</code> when GRASS header keys are detected</td></tr>
+<tr><td>Surfer GRD</td><td>Yes</td><td>Yes</td><td><code>.grd</code> (DSAA / DSRB signatures)</td></tr>
+<tr><td>PCRaster</td><td>Yes</td><td>Yes</td><td><code>.map</code> (CSF signature)</td></tr>
+<tr><td>SAGA Binary Grid</td><td>Yes</td><td>Yes</td><td><code>.sdat</code>, <code>.sgrd</code></td></tr>
+<tr><td>Idrisi / TerrSet Raster</td><td>Yes</td><td>Yes</td><td><code>.rst</code>, <code>.rdc</code></td></tr>
+<tr><td>ER Mapper</td><td>Yes</td><td>Yes</td><td><code>.ers</code></td></tr>
+<tr><td>ENVI HDR-labelled raster</td><td>Yes</td><td>Yes</td><td><code>.hdr</code>, or data files (<code>.img</code>, <code>.dat</code>, <code>.bin</code>, <code>.raw</code>, <code>.bil</code>, <code>.bsq</code>, <code>.bip</code>) with <code>.hdr</code> sidecar</td></tr>
+<tr><td>GeoTIFF / BigTIFF / COG</td><td>Yes</td><td>Yes</td><td><code>.tif</code>, <code>.tiff</code></td></tr>
+<tr><td>GeoPackage raster</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>JPEG2000 / GeoJP2</td><td>Yes</td><td>Yes</td><td><code>.jp2</code></td></tr>
+<tr><td>Zarr</td><td>Yes</td><td>Yes</td><td><code>.zarr</code> store (directory / suffix)</td></tr>
+</tbody></table>
+</div>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -971,14 +1538,22 @@ r = wbe.read_raster('dem.tif')
 wbe.write_raster(r, 'dem_out.tif')
 </code></pre>
 <h2 id="vector-formats"><a class="header" href="#vector-formats">Vector Formats</a></h2>
-<p>Commonly used vector formats include:</p>
-<ul>
-<li>GeoPackage (<code>.gpkg</code>)</li>
-<li>Shapefile (<code>.shp</code> and sidecar dataset files)</li>
-<li>GeoJSON (<code>.geojson</code>, <code>.json</code>)</li>
-<li>GeoParquet (<code>.parquet</code>)</li>
-<li>OSM PBF read workflows (<code>.osm.pbf</code>)</li>
-</ul>
+<p>Exhaustive vector format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_vector</code>)</th><th>Write (<code>write_vector</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>FlatGeobuf</td><td>Yes</td><td>Yes</td><td><code>.fgb</code></td></tr>
+<tr><td>GeoJSON</td><td>Yes</td><td>Yes</td><td><code>.geojson</code>, <code>.json</code></td></tr>
+<tr><td>GeoPackage</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>GeoParquet</td><td>Yes</td><td>Yes</td><td><code>.parquet</code></td></tr>
+<tr><td>GML</td><td>Yes</td><td>Yes</td><td><code>.gml</code></td></tr>
+<tr><td>GPX</td><td>Yes</td><td>Yes</td><td><code>.gpx</code></td></tr>
+<tr><td>KML</td><td>Yes</td><td>Yes</td><td><code>.kml</code></td></tr>
+<tr><td>KMZ</td><td>Yes</td><td>Yes</td><td><code>.kmz</code></td></tr>
+<tr><td>MapInfo Interchange</td><td>Yes</td><td>Yes</td><td><code>.mif</code> with <code>.mid</code> sidecar</td></tr>
+<tr><td>OSM PBF</td><td>Yes</td><td>No</td><td><code>.osm.pbf</code> (read workflows only)</td></tr>
+<tr><td>ESRI Shapefile</td><td>Yes</td><td>Yes</td><td><code>.shp</code> plus dataset sidecars</td></tr>
+</tbody></table>
+</div>
+<p>When <code>write_vector(...)</code> is called without an extension, WbW-Py defaults output to <code>.gpkg</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -987,12 +1562,16 @@ v = wbe.read_vector('roads.gpkg')
 wbe.write_vector(v, 'roads_out.gpkg')
 </code></pre>
 <h2 id="lidar-formats"><a class="header" href="#lidar-formats">Lidar Formats</a></h2>
-<p>Commonly used lidar formats include:</p>
-<ul>
-<li>LAS (<code>.las</code>)</li>
-<li>LAZ (<code>.laz</code>)</li>
-<li>COPC (<code>.copc.laz</code>)</li>
-</ul>
+<p>Exhaustive lidar format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_lidar</code>)</th><th>Write (<code>write_lidar</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>LAS</td><td>Yes</td><td>Yes</td><td><code>.las</code></td></tr>
+<tr><td>LAZ</td><td>Yes</td><td>Yes</td><td><code>.laz</code></td></tr>
+<tr><td>COPC</td><td>Yes</td><td>Yes</td><td><code>.copc.las</code>, <code>.copc.laz</code></td></tr>
+<tr><td>PLY</td><td>Yes</td><td>Yes</td><td><code>.ply</code></td></tr>
+<tr><td>E57</td><td>Yes</td><td>Yes</td><td><code>.e57</code></td></tr>
+</tbody></table>
+</div>
+<p>When <code>write_lidar(...)</code> is called without an extension, WbW-Py defaults output to <code>.copc.laz</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -1014,6 +1593,13 @@ wbe.write_lidar(l, 'survey_out.copc.laz')
 <li><code>read_radarsat2(...)</code></li>
 <li><code>read_rcm(...)</code></li>
 </ul>
+<p>Bundle inputs may be either extracted directories or supported archives:</p>
+<ul>
+<li><code>.zip</code></li>
+<li><code>.tar</code></li>
+<li><code>.tar.gz</code></li>
+<li><code>.tgz</code></li>
+</ul>
 <p>See <a href="./working-with-sensor-bundles.html">Working with Sensor Bundles</a> for family-specific examples.</p>
 <h2 id="validation-guidance"><a class="header" href="#validation-guidance">Validation Guidance</a></h2>
 <ol>
@@ -1023,6 +1609,11 @@ wbe.write_lidar(l, 'survey_out.copc.laz')
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interoperability"><a class="header" href="#interoperability">Interoperability</a></h1>
 <p>This chapter provides practical exchange patterns between WbW-Py and common Python geospatial tooling.</p>
+<p>Interoperability is best thought of as controlled boundary crossing. Each
+conversion introduces potential differences in metadata conventions, numeric
+precision, CRS representation, and schema typing. The workflows in this chapter
+focus on explicit handoff points and roundtrip validation so multi-library
+pipelines remain trustworthy.</p>
 <h2 id="copy-boundary-model"><a class="header" href="#copy-boundary-model">Copy-Boundary Model</a></h2>
 <ul>
 <li><code>to_numpy()</code> / <code>from_numpy()</code> are explicit in-memory exchange boundaries.</li>
@@ -1030,6 +1621,7 @@ wbe.write_lidar(l, 'survey_out.copc.laz')
 <li>Always validate metadata after roundtrip (<code>metadata()</code>, CRS, dimensions, schema).</li>
 </ul>
 <h2 id="numpy-roundtrip"><a class="header" href="#numpy-roundtrip">NumPy Roundtrip</a></h2>
+<p>Use this when you need direct numeric control for custom raster math.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
 
@@ -1041,6 +1633,7 @@ a = np.where(np.isfinite(a), a + 1.0, a)
 r2 = wb.Raster.from_numpy(a, r, output_path='dem_plus1.tif')
 </code></pre>
 <h2 id="rasterio-roundtrip"><a class="header" href="#rasterio-roundtrip">Rasterio Roundtrip</a></h2>
+<p>Use this for compatibility with rasterio-centric ecosystems and workflows.</p>
 <pre><code class="language-python">import rasterio
 import whitebox_workflows as wb
 
@@ -1061,6 +1654,8 @@ r_back = wbe.read_raster('dem_rio_out.tif')
 print(r_back.metadata())
 </code></pre>
 <h2 id="geopandas-and-shapely-roundtrip"><a class="header" href="#geopandas-and-shapely-roundtrip">GeoPandas and Shapely Roundtrip</a></h2>
+<p>Use this pattern for vector enrichment and geometry filtering in the broader
+Python geospatial stack.</p>
 <pre><code class="language-python">import geopandas as gpd
 import whitebox_workflows as wb
 
@@ -1077,6 +1672,7 @@ v_back = wbe.read_vector('roads_filtered.gpkg')
 print(v_back.schema())
 </code></pre>
 <h2 id="xarrayrioxarray-roundtrip"><a class="header" href="#xarrayrioxarray-roundtrip">xarray/rioxarray Roundtrip</a></h2>
+<p>Use this when you need labeled-array operations or rolling-window processing.</p>
 <pre><code class="language-python">import rioxarray as rxr
 import whitebox_workflows as wb
 
@@ -1092,6 +1688,8 @@ r_back = wbe.read_raster('dem_xarray_smoothed.tif')
 print(r_back.metadata())
 </code></pre>
 <h2 id="pyproj-crs-workflow"><a class="header" href="#pyproj-crs-workflow">pyproj CRS Workflow</a></h2>
+<p>Use this for explicit CRS introspection and conversion checks outside full file
+I/O steps.</p>
 <pre><code class="language-python">from pyproj import CRS
 import whitebox_workflows as wb
 
@@ -1113,13 +1711,22 @@ r_utm = wbe.reproject_raster(r, dst_epsg=dst.to_epsg(), resample='bilinear')
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="licensing"><a class="header" href="#licensing">Licensing</a></h1>
 <p>This chapter documents open, signed entitlement, and floating license startup modes.</p>
+<p>Licensing mode is a runtime dependency and should be treated like any other
+infrastructure requirement. The objective is to make startup behavior explicit,
+auditable, and resilient: scripts should clearly communicate which mode they
+expect, how fallback is handled, and what operational evidence is logged when
+activation succeeds or fails.</p>
 <h2 id="open-mode"><a class="header" href="#open-mode">Open Mode</a></h2>
+<p>Use this for OSS-only workflows or environments where entitlement is not
+required.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 print('license type:', wbe.license_type())
 </code></pre>
 <h2 id="signed-entitlement-json"><a class="header" href="#signed-entitlement-json">Signed Entitlement (JSON)</a></h2>
+<p>Use this in managed deployments where entitlement payloads are supplied at
+runtime.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 signed_entitlement_json = '...'
@@ -1137,6 +1744,7 @@ wbe = wb.WbEnvironment.from_signed_entitlement_json(
 print(wbe.license_type())
 </code></pre>
 <h2 id="signed-entitlement-file"><a class="header" href="#signed-entitlement-file">Signed Entitlement (File)</a></h2>
+<p>Use this when entitlement bundles are provisioned as files by platform tooling.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment.from_signed_entitlement_file(
@@ -1148,6 +1756,8 @@ wbe = wb.WbEnvironment.from_signed_entitlement_file(
 )
 </code></pre>
 <h2 id="floating-license"><a class="header" href="#floating-license">Floating License</a></h2>
+<p>Use this when license allocation is centrally managed and leased per machine or
+session.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment.from_floating_license_id(
@@ -1175,6 +1785,11 @@ print(wbe.license_info())
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="api-reference-strategy"><a class="header" href="#api-reference-strategy">API Reference Strategy</a></h1>
 <p>Manual chapters provide narrative and recipes.</p>
+<p>This split between narrative manual content and detailed tool references is
+intentional. Conceptual chapters answer workflow questions (what to do and why),
+while reference docs answer contract questions (exact parameters and return
+shape). Keeping these concerns separate improves readability without sacrificing
+precision.</p>
 <p>Tool-by-tool parameter references remain in:</p>
 <ul>
 <li><code>TOOLS.md</code></li>
@@ -1194,46 +1809,50 @@ print(wbe.license_info())
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="script-index"><a class="header" href="#script-index">Script Index</a></h1>
 <p>Use this index to map manual chapters to runnable examples.</p>
+<p>Use this chapter as a bridge from concept to execution. When adapting examples,
+start from the script closest to your data type and operational goal, then copy
+its structure before changing parameters. This tends to produce safer edits than
+assembling a workflow from isolated snippets.</p>
 <h2 id="quick-start-and-core-api"><a class="header" href="#quick-start-and-core-api">Quick Start and Core API</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/quickstart_harmonized_api.py</code></li>
-<li><code>crates/wbw_python/examples/wbenvironment_example.py</code></li>
-<li><code>crates/wbw_python/examples/current_api_data_handling_demo.py</code></li>
+<li><code>crates/wbw_python/examples/quickstart_harmonized_api.py</code> - minimal end-to-end startup and first tool run</li>
+<li><code>crates/wbw_python/examples/wbenvironment_example.py</code> - environment configuration and discovery baseline</li>
+<li><code>crates/wbw_python/examples/current_api_data_handling_demo.py</code> - data object handling patterns across core types</li>
 </ul>
 <h2 id="raster-workflows"><a class="header" href="#raster-workflows">Raster Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/raster_numpy_roundtrip.py</code></li>
-<li><code>crates/wbw_python/examples/raster_numpy_multiband_roundtrip.py</code></li>
-<li><code>crates/wbw_python/examples/unary_raster_tools_example.py</code></li>
+<li><code>crates/wbw_python/examples/raster_numpy_roundtrip.py</code> - single-band array conversion and writeback</li>
+<li><code>crates/wbw_python/examples/raster_numpy_multiband_roundtrip.py</code> - multiband array access and persistence</li>
+<li><code>crates/wbw_python/examples/unary_raster_tools_example.py</code> - tool-driven raster transform chain</li>
 </ul>
 <h2 id="vector-workflows"><a class="header" href="#vector-workflows">Vector Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/vector_attributes_harmonized_api.py</code></li>
-<li><code>crates/wbw_python/examples/vector_multifile_write_demo.py</code></li>
+<li><code>crates/wbw_python/examples/vector_attributes_harmonized_api.py</code> - schema inspection and attribute updates</li>
+<li><code>crates/wbw_python/examples/vector_multifile_write_demo.py</code> - format-aware vector export behavior</li>
 </ul>
 <h2 id="lidar-workflows"><a class="header" href="#lidar-workflows">Lidar Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/lidar_write_options.py</code></li>
-<li><code>crates/wbw_python/examples/lidar_numpy_roundtrip_smoke_test.py</code></li>
-<li><code>crates/wbw_python/examples/lidar_chunked_pipeline.py</code></li>
+<li><code>crates/wbw_python/examples/lidar_write_options.py</code> - LAZ and COPC output option tuning</li>
+<li><code>crates/wbw_python/examples/lidar_numpy_roundtrip_smoke_test.py</code> - point-field numpy roundtrip validation</li>
+<li><code>crates/wbw_python/examples/lidar_chunked_pipeline.py</code> - chunked processing pattern for large clouds</li>
 </ul>
 <h2 id="sensor-bundle-workflows"><a class="header" href="#sensor-bundle-workflows">Sensor Bundle Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/sensor_bundle_overview.py</code></li>
+<li><code>crates/wbw_python/examples/sensor_bundle_overview.py</code> - cross-family inspection and key discovery</li>
 </ul>
 <h2 id="interoperability-and-validation"><a class="header" href="#interoperability-and-validation">Interoperability and Validation</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/interop_roundtrip_smoke_test.py</code></li>
+<li><code>crates/wbw_python/examples/interop_roundtrip_smoke_test.py</code> - cross-library roundtrip sanity checks</li>
 </ul>
 <h2 id="licensing-1"><a class="header" href="#licensing-1">Licensing</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/licensing_offline_example.py</code></li>
-<li><code>crates/wbw_python/examples/licensing_floating_online_example.py</code></li>
+<li><code>crates/wbw_python/examples/licensing_offline_example.py</code> - local entitlement startup pattern</li>
+<li><code>crates/wbw_python/examples/licensing_floating_online_example.py</code> - floating-license provider bootstrap pattern</li>
 </ul>
 <h2 id="dynamic-output-smoke-tests"><a class="header" href="#dynamic-output-smoke-tests">Dynamic Output Smoke Tests</a></h2>
 <ul>
-<li><code>crates/wbw_python/examples/dynamic_single_output_smoke_test.py</code></li>
-<li><code>crates/wbw_python/examples/dynamic_multi_output_smoke_test.py</code></li>
+<li><code>crates/wbw_python/examples/dynamic_single_output_smoke_test.py</code> - runtime single-output behavior checks</li>
+<li><code>crates/wbw_python/examples/dynamic_multi_output_smoke_test.py</code> - runtime multi-output behavior checks</li>
 </ul>
 
                     </main>

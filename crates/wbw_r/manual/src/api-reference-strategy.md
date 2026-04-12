@@ -2,6 +2,11 @@
 
 Manual chapters provide narrative and recipes.
 
+This separation between narrative guidance and parameter-complete references is
+intentional. The manual answers workflow and design questions, while shared tool
+docs provide exhaustive argument contracts. Keeping these concerns separate makes
+the manual easier to read without reducing technical precision.
+
 Detailed tool-level parameter references remain in shared tool docs.
 
 ## Reference Boundaries

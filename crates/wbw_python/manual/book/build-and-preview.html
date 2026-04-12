@@ -175,16 +175,24 @@
                     <main>
                         <h1 id="build-and-preview"><a class="header" href="#build-and-preview">Build and Preview</a></h1>
 <p>This manual is structured as an mdBook project.</p>
+<p>Treat documentation builds as part of normal engineering hygiene. A clean build
+confirms that chapter links, code fences, and chapter ordering remain coherent
+as examples evolve. Live preview is especially useful when refining conceptual
+text, because it helps ensure headings and narrative pacing stay readable.</p>
 <h2 id="install-mdbook"><a class="header" href="#install-mdbook">Install mdBook</a></h2>
 <pre><code class="language-bash">cargo install mdbook
 </code></pre>
 <h2 id="build-the-manual"><a class="header" href="#build-the-manual">Build the Manual</a></h2>
+<p>Run a full build when editing chapter structure, links, or long conceptual
+sections.</p>
 <p>From repository root:</p>
 <pre><code class="language-bash">cd crates/wbw_python/manual
 mdbook build
 </code></pre>
 <p>Generated HTML is written to <code>book/</code>.</p>
 <h2 id="live-preview"><a class="header" href="#live-preview">Live Preview</a></h2>
+<p>Use live preview while refining wording and section flow in narrative-heavy
+chapters.</p>
 <pre><code class="language-bash">cd crates/wbw_python/manual
 mdbook serve --open
 </code></pre>

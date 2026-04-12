@@ -175,7 +175,29 @@
                     <main>
                         <h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
 <p>This chapter covers topology helper methods available under <code>wbe.topology</code>.</p>
+<p>Topology utilities are best used as fast, script-level geometry checks and
+diagnostics. They answer questions like:</p>
+<ul>
+<li>Do these two geometries intersect, touch, or overlap?</li>
+<li>Is this polygon valid before a downstream operation?</li>
+<li>What is the exact DE-9IM relationship between two geometries?</li>
+</ul>
+<p>These methods are lightweight and ideal for validation gates. For large-scale
+overlay workflows and heavy production geometry processing, prefer dedicated
+vector tools in <code>wbe.vector.*</code>.</p>
+<h2 id="topology-workflow-pattern"><a class="header" href="#topology-workflow-pattern">Topology Workflow Pattern</a></h2>
+<p>A robust pattern for topology-aware scripts is:</p>
+<ol>
+<li>Validate CRS compatibility first.</li>
+<li>Run quick topology predicates to detect obvious incompatibilities.</li>
+<li>Repair invalid geometries if required.</li>
+<li>Re-check relationships after repairs.</li>
+<li>Continue into heavier vector analysis only after topology checks pass.</li>
+</ol>
+<p>This keeps failures early and localized, which is usually easier to debug than
+finding topology issues deep into a long processing chain.</p>
 <h2 id="wkt-predicate-checks"><a class="header" href="#wkt-predicate-checks">WKT Predicate Checks</a></h2>
+<p>Use predicate checks for fast boolean decisions in filters and QA gates.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -186,8 +208,12 @@ pt = 'POINT(5 5)'
 print('contains:', wbe.topology.contains_wkt(poly, pt))
 print('intersects:', wbe.topology.intersects_wkt(poly, pt))
 print('within:', wbe.topology.within_wkt(pt, poly))
+print('touches:', wbe.topology.touches_wkt(poly, pt))
+print('disjoint:', wbe.topology.disjoint_wkt(poly, pt))
 </code></pre>
 <h2 id="relationship-and-distance"><a class="header" href="#relationship-and-distance">Relationship and Distance</a></h2>
+<p>Use <code>relate_wkt</code> when a simple predicate is not enough and you need the full
+topological relationship signature.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -198,7 +224,12 @@ b = 'LINESTRING(0 1, 10 1)'
 print('distance:', wbe.topology.distance_wkt(a, b))
 print('relate:', wbe.topology.relate_wkt(a, b))
 </code></pre>
+<p>The DE-9IM string returned by <code>relate_wkt</code> is useful for rule-based quality
+checks in advanced pipelines, especially when business logic depends on exact
+boundary/interior behavior.</p>
 <h2 id="geometry-validation-and-repair"><a class="header" href="#geometry-validation-and-repair">Geometry Validation and Repair</a></h2>
+<p>Validation and repair are especially useful before overlays, dissolves, and
+buffer-heavy workflows where invalid rings can cause downstream failures.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -212,6 +243,8 @@ print('fixed:', fixed)
 buf = wbe.topology.buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
 print('buffer:', buf)
 </code></pre>
+<p>When repairing, prefer writing repaired geometries to new outputs and keeping
+source data immutable for auditability.</p>
 <h2 id="feature-to-feature-relation"><a class="header" href="#feature-to-feature-relation">Feature-to-Feature Relation</a></h2>
 <p>For vector feature comparisons, use <code>vector_feature_relation(...)</code>.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
@@ -222,10 +255,34 @@ roads = wbe.read_vector('roads.gpkg')
 rel = wbe.topology.vector_feature_relation(roads, 0, roads, 1)
 print(rel)
 </code></pre>
+<p>For batch validation across many feature pairs, call this in a controlled loop
+and log results with feature IDs for traceable QA reports.</p>
+<h2 id="topology-namespace-method-reference"><a class="header" href="#topology-namespace-method-reference">Topology Namespace Method Reference</a></h2>
+<p>The table below summarizes the core <code>wbe.topology</code> methods.</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>intersects_wkt</code></td><td>Return <code>True</code> when two geometries share any portion of space.</td></tr>
+<tr><td><code>contains_wkt</code></td><td>Return <code>True</code> when geometry A strictly contains geometry B.</td></tr>
+<tr><td><code>within_wkt</code></td><td>Return <code>True</code> when geometry A is strictly within geometry B.</td></tr>
+<tr><td><code>touches_wkt</code></td><td>Return <code>True</code> when geometries meet at boundaries but interiors do not overlap.</td></tr>
+<tr><td><code>disjoint_wkt</code></td><td>Return <code>True</code> when geometries have no spatial intersection.</td></tr>
+<tr><td><code>crosses_wkt</code></td><td>Return <code>True</code> when geometries cross with dimensional reduction behavior.</td></tr>
+<tr><td><code>overlaps_wkt</code></td><td>Return <code>True</code> when same-dimension geometries partially overlap.</td></tr>
+<tr><td><code>covers_wkt</code></td><td>Return <code>True</code> when geometry A covers geometry B including boundary cases.</td></tr>
+<tr><td><code>covered_by_wkt</code></td><td>Return <code>True</code> when geometry A is covered by geometry B including boundary cases.</td></tr>
+<tr><td><code>relate_wkt</code></td><td>Return DE-9IM relationship text for exact topology-rule evaluation.</td></tr>
+<tr><td><code>distance_wkt</code></td><td>Return shortest distance between two geometries.</td></tr>
+<tr><td><code>is_valid_polygon_wkt</code></td><td>Check polygon validity before topology-sensitive workflows.</td></tr>
+<tr><td><code>make_valid_polygon_wkt</code></td><td>Repair an invalid polygon WKT representation.</td></tr>
+<tr><td><code>buffer_wkt</code></td><td>Build a buffered geometry from WKT and distance.</td></tr>
+<tr><td><code>vector_feature_relation</code></td><td>Evaluate topology relation between indexed features in vector datasets.</td></tr>
+</tbody></table>
+</div>
 <h2 id="practical-guidance"><a class="header" href="#practical-guidance">Practical Guidance</a></h2>
 <ul>
 <li>Use topology utilities for fast geometry checks in validation pipelines.</li>
 <li>For complex overlays and production transforms, prefer vector tool workflows.</li>
+<li>Keep CRS explicit before topology checks; mismatched CRS can produce plausible but wrong relations.</li>
+<li>Use <code>relate_wkt</code> when QA rules depend on exact boundary/interior semantics.</li>
 </ul>
 
                     </main>

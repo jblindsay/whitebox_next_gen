@@ -2,7 +2,16 @@
 
 This chapter documents execution styles and progress handling in WbW-R.
 
+Execution structure affects observability and reproducibility. Explicit session
+execution makes dependencies and runtime state clear, while progress-aware
+patterns help with monitoring, troubleshooting, and user feedback during long
+operations. Think of callbacks as operational instrumentation, not just console
+output.
+
 ## Explicit Session Execution
+
+Use explicit session execution as the default in production scripts so runtime
+dependencies and state are clear.
 
 ```r
 library(whiteboxworkflows)
@@ -18,6 +27,9 @@ print(result)
 ```
 
 ## Progress-Aware Execution
+
+Use progress-aware execution for long operations, remote runs, and logs that
+require periodic status updates.
 
 ```r
 library(whiteboxworkflows)
@@ -35,6 +47,9 @@ str(result$progress)
 ```
 
 ## Custom Progress Callback
+
+This callback pattern is useful when progress events need to feed custom log
+formats or monitoring pipelines.
 
 ```r
 progress_cb <- local({

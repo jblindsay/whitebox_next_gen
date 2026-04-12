@@ -175,7 +175,14 @@
                     <main>
                         <h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
 <p>This chapter documents execution styles and progress handling.</p>
+<p>Execution style affects both correctness and maintainability. Object-first calls
+are concise for in-memory workflows, while path-first calls can be clearer in
+batch pipelines and audit logs. Progress callbacks are operational tools, not
+just UI niceties: they support observability, timeout policies, and better
+failure triage in long geoprocessing runs.</p>
 <h2 id="object-first-execution"><a class="header" href="#object-first-execution">Object-First Execution</a></h2>
+<p>Use object-first execution when your script is primarily in-memory and you want
+concise dataflow between steps.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -186,6 +193,8 @@ accum = wbe.hydrology.d8_flow_accum(filled)
 wbe.write_raster(accum, 'accum.tif')
 </code></pre>
 <h2 id="path-first-execution"><a class="header" href="#path-first-execution">Path-First Execution</a></h2>
+<p>Use path-first execution when you need explicit artifact paths for auditability,
+handoffs to external tools, or checkpointed batch runs.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -197,6 +206,7 @@ result = wbe.hydrology.fill_depressions(
 print(result)
 </code></pre>
 <h2 id="basic-progress-callback"><a class="header" href="#basic-progress-callback">Basic Progress Callback</a></h2>
+<p>Use a simple callback for interactive runs where immediate feedback is enough.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -208,6 +218,8 @@ filled = wbe.hydrology.fill_depressions(
 )
 </code></pre>
 <h2 id="custom-progress-callback"><a class="header" href="#custom-progress-callback">Custom Progress Callback</a></h2>
+<p>Use a custom callback when integrating with logs, dashboards, job schedulers, or
+failure retry logic.</p>
 <pre><code class="language-python">import json
 import re
 
@@ -235,6 +247,7 @@ def on_progress(event):
 # Use: callback=on_progress
 </code></pre>
 <h2 id="recommended-execution-pattern"><a class="header" href="#recommended-execution-pattern">Recommended Execution Pattern</a></h2>
+<p>Treat this as the default operational template for robust scripts.</p>
 <ol>
 <li>Validate required tools.</li>
 <li>Run tool chain memory-first.</li>

@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html" class="active"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html" class="active"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,6 +176,33 @@
                         <h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
 <p>WbW-R currently emphasizes topology through tool workflows (category-driven) rather
 than a dedicated R-native <code>topology</code> utility namespace equivalent to Python.</p>
+<p>At the same time, session-level topology helpers provide a fast path for
+geometry QA checks and validation gates before heavier vector operations.</p>
+<h2 id="topology-workflow-pattern"><a class="header" href="#topology-workflow-pattern">Topology Workflow Pattern</a></h2>
+<p>A robust topology-first script pattern is:</p>
+<ol>
+<li>Validate CRS compatibility first.</li>
+<li>Run fast predicate checks to detect obvious incompatibilities.</li>
+<li>Repair invalid polygon geometries if needed.</li>
+<li>Re-run critical predicates after repair.</li>
+<li>Continue into heavier vector processing only after checks pass.</li>
+</ol>
+<p>This keeps failures early, localized, and easier to diagnose.</p>
+<h2 id="session-level-topology-predicate-checks"><a class="header" href="#session-level-topology-predicate-checks">Session-Level Topology Predicate Checks</a></h2>
+<p>Use these methods when you need script-level yes/no checks on WKT geometries.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+poly &lt;- 'POLYGON((0 0,10 0,10 10,0 10,0 0))'
+pt &lt;- 'POINT(5 5)'
+
+print(s$topology_contains_wkt(poly, pt))
+print(s$topology_intersects_wkt(poly, pt))
+print(s$topology_within_wkt(pt, poly))
+print(s$topology_touches_wkt(poly, pt))
+print(s$topology_disjoint_wkt(poly, pt))
+</code></pre>
 <h2 id="topology-via-tool-workflows"><a class="header" href="#topology-via-tool-workflows">Topology via Tool Workflows</a></h2>
 <p>Use session execution and topology/geometry tool IDs through category discovery.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
@@ -193,6 +220,8 @@ if (length(hits) &gt; 0) {
   print(wbw_describe_tool(tool_id))
 }
 </code></pre>
+<p>Use this pattern when topology checks are part of larger, file-based vector
+pipelines that should remain in Whitebox tooling end to end.</p>
 <h2 id="vector-topology-pattern"><a class="header" href="#vector-topology-pattern">Vector Topology Pattern</a></h2>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -206,8 +235,23 @@ s &lt;- wbw_session()
 #   session = s
 # )
 </code></pre>
-<h2 id="geometry-validation-via-interop"><a class="header" href="#geometry-validation-via-interop">Geometry Validation via Interop</a></h2>
-<p>For strict in-memory geometry predicates/repairs in R scripts, an <code>sf</code> interop path is often practical.</p>
+<p>Use this template after selecting a concrete tool ID through discovery.</p>
+<h2 id="geometry-validation-and-repair"><a class="header" href="#geometry-validation-and-repair">Geometry Validation and Repair</a></h2>
+<p>Use session helpers for pure WKT checks and repairs.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+invalid &lt;- 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
+print(s$topology_is_valid_polygon_wkt(invalid))
+
+fixed &lt;- s$topology_make_valid_polygon_wkt(invalid)
+print(fixed)
+
+buf &lt;- s$topology_buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+print(buf)
+</code></pre>
+<p>For broader in-memory feature editing, an <code>sf</code> interop path is still practical:</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 library(sf)
 
@@ -220,10 +264,42 @@ print(table(valid_flags))
 g_fixed &lt;- st_make_valid(g)
 st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
 </code></pre>
+<h2 id="relationship-and-distance"><a class="header" href="#relationship-and-distance">Relationship and Distance</a></h2>
+<p>Use relation/distance methods when binary predicates are not expressive enough.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+a &lt;- 'LINESTRING(0 0, 10 0)'
+b &lt;- 'LINESTRING(0 1, 10 1)'
+
+print(s$topology_distance_wkt(a, b))
+print(s$topology_relate_wkt(a, b))
+</code></pre>
+<h2 id="topology-method-reference"><a class="header" href="#topology-method-reference">Topology Method Reference</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Session Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>topology_intersects_wkt</code></td><td>Return <code>TRUE</code> when two geometries share any space.</td></tr>
+<tr><td><code>topology_contains_wkt</code></td><td>Return <code>TRUE</code> when geometry A strictly contains geometry B.</td></tr>
+<tr><td><code>topology_within_wkt</code></td><td>Return <code>TRUE</code> when geometry A is strictly within geometry B.</td></tr>
+<tr><td><code>topology_touches_wkt</code></td><td>Return <code>TRUE</code> when geometries meet at boundaries only.</td></tr>
+<tr><td><code>topology_disjoint_wkt</code></td><td>Return <code>TRUE</code> when geometries do not intersect.</td></tr>
+<tr><td><code>topology_crosses_wkt</code></td><td>Return <code>TRUE</code> when geometries cross with dimensional reduction behavior.</td></tr>
+<tr><td><code>topology_overlaps_wkt</code></td><td>Return <code>TRUE</code> when same-dimension geometries partially overlap.</td></tr>
+<tr><td><code>topology_covers_wkt</code></td><td>Boundary-aware containment test (<code>A</code> covers <code>B</code>).</td></tr>
+<tr><td><code>topology_covered_by_wkt</code></td><td>Boundary-aware containment test (<code>A</code> covered by <code>B</code>).</td></tr>
+<tr><td><code>topology_relate_wkt</code></td><td>Return DE-9IM relationship text for exact topology-rule evaluation.</td></tr>
+<tr><td><code>topology_distance_wkt</code></td><td>Return shortest distance between geometries.</td></tr>
+<tr><td><code>topology_vector_feature_relation</code></td><td>Evaluate relation between indexed features in vector objects.</td></tr>
+<tr><td><code>topology_is_valid_polygon_wkt</code></td><td>Check polygon validity before topology-sensitive workflows.</td></tr>
+<tr><td><code>topology_make_valid_polygon_wkt</code></td><td>Repair an invalid polygon WKT representation.</td></tr>
+<tr><td><code>topology_buffer_wkt</code></td><td>Create a buffered geometry from WKT and distance.</td></tr>
+</tbody></table>
+</div>
 <h2 id="guidance"><a class="header" href="#guidance">Guidance</a></h2>
 <ul>
 <li>Use <code>wbw_search_tools(...)</code> + <code>wbw_describe_tool(...)</code> to select backend topology tools.</li>
-<li>Use <code>sf</code> for script-level predicate checks and ad hoc geometry fixes when needed.</li>
+<li>Use session topology helpers for fast script-level predicates and repairs.</li>
+<li>Use <code>sf</code> for broader in-memory feature editing when needed.</li>
 <li>Re-open outputs with <code>wbw_read_vector(...)</code> and verify schema/CRS after topology operations.</li>
 </ul>
 
@@ -231,11 +307,11 @@ st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="supported-data-formats.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="reprojection-and-crs.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="interoperability.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="supported-data-formats.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -245,11 +321,11 @@ st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="supported-data-formats.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="reprojection-and-crs.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="interoperability.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="supported-data-formats.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

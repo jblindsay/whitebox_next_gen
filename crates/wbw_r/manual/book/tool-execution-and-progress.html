@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html" class="active"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html" class="active"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -175,7 +175,14 @@
                     <main>
                         <h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
 <p>This chapter documents execution styles and progress handling in WbW-R.</p>
+<p>Execution structure affects observability and reproducibility. Explicit session
+execution makes dependencies and runtime state clear, while progress-aware
+patterns help with monitoring, troubleshooting, and user feedback during long
+operations. Think of callbacks as operational instrumentation, not just console
+output.</p>
 <h2 id="explicit-session-execution"><a class="header" href="#explicit-session-execution">Explicit Session Execution</a></h2>
+<p>Use explicit session execution as the default in production scripts so runtime
+dependencies and state are clear.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -188,6 +195,8 @@ result &lt;- wbw_run_tool(
 print(result)
 </code></pre>
 <h2 id="progress-aware-execution"><a class="header" href="#progress-aware-execution">Progress-Aware Execution</a></h2>
+<p>Use progress-aware execution for long operations, remote runs, and logs that
+require periodic status updates.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -202,6 +211,8 @@ result &lt;- wbw_run_tool_with_progress(
 str(result$progress)
 </code></pre>
 <h2 id="custom-progress-callback"><a class="header" href="#custom-progress-callback">Custom Progress Callback</a></h2>
+<p>This callback pattern is useful when progress events need to feed custom log
+formats or monitoring pipelines.</p>
 <pre><code class="language-r">progress_cb &lt;- local({
 	last &lt;- -1L
 	function(pct = NA_real_, message = '') {

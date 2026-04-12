@@ -3,7 +3,15 @@
 This chapter documents lidar workflows in WbW-R, including file-backed processing,
 metadata checks, and output control patterns.
 
+Lidar workflows are strongly shaped by dataset size and I/O cost. The guiding
+pattern here is to use file-backed objects and vectorized matrix operations for
+normal workloads, then switch to chunked processing when point counts exceed
+comfortable memory limits.
+
 ## Baseline Workflow
+
+Use this as a first-run validation before introducing matrix edits or chunked
+processing.
 
 ```r
 library(whiteboxworkflows)
@@ -26,6 +34,9 @@ Recommended point-level workflow:
 2. Apply vectorized edits in base R/tidy workflows.
 3. Write updates with `from_matrix(...)` or `from_data_frame(...)`.
 
+The example below uses a simple reclassification rule to illustrate the matrix
+roundtrip pattern.
+
 ```r
 library(whiteboxworkflows)
 
@@ -47,6 +58,9 @@ print(edited$point_count())
 
 ## Tool-Driven Lidar Processing
 
+Use tool-driven processing when extracting QA outputs and diagnostics from lidar
+datasets.
+
 ```r
 library(whiteboxworkflows)
 
@@ -67,6 +81,8 @@ Recommended chunked workflow:
 1. Read chunks with `to_matrix_chunks(...)`.
 2. Apply vectorized edits in each chunk.
 3. Write edited chunks with `from_matrix_chunks(...)`.
+
+Use this when full-matrix operations would exceed available memory.
 
 ```r
 library(whiteboxworkflows)
@@ -99,3 +115,37 @@ Notes:
 - Validate CRS before and after reprojection.
 - Keep source lidar immutable; write derived products to new files.
 - Prefer COPC/LAZ outputs for large cloud workflows.
+
+## Lidar Object Method Reference
+
+### Metadata and Access
+
+| Method | Description |
+|---|---|
+| `metadata` | Return lidar metadata (bounds, point format, CRS, counts). |
+| `point_count` | Return total number of points. |
+| `file_path`, `path` | Return backing lidar path. |
+| `get_short_filename` | Return basename of lidar file. |
+
+### Matrix and Data-Frame Conversion
+
+| Method | Description |
+|---|---|
+| `to_matrix` | Read selected lidar fields as numeric matrix. |
+| `to_data_frame` | Read selected lidar fields as data frame. |
+| `to_matrix_chunks` | Read selected lidar fields in chunked matrix blocks. |
+
+### Writing Edited Point Data
+
+| Method | Description |
+|---|---|
+| `from_matrix` | Write edited matrix data to lidar output. |
+| `from_data_frame` | Write edited data frame fields to lidar output. |
+| `from_matrix_chunks` | Write chunked matrix edits to lidar output. |
+
+### Persistence
+
+| Method | Description |
+|---|---|
+| `deep_copy` | Copy lidar to a new path with optional write options. |
+| `write` | Write lidar to a new output path. |

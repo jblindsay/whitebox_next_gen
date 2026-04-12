@@ -1,5 +1,15 @@
 # Quick Start
 
+This chapter is a minimal "first success" path. It verifies that your R
+installation, package setup, session creation, tool execution, and output write
+path all work together before you take on larger workflows.
+
+Once this slice runs end-to-end, the remaining chapters explain how to make the
+same pattern more explicit, reproducible, and resilient.
+
+The example below demonstrates the core session-first model in WbW-R: create a
+session, load data, run a tool, and inspect the result object.
+
 ```r
 library(whiteboxworkflows)
 
@@ -15,6 +25,9 @@ print(result)
 ```
 
 ## What to Read Next
+
+These chapters extend the same lifecycle with discovery, progress handling, and
+larger workflow templates.
 
 - Session lifecycle and discovery: [Session and Discovery](./session-and-discovery.md)
 - Progress callbacks and execution patterns: [Tool Execution and Progress](./tool-execution-and-progress.md)

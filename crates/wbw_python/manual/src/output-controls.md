@@ -2,6 +2,12 @@
 
 This chapter documents output controls for raster, vector, and lidar writes in WbW-Py.
 
+Output settings are where reproducibility becomes explicit. Defaults are useful
+for fast iteration, but production workflows should pin format, compression, and
+layout choices so outputs remain comparable across runs and environments. Treat
+this chapter as the policy layer for how artifacts are written, named, and
+validated.
+
 ## General Principles
 
 - Start with default output behavior unless you need strict reproducibility.
@@ -12,6 +18,9 @@ to fail instead of silently ignoring options.
 ## Raster Output Controls
 
 `write_raster(...)` and `write_rasters(...)` support an `options` dictionary.
+
+Use this when output layout and compression are part of a reproducibility or
+distribution requirement.
 
 ```python
 import whitebox_workflows as wb
@@ -39,6 +48,9 @@ wbe.write_raster(
 
 ### Common Raster Profiles
 
+These profiles illustrate common tradeoffs between compatibility and read
+performance.
+
 ```python
 # Stripped GeoTIFF
 wbe.write_raster(r, 'out_stripped.tif', options={
@@ -54,6 +66,8 @@ wbe.write_raster(r, 'out_tiled.tif', options={
 ## Vector Output Controls
 
 `write_vector(...)` supports format-specific options.
+
+Use strict format options in production so incompatible settings fail fast.
 
 ```python
 import whitebox_workflows as wb
@@ -83,6 +97,9 @@ wbe.write_vector(
 
 `write_lidar(...)` supports LAZ and COPC option blocks.
 
+Choose LAZ for compact archives and COPC when cloud-native spatial access is
+important.
+
 ```python
 import whitebox_workflows as wb
 
@@ -105,6 +122,9 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
 ```
 
 ## Extensionless Defaults
+
+Extensionless writes are useful in prototyping, but pin extensions in production
+for deterministic artifact naming.
 
 When no extension is provided:
 - raster -> `.tif` (COG-style GeoTIFF default)

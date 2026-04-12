@@ -175,6 +175,11 @@
                     <main>
                         <h1 id="interoperability"><a class="header" href="#interoperability">Interoperability</a></h1>
 <p>This chapter provides practical exchange patterns between WbW-Py and common Python geospatial tooling.</p>
+<p>Interoperability is best thought of as controlled boundary crossing. Each
+conversion introduces potential differences in metadata conventions, numeric
+precision, CRS representation, and schema typing. The workflows in this chapter
+focus on explicit handoff points and roundtrip validation so multi-library
+pipelines remain trustworthy.</p>
 <h2 id="copy-boundary-model"><a class="header" href="#copy-boundary-model">Copy-Boundary Model</a></h2>
 <ul>
 <li><code>to_numpy()</code> / <code>from_numpy()</code> are explicit in-memory exchange boundaries.</li>
@@ -182,6 +187,7 @@
 <li>Always validate metadata after roundtrip (<code>metadata()</code>, CRS, dimensions, schema).</li>
 </ul>
 <h2 id="numpy-roundtrip"><a class="header" href="#numpy-roundtrip">NumPy Roundtrip</a></h2>
+<p>Use this when you need direct numeric control for custom raster math.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
 
@@ -193,6 +199,7 @@ a = np.where(np.isfinite(a), a + 1.0, a)
 r2 = wb.Raster.from_numpy(a, r, output_path='dem_plus1.tif')
 </code></pre>
 <h2 id="rasterio-roundtrip"><a class="header" href="#rasterio-roundtrip">Rasterio Roundtrip</a></h2>
+<p>Use this for compatibility with rasterio-centric ecosystems and workflows.</p>
 <pre><code class="language-python">import rasterio
 import whitebox_workflows as wb
 
@@ -213,6 +220,8 @@ r_back = wbe.read_raster('dem_rio_out.tif')
 print(r_back.metadata())
 </code></pre>
 <h2 id="geopandas-and-shapely-roundtrip"><a class="header" href="#geopandas-and-shapely-roundtrip">GeoPandas and Shapely Roundtrip</a></h2>
+<p>Use this pattern for vector enrichment and geometry filtering in the broader
+Python geospatial stack.</p>
 <pre><code class="language-python">import geopandas as gpd
 import whitebox_workflows as wb
 
@@ -229,6 +238,7 @@ v_back = wbe.read_vector('roads_filtered.gpkg')
 print(v_back.schema())
 </code></pre>
 <h2 id="xarrayrioxarray-roundtrip"><a class="header" href="#xarrayrioxarray-roundtrip">xarray/rioxarray Roundtrip</a></h2>
+<p>Use this when you need labeled-array operations or rolling-window processing.</p>
 <pre><code class="language-python">import rioxarray as rxr
 import whitebox_workflows as wb
 
@@ -244,6 +254,8 @@ r_back = wbe.read_raster('dem_xarray_smoothed.tif')
 print(r_back.metadata())
 </code></pre>
 <h2 id="pyproj-crs-workflow"><a class="header" href="#pyproj-crs-workflow">pyproj CRS Workflow</a></h2>
+<p>Use this for explicit CRS introspection and conversion checks outside full file
+I/O steps.</p>
 <pre><code class="language-python">from pyproj import CRS
 import whitebox_workflows as wb
 

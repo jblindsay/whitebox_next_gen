@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html" class="active"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html" class="active"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,7 +176,14 @@
                         <h1 id="working-with-rasters"><a class="header" href="#working-with-rasters">Working with Rasters</a></h1>
 <p>This chapter documents practical raster workflows in WbW-R with emphasis on
 inspection, iteration, modification, and persistence.</p>
+<p>Raster processing usually alternates between backend tools for heavy
+transformations and array-level edits for custom logic. The key design choice is
+to use tool operations for scale and consistency, then reserve manual array
+passes for domain-specific adjustments that are hard to express with existing
+tools.</p>
 <h2 id="raster-lifecycle"><a class="header" href="#raster-lifecycle">Raster Lifecycle</a></h2>
+<p>This lifecycle makes assumptions explicit before computation and keeps your
+workflow reviewable.</p>
 <p>Typical lifecycle:</p>
 <ol>
 <li>Read raster.</li>
@@ -194,6 +201,8 @@ print(meta$columns)
 print(meta$nodata)
 </code></pre>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
+<p>Use this only for logic that cannot be expressed through existing tools or
+vectorized operations.</p>
 <p>Use <code>to_array()</code> for cell-level logic.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -216,6 +225,8 @@ for (row in seq_len(nr)) {
 }
 </code></pre>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
+<p>This demonstrates creating a derived raster while preserving base geospatial
+context.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 base &lt;- wbw_read_raster('dem.tif')
@@ -226,6 +237,7 @@ out &lt;- wbw_array_to_raster(a, base, output_path = 'dem_scaled.tif')
 print(out)
 </code></pre>
 <h2 id="multi-band-iteration"><a class="header" href="#multi-band-iteration">Multi-Band Iteration</a></h2>
+<p>Use this when transform rules depend on band identity or per-band thresholds.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 r &lt;- wbw_read_raster('multiband.tif')
@@ -253,6 +265,8 @@ if (length(d) == 3) {
 wbw_array_to_raster(a, r, output_path = 'multiband_clamped.tif')
 </code></pre>
 <h2 id="tool-first-raster-processing"><a class="header" href="#tool-first-raster-processing">Tool-First Raster Processing</a></h2>
+<p>Prefer this pattern for heavy processing: let optimized tools do most work,
+then apply targeted custom edits.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -270,7 +284,32 @@ slope$write('slope_out.tif', overwrite = TRUE)
 <li>Prefer tool operations for heavy transforms.</li>
 <li>Use array loops only for custom logic not available as tools.</li>
 </ul>
-
+<h2 id="raster-object-method-reference"><a class="header" href="#raster-object-method-reference">Raster Object Method Reference</a></h2>
+<h3 id="metadata-and-conversion"><a class="header" href="#metadata-and-conversion">Metadata and Conversion</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return raster metadata (dimensions, extent, nodata, CRS fields).</td></tr>
+<tr><td><code>file_path</code></td><td>Return the backing raster path.</td></tr>
+<tr><td><code>band_count</code></td><td>Return raster band count.</td></tr>
+<tr><td><code>active_band</code></td><td>Return active band index.</td></tr>
+<tr><td><code>crs_epsg</code>, <code>crs_wkt</code></td><td>Inspect CRS metadata.</td></tr>
+<tr><td><code>to_array</code></td><td>Convert raster to in-memory array for custom processing.</td></tr>
+<tr><td><code>to_stars</code></td><td>Convert raster to a <code>stars</code> object (requires <code>terra</code> support path).</td></tr>
+</tbody></table>
+</div>
+<h3 id="arithmetic-and-unary-transform-methods"><a class="header" href="#arithmetic-and-unary-transform-methods">Arithmetic and Unary Transform Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>add</code>, <code>subtract</code>, <code>multiply</code>, <code>divide</code></td><td>Cellwise binary arithmetic with another raster/path operand.</td></tr>
+<tr><td><code>abs</code>, <code>ceil</code>, <code>floor</code>, <code>round</code>, <code>square</code>, <code>sqrt</code></td><td>Common unary numeric transforms.</td></tr>
+<tr><td><code>log10</code>, <code>log2</code>, <code>exp</code>, <code>exp2</code></td><td>Log and exponential transforms.</td></tr>
+<tr><td><code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sinh</code>, <code>cosh</code>, <code>tanh</code></td><td>Trigonometric and hyperbolic transforms.</td></tr>
+</tbody></table>
+</div>
+<h3 id="persistence"><a class="header" href="#persistence">Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>deep_copy</code></td><td>Copy raster to a new output path and return a raster object.</td></tr>
+<tr><td><code>write</code></td><td>Write raster to disk with optional output options.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

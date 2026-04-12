@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html" class="active"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html" class="active"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -175,6 +175,38 @@
                     <main>
                         <h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
 <p>This manual is the long-form user guide for the WbW-R API.</p>
+<p>WbW-R (Whitebox Workflows for R) is the R frontend to Whitebox Next Gen,
+providing access to modern geospatial processing for raster, vector, lidar, and
+sensor-bundle data through an R-friendly API and workflow model.</p>
+<p>Whitebox is a long-running geospatial project that originated in academia and
+has grown into a broad analysis platform with recognized strengths in
+geomorphometry, hydrology, lidar processing, and remote sensing. Whitebox Next
+Gen is the current Rust-based major iteration focused on performance,
+cross-platform reliability, and modern data formats.</p>
+<p>In this architecture, WbW-R is the orchestration layer for R users who need
+both practical scripting ergonomics and backend-scale performance.</p>
+<p>This manual is written to be both:</p>
+<ul>
+<li>beginner friendly: clear progression and runnable examples,</li>
+<li>canonical reference: explicit operational patterns, constraints, and
+validation guidance aligned with backend behavior.</li>
+</ul>
+<h2 id="how-to-use-this-manual"><a class="header" href="#how-to-use-this-manual">How to Use This Manual</a></h2>
+<p>This guide is intended for analysts who want to move from one-off exploratory
+commands to stable, scriptable geospatial workflows. The examples are practical
+and executable, but each chapter also explains the operational intent behind the
+code: when to keep work in memory, when to persist outputs, and how to validate
+results between stages.</p>
+<p>A good first pass is chapter-order reading. After that, use the script index as
+a task-oriented entry point for adapting workflows to your own projects.</p>
+<p>When adapting examples, keep a consistent script shape:</p>
+<ol>
+<li>session setup,</li>
+<li>input loading,</li>
+<li>transformation chain,</li>
+<li>validation and output persistence.</li>
+</ol>
+<p>This structure keeps scripts easier to review, test, and maintain.</p>
 <p>Goals:</p>
 <ul>
 <li>Comprehensive API coverage.</li>
@@ -186,6 +218,13 @@
 <li>Every major concept includes runnable code snippets.</li>
 <li>Each chapter includes at least one end-to-end workflow script.</li>
 <li>Tool parameter specifics are linked to shared tool reference docs as needed.</li>
+</ul>
+<h2 id="common-pitfalls-and-validation"><a class="header" href="#common-pitfalls-and-validation">Common Pitfalls and Validation</a></h2>
+<ul>
+<li>Confirm inputs exist and have the expected CRS/schema/metadata before running long workflows.</li>
+<li>Prefer explicit output names and formats for reproducibility, especially in batch scripts.</li>
+<li>Re-open and inspect outputs after major steps to validate assumptions before chaining more tools.</li>
+<li>For performance-sensitive runs, start with a small representative subset, then scale to full data.</li>
 </ul>
 
                     </main>

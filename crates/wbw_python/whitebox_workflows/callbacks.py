@@ -143,6 +143,11 @@ def print_progress(event: Any) -> None:
     Intended usage:
 
     ``result = wbe.raster.abs(input=dem, callback=wb.callbacks.print_progress)``
+
+    This callback always writes progress messages to stdout. ``wbe.verbose`` only
+    controls environment/runtime status messages emitted by the bindings; it does
+    not disable an explicit callback printer. Pass ``callback=None`` for silent
+    execution.
     """
     _default_progress_printer(event)
 

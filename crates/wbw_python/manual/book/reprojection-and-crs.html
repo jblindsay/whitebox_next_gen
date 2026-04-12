@@ -175,7 +175,13 @@
                     <main>
                         <h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
 <p>This chapter covers raster, vector, and lidar reprojection in WbW-Py.</p>
+<p>CRS handling is a semantic correctness issue, not just a metadata preference.
+When coordinate assumptions are wrong, analyses may still run but yield invalid
+spatial conclusions. The patterns here emphasize explicit source/destination CRS
+checks, controlled reprojection settings, and immediate post-transform
+verification before any downstream computation.</p>
 <h2 id="crs-inspection"><a class="header" href="#crs-inspection">CRS Inspection</a></h2>
+<p>Run this first to verify assumptions before any reprojection call.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -187,7 +193,41 @@ print('raster epsg:', dem.metadata().epsg_code)
 print('vector epsg:', roads.metadata().crs_epsg)
 print('lidar epsg:', las.metadata().crs_epsg)
 </code></pre>
+<h2 id="assigning-projection-metadata"><a class="header" href="#assigning-projection-metadata">Assigning Projection Metadata</a></h2>
+<p>Use CRS assignment only when the coordinates are already in the correct
+coordinate system but the file metadata is missing or wrong. Assignment does
+not move coordinates; it only changes the declared CRS. If you need to change
+the coordinate values themselves, use the reprojection methods shown later in
+this chapter.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem_without_crs.tif')
+roads = wbe.read_vector('roads_without_crs.gpkg')
+las = wbe.read_lidar('survey_without_crs.las')
+
+# Assign by EPSG when you know the coordinates already use that CRS.
+dem.set_crs_epsg(26917)
+roads.set_crs_epsg(26917)
+
+# Assign by WKT when that is the CRS information you have available.
+utm_wkt = wbe.projection.to_ogc_wkt(26917)
+las.set_crs_wkt(utm_wkt)
+
+print('raster epsg after assignment:', dem.crs_epsg())
+print('vector epsg after assignment:', roads.crs_epsg())
+print('lidar epsg after assignment:', las.crs_epsg())
+
+# If metadata is wrong rather than missing, clear it before reassigning.
+roads.clear_crs()
+roads.set_crs_epsg(26917)
+</code></pre>
+<p>This pattern is especially useful for legacy rasters, sidecar-free vector
+exports, and lidar files that have correct coordinates but incomplete CRS
+metadata.</p>
 <h2 id="raster-reprojection"><a class="header" href="#raster-reprojection">Raster Reprojection</a></h2>
+<p>This example shows continuous-surface reprojection with explicit resampling and
+resolution controls.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -204,6 +244,8 @@ dem_utm = wbe.reproject_raster(
 wbe.write_raster(dem_utm, 'dem_utm_10m.tif')
 </code></pre>
 <h2 id="vector-reprojection"><a class="header" href="#vector-reprojection">Vector Reprojection</a></h2>
+<p>This pattern is appropriate when geometry validity and failure policy need to be
+explicit.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -219,6 +261,8 @@ roads_utm = wbe.reproject_vector(
 wbe.write_vector(roads_utm, 'roads_utm.gpkg')
 </code></pre>
 <h2 id="lidar-reprojection"><a class="header" href="#lidar-reprojection">Lidar Reprojection</a></h2>
+<p>Use explicit lidar reprojection settings to avoid silent dimensional or policy
+defaults.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -234,6 +278,8 @@ las_utm = wbe.reproject_lidar(
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
 </code></pre>
 <h2 id="projection-utility-namespace"><a class="header" href="#projection-utility-namespace">Projection Utility Namespace</a></h2>
+<p>This namespace is useful for CRS diagnostics and point-level coordinate
+transform tasks outside full dataset reprojection.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()

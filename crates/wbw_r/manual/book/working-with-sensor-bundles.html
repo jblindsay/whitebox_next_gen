@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html" class="active"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html" class="active"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -175,6 +175,10 @@
                     <main>
                         <h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
 <p>This chapter documents supported sensor bundle families and common workflows.</p>
+<p>Bundle APIs provide a common operational interface across heterogeneous sensor
+families. The conceptual goal is to standardize ingestion and inspection steps
+even when archive layout, naming conventions, or QA assets differ between
+providers.</p>
 <h2 id="supported-families"><a class="header" href="#supported-families">Supported Families</a></h2>
 <ul>
 <li>Generic auto-detect: <code>wbw_read_bundle(...)</code></li>
@@ -189,6 +193,8 @@
 <li>RCM: <code>wbw_read_rcm(...)</code></li>
 </ul>
 <h2 id="common-inspection-pattern"><a class="header" href="#common-inspection-pattern">Common Inspection Pattern</a></h2>
+<p>Start here to establish what each bundle contains before choosing analysis
+channels.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 b &lt;- wbw_read_bundle('BUNDLE_ROOT')
@@ -200,25 +206,31 @@ print(b$list_qa_keys())
 print(b$list_asset_keys())
 </code></pre>
 <h2 id="family-specific-examples"><a class="header" href="#family-specific-examples">Family-Specific Examples</a></h2>
+<p>These examples follow one shared shape across providers: load, inspect,
+sample key channels, then generate QA-ready outputs.</p>
 <h3 id="sentinel-2"><a class="header" href="#sentinel-2">Sentinel-2</a></h3>
+<p>Use this for optical band workflows where band identity is explicit.</p>
 <pre><code class="language-r">s2 &lt;- wbw_read_sentinel2('S2_SCENE.SAFE')
 red &lt;- s2$read_band('B04')
 nir &lt;- s2$read_band('B08')
 rgb &lt;- s2$write_true_colour('s2_true_colour.tif')
 </code></pre>
 <h3 id="landsat"><a class="header" href="#landsat">Landsat</a></h3>
+<p>Use this when metadata such as cloud cover and processing level drive filtering.</p>
 <pre><code class="language-r">ls &lt;- wbw_read_landsat('LC09_SCENE')
 print(ls$processing_level())
 print(ls$cloud_cover_percent())
 preview &lt;- ls$read_band(ls$list_band_keys()[[1]])
 </code></pre>
 <h3 id="sentinel-1--sar-families"><a class="header" href="#sentinel-1--sar-families">Sentinel-1 / SAR Families</a></h3>
+<p>Use this pattern for SAR measurement access and quick false-colour QA.</p>
 <pre><code class="language-r">s1 &lt;- wbw_read_sentinel1('S1_SCENE.SAFE')
 print(s1$polarizations())
 meas &lt;- s1$read_measurement(s1$list_measurement_keys()[[1]])
 fc &lt;- s1$write_false_colour('s1_false_colour.tif')
 </code></pre>
 <h3 id="planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm"><a class="header" href="#planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm">PlanetScope / ICEYE / DIMAP / Maxar-WorldView / RADARSAT-2 / RCM</a></h3>
+<p>Use this loop for multi-provider intake checks with a consistent script shape.</p>
 <pre><code class="language-r">loaders &lt;- list(
   wbw_read_planetscope,
   wbw_read_iceye,
@@ -243,7 +255,40 @@ for (i in seq_along(loaders)) {
 <li>Generate preview/composite rasters for QA.</li>
 <li>Persist derived outputs and record source family + key choices.</li>
 </ol>
-
+<h2 id="sensor-bundle-object-method-reference"><a class="header" href="#sensor-bundle-object-method-reference">Sensor Bundle Object Method Reference</a></h2>
+<h3 id="metadata-and-key-discovery"><a class="header" href="#metadata-and-key-discovery">Metadata and Key Discovery</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return bundle metadata (family, product descriptors, CRS hints).</td></tr>
+<tr><td><code>family</code>, <code>bundle_root</code>, <code>path</code></td><td>Return family ID and resolved bundle root/path.</td></tr>
+<tr><td><code>key_summary</code></td><td>Summarize available key groups and counts.</td></tr>
+<tr><td><code>list_band_keys</code>, <code>list_measurement_keys</code></td><td>List band/measurement keys.</td></tr>
+<tr><td><code>list_qa_keys</code>, <code>list_aux_keys</code>, <code>list_asset_keys</code></td><td>List QA, auxiliary, and asset keys.</td></tr>
+<tr><td><code>resolve_key</code>, <code>has_key</code></td><td>Resolve and verify key existence across key types.</td></tr>
+</tbody></table>
+</div>
+<h3 id="raster-access-by-key"><a class="header" href="#raster-access-by-key">Raster Access by Key</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_any</code></td><td>Read key by searching configured key types.</td></tr>
+<tr><td><code>read_band</code></td><td>Read band key as raster.</td></tr>
+<tr><td><code>read_measurement</code></td><td>Read measurement key as raster.</td></tr>
+<tr><td><code>read_qa_layer</code>, <code>read_aux_layer</code>, <code>read_asset</code></td><td>Read QA/auxiliary/asset keys as rasters.</td></tr>
+<tr><td><code>read_preview_raster</code></td><td>Return selected preview raster descriptor.</td></tr>
+</tbody></table>
+</div>
+<h3 id="composite-generation"><a class="header" href="#composite-generation">Composite Generation</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>write_true_colour</code></td><td>Write true-colour composite raster.</td></tr>
+<tr><td><code>write_false_colour</code></td><td>Write false-colour composite raster.</td></tr>
+</tbody></table>
+</div>
+<h3 id="common-metadata-accessors"><a class="header" href="#common-metadata-accessors">Common Metadata Accessors</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>acquisition_datetime_utc</code></td><td>Return acquisition timestamp when available.</td></tr>
+<tr><td><code>processing_level</code>, <code>product_type</code></td><td>Return processing/product descriptors.</td></tr>
+<tr><td><code>tile_id</code>, <code>mission</code>, <code>acquisition_mode</code></td><td>Return common platform and acquisition descriptors.</td></tr>
+<tr><td><code>cloud_cover_percent</code>, <code>polarizations</code></td><td>Return cloud or polarization metadata when available.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

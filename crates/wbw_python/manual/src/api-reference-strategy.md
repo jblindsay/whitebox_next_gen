@@ -2,6 +2,12 @@
 
 Manual chapters provide narrative and recipes.
 
+This split between narrative manual content and detailed tool references is
+intentional. Conceptual chapters answer workflow questions (what to do and why),
+while reference docs answer contract questions (exact parameters and return
+shape). Keeping these concerns separate improves readability without sacrificing
+precision.
+
 Tool-by-tool parameter references remain in:
 - `TOOLS.md`
 - `docs/tools_*.md`

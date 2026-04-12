@@ -175,6 +175,10 @@
                     <main>
                         <h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
 <p>This chapter summarizes practical format support exposed through WbW-Py.</p>
+<p>Format support influences interoperability, performance, and long-term archive
+strategy. Read/write capability is only one part of the decision; you should
+also consider ecosystem compatibility, compression behavior, and whether a given
+format is best used as an interchange artifact or as an internal working format.</p>
 <p>Backend support comes from core crates:</p>
 <ul>
 <li>Raster: <code>wbraster</code></li>
@@ -182,14 +186,23 @@
 <li>Lidar: <code>wblidar</code></li>
 </ul>
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
-<p>Commonly used raster formats include:</p>
-<ul>
-<li>GeoTIFF / BigTIFF / COG (<code>.tif</code>, <code>.tiff</code>)</li>
-<li>JPEG2000 / GeoJP2 (<code>.jp2</code>)</li>
-<li>GeoPackage raster (<code>.gpkg</code>)</li>
-<li>ENVI (<code>.hdr</code> with sidecar data)</li>
-<li>ER Mapper (<code>.ers</code>)</li>
-</ul>
+<p>Exhaustive raster format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_raster</code>)</th><th>Write (<code>write_raster</code>)</th><th>Common extensions / path rules</th></tr></thead><tbody>
+<tr><td>Esri ASCII Grid</td><td>Yes</td><td>Yes</td><td><code>.asc</code> (and <code>.grd</code> when detected as ASCII)</td></tr>
+<tr><td>Esri Binary Grid workspace</td><td>Yes</td><td>Backend-only</td><td>Esri Binary workspace directory (<code>hdr.adf</code> + <code>w001001.adf</code>) or <code>.adf</code></td></tr>
+<tr><td>GRASS ASCII Raster</td><td>Yes</td><td>Yes</td><td><code>.txt</code> / <code>.asc</code> when GRASS header keys are detected</td></tr>
+<tr><td>Surfer GRD</td><td>Yes</td><td>Yes</td><td><code>.grd</code> (DSAA / DSRB signatures)</td></tr>
+<tr><td>PCRaster</td><td>Yes</td><td>Yes</td><td><code>.map</code> (CSF signature)</td></tr>
+<tr><td>SAGA Binary Grid</td><td>Yes</td><td>Yes</td><td><code>.sdat</code>, <code>.sgrd</code></td></tr>
+<tr><td>Idrisi / TerrSet Raster</td><td>Yes</td><td>Yes</td><td><code>.rst</code>, <code>.rdc</code></td></tr>
+<tr><td>ER Mapper</td><td>Yes</td><td>Yes</td><td><code>.ers</code></td></tr>
+<tr><td>ENVI HDR-labelled raster</td><td>Yes</td><td>Yes</td><td><code>.hdr</code>, or data files (<code>.img</code>, <code>.dat</code>, <code>.bin</code>, <code>.raw</code>, <code>.bil</code>, <code>.bsq</code>, <code>.bip</code>) with <code>.hdr</code> sidecar</td></tr>
+<tr><td>GeoTIFF / BigTIFF / COG</td><td>Yes</td><td>Yes</td><td><code>.tif</code>, <code>.tiff</code></td></tr>
+<tr><td>GeoPackage raster</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>JPEG2000 / GeoJP2</td><td>Yes</td><td>Yes</td><td><code>.jp2</code></td></tr>
+<tr><td>Zarr</td><td>Yes</td><td>Yes</td><td><code>.zarr</code> store (directory / suffix)</td></tr>
+</tbody></table>
+</div>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -198,14 +211,22 @@ r = wbe.read_raster('dem.tif')
 wbe.write_raster(r, 'dem_out.tif')
 </code></pre>
 <h2 id="vector-formats"><a class="header" href="#vector-formats">Vector Formats</a></h2>
-<p>Commonly used vector formats include:</p>
-<ul>
-<li>GeoPackage (<code>.gpkg</code>)</li>
-<li>Shapefile (<code>.shp</code> and sidecar dataset files)</li>
-<li>GeoJSON (<code>.geojson</code>, <code>.json</code>)</li>
-<li>GeoParquet (<code>.parquet</code>)</li>
-<li>OSM PBF read workflows (<code>.osm.pbf</code>)</li>
-</ul>
+<p>Exhaustive vector format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_vector</code>)</th><th>Write (<code>write_vector</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>FlatGeobuf</td><td>Yes</td><td>Yes</td><td><code>.fgb</code></td></tr>
+<tr><td>GeoJSON</td><td>Yes</td><td>Yes</td><td><code>.geojson</code>, <code>.json</code></td></tr>
+<tr><td>GeoPackage</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>GeoParquet</td><td>Yes</td><td>Yes</td><td><code>.parquet</code></td></tr>
+<tr><td>GML</td><td>Yes</td><td>Yes</td><td><code>.gml</code></td></tr>
+<tr><td>GPX</td><td>Yes</td><td>Yes</td><td><code>.gpx</code></td></tr>
+<tr><td>KML</td><td>Yes</td><td>Yes</td><td><code>.kml</code></td></tr>
+<tr><td>KMZ</td><td>Yes</td><td>Yes</td><td><code>.kmz</code></td></tr>
+<tr><td>MapInfo Interchange</td><td>Yes</td><td>Yes</td><td><code>.mif</code> with <code>.mid</code> sidecar</td></tr>
+<tr><td>OSM PBF</td><td>Yes</td><td>No</td><td><code>.osm.pbf</code> (read workflows only)</td></tr>
+<tr><td>ESRI Shapefile</td><td>Yes</td><td>Yes</td><td><code>.shp</code> plus dataset sidecars</td></tr>
+</tbody></table>
+</div>
+<p>When <code>write_vector(...)</code> is called without an extension, WbW-Py defaults output to <code>.gpkg</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -214,12 +235,16 @@ v = wbe.read_vector('roads.gpkg')
 wbe.write_vector(v, 'roads_out.gpkg')
 </code></pre>
 <h2 id="lidar-formats"><a class="header" href="#lidar-formats">Lidar Formats</a></h2>
-<p>Commonly used lidar formats include:</p>
-<ul>
-<li>LAS (<code>.las</code>)</li>
-<li>LAZ (<code>.laz</code>)</li>
-<li>COPC (<code>.copc.laz</code>)</li>
-</ul>
+<p>Exhaustive lidar format support in the current WbW-Py build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_lidar</code>)</th><th>Write (<code>write_lidar</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>LAS</td><td>Yes</td><td>Yes</td><td><code>.las</code></td></tr>
+<tr><td>LAZ</td><td>Yes</td><td>Yes</td><td><code>.laz</code></td></tr>
+<tr><td>COPC</td><td>Yes</td><td>Yes</td><td><code>.copc.las</code>, <code>.copc.laz</code></td></tr>
+<tr><td>PLY</td><td>Yes</td><td>Yes</td><td><code>.ply</code></td></tr>
+<tr><td>E57</td><td>Yes</td><td>Yes</td><td><code>.e57</code></td></tr>
+</tbody></table>
+</div>
+<p>When <code>write_lidar(...)</code> is called without an extension, WbW-Py defaults output to <code>.copc.laz</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -240,6 +265,13 @@ wbe.write_lidar(l, 'survey_out.copc.laz')
 <li><code>read_maxar_worldview(...)</code></li>
 <li><code>read_radarsat2(...)</code></li>
 <li><code>read_rcm(...)</code></li>
+</ul>
+<p>Bundle inputs may be either extracted directories or supported archives:</p>
+<ul>
+<li><code>.zip</code></li>
+<li><code>.tar</code></li>
+<li><code>.tar.gz</code></li>
+<li><code>.tgz</code></li>
 </ul>
 <p>See <a href="./working-with-sensor-bundles.html">Working with Sensor Bundles</a> for family-specific examples.</p>
 <h2 id="validation-guidance"><a class="header" href="#validation-guidance">Validation Guidance</a></h2>

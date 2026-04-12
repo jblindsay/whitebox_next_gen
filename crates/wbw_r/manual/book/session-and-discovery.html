@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html" class="active"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html" class="active"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -175,13 +175,21 @@
                     <main>
                         <h1 id="session-and-discovery"><a class="header" href="#session-and-discovery">Session and Discovery</a></h1>
 <p>This chapter covers session lifecycle and tool discovery patterns.</p>
+<p>Session and discovery APIs establish runtime certainty before execution. By
+creating a session explicitly and checking tool visibility up front, you avoid
+late failures in long pipelines and make script behavior easier to reason about
+across different environments and deployment targets.</p>
 <h2 id="create-session"><a class="header" href="#create-session">Create Session</a></h2>
+<p>This is the standard session bootstrap for scripts. Keep it explicit so runtime
+state is obvious to future readers.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
 print(s)
 </code></pre>
 <h2 id="visibility-checks"><a class="header" href="#visibility-checks">Visibility Checks</a></h2>
+<p>Use hard visibility checks before long jobs so missing-tool failures happen
+immediately.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -193,6 +201,8 @@ if (!wbw_has_tool('slope', session = s)) {
 }
 </code></pre>
 <h2 id="search-and-describe"><a class="header" href="#search-and-describe">Search and Describe</a></h2>
+<p>Use this when you know the task objective but need to confirm exact tool IDs and
+parameter contracts.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 matches &lt;- wbw_search_tools('lidar')
@@ -202,6 +212,8 @@ desc &lt;- wbw_describe_tool('slope')
 print(desc)
 </code></pre>
 <h2 id="category-based-discovery"><a class="header" href="#category-based-discovery">Category-Based Discovery</a></h2>
+<p>Category discovery is useful for UI generation, guided workflows, and policy
+checks in larger automation systems.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 summary &lt;- wbw_category_summary()
@@ -213,6 +225,45 @@ print(cats)
 raster_tools &lt;- wbw_tools_in_category('Raster')
 print(head(raster_tools, 20))
 </code></pre>
+<h2 id="session-api-reference"><a class="header" href="#session-api-reference">Session API Reference</a></h2>
+<p>WbW-R is function-first, but the <code>wbw_session()</code> object still exposes a useful
+set of callable methods for execution, projection utilities, topology checks,
+and typed I/O helpers.</p>
+<h3 id="session-construction-and-execution"><a class="header" href="#session-construction-and-execution">Session Construction and Execution</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>run_tool</code></td><td>Execute a tool with a named argument list.</td></tr>
+<tr><td><code>run_tool_with_progress</code></td><td>Execute a tool and return structured progress/result output.</td></tr>
+<tr><td><code>list_tools</code></td><td>Return visible tool IDs for the session/license context.</td></tr>
+</tbody></table>
+</div>
+<h3 id="typed-io-helpers"><a class="header" href="#typed-io-helpers">Typed I/O Helpers</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_vector</code></td><td>Read vector data with optional read options.</td></tr>
+<tr><td><code>write_raster</code></td><td>Write one raster with optional format options.</td></tr>
+<tr><td><code>write_rasters</code></td><td>Write multiple rasters in one call.</td></tr>
+<tr><td><code>write_vector</code></td><td>Write one vector with optional format options.</td></tr>
+</tbody></table>
+</div>
+<h3 id="projection-utility-methods"><a class="header" href="#projection-utility-methods">Projection Utility Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>projection_to_ogc_wkt</code></td><td>Convert EPSG code to OGC WKT text.</td></tr>
+<tr><td><code>projection_identify_epsg</code></td><td>Identify EPSG from CRS text where possible.</td></tr>
+<tr><td><code>projection_reproject_points</code></td><td>Reproject point collections between EPSG systems.</td></tr>
+<tr><td><code>projection_reproject_point</code></td><td>Reproject a single point between EPSG systems.</td></tr>
+</tbody></table>
+</div>
+<h3 id="topology-utility-methods"><a class="header" href="#topology-utility-methods">Topology Utility Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>topology_intersects_wkt</code>, <code>topology_contains_wkt</code>, <code>topology_within_wkt</code></td><td>Core spatial predicate checks on WKT geometries.</td></tr>
+<tr><td><code>topology_touches_wkt</code>, <code>topology_disjoint_wkt</code>, <code>topology_crosses_wkt</code>, <code>topology_overlaps_wkt</code></td><td>Additional topological predicates for rule-based QA.</td></tr>
+<tr><td><code>topology_covers_wkt</code>, <code>topology_covered_by_wkt</code></td><td>Boundary-aware containment checks.</td></tr>
+<tr><td><code>topology_relate_wkt</code></td><td>Return DE-9IM relation text for exact topology logic.</td></tr>
+<tr><td><code>topology_distance_wkt</code></td><td>Return shortest distance between WKT geometries.</td></tr>
+<tr><td><code>topology_vector_feature_relation</code></td><td>Evaluate topology relation between indexed features in two vector objects.</td></tr>
+<tr><td><code>topology_is_valid_polygon_wkt</code>, <code>topology_make_valid_polygon_wkt</code></td><td>Validate and repair polygon WKT geometries.</td></tr>
+<tr><td><code>topology_buffer_wkt</code></td><td>Build buffered geometry from WKT and distance.</td></tr>
+</tbody></table>
+</div>
 <h2 id="recommended-discovery-pattern"><a class="header" href="#recommended-discovery-pattern">Recommended Discovery Pattern</a></h2>
 <ol>
 <li>Build session explicitly.</li>

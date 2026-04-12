@@ -2,7 +2,16 @@
 
 This chapter documents execution styles and progress handling.
 
+Execution style affects both correctness and maintainability. Object-first calls
+are concise for in-memory workflows, while path-first calls can be clearer in
+batch pipelines and audit logs. Progress callbacks are operational tools, not
+just UI niceties: they support observability, timeout policies, and better
+failure triage in long geoprocessing runs.
+
 ## Object-First Execution
+
+Use object-first execution when your script is primarily in-memory and you want
+concise dataflow between steps.
 
 ```python
 import whitebox_workflows as wb
@@ -16,6 +25,9 @@ wbe.write_raster(accum, 'accum.tif')
 ```
 
 ## Path-First Execution
+
+Use path-first execution when you need explicit artifact paths for auditability,
+handoffs to external tools, or checkpointed batch runs.
 
 ```python
 import whitebox_workflows as wb
@@ -31,6 +43,8 @@ print(result)
 
 ## Basic Progress Callback
 
+Use a simple callback for interactive runs where immediate feedback is enough.
+
 ```python
 import whitebox_workflows as wb
 
@@ -44,6 +58,9 @@ filled = wbe.hydrology.fill_depressions(
 ```
 
 ## Custom Progress Callback
+
+Use a custom callback when integrating with logs, dashboards, job schedulers, or
+failure retry logic.
 
 ```python
 import json
@@ -74,6 +91,8 @@ def on_progress(event):
 ```
 
 ## Recommended Execution Pattern
+
+Treat this as the default operational template for robust scripts.
 
 1. Validate required tools.
 2. Run tool chain memory-first.

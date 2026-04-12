@@ -2,7 +2,16 @@
 
 This chapter documents open, signed entitlement, and floating license startup modes.
 
+Licensing mode is a runtime dependency and should be treated like any other
+infrastructure requirement. The objective is to make startup behavior explicit,
+auditable, and resilient: scripts should clearly communicate which mode they
+expect, how fallback is handled, and what operational evidence is logged when
+activation succeeds or fails.
+
 ## Open Mode
+
+Use this for OSS-only workflows or environments where entitlement is not
+required.
 
 ```python
 import whitebox_workflows as wb
@@ -12,6 +21,9 @@ print('license type:', wbe.license_type())
 ```
 
 ## Signed Entitlement (JSON)
+
+Use this in managed deployments where entitlement payloads are supplied at
+runtime.
 
 ```python
 import whitebox_workflows as wb
@@ -33,6 +45,8 @@ print(wbe.license_type())
 
 ## Signed Entitlement (File)
 
+Use this when entitlement bundles are provisioned as files by platform tooling.
+
 ```python
 import whitebox_workflows as wb
 
@@ -46,6 +60,9 @@ wbe = wb.WbEnvironment.from_signed_entitlement_file(
 ```
 
 ## Floating License
+
+Use this when license allocation is centrally managed and leased per machine or
+session.
 
 ```python
 import whitebox_workflows as wb

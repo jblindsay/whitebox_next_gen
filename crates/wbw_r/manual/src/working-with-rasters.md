@@ -3,7 +3,16 @@
 This chapter documents practical raster workflows in WbW-R with emphasis on
 inspection, iteration, modification, and persistence.
 
+Raster processing usually alternates between backend tools for heavy
+transformations and array-level edits for custom logic. The key design choice is
+to use tool operations for scale and consistency, then reserve manual array
+passes for domain-specific adjustments that are hard to express with existing
+tools.
+
 ## Raster Lifecycle
+
+This lifecycle makes assumptions explicit before computation and keeps your
+workflow reviewable.
 
 Typical lifecycle:
 1. Read raster.
@@ -23,6 +32,9 @@ print(meta$nodata)
 ```
 
 ## Iterating Through Grid Cells
+
+Use this only for logic that cannot be expressed through existing tools or
+vectorized operations.
 
 Use `to_array()` for cell-level logic.
 
@@ -50,6 +62,9 @@ for (row in seq_len(nr)) {
 
 ## Writing Modified Data Back
 
+This demonstrates creating a derived raster while preserving base geospatial
+context.
+
 ```r
 library(whiteboxworkflows)
 
@@ -62,6 +77,8 @@ print(out)
 ```
 
 ## Multi-Band Iteration
+
+Use this when transform rules depend on band identity or per-band thresholds.
 
 ```r
 library(whiteboxworkflows)
@@ -93,6 +110,9 @@ wbw_array_to_raster(a, r, output_path = 'multiband_clamped.tif')
 
 ## Tool-First Raster Processing
 
+Prefer this pattern for heavy processing: let optimized tools do most work,
+then apply targeted custom edits.
+
 ```r
 library(whiteboxworkflows)
 
@@ -111,3 +131,33 @@ slope$write('slope_out.tif', overwrite = TRUE)
 - Always account for `metadata()$nodata` in per-cell loops.
 - Prefer tool operations for heavy transforms.
 - Use array loops only for custom logic not available as tools.
+
+## Raster Object Method Reference
+
+### Metadata and Conversion
+
+| Method | Description |
+|---|---|
+| `metadata` | Return raster metadata (dimensions, extent, nodata, CRS fields). |
+| `file_path` | Return the backing raster path. |
+| `band_count` | Return raster band count. |
+| `active_band` | Return active band index. |
+| `crs_epsg`, `crs_wkt` | Inspect CRS metadata. |
+| `to_array` | Convert raster to in-memory array for custom processing. |
+| `to_stars` | Convert raster to a `stars` object (requires `terra` support path). |
+
+### Arithmetic and Unary Transform Methods
+
+| Method | Description |
+|---|---|
+| `add`, `subtract`, `multiply`, `divide` | Cellwise binary arithmetic with another raster/path operand. |
+| `abs`, `ceil`, `floor`, `round`, `square`, `sqrt` | Common unary numeric transforms. |
+| `log10`, `log2`, `exp`, `exp2` | Log and exponential transforms. |
+| `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh` | Trigonometric and hyperbolic transforms. |
+
+### Persistence
+
+| Method | Description |
+|---|---|
+| `deep_copy` | Copy raster to a new output path and return a raster object. |
+| `write` | Write raster to disk with optional output options. |

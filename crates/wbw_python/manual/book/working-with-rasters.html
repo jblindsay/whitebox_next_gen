@@ -176,7 +176,14 @@
                         <h1 id="working-with-rasters"><a class="header" href="#working-with-rasters">Working with Rasters</a></h1>
 <p>This chapter documents practical raster workflows in WbW-Py with emphasis on
 inspection, iteration, modification, and persistence.</p>
+<p>Raster workflows usually alternate between high-performance tool operations and
+targeted custom logic. The important concept is to choose the lowest-cost path
+for each step: use backend tools for heavy transformations, and reserve
+NumPy-level iteration for domain-specific adjustments that tools do not expose
+directly.</p>
 <h2 id="raster-lifecycle"><a class="header" href="#raster-lifecycle">Raster Lifecycle</a></h2>
+<p>This lifecycle helps you separate inspection from transformation so assumptions
+about CRS, resolution, and nodata are explicit before heavy operations.</p>
 <p>Typical lifecycle:</p>
 <ol>
 <li>Read raster.</li>
@@ -195,6 +202,8 @@ print('EPSG:', meta.epsg_code)
 print('NoData:', meta.nodata)
 </code></pre>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
+<p>Use this pattern only when tool methods or vectorized operations cannot express
+your custom rule directly.</p>
 <p>For cell-level logic, convert to NumPy and iterate safely.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
@@ -214,6 +223,8 @@ for row in range(rows):
                 a[row, col] = 0.0
 </code></pre>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
+<p>This example shows the common pattern of deriving a new raster while preserving
+georeferencing context from a base raster.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -229,6 +240,8 @@ wbe.write_raster(out, 'dem_scaled_cog.tif', options={
 })
 </code></pre>
 <h2 id="multi-band-iteration"><a class="header" href="#multi-band-iteration">Multi-Band Iteration</a></h2>
+<p>Use this structure when per-band logic differs or when your transform depends on
+band-specific rules.</p>
 <pre><code class="language-python">import numpy as np
 import whitebox_workflows as wb
 
@@ -248,6 +261,8 @@ for b in range(bands):
 wb.Raster.from_numpy(arr, rgb, output_path='multiband_clamped.tif')
 </code></pre>
 <h2 id="tool-first-raster-processing"><a class="header" href="#tool-first-raster-processing">Tool-First Raster Processing</a></h2>
+<p>This is the preferred pattern for scale: run optimized tools first, then apply
+targeted custom fixes only where necessary.</p>
 <p>Use tools for most heavy computation, then iterate only where custom logic is needed.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
@@ -270,7 +285,100 @@ wbe.write_raster(slope_fixed, 'slope_fixed.tif')
 <li>Use tool methods (<code>wbe.hydrology.*</code>, <code>wbe.raster.*</code>, <code>wbe.terrain.*</code>) for large transforms.</li>
 <li>Persist only final outputs where possible to keep memory-first workflows efficient.</li>
 </ul>
-
+<h2 id="raster-object-method-reference"><a class="header" href="#raster-object-method-reference">Raster Object Method Reference</a></h2>
+<p>The tables below focus on callable <code>Raster</code> methods. Common simple properties
+such as <code>file_path</code>, <code>file_name</code>, <code>active_band</code>, and <code>band_count</code> are omitted
+from the tables to keep the reference readable.</p>
+<h3 id="construction-conversion-and-summary"><a class="header" href="#construction-conversion-and-summary">Construction, Conversion, and Summary</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>from_numpy</code></td><td>Create a raster from a NumPy array while inheriting grid geometry from a base raster.</td></tr>
+<tr><td><code>band</code></td><td>Return a band-specific raster view for multiband data.</td></tr>
+<tr><td><code>to_numpy</code></td><td>Export the active band or all bands to NumPy for custom numeric work.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a full raster copy to a derived or explicit output path.</td></tr>
+<tr><td><code>new_from_other</code>, <code>new_from_other_with_data</code></td><td>Create a new raster that inherits geometry from another raster, optionally with a new data buffer.</td></tr>
+<tr><td><code>metadata</code></td><td>Return the <code>RasterConfigs</code> summary for rows, columns, resolution, bounds, and nodata.</td></tr>
+<tr><td><code>calculate_clip_values</code></td><td>Calculate percentile-based lower and upper clip values.</td></tr>
+<tr><td><code>calculate_mean</code>, <code>calculate_mean_and_stdev</code></td><td>Compute simple raster summary statistics.</td></tr>
+<tr><td><code>normalize</code></td><td>Produce a normalized raster suitable for display or downstream scaling steps.</td></tr>
+<tr><td><code>reinitialize_values</code></td><td>Reset all cells to a single constant value.</td></tr>
+<tr><td><code>update_min_max</code></td><td>Recompute cached minimum and maximum values after edits.</td></tr>
+<tr><td><code>num_cells</code>, <code>num_valid_cells</code></td><td>Report total cell count and valid-cell count.</td></tr>
+<tr><td><code>size_of</code>, <code>get_data_size_in_bytes</code></td><td>Report approximate in-memory or backing-data size.</td></tr>
+<tr><td><code>is_memory_backed</code></td><td>Indicate whether the raster is currently memory-backed.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information for reporting or output naming.</td></tr>
+</tbody></table>
+</div>
+<h3 id="grid-navigation-and-direct-editing"><a class="header" href="#grid-navigation-and-direct-editing">Grid Navigation and Direct Editing</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>get_value</code>, <code>set_value</code></td><td>Read or write an individual cell value.</td></tr>
+<tr><td><code>get_row_data</code>, <code>set_row_data</code></td><td>Read or replace an entire row of raster values.</td></tr>
+<tr><td><code>increment</code>, <code>decrement</code></td><td>Add to or subtract from a single cell value.</td></tr>
+<tr><td><code>increment_row_data</code>, <code>decrement_row_data</code></td><td>Add to or subtract from every value in a row.</td></tr>
+<tr><td><code>is_cell_nodata</code></td><td>Check whether a specific cell is nodata.</td></tr>
+<tr><td><code>get_row_from_y</code>, <code>get_y_from_row</code></td><td>Convert between world Y coordinates and raster row indices.</td></tr>
+<tr><td><code>get_column_from_x</code>, <code>get_x_from_column</code></td><td>Convert between world X coordinates and raster column indices.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-reprojection"><a class="header" href="#crs-and-reprojection">CRS and Reprojection</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect the raster CRS as WKT text or inferred/declared EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving the raster grid.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata when it is known to be wrong or must be re-assigned.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the raster with explicit control over resampling, extent, resolution, and grid policies.</td></tr>
+<tr><td><code>reproject_nearest</code>, <code>reproject_bilinear</code></td><td>Reproject with a fixed resampling method for common nearest-neighbour or bilinear cases.</td></tr>
+<tr><td><code>reproject_to_match_grid</code></td><td>Reproject onto the exact grid geometry of a target raster.</td></tr>
+<tr><td><code>reproject_to_match_resolution</code></td><td>Reproject while matching the cell resolution of a reference raster.</td></tr>
+<tr><td><code>reproject_to_match_resolution_in_epsg</code></td><td>Reproject to a target EPSG while borrowing cell resolution from a reference raster.</td></tr>
+</tbody></table>
+</div>
+<h3 id="unary-math-and-numeric-transforms"><a class="header" href="#unary-math-and-numeric-transforms">Unary Math and Numeric Transforms</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>abs</code></td><td>Absolute value transform.</td></tr>
+<tr><td><code>acos</code>, <code>arccos</code></td><td>Inverse cosine transform.</td></tr>
+<tr><td><code>acosh</code></td><td>Inverse hyperbolic cosine transform.</td></tr>
+<tr><td><code>asin</code>, <code>arcsin</code></td><td>Inverse sine transform.</td></tr>
+<tr><td><code>asinh</code></td><td>Inverse hyperbolic sine transform.</td></tr>
+<tr><td><code>atan</code>, <code>arctan</code></td><td>Inverse tangent transform.</td></tr>
+<tr><td><code>atanh</code></td><td>Inverse hyperbolic tangent transform.</td></tr>
+<tr><td><code>cbrt</code></td><td>Cube-root transform.</td></tr>
+<tr><td><code>ceil</code>, <code>floor</code>, <code>round</code>, <code>trunc</code></td><td>Standard rounding-family transforms.</td></tr>
+<tr><td><code>clamp</code></td><td>Limit values to a minimum and maximum range.</td></tr>
+<tr><td><code>cos</code>, <code>cosh</code>, <code>sin</code>, <code>sinh</code>, <code>tan</code>, <code>tanh</code></td><td>Trigonometric and hyperbolic transforms.</td></tr>
+<tr><td><code>degrees</code>, <code>to_degrees</code>, <code>radians</code>, <code>to_radians</code></td><td>Convert angular units between radians and degrees.</td></tr>
+<tr><td><code>exp</code>, <code>exp2</code>, <code>expm1</code></td><td>Exponential transforms.</td></tr>
+<tr><td><code>ln</code>, <code>log10</code>, <code>log1p</code>, <code>log2</code></td><td>Natural-log and common logarithmic transforms.</td></tr>
+<tr><td><code>neg</code>, <code>signum</code>, <code>sqrt</code>, <code>square</code>, <code>recip</code></td><td>Negation, sign extraction, square root, squaring, and reciprocal transforms.</td></tr>
+<tr><td><code>is_finite</code>, <code>is_infinite</code>, <code>is_nan</code>, <code>is_nodata</code></td><td>Build masks from numeric validity tests.</td></tr>
+<tr><td><code>logical_not</code>, <code>logical_not_in_place</code>, <code>not_</code></td><td>Logical-not style mask inversion.</td></tr>
+</tbody></table>
+</div>
+<h3 id="binary-arithmetic-and-comparisons"><a class="header" href="#binary-arithmetic-and-comparisons">Binary Arithmetic and Comparisons</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>add</code>, <code>add_in_place</code></td><td>Add another raster or scalar, either to a new raster or in place.</td></tr>
+<tr><td><code>sub</code>, <code>subtract</code>, <code>sub_in_place</code></td><td>Subtract another raster or scalar.</td></tr>
+<tr><td><code>mul</code>, <code>multiply</code>, <code>mul_in_place</code></td><td>Multiply by another raster or scalar.</td></tr>
+<tr><td><code>div</code>, <code>divide</code>, <code>div_in_place</code></td><td>Divide by another raster or scalar.</td></tr>
+<tr><td><code>pow</code>, <code>power</code>, <code>pow_in_place</code></td><td>Raise values to a raster/scalar power.</td></tr>
+<tr><td><code>atan2</code></td><td>Compute two-argument arctangent from paired raster/scalar inputs.</td></tr>
+<tr><td><code>min</code>, <code>max</code></td><td>Compute cellwise minima or maxima.</td></tr>
+<tr><td><code>eq</code>, <code>eq_in_place</code></td><td>Equality comparison.</td></tr>
+<tr><td><code>ne</code>, <code>ne_in_place</code></td><td>Inequality comparison.</td></tr>
+<tr><td><code>gt</code>, <code>gt_in_place</code></td><td>Greater-than comparison.</td></tr>
+<tr><td><code>ge</code>, <code>ge_in_place</code></td><td>Greater-than-or-equal comparison.</td></tr>
+<tr><td><code>lt</code>, <code>lt_in_place</code></td><td>Less-than comparison.</td></tr>
+<tr><td><code>le</code>, <code>le_in_place</code></td><td>Less-than-or-equal comparison.</td></tr>
+</tbody></table>
+</div>
+<h3 id="logical-combination"><a class="header" href="#logical-combination">Logical Combination</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>and_</code></td><td>Bitwise-style cellwise AND combination.</td></tr>
+<tr><td><code>or_</code></td><td>Bitwise-style cellwise OR combination.</td></tr>
+<tr><td><code>xor_</code></td><td>Bitwise-style cellwise XOR combination.</td></tr>
+<tr><td><code>logical_and</code>, <code>logical_and_in_place</code></td><td>Logical AND for boolean or mask rasters.</td></tr>
+<tr><td><code>logical_or</code>, <code>logical_or_in_place</code></td><td>Logical OR for boolean or mask rasters.</td></tr>
+<tr><td><code>logical_xor</code>, <code>logical_xor_in_place</code></td><td>Logical XOR for boolean or mask rasters.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

@@ -2,6 +2,11 @@
 
 This chapter provides practical roundtrip patterns between WbW-R and R spatial tooling.
 
+Interoperability should be treated as deliberate boundary crossing. Each
+conversion step can affect metadata fidelity, CRS representation, numeric
+precision, and schema details. The examples here emphasize explicit handoff
+points and validation checkpoints so multi-package workflows remain defensible.
+
 ## Copy-Boundary Model
 
 - Array exchange via `to_array()` and `wbw_array_to_raster(...)` is an explicit in-memory boundary.
@@ -9,6 +14,8 @@ This chapter provides practical roundtrip patterns between WbW-R and R spatial t
 - Always validate metadata after roundtrip.
 
 ## terra Roundtrip
+
+Use this when your raster workflow depends on terra-native functions.
 
 ```r
 library(whiteboxworkflows)
@@ -27,6 +34,8 @@ print(r_back$metadata())
 
 ## stars Roundtrip
 
+Use this for labeled-array operations and grid math in stars workflows.
+
 ```r
 library(whiteboxworkflows)
 library(stars)
@@ -44,6 +53,8 @@ print(r_back$metadata())
 ```
 
 ## sf Roundtrip (Vector)
+
+Use this when vector editing and validity checks are more convenient in sf.
 
 ```r
 library(whiteboxworkflows)

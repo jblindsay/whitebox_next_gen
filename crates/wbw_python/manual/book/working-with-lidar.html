@@ -176,7 +176,14 @@
                         <h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
 <p>This chapter documents lidar workflows in WbW-Py, including file-backed processing,
 metadata checks, and output controls.</p>
+<p>Lidar datasets are typically large enough that memory strategy becomes a primary
+design concern. The core pattern in this chapter is to combine file-backed
+objects, vectorized column operations, and chunked processing so scripts scale
+from small validation tiles to production-scale point clouds without rewriting
+your workflow model.</p>
 <h2 id="baseline-workflow"><a class="header" href="#baseline-workflow">Baseline Workflow</a></h2>
+<p>This baseline confirms read, inspect, transform, and write in a single lidar
+path before introducing chunking complexity.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -199,6 +206,8 @@ still not the primary API path.</p>
 <li>Perform vectorized filtering/classification edits in NumPy.</li>
 <li>Write updates with <code>Lidar.from_numpy(...)</code>.</li>
 </ol>
+<p>The example below reclassifies points using a simple mask to illustrate the
+pattern without domain-specific classification logic.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 import numpy as np
 
@@ -219,6 +228,8 @@ edited = wb.Lidar.from_numpy(
 print('points:', edited.point_count)
 </code></pre>
 <h2 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h2>
+<p>Use these options when you need to tune compression and structure for storage,
+cloud access, or downstream compatibility.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -248,6 +259,7 @@ full point matrix in memory.</p>
 <li>Apply vectorized edits per chunk.</li>
 <li>Write edited chunks with <code>Lidar.from_numpy_chunks(...)</code>.</li>
 </ol>
+<p>Use this pattern whenever full-matrix reads risk exhausting memory.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
@@ -283,7 +295,39 @@ process each chunk as it is decoded. In callback mode, no list is returned.</p>
 <li>Prefer COPC output for large datasets and cloud streaming scenarios.</li>
 <li>Keep raw source lidar immutable; write derived products to new files.</li>
 </ul>
-
+<h2 id="lidar-object-method-reference"><a class="header" href="#lidar-object-method-reference">Lidar Object Method Reference</a></h2>
+<p>Common simple properties such as <code>file_path</code>, <code>file_name</code>, and <code>point_count</code>
+are omitted here so the tables stay focused on callable <code>Lidar</code> methods and the
+most important array-processing workflows.</p>
+<h3 id="array-and-chunk-workflows"><a class="header" href="#array-and-chunk-workflows">Array and Chunk Workflows</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>to_numpy</code></td><td>Export selected point fields as a 2D NumPy array.</td></tr>
+<tr><td><code>to_numpy_chunks</code></td><td>Stream selected point fields as chunked NumPy arrays for large clouds.</td></tr>
+<tr><td><code>from_numpy</code></td><td>Build a new lidar file by applying a full 2D NumPy array back onto a base cloud.</td></tr>
+<tr><td><code>from_numpy_chunks</code></td><td>Build a new lidar file from an iterable of chunked NumPy arrays.</td></tr>
+</tbody></table>
+</div>
+<h3 id="file-metadata-and-copying"><a class="header" href="#file-metadata-and-copying">File, Metadata, and Copying</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return <code>LidarMetadata</code> for path, file state, and CRS information.</td></tr>
+<tr><td><code>absolute_path</code></td><td>Resolve the cloud to an absolute file path string.</td></tr>
+<tr><td><code>parent_directory</code></td><td>Return the containing directory path.</td></tr>
+<tr><td><code>exists</code></td><td>Check whether the backing lidar file exists.</td></tr>
+<tr><td><code>get_short_filename</code>, <code>get_file_extension</code></td><td>Return convenience filename information.</td></tr>
+<tr><td><code>get_file_size_in_bytes</code>, <code>get_last_modified_unix_seconds</code></td><td>Inspect filesystem metadata for reporting or audit logs.</td></tr>
+<tr><td><code>deep_copy</code></td><td>Write a copied lidar dataset to a new path.</td></tr>
+<tr><td><code>copy_to_path</code></td><td>Copy the lidar dataset to an explicit destination.</td></tr>
+<tr><td><code>write_to_path</code></td><td>Persist the lidar dataset with optional format-specific write options.</td></tr>
+</tbody></table>
+</div>
+<h3 id="crs-and-coordinate-management"><a class="header" href="#crs-and-coordinate-management">CRS and Coordinate Management</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>crs_wkt</code>, <code>crs_epsg</code></td><td>Inspect CRS metadata as WKT text or EPSG code.</td></tr>
+<tr><td><code>set_crs_wkt</code>, <code>set_crs_epsg</code></td><td>Assign CRS metadata without moving point coordinates.</td></tr>
+<tr><td><code>clear_crs</code></td><td>Remove CRS metadata when it is wrong or unknown.</td></tr>
+<tr><td><code>reproject</code></td><td>Reproject the point cloud with explicit 3D-transform and failure-policy controls.</td></tr>
+</tbody></table>
+</div>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

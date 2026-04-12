@@ -2,6 +2,12 @@
 
 This chapter provides practical exchange patterns between WbW-Py and common Python geospatial tooling.
 
+Interoperability is best thought of as controlled boundary crossing. Each
+conversion introduces potential differences in metadata conventions, numeric
+precision, CRS representation, and schema typing. The workflows in this chapter
+focus on explicit handoff points and roundtrip validation so multi-library
+pipelines remain trustworthy.
+
 ## Copy-Boundary Model
 
 - `to_numpy()` / `from_numpy()` are explicit in-memory exchange boundaries.
@@ -9,6 +15,8 @@ This chapter provides practical exchange patterns between WbW-Py and common Pyth
 - Always validate metadata after roundtrip (`metadata()`, CRS, dimensions, schema).
 
 ## NumPy Roundtrip
+
+Use this when you need direct numeric control for custom raster math.
 
 ```python
 import numpy as np
@@ -23,6 +31,8 @@ r2 = wb.Raster.from_numpy(a, r, output_path='dem_plus1.tif')
 ```
 
 ## Rasterio Roundtrip
+
+Use this for compatibility with rasterio-centric ecosystems and workflows.
 
 ```python
 import rasterio
@@ -47,6 +57,9 @@ print(r_back.metadata())
 
 ## GeoPandas and Shapely Roundtrip
 
+Use this pattern for vector enrichment and geometry filtering in the broader
+Python geospatial stack.
+
 ```python
 import geopandas as gpd
 import whitebox_workflows as wb
@@ -66,6 +79,8 @@ print(v_back.schema())
 
 ## xarray/rioxarray Roundtrip
 
+Use this when you need labeled-array operations or rolling-window processing.
+
 ```python
 import rioxarray as rxr
 import whitebox_workflows as wb
@@ -83,6 +98,9 @@ print(r_back.metadata())
 ```
 
 ## pyproj CRS Workflow
+
+Use this for explicit CRS introspection and conversion checks outside full file
+I/O steps.
 
 ```python
 from pyproj import CRS

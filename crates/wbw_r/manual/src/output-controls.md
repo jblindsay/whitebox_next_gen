@@ -2,6 +2,11 @@
 
 This chapter documents practical output controls for raster, vector, and lidar workflows in WbW-R.
 
+Output configuration is where reproducibility is made explicit. Defaults are
+useful during exploration, but production scripts should pin extensions and
+format options so artifacts remain comparable across runs and environments.
+Treat this chapter as the policy layer for how outputs are persisted.
+
 ## General Principles
 
 - Start with defaults until explicit format constraints are required.
@@ -11,6 +16,9 @@ This chapter documents practical output controls for raster, vector, and lidar w
 ## Raster Output Controls
 
 Raster objects expose `write(...)` and `deep_copy(...)` with optional `options`.
+
+Use explicit raster options when output layout and compression behavior must be
+stable across environments.
 
 ```r
 library(whiteboxworkflows)
@@ -40,6 +48,9 @@ r$write(
 ## Lidar Output Controls
 
 Lidar objects expose `write(...)` and `deep_copy(...)` with optional `options`.
+
+Use these options to tune archive size, cloud-read behavior, and downstream
+compatibility.
 
 ```r
 library(whiteboxworkflows)
@@ -73,6 +84,8 @@ l$write(
 ```
 
 ## Vector Output Pattern
+
+This reflects the current R facade emphasis on tool-driven vector persistence.
 
 Vector persistence is commonly tool-driven in current R workflows:
 

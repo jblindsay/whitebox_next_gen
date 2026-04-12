@@ -89,7 +89,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">13.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">14.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,6 +176,38 @@
                     <main>
                         <h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
 <p>This manual is the long-form user guide for the WbW-R API.</p>
+<p>WbW-R (Whitebox Workflows for R) is the R frontend to Whitebox Next Gen,
+providing access to modern geospatial processing for raster, vector, lidar, and
+sensor-bundle data through an R-friendly API and workflow model.</p>
+<p>Whitebox is a long-running geospatial project that originated in academia and
+has grown into a broad analysis platform with recognized strengths in
+geomorphometry, hydrology, lidar processing, and remote sensing. Whitebox Next
+Gen is the current Rust-based major iteration focused on performance,
+cross-platform reliability, and modern data formats.</p>
+<p>In this architecture, WbW-R is the orchestration layer for R users who need
+both practical scripting ergonomics and backend-scale performance.</p>
+<p>This manual is written to be both:</p>
+<ul>
+<li>beginner friendly: clear progression and runnable examples,</li>
+<li>canonical reference: explicit operational patterns, constraints, and
+validation guidance aligned with backend behavior.</li>
+</ul>
+<h2 id="how-to-use-this-manual"><a class="header" href="#how-to-use-this-manual">How to Use This Manual</a></h2>
+<p>This guide is intended for analysts who want to move from one-off exploratory
+commands to stable, scriptable geospatial workflows. The examples are practical
+and executable, but each chapter also explains the operational intent behind the
+code: when to keep work in memory, when to persist outputs, and how to validate
+results between stages.</p>
+<p>A good first pass is chapter-order reading. After that, use the script index as
+a task-oriented entry point for adapting workflows to your own projects.</p>
+<p>When adapting examples, keep a consistent script shape:</p>
+<ol>
+<li>session setup,</li>
+<li>input loading,</li>
+<li>transformation chain,</li>
+<li>validation and output persistence.</li>
+</ol>
+<p>This structure keeps scripts easier to review, test, and maintain.</p>
 <p>Goals:</p>
 <ul>
 <li>Comprehensive API coverage.</li>
@@ -188,25 +220,47 @@
 <li>Each chapter includes at least one end-to-end workflow script.</li>
 <li>Tool parameter specifics are linked to shared tool reference docs as needed.</li>
 </ul>
+<h2 id="common-pitfalls-and-validation"><a class="header" href="#common-pitfalls-and-validation">Common Pitfalls and Validation</a></h2>
+<ul>
+<li>Confirm inputs exist and have the expected CRS/schema/metadata before running long workflows.</li>
+<li>Prefer explicit output names and formats for reproducibility, especially in batch scripts.</li>
+<li>Re-open and inspect outputs after major steps to validate assumptions before chaining more tools.</li>
+<li>For performance-sensitive runs, start with a small representative subset, then scale to full data.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="installation-and-setup"><a class="header" href="#installation-and-setup">Installation and Setup</a></h1>
+<p>Treat setup as an explicit validation stage, not a one-time administrative task.
+The smoke test in this chapter confirms that the package and runtime can create
+a session and enumerate tools, which catches many environment issues before they
+surface in long-running processing scripts.</p>
+<p>For collaborative projects, this chapter doubles as a baseline checklist for
+new machines and CI environments.</p>
 <h2 id="install"><a class="header" href="#install">Install</a></h2>
+<p>Use this to install the current local package build for development and testing.</p>
 <pre><code class="language-bash">R CMD INSTALL crates/wbw_r/r-package/whiteboxworkflows
 </code></pre>
 <h2 id="smoke-test"><a class="header" href="#smoke-test">Smoke Test</a></h2>
+<p>This verifies that startup succeeds and tool enumeration is available in your
+current runtime.</p>
 <pre><code class="language-bash">Rscript -e 'library(whiteboxworkflows); s &lt;- wbw_session(); cat(length(wbw_tool_ids(session = s)), "\n")'
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="build-and-preview"><a class="header" href="#build-and-preview">Build and Preview</a></h1>
 <p>This manual is structured as an mdBook project.</p>
+<p>Documentation build steps are part of quality control. Running these commands
+early and often helps catch broken links, malformed markdown, and chapter order
+drift before those issues accumulate. Live preview is especially useful when
+iterating on explanatory text and section hierarchy.</p>
 <h2 id="install-mdbook"><a class="header" href="#install-mdbook">Install mdBook</a></h2>
 <pre><code class="language-bash">cargo install mdbook
 </code></pre>
 <h2 id="build-the-manual"><a class="header" href="#build-the-manual">Build the Manual</a></h2>
+<p>Run this when changing chapter content, links, or section ordering.</p>
 <p>From repository root:</p>
 <pre><code class="language-bash">cd crates/wbw_r/manual
 mdbook build
 </code></pre>
 <p>Generated HTML is written to <code>book/</code>.</p>
 <h2 id="live-preview"><a class="header" href="#live-preview">Live Preview</a></h2>
+<p>Use live preview while refining long explanatory sections and chapter flow.</p>
 <pre><code class="language-bash">cd crates/wbw_r/manual
 mdbook serve --open
 </code></pre>
@@ -217,6 +271,13 @@ mdbook serve --open
 <li>Link chapter recipes to concrete scripts listed in the script index.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<p>This chapter is a minimal "first success" path. It verifies that your R
+installation, package setup, session creation, tool execution, and output write
+path all work together before you take on larger workflows.</p>
+<p>Once this slice runs end-to-end, the remaining chapters explain how to make the
+same pattern more explicit, reproducible, and resilient.</p>
+<p>The example below demonstrates the core session-first model in WbW-R: create a
+session, load data, run a tool, and inspect the result object.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -230,6 +291,8 @@ result &lt;- wbw_run_tool(
 print(result)
 </code></pre>
 <h2 id="what-to-read-next"><a class="header" href="#what-to-read-next">What to Read Next</a></h2>
+<p>These chapters extend the same lifecycle with discovery, progress handling, and
+larger workflow templates.</p>
 <ul>
 <li>Session lifecycle and discovery: <a href="./session-and-discovery.html">Session and Discovery</a></li>
 <li>Progress callbacks and execution patterns: <a href="./tool-execution-and-progress.html">Tool Execution and Progress</a></li>
@@ -243,13 +306,21 @@ print(result)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="session-and-discovery"><a class="header" href="#session-and-discovery">Session and Discovery</a></h1>
 <p>This chapter covers session lifecycle and tool discovery patterns.</p>
+<p>Session and discovery APIs establish runtime certainty before execution. By
+creating a session explicitly and checking tool visibility up front, you avoid
+late failures in long pipelines and make script behavior easier to reason about
+across different environments and deployment targets.</p>
 <h2 id="create-session"><a class="header" href="#create-session">Create Session</a></h2>
+<p>This is the standard session bootstrap for scripts. Keep it explicit so runtime
+state is obvious to future readers.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
 print(s)
 </code></pre>
 <h2 id="visibility-checks"><a class="header" href="#visibility-checks">Visibility Checks</a></h2>
+<p>Use hard visibility checks before long jobs so missing-tool failures happen
+immediately.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -261,6 +332,8 @@ if (!wbw_has_tool('slope', session = s)) {
 }
 </code></pre>
 <h2 id="search-and-describe"><a class="header" href="#search-and-describe">Search and Describe</a></h2>
+<p>Use this when you know the task objective but need to confirm exact tool IDs and
+parameter contracts.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 matches &lt;- wbw_search_tools('lidar')
@@ -270,6 +343,8 @@ desc &lt;- wbw_describe_tool('slope')
 print(desc)
 </code></pre>
 <h2 id="category-based-discovery"><a class="header" href="#category-based-discovery">Category-Based Discovery</a></h2>
+<p>Category discovery is useful for UI generation, guided workflows, and policy
+checks in larger automation systems.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 summary &lt;- wbw_category_summary()
@@ -281,6 +356,45 @@ print(cats)
 raster_tools &lt;- wbw_tools_in_category('Raster')
 print(head(raster_tools, 20))
 </code></pre>
+<h2 id="session-api-reference"><a class="header" href="#session-api-reference">Session API Reference</a></h2>
+<p>WbW-R is function-first, but the <code>wbw_session()</code> object still exposes a useful
+set of callable methods for execution, projection utilities, topology checks,
+and typed I/O helpers.</p>
+<h3 id="session-construction-and-execution"><a class="header" href="#session-construction-and-execution">Session Construction and Execution</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>run_tool</code></td><td>Execute a tool with a named argument list.</td></tr>
+<tr><td><code>run_tool_with_progress</code></td><td>Execute a tool and return structured progress/result output.</td></tr>
+<tr><td><code>list_tools</code></td><td>Return visible tool IDs for the session/license context.</td></tr>
+</tbody></table>
+</div>
+<h3 id="typed-io-helpers"><a class="header" href="#typed-io-helpers">Typed I/O Helpers</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_vector</code></td><td>Read vector data with optional read options.</td></tr>
+<tr><td><code>write_raster</code></td><td>Write one raster with optional format options.</td></tr>
+<tr><td><code>write_rasters</code></td><td>Write multiple rasters in one call.</td></tr>
+<tr><td><code>write_vector</code></td><td>Write one vector with optional format options.</td></tr>
+</tbody></table>
+</div>
+<h3 id="projection-utility-methods"><a class="header" href="#projection-utility-methods">Projection Utility Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>projection_to_ogc_wkt</code></td><td>Convert EPSG code to OGC WKT text.</td></tr>
+<tr><td><code>projection_identify_epsg</code></td><td>Identify EPSG from CRS text where possible.</td></tr>
+<tr><td><code>projection_reproject_points</code></td><td>Reproject point collections between EPSG systems.</td></tr>
+<tr><td><code>projection_reproject_point</code></td><td>Reproject a single point between EPSG systems.</td></tr>
+</tbody></table>
+</div>
+<h3 id="topology-utility-methods"><a class="header" href="#topology-utility-methods">Topology Utility Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>topology_intersects_wkt</code>, <code>topology_contains_wkt</code>, <code>topology_within_wkt</code></td><td>Core spatial predicate checks on WKT geometries.</td></tr>
+<tr><td><code>topology_touches_wkt</code>, <code>topology_disjoint_wkt</code>, <code>topology_crosses_wkt</code>, <code>topology_overlaps_wkt</code></td><td>Additional topological predicates for rule-based QA.</td></tr>
+<tr><td><code>topology_covers_wkt</code>, <code>topology_covered_by_wkt</code></td><td>Boundary-aware containment checks.</td></tr>
+<tr><td><code>topology_relate_wkt</code></td><td>Return DE-9IM relation text for exact topology logic.</td></tr>
+<tr><td><code>topology_distance_wkt</code></td><td>Return shortest distance between WKT geometries.</td></tr>
+<tr><td><code>topology_vector_feature_relation</code></td><td>Evaluate topology relation between indexed features in two vector objects.</td></tr>
+<tr><td><code>topology_is_valid_polygon_wkt</code>, <code>topology_make_valid_polygon_wkt</code></td><td>Validate and repair polygon WKT geometries.</td></tr>
+<tr><td><code>topology_buffer_wkt</code></td><td>Build buffered geometry from WKT and distance.</td></tr>
+</tbody></table>
+</div>
 <h2 id="recommended-discovery-pattern"><a class="header" href="#recommended-discovery-pattern">Recommended Discovery Pattern</a></h2>
 <ol>
 <li>Build session explicitly.</li>
@@ -290,7 +404,14 @@ print(head(raster_tools, 20))
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
 <p>This chapter documents execution styles and progress handling in WbW-R.</p>
+<p>Execution structure affects observability and reproducibility. Explicit session
+execution makes dependencies and runtime state clear, while progress-aware
+patterns help with monitoring, troubleshooting, and user feedback during long
+operations. Think of callbacks as operational instrumentation, not just console
+output.</p>
 <h2 id="explicit-session-execution"><a class="header" href="#explicit-session-execution">Explicit Session Execution</a></h2>
+<p>Use explicit session execution as the default in production scripts so runtime
+dependencies and state are clear.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -303,6 +424,8 @@ result &lt;- wbw_run_tool(
 print(result)
 </code></pre>
 <h2 id="progress-aware-execution"><a class="header" href="#progress-aware-execution">Progress-Aware Execution</a></h2>
+<p>Use progress-aware execution for long operations, remote runs, and logs that
+require periodic status updates.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -317,6 +440,8 @@ result &lt;- wbw_run_tool_with_progress(
 str(result$progress)
 </code></pre>
 <h2 id="custom-progress-callback"><a class="header" href="#custom-progress-callback">Custom Progress Callback</a></h2>
+<p>This callback pattern is useful when progress events need to feed custom log
+formats or monitoring pipelines.</p>
 <pre><code class="language-r">progress_cb &lt;- local({
 	last &lt;- -1L
 	function(pct = NA_real_, message = '') {
@@ -356,7 +481,14 @@ str(result$progress)
 <div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-rasters"><a class="header" href="#working-with-rasters">Working with Rasters</a></h1>
 <p>This chapter documents practical raster workflows in WbW-R with emphasis on
 inspection, iteration, modification, and persistence.</p>
+<p>Raster processing usually alternates between backend tools for heavy
+transformations and array-level edits for custom logic. The key design choice is
+to use tool operations for scale and consistency, then reserve manual array
+passes for domain-specific adjustments that are hard to express with existing
+tools.</p>
 <h2 id="raster-lifecycle"><a class="header" href="#raster-lifecycle">Raster Lifecycle</a></h2>
+<p>This lifecycle makes assumptions explicit before computation and keeps your
+workflow reviewable.</p>
 <p>Typical lifecycle:</p>
 <ol>
 <li>Read raster.</li>
@@ -374,6 +506,8 @@ print(meta$columns)
 print(meta$nodata)
 </code></pre>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
+<p>Use this only for logic that cannot be expressed through existing tools or
+vectorized operations.</p>
 <p>Use <code>to_array()</code> for cell-level logic.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -396,6 +530,8 @@ for (row in seq_len(nr)) {
 }
 </code></pre>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
+<p>This demonstrates creating a derived raster while preserving base geospatial
+context.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 base &lt;- wbw_read_raster('dem.tif')
@@ -406,6 +542,7 @@ out &lt;- wbw_array_to_raster(a, base, output_path = 'dem_scaled.tif')
 print(out)
 </code></pre>
 <h2 id="multi-band-iteration"><a class="header" href="#multi-band-iteration">Multi-Band Iteration</a></h2>
+<p>Use this when transform rules depend on band identity or per-band thresholds.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 r &lt;- wbw_read_raster('multiband.tif')
@@ -433,6 +570,8 @@ if (length(d) == 3) {
 wbw_array_to_raster(a, r, output_path = 'multiband_clamped.tif')
 </code></pre>
 <h2 id="tool-first-raster-processing"><a class="header" href="#tool-first-raster-processing">Tool-First Raster Processing</a></h2>
+<p>Prefer this pattern for heavy processing: let optimized tools do most work,
+then apply targeted custom edits.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -450,10 +589,41 @@ slope$write('slope_out.tif', overwrite = TRUE)
 <li>Prefer tool operations for heavy transforms.</li>
 <li>Use array loops only for custom logic not available as tools.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
+<h2 id="raster-object-method-reference"><a class="header" href="#raster-object-method-reference">Raster Object Method Reference</a></h2>
+<h3 id="metadata-and-conversion"><a class="header" href="#metadata-and-conversion">Metadata and Conversion</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return raster metadata (dimensions, extent, nodata, CRS fields).</td></tr>
+<tr><td><code>file_path</code></td><td>Return the backing raster path.</td></tr>
+<tr><td><code>band_count</code></td><td>Return raster band count.</td></tr>
+<tr><td><code>active_band</code></td><td>Return active band index.</td></tr>
+<tr><td><code>crs_epsg</code>, <code>crs_wkt</code></td><td>Inspect CRS metadata.</td></tr>
+<tr><td><code>to_array</code></td><td>Convert raster to in-memory array for custom processing.</td></tr>
+<tr><td><code>to_stars</code></td><td>Convert raster to a <code>stars</code> object (requires <code>terra</code> support path).</td></tr>
+</tbody></table>
+</div>
+<h3 id="arithmetic-and-unary-transform-methods"><a class="header" href="#arithmetic-and-unary-transform-methods">Arithmetic and Unary Transform Methods</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>add</code>, <code>subtract</code>, <code>multiply</code>, <code>divide</code></td><td>Cellwise binary arithmetic with another raster/path operand.</td></tr>
+<tr><td><code>abs</code>, <code>ceil</code>, <code>floor</code>, <code>round</code>, <code>square</code>, <code>sqrt</code></td><td>Common unary numeric transforms.</td></tr>
+<tr><td><code>log10</code>, <code>log2</code>, <code>exp</code>, <code>exp2</code></td><td>Log and exponential transforms.</td></tr>
+<tr><td><code>sin</code>, <code>cos</code>, <code>tan</code>, <code>sinh</code>, <code>cosh</code>, <code>tanh</code></td><td>Trigonometric and hyperbolic transforms.</td></tr>
+</tbody></table>
+</div>
+<h3 id="persistence"><a class="header" href="#persistence">Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>deep_copy</code></td><td>Copy raster to a new output path and return a raster object.</td></tr>
+<tr><td><code>write</code></td><td>Write raster to disk with optional output options.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
 <p>This chapter covers schema inspection, feature iteration, attribute reads/writes,
 and persistence workflows.</p>
+<p>Reliable vector workflows depend on stable schema and attribute contracts as much
+as geometry itself. The patterns in this chapter emphasize inspecting structure
+early, applying deterministic edits, and validating outputs after persistence so
+downstream analysis remains predictable.</p>
 <h2 id="read-and-inspect"><a class="header" href="#read-and-inspect">Read and Inspect</a></h2>
+<p>Begin with schema and metadata inspection so edits are grounded in the actual
+field model.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
@@ -462,10 +632,11 @@ print(schema)
 print(v$metadata())
 </code></pre>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
+<p>Use this for quality checks, custom filters, and record-level diagnostics.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
-count &lt;- v$num_records()
+count &lt;- v$metadata()$feature_count
 
 for (i in seq_len(count)) {
   attrs &lt;- v$attributes(i)
@@ -474,6 +645,8 @@ for (i in seq_len(count)) {
 }
 </code></pre>
 <h2 id="read-and-update-attribute-table"><a class="header" href="#read-and-update-attribute-table">Read and Update Attribute Table</a></h2>
+<p>This example combines common edit actions: single-value updates, grouped updates,
+and field creation.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 v &lt;- wbw_read_vector('roads.gpkg')
@@ -486,6 +659,7 @@ v$update_attributes(2, list(speed = 50, class = 'collector'))
 v$add_field('reviewed', field_type = 'integer', default_value = 0)
 </code></pre>
 <h2 id="persist-vector-outputs"><a class="header" href="#persist-vector-outputs">Persist Vector Outputs</a></h2>
+<p>This pattern demonstrates tool-driven persistence and post-write verification.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -506,10 +680,39 @@ print(buffered$metadata())
 <li>Use <code>update_attributes()</code> for grouped feature edits.</li>
 <li>Re-read output files to validate schema and values after writes.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
+<h2 id="vector-object-method-reference"><a class="header" href="#vector-object-method-reference">Vector Object Method Reference</a></h2>
+<h3 id="metadata-and-structure"><a class="header" href="#metadata-and-structure">Metadata and Structure</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return vector metadata (geometry type, feature count, CRS, fields).</td></tr>
+<tr><td><code>schema</code></td><td>Return field names and types as a data frame.</td></tr>
+<tr><td><code>path</code></td><td>Return backing vector path.</td></tr>
+<tr><td><code>to_terra</code>, <code>to_sf</code></td><td>Convert to <code>terra</code>/<code>sf</code> objects for ecosystem workflows.</td></tr>
+</tbody></table>
+</div>
+<h3 id="attribute-access-and-edits"><a class="header" href="#attribute-access-and-edits">Attribute Access and Edits</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>attributes</code></td><td>Return all attribute values for one feature index.</td></tr>
+<tr><td><code>attribute</code></td><td>Return one field value for one feature index.</td></tr>
+<tr><td><code>update_attributes</code></td><td>Update multiple fields for one feature index.</td></tr>
+<tr><td><code>update_attribute</code></td><td>Update one field for one feature index.</td></tr>
+<tr><td><code>add_field</code></td><td>Add a new field with declared type and default value.</td></tr>
+</tbody></table>
+</div>
+<h3 id="persistence-1"><a class="header" href="#persistence-1">Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>deep_copy</code></td><td>Copy vector to a new path with optional write options.</td></tr>
+<tr><td><code>write</code></td><td>Write vector to a new output path.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
 <p>This chapter documents lidar workflows in WbW-R, including file-backed processing,
 metadata checks, and output control patterns.</p>
+<p>Lidar workflows are strongly shaped by dataset size and I/O cost. The guiding
+pattern here is to use file-backed objects and vectorized matrix operations for
+normal workloads, then switch to chunked processing when point counts exceed
+comfortable memory limits.</p>
 <h2 id="baseline-workflow"><a class="header" href="#baseline-workflow">Baseline Workflow</a></h2>
+<p>Use this as a first-run validation before introducing matrix edits or chunked
+processing.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 l &lt;- wbw_read_lidar('survey.las')
@@ -519,28 +722,37 @@ copy &lt;- l$deep_copy('survey_copy.las', overwrite = TRUE)
 print(copy$metadata())
 </code></pre>
 <h2 id="iterating-through-lidar-points"><a class="header" href="#iterating-through-lidar-points">Iterating Through Lidar Points</a></h2>
-<p>Current stable WbW-R lidar objects are file-backed and tool-oriented. Direct
-point-by-point iteration is not the primary API path.</p>
+<p>Stable WbW-R lidar objects are file-backed and tool-oriented, with explicit
+columnar point access through matrix/data-frame APIs. Direct point-by-point
+iteration is still not the primary API path.</p>
 <p>Recommended point-level workflow:</p>
 <ol>
-<li>Use WbW-R for lidar processing and reprojection.</li>
-<li>For explicit point iteration, use an R point-cloud package on an output file.</li>
-<li>Return to WbW-R for downstream geoprocessing.</li>
+<li>Use <code>to_matrix()</code> or <code>to_data_frame()</code> with selected point fields.</li>
+<li>Apply vectorized edits in base R/tidy workflows.</li>
+<li>Write updates with <code>from_matrix(...)</code> or <code>from_data_frame(...)</code>.</li>
 </ol>
+<p>The example below uses a simple reclassification rule to illustrate the matrix
+roundtrip pattern.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
-# Optional bridge package for point-level inspection.
-# library(lidR)
 
 l &lt;- wbw_read_lidar('survey.las')
-out &lt;- l$deep_copy('survey_filtered.laz', overwrite = TRUE)
+pts &lt;- l$to_matrix(fields = c('x', 'y', 'z', 'classification'))
 
-# las &lt;- lidR::readLAS(out$file_path())
-# pts &lt;- las@data
-# for (i in seq_len(min(1000, nrow(pts)))) {
-#   x &lt;- pts$X[i]; y &lt;- pts$Y[i]; z &lt;- pts$Z[i]
-# }
+ground &lt;- pts[, 4] == 2
+pts[ground, 4] &lt;- 6
+
+edited &lt;- l$from_matrix(
+  pts,
+  output_path = 'survey_reclassified.laz',
+  overwrite = TRUE,
+  fields = c('x', 'y', 'z', 'classification')
+)
+
+print(edited$point_count())
 </code></pre>
 <h2 id="tool-driven-lidar-processing"><a class="header" href="#tool-driven-lidar-processing">Tool-Driven Lidar Processing</a></h2>
+<p>Use tool-driven processing when extracting QA outputs and diagnostics from lidar
+datasets.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -550,14 +762,81 @@ wbw_run_tool(
   session = s
 )
 </code></pre>
+<h2 id="chunked-matrix-streaming"><a class="header" href="#chunked-matrix-streaming">Chunked Matrix Streaming</a></h2>
+<p>For very large point clouds, use chunked matrix streaming to avoid keeping the
+full point matrix in memory.</p>
+<p>Recommended chunked workflow:</p>
+<ol>
+<li>Read chunks with <code>to_matrix_chunks(...)</code>.</li>
+<li>Apply vectorized edits in each chunk.</li>
+<li>Write edited chunks with <code>from_matrix_chunks(...)</code>.</li>
+</ol>
+<p>Use this when full-matrix operations would exceed available memory.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+l &lt;- wbw_read_lidar('survey.las')
+fields &lt;- c('x', 'y', 'z', 'classification')
+
+chunks &lt;- l$to_matrix_chunks(chunk_size = 200000, fields = fields)
+for (i in seq_along(chunks)) {
+  high &lt;- chunks[[i]][, 3] &gt; 250
+  chunks[[i]][high, 4] &lt;- 6
+}
+
+edited &lt;- l$from_matrix_chunks(
+  chunks,
+  output_path = 'survey_chunked_reclassified.laz',
+  overwrite = TRUE,
+  fields = fields
+)
+
+print(edited$point_count())
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li>LAS/LAZ chunk outputs use shared core streaming rewrite.</li>
+<li>Other output formats currently fall back to non-streaming assembly in this API path.</li>
+</ul>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ul>
 <li>Validate CRS before and after reprojection.</li>
 <li>Keep source lidar immutable; write derived products to new files.</li>
 <li>Prefer COPC/LAZ outputs for large cloud workflows.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
+<h2 id="lidar-object-method-reference"><a class="header" href="#lidar-object-method-reference">Lidar Object Method Reference</a></h2>
+<h3 id="metadata-and-access"><a class="header" href="#metadata-and-access">Metadata and Access</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return lidar metadata (bounds, point format, CRS, counts).</td></tr>
+<tr><td><code>point_count</code></td><td>Return total number of points.</td></tr>
+<tr><td><code>file_path</code>, <code>path</code></td><td>Return backing lidar path.</td></tr>
+<tr><td><code>get_short_filename</code></td><td>Return basename of lidar file.</td></tr>
+</tbody></table>
+</div>
+<h3 id="matrix-and-data-frame-conversion"><a class="header" href="#matrix-and-data-frame-conversion">Matrix and Data-Frame Conversion</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>to_matrix</code></td><td>Read selected lidar fields as numeric matrix.</td></tr>
+<tr><td><code>to_data_frame</code></td><td>Read selected lidar fields as data frame.</td></tr>
+<tr><td><code>to_matrix_chunks</code></td><td>Read selected lidar fields in chunked matrix blocks.</td></tr>
+</tbody></table>
+</div>
+<h3 id="writing-edited-point-data"><a class="header" href="#writing-edited-point-data">Writing Edited Point Data</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>from_matrix</code></td><td>Write edited matrix data to lidar output.</td></tr>
+<tr><td><code>from_data_frame</code></td><td>Write edited data frame fields to lidar output.</td></tr>
+<tr><td><code>from_matrix_chunks</code></td><td>Write chunked matrix edits to lidar output.</td></tr>
+</tbody></table>
+</div>
+<h3 id="persistence-2"><a class="header" href="#persistence-2">Persistence</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>deep_copy</code></td><td>Copy lidar to a new path with optional write options.</td></tr>
+<tr><td><code>write</code></td><td>Write lidar to a new output path.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
 <p>This chapter documents supported sensor bundle families and common workflows.</p>
+<p>Bundle APIs provide a common operational interface across heterogeneous sensor
+families. The conceptual goal is to standardize ingestion and inspection steps
+even when archive layout, naming conventions, or QA assets differ between
+providers.</p>
 <h2 id="supported-families"><a class="header" href="#supported-families">Supported Families</a></h2>
 <ul>
 <li>Generic auto-detect: <code>wbw_read_bundle(...)</code></li>
@@ -572,6 +851,8 @@ wbw_run_tool(
 <li>RCM: <code>wbw_read_rcm(...)</code></li>
 </ul>
 <h2 id="common-inspection-pattern"><a class="header" href="#common-inspection-pattern">Common Inspection Pattern</a></h2>
+<p>Start here to establish what each bundle contains before choosing analysis
+channels.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 b &lt;- wbw_read_bundle('BUNDLE_ROOT')
@@ -583,25 +864,31 @@ print(b$list_qa_keys())
 print(b$list_asset_keys())
 </code></pre>
 <h2 id="family-specific-examples"><a class="header" href="#family-specific-examples">Family-Specific Examples</a></h2>
+<p>These examples follow one shared shape across providers: load, inspect,
+sample key channels, then generate QA-ready outputs.</p>
 <h3 id="sentinel-2"><a class="header" href="#sentinel-2">Sentinel-2</a></h3>
+<p>Use this for optical band workflows where band identity is explicit.</p>
 <pre><code class="language-r">s2 &lt;- wbw_read_sentinel2('S2_SCENE.SAFE')
 red &lt;- s2$read_band('B04')
 nir &lt;- s2$read_band('B08')
 rgb &lt;- s2$write_true_colour('s2_true_colour.tif')
 </code></pre>
 <h3 id="landsat"><a class="header" href="#landsat">Landsat</a></h3>
+<p>Use this when metadata such as cloud cover and processing level drive filtering.</p>
 <pre><code class="language-r">ls &lt;- wbw_read_landsat('LC09_SCENE')
 print(ls$processing_level())
 print(ls$cloud_cover_percent())
 preview &lt;- ls$read_band(ls$list_band_keys()[[1]])
 </code></pre>
 <h3 id="sentinel-1--sar-families"><a class="header" href="#sentinel-1--sar-families">Sentinel-1 / SAR Families</a></h3>
+<p>Use this pattern for SAR measurement access and quick false-colour QA.</p>
 <pre><code class="language-r">s1 &lt;- wbw_read_sentinel1('S1_SCENE.SAFE')
 print(s1$polarizations())
 meas &lt;- s1$read_measurement(s1$list_measurement_keys()[[1]])
 fc &lt;- s1$write_false_colour('s1_false_colour.tif')
 </code></pre>
 <h3 id="planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm"><a class="header" href="#planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm">PlanetScope / ICEYE / DIMAP / Maxar-WorldView / RADARSAT-2 / RCM</a></h3>
+<p>Use this loop for multi-provider intake checks with a consistent script shape.</p>
 <pre><code class="language-r">loaders &lt;- list(
   wbw_read_planetscope,
   wbw_read_iceye,
@@ -626,8 +913,45 @@ for (i in seq_along(loaders)) {
 <li>Generate preview/composite rasters for QA.</li>
 <li>Persist derived outputs and record source family + key choices.</li>
 </ol>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h1>
+<h2 id="sensor-bundle-object-method-reference"><a class="header" href="#sensor-bundle-object-method-reference">Sensor Bundle Object Method Reference</a></h2>
+<h3 id="metadata-and-key-discovery"><a class="header" href="#metadata-and-key-discovery">Metadata and Key Discovery</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>metadata</code></td><td>Return bundle metadata (family, product descriptors, CRS hints).</td></tr>
+<tr><td><code>family</code>, <code>bundle_root</code>, <code>path</code></td><td>Return family ID and resolved bundle root/path.</td></tr>
+<tr><td><code>key_summary</code></td><td>Summarize available key groups and counts.</td></tr>
+<tr><td><code>list_band_keys</code>, <code>list_measurement_keys</code></td><td>List band/measurement keys.</td></tr>
+<tr><td><code>list_qa_keys</code>, <code>list_aux_keys</code>, <code>list_asset_keys</code></td><td>List QA, auxiliary, and asset keys.</td></tr>
+<tr><td><code>resolve_key</code>, <code>has_key</code></td><td>Resolve and verify key existence across key types.</td></tr>
+</tbody></table>
+</div>
+<h3 id="raster-access-by-key"><a class="header" href="#raster-access-by-key">Raster Access by Key</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>read_any</code></td><td>Read key by searching configured key types.</td></tr>
+<tr><td><code>read_band</code></td><td>Read band key as raster.</td></tr>
+<tr><td><code>read_measurement</code></td><td>Read measurement key as raster.</td></tr>
+<tr><td><code>read_qa_layer</code>, <code>read_aux_layer</code>, <code>read_asset</code></td><td>Read QA/auxiliary/asset keys as rasters.</td></tr>
+<tr><td><code>read_preview_raster</code></td><td>Return selected preview raster descriptor.</td></tr>
+</tbody></table>
+</div>
+<h3 id="composite-generation"><a class="header" href="#composite-generation">Composite Generation</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>write_true_colour</code></td><td>Write true-colour composite raster.</td></tr>
+<tr><td><code>write_false_colour</code></td><td>Write false-colour composite raster.</td></tr>
+</tbody></table>
+</div>
+<h3 id="common-metadata-accessors"><a class="header" href="#common-metadata-accessors">Common Metadata Accessors</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>acquisition_datetime_utc</code></td><td>Return acquisition timestamp when available.</td></tr>
+<tr><td><code>processing_level</code>, <code>product_type</code></td><td>Return processing/product descriptors.</td></tr>
+<tr><td><code>tile_id</code>, <code>mission</code>, <code>acquisition_mode</code></td><td>Return common platform and acquisition descriptors.</td></tr>
+<tr><td><code>cloud_cover_percent</code>, <code>polarizations</code></td><td>Return cloud or polarization metadata when available.</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h1>
 <p>This chapter documents practical output controls for raster, vector, and lidar workflows in WbW-R.</p>
+<p>Output configuration is where reproducibility is made explicit. Defaults are
+useful during exploration, but production scripts should pin extensions and
+format options so artifacts remain comparable across runs and environments.
+Treat this chapter as the policy layer for how outputs are persisted.</p>
 <h2 id="general-principles"><a class="header" href="#general-principles">General Principles</a></h2>
 <ul>
 <li>Start with defaults until explicit format constraints are required.</li>
@@ -636,6 +960,8 @@ for (i in seq_along(loaders)) {
 </ul>
 <h2 id="raster-output-controls"><a class="header" href="#raster-output-controls">Raster Output Controls</a></h2>
 <p>Raster objects expose <code>write(...)</code> and <code>deep_copy(...)</code> with optional <code>options</code>.</p>
+<p>Use explicit raster options when output layout and compression behavior must be
+stable across environments.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 r &lt;- wbw_read_raster('dem.tif')
@@ -661,6 +987,8 @@ r$write(
 </code></pre>
 <h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
 <p>Lidar objects expose <code>write(...)</code> and <code>deep_copy(...)</code> with optional <code>options</code>.</p>
+<p>Use these options to tune archive size, cloud-read behavior, and downstream
+compatibility.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 l &lt;- wbw_read_lidar('survey.las')
@@ -691,6 +1019,7 @@ l$write(
 )
 </code></pre>
 <h2 id="vector-output-pattern"><a class="header" href="#vector-output-pattern">Vector Output Pattern</a></h2>
+<p>This reflects the current R facade emphasis on tool-driven vector persistence.</p>
 <p>Vector persistence is commonly tool-driven in current R workflows:</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -710,7 +1039,13 @@ wbw_run_tool(
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
 <p>This chapter covers reprojection and CRS validation workflows in WbW-R.</p>
+<p>CRS operations are correctness-critical. A workflow can run successfully while
+still producing invalid spatial interpretation if source and destination
+reference systems are misunderstood. The patterns here prioritize explicit CRS
+inspection, controlled reprojection calls, and immediate validation of outputs.</p>
 <h2 id="inspect-crs"><a class="header" href="#inspect-crs">Inspect CRS</a></h2>
+<p>Run this check before any reprojection to catch missing or incorrect source CRS
+assumptions.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 r &lt;- wbw_read_raster('dem.tif')
@@ -721,8 +1056,40 @@ print(r$crs_epsg())
 print(v$crs_epsg())
 print(l$crs_epsg())
 </code></pre>
+<h2 id="assigning-projection-metadata"><a class="header" href="#assigning-projection-metadata">Assigning Projection Metadata</a></h2>
+<p>Projection assignment and reprojection are different operations:</p>
+<ul>
+<li>Assignment updates CRS metadata only.</li>
+<li>Reprojection changes coordinate values.</li>
+</ul>
+<p>In current WbW-R, direct object-level CRS assignment helpers are not exposed in
+the same way as WbW-Py object methods. The practical assignment pattern is to
+use R spatial libraries for metadata repair, then re-open data in WbW-R.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+library(terra)
+library(sf)
+
+# Raster CRS assignment (metadata only)
+r &lt;- rast('dem_without_crs.tif')
+crs(r) &lt;- 'EPSG:26917'
+writeRaster(r, 'dem_with_crs.tif', overwrite = TRUE)
+
+# Vector CRS assignment (metadata only)
+v &lt;- st_read('roads_without_crs.gpkg', quiet = TRUE)
+v &lt;- st_set_crs(v, 26917)
+st_write(v, 'roads_with_crs.gpkg', delete_dsn = TRUE, quiet = TRUE)
+
+# Re-open in WbW-R for downstream analysis
+r_wbw &lt;- wbw_read_raster('dem_with_crs.tif')
+v_wbw &lt;- wbw_read_vector('roads_with_crs.gpkg')
+print(r_wbw$crs_epsg())
+print(v_wbw$crs_epsg())
+</code></pre>
+<p>If you need coordinate changes, use reprojection workflows in the next
+sections rather than metadata assignment.</p>
 <h2 id="raster-reprojection-pattern"><a class="header" href="#raster-reprojection-pattern">Raster Reprojection Pattern</a></h2>
 <p>Use <code>wbw_run_tool(...)</code> for reprojection pipelines and then reopen typed objects.</p>
+<p>This pattern keeps reprojection explicit and testable as a standalone step.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -736,6 +1103,7 @@ dem_utm &lt;- wbw_read_raster('dem_utm.tif')
 print(dem_utm$crs_epsg())
 </code></pre>
 <h2 id="vector-reprojection-pattern"><a class="header" href="#vector-reprojection-pattern">Vector Reprojection Pattern</a></h2>
+<p>Use this when downstream geometry processing depends on a specific projected CRS.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -749,6 +1117,7 @@ roads_utm &lt;- wbw_read_vector('roads_utm.gpkg')
 print(roads_utm$crs_epsg())
 </code></pre>
 <h2 id="lidar-reprojection-pattern"><a class="header" href="#lidar-reprojection-pattern">Lidar Reprojection Pattern</a></h2>
+<p>Use this when point-cloud alignment and metric operations require a target CRS.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
@@ -768,8 +1137,141 @@ print(survey_utm$crs_epsg())
 <li>Re-open outputs and verify CRS metadata.</li>
 <li>Keep transform arguments explicit in reproducible scripts.</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
+<p>WbW-R currently emphasizes topology through tool workflows (category-driven) rather
+than a dedicated R-native <code>topology</code> utility namespace equivalent to Python.</p>
+<p>At the same time, session-level topology helpers provide a fast path for
+geometry QA checks and validation gates before heavier vector operations.</p>
+<h2 id="topology-workflow-pattern"><a class="header" href="#topology-workflow-pattern">Topology Workflow Pattern</a></h2>
+<p>A robust topology-first script pattern is:</p>
+<ol>
+<li>Validate CRS compatibility first.</li>
+<li>Run fast predicate checks to detect obvious incompatibilities.</li>
+<li>Repair invalid polygon geometries if needed.</li>
+<li>Re-run critical predicates after repair.</li>
+<li>Continue into heavier vector processing only after checks pass.</li>
+</ol>
+<p>This keeps failures early, localized, and easier to diagnose.</p>
+<h2 id="session-level-topology-predicate-checks"><a class="header" href="#session-level-topology-predicate-checks">Session-Level Topology Predicate Checks</a></h2>
+<p>Use these methods when you need script-level yes/no checks on WKT geometries.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+poly &lt;- 'POLYGON((0 0,10 0,10 10,0 10,0 0))'
+pt &lt;- 'POINT(5 5)'
+
+print(s$topology_contains_wkt(poly, pt))
+print(s$topology_intersects_wkt(poly, pt))
+print(s$topology_within_wkt(pt, poly))
+print(s$topology_touches_wkt(poly, pt))
+print(s$topology_disjoint_wkt(poly, pt))
+</code></pre>
+<h2 id="topology-via-tool-workflows"><a class="header" href="#topology-via-tool-workflows">Topology via Tool Workflows</a></h2>
+<p>Use session execution and topology/geometry tool IDs through category discovery.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+# Discover likely topology-related tools
+hits &lt;- wbw_search_tools('topology')
+print(hits)
+
+# Inspect a specific candidate tool
+if (length(hits) &gt; 0) {
+  first_hit &lt;- hits[[1]]
+  tool_id &lt;- if (is.list(first_hit) &amp;&amp; !is.null(first_hit$tool_id)) first_hit$tool_id else as.character(first_hit)
+  print(wbw_describe_tool(tool_id))
+}
+</code></pre>
+<p>Use this pattern when topology checks are part of larger, file-based vector
+pipelines that should remain in Whitebox tooling end to end.</p>
+<h2 id="vector-topology-pattern"><a class="header" href="#vector-topology-pattern">Vector Topology Pattern</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+# Example pattern: run a topology-oriented vector tool once selected.
+# Replace 'tool_id_here' and args with the concrete tool from discovery.
+# wbw_run_tool(
+#   'tool_id_here',
+#   args = list(input = 'input.gpkg', output = 'output.gpkg'),
+#   session = s
+# )
+</code></pre>
+<p>Use this template after selecting a concrete tool ID through discovery.</p>
+<h2 id="geometry-validation-and-repair"><a class="header" href="#geometry-validation-and-repair">Geometry Validation and Repair</a></h2>
+<p>Use session helpers for pure WKT checks and repairs.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+invalid &lt;- 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
+print(s$topology_is_valid_polygon_wkt(invalid))
+
+fixed &lt;- s$topology_make_valid_polygon_wkt(invalid)
+print(fixed)
+
+buf &lt;- s$topology_buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+print(buf)
+</code></pre>
+<p>For broader in-memory feature editing, an <code>sf</code> interop path is still practical:</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+library(sf)
+
+v &lt;- wbw_read_vector('polygons.gpkg')
+g &lt;- v$to_sf()
+
+valid_flags &lt;- st_is_valid(g)
+print(table(valid_flags))
+
+g_fixed &lt;- st_make_valid(g)
+st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
+</code></pre>
+<h2 id="relationship-and-distance"><a class="header" href="#relationship-and-distance">Relationship and Distance</a></h2>
+<p>Use relation/distance methods when binary predicates are not expressive enough.</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+
+a &lt;- 'LINESTRING(0 0, 10 0)'
+b &lt;- 'LINESTRING(0 1, 10 1)'
+
+print(s$topology_distance_wkt(a, b))
+print(s$topology_relate_wkt(a, b))
+</code></pre>
+<h2 id="topology-method-reference"><a class="header" href="#topology-method-reference">Topology Method Reference</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Session Method</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>topology_intersects_wkt</code></td><td>Return <code>TRUE</code> when two geometries share any space.</td></tr>
+<tr><td><code>topology_contains_wkt</code></td><td>Return <code>TRUE</code> when geometry A strictly contains geometry B.</td></tr>
+<tr><td><code>topology_within_wkt</code></td><td>Return <code>TRUE</code> when geometry A is strictly within geometry B.</td></tr>
+<tr><td><code>topology_touches_wkt</code></td><td>Return <code>TRUE</code> when geometries meet at boundaries only.</td></tr>
+<tr><td><code>topology_disjoint_wkt</code></td><td>Return <code>TRUE</code> when geometries do not intersect.</td></tr>
+<tr><td><code>topology_crosses_wkt</code></td><td>Return <code>TRUE</code> when geometries cross with dimensional reduction behavior.</td></tr>
+<tr><td><code>topology_overlaps_wkt</code></td><td>Return <code>TRUE</code> when same-dimension geometries partially overlap.</td></tr>
+<tr><td><code>topology_covers_wkt</code></td><td>Boundary-aware containment test (<code>A</code> covers <code>B</code>).</td></tr>
+<tr><td><code>topology_covered_by_wkt</code></td><td>Boundary-aware containment test (<code>A</code> covered by <code>B</code>).</td></tr>
+<tr><td><code>topology_relate_wkt</code></td><td>Return DE-9IM relationship text for exact topology-rule evaluation.</td></tr>
+<tr><td><code>topology_distance_wkt</code></td><td>Return shortest distance between geometries.</td></tr>
+<tr><td><code>topology_vector_feature_relation</code></td><td>Evaluate relation between indexed features in vector objects.</td></tr>
+<tr><td><code>topology_is_valid_polygon_wkt</code></td><td>Check polygon validity before topology-sensitive workflows.</td></tr>
+<tr><td><code>topology_make_valid_polygon_wkt</code></td><td>Repair an invalid polygon WKT representation.</td></tr>
+<tr><td><code>topology_buffer_wkt</code></td><td>Create a buffered geometry from WKT and distance.</td></tr>
+</tbody></table>
+</div>
+<h2 id="guidance"><a class="header" href="#guidance">Guidance</a></h2>
+<ul>
+<li>Use <code>wbw_search_tools(...)</code> + <code>wbw_describe_tool(...)</code> to select backend topology tools.</li>
+<li>Use session topology helpers for fast script-level predicates and repairs.</li>
+<li>Use <code>sf</code> for broader in-memory feature editing when needed.</li>
+<li>Re-open outputs with <code>wbw_read_vector(...)</code> and verify schema/CRS after topology operations.</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
 <p>This chapter summarizes practical format support exposed through WbW-R.</p>
+<p>Choosing formats is a workflow architecture decision, not just a file-extension
+choice. You should evaluate read/write support together with ecosystem fit,
+compression behavior, and long-term maintainability of outputs shared across
+toolchains.</p>
 <p>Backend support comes from core crates:</p>
 <ul>
 <li>Raster: <code>wbraster</code></li>
@@ -777,14 +1279,23 @@ print(survey_utm$crs_epsg())
 <li>Lidar: <code>wblidar</code></li>
 </ul>
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
-<p>Commonly used raster formats include:</p>
-<ul>
-<li>GeoTIFF / BigTIFF / COG (<code>.tif</code>, <code>.tiff</code>)</li>
-<li>JPEG2000 / GeoJP2 (<code>.jp2</code>)</li>
-<li>GeoPackage raster (<code>.gpkg</code>)</li>
-<li>ENVI (<code>.hdr</code> with sidecar data)</li>
-<li>ER Mapper (<code>.ers</code>)</li>
-</ul>
+<p>Exhaustive raster format support in the current WbW-R build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>wbw_read_raster</code>)</th><th>Write (<code>wbw_write_raster</code>)</th><th>Common extensions / path rules</th></tr></thead><tbody>
+<tr><td>Esri ASCII Grid</td><td>Yes</td><td>Yes</td><td><code>.asc</code> (and <code>.grd</code> when detected as ASCII)</td></tr>
+<tr><td>Esri Binary Grid workspace</td><td>Yes</td><td>Backend-only</td><td>Esri Binary workspace directory (<code>hdr.adf</code> + <code>w001001.adf</code>) or <code>.adf</code></td></tr>
+<tr><td>GRASS ASCII Raster</td><td>Yes</td><td>Yes</td><td><code>.txt</code> / <code>.asc</code> when GRASS header keys are detected</td></tr>
+<tr><td>Surfer GRD</td><td>Yes</td><td>Yes</td><td><code>.grd</code> (DSAA / DSRB signatures)</td></tr>
+<tr><td>PCRaster</td><td>Yes</td><td>Yes</td><td><code>.map</code> (CSF signature)</td></tr>
+<tr><td>SAGA Binary Grid</td><td>Yes</td><td>Yes</td><td><code>.sdat</code>, <code>.sgrd</code></td></tr>
+<tr><td>Idrisi / TerrSet Raster</td><td>Yes</td><td>Yes</td><td><code>.rst</code>, <code>.rdc</code></td></tr>
+<tr><td>ER Mapper</td><td>Yes</td><td>Yes</td><td><code>.ers</code></td></tr>
+<tr><td>ENVI HDR-labelled raster</td><td>Yes</td><td>Yes</td><td><code>.hdr</code>, or data files (<code>.img</code>, <code>.dat</code>, <code>.bin</code>, <code>.raw</code>, <code>.bil</code>, <code>.bsq</code>, <code>.bip</code>) with <code>.hdr</code> sidecar</td></tr>
+<tr><td>GeoTIFF / BigTIFF / COG</td><td>Yes</td><td>Yes</td><td><code>.tif</code>, <code>.tiff</code></td></tr>
+<tr><td>GeoPackage raster</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>JPEG2000 / GeoJP2</td><td>Yes</td><td>Yes</td><td><code>.jp2</code></td></tr>
+<tr><td>Zarr</td><td>Yes</td><td>Yes</td><td><code>.zarr</code> store (directory / suffix)</td></tr>
+</tbody></table>
+</div>
 <p>Typical pattern:</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -792,14 +1303,22 @@ r &lt;- wbw_read_raster('dem.tif')
 wbw_write_raster(r, 'dem_out.tif')
 </code></pre>
 <h2 id="vector-formats"><a class="header" href="#vector-formats">Vector Formats</a></h2>
-<p>Commonly used vector formats include:</p>
-<ul>
-<li>GeoPackage (<code>.gpkg</code>)</li>
-<li>Shapefile (<code>.shp</code> and sidecar dataset files)</li>
-<li>GeoJSON (<code>.geojson</code>, <code>.json</code>)</li>
-<li>GeoParquet (<code>.parquet</code>)</li>
-<li>OSM PBF read workflows (<code>.osm.pbf</code>)</li>
-</ul>
+<p>Exhaustive vector format support in the current WbW-R build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>wbw_read_vector</code>)</th><th>Write (<code>wbw_write_vector</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>FlatGeobuf</td><td>Yes</td><td>Yes</td><td><code>.fgb</code></td></tr>
+<tr><td>GeoJSON</td><td>Yes</td><td>Yes</td><td><code>.geojson</code>, <code>.json</code></td></tr>
+<tr><td>GeoPackage</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
+<tr><td>GeoParquet</td><td>Yes</td><td>Yes</td><td><code>.parquet</code></td></tr>
+<tr><td>GML</td><td>Yes</td><td>Yes</td><td><code>.gml</code></td></tr>
+<tr><td>GPX</td><td>Yes</td><td>Yes</td><td><code>.gpx</code></td></tr>
+<tr><td>KML</td><td>Yes</td><td>Yes</td><td><code>.kml</code></td></tr>
+<tr><td>KMZ</td><td>Yes</td><td>Yes</td><td><code>.kmz</code></td></tr>
+<tr><td>MapInfo Interchange</td><td>Yes</td><td>Yes</td><td><code>.mif</code> with <code>.mid</code> sidecar</td></tr>
+<tr><td>OSM PBF</td><td>Yes</td><td>No</td><td><code>.osm.pbf</code> (read workflows only)</td></tr>
+<tr><td>ESRI Shapefile</td><td>Yes</td><td>Yes</td><td><code>.shp</code> plus dataset sidecars</td></tr>
+</tbody></table>
+</div>
+<p>When <code>wbw_write_vector(...)</code> is called without an extension, WbW-R defaults output to <code>.gpkg</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -807,12 +1326,16 @@ v &lt;- wbw_read_vector('roads.gpkg')
 wbw_write_vector(v, 'roads_out.gpkg')
 </code></pre>
 <h2 id="lidar-formats"><a class="header" href="#lidar-formats">Lidar Formats</a></h2>
-<p>Commonly used lidar formats include:</p>
-<ul>
-<li>LAS (<code>.las</code>)</li>
-<li>LAZ (<code>.laz</code>)</li>
-<li>COPC (<code>.copc.laz</code>)</li>
-</ul>
+<p>Exhaustive lidar format support in the current WbW-R build:</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>wbw_read_lidar</code>)</th><th>Write (<code>wbw_write_lidar</code>)</th><th>Extensions / notes</th></tr></thead><tbody>
+<tr><td>LAS</td><td>Yes</td><td>Yes</td><td><code>.las</code></td></tr>
+<tr><td>LAZ</td><td>Yes</td><td>Yes</td><td><code>.laz</code></td></tr>
+<tr><td>COPC</td><td>Yes</td><td>Yes</td><td><code>.copc.las</code>, <code>.copc.laz</code></td></tr>
+<tr><td>PLY</td><td>Yes</td><td>Yes</td><td><code>.ply</code></td></tr>
+<tr><td>E57</td><td>Yes</td><td>Yes</td><td><code>.e57</code></td></tr>
+</tbody></table>
+</div>
+<p>When <code>wbw_write_lidar(...)</code> is called without an extension, WbW-R defaults output to <code>.copc.laz</code>.</p>
 <p>Typical pattern:</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
@@ -833,6 +1356,13 @@ wbw_write_lidar(l, 'survey_out.copc.laz')
 <li><code>wbw_read_radarsat2(...)</code></li>
 <li><code>wbw_read_rcm(...)</code></li>
 </ul>
+<p>Bundle inputs may be either extracted directories or supported archives:</p>
+<ul>
+<li><code>.zip</code></li>
+<li><code>.tar</code></li>
+<li><code>.tar.gz</code></li>
+<li><code>.tgz</code></li>
+</ul>
 <p>See <a href="./working-with-sensor-bundles.html">Working with Sensor Bundles</a> for family-specific examples.</p>
 <h2 id="validation-guidance"><a class="header" href="#validation-guidance">Validation Guidance</a></h2>
 <ol>
@@ -840,61 +1370,12 @@ wbw_write_lidar(l, 'survey_out.copc.laz')
 <li>Re-open outputs and verify metadata after write operations.</li>
 <li>Use explicit options where format behavior must be reproducible.</li>
 </ol>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
-<p>WbW-R currently emphasizes topology through tool workflows (category-driven) rather
-than a dedicated R-native <code>topology</code> utility namespace equivalent to Python.</p>
-<h2 id="topology-via-tool-workflows"><a class="header" href="#topology-via-tool-workflows">Topology via Tool Workflows</a></h2>
-<p>Use session execution and topology/geometry tool IDs through category discovery.</p>
-<pre><code class="language-r">library(whiteboxworkflows)
-
-s &lt;- wbw_session()
-
-# Discover likely topology-related tools
-hits &lt;- wbw_search_tools('topology')
-print(hits)
-
-# Inspect a specific candidate tool
-if (length(hits) &gt; 0) {
-  first_hit &lt;- hits[[1]]
-  tool_id &lt;- if (is.list(first_hit) &amp;&amp; !is.null(first_hit$tool_id)) first_hit$tool_id else as.character(first_hit)
-  print(wbw_describe_tool(tool_id))
-}
-</code></pre>
-<h2 id="vector-topology-pattern"><a class="header" href="#vector-topology-pattern">Vector Topology Pattern</a></h2>
-<pre><code class="language-r">library(whiteboxworkflows)
-
-s &lt;- wbw_session()
-
-# Example pattern: run a topology-oriented vector tool once selected.
-# Replace 'tool_id_here' and args with the concrete tool from discovery.
-# wbw_run_tool(
-#   'tool_id_here',
-#   args = list(input = 'input.gpkg', output = 'output.gpkg'),
-#   session = s
-# )
-</code></pre>
-<h2 id="geometry-validation-via-interop"><a class="header" href="#geometry-validation-via-interop">Geometry Validation via Interop</a></h2>
-<p>For strict in-memory geometry predicates/repairs in R scripts, an <code>sf</code> interop path is often practical.</p>
-<pre><code class="language-r">library(whiteboxworkflows)
-library(sf)
-
-v &lt;- wbw_read_vector('polygons.gpkg')
-g &lt;- v$to_sf()
-
-valid_flags &lt;- st_is_valid(g)
-print(table(valid_flags))
-
-g_fixed &lt;- st_make_valid(g)
-st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
-</code></pre>
-<h2 id="guidance"><a class="header" href="#guidance">Guidance</a></h2>
-<ul>
-<li>Use <code>wbw_search_tools(...)</code> + <code>wbw_describe_tool(...)</code> to select backend topology tools.</li>
-<li>Use <code>sf</code> for script-level predicate checks and ad hoc geometry fixes when needed.</li>
-<li>Re-open outputs with <code>wbw_read_vector(...)</code> and verify schema/CRS after topology operations.</li>
-</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interoperability"><a class="header" href="#interoperability">Interoperability</a></h1>
 <p>This chapter provides practical roundtrip patterns between WbW-R and R spatial tooling.</p>
+<p>Interoperability should be treated as deliberate boundary crossing. Each
+conversion step can affect metadata fidelity, CRS representation, numeric
+precision, and schema details. The examples here emphasize explicit handoff
+points and validation checkpoints so multi-package workflows remain defensible.</p>
 <h2 id="copy-boundary-model"><a class="header" href="#copy-boundary-model">Copy-Boundary Model</a></h2>
 <ul>
 <li>Array exchange via <code>to_array()</code> and <code>wbw_array_to_raster(...)</code> is an explicit in-memory boundary.</li>
@@ -902,6 +1383,7 @@ st_write(g_fixed, 'polygons_valid.gpkg', delete_dsn = TRUE, quiet = TRUE)
 <li>Always validate metadata after roundtrip.</li>
 </ul>
 <h2 id="terra-roundtrip"><a class="header" href="#terra-roundtrip">terra Roundtrip</a></h2>
+<p>Use this when your raster workflow depends on terra-native functions.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 library(terra)
 
@@ -916,6 +1398,7 @@ r_back &lt;- wbw_read_raster('dem_terra_smoothed.tif')
 print(r_back$metadata())
 </code></pre>
 <h2 id="stars-roundtrip"><a class="header" href="#stars-roundtrip">stars Roundtrip</a></h2>
+<p>Use this for labeled-array operations and grid math in stars workflows.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 library(stars)
 
@@ -931,6 +1414,7 @@ r_back &lt;- wbw_read_raster('dem_stars_scaled.tif')
 print(r_back$metadata())
 </code></pre>
 <h2 id="sf-roundtrip-vector"><a class="header" href="#sf-roundtrip-vector">sf Roundtrip (Vector)</a></h2>
+<p>Use this when vector editing and validity checks are more convenient in sf.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 library(sf)
 
@@ -953,13 +1437,19 @@ print(v_back$schema())
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="licensing"><a class="header" href="#licensing">Licensing</a></h1>
 <p>This chapter documents open, signed entitlement, and floating license startup patterns in WbW-R.</p>
+<p>Licensing mode is an operational dependency that should be explicit in scripts.
+The objective is to make startup behavior predictable and auditable: define which
+mode is expected, how fallback is handled, and what diagnostics are captured when
+activation fails.</p>
 <h2 id="open-mode"><a class="header" href="#open-mode">Open Mode</a></h2>
+<p>Use this mode for OSS-only workflows or environments without entitlement needs.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session()
 print(s)
 </code></pre>
 <h2 id="signed-entitlement-mode"><a class="header" href="#signed-entitlement-mode">Signed Entitlement Mode</a></h2>
+<p>Use this for managed deployments with entitlement payload verification.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 signed_entitlement_json &lt;- '...'
@@ -975,6 +1465,7 @@ s &lt;- wbw_session(
 print(s)
 </code></pre>
 <h2 id="floating-license-mode"><a class="header" href="#floating-license-mode">Floating License Mode</a></h2>
+<p>Use this for centrally managed license allocation across users or machines.</p>
 <pre><code class="language-r">library(whiteboxworkflows)
 
 s &lt;- wbw_session(
@@ -1002,6 +1493,10 @@ print(s)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="api-reference-strategy"><a class="header" href="#api-reference-strategy">API Reference Strategy</a></h1>
 <p>Manual chapters provide narrative and recipes.</p>
+<p>This separation between narrative guidance and parameter-complete references is
+intentional. The manual answers workflow and design questions, while shared tool
+docs provide exhaustive argument contracts. Keeping these concerns separate makes
+the manual easier to read without reducing technical precision.</p>
 <p>Detailed tool-level parameter references remain in shared tool docs.</p>
 <h2 id="reference-boundaries"><a class="header" href="#reference-boundaries">Reference Boundaries</a></h2>
 <ul>
@@ -1017,35 +1512,40 @@ print(s)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="script-index"><a class="header" href="#script-index">Script Index</a></h1>
 <p>Use this index to map manual chapters to runnable examples.</p>
+<p>Treat this chapter as the transition from concept to implementation. When
+building a new workflow, start from the closest example script and adapt it with
+your paths and parameters rather than composing from isolated snippets. This
+usually produces safer and more maintainable scripts.</p>
 <h2 id="core-session-and-discovery"><a class="header" href="#core-session-and-discovery">Core Session and Discovery</a></h2>
 <ul>
-<li><code>crates/wbw_r/examples/generated_session_example.R</code></li>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/generated_session_example.R</code></li>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/golden_path_workflows.R</code></li>
+<li><code>crates/wbw_r/examples/generated_session_example.R</code> - baseline session creation and discovery flow</li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/generated_session_example.R</code> - package-scoped session bootstrap pattern</li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/golden_path_workflows.R</code> - representative end-to-end workflow chain</li>
 </ul>
 <h2 id="raster-workflows"><a class="header" href="#raster-workflows">Raster Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/raster_object_quickstart.R</code></li>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R</code></li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/raster_object_quickstart.R</code> - object lifecycle and metadata checks</li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R</code> - array conversion and persistence roundtrip</li>
 </ul>
 <h2 id="vector-workflows"><a class="header" href="#vector-workflows">Vector Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/vector_object_quickstart.R</code></li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/vector_object_quickstart.R</code> - schema-first vector workflow baseline</li>
 </ul>
 <h2 id="lidar-workflows"><a class="header" href="#lidar-workflows">Lidar Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/lidar_object_quickstart.R</code></li>
-<li><code>crates/wbw_r/examples/lidar_write_options.R</code></li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/lidar_object_quickstart.R</code> - lidar object lifecycle and metadata checks</li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/lidar_chunked_matrix_streaming.R</code> - chunked matrix processing at scale</li>
+<li><code>crates/wbw_r/examples/lidar_write_options.R</code> - output option tuning for lidar formats</li>
 </ul>
 <h2 id="sensor-bundle-workflows"><a class="header" href="#sensor-bundle-workflows">Sensor Bundle Workflows</a></h2>
 <ul>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R</code></li>
-<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R</code></li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R</code> - bundle intake and key inspection baseline</li>
+<li><code>crates/wbw_r/r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R</code> - cross-family preview pattern</li>
 </ul>
 <h2 id="licensing-1"><a class="header" href="#licensing-1">Licensing</a></h2>
 <ul>
-<li><code>crates/wbw_r/examples/licensing_offline.R</code></li>
-<li><code>crates/wbw_r/examples/licensing_floating_online.R</code></li>
+<li><code>crates/wbw_r/examples/licensing_offline.R</code> - local entitlement startup example</li>
+<li><code>crates/wbw_r/examples/licensing_floating_online.R</code> - floating license provider startup example</li>
 </ul>
 
                     </main>

@@ -172,6 +172,11 @@ pub struct RouteEventPointsFromTableTool;
 pub struct RouteEventLinesFromTableTool;
 pub struct RouteEventPointsFromLayerTool;
 pub struct RouteEventLinesFromLayerTool;
+pub struct RouteEventSplitTool;
+pub struct RouteEventMergeTool;
+pub struct RouteEventOverlayTool;
+pub struct RouteCalibrateTool;
+pub struct RouteRecalibrateTool;
 pub struct VectorSummaryStatisticsTool;
 pub struct RenameFieldTool;
 pub struct DeleteFieldTool;
@@ -17538,6 +17543,19 @@ fn field_value_to_f64(value: &wbvector::FieldValue) -> Option<f64> {
     }
 }
 
+fn field_value_to_signature_string(value: &wbvector::FieldValue) -> String {
+    match value {
+        wbvector::FieldValue::Integer(v) => format!("i:{}", v),
+        wbvector::FieldValue::Float(v) => format!("f:{:.15}", v),
+        wbvector::FieldValue::Text(v) => format!("t:{}", v),
+        wbvector::FieldValue::Boolean(v) => format!("b:{}", v),
+        wbvector::FieldValue::Date(v) => format!("d:{}", v),
+        wbvector::FieldValue::DateTime(v) => format!("dt:{}", v),
+        wbvector::FieldValue::Null => "null".to_string(),
+        wbvector::FieldValue::Blob(v) => format!("blob:{}", v.len()),
+    }
+}
+
 fn build_prefixed_event_fields_from_layer(
     events: &wbvector::Layer,
 ) -> Vec<(usize, String, wbvector::FieldType)> {
@@ -20689,6 +20707,1339 @@ impl Tool for RouteEventLinesFromLayerTool {
                 attributes: attrs,
             });
             next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+fn feature_join_key(
+    feature: &wbvector::Feature,
+    id_idx: Option<usize>,
+) -> String {
+    if let Some(idx) = id_idx {
+        field_value_to_join_key(feature.attributes.get(idx).unwrap_or(&wbvector::FieldValue::Null))
+    } else {
+        feature.fid.to_string()
+    }
+}
+
+fn ensure_attr_slot(feature: &mut wbvector::Feature, idx: usize) {
+    while feature.attributes.len() <= idx {
+        feature.attributes.push(wbvector::FieldValue::Null);
+    }
+}
+
+fn set_feature_attr(feature: &mut wbvector::Feature, idx: usize, value: wbvector::FieldValue) {
+    ensure_attr_slot(feature, idx);
+    feature.attributes[idx] = value;
+}
+
+impl Tool for RouteCalibrateTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_calibrate",
+            display_name: "Route Calibrate",
+            summary: "Calibrates route start/end measures from control points with known measures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "control_points", description: "Input control-point layer.", required: true },
+                ToolParamSpec { name: "control_measure_field", description: "Control-point field containing known measure values.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional route identifier field in routes. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "control_route_id_field", description: "Optional route identifier field in control points. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "from_measure_field", description: "Output field for route start measure (default 'from_measure').", required: false },
+                ToolParamSpec { name: "to_measure_field", description: "Output field for route end measure (default 'to_measure').", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Maximum control-point offset distance from route geometry (default 1.0).", required: false },
+                ToolParamSpec { name: "output", description: "Output calibrated route layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("control_points".to_string(), json!("control_points.gpkg"));
+        defaults.insert("control_measure_field".to_string(), json!("measure"));
+        defaults.insert("snap_tolerance".to_string(), json!(1.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("route_id"));
+        example_args.insert("control_route_id_field".to_string(), json!("route_id"));
+        example_args.insert("output".to_string(), json!("routes_calibrated.gpkg"));
+
+        ToolManifest {
+            id: "route_calibrate".to_string(),
+            display_name: "Route Calibrate".to_string(),
+            summary: "Calibrates route start/end measures from control points with known measures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "control_points".to_string(), description: "Input control-point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "control_measure_field".to_string(), description: "Control-point field containing known measure values.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional route identifier field in routes. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "control_route_id_field".to_string(), description: "Optional route identifier field in control points. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Output field for route start measure (default 'from_measure').".to_string(), required: false },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Output field for route end measure (default 'to_measure').".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Maximum control-point offset distance from route geometry (default 1.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output calibrated route layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_calibrate_basic".to_string(),
+                description: "Calibrates route start/end measures using route control points.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "calibration".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let control_points = load_vector_arg(args, "control_points")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        if control_points.geom_type != Some(wbvector::GeometryType::Point)
+            && control_points.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("control_points must be a point layer".to_string()));
+        }
+
+        let measure_field = parse_string_arg(args, "control_measure_field")?;
+        if control_points.schema.field_index(measure_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "control_measure_field '{}' not found in control_points schema",
+                measure_field
+            )));
+        }
+        if let Some(route_id_field) = parse_optional_string_arg(args, "route_id_field") {
+            if routes.schema.field_index(route_id_field).is_none() {
+                return Err(ToolError::Validation(format!(
+                    "route_id_field '{}' not found in routes schema",
+                    route_id_field
+                )));
+            }
+        }
+        if let Some(control_route_id_field) = parse_optional_string_arg(args, "control_route_id_field") {
+            if control_points.schema.field_index(control_route_id_field).is_none() {
+                return Err(ToolError::Validation(format!(
+                    "control_route_id_field '{}' not found in control_points schema",
+                    control_route_id_field
+                )));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        let _ = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(1.0);
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let control_points = load_vector_arg(args, "control_points")?;
+        let control_measure_field = parse_string_arg(args, "control_measure_field")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let control_route_id_field = parse_optional_string_arg(args, "control_route_id_field");
+        let from_measure_field = parse_optional_string_arg(args, "from_measure_field").unwrap_or("from_measure");
+        let to_measure_field = parse_optional_string_arg(args, "to_measure_field").unwrap_or("to_measure");
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(1.0).max(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let route_id_idx = route_id_field.and_then(|f| routes.schema.field_index(f));
+        let control_route_id_idx = control_route_id_field.and_then(|f| control_points.schema.field_index(f));
+        let control_measure_idx = control_points
+            .schema
+            .field_index(control_measure_field)
+            .ok_or_else(|| ToolError::Execution("control_measure_field missing unexpectedly".to_string()))?;
+
+        let mut controls_by_route = HashMap::<String, Vec<(f64, wbvector::Coord)>>::new();
+        for feature in &control_points.features {
+            let route_key = feature_join_key(feature, control_route_id_idx);
+            if route_key.is_empty() {
+                continue;
+            }
+            let measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(control_measure_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("control feature {} has invalid measure", feature.fid)))?;
+            let point = match feature.geometry.as_ref() {
+                Some(wbvector::Geometry::Point(c)) => c.clone(),
+                Some(wbvector::Geometry::MultiPoint(points)) => points.first().cloned().ok_or_else(|| {
+                    ToolError::Execution(format!("control feature {} has empty multipoint geometry", feature.fid))
+                })?,
+                _ => continue,
+            };
+            controls_by_route
+                .entry(route_key)
+                .or_insert_with(Vec::new)
+                .push((measure, point));
+        }
+
+        let mut output = routes.clone();
+        let from_idx = output.schema.field_index(from_measure_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(from_measure_field, wbvector::FieldType::Float));
+            output.schema.field_index(from_measure_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating from_measure output field".to_string()))?;
+        let to_idx = output.schema.field_index(to_measure_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(to_measure_field, wbvector::FieldType::Float));
+            output.schema.field_index(to_measure_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating to_measure output field".to_string()))?;
+        let status_field = "calib_status";
+        let status_idx = output.schema.field_index(status_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(status_field, wbvector::FieldType::Text));
+            output.schema.field_index(status_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating calib_status output field".to_string()))?;
+        let count_field = "control_count";
+        let count_idx = output.schema.field_index(count_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(count_field, wbvector::FieldType::Integer));
+            output.schema.field_index(count_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating control_count output field".to_string()))?;
+
+        for feature in output.features.iter_mut() {
+            let route_key = feature_join_key(feature, route_id_idx);
+            let Some(geometry) = feature.geometry.clone() else {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_geometry".to_string()));
+                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
+                continue;
+            };
+            if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("not_line_geometry".to_string()));
+                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
+                continue;
+            }
+
+            let controls = controls_by_route.get(route_key.as_str()).cloned().unwrap_or_default();
+            if controls.is_empty() {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("no_controls".to_string()));
+                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
+                continue;
+            }
+
+            let mut projected = Vec::<(f64, f64)>::new();
+            for (control_measure, control_point) in &controls {
+                if let Some((distance_along, offset_dist, _)) = locate_point_along_route_geometry(control_point, &geometry) {
+                    if offset_dist <= snap_tolerance {
+                        projected.push((distance_along, *control_measure));
+                    }
+                }
+            }
+            projected.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+            set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(projected.len() as i64));
+
+            if projected.is_empty() {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("no_snapped_controls".to_string()));
+                continue;
+            }
+
+            let mut monotonic = true;
+            for pair in projected.windows(2) {
+                if pair[1].1 < pair[0].1 - 1.0e-12 {
+                    monotonic = false;
+                    break;
+                }
+            }
+            if !monotonic {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("non_monotonic_controls".to_string()));
+                continue;
+            }
+
+            let route_length = route_geometry_length(&geometry);
+            let (from_measure, to_measure, status) = if projected.len() == 1 {
+                let (d, m) = projected[0];
+                let from = m - d;
+                (from, from + route_length, "single_control_assumed_unit_scale")
+            } else {
+                let (d0, m0) = projected[0];
+                let (d1, m1) = projected[projected.len() - 1];
+                if (d1 - d0).abs() <= 1.0e-12 {
+                    (0.0, 0.0, "degenerate_control_positions")
+                } else {
+                    let slope = (m1 - m0) / (d1 - d0);
+                    let intercept = m0 - slope * d0;
+                    (intercept, intercept + slope * route_length, "calibrated")
+                }
+            };
+
+            if status == "calibrated" || status == "single_control_assumed_unit_scale" {
+                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from_measure));
+                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to_measure));
+            }
+            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text(status.to_string()));
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteRecalibrateTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_recalibrate",
+            display_name: "Route Recalibrate",
+            summary: "Recalibrates edited route measures from a reference route layer while preserving route measure continuity.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "original_routes", description: "Reference routes containing prior calibrated measures.", required: true },
+                ToolParamSpec { name: "edited_routes", description: "Edited routes to recalibrate.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional shared route identifier field. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "from_measure_field", description: "Measure-start field name (default 'from_measure').", required: false },
+                ToolParamSpec { name: "to_measure_field", description: "Measure-end field name (default 'to_measure').", required: false },
+                ToolParamSpec { name: "output", description: "Output recalibrated route layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("original_routes".to_string(), json!("routes_original.gpkg"));
+        defaults.insert("edited_routes".to_string(), json!("routes_edited.gpkg"));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("route_id"));
+        example_args.insert("output".to_string(), json!("routes_recalibrated.gpkg"));
+
+        ToolManifest {
+            id: "route_recalibrate".to_string(),
+            display_name: "Route Recalibrate".to_string(),
+            summary: "Recalibrates edited route measures from a reference route layer while preserving route measure continuity.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "original_routes".to_string(), description: "Reference routes containing prior calibrated measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "edited_routes".to_string(), description: "Edited routes to recalibrate.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional shared route identifier field. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Measure-start field name (default 'from_measure').".to_string(), required: false },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Measure-end field name (default 'to_measure').".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output recalibrated route layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_recalibrate_basic".to_string(),
+                description: "Scales edited route measures from a previously calibrated route layer.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "recalibration".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let original_routes = load_vector_arg(args, "original_routes")?;
+        let edited_routes = load_vector_arg(args, "edited_routes")?;
+        for (name, layer) in [("original_routes", &original_routes), ("edited_routes", &edited_routes)] {
+            if layer.geom_type != Some(wbvector::GeometryType::LineString)
+                && layer.geom_type != Some(wbvector::GeometryType::MultiLineString)
+            {
+                return Err(ToolError::Validation(format!("{} must be a line layer", name)));
+            }
+        }
+
+        let from_measure_field = parse_optional_string_arg(args, "from_measure_field").unwrap_or("from_measure");
+        let to_measure_field = parse_optional_string_arg(args, "to_measure_field").unwrap_or("to_measure");
+        if original_routes.schema.field_index(from_measure_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "from_measure_field '{}' not found in original_routes schema",
+                from_measure_field
+            )));
+        }
+        if original_routes.schema.field_index(to_measure_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "to_measure_field '{}' not found in original_routes schema",
+                to_measure_field
+            )));
+        }
+
+        if let Some(route_id_field) = parse_optional_string_arg(args, "route_id_field") {
+            if original_routes.schema.field_index(route_id_field).is_none() {
+                return Err(ToolError::Validation(format!(
+                    "route_id_field '{}' not found in original_routes schema",
+                    route_id_field
+                )));
+            }
+            if edited_routes.schema.field_index(route_id_field).is_none() {
+                return Err(ToolError::Validation(format!(
+                    "route_id_field '{}' not found in edited_routes schema",
+                    route_id_field
+                )));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let original_routes = load_vector_arg(args, "original_routes")?;
+        let edited_routes = load_vector_arg(args, "edited_routes")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let from_measure_field = parse_optional_string_arg(args, "from_measure_field").unwrap_or("from_measure");
+        let to_measure_field = parse_optional_string_arg(args, "to_measure_field").unwrap_or("to_measure");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let original_route_id_idx = route_id_field.and_then(|f| original_routes.schema.field_index(f));
+        let edited_route_id_idx = route_id_field.and_then(|f| edited_routes.schema.field_index(f));
+        let original_from_idx = original_routes
+            .schema
+            .field_index(from_measure_field)
+            .ok_or_else(|| ToolError::Execution("from_measure_field missing unexpectedly".to_string()))?;
+        let original_to_idx = original_routes
+            .schema
+            .field_index(to_measure_field)
+            .ok_or_else(|| ToolError::Execution("to_measure_field missing unexpectedly".to_string()))?;
+
+        let mut reference = HashMap::<String, (f64, f64, f64)>::new();
+        for feature in &original_routes.features {
+            let key = feature_join_key(feature, original_route_id_idx);
+            if key.is_empty() {
+                continue;
+            }
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+                continue;
+            }
+            let from_measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(original_from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            let to_measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(original_to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if let (Some(from_m), Some(to_m)) = (from_measure, to_measure) {
+                reference.insert(key, (from_m, to_m, route_geometry_length(geometry)));
+            }
+        }
+
+        let mut output = edited_routes.clone();
+        let from_idx = output.schema.field_index(from_measure_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(from_measure_field, wbvector::FieldType::Float));
+            output.schema.field_index(from_measure_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating from_measure output field".to_string()))?;
+        let to_idx = output.schema.field_index(to_measure_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(to_measure_field, wbvector::FieldType::Float));
+            output.schema.field_index(to_measure_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating to_measure output field".to_string()))?;
+        let status_field = "recalib_status";
+        let status_idx = output.schema.field_index(status_field).or_else(|| {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(status_field, wbvector::FieldType::Text));
+            output.schema.field_index(status_field)
+        }).ok_or_else(|| ToolError::Execution("failed creating recalib_status output field".to_string()))?;
+
+        for feature in output.features.iter_mut() {
+            let key = feature_join_key(feature, edited_route_id_idx);
+            let Some((from_m, to_m, reference_len)) = reference.get(key.as_str()).cloned() else {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_reference".to_string()));
+                continue;
+            };
+            let Some(geometry) = feature.geometry.as_ref() else {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_geometry".to_string()));
+                continue;
+            };
+            if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("not_line_geometry".to_string()));
+                continue;
+            }
+
+            let edited_len = route_geometry_length(geometry);
+            if reference_len <= 1.0e-12 {
+                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from_m));
+                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to_m));
+                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("recalibrated_zero_length_reference".to_string()));
+                continue;
+            }
+
+            let scale = edited_len / reference_len;
+            let new_from = from_m;
+            let new_to = from_m + (to_m - from_m) * scale;
+            set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(new_from));
+            set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(new_to));
+            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("recalibrated_scaled".to_string()));
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventSplitTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_split",
+            display_name: "Route Event Split",
+            summary: "Splits route events by per-route boundary measures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "events", description: "Input event layer containing route intervals.", required: true },
+                ToolParamSpec { name: "boundaries", description: "Input boundary layer containing route measure breakpoints.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "Event-layer route identifier field.", required: true },
+                ToolParamSpec { name: "from_measure_field", description: "Event-layer interval start field.", required: true },
+                ToolParamSpec { name: "to_measure_field", description: "Event-layer interval end field.", required: true },
+                ToolParamSpec { name: "boundary_route_field", description: "Boundary-layer route identifier field.", required: true },
+                ToolParamSpec { name: "boundary_measure_field", description: "Boundary-layer measure field.", required: true },
+                ToolParamSpec { name: "min_segment_length", description: "Optional minimum split segment length to keep (default 0.0).", required: false },
+                ToolParamSpec { name: "output", description: "Output split-event layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("events".to_string(), json!("events.gpkg"));
+        defaults.insert("boundaries".to_string(), json!("event_boundaries.gpkg"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("boundary_route_field".to_string(), json!("route_id"));
+        defaults.insert("boundary_measure_field".to_string(), json!("measure"));
+        defaults.insert("min_segment_length".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("events_split.gpkg"));
+
+        ToolManifest {
+            id: "route_event_split".to_string(),
+            display_name: "Route Event Split".to_string(),
+            summary: "Splits route events by per-route boundary measures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "events".to_string(), description: "Input event layer containing route intervals.".to_string(), required: true },
+                ToolParamDescriptor { name: "boundaries".to_string(), description: "Input boundary layer containing route measure breakpoints.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "Event-layer route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Event-layer interval start field.".to_string(), required: true },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Event-layer interval end field.".to_string(), required: true },
+                ToolParamDescriptor { name: "boundary_route_field".to_string(), description: "Boundary-layer route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "boundary_measure_field".to_string(), description: "Boundary-layer measure field.".to_string(), required: true },
+                ToolParamDescriptor { name: "min_segment_length".to_string(), description: "Optional minimum split segment length to keep (default 0.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output split-event layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_split_basic".to_string(),
+                description: "Splits route event intervals at supplied route measure boundaries.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "split".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let boundaries = load_vector_arg(args, "boundaries")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        let boundary_route_field = parse_string_arg(args, "boundary_route_field")?;
+        let boundary_measure_field = parse_string_arg(args, "boundary_measure_field")?;
+        if events.schema.field_index(event_route_field).is_none() {
+            return Err(ToolError::Validation(format!("event_route_field '{}' not found in events schema", event_route_field)));
+        }
+        if events.schema.field_index(from_measure_field).is_none() {
+            return Err(ToolError::Validation(format!("from_measure_field '{}' not found in events schema", from_measure_field)));
+        }
+        if events.schema.field_index(to_measure_field).is_none() {
+            return Err(ToolError::Validation(format!("to_measure_field '{}' not found in events schema", to_measure_field)));
+        }
+        if boundaries.schema.field_index(boundary_route_field).is_none() {
+            return Err(ToolError::Validation(format!("boundary_route_field '{}' not found in boundaries schema", boundary_route_field)));
+        }
+        if boundaries.schema.field_index(boundary_measure_field).is_none() {
+            return Err(ToolError::Validation(format!("boundary_measure_field '{}' not found in boundaries schema", boundary_measure_field)));
+        }
+        let _ = parse_optional_f64_arg(args, "min_segment_length").unwrap_or(0.0);
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let boundaries = load_vector_arg(args, "boundaries")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        let boundary_route_field = parse_string_arg(args, "boundary_route_field")?;
+        let boundary_measure_field = parse_string_arg(args, "boundary_measure_field")?;
+        let min_segment_length = parse_optional_f64_arg(args, "min_segment_length").unwrap_or(0.0).max(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let event_route_idx = events
+            .schema
+            .field_index(event_route_field)
+            .ok_or_else(|| ToolError::Execution("event_route_field missing unexpectedly".to_string()))?;
+        let from_idx = events
+            .schema
+            .field_index(from_measure_field)
+            .ok_or_else(|| ToolError::Execution("from_measure_field missing unexpectedly".to_string()))?;
+        let to_idx = events
+            .schema
+            .field_index(to_measure_field)
+            .ok_or_else(|| ToolError::Execution("to_measure_field missing unexpectedly".to_string()))?;
+
+        let boundary_route_idx = boundaries
+            .schema
+            .field_index(boundary_route_field)
+            .ok_or_else(|| ToolError::Execution("boundary_route_field missing unexpectedly".to_string()))?;
+        let boundary_measure_idx = boundaries
+            .schema
+            .field_index(boundary_measure_field)
+            .ok_or_else(|| ToolError::Execution("boundary_measure_field missing unexpectedly".to_string()))?;
+
+        let mut boundary_map = HashMap::<String, Vec<f64>>::new();
+        for feature in &boundaries.features {
+            let key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(boundary_route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if key.is_empty() {
+                continue;
+            }
+            let Some(measure) = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(boundary_measure_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            ) else {
+                return Err(ToolError::Execution(format!("boundary feature {} has invalid measure", feature.fid)));
+            };
+            boundary_map.entry(key).or_insert_with(Vec::new).push(measure);
+        }
+        for values in boundary_map.values_mut() {
+            values.sort_by(|a, b| a.total_cmp(b));
+            values.dedup_by(|a, b| (*a - *b).abs() <= 1.0e-12);
+        }
+
+        let mut output = events.clone();
+        output.features.clear();
+        let split_seq_idx = output.schema.field_index("split_seq").or_else(|| {
+            output.schema.add_field(wbvector::FieldDef::new("split_seq", wbvector::FieldType::Integer));
+            output.schema.field_index("split_seq")
+        }).ok_or_else(|| ToolError::Execution("failed creating split_seq field".to_string()))?;
+        let parent_fid_idx = output.schema.field_index("parent_fid").or_else(|| {
+            output.schema.add_field(wbvector::FieldDef::new("parent_fid", wbvector::FieldType::Integer));
+            output.schema.field_index("parent_fid")
+        }).ok_or_else(|| ToolError::Execution("failed creating parent_fid field".to_string()))?;
+
+        let mut next_fid = 1u64;
+        for feature in &events.features {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(event_route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("event feature {} has empty route id", feature.fid)));
+            }
+            let from_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from measure", feature.fid)))?;
+            let to_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to measure", feature.fid)))?;
+
+            let mut cuts = vec![from_m];
+            if let Some(boundaries_for_route) = boundary_map.get(route_key.as_str()) {
+                if to_m >= from_m {
+                    for boundary in boundaries_for_route {
+                        if *boundary > from_m + 1.0e-12 && *boundary < to_m - 1.0e-12 {
+                            cuts.push(*boundary);
+                        }
+                    }
+                    cuts.sort_by(|a, b| a.total_cmp(b));
+                } else {
+                    for boundary in boundaries_for_route {
+                        if *boundary > to_m + 1.0e-12 && *boundary < from_m - 1.0e-12 {
+                            cuts.push(*boundary);
+                        }
+                    }
+                    cuts.sort_by(|a, b| b.total_cmp(a));
+                }
+            }
+            cuts.push(to_m);
+
+            let mut split_seq: i64 = 1;
+            for pair in cuts.windows(2) {
+                let segment_from = pair[0];
+                let segment_to = pair[1];
+                if (segment_to - segment_from).abs() < min_segment_length {
+                    continue;
+                }
+
+                let mut split_feature = feature.clone();
+                split_feature.fid = next_fid;
+                set_feature_attr(&mut split_feature, from_idx, wbvector::FieldValue::Float(segment_from));
+                set_feature_attr(&mut split_feature, to_idx, wbvector::FieldValue::Float(segment_to));
+                set_feature_attr(&mut split_feature, split_seq_idx, wbvector::FieldValue::Integer(split_seq));
+                set_feature_attr(&mut split_feature, parent_fid_idx, wbvector::FieldValue::Integer(feature.fid as i64));
+                output.features.push(split_feature);
+
+                next_fid += 1;
+                split_seq += 1;
+            }
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventMergeTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_merge",
+            display_name: "Route Event Merge",
+            summary: "Merges adjacent compatible route events.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "events", description: "Input event layer containing route intervals.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "Event-layer route identifier field.", required: true },
+                ToolParamSpec { name: "from_measure_field", description: "Event-layer interval start field.", required: true },
+                ToolParamSpec { name: "to_measure_field", description: "Event-layer interval end field.", required: true },
+                ToolParamSpec { name: "group_fields", description: "Optional comma-delimited fields used for merge compatibility. Defaults to all non-measure fields.", required: false },
+                ToolParamSpec { name: "gap_tolerance", description: "Maximum gap allowed for adjacency merge (default 0.0).", required: false },
+                ToolParamSpec { name: "conflict_mode", description: "Overlap handling mode: error|skip (default error).", required: false },
+                ToolParamSpec { name: "output", description: "Output merged-event layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("events".to_string(), json!("events.gpkg"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("gap_tolerance".to_string(), json!(0.0));
+        defaults.insert("conflict_mode".to_string(), json!("error"));
+        let mut example_args = defaults.clone();
+        example_args.insert("group_fields".to_string(), json!("route_id,road_class,speed"));
+        example_args.insert("output".to_string(), json!("events_merged.gpkg"));
+
+        ToolManifest {
+            id: "route_event_merge".to_string(),
+            display_name: "Route Event Merge".to_string(),
+            summary: "Merges adjacent compatible route events.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "events".to_string(), description: "Input event layer containing route intervals.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "Event-layer route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Event-layer interval start field.".to_string(), required: true },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Event-layer interval end field.".to_string(), required: true },
+                ToolParamDescriptor { name: "group_fields".to_string(), description: "Optional comma-delimited fields used for merge compatibility. Defaults to all non-measure fields.".to_string(), required: false },
+                ToolParamDescriptor { name: "gap_tolerance".to_string(), description: "Maximum gap allowed for adjacency merge (default 0.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "conflict_mode".to_string(), description: "Overlap handling mode: error|skip (default error).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output merged-event layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_merge_basic".to_string(),
+                description: "Merges compatible adjacent events on each route.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "merge".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        if events.schema.field_index(event_route_field).is_none() {
+            return Err(ToolError::Validation(format!("event_route_field '{}' not found in events schema", event_route_field)));
+        }
+        if events.schema.field_index(from_measure_field).is_none() {
+            return Err(ToolError::Validation(format!("from_measure_field '{}' not found in events schema", from_measure_field)));
+        }
+        if events.schema.field_index(to_measure_field).is_none() {
+            return Err(ToolError::Validation(format!("to_measure_field '{}' not found in events schema", to_measure_field)));
+        }
+
+        if let Some(group_fields) = parse_optional_string_arg(args, "group_fields") {
+            for name in group_fields.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                if events.schema.field_index(name).is_none() {
+                    return Err(ToolError::Validation(format!("group field '{}' not found in events schema", name)));
+                }
+            }
+        }
+
+        let conflict_mode = parse_optional_string_arg(args, "conflict_mode").unwrap_or("error");
+        if conflict_mode != "error" && conflict_mode != "skip" {
+            return Err(ToolError::Validation(format!(
+                "unsupported conflict_mode '{}'; expected error or skip",
+                conflict_mode
+            )));
+        }
+
+        let _ = parse_optional_f64_arg(args, "gap_tolerance").unwrap_or(0.0);
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let events = load_vector_arg(args, "events")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        let gap_tolerance = parse_optional_f64_arg(args, "gap_tolerance").unwrap_or(0.0).max(0.0);
+        let conflict_mode = parse_optional_string_arg(args, "conflict_mode").unwrap_or("error");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let event_route_idx = events
+            .schema
+            .field_index(event_route_field)
+            .ok_or_else(|| ToolError::Execution("event_route_field missing unexpectedly".to_string()))?;
+        let from_idx = events
+            .schema
+            .field_index(from_measure_field)
+            .ok_or_else(|| ToolError::Execution("from_measure_field missing unexpectedly".to_string()))?;
+        let to_idx = events
+            .schema
+            .field_index(to_measure_field)
+            .ok_or_else(|| ToolError::Execution("to_measure_field missing unexpectedly".to_string()))?;
+
+        let group_indices: Vec<usize> = if let Some(raw) = parse_optional_string_arg(args, "group_fields") {
+            raw.split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .filter_map(|name| events.schema.field_index(name))
+                .collect()
+        } else {
+            events
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, _)| if idx == from_idx || idx == to_idx { None } else { Some(idx) })
+                .collect()
+        };
+
+        #[derive(Clone)]
+        struct MergeRec {
+            route_key: String,
+            from_m: f64,
+            to_m: f64,
+            feature: wbvector::Feature,
+        }
+
+        let mut by_route = HashMap::<String, Vec<MergeRec>>::new();
+        for feature in &events.features {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(event_route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("event feature {} has empty route id", feature.fid)));
+            }
+            let from_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from measure", feature.fid)))?;
+            let to_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to measure", feature.fid)))?;
+            if to_m < from_m - 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "event feature {} has descending interval [{} -> {}]; route_event_merge expects from<=to",
+                    feature.fid,
+                    from_m,
+                    to_m
+                )));
+            }
+
+            by_route
+                .entry(route_key.clone())
+                .or_insert_with(Vec::new)
+                .push(MergeRec { route_key, from_m, to_m, feature: feature.clone() });
+        }
+
+        let merge_count_idx = {
+            let mut output_schema = events.schema.clone();
+            if output_schema.field_index("merge_count").is_none() {
+                output_schema.add_field(wbvector::FieldDef::new("merge_count", wbvector::FieldType::Integer));
+            }
+            output_schema
+                .field_index("merge_count")
+                .ok_or_else(|| ToolError::Execution("failed creating merge_count field".to_string()))?
+        };
+
+        let mut output = events.clone();
+        output.features.clear();
+        if output.schema.field_index("merge_count").is_none() {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new("merge_count", wbvector::FieldType::Integer));
+        }
+
+        let feature_signature = |feature: &wbvector::Feature| -> Vec<String> {
+            group_indices
+                .iter()
+                .map(|idx| {
+                    feature
+                        .attributes
+                        .get(*idx)
+                        .map(field_value_to_signature_string)
+                        .unwrap_or_default()
+                })
+                .collect()
+        };
+
+        let mut next_fid = 1u64;
+        for recs in by_route.values_mut() {
+            recs.sort_by(|a, b| {
+                let ord = a.from_m.total_cmp(&b.from_m);
+                if ord == std::cmp::Ordering::Equal {
+                    a.to_m.total_cmp(&b.to_m)
+                } else {
+                    ord
+                }
+            });
+
+            let mut pending: Option<(MergeRec, Vec<String>, i64)> = None;
+            for rec in recs.iter() {
+                let rec_sig = feature_signature(&rec.feature);
+
+                if let Some((current, current_sig, current_count)) = pending.take() {
+                    if rec.from_m < current.to_m - 1.0e-12 {
+                        if conflict_mode == "error" {
+                            return Err(ToolError::Execution(format!(
+                                "overlapping events detected on route '{}' around [{}, {}] and [{}, {}]",
+                                current.route_key,
+                                current.from_m,
+                                current.to_m,
+                                rec.from_m,
+                                rec.to_m
+                            )));
+                        }
+                        let mut out_feature = current.feature.clone();
+                        out_feature.fid = next_fid;
+                        set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
+                        set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
+                        set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
+                        output.features.push(out_feature);
+                        next_fid += 1;
+                        pending = Some((rec.clone(), rec_sig, 1));
+                        continue;
+                    }
+
+                    let gap = rec.from_m - current.to_m;
+                    let can_merge = gap <= gap_tolerance + 1.0e-12 && current_sig == rec_sig;
+                    if can_merge {
+                        let mut merged = current.clone();
+                        merged.to_m = rec.to_m;
+                        pending = Some((merged, current_sig, current_count + 1));
+                    } else {
+                        let mut out_feature = current.feature.clone();
+                        out_feature.fid = next_fid;
+                        set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
+                        set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
+                        set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
+                        output.features.push(out_feature);
+                        next_fid += 1;
+                        pending = Some((rec.clone(), rec_sig, 1));
+                    }
+                } else {
+                    pending = Some((rec.clone(), rec_sig, 1));
+                }
+            }
+
+            if let Some((last, _, count)) = pending {
+                let mut out_feature = last.feature.clone();
+                out_feature.fid = next_fid;
+                set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(last.from_m));
+                set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(last.to_m));
+                set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(count));
+                output.features.push(out_feature);
+                next_fid += 1;
+            }
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventOverlayTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_overlay",
+            display_name: "Route Event Overlay",
+            summary: "Overlays two route event layers by interval overlap.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "primary_events", description: "Primary event layer.", required: true },
+                ToolParamSpec { name: "overlay_events", description: "Overlay event layer.", required: true },
+                ToolParamSpec { name: "primary_route_field", description: "Primary layer route identifier field.", required: true },
+                ToolParamSpec { name: "primary_from_measure_field", description: "Primary layer interval start field.", required: true },
+                ToolParamSpec { name: "primary_to_measure_field", description: "Primary layer interval end field.", required: true },
+                ToolParamSpec { name: "overlay_route_field", description: "Overlay layer route identifier field.", required: true },
+                ToolParamSpec { name: "overlay_from_measure_field", description: "Overlay layer interval start field.", required: true },
+                ToolParamSpec { name: "overlay_to_measure_field", description: "Overlay layer interval end field.", required: true },
+                ToolParamSpec { name: "min_overlap_length", description: "Minimum overlap length to keep (default 0.0).", required: false },
+                ToolParamSpec { name: "output", description: "Output overlay layer.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("primary_events".to_string(), json!("primary_events.gpkg"));
+        defaults.insert("overlay_events".to_string(), json!("overlay_events.gpkg"));
+        defaults.insert("primary_route_field".to_string(), json!("route_id"));
+        defaults.insert("primary_from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("primary_to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("overlay_route_field".to_string(), json!("route_id"));
+        defaults.insert("overlay_from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("overlay_to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("min_overlap_length".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("events_overlay.gpkg"));
+
+        ToolManifest {
+            id: "route_event_overlay".to_string(),
+            display_name: "Route Event Overlay".to_string(),
+            summary: "Overlays two route event layers by interval overlap.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "primary_events".to_string(), description: "Primary event layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "overlay_events".to_string(), description: "Overlay event layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "primary_route_field".to_string(), description: "Primary layer route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "primary_from_measure_field".to_string(), description: "Primary layer interval start field.".to_string(), required: true },
+                ToolParamDescriptor { name: "primary_to_measure_field".to_string(), description: "Primary layer interval end field.".to_string(), required: true },
+                ToolParamDescriptor { name: "overlay_route_field".to_string(), description: "Overlay layer route identifier field.".to_string(), required: true },
+                ToolParamDescriptor { name: "overlay_from_measure_field".to_string(), description: "Overlay layer interval start field.".to_string(), required: true },
+                ToolParamDescriptor { name: "overlay_to_measure_field".to_string(), description: "Overlay layer interval end field.".to_string(), required: true },
+                ToolParamDescriptor { name: "min_overlap_length".to_string(), description: "Minimum overlap length to keep (default 0.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output overlay layer.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_overlay_basic".to_string(),
+                description: "Computes overlapping route-event intervals between two event layers.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "overlay".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let primary = load_vector_arg(args, "primary_events")?;
+        let overlay = load_vector_arg(args, "overlay_events")?;
+
+        let primary_route_field = parse_string_arg(args, "primary_route_field")?;
+        let primary_from_field = parse_string_arg(args, "primary_from_measure_field")?;
+        let primary_to_field = parse_string_arg(args, "primary_to_measure_field")?;
+        let overlay_route_field = parse_string_arg(args, "overlay_route_field")?;
+        let overlay_from_field = parse_string_arg(args, "overlay_from_measure_field")?;
+        let overlay_to_field = parse_string_arg(args, "overlay_to_measure_field")?;
+
+        for (schema, field_name, label) in [
+            (&primary.schema, primary_route_field, "primary_route_field"),
+            (&primary.schema, primary_from_field, "primary_from_measure_field"),
+            (&primary.schema, primary_to_field, "primary_to_measure_field"),
+            (&overlay.schema, overlay_route_field, "overlay_route_field"),
+            (&overlay.schema, overlay_from_field, "overlay_from_measure_field"),
+            (&overlay.schema, overlay_to_field, "overlay_to_measure_field"),
+        ] {
+            if schema.field_index(field_name).is_none() {
+                return Err(ToolError::Validation(format!("{} '{}' not found", label, field_name)));
+            }
+        }
+
+        let _ = parse_optional_f64_arg(args, "min_overlap_length").unwrap_or(0.0);
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let primary = load_vector_arg(args, "primary_events")?;
+        let overlay = load_vector_arg(args, "overlay_events")?;
+
+        let primary_route_field = parse_string_arg(args, "primary_route_field")?;
+        let primary_from_field = parse_string_arg(args, "primary_from_measure_field")?;
+        let primary_to_field = parse_string_arg(args, "primary_to_measure_field")?;
+        let overlay_route_field = parse_string_arg(args, "overlay_route_field")?;
+        let overlay_from_field = parse_string_arg(args, "overlay_from_measure_field")?;
+        let overlay_to_field = parse_string_arg(args, "overlay_to_measure_field")?;
+        let min_overlap = parse_optional_f64_arg(args, "min_overlap_length").unwrap_or(0.0).max(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let primary_route_idx = primary
+            .schema
+            .field_index(primary_route_field)
+            .ok_or_else(|| ToolError::Execution("primary_route_field missing unexpectedly".to_string()))?;
+        let primary_from_idx = primary
+            .schema
+            .field_index(primary_from_field)
+            .ok_or_else(|| ToolError::Execution("primary_from_measure_field missing unexpectedly".to_string()))?;
+        let primary_to_idx = primary
+            .schema
+            .field_index(primary_to_field)
+            .ok_or_else(|| ToolError::Execution("primary_to_measure_field missing unexpectedly".to_string()))?;
+
+        let overlay_route_idx = overlay
+            .schema
+            .field_index(overlay_route_field)
+            .ok_or_else(|| ToolError::Execution("overlay_route_field missing unexpectedly".to_string()))?;
+        let overlay_from_idx = overlay
+            .schema
+            .field_index(overlay_from_field)
+            .ok_or_else(|| ToolError::Execution("overlay_from_measure_field missing unexpectedly".to_string()))?;
+        let overlay_to_idx = overlay
+            .schema
+            .field_index(overlay_to_field)
+            .ok_or_else(|| ToolError::Execution("overlay_to_measure_field missing unexpectedly".to_string()))?;
+
+        #[derive(Clone)]
+        struct OverlayRec {
+            from_m: f64,
+            to_m: f64,
+            feature: wbvector::Feature,
+        }
+
+        let mut primary_by_route = HashMap::<String, Vec<OverlayRec>>::new();
+        for feature in &primary.features {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(primary_route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("primary feature {} has empty route id", feature.fid)));
+            }
+            let from_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(primary_from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("primary feature {} has invalid from measure", feature.fid)))?;
+            let to_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(primary_to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("primary feature {} has invalid to measure", feature.fid)))?;
+            if to_m < from_m - 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "primary feature {} has descending interval [{} -> {}]",
+                    feature.fid,
+                    from_m,
+                    to_m
+                )));
+            }
+            primary_by_route
+                .entry(route_key)
+                .or_insert_with(Vec::new)
+                .push(OverlayRec {
+                    from_m,
+                    to_m,
+                    feature: feature.clone(),
+                });
+        }
+
+        let mut overlay_by_route = HashMap::<String, Vec<OverlayRec>>::new();
+        for feature in &overlay.features {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(overlay_route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("overlay feature {} has empty route id", feature.fid)));
+            }
+            let from_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(overlay_from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("overlay feature {} has invalid from measure", feature.fid)))?;
+            let to_m = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(overlay_to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("overlay feature {} has invalid to measure", feature.fid)))?;
+            if to_m < from_m - 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "overlay feature {} has descending interval [{} -> {}]",
+                    feature.fid,
+                    from_m,
+                    to_m
+                )));
+            }
+            overlay_by_route
+                .entry(route_key)
+                .or_insert_with(Vec::new)
+                .push(OverlayRec {
+                    from_m,
+                    to_m,
+                    feature: feature.clone(),
+                });
+        }
+
+        let mut output = wbvector::Layer::new("route_event_overlay");
+        output.geom_type = primary.geom_type;
+        output.crs = primary.crs.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("ROUTE_ID", wbvector::FieldType::Text));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FROM_M", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("TO_M", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("PRI_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("OVR_FID", wbvector::FieldType::Integer));
+
+        let mut used = HashSet::<String>::new();
+        used.insert("ROUTE_ID".to_string());
+        used.insert("FROM_M".to_string());
+        used.insert("TO_M".to_string());
+        used.insert("PRI_FID".to_string());
+        used.insert("OVR_FID".to_string());
+        let primary_fields = primary
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| {
+                let out_name = make_unique_field_name(&format!("PRI_{}", field.name), &mut used);
+                output
+                    .schema
+                    .add_field(wbvector::FieldDef::new(&out_name, field.field_type.clone()));
+                (idx, out_name)
+            })
+            .collect::<Vec<_>>();
+        let overlay_fields = overlay
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(idx, field)| {
+                let out_name = make_unique_field_name(&format!("OVR_{}", field.name), &mut used);
+                output
+                    .schema
+                    .add_field(wbvector::FieldDef::new(&out_name, field.field_type.clone()));
+                (idx, out_name)
+            })
+            .collect::<Vec<_>>();
+
+        let mut next_fid = 1u64;
+        for (route_key, primary_recs) in &primary_by_route {
+            let Some(overlay_recs) = overlay_by_route.get(route_key.as_str()) else {
+                continue;
+            };
+            for p in primary_recs {
+                for o in overlay_recs {
+                    let overlap_from = p.from_m.max(o.from_m);
+                    let overlap_to = p.to_m.min(o.to_m);
+                    if overlap_to - overlap_from < min_overlap - 1.0e-12 {
+                        continue;
+                    }
+                    if overlap_to <= overlap_from + 1.0e-12 {
+                        continue;
+                    }
+
+                    let mut attrs = Vec::<wbvector::FieldValue>::new();
+                    attrs.push(wbvector::FieldValue::Text(route_key.clone()));
+                    attrs.push(wbvector::FieldValue::Float(overlap_from));
+                    attrs.push(wbvector::FieldValue::Float(overlap_to));
+                    attrs.push(wbvector::FieldValue::Integer(p.feature.fid as i64));
+                    attrs.push(wbvector::FieldValue::Integer(o.feature.fid as i64));
+                    for (idx, _) in &primary_fields {
+                        attrs.push(
+                            p.feature
+                                .attributes
+                                .get(*idx)
+                                .cloned()
+                                .unwrap_or(wbvector::FieldValue::Null),
+                        );
+                    }
+                    for (idx, _) in &overlay_fields {
+                        attrs.push(
+                            o.feature
+                                .attributes
+                                .get(*idx)
+                                .cloned()
+                                .unwrap_or(wbvector::FieldValue::Null),
+                        );
+                    }
+
+                    output.features.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: p.feature.geometry.clone(),
+                        attributes: attrs,
+                    });
+                    next_fid += 1;
+                }
+            }
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;

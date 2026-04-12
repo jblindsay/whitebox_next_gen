@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 2 (Topology Rule Engine + Linear Referencing Core)
-Status: In Progress (Stream A & B Complete)
+Status: In Progress (Stream A-D Complete; Stream E Pending)
 
 ## Scope Anchors
 
@@ -35,16 +35,16 @@ Phase 2 planned outcomes:
 - [x] Add integration tests for deterministic fix behavior.
 
 ### Stream C: Route Calibration Core
-- [ ] Implement calibration from route control points.
-- [ ] Implement recalibration for edited route geometries.
-- [ ] Emit calibrated measure attributes and QA metadata.
-- [ ] Add route continuity and monotonicity tests.
+- [x] Implement calibration from route control points.
+- [x] Implement recalibration for edited route geometries.
+- [x] Emit calibrated measure attributes and QA metadata.
+- [x] Add route continuity and monotonicity tests.
 
 ### Stream D: Event Split/Merge/Overlay
-- [ ] Implement event split tool by measure boundaries.
-- [ ] Implement event merge tool with conflict handling.
-- [ ] Implement event overlay tool for aligned route events.
-- [ ] Add integration tests for overlapping and disjoint event intervals.
+- [x] Implement event split tool by measure boundaries.
+- [x] Implement event merge tool with conflict handling.
+- [x] Implement event overlay tool for aligned route events.
+- [x] Add integration tests for overlapping and disjoint event intervals.
 
 ### Stream E: Route-Measure QA
 - [ ] Implement gap and overlap diagnostics.
@@ -110,4 +110,63 @@ Phase 2 planned outcomes:
 		- `topology_rule_autofix_dry_run_mode_preserves_input`
 	- Full test validation: `cargo test -p wbtools_oss topology_rule_autofix` = **3 tests PASSED**.
 - 2026-04-12: **NEXT**: Stream C (Route Calibration Core) or proceed to Stream D (Event Split/Merge/Overlay).
+- 2026-04-12: **STREAM C CORE IMPLEMENTATION**: Added route calibration/recalibration primitives in `wbtools_oss`:
+	- Implemented `route_calibrate` using control-point measures with per-route snapping tolerance, monotonicity guard, and calibrated `from_measure`/`to_measure` outputs.
+	- Implemented `route_recalibrate` using reference route measures and geometry-length scaling for edited routes.
+	- Added QA/status metadata fields: `calib_status`, `control_count`, and `recalib_status`.
+	- Wired exports and default registry registration for both tools.
+	- Updated default registry integration assertions for `route_calibrate` and `route_recalibrate`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
+- 2026-04-12: **STREAM C TEST COVERAGE EXPANDED**: Added and validated continuity/monotonicity integration tests:
+	- `route_calibrate_sets_from_to_measures_from_control_points`
+	- `route_calibrate_marks_non_monotonic_control_sequences`
+	- `route_recalibrate_scales_measure_span_with_edited_geometry_length`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration route_calibrate` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_recalibrate_scales_measure_span_with_edited_geometry_length` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-12: **STREAM D KICKOFF (EVENT SPLIT)**: Implemented and validated `route_event_split`.
+	- Added `route_event_split` to `gis/mod.rs` with route-wise boundary splitting for event intervals.
+	- Emits split metadata fields: `split_seq` and `parent_fid`.
+	- Added default tool export and registry registration.
+	- Added integration test: `route_event_split_splits_intervals_at_route_boundaries`.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration route_event_split_splits_intervals_at_route_boundaries` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-12: **STREAM D STEP 2 (EVENT MERGE)**: Implemented and validated `route_event_merge` with conflict handling.
+	- Added `route_event_merge` to merge adjacent compatible intervals per route.
+	- Added conflict handling mode (`conflict_mode`: `error` or `skip`) for overlap cases.
+	- Added optional compatibility grouping via `group_fields` and merge metadata field `merge_count`.
+	- Added default tool export and registry registration.
+	- Added integration test: `route_event_merge_merges_adjacent_compatible_events`.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration route_event_merge_merges_adjacent_compatible_events` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-12: **STREAM D STEP 3 (EVENT OVERLAY + COVERAGE CLOSEOUT)**: Implemented and validated `route_event_overlay`.
+	- Added `route_event_overlay` to compute interval intersections between primary and overlay event layers on matching routes.
+	- Output includes overlap interval fields (`ROUTE_ID`, `FROM_M`, `TO_M`) and prefixed attribute provenance (`PRI_*`, `OVR_*`).
+	- Added default tool export and registry registration.
+	- Added overlap/disjoint integration tests:
+		- `route_event_overlay_outputs_overlapping_intervals`
+		- `route_event_overlay_returns_empty_for_disjoint_intervals`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration route_event_overlay_outputs_overlapping_intervals` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_event_overlay_returns_empty_for_disjoint_intervals` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-12: **STREAM D HARDENING PASS**: Added edge-case tests for conflict handling and overlap thresholds.
+	- Added merge conflict-mode coverage:
+		- `route_event_merge_rejects_overlaps_in_error_mode`
+		- `route_event_merge_skips_overlaps_in_skip_mode`
+	- Added overlay threshold coverage:
+		- `route_event_overlay_respects_min_overlap_length`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration route_event_merge_rejects_overlaps_in_error_mode` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_event_merge_skips_overlaps_in_skip_mode` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration route_event_overlay_respects_min_overlap_length` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
 

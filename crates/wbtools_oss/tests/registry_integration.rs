@@ -232,6 +232,11 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"route_event_lines_from_table"));
     assert!(ids.contains(&"route_event_points_from_layer"));
     assert!(ids.contains(&"route_event_lines_from_layer"));
+    assert!(ids.contains(&"route_event_split"));
+    assert!(ids.contains(&"route_event_merge"));
+    assert!(ids.contains(&"route_event_overlay"));
+    assert!(ids.contains(&"route_calibrate"));
+    assert!(ids.contains(&"route_recalibrate"));
     assert!(ids.contains(&"vector_summary_statistics"));
     assert!(ids.contains(&"rename_field"));
     assert!(ids.contains(&"delete_field"));
@@ -1546,6 +1551,815 @@ fn route_event_points_from_layer_can_disable_event_traceability_fields() {
 
     let _ = std::fs::remove_file(&routes_path);
     let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_calibrate_sets_from_to_measures_from_control_points() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_calibrate_controls");
+    let routes_path = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+    let controls_path = std::env::temp_dir().join(format!("{tag}_controls.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut routes = Layer::new("routes")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    routes.schema.add_field(FieldDef::new("RID", FieldType::Text));
+    routes
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)])),
+            &[("RID", FieldValue::Text("R1".to_string()))],
+        )
+        .expect("add route feature");
+    wbvector::write(&routes, &routes_path, VectorFormat::GeoPackage).expect("write routes");
+
+    let mut controls = Layer::new("controls")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    controls.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    controls.schema.add_field(FieldDef::new("measure", FieldType::Float));
+    controls
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(2.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("measure", FieldValue::Float(20.0)),
+            ],
+        )
+        .expect("add first control");
+    controls
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(8.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("measure", FieldValue::Float(80.0)),
+            ],
+        )
+        .expect("add second control");
+    wbvector::write(&controls, &controls_path, VectorFormat::GeoPackage).expect("write controls");
+
+    let mut args = ToolArgs::new();
+    args.insert("routes".to_string(), json!(routes_path.to_string_lossy().to_string()));
+    args.insert("control_points".to_string(), json!(controls_path.to_string_lossy().to_string()));
+    args.insert("control_measure_field".to_string(), json!("measure"));
+    args.insert("route_id_field".to_string(), json!("RID"));
+    args.insert("control_route_id_field".to_string(), json!("route_id"));
+    args.insert("snap_tolerance".to_string(), json!(0.01));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_calibrate", &args, &context(&caps))
+        .expect("route_calibrate run");
+
+    let out = wbvector::read(&out_path).expect("read calibrated routes");
+    assert_eq!(out.features.len(), 1);
+    let from_idx = out.schema.field_index("from_measure").expect("from_measure field");
+    let to_idx = out.schema.field_index("to_measure").expect("to_measure field");
+    let status_idx = out.schema.field_index("calib_status").expect("calib_status field");
+    let count_idx = out.schema.field_index("control_count").expect("control_count field");
+
+    let from_measure = match &out.features[0].attributes[from_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric from_measure, got {:?}", other),
+    };
+    let to_measure = match &out.features[0].attributes[to_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric to_measure, got {:?}", other),
+    };
+    assert!((from_measure - 0.0).abs() < 1.0e-9, "unexpected from_measure: {}", from_measure);
+    assert!((to_measure - 100.0).abs() < 1.0e-9, "unexpected to_measure: {}", to_measure);
+    assert_eq!(
+        out.features[0].attributes[status_idx],
+        FieldValue::Text("calibrated".to_string())
+    );
+    assert_eq!(out.features[0].attributes[count_idx], FieldValue::Integer(2));
+
+    let _ = std::fs::remove_file(&routes_path);
+    let _ = std::fs::remove_file(&controls_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_recalibrate_scales_measure_span_with_edited_geometry_length() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_recalibrate_scale");
+    let original_path = std::env::temp_dir().join(format!("{tag}_original.gpkg"));
+    let edited_path = std::env::temp_dir().join(format!("{tag}_edited.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut original = Layer::new("original")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    original.schema.add_field(FieldDef::new("RID", FieldType::Text));
+    original.schema.add_field(FieldDef::new("from_measure", FieldType::Float));
+    original.schema.add_field(FieldDef::new("to_measure", FieldType::Float));
+    original
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)])),
+            &[
+                ("RID", FieldValue::Text("R1".to_string())),
+                ("from_measure", FieldValue::Float(100.0)),
+                ("to_measure", FieldValue::Float(200.0)),
+            ],
+        )
+        .expect("add original route");
+    wbvector::write(&original, &original_path, VectorFormat::GeoPackage).expect("write original routes");
+
+    let mut edited = Layer::new("edited")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    edited.schema.add_field(FieldDef::new("RID", FieldType::Text));
+    edited
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(20.0, 0.0)])),
+            &[("RID", FieldValue::Text("R1".to_string()))],
+        )
+        .expect("add edited route");
+    wbvector::write(&edited, &edited_path, VectorFormat::GeoPackage).expect("write edited routes");
+
+    let mut args = ToolArgs::new();
+    args.insert("original_routes".to_string(), json!(original_path.to_string_lossy().to_string()));
+    args.insert("edited_routes".to_string(), json!(edited_path.to_string_lossy().to_string()));
+    args.insert("route_id_field".to_string(), json!("RID"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_recalibrate", &args, &context(&caps))
+        .expect("route_recalibrate run");
+
+    let out = wbvector::read(&out_path).expect("read recalibrated routes");
+    assert_eq!(out.features.len(), 1);
+    let from_idx = out.schema.field_index("from_measure").expect("from_measure field");
+    let to_idx = out.schema.field_index("to_measure").expect("to_measure field");
+    let status_idx = out.schema.field_index("recalib_status").expect("recalib_status field");
+
+    let from_measure = match &out.features[0].attributes[from_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric from_measure, got {:?}", other),
+    };
+    let to_measure = match &out.features[0].attributes[to_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric to_measure, got {:?}", other),
+    };
+    assert!((from_measure - 100.0).abs() < 1.0e-9, "unexpected from_measure: {}", from_measure);
+    assert!((to_measure - 300.0).abs() < 1.0e-9, "unexpected to_measure: {}", to_measure);
+    assert_eq!(
+        out.features[0].attributes[status_idx],
+        FieldValue::Text("recalibrated_scaled".to_string())
+    );
+
+    let _ = std::fs::remove_file(&original_path);
+    let _ = std::fs::remove_file(&edited_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_calibrate_marks_non_monotonic_control_sequences() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_calibrate_non_monotonic");
+    let routes_path = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+    let controls_path = std::env::temp_dir().join(format!("{tag}_controls.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut routes = Layer::new("routes")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    routes.schema.add_field(FieldDef::new("RID", FieldType::Text));
+    routes
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)])),
+            &[("RID", FieldValue::Text("R1".to_string()))],
+        )
+        .expect("add route feature");
+    wbvector::write(&routes, &routes_path, VectorFormat::GeoPackage).expect("write routes");
+
+    let mut controls = Layer::new("controls")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    controls.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    controls.schema.add_field(FieldDef::new("measure", FieldType::Float));
+    controls
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(2.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("measure", FieldValue::Float(80.0)),
+            ],
+        )
+        .expect("add first control");
+    controls
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(8.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("measure", FieldValue::Float(20.0)),
+            ],
+        )
+        .expect("add second control");
+    wbvector::write(&controls, &controls_path, VectorFormat::GeoPackage).expect("write controls");
+
+    let mut args = ToolArgs::new();
+    args.insert("routes".to_string(), json!(routes_path.to_string_lossy().to_string()));
+    args.insert("control_points".to_string(), json!(controls_path.to_string_lossy().to_string()));
+    args.insert("control_measure_field".to_string(), json!("measure"));
+    args.insert("route_id_field".to_string(), json!("RID"));
+    args.insert("control_route_id_field".to_string(), json!("route_id"));
+    args.insert("snap_tolerance".to_string(), json!(0.01));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_calibrate", &args, &context(&caps))
+        .expect("route_calibrate run");
+
+    let out = wbvector::read(&out_path).expect("read calibrated routes");
+    assert_eq!(out.features.len(), 1);
+    let status_idx = out.schema.field_index("calib_status").expect("calib_status field");
+    assert_eq!(
+        out.features[0].attributes[status_idx],
+        FieldValue::Text("non_monotonic_controls".to_string())
+    );
+
+    let _ = std::fs::remove_file(&routes_path);
+    let _ = std::fs::remove_file(&controls_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_split_splits_intervals_at_route_boundaries() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_split_basic");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let boundaries_path = std::env::temp_dir().join(format!("{tag}_boundaries.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("name", FieldType::Text));
+    events
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(0.0)),
+                ("to_m", FieldValue::Float(10.0)),
+                ("name", FieldValue::Text("A".to_string())),
+            ],
+        )
+        .expect("add event feature");
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+    let persisted_events = wbvector::read(&events_path).expect("read persisted events");
+    let expected_parent_fid = persisted_events.features[0].fid as i64;
+
+    let mut boundaries = Layer::new("boundaries")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    boundaries.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    boundaries.schema.add_field(FieldDef::new("measure", FieldType::Float));
+    for m in [2.0, 5.0, 8.0] {
+        boundaries
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("measure", FieldValue::Float(m)),
+                ],
+            )
+            .expect("add boundary feature");
+    }
+    wbvector::write(&boundaries, &boundaries_path, VectorFormat::GeoPackage).expect("write boundaries");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("boundaries".to_string(), json!(boundaries_path.to_string_lossy().to_string()));
+    args.insert("event_route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("boundary_route_field".to_string(), json!("route_id"));
+    args.insert("boundary_measure_field".to_string(), json!("measure"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_split", &args, &context(&caps))
+        .expect("route_event_split run");
+
+    let out = wbvector::read(&out_path).expect("read split events");
+    assert_eq!(out.features.len(), 4);
+    let from_idx = out.schema.field_index("from_m").expect("from_m field");
+    let to_idx = out.schema.field_index("to_m").expect("to_m field");
+    let split_seq_idx = out.schema.field_index("split_seq").expect("split_seq field");
+    let parent_fid_idx = out.schema.field_index("parent_fid").expect("parent_fid field");
+
+    let expected = [(0.0, 2.0, 1i64), (2.0, 5.0, 2i64), (5.0, 8.0, 3i64), (8.0, 10.0, 4i64)];
+    for (idx, feature) in out.features.iter().enumerate() {
+        let from_m = match &feature.attributes[from_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric from_m, got {:?}", other),
+        };
+        let to_m = match &feature.attributes[to_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric to_m, got {:?}", other),
+        };
+        let split_seq = match &feature.attributes[split_seq_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer split_seq, got {:?}", other),
+        };
+        let parent_fid = match &feature.attributes[parent_fid_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer parent_fid, got {:?}", other),
+        };
+        assert!((from_m - expected[idx].0).abs() < 1.0e-9);
+        assert!((to_m - expected[idx].1).abs() < 1.0e-9);
+        assert_eq!(split_seq, expected[idx].2);
+        assert_eq!(parent_fid, expected_parent_fid);
+    }
+
+    let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&boundaries_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_merge_merges_adjacent_compatible_events() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_merge_basic");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("speed", FieldType::Integer));
+
+    for (from_m, to_m, speed) in [(0.0, 3.0, 50i64), (3.0, 6.0, 50i64), (6.0, 10.0, 30i64)] {
+        events
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(from_m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("from_m", FieldValue::Float(from_m)),
+                    ("to_m", FieldValue::Float(to_m)),
+                    ("speed", FieldValue::Integer(speed)),
+                ],
+            )
+            .expect("add event feature");
+    }
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("event_route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("group_fields".to_string(), json!("route_id,speed"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_merge", &args, &context(&caps))
+        .expect("route_event_merge run");
+
+    let out = wbvector::read(&out_path).expect("read merged events");
+    assert_eq!(out.features.len(), 2);
+
+    let from_idx = out.schema.field_index("from_m").expect("from_m field");
+    let to_idx = out.schema.field_index("to_m").expect("to_m field");
+    let speed_idx = out.schema.field_index("speed").expect("speed field");
+    let merge_count_idx = out.schema.field_index("merge_count").expect("merge_count field");
+
+    let mut observed = out
+        .features
+        .iter()
+        .map(|feature| {
+            let from_m = match &feature.attributes[from_idx] {
+                FieldValue::Float(v) => *v,
+                FieldValue::Integer(v) => *v as f64,
+                other => panic!("expected numeric from_m, got {:?}", other),
+            };
+            let to_m = match &feature.attributes[to_idx] {
+                FieldValue::Float(v) => *v,
+                FieldValue::Integer(v) => *v as f64,
+                other => panic!("expected numeric to_m, got {:?}", other),
+            };
+            let speed = match &feature.attributes[speed_idx] {
+                FieldValue::Integer(v) => *v,
+                other => panic!("expected integer speed, got {:?}", other),
+            };
+            let merge_count = match &feature.attributes[merge_count_idx] {
+                FieldValue::Integer(v) => *v,
+                other => panic!("expected integer merge_count, got {:?}", other),
+            };
+            (from_m, to_m, speed, merge_count)
+        })
+        .collect::<Vec<_>>();
+    observed.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+    assert!((observed[0].0 - 0.0).abs() < 1.0e-9);
+    assert!((observed[0].1 - 6.0).abs() < 1.0e-9);
+    assert_eq!(observed[0].2, 50);
+    assert_eq!(observed[0].3, 2);
+
+    assert!((observed[1].0 - 6.0).abs() < 1.0e-9);
+    assert!((observed[1].1 - 10.0).abs() < 1.0e-9);
+    assert_eq!(observed[1].2, 30);
+    assert_eq!(observed[1].3, 1);
+
+    let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_merge_rejects_overlaps_in_error_mode() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_merge_overlap_error");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("speed", FieldType::Integer));
+
+    for (from_m, to_m) in [(0.0, 5.0), (4.0, 8.0)] {
+        events
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(from_m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("from_m", FieldValue::Float(from_m)),
+                    ("to_m", FieldValue::Float(to_m)),
+                    ("speed", FieldValue::Integer(50)),
+                ],
+            )
+            .expect("add event feature");
+    }
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("event_route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("group_fields".to_string(), json!("route_id,speed"));
+    args.insert("conflict_mode".to_string(), json!("error"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let err = registry
+        .run("route_event_merge", &args, &context(&caps))
+        .expect_err("expected overlap conflict in error mode");
+    let msg = err.to_string();
+    assert!(msg.contains("overlapping events detected"), "unexpected error: {}", msg);
+
+    let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_merge_skips_overlaps_in_skip_mode() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_merge_overlap_skip");
+    let events_path = std::env::temp_dir().join(format!("{tag}_events.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut events = Layer::new("events")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    events.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    events.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    events.schema.add_field(FieldDef::new("speed", FieldType::Integer));
+
+    for (from_m, to_m) in [(0.0, 5.0), (4.0, 8.0)] {
+        events
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(from_m, 0.0))),
+                &[
+                    ("route_id", FieldValue::Text("R1".to_string())),
+                    ("from_m", FieldValue::Float(from_m)),
+                    ("to_m", FieldValue::Float(to_m)),
+                    ("speed", FieldValue::Integer(50)),
+                ],
+            )
+            .expect("add event feature");
+    }
+    wbvector::write(&events, &events_path, VectorFormat::GeoPackage).expect("write events");
+
+    let mut args = ToolArgs::new();
+    args.insert("events".to_string(), json!(events_path.to_string_lossy().to_string()));
+    args.insert("event_route_field".to_string(), json!("route_id"));
+    args.insert("from_measure_field".to_string(), json!("from_m"));
+    args.insert("to_measure_field".to_string(), json!("to_m"));
+    args.insert("group_fields".to_string(), json!("route_id,speed"));
+    args.insert("conflict_mode".to_string(), json!("skip"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_merge", &args, &context(&caps))
+        .expect("route_event_merge run in skip mode");
+
+    let out = wbvector::read(&out_path).expect("read merged events");
+    assert_eq!(out.features.len(), 2);
+    let merge_count_idx = out.schema.field_index("merge_count").expect("merge_count field");
+    for feature in &out.features {
+        assert_eq!(feature.attributes[merge_count_idx], FieldValue::Integer(1));
+    }
+
+    let _ = std::fs::remove_file(&events_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_overlay_outputs_overlapping_intervals() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_overlay_overlap");
+    let primary_path = std::env::temp_dir().join(format!("{tag}_primary.gpkg"));
+    let overlay_path = std::env::temp_dir().join(format!("{tag}_overlay.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut primary = Layer::new("primary")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    primary.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    primary.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    primary.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    primary.schema.add_field(FieldDef::new("surface", FieldType::Text));
+    primary
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(0.0)),
+                ("to_m", FieldValue::Float(10.0)),
+                ("surface", FieldValue::Text("asphalt".to_string())),
+            ],
+        )
+        .expect("add primary feature");
+    wbvector::write(&primary, &primary_path, VectorFormat::GeoPackage).expect("write primary");
+
+    let mut overlay = Layer::new("overlay")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    overlay.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    overlay.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    overlay.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    overlay.schema.add_field(FieldDef::new("speed", FieldType::Integer));
+    overlay
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(3.0)),
+                ("to_m", FieldValue::Float(6.0)),
+                ("speed", FieldValue::Integer(40)),
+            ],
+        )
+        .expect("add overlay feature");
+    wbvector::write(&overlay, &overlay_path, VectorFormat::GeoPackage).expect("write overlay");
+
+    let mut args = ToolArgs::new();
+    args.insert("primary_events".to_string(), json!(primary_path.to_string_lossy().to_string()));
+    args.insert("overlay_events".to_string(), json!(overlay_path.to_string_lossy().to_string()));
+    args.insert("primary_route_field".to_string(), json!("route_id"));
+    args.insert("primary_from_measure_field".to_string(), json!("from_m"));
+    args.insert("primary_to_measure_field".to_string(), json!("to_m"));
+    args.insert("overlay_route_field".to_string(), json!("route_id"));
+    args.insert("overlay_from_measure_field".to_string(), json!("from_m"));
+    args.insert("overlay_to_measure_field".to_string(), json!("to_m"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_overlay", &args, &context(&caps))
+        .expect("route_event_overlay run");
+
+    let out = wbvector::read(&out_path).expect("read overlay events");
+    assert_eq!(out.features.len(), 1);
+    let route_idx = out.schema.field_index("ROUTE_ID").expect("ROUTE_ID field");
+    let from_idx = out.schema.field_index("FROM_M").expect("FROM_M field");
+    let to_idx = out.schema.field_index("TO_M").expect("TO_M field");
+    let pri_surface_idx = out.schema.field_index("PRI_surface").expect("PRI_surface field");
+    let ovr_speed_idx = out.schema.field_index("OVR_speed").expect("OVR_speed field");
+
+    assert_eq!(out.features[0].attributes[route_idx], FieldValue::Text("R1".to_string()));
+    let from_m = match &out.features[0].attributes[from_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric FROM_M, got {:?}", other),
+    };
+    let to_m = match &out.features[0].attributes[to_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric TO_M, got {:?}", other),
+    };
+    assert!((from_m - 3.0).abs() < 1.0e-9);
+    assert!((to_m - 6.0).abs() < 1.0e-9);
+    assert_eq!(
+        out.features[0].attributes[pri_surface_idx],
+        FieldValue::Text("asphalt".to_string())
+    );
+    assert_eq!(out.features[0].attributes[ovr_speed_idx], FieldValue::Integer(40));
+
+    let _ = std::fs::remove_file(&primary_path);
+    let _ = std::fs::remove_file(&overlay_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_overlay_returns_empty_for_disjoint_intervals() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_overlay_disjoint");
+    let primary_path = std::env::temp_dir().join(format!("{tag}_primary.gpkg"));
+    let overlay_path = std::env::temp_dir().join(format!("{tag}_overlay.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut primary = Layer::new("primary")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    primary.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    primary.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    primary.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    primary
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(0.0)),
+                ("to_m", FieldValue::Float(2.0)),
+            ],
+        )
+        .expect("add primary feature");
+    wbvector::write(&primary, &primary_path, VectorFormat::GeoPackage).expect("write primary");
+
+    let mut overlay = Layer::new("overlay")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    overlay.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    overlay.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    overlay.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    overlay
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(3.0)),
+                ("to_m", FieldValue::Float(5.0)),
+            ],
+        )
+        .expect("add overlay feature");
+    wbvector::write(&overlay, &overlay_path, VectorFormat::GeoPackage).expect("write overlay");
+
+    let mut args = ToolArgs::new();
+    args.insert("primary_events".to_string(), json!(primary_path.to_string_lossy().to_string()));
+    args.insert("overlay_events".to_string(), json!(overlay_path.to_string_lossy().to_string()));
+    args.insert("primary_route_field".to_string(), json!("route_id"));
+    args.insert("primary_from_measure_field".to_string(), json!("from_m"));
+    args.insert("primary_to_measure_field".to_string(), json!("to_m"));
+    args.insert("overlay_route_field".to_string(), json!("route_id"));
+    args.insert("overlay_from_measure_field".to_string(), json!("from_m"));
+    args.insert("overlay_to_measure_field".to_string(), json!("to_m"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_overlay", &args, &context(&caps))
+        .expect("route_event_overlay run");
+
+    let out = wbvector::read(&out_path).expect("read overlay events");
+    assert_eq!(out.features.len(), 0);
+
+    let _ = std::fs::remove_file(&primary_path);
+    let _ = std::fs::remove_file(&overlay_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn route_event_overlay_respects_min_overlap_length() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_route_event_overlay_min_overlap");
+    let primary_path = std::env::temp_dir().join(format!("{tag}_primary.gpkg"));
+    let overlay_path = std::env::temp_dir().join(format!("{tag}_overlay.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut primary = Layer::new("primary")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    primary.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    primary.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    primary.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    primary
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(0.0)),
+                ("to_m", FieldValue::Float(10.0)),
+            ],
+        )
+        .expect("add primary feature");
+    wbvector::write(&primary, &primary_path, VectorFormat::GeoPackage).expect("write primary");
+
+    let mut overlay = Layer::new("overlay")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    overlay.schema.add_field(FieldDef::new("route_id", FieldType::Text));
+    overlay.schema.add_field(FieldDef::new("from_m", FieldType::Float));
+    overlay.schema.add_field(FieldDef::new("to_m", FieldType::Float));
+    overlay
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[
+                ("route_id", FieldValue::Text("R1".to_string())),
+                ("from_m", FieldValue::Float(9.0)),
+                ("to_m", FieldValue::Float(12.0)),
+            ],
+        )
+        .expect("add overlay feature");
+    wbvector::write(&overlay, &overlay_path, VectorFormat::GeoPackage).expect("write overlay");
+
+    let mut args = ToolArgs::new();
+    args.insert("primary_events".to_string(), json!(primary_path.to_string_lossy().to_string()));
+    args.insert("overlay_events".to_string(), json!(overlay_path.to_string_lossy().to_string()));
+    args.insert("primary_route_field".to_string(), json!("route_id"));
+    args.insert("primary_from_measure_field".to_string(), json!("from_m"));
+    args.insert("primary_to_measure_field".to_string(), json!("to_m"));
+    args.insert("overlay_route_field".to_string(), json!("route_id"));
+    args.insert("overlay_from_measure_field".to_string(), json!("from_m"));
+    args.insert("overlay_to_measure_field".to_string(), json!("to_m"));
+    args.insert("min_overlap_length".to_string(), json!(2.0));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    registry
+        .run("route_event_overlay", &args, &context(&caps))
+        .expect("route_event_overlay run");
+
+    let out = wbvector::read(&out_path).expect("read overlay events");
+    assert_eq!(out.features.len(), 0);
+
+    let _ = std::fs::remove_file(&primary_path);
+    let _ = std::fs::remove_file(&overlay_path);
     let _ = std::fs::remove_file(&out_path);
 }
 

@@ -441,6 +441,11 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::RouteEventLinesFromTableTool));
     registry.register(Box::new(tools::RouteEventPointsFromLayerTool));
     registry.register(Box::new(tools::RouteEventLinesFromLayerTool));
+    registry.register(Box::new(tools::RouteEventSplitTool));
+    registry.register(Box::new(tools::RouteEventMergeTool));
+    registry.register(Box::new(tools::RouteEventOverlayTool));
+    registry.register(Box::new(tools::RouteCalibrateTool));
+    registry.register(Box::new(tools::RouteRecalibrateTool));
     registry.register(Box::new(tools::DensifyFeaturesTool));
     registry.register(Box::new(tools::SplitVectorLinesTool));
     registry.register(Box::new(tools::StandardDeviationOverlayTool));

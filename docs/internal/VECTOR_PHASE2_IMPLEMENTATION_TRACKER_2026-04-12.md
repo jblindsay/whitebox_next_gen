@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 2 (Topology Rule Engine + Linear Referencing Core)
-Status: In Progress (Stream A-D Complete; Stream E Core Implemented)
+Status: Complete (Streams A-E complete; wrappers/docs parity captured)
 
 ## Scope Anchors
 
@@ -50,7 +50,51 @@ Phase 2 planned outcomes:
 - [x] Implement gap and overlap diagnostics.
 - [x] Implement monotonicity and duplicate-measure checks.
 - [x] Add report output schema for governance workflows.
-- [ ] Add cookbook examples and wrapper parity notes.
+- [x] Add cookbook examples and wrapper parity notes.
+
+#### Stream E Cookbook (Python/R)
+
+Python (runtime-safe pattern, works even when static type stubs lag manifest updates):
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+result = wbe.run_tool(
+		"route_measure_qa",
+		{
+				"input": "events.gpkg",
+				"route_id_field": "route_id",
+				"from_measure_field": "from_m",
+				"to_measure_field": "to_m",
+				"output": "route_measure_issues.gpkg",
+				"report_json": "route_measure_qa_summary.json",
+		},
+)
+print(result)
+```
+
+R (generated wrappers refreshed for open tier):
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+qa <- s$route_measure_qa(
+	input = "events.gpkg",
+	route_id_field = "route_id",
+	from_measure_field = "from_m",
+	to_measure_field = "to_m",
+	output = "route_measure_issues.gpkg",
+	report_json = "route_measure_qa_summary.json"
+)
+print(qa)
+```
+
+Wrapper parity notes:
+- New Phase 2 route tools now available in `wbtools_oss`: `route_event_split`, `route_event_merge`, `route_event_overlay`, `route_measure_qa`.
+- R generated wrappers were refreshed and synced into package scaffolding.
+- Python runtime exposure is manifest-driven via dynamic/category namespaces and `run_tool`; static typing/docs artifacts may be regenerated in a dedicated Python packaging/docs pass.
 
 ## Suggested Execution Order
 
@@ -183,4 +227,11 @@ Phase 2 planned outcomes:
 		- `cargo test -p wbtools_oss --test registry_integration route_measure_qa_detects_gaps_overlaps_non_monotonic_and_duplicates` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration route_measure_qa_returns_zero_counts_for_clean_sequence` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools` (PASS)
+- 2026-04-12: **STREAM E DOCS + WRAPPER PARITY NOTES COMPLETION**
+	- Added Python and R cookbook examples for `route_measure_qa`.
+	- Added cross-wrapper parity notes for new Phase 2 route tools.
+	- Regenerated open-tier R wrapper module and synced package wrapper file.
+	- Validation commands:
+		- `cargo run -p wbw_r --example generate_r_wrappers -- --tier open --output crates/wbw_r/generated/wbw_tools_generated.R` (PASS)
+		- `cp crates/wbw_r/generated/wbw_tools_generated.R crates/wbw_r/r-package/whiteboxworkflows/R/zz_generated_wrappers.R` (PASS)
 

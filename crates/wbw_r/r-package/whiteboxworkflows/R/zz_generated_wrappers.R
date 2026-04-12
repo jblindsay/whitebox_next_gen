@@ -1307,6 +1307,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Maps discrete elevated terrain features from a raster using descending-priority region growth.
     run_tool("map_features", list(...))
   }
+  session$map_matching_v1 <- function(...) {
+    # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
+    run_tool("map_matching_v1", list(...))
+  }
   session$map_off_terrain_objects <- function(...) {
     # Maps off-terrain object segments in DSMs using slope-constrained region growing and optional minimum feature-size filtering.
     run_tool("map_off_terrain_objects", list(...))
@@ -1576,12 +1580,8 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("network_service_area", list(...))
   }
   session$network_topology_audit <- function(...) {
-    # Audits network topology (degree, component IDs, and likely routing blockers).
+    # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
     run_tool("network_topology_audit", list(...))
-  }
-  session$map_matching_v1 <- function(...) {
-    # Matches timestamped trajectory points onto a network and outputs the inferred path.
-    run_tool("map_matching_v1", list(...))
   }
   session$new_raster_from_base_raster <- function(...) {
     # Creates a new raster using the extent, dimensions, and CRS of a base raster.
@@ -2007,6 +2007,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Rounds each raster cell to the nearest integer.
     run_tool("round", list(...))
   }
+  session$route_calibrate <- function(...) {
+    # Calibrates route start/end measures from control points with known measures.
+    run_tool("route_calibrate", list(...))
+  }
   session$route_event_lines_from_layer <- function(...) {
     # Creates routed line events from an event vector layer using from/to measures.
     run_tool("route_event_lines_from_layer", list(...))
@@ -2015,6 +2019,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates routed line events from a CSV event table and a route layer using from/to measures.
     run_tool("route_event_lines_from_table", list(...))
   }
+  session$route_event_merge <- function(...) {
+    # Merges adjacent compatible route events.
+    run_tool("route_event_merge", list(...))
+  }
+  session$route_event_overlay <- function(...) {
+    # Overlays two route event layers by interval overlap.
+    run_tool("route_event_overlay", list(...))
+  }
   session$route_event_points_from_layer <- function(...) {
     # Creates routed point events from an event vector layer and a route layer.
     run_tool("route_event_points_from_layer", list(...))
@@ -2022,6 +2034,18 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$route_event_points_from_table <- function(...) {
     # Creates routed point events from a CSV event table and a route layer.
     run_tool("route_event_points_from_table", list(...))
+  }
+  session$route_event_split <- function(...) {
+    # Splits route events by per-route boundary measures.
+    run_tool("route_event_split", list(...))
+  }
+  session$route_measure_qa <- function(...) {
+    # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
+    run_tool("route_measure_qa", list(...))
+  }
+  session$route_recalibrate <- function(...) {
+    # Recalibrates edited route measures from a reference route layer while preserving route measure continuity.
+    run_tool("route_recalibrate", list(...))
   }
   session$ruggedness_index <- function(...) {
     # Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).
@@ -2278,6 +2302,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$topological_stream_order <- function(...) {
     # Assigns topological stream order based on link count.
     run_tool("topological_stream_order", list(...))
+  }
+  session$topology_rule_autofix <- function(...) {
+    # Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.
+    run_tool("topology_rule_autofix", list(...))
+  }
+  session$topology_rule_validate <- function(...) {
+    # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
+    run_tool("topology_rule_validate", list(...))
   }
   session$topology_validation_report <- function(...) {
     # Audits a vector layer for topology issues and writes a per-feature CSV report.
@@ -4336,6 +4368,12 @@ map_features <- function(...) {
   session$map_features(...)
 }
 
+map_matching_v1 <- function(...) {
+  # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$map_matching_v1(...)
+}
+
 map_off_terrain_objects <- function(...) {
   # Maps off-terrain object segments in DSMs using slope-constrained region growing and optional minimum feature-size filtering.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -4739,15 +4777,9 @@ network_service_area <- function(...) {
 }
 
 network_topology_audit <- function(...) {
-  # Audits network topology (degree, component IDs, and likely routing blockers).
+  # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$network_topology_audit(...)
-}
-
-map_matching_v1 <- function(...) {
-  # Matches timestamped trajectory points onto a network and outputs the inferred path.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$map_matching_v1(...)
 }
 
 new_raster_from_base_raster <- function(...) {
@@ -5386,6 +5418,12 @@ round <- function(...) {
   session$round(...)
 }
 
+route_calibrate <- function(...) {
+  # Calibrates route start/end measures from control points with known measures.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_calibrate(...)
+}
+
 route_event_lines_from_layer <- function(...) {
   # Creates routed line events from an event vector layer using from/to measures.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -5398,6 +5436,18 @@ route_event_lines_from_table <- function(...) {
   session$route_event_lines_from_table(...)
 }
 
+route_event_merge <- function(...) {
+  # Merges adjacent compatible route events.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_event_merge(...)
+}
+
+route_event_overlay <- function(...) {
+  # Overlays two route event layers by interval overlap.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_event_overlay(...)
+}
+
 route_event_points_from_layer <- function(...) {
   # Creates routed point events from an event vector layer and a route layer.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -5408,6 +5458,24 @@ route_event_points_from_table <- function(...) {
   # Creates routed point events from a CSV event table and a route layer.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$route_event_points_from_table(...)
+}
+
+route_event_split <- function(...) {
+  # Splits route events by per-route boundary measures.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_event_split(...)
+}
+
+route_measure_qa <- function(...) {
+  # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_measure_qa(...)
+}
+
+route_recalibrate <- function(...) {
+  # Recalibrates edited route measures from a reference route layer while preserving route measure continuity.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$route_recalibrate(...)
 }
 
 ruggedness_index <- function(...) {
@@ -5792,6 +5860,18 @@ topological_stream_order <- function(...) {
   # Assigns topological stream order based on link count.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$topological_stream_order(...)
+}
+
+topology_rule_autofix <- function(...) {
+  # Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$topology_rule_autofix(...)
+}
+
+topology_rule_validate <- function(...) {
+  # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$topology_rule_validate(...)
 }
 
 topology_validation_report <- function(...) {

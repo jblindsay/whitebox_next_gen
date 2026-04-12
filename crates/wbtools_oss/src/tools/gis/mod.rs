@@ -33,11 +33,16 @@ use wbtopology::{
     buffer_linestring, buffer_point, buffer_polygon_multi, make_valid_polygon, BufferCapStyle,
     BufferJoinStyle, BufferOptions, Coord as TopoCoord, LineString as TopoLineString,
     Geometry as TopoGeometry, LinearRing as TopoLinearRing, Polygon as TopoPolygon,
-    convex_hull, polygon_difference,
+    concave_hull_geometry, concave_hull_geometry_with_options, ConcaveHullOptions,
+    contains, convex_hull, crosses, disjoint, geometry_area, geometry_centroid,
+    geometry_length, intersects, is_within_distance, overlaps,
+    polygon_difference, simplify_geometry, touches, within,
     delaunay_triangulation,
     polygonize_closed_linestrings,
     polygon_intersection, polygon_unary_dissolve,
     voronoi_diagram,
+    Envelope as TopoEnvelope,
+    PreparedPolygon, SpatialIndex,
 };
 
 use crate::memory_store;
@@ -146,6 +151,26 @@ pub struct TravellingSalesmanProblemTool;
 
 pub struct ConstructVectorTinTool;
 pub struct VectorHexBinningTool;
+
+// ── Tier-1 new vector tools ──────────────────────────────────────────────────
+pub struct ReprojectVectorTool;
+pub struct AddGeometryAttributesTool;
+pub struct SimplifyFeaturesTool;
+pub struct NearTool;
+pub struct SelectByLocationTool;
+pub struct FieldCalculatorTool;
+pub struct SpatialJoinTool;
+
+// ── Tier-2 new vector tools ──────────────────────────────────────────────────
+pub struct ConcaveHullTool;
+pub struct RandomPointsInPolygonTool;
+pub struct DensifyFeaturesTool;
+pub struct PointsAlongLinesTool;
+pub struct VectorSummaryStatisticsTool;
+pub struct RenameFieldTool;
+pub struct DeleteFieldTool;
+pub struct AddFieldTool;
+pub struct LinePolygonClipTool;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GisOverlayOp {
@@ -17194,6 +17219,2521 @@ impl Tool for VectorHexBinningTool {
                 ],
             });
             coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_cells as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+fn topo_coord_from_xy(x: f64, y: f64) -> TopoCoord {
+    TopoCoord::xy(x, y)
+}
+
+fn topo_line_from_coords(coords: &[wbvector::Coord]) -> TopoLineString {
+    TopoLineString::new(coords.iter().map(to_topo_coord).collect())
+}
+
+fn topo_polygon_from_parts(exterior: &wbvector::Ring, interiors: &[wbvector::Ring]) -> TopoPolygon {
+    TopoPolygon::new(
+        TopoLinearRing::new(exterior.coords().iter().map(to_topo_coord).collect()),
+        interiors
+            .iter()
+            .map(|ring| TopoLinearRing::new(ring.coords().iter().map(to_topo_coord).collect()))
+            .collect(),
+    )
+}
+
+fn flatten_wb_geometry_to_topo_primitives(
+    geometry: &wbvector::Geometry,
+    out: &mut Vec<TopoGeometry>,
+) -> Result<(), ToolError> {
+    match geometry {
+        wbvector::Geometry::Point(coord) => out.push(TopoGeometry::Point(to_topo_coord(coord))),
+        wbvector::Geometry::LineString(coords) => out.push(TopoGeometry::LineString(topo_line_from_coords(coords))),
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            out.push(TopoGeometry::Polygon(topo_polygon_from_parts(exterior, interiors)));
+        }
+        wbvector::Geometry::MultiPoint(points) => {
+            for point in points {
+                out.push(TopoGeometry::Point(to_topo_coord(point)));
+            }
+        }
+        wbvector::Geometry::MultiLineString(lines) => {
+            for line in lines {
+                out.push(TopoGeometry::LineString(topo_line_from_coords(line)));
+            }
+        }
+        wbvector::Geometry::MultiPolygon(parts) => {
+            for (exterior, interiors) in parts {
+                out.push(TopoGeometry::Polygon(topo_polygon_from_parts(exterior, interiors)));
+            }
+        }
+        wbvector::Geometry::GeometryCollection(parts) => {
+            for part in parts {
+                flatten_wb_geometry_to_topo_primitives(part, out)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn wb_geometry_to_topo(geometry: &wbvector::Geometry) -> Result<TopoGeometry, ToolError> {
+    let mut components = Vec::<TopoGeometry>::new();
+    flatten_wb_geometry_to_topo_primitives(geometry, &mut components)?;
+    if components.is_empty() {
+        return Err(ToolError::Execution(
+            "geometry does not contain any supported coordinates".to_string(),
+        ));
+    }
+    if components.len() == 1 {
+        Ok(components.remove(0))
+    } else {
+        Ok(TopoGeometry::GeometryCollection(components))
+    }
+}
+
+fn collect_feature_topo_geometries(layer: &wbvector::Layer) -> Result<Vec<Option<TopoGeometry>>, ToolError> {
+    let mut out = Vec::with_capacity(layer.features.len());
+    for feature in &layer.features {
+        if let Some(geometry) = feature.geometry.as_ref() {
+            out.push(Some(wb_geometry_to_topo(geometry)?));
+        } else {
+            out.push(None);
+        }
+    }
+    Ok(out)
+}
+
+fn geometry_matches_predicate(
+    left: &TopoGeometry,
+    right: &TopoGeometry,
+    predicate: &str,
+    distance: Option<f64>,
+) -> bool {
+    match predicate {
+        "intersects" => intersects(left, right),
+        "within" => within(left, right),
+        "contains" => contains(left, right),
+        "touches" => touches(left, right),
+        "crosses" => crosses(left, right),
+        "overlaps" => overlaps(left, right),
+        "disjoint" => disjoint(left, right),
+        "within_distance" => distance
+            .map(|d| is_within_distance(left, right, d))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn topo_geometry_boundary_length(g: &TopoGeometry) -> f64 {
+    match g {
+        TopoGeometry::Polygon(poly) => {
+            let mut len = geometry_length(&TopoGeometry::LineString(TopoLineString::new(poly.exterior.coords.clone())));
+            for hole in &poly.holes {
+                len += geometry_length(&TopoGeometry::LineString(TopoLineString::new(hole.coords.clone())));
+            }
+            len
+        }
+        TopoGeometry::MultiPolygon(polys) => polys
+            .iter()
+            .map(|poly| {
+                let mut len = geometry_length(&TopoGeometry::LineString(TopoLineString::new(poly.exterior.coords.clone())));
+                for hole in &poly.holes {
+                    len += geometry_length(&TopoGeometry::LineString(TopoLineString::new(hole.coords.clone())));
+                }
+                len
+            })
+            .sum(),
+        TopoGeometry::GeometryCollection(parts) => parts.iter().map(topo_geometry_boundary_length).sum(),
+        _ => geometry_length(g),
+    }
+}
+
+fn parse_bool_arg(args: &ToolArgs, key: &str, default: bool) -> bool {
+    args.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
+}
+
+fn parse_f64_arg(args: &ToolArgs, key: &str) -> Result<f64, ToolError> {
+    args.get(key)
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| ToolError::Validation(format!("parameter '{}' is required", key)))
+}
+
+fn parse_optional_f64_arg(args: &ToolArgs, key: &str) -> Option<f64> {
+    args.get(key).and_then(|v| v.as_f64())
+}
+
+fn parse_string_arg<'a>(args: &'a ToolArgs, key: &str) -> Result<&'a str, ToolError> {
+    args.get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ToolError::Validation(format!("parameter '{}' is required", key)))
+}
+
+fn parse_optional_string_arg<'a>(args: &'a ToolArgs, key: &str) -> Option<&'a str> {
+    args.get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+fn sanitize_field_name_for_output(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    if out.is_empty() {
+        "FIELD".to_string()
+    } else {
+        out
+    }
+}
+
+fn field_value_to_evalexpr(value: &wbvector::FieldValue) -> Value {
+    match value {
+        wbvector::FieldValue::Integer(v) => Value::Int(*v),
+        wbvector::FieldValue::Float(v) => Value::Float(*v),
+        wbvector::FieldValue::Text(v) => Value::String(v.clone()),
+        wbvector::FieldValue::Boolean(v) => Value::Boolean(*v),
+        wbvector::FieldValue::Date(v) => Value::String(v.clone()),
+        wbvector::FieldValue::DateTime(v) => Value::String(v.clone()),
+        wbvector::FieldValue::Null => Value::Empty,
+        wbvector::FieldValue::Blob(_) => Value::Empty,
+    }
+}
+
+fn evalexpr_to_field_value(value: &Value, field_type: &str) -> wbvector::FieldValue {
+    match field_type {
+        "integer" => match value.as_int() {
+            Ok(v) => wbvector::FieldValue::Integer(v),
+            Err(_) => wbvector::FieldValue::Null,
+        },
+        "text" => match value {
+            Value::String(v) => wbvector::FieldValue::Text(v.clone()),
+            Value::Int(v) => wbvector::FieldValue::Text(v.to_string()),
+            Value::Float(v) => wbvector::FieldValue::Text(v.to_string()),
+            Value::Boolean(v) => wbvector::FieldValue::Text(v.to_string()),
+            _ => wbvector::FieldValue::Null,
+        },
+        _ => match value.as_number() {
+            Ok(v) => wbvector::FieldValue::Float(v),
+            Err(_) => wbvector::FieldValue::Null,
+        },
+    }
+}
+
+fn collect_points_from_geometry(geometry: &wbvector::Geometry, points: &mut Vec<wbvector::Coord>) {
+    match geometry {
+        wbvector::Geometry::Point(coord) => points.push(coord.clone()),
+        wbvector::Geometry::MultiPoint(coords) => points.extend(coords.iter().cloned()),
+        wbvector::Geometry::LineString(coords) => points.extend(coords.iter().cloned()),
+        wbvector::Geometry::MultiLineString(lines) => {
+            for line in lines {
+                points.extend(line.iter().cloned());
+            }
+        }
+        wbvector::Geometry::Polygon { exterior, interiors } => {
+            points.extend(exterior.coords().iter().cloned());
+            for ring in interiors {
+                points.extend(ring.coords().iter().cloned());
+            }
+        }
+        wbvector::Geometry::MultiPolygon(polys) => {
+            for (exterior, interiors) in polys {
+                points.extend(exterior.coords().iter().cloned());
+                for ring in interiors {
+                    points.extend(ring.coords().iter().cloned());
+                }
+            }
+        }
+        wbvector::Geometry::GeometryCollection(parts) => {
+            for part in parts {
+                collect_points_from_geometry(part, points);
+            }
+        }
+    }
+}
+
+fn parse_field_type(field_type: &str) -> Result<wbvector::FieldType, ToolError> {
+    match field_type.to_ascii_lowercase().as_str() {
+        "integer" | "int" => Ok(wbvector::FieldType::Integer),
+        "float" | "double" | "real" => Ok(wbvector::FieldType::Float),
+        "text" | "string" => Ok(wbvector::FieldType::Text),
+        "boolean" | "bool" => Ok(wbvector::FieldType::Boolean),
+        "date" => Ok(wbvector::FieldType::Date),
+        "datetime" => Ok(wbvector::FieldType::DateTime),
+        "json" => Ok(wbvector::FieldType::Json),
+        _ => Err(ToolError::Validation(
+            "field_type must be one of: integer, float, text, boolean, date, datetime, json"
+                .to_string(),
+        )),
+    }
+}
+
+fn field_value_from_json(value: Option<&serde_json::Value>, field_type: wbvector::FieldType) -> wbvector::FieldValue {
+    match field_type {
+        wbvector::FieldType::Integer => value
+            .and_then(|v| v.as_i64())
+            .map(wbvector::FieldValue::Integer)
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Float => value
+            .and_then(|v| v.as_f64())
+            .map(wbvector::FieldValue::Float)
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Text => value
+            .and_then(|v| v.as_str())
+            .map(|v| wbvector::FieldValue::Text(v.to_string()))
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Boolean => value
+            .and_then(|v| v.as_bool())
+            .map(wbvector::FieldValue::Boolean)
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Date => value
+            .and_then(|v| v.as_str())
+            .map(|v| wbvector::FieldValue::Date(v.to_string()))
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::DateTime => value
+            .and_then(|v| v.as_str())
+            .map(|v| wbvector::FieldValue::DateTime(v.to_string()))
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Json => value
+            .map(|v| wbvector::FieldValue::Text(v.to_string()))
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Blob => wbvector::FieldValue::Null,
+    }
+}
+
+fn resample_linestring(coords: &[wbvector::Coord], spacing: f64) -> Vec<wbvector::Coord> {
+    if coords.len() < 2 || spacing <= 0.0 {
+        return coords.to_vec();
+    }
+
+    let mut out = Vec::<wbvector::Coord>::new();
+    out.push(coords[0].clone());
+
+    let mut distance_to_next = spacing;
+    let mut current = coords[0].clone();
+
+    for next in coords.iter().skip(1) {
+        let mut seg_start = current.clone();
+        let seg_end = next.clone();
+        let mut seg_len = ((seg_end.x - seg_start.x).powi(2) + (seg_end.y - seg_start.y).powi(2)).sqrt();
+
+        while seg_len >= distance_to_next && seg_len > 0.0 {
+            let t = distance_to_next / seg_len;
+            let interp = wbvector::Coord::xy(
+                seg_start.x + (seg_end.x - seg_start.x) * t,
+                seg_start.y + (seg_end.y - seg_start.y) * t,
+            );
+            out.push(interp.clone());
+            seg_start = interp;
+            seg_len = ((seg_end.x - seg_start.x).powi(2) + (seg_end.y - seg_start.y).powi(2)).sqrt();
+            distance_to_next = spacing;
+        }
+
+        distance_to_next -= seg_len;
+        current = seg_end;
+    }
+
+    if !out
+        .last()
+        .map(|c| (c.x - coords[coords.len() - 1].x).abs() <= 1.0e-10 && (c.y - coords[coords.len() - 1].y).abs() <= 1.0e-10)
+        .unwrap_or(false)
+    {
+        out.push(coords[coords.len() - 1].clone());
+    }
+
+    out
+}
+
+fn points_along_linestring(coords: &[wbvector::Coord], spacing: f64, include_end: bool) -> Vec<wbvector::Coord> {
+    if coords.len() < 2 || spacing <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut out = Vec::<wbvector::Coord>::new();
+    let mut distance_since_last = 0.0;
+
+    for i in 0..(coords.len() - 1) {
+        let a = &coords[i];
+        let b = &coords[i + 1];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let seg_len = (dx * dx + dy * dy).sqrt();
+        if seg_len <= 0.0 {
+            continue;
+        }
+
+        let mut t = (spacing - distance_since_last) / seg_len;
+        while t <= 1.0 {
+            out.push(wbvector::Coord::xy(a.x + t * dx, a.y + t * dy));
+            t += spacing / seg_len;
+        }
+
+        let travelled = (t - spacing / seg_len) * seg_len;
+        distance_since_last = seg_len - travelled;
+        if distance_since_last < 0.0 {
+            distance_since_last = 0.0;
+        }
+    }
+
+    if include_end {
+        if let Some(last) = coords.last() {
+            if out
+                .last()
+                .map(|c| (c.x - last.x).abs() > 1.0e-10 || (c.y - last.y).abs() > 1.0e-10)
+                .unwrap_or(true)
+            {
+                out.push(last.clone());
+            }
+        }
+    }
+
+    out
+}
+
+impl Tool for ReprojectVectorTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "reproject_vector",
+            display_name: "Reproject Vector",
+            summary: "Reprojects an input vector layer to a destination EPSG code.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "epsg", description: "Destination EPSG code.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("epsg".to_string(), json!(4326));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("reprojected.shp"));
+
+        ToolManifest {
+            id: "reproject_vector".to_string(),
+            display_name: "Reproject Vector".to_string(),
+            summary: "Reprojects an input vector layer to a destination EPSG code.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "epsg".to_string(), description: "Destination EPSG code.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "reproject_vector_basic".to_string(),
+                description: "Reprojects a vector layer to EPSG:4326.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "projection".to_string(), "crs".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let epsg = args
+            .get("epsg")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| ToolError::Validation("parameter 'epsg' is required".to_string()))?;
+        if epsg == 0 {
+            return Err(ToolError::Validation("epsg must be > 0".to_string()));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let epsg = args
+            .get("epsg")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| ToolError::Validation("parameter 'epsg' is required".to_string()))? as u32;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let output = input.reproject_to_epsg(epsg).map_err(|e| {
+            ToolError::Execution(format!("failed reprojecting vector layer to EPSG:{}: {}", epsg, e))
+        })?;
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for AddGeometryAttributesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "add_geometry_attributes",
+            display_name: "Add Geometry Attributes",
+            summary: "Adds area, length, perimeter, and centroid attributes to vector features.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "area", description: "Include AREA field (default true).", required: false },
+                ToolParamSpec { name: "length", description: "Include LENGTH field (default true).", required: false },
+                ToolParamSpec { name: "perimeter", description: "Include PERIMETER field (default true).", required: false },
+                ToolParamSpec { name: "centroid", description: "Include centroid X/Y fields (default true).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("area".to_string(), json!(true));
+        defaults.insert("length".to_string(), json!(true));
+        defaults.insert("perimeter".to_string(), json!(true));
+        defaults.insert("centroid".to_string(), json!(true));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("geometry_attributes.shp"));
+
+        ToolManifest {
+            id: "add_geometry_attributes".to_string(),
+            display_name: "Add Geometry Attributes".to_string(),
+            summary: "Adds area, length, perimeter, and centroid attributes to vector features.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "area".to_string(), description: "Include AREA field (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "length".to_string(), description: "Include LENGTH field (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "perimeter".to_string(), description: "Include PERIMETER field (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "centroid".to_string(), description: "Include centroid X/Y fields (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "add_geometry_attributes_basic".to_string(),
+                description: "Adds geometry-derived attributes to each feature.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "attributes".to_string(), "measurements".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let include_area = parse_bool_arg(args, "area", true);
+        let include_length = parse_bool_arg(args, "length", true);
+        let include_perimeter = parse_bool_arg(args, "perimeter", true);
+        let include_centroid = parse_bool_arg(args, "centroid", true);
+
+        let mut output = input.clone();
+        if include_area {
+            output.schema.add_field(wbvector::FieldDef::new("AREA", wbvector::FieldType::Float));
+        }
+        if include_length {
+            output.schema.add_field(wbvector::FieldDef::new("LENGTH", wbvector::FieldType::Float));
+        }
+        if include_perimeter {
+            output.schema.add_field(wbvector::FieldDef::new("PERIMETER", wbvector::FieldType::Float));
+        }
+        if include_centroid {
+            output.schema.add_field(wbvector::FieldDef::new("CENTROID_X", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("CENTROID_Y", wbvector::FieldType::Float));
+        }
+
+        let total = output.features.len().max(1);
+        for (index, feature) in output.features.iter_mut().enumerate() {
+            if let Some(geometry) = feature.geometry.as_ref() {
+                let topo = wb_geometry_to_topo(geometry)?;
+                if include_area {
+                    feature.attributes.push(wbvector::FieldValue::Float(geometry_area(&topo)));
+                }
+                if include_length {
+                    feature.attributes.push(wbvector::FieldValue::Float(geometry_length(&topo)));
+                }
+                if include_perimeter {
+                    feature.attributes.push(wbvector::FieldValue::Float(topo_geometry_boundary_length(&topo)));
+                }
+                if include_centroid {
+                    if let Some(centroid) = geometry_centroid(&topo) {
+                        feature.attributes.push(wbvector::FieldValue::Float(centroid.x));
+                        feature.attributes.push(wbvector::FieldValue::Float(centroid.y));
+                    } else {
+                        feature.attributes.push(wbvector::FieldValue::Null);
+                        feature.attributes.push(wbvector::FieldValue::Null);
+                    }
+                }
+            } else {
+                if include_area {
+                    feature.attributes.push(wbvector::FieldValue::Null);
+                }
+                if include_length {
+                    feature.attributes.push(wbvector::FieldValue::Null);
+                }
+                if include_perimeter {
+                    feature.attributes.push(wbvector::FieldValue::Null);
+                }
+                if include_centroid {
+                    feature.attributes.push(wbvector::FieldValue::Null);
+                    feature.attributes.push(wbvector::FieldValue::Null);
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for SimplifyFeaturesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "simplify_features",
+            display_name: "Simplify Features",
+            summary: "Simplifies vector geometries using Douglas-Peucker tolerance.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "tolerance", description: "Simplification tolerance in map units.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("tolerance".to_string(), json!(5.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("simplified.shp"));
+
+        ToolManifest {
+            id: "simplify_features".to_string(),
+            display_name: "Simplify Features".to_string(),
+            summary: "Simplifies vector geometries using Douglas-Peucker tolerance.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "tolerance".to_string(), description: "Simplification tolerance in map units.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "simplify_features_basic".to_string(),
+                description: "Simplifies geometry complexity while retaining shape.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "simplify".to_string(), "generalization".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let tolerance = parse_f64_arg(args, "tolerance")?;
+        if !tolerance.is_finite() || tolerance < 0.0 {
+            return Err(ToolError::Validation(
+                "tolerance must be a finite value >= 0".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let tolerance = parse_f64_arg(args, "tolerance")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let mut output = input.clone();
+        let total = output.features.len().max(1);
+        for (index, feature) in output.features.iter_mut().enumerate() {
+            if let Some(geometry) = feature.geometry.as_ref() {
+                let topo = wb_geometry_to_topo(geometry)?;
+                let simplified = simplify_geometry(&topo, tolerance);
+                feature.geometry = Some(match simplified {
+                    TopoGeometry::Point(coord) => wbvector::Geometry::Point(to_wb_coord(&coord)),
+                    TopoGeometry::LineString(line) => {
+                        wbvector::Geometry::LineString(line.coords.iter().map(to_wb_coord).collect())
+                    }
+                    TopoGeometry::Polygon(poly) => wbvector::Geometry::Polygon {
+                        exterior: to_wb_ring(&poly.exterior),
+                        interiors: to_wb_rings(&poly.holes),
+                    },
+                    TopoGeometry::MultiPoint(points) => {
+                        wbvector::Geometry::MultiPoint(points.iter().map(to_wb_coord).collect())
+                    }
+                    TopoGeometry::MultiLineString(lines) => wbvector::Geometry::MultiLineString(
+                        lines
+                            .iter()
+                            .map(|line| line.coords.iter().map(to_wb_coord).collect())
+                            .collect(),
+                    ),
+                    TopoGeometry::MultiPolygon(polys) => wbvector::Geometry::MultiPolygon(
+                        polys
+                            .iter()
+                            .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                            .collect(),
+                    ),
+                    TopoGeometry::GeometryCollection(parts) => wbvector::Geometry::GeometryCollection(
+                        parts
+                            .iter()
+                            .filter_map(|part| {
+                                match part {
+                                    TopoGeometry::Point(coord) => Some(wbvector::Geometry::Point(to_wb_coord(coord))),
+                                    TopoGeometry::LineString(line) => Some(wbvector::Geometry::LineString(
+                                        line.coords.iter().map(to_wb_coord).collect(),
+                                    )),
+                                    TopoGeometry::Polygon(poly) => Some(wbvector::Geometry::Polygon {
+                                        exterior: to_wb_ring(&poly.exterior),
+                                        interiors: to_wb_rings(&poly.holes),
+                                    }),
+                                    TopoGeometry::MultiPoint(points) => Some(wbvector::Geometry::MultiPoint(
+                                        points.iter().map(to_wb_coord).collect(),
+                                    )),
+                                    TopoGeometry::MultiLineString(lines) => Some(
+                                        wbvector::Geometry::MultiLineString(
+                                            lines
+                                                .iter()
+                                                .map(|line| line.coords.iter().map(to_wb_coord).collect())
+                                                .collect(),
+                                        ),
+                                    ),
+                                    TopoGeometry::MultiPolygon(polys) => Some(wbvector::Geometry::MultiPolygon(
+                                        polys
+                                            .iter()
+                                            .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                                            .collect(),
+                                    )),
+                                    TopoGeometry::GeometryCollection(_) => None,
+                                }
+                            })
+                            .collect(),
+                    ),
+                });
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NearTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "near",
+            display_name: "Near",
+            summary: "Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "near", description: "Near-feature vector layer.", required: true },
+                ToolParamSpec { name: "max_distance", description: "Optional maximum search distance.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("near".to_string(), json!("near.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("near_output.shp"));
+
+        ToolManifest {
+            id: "near".to_string(),
+            display_name: "Near".to_string(),
+            summary: "Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "near".to_string(), description: "Near-feature vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_distance".to_string(), description: "Optional maximum search distance.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "near_basic".to_string(),
+                description: "Computes nearest feature IDs and distances.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "nearest".to_string(), "distance".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let _ = load_vector_arg(args, "near")?;
+        if let Some(max_distance) = parse_optional_f64_arg(args, "max_distance") {
+            if !max_distance.is_finite() || max_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let near_layer = load_vector_arg(args, "near")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let max_distance = parse_optional_f64_arg(args, "max_distance");
+
+        let near_topo = collect_feature_topo_geometries(&near_layer)?;
+        let near_geometries: Vec<TopoGeometry> = near_topo.iter().filter_map(|g| g.clone()).collect();
+        let near_index = SpatialIndex::from_geometries(&near_geometries);
+
+        let input_topo = collect_feature_topo_geometries(&input)?;
+        let results: Vec<(i64, f64)> = input_topo
+            .par_iter()
+            .map(|maybe_geom| {
+                let Some(geom) = maybe_geom else {
+                    return (-1i64, -1.0f64);
+                };
+
+                if let Some((id, dist)) = near_index.nearest_neighbor(geom) {
+                    if let Some(max_d) = max_distance {
+                        if dist > max_d {
+                            return (-1i64, -1.0f64);
+                        }
+                    }
+                    ((id + 1) as i64, dist)
+                } else {
+                    (-1i64, -1.0f64)
+                }
+            })
+            .collect();
+
+        let mut output = input.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("NEAR_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("NEAR_DIST", wbvector::FieldType::Float));
+
+        let total = output.features.len().max(1);
+        for (index, feature) in output.features.iter_mut().enumerate() {
+            let (near_fid, near_dist) = results[index];
+            feature.attributes.push(wbvector::FieldValue::Integer(near_fid));
+            feature.attributes.push(if near_dist < 0.0 {
+                wbvector::FieldValue::Float(-1.0)
+            } else {
+                wbvector::FieldValue::Float(near_dist)
+            });
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for SelectByLocationTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "select_by_location",
+            display_name: "Select By Location",
+            summary: "Extracts target features that satisfy a spatial relationship to query features.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "target", description: "Target feature layer to filter.", required: true },
+                ToolParamSpec { name: "query", description: "Query feature layer.", required: true },
+                ToolParamSpec { name: "predicate", description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance.", required: true },
+                ToolParamSpec { name: "distance", description: "Distance threshold for within_distance predicate.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("target".to_string(), json!("target.shp"));
+        defaults.insert("query".to_string(), json!("query.shp"));
+        defaults.insert("predicate".to_string(), json!("intersects"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("selected.shp"));
+
+        ToolManifest {
+            id: "select_by_location".to_string(),
+            display_name: "Select By Location".to_string(),
+            summary: "Extracts target features that satisfy a spatial relationship to query features.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "target".to_string(), description: "Target feature layer to filter.".to_string(), required: true },
+                ToolParamDescriptor { name: "query".to_string(), description: "Query feature layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "predicate".to_string(), description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance.".to_string(), required: true },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for within_distance predicate.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "select_by_location_basic".to_string(),
+                description: "Selects target features that intersect query features.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "query".to_string(), "spatial".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "target")?;
+        let _ = load_vector_arg(args, "query")?;
+        let predicate = parse_string_arg(args, "predicate")?.to_ascii_lowercase();
+        let allowed = [
+            "intersects",
+            "within",
+            "contains",
+            "touches",
+            "crosses",
+            "overlaps",
+            "disjoint",
+            "within_distance",
+        ];
+        if !allowed.iter().any(|p| *p == predicate) {
+            return Err(ToolError::Validation(
+                "predicate must be one of: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance"
+                    .to_string(),
+            ));
+        }
+        if predicate == "within_distance" {
+            let distance = parse_f64_arg(args, "distance")?;
+            if !distance.is_finite() || distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "distance must be a finite value >= 0 for within_distance".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let target = load_vector_arg(args, "target")?;
+        let query = load_vector_arg(args, "query")?;
+        let predicate = parse_string_arg(args, "predicate")?.to_ascii_lowercase();
+        let distance = parse_optional_f64_arg(args, "distance");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let target_topo = collect_feature_topo_geometries(&target)?;
+        let query_topo = collect_feature_topo_geometries(&query)?;
+        let query_geoms: Vec<TopoGeometry> = query_topo.iter().filter_map(|g| g.clone()).collect();
+        let query_index = SpatialIndex::from_geometries(&query_geoms);
+
+        let selected_mask: Vec<bool> = target_topo
+            .par_iter()
+            .map(|maybe_target_geom| {
+                let Some(target_geom) = maybe_target_geom else {
+                    return false;
+                };
+                let candidates = query_index.query_geometry(target_geom);
+                if candidates.is_empty() {
+                    return predicate == "disjoint";
+                }
+
+                let mut any_match = false;
+                for candidate in candidates {
+                    let Some(query_geom) = query_geoms.get(candidate) else {
+                        continue;
+                    };
+                    if geometry_matches_predicate(target_geom, query_geom, &predicate, distance) {
+                        any_match = true;
+                        break;
+                    }
+                }
+
+                if predicate == "disjoint" {
+                    !any_match
+                } else {
+                    any_match
+                }
+            })
+            .collect();
+
+        let mut output = wbvector::Layer::new(format!("{}_select_by_location", target.name));
+        output.schema = target.schema.clone();
+        output.crs = target.crs.clone();
+        output.geom_type = target.geom_type;
+
+        let total = target.features.len().max(1);
+        let mut next_fid = 1u64;
+        for (index, feature) in target.features.iter().enumerate() {
+            if selected_mask[index] {
+                let mut cloned = feature.clone();
+                cloned.fid = next_fid;
+                next_fid += 1;
+                output.push(cloned);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for FieldCalculatorTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "field_calculator",
+            display_name: "Field Calculator",
+            summary: "Calculates a field value from an expression using feature attributes and geometry variables.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "field", description: "Output field name.", required: true },
+                ToolParamSpec { name: "field_type", description: "Output field type: float, integer, text.", required: false },
+                ToolParamSpec { name: "expression", description: "Expression evaluated per feature.", required: true },
+                ToolParamSpec { name: "overwrite", description: "Overwrite existing field if present (default true).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("field".to_string(), json!("score"));
+        defaults.insert("field_type".to_string(), json!("float"));
+        defaults.insert("expression".to_string(), json!("VALUE * 2.0 + $area"));
+        defaults.insert("overwrite".to_string(), json!(true));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("field_calc.shp"));
+
+        ToolManifest {
+            id: "field_calculator".to_string(),
+            display_name: "Field Calculator".to_string(),
+            summary: "Calculates a field value from an expression using feature attributes and geometry variables.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "field".to_string(), description: "Output field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "field_type".to_string(), description: "Output field type: float, integer, text.".to_string(), required: false },
+                ToolParamDescriptor { name: "expression".to_string(), description: "Expression evaluated per feature.".to_string(), required: true },
+                ToolParamDescriptor { name: "overwrite".to_string(), description: "Overwrite existing field if present (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "field_calculator_basic".to_string(),
+                description: "Computes a derived numeric field using attributes and geometry.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "attributes".to_string(), "expression".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field_name = parse_string_arg(args, "field")?;
+        let _ = sanitize_field_name_for_output(field_name);
+
+        let expression = parse_string_arg(args, "expression")?;
+        build_operator_tree::<evalexpr::DefaultNumericTypes>(expression).map_err(|e| {
+            ToolError::Validation(format!("invalid expression: {}", e))
+        })?;
+
+        let field_type = parse_optional_string_arg(args, "field_type").unwrap_or("float");
+        match field_type.to_ascii_lowercase().as_str() {
+            "float" | "integer" | "text" => {}
+            _ => {
+                return Err(ToolError::Validation(
+                    "field_type must be one of: float, integer, text".to_string(),
+                ))
+            }
+        }
+
+        if let Some(existing_idx) = input.schema.field_index(field_name) {
+            let overwrite = parse_bool_arg(args, "overwrite", true);
+            if !overwrite && existing_idx < input.schema.len() {
+                return Err(ToolError::Validation(format!(
+                    "field '{}' already exists; set overwrite=true to replace it",
+                    field_name
+                )));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let field_name = sanitize_field_name_for_output(parse_string_arg(args, "field")?);
+        let field_type = parse_optional_string_arg(args, "field_type")
+            .unwrap_or("float")
+            .to_ascii_lowercase();
+        let expression = parse_string_arg(args, "expression")?;
+        let overwrite = parse_bool_arg(args, "overwrite", true);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let tree = build_operator_tree::<evalexpr::DefaultNumericTypes>(expression).map_err(|e| {
+            ToolError::Validation(format!("invalid expression: {}", e))
+        })?;
+
+        let mut output = input.clone();
+        let existing_idx = output.schema.field_index(&field_name);
+        let target_idx = if let Some(idx) = existing_idx {
+            if overwrite {
+                idx
+            } else {
+                return Err(ToolError::Validation(format!(
+                    "field '{}' already exists; set overwrite=true to replace it",
+                    field_name
+                )));
+            }
+        } else {
+            let field_def_type = match field_type.as_str() {
+                "integer" => wbvector::FieldType::Integer,
+                "text" => wbvector::FieldType::Text,
+                _ => wbvector::FieldType::Float,
+            };
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new(&field_name, field_def_type));
+            output.schema.len() - 1
+        };
+
+        let total = output.features.len().max(1);
+        for (index, feature) in output.features.iter_mut().enumerate() {
+            let mut context = HashMapContext::new();
+
+            for (field_idx, field_def) in output.schema.fields().iter().enumerate() {
+                if field_idx >= feature.attributes.len() {
+                    continue;
+                }
+                let value = field_value_to_evalexpr(&feature.attributes[field_idx]);
+                context
+                    .set_value(field_def.name.clone(), value)
+                    .map_err(|e| ToolError::Execution(format!("failed setting expression variable: {}", e)))?;
+            }
+
+            if let Some(geometry) = feature.geometry.as_ref() {
+                let topo = wb_geometry_to_topo(geometry)?;
+                context
+                    .set_value("$area".to_string(), Value::Float(geometry_area(&topo)))
+                    .map_err(|e| ToolError::Execution(format!("failed setting $area: {}", e)))?;
+                context
+                    .set_value("$length".to_string(), Value::Float(geometry_length(&topo)))
+                    .map_err(|e| ToolError::Execution(format!("failed setting $length: {}", e)))?;
+                if let Some(centroid) = geometry_centroid(&topo) {
+                    context
+                        .set_value("$x".to_string(), Value::Float(centroid.x))
+                        .map_err(|e| ToolError::Execution(format!("failed setting $x: {}", e)))?;
+                    context
+                        .set_value("$y".to_string(), Value::Float(centroid.y))
+                        .map_err(|e| ToolError::Execution(format!("failed setting $y: {}", e)))?;
+                }
+            }
+            context
+                .set_value("$fid".to_string(), Value::Int(feature.fid as i64))
+                .map_err(|e| ToolError::Execution(format!("failed setting $fid: {}", e)))?;
+
+            let value = tree
+                .eval_with_context(&context)
+                .map_err(|e| ToolError::Execution(format!("expression evaluation failed: {}", e)))?;
+
+            let converted = evalexpr_to_field_value(&value, field_type.as_str());
+            if target_idx < feature.attributes.len() {
+                feature.attributes[target_idx] = converted;
+            } else {
+                feature.attributes.push(converted);
+            }
+
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for SpatialJoinTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "spatial_join",
+            display_name: "Spatial Join",
+            summary: "Joins attributes from a join layer onto target features using a spatial predicate.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "target", description: "Target layer receiving joined attributes.", required: true },
+                ToolParamSpec { name: "join", description: "Join layer providing attributes.", required: true },
+                ToolParamSpec { name: "predicate", description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.", required: true },
+                ToolParamSpec { name: "distance", description: "Distance threshold for within_distance predicate.", required: false },
+                ToolParamSpec { name: "strategy", description: "Join strategy: first, last, count.", required: false },
+                ToolParamSpec { name: "prefix", description: "Prefix for joined field names (default JOIN_).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("target".to_string(), json!("target.shp"));
+        defaults.insert("join".to_string(), json!("join.shp"));
+        defaults.insert("predicate".to_string(), json!("intersects"));
+        defaults.insert("strategy".to_string(), json!("first"));
+        defaults.insert("prefix".to_string(), json!("JOIN_"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("spatial_join.shp"));
+
+        ToolManifest {
+            id: "spatial_join".to_string(),
+            display_name: "Spatial Join".to_string(),
+            summary: "Joins attributes from a join layer onto target features using a spatial predicate.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "target".to_string(), description: "Target layer receiving joined attributes.".to_string(), required: true },
+                ToolParamDescriptor { name: "join".to_string(), description: "Join layer providing attributes.".to_string(), required: true },
+                ToolParamDescriptor { name: "predicate".to_string(), description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.".to_string(), required: true },
+                ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for within_distance predicate.".to_string(), required: false },
+                ToolParamDescriptor { name: "strategy".to_string(), description: "Join strategy: first, last, count.".to_string(), required: false },
+                ToolParamDescriptor { name: "prefix".to_string(), description: "Prefix for joined field names (default JOIN_).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "spatial_join_basic".to_string(),
+                description: "Transfers join-layer attributes where geometries intersect.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "join".to_string(), "spatial".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "target")?;
+        let _ = load_vector_arg(args, "join")?;
+        let predicate = parse_string_arg(args, "predicate")?.to_ascii_lowercase();
+        let allowed_predicates = [
+            "intersects",
+            "within",
+            "contains",
+            "touches",
+            "crosses",
+            "overlaps",
+            "within_distance",
+        ];
+        if !allowed_predicates.iter().any(|p| *p == predicate) {
+            return Err(ToolError::Validation(
+                "predicate must be one of: intersects, within, contains, touches, crosses, overlaps, within_distance"
+                    .to_string(),
+            ));
+        }
+        if predicate == "within_distance" {
+            let distance = parse_f64_arg(args, "distance")?;
+            if !distance.is_finite() || distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "distance must be a finite value >= 0 for within_distance".to_string(),
+                ));
+            }
+        }
+
+        let strategy = parse_optional_string_arg(args, "strategy")
+            .unwrap_or("first")
+            .to_ascii_lowercase();
+        match strategy.as_str() {
+            "first" | "last" | "count" => {}
+            _ => {
+                return Err(ToolError::Validation(
+                    "strategy must be one of: first, last, count".to_string(),
+                ))
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let target = load_vector_arg(args, "target")?;
+        let join_layer = load_vector_arg(args, "join")?;
+        let predicate = parse_string_arg(args, "predicate")?.to_ascii_lowercase();
+        let distance = parse_optional_f64_arg(args, "distance");
+        let strategy = parse_optional_string_arg(args, "strategy")
+            .unwrap_or("first")
+            .to_ascii_lowercase();
+        let prefix = parse_optional_string_arg(args, "prefix").unwrap_or("JOIN_");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let target_topo = collect_feature_topo_geometries(&target)?;
+        let join_topo = collect_feature_topo_geometries(&join_layer)?;
+        let join_geometries: Vec<TopoGeometry> = join_topo.iter().filter_map(|g| g.clone()).collect();
+        let join_index = SpatialIndex::from_geometries(&join_geometries);
+
+        let candidate_matches: Vec<Vec<usize>> = target_topo
+            .par_iter()
+            .map(|maybe_target_geom| {
+                let Some(target_geom) = maybe_target_geom else {
+                    return Vec::new();
+                };
+                let candidates = join_index.query_geometry(target_geom);
+                let mut matches = Vec::<usize>::new();
+                for candidate in candidates {
+                    let Some(join_geom) = join_geometries.get(candidate) else {
+                        continue;
+                    };
+                    if geometry_matches_predicate(target_geom, join_geom, &predicate, distance) {
+                        matches.push(candidate);
+                    }
+                }
+                matches
+            })
+            .collect();
+
+        let mut output = wbvector::Layer::new(format!("{}_spatial_join", target.name));
+        output.schema = target.schema.clone();
+        output.crs = target.crs.clone();
+        output.geom_type = target.geom_type;
+
+        for field in join_layer.schema.fields() {
+            let joined_name = format!("{}{}", prefix, field.name);
+            let safe_name = sanitize_field_name_for_output(&joined_name);
+            if output.schema.field_index(&safe_name).is_none() {
+                output
+                    .schema
+                    .add_field(wbvector::FieldDef::new(&safe_name, field.field_type));
+            }
+        }
+        if output.schema.field_index("JOIN_COUNT").is_none() {
+            output
+                .schema
+                .add_field(wbvector::FieldDef::new("JOIN_COUNT", wbvector::FieldType::Integer));
+        }
+
+        let target_schema_len = target.schema.len();
+        let joined_field_indices: Vec<Option<usize>> = join_layer
+            .schema
+            .fields()
+            .iter()
+            .map(|field| {
+                let joined_name = sanitize_field_name_for_output(&format!("{}{}", prefix, field.name));
+                output.schema.field_index(&joined_name)
+            })
+            .collect();
+        let join_count_idx = output
+            .schema
+            .field_index("JOIN_COUNT")
+            .ok_or_else(|| ToolError::Execution("JOIN_COUNT field missing from output schema".to_string()))?;
+
+        let total = target.features.len().max(1);
+        let mut next_fid = 1u64;
+        for (index, feature) in target.features.iter().enumerate() {
+            let matches = &candidate_matches[index];
+
+            let mut attrs = vec![wbvector::FieldValue::Null; output.schema.len()];
+            for (src_idx, value) in feature.attributes.iter().enumerate() {
+                if src_idx < attrs.len() {
+                    attrs[src_idx] = value.clone();
+                }
+            }
+
+            let join_feature_opt = if matches.is_empty() {
+                None
+            } else {
+                match strategy.as_str() {
+                    "last" => join_layer.features.get(matches[matches.len() - 1]),
+                    "count" => None,
+                    _ => join_layer.features.get(matches[0]),
+                }
+            };
+
+            if let Some(join_feature) = join_feature_opt {
+                for (join_src_idx, join_value) in join_feature.attributes.iter().enumerate() {
+                    if let Some(Some(dst_idx)) = joined_field_indices.get(join_src_idx) {
+                        if *dst_idx < attrs.len() {
+                            attrs[*dst_idx] = join_value.clone();
+                        }
+                    }
+                }
+            }
+
+            attrs[join_count_idx] = wbvector::FieldValue::Integer(matches.len() as i64);
+
+            if attrs.len() < target_schema_len {
+                attrs.resize(target_schema_len, wbvector::FieldValue::Null);
+            }
+
+            let mut out_feature = feature.clone();
+            out_feature.fid = next_fid;
+            out_feature.attributes = attrs;
+            next_fid += 1;
+            output.push(out_feature);
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for ConcaveHullTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "concave_hull",
+            display_name: "Concave Hull",
+            summary: "Creates concave hull polygons around all input feature coordinates.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "max_edge_length", description: "Maximum edge length controlling hull detail.", required: true },
+                ToolParamSpec { name: "epsilon", description: "Robustness epsilon (default 1e-9).", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("max_edge_length".to_string(), json!(50.0));
+        defaults.insert("epsilon".to_string(), json!(1.0e-9));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("concave_hull.shp"));
+
+        ToolManifest {
+            id: "concave_hull".to_string(),
+            display_name: "Concave Hull".to_string(),
+            summary: "Creates concave hull polygons around all input feature coordinates.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_edge_length".to_string(), description: "Maximum edge length controlling hull detail.".to_string(), required: true },
+                ToolParamDescriptor { name: "epsilon".to_string(), description: "Robustness epsilon (default 1e-9).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "concave_hull_basic".to_string(),
+                description: "Builds a concave hull from all input coordinates.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "hull".to_string(), "boundary".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let max_edge_length = parse_f64_arg(args, "max_edge_length")?;
+        if !max_edge_length.is_finite() || max_edge_length <= 0.0 {
+            return Err(ToolError::Validation(
+                "max_edge_length must be a finite value > 0".to_string(),
+            ));
+        }
+        if let Some(epsilon) = parse_optional_f64_arg(args, "epsilon") {
+            if !epsilon.is_finite() || epsilon <= 0.0 {
+                return Err(ToolError::Validation(
+                    "epsilon must be a finite value > 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let max_edge_length = parse_f64_arg(args, "max_edge_length")?;
+        let epsilon = parse_optional_f64_arg(args, "epsilon").unwrap_or(1.0e-9);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let mut coords = Vec::<TopoCoord>::new();
+        for feature in &input.features {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            let mut points = Vec::<wbvector::Coord>::new();
+            collect_points_from_geometry(geometry, &mut points);
+            coords.extend(points.iter().map(to_topo_coord));
+        }
+
+        if coords.len() < 3 {
+            return Err(ToolError::Execution(
+                "input layer does not contain enough coordinates to build a concave hull".to_string(),
+            ));
+        }
+
+        let options = ConcaveHullOptions {
+            max_edge_length,
+            epsilon,
+            ..ConcaveHullOptions::default()
+        };
+        let hull = concave_hull_geometry_with_options(&TopoGeometry::MultiPoint(coords), options);
+
+        let mut output = wbvector::Layer::new(format!("{}_concave_hull", input.name));
+        output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
+        output.geom_type = Some(wbvector::GeometryType::Polygon);
+        output.crs = input.crs.clone();
+
+        let geom = match hull {
+            TopoGeometry::Polygon(poly) => wbvector::Geometry::Polygon {
+                exterior: to_wb_ring(&poly.exterior),
+                interiors: to_wb_rings(&poly.holes),
+            },
+            TopoGeometry::MultiPolygon(polys) => wbvector::Geometry::MultiPolygon(
+                polys
+                    .iter()
+                    .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                    .collect(),
+            ),
+            other => {
+                let fallback = concave_hull_geometry(&other, max_edge_length, epsilon);
+                match fallback {
+                    TopoGeometry::Polygon(poly) => wbvector::Geometry::Polygon {
+                        exterior: to_wb_ring(&poly.exterior),
+                        interiors: to_wb_rings(&poly.holes),
+                    },
+                    TopoGeometry::MultiPolygon(polys) => wbvector::Geometry::MultiPolygon(
+                        polys
+                            .iter()
+                            .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                            .collect(),
+                    ),
+                    _ => {
+                        return Err(ToolError::Execution(
+                            "concave hull did not produce a polygon geometry".to_string(),
+                        ))
+                    }
+                }
+            }
+        };
+
+        output.push(wbvector::Feature {
+            fid: 1,
+            geometry: Some(geom),
+            attributes: vec![wbvector::FieldValue::Integer(1)],
+        });
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RandomPointsInPolygonTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "random_points_in_polygon",
+            display_name: "Random Points In Polygon",
+            summary: "Generates random points uniformly within input polygon geometries.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input polygon layer.", required: true },
+                ToolParamSpec { name: "num_points", description: "Number of random points to create.", required: true },
+                ToolParamSpec { name: "seed", description: "Optional RNG seed for reproducibility.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("polygons.shp"));
+        defaults.insert("num_points".to_string(), json!(100));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("random_points.shp"));
+
+        ToolManifest {
+            id: "random_points_in_polygon".to_string(),
+            display_name: "Random Points In Polygon".to_string(),
+            summary: "Generates random points uniformly within input polygon geometries.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input polygon layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "num_points".to_string(), description: "Number of random points to create.".to_string(), required: true },
+                ToolParamDescriptor { name: "seed".to_string(), description: "Optional RNG seed for reproducibility.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "random_points_in_polygon_basic".to_string(),
+                description: "Generates random sample points inside polygon boundaries.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "sampling".to_string(), "random".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::Polygon)
+            && input.geom_type != Some(wbvector::GeometryType::MultiPolygon)
+        {
+            return Err(ToolError::Validation(
+                "input must be a polygon layer".to_string(),
+            ));
+        }
+        let num_points = args
+            .get("num_points")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| ToolError::Validation("parameter 'num_points' is required".to_string()))?;
+        if num_points == 0 {
+            return Err(ToolError::Validation(
+                "num_points must be > 0".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        use rand::RngExt;
+        let input = load_vector_arg(args, "input")?;
+        let num_points = args
+            .get("num_points")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| ToolError::Validation("parameter 'num_points' is required".to_string()))?
+            as usize;
+        let _seed = args.get("seed").and_then(|v| v.as_u64());
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let mut polys = Vec::<TopoPolygon>::new();
+        for feature in &input.features {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            let mut extracted = Vec::<TopoPolygon>::new();
+            extract_polygons_from_geometry(geometry, &mut extracted)?;
+            polys.extend(extracted);
+        }
+
+        if polys.is_empty() {
+            return Err(ToolError::Execution(
+                "input contains no polygon geometry".to_string(),
+            ));
+        }
+
+        let mut envelopes = Vec::<TopoEnvelope>::new();
+        let mut prepared = Vec::<PreparedPolygon>::new();
+        for poly in &polys {
+            let Some(env) = poly.envelope() else {
+                continue;
+            };
+            envelopes.push(env);
+            prepared.push(PreparedPolygon::new(poly.clone()));
+        }
+
+        if envelopes.is_empty() {
+            return Err(ToolError::Execution(
+                "unable to derive polygon envelopes from input".to_string(),
+            ));
+        }
+
+        let mut rng = rand::rng();
+        let mut output = wbvector::Layer::new(format!("{}_random_points", input.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = input.crs.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("POLY_ID", wbvector::FieldType::Integer));
+
+        let mut generated = 0usize;
+        let mut attempts = 0usize;
+        let max_attempts = num_points.saturating_mul(200).max(10_000);
+        while generated < num_points && attempts < max_attempts {
+            attempts += 1;
+            let poly_idx = rng.random_range(0..prepared.len());
+            let env = envelopes[poly_idx];
+            let x = rng.random_range(env.min_x..=env.max_x);
+            let y = rng.random_range(env.min_y..=env.max_y);
+            let p = topo_coord_from_xy(x, y);
+            if prepared[poly_idx].contains_coord(p) {
+                generated += 1;
+                let fid = generated as u64;
+                output.push(wbvector::Feature {
+                    fid,
+                    geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(x, y))),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(fid as i64),
+                        wbvector::FieldValue::Integer((poly_idx + 1) as i64),
+                    ],
+                });
+                coalescer.emit_unit_fraction(ctx.progress, generated as f64 / num_points as f64);
+            }
+        }
+
+        if generated < num_points {
+            return Err(ToolError::Execution(format!(
+                "generated {} of {} requested points before reaching attempt limit; consider simpler polygons",
+                generated, num_points
+            )));
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for DensifyFeaturesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "densify_features",
+            display_name: "Densify Features",
+            summary: "Adds vertices along line and polygon boundaries at a specified spacing.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "spacing", description: "Maximum spacing between adjacent vertices.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("spacing".to_string(), json!(25.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("densified.shp"));
+
+        ToolManifest {
+            id: "densify_features".to_string(),
+            display_name: "Densify Features".to_string(),
+            summary: "Adds vertices along line and polygon boundaries at a specified spacing.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "spacing".to_string(), description: "Maximum spacing between adjacent vertices.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "densify_features_basic".to_string(),
+                description: "Adds regularly spaced vertices along geometry segments.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "densify".to_string(), "vertices".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = load_vector_arg(args, "input")?;
+        let spacing = parse_f64_arg(args, "spacing")?;
+        if !spacing.is_finite() || spacing <= 0.0 {
+            return Err(ToolError::Validation(
+                "spacing must be a finite value > 0".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let spacing = parse_f64_arg(args, "spacing")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let mut output = input.clone();
+        let total = output.features.len().max(1);
+        for (index, feature) in output.features.iter_mut().enumerate() {
+            if let Some(geometry) = feature.geometry.take() {
+                let densified = match geometry {
+                    wbvector::Geometry::LineString(coords) => {
+                        wbvector::Geometry::LineString(resample_linestring(&coords, spacing))
+                    }
+                    wbvector::Geometry::MultiLineString(lines) => wbvector::Geometry::MultiLineString(
+                        lines
+                            .iter()
+                            .map(|line| resample_linestring(line, spacing))
+                            .collect(),
+                    ),
+                    wbvector::Geometry::Polygon { exterior, interiors } => {
+                        let ext = wbvector::Ring::new(resample_linestring(exterior.coords(), spacing));
+                        let inners = interiors
+                            .iter()
+                            .map(|ring| wbvector::Ring::new(resample_linestring(ring.coords(), spacing)))
+                            .collect();
+                        wbvector::Geometry::Polygon { exterior: ext, interiors: inners }
+                    }
+                    wbvector::Geometry::MultiPolygon(parts) => wbvector::Geometry::MultiPolygon(
+                        parts
+                            .iter()
+                            .map(|(exterior, interiors)| {
+                                (
+                                    wbvector::Ring::new(resample_linestring(exterior.coords(), spacing)),
+                                    interiors
+                                        .iter()
+                                        .map(|ring| wbvector::Ring::new(resample_linestring(ring.coords(), spacing)))
+                                        .collect(),
+                                )
+                            })
+                            .collect(),
+                    ),
+                    wbvector::Geometry::GeometryCollection(parts) => wbvector::Geometry::GeometryCollection(
+                        parts
+                            .iter()
+                            .map(|part| {
+                                match part {
+                                    wbvector::Geometry::LineString(coords) => {
+                                        wbvector::Geometry::LineString(resample_linestring(coords, spacing))
+                                    }
+                                    wbvector::Geometry::Polygon { exterior, interiors } => {
+                                        let ext = wbvector::Ring::new(resample_linestring(exterior.coords(), spacing));
+                                        let inners = interiors
+                                            .iter()
+                                            .map(|ring| wbvector::Ring::new(resample_linestring(ring.coords(), spacing)))
+                                            .collect();
+                                        wbvector::Geometry::Polygon { exterior: ext, interiors: inners }
+                                    }
+                                    _ => part.clone(),
+                                }
+                            })
+                            .collect(),
+                    ),
+                    other => other,
+                };
+                feature.geometry = Some(densified);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for PointsAlongLinesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "points_along_lines",
+            display_name: "Points Along Lines",
+            summary: "Creates regularly spaced point features along input line geometries.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line layer.", required: true },
+                ToolParamSpec { name: "spacing", description: "Spacing distance between points.", required: true },
+                ToolParamSpec { name: "include_end", description: "Include line endpoints (default true).", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("lines.shp"));
+        defaults.insert("spacing".to_string(), json!(50.0));
+        defaults.insert("include_end".to_string(), json!(true));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("points_along_lines.shp"));
+
+        ToolManifest {
+            id: "points_along_lines".to_string(),
+            display_name: "Points Along Lines".to_string(),
+            summary: "Creates regularly spaced point features along input line geometries.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "spacing".to_string(), description: "Spacing distance between points.".to_string(), required: true },
+                ToolParamDescriptor { name: "include_end".to_string(), description: "Include line endpoints (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "points_along_lines_basic".to_string(),
+                description: "Creates points at fixed spacing along each line.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "points".to_string(), "lines".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation(
+                "input must be a line layer".to_string(),
+            ));
+        }
+        let spacing = parse_f64_arg(args, "spacing")?;
+        if !spacing.is_finite() || spacing <= 0.0 {
+            return Err(ToolError::Validation(
+                "spacing must be a finite value > 0".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let spacing = parse_f64_arg(args, "spacing")?;
+        let include_end = parse_bool_arg(args, "include_end", true);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let mut output = wbvector::Layer::new(format!("{}_points_along_lines", input.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("SRC_FID", wbvector::FieldType::Integer));
+
+        let total = input.features.len().max(1);
+        let mut next_fid = 1u64;
+        for (index, feature) in input.features.iter().enumerate() {
+            let src_fid = feature.fid as i64;
+            if let Some(geometry) = feature.geometry.as_ref() {
+                let points = match geometry {
+                    wbvector::Geometry::LineString(coords) => {
+                        points_along_linestring(coords, spacing, include_end)
+                    }
+                    wbvector::Geometry::MultiLineString(lines) => {
+                        let mut acc = Vec::<wbvector::Coord>::new();
+                        for line in lines {
+                            acc.extend(points_along_linestring(line, spacing, include_end));
+                        }
+                        acc
+                    }
+                    _ => Vec::new(),
+                };
+
+                for point in points {
+                    output.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::Point(point)),
+                        attributes: vec![
+                            wbvector::FieldValue::Integer(next_fid as i64),
+                            wbvector::FieldValue::Integer(src_fid),
+                        ],
+                    });
+                    next_fid += 1;
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for VectorSummaryStatisticsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "vector_summary_statistics",
+            display_name: "Vector Summary Statistics",
+            summary: "Computes grouped summary statistics for a numeric field and writes the result to CSV.",
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "group_field", description: "Grouping field name.", required: true },
+                ToolParamSpec { name: "value_field", description: "Numeric value field name.", required: true },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("group_field".to_string(), json!("CLASS"));
+        defaults.insert("value_field".to_string(), json!("VALUE"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("summary.csv"));
+
+        ToolManifest {
+            id: "vector_summary_statistics".to_string(),
+            display_name: "Vector Summary Statistics".to_string(),
+            summary: "Computes grouped summary statistics for a numeric field and writes the result to CSV.".to_string(),
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "group_field".to_string(), description: "Grouping field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "value_field".to_string(), description: "Numeric value field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "vector_summary_statistics_basic".to_string(),
+                description: "Summarizes a value field by category.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "statistics".to_string(), "table".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let group_field = parse_string_arg(args, "group_field")?;
+        let value_field = parse_string_arg(args, "value_field")?;
+        if input.schema.field_index(group_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "group_field '{}' not found in input schema",
+                group_field
+            )));
+        }
+        if input.schema.field_index(value_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "value_field '{}' not found in input schema",
+                value_field
+            )));
+        }
+        let output = parse_string_arg(args, "output")?;
+        if !output.to_ascii_lowercase().ends_with(".csv") {
+            return Err(ToolError::Validation(
+                "output must be a .csv path".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let group_field = parse_string_arg(args, "group_field")?;
+        let value_field = parse_string_arg(args, "value_field")?;
+        let output = parse_string_arg(args, "output")?;
+
+        let group_idx = input
+            .schema
+            .field_index(group_field)
+            .ok_or_else(|| ToolError::Execution("group_field missing unexpectedly".to_string()))?;
+        let value_idx = input
+            .schema
+            .field_index(value_field)
+            .ok_or_else(|| ToolError::Execution("value_field missing unexpectedly".to_string()))?;
+
+        let total = input.features.len().max(1);
+        let mut groups = HashMap::<String, Vec<f64>>::new();
+        for (index, feature) in input.features.iter().enumerate() {
+            let key = feature
+                .attributes
+                .get(group_idx)
+                .map(|v| match v {
+                    wbvector::FieldValue::Text(t) => t.clone(),
+                    wbvector::FieldValue::Integer(v) => v.to_string(),
+                    wbvector::FieldValue::Float(v) => v.to_string(),
+                    wbvector::FieldValue::Boolean(v) => v.to_string(),
+                    wbvector::FieldValue::Date(v) => v.clone(),
+                    wbvector::FieldValue::DateTime(v) => v.clone(),
+                    wbvector::FieldValue::Null => "NULL".to_string(),
+                    wbvector::FieldValue::Blob(_) => "BLOB".to_string(),
+                })
+                .unwrap_or_else(|| "NULL".to_string());
+
+            if let Some(value) = feature.attributes.get(value_idx) {
+                let numeric = match value {
+                    wbvector::FieldValue::Integer(v) => Some(*v as f64),
+                    wbvector::FieldValue::Float(v) => Some(*v),
+                    _ => None,
+                };
+                if let Some(v) = numeric {
+                    groups.entry(key).or_default().push(v);
+                }
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let mut rows: Vec<(String, usize, f64, f64, f64, f64)> = groups
+            .into_par_iter()
+            .map(|(group, mut values)| {
+                values.sort_by(|a, b| a.total_cmp(b));
+                let count = values.len();
+                let sum: f64 = values.iter().sum();
+                let mean = if count > 0 { sum / count as f64 } else { f64::NAN };
+                let min = values.first().copied().unwrap_or(f64::NAN);
+                let max = values.last().copied().unwrap_or(f64::NAN);
+                (group, count, sum, mean, min, max)
+            })
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+
+        if let Some(parent) = std::path::Path::new(output).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| ToolError::Execution(format!("failed creating output directory: {}", e)))?;
+            }
+        }
+
+        let mut csv = String::from("group,count,sum,mean,min,max\n");
+        for (group, count, sum, mean, min, max) in rows {
+            let escaped_group = group.replace('"', "\"\"");
+            csv.push_str(&format!(
+                "\"{}\",{},{},{},{},{}\n",
+                escaped_group, count, sum, mean, min, max
+            ));
+        }
+        std::fs::write(output, csv)
+            .map_err(|e| ToolError::Execution(format!("failed writing CSV summary: {}", e)))?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for RenameFieldTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "rename_field",
+            display_name: "Rename Field",
+            summary: "Renames an attribute field in a vector layer.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "field", description: "Existing field name.", required: true },
+                ToolParamSpec { name: "new_field", description: "Replacement field name.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("field".to_string(), json!("OLD_NAME"));
+        defaults.insert("new_field".to_string(), json!("NEW_NAME"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("renamed.shp"));
+
+        ToolManifest {
+            id: "rename_field".to_string(),
+            display_name: "Rename Field".to_string(),
+            summary: "Renames an attribute field in a vector layer.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "field".to_string(), description: "Existing field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "new_field".to_string(), description: "Replacement field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "rename_field_basic".to_string(),
+                description: "Renames one attribute field.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        let new_field = parse_string_arg(args, "new_field")?;
+        if input.schema.field_index(field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "field '{}' not found in input schema",
+                field
+            )));
+        }
+        if input.schema.field_index(new_field).is_some() {
+            return Err(ToolError::Validation(format!(
+                "new_field '{}' already exists",
+                new_field
+            )));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = parse_string_arg(args, "field")?;
+        let new_field = sanitize_field_name_for_output(parse_string_arg(args, "new_field")?);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let idx = input
+            .schema
+            .field_index(field)
+            .ok_or_else(|| ToolError::Execution("field missing unexpectedly".to_string()))?;
+
+        let mut output = input.clone();
+        let old_def = output.schema.fields()[idx].clone();
+        let mut new_schema = wbvector::Schema::new();
+        for (i, field_def) in output.schema.fields().iter().enumerate() {
+            if i == idx {
+                new_schema.add_field(wbvector::FieldDef::new(&new_field, old_def.field_type));
+            } else {
+                new_schema.add_field(field_def.clone());
+            }
+        }
+        output.schema = new_schema;
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for DeleteFieldTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "delete_field",
+            display_name: "Delete Field",
+            summary: "Deletes one or more attribute fields from a vector layer.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "fields", description: "Comma-delimited field names to delete.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("fields".to_string(), json!("FIELD_A,FIELD_B"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("fields_deleted.shp"));
+
+        ToolManifest {
+            id: "delete_field".to_string(),
+            display_name: "Delete Field".to_string(),
+            summary: "Deletes one or more attribute fields from a vector layer.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "fields".to_string(), description: "Comma-delimited field names to delete.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "delete_field_basic".to_string(),
+                description: "Removes selected fields from a layer schema.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let fields = parse_string_arg(args, "fields")?;
+        let names: Vec<&str> = fields
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if names.is_empty() {
+            return Err(ToolError::Validation(
+                "fields must contain at least one field name".to_string(),
+            ));
+        }
+        for name in names {
+            if input.schema.field_index(name).is_none() {
+                return Err(ToolError::Validation(format!(
+                    "field '{}' not found in input schema",
+                    name
+                )));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let fields = parse_string_arg(args, "fields")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let delete_set: HashSet<String> = fields
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        let keep_indices: Vec<usize> = input
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, field)| if delete_set.contains(&field.name) { None } else { Some(idx) })
+            .collect();
+
+        let mut output = input.clone();
+        let mut new_schema = wbvector::Schema::new();
+        for idx in &keep_indices {
+            new_schema.add_field(output.schema.fields()[*idx].clone());
+        }
+        output.schema = new_schema;
+
+        for feature in &mut output.features {
+            let mut attrs = Vec::<wbvector::FieldValue>::with_capacity(keep_indices.len());
+            for idx in &keep_indices {
+                if let Some(value) = feature.attributes.get(*idx) {
+                    attrs.push(value.clone());
+                } else {
+                    attrs.push(wbvector::FieldValue::Null);
+                }
+            }
+            feature.attributes = attrs;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for AddFieldTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "add_field",
+            display_name: "Add Field",
+            summary: "Adds a new attribute field with an optional default value.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector layer.", required: true },
+                ToolParamSpec { name: "field", description: "New field name.", required: true },
+                ToolParamSpec { name: "field_type", description: "Field type: integer, float, text, boolean.", required: true },
+                ToolParamSpec { name: "default", description: "Optional default value.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.shp"));
+        defaults.insert("field".to_string(), json!("NEW_FIELD"));
+        defaults.insert("field_type".to_string(), json!("float"));
+        let mut example_args = defaults.clone();
+        example_args.insert("default".to_string(), json!(0.0));
+        example_args.insert("output".to_string(), json!("add_field.shp"));
+
+        ToolManifest {
+            id: "add_field".to_string(),
+            display_name: "Add Field".to_string(),
+            summary: "Adds a new attribute field with an optional default value.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "field".to_string(), description: "New field name.".to_string(), required: true },
+                ToolParamDescriptor { name: "field_type".to_string(), description: "Field type: integer, float, text, boolean.".to_string(), required: true },
+                ToolParamDescriptor { name: "default".to_string(), description: "Optional default value.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "add_field_basic".to_string(),
+                description: "Adds a typed field to the layer schema.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "schema".to_string(), "attributes".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = sanitize_field_name_for_output(parse_string_arg(args, "field")?);
+        if input.schema.field_index(&field).is_some() {
+            return Err(ToolError::Validation(format!(
+                "field '{}' already exists",
+                field
+            )));
+        }
+        let field_type = parse_string_arg(args, "field_type")?;
+        let _ = parse_field_type(field_type)?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let field = sanitize_field_name_for_output(parse_string_arg(args, "field")?);
+        let field_type_str = parse_string_arg(args, "field_type")?;
+        let field_type = parse_field_type(field_type_str)?;
+        let default = args.get("default");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let default_value = field_value_from_json(default, field_type);
+
+        let mut output = input.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new(&field, field_type));
+
+        for feature in &mut output.features {
+            feature.attributes.push(default_value.clone());
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for LinePolygonClipTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "line_polygon_clip",
+            display_name: "Line Polygon Clip",
+            summary: "Extracts line features that intersect input polygon clip geometries.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line layer.", required: true },
+                ToolParamSpec { name: "clip", description: "Clip polygon layer.", required: true },
+                ToolParamSpec { name: "output", description: "Output vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("lines.shp"));
+        defaults.insert("clip".to_string(), json!("clip_polygons.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("line_polygon_clip.shp"));
+
+        ToolManifest {
+            id: "line_polygon_clip".to_string(),
+            display_name: "Line Polygon Clip".to_string(),
+            summary: "Extracts line features that intersect input polygon clip geometries.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "clip".to_string(), description: "Clip polygon layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "line_polygon_clip_basic".to_string(),
+                description: "Retains lines that intersect the clip polygons.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "clip".to_string(), "line".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let clip = load_vector_arg(args, "clip")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation(
+                "input must be a line layer".to_string(),
+            ));
+        }
+        if clip.geom_type != Some(wbvector::GeometryType::Polygon)
+            && clip.geom_type != Some(wbvector::GeometryType::MultiPolygon)
+        {
+            return Err(ToolError::Validation(
+                "clip must be a polygon layer".to_string(),
+            ));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input = load_vector_arg(args, "input")?;
+        let clip = load_vector_arg(args, "clip")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let clip_topo = collect_feature_topo_geometries(&clip)?;
+        let clip_geometries: Vec<TopoGeometry> = clip_topo.iter().filter_map(|g| g.clone()).collect();
+        let clip_index = SpatialIndex::from_geometries(&clip_geometries);
+        let input_topo = collect_feature_topo_geometries(&input)?;
+
+        let keep: Vec<bool> = input_topo
+            .par_iter()
+            .map(|maybe_line| {
+                let Some(line_geom) = maybe_line else {
+                    return false;
+                };
+                let candidates = clip_index.query_geometry(line_geom);
+                for idx in candidates {
+                    if let Some(poly_geom) = clip_geometries.get(idx) {
+                        if intersects(line_geom, poly_geom) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            })
+            .collect();
+
+        let mut output = wbvector::Layer::new(format!("{}_line_polygon_clip", input.name));
+        output.schema = input.schema.clone();
+        output.crs = input.crs.clone();
+        output.geom_type = input.geom_type;
+
+        let total = input.features.len().max(1);
+        let mut next_fid = 1u64;
+        for (index, feature) in input.features.iter().enumerate() {
+            if keep[index] {
+                let mut cloned = feature.clone();
+                cloned.fid = next_fid;
+                next_fid += 1;
+                output.push(cloned);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;

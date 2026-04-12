@@ -295,6 +295,13 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ErasePolygonFromRasterTool));
     registry.register(Box::new(tools::ExtendVectorLinesTool));
     registry.register(Box::new(tools::ExtractByAttributeTool));
+    registry.register(Box::new(tools::SelectByLocationTool));
+    registry.register(Box::new(tools::SpatialJoinTool));
+    registry.register(Box::new(tools::NearTool));
+    registry.register(Box::new(tools::FieldCalculatorTool));
+    registry.register(Box::new(tools::AddGeometryAttributesTool));
+    registry.register(Box::new(tools::ReprojectVectorTool));
+    registry.register(Box::new(tools::SimplifyFeaturesTool));
     registry.register(Box::new(tools::ExtractRasterValuesAtPointsTool));
     registry.register(Box::new(tools::ExtractNodesTool));
     registry.register(Box::new(tools::FilterVectorFeaturesByAreaTool));
@@ -320,6 +327,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::MinimumBoundingCircleTool));
     registry.register(Box::new(tools::MinimumBoundingEnvelopeTool));
     registry.register(Box::new(tools::MinimumConvexHullTool));
+    registry.register(Box::new(tools::ConcaveHullTool));
     registry.register(Box::new(tools::MedoidTool));
     registry.register(Box::new(tools::NaturalNeighbourInterpolationTool));
     registry.register(Box::new(tools::NearestNeighbourInterpolationTool));
@@ -424,6 +432,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ShapeComplexityIndexVectorTool));
     registry.register(Box::new(tools::SmoothVectorsTool));
     registry.register(Box::new(tools::SnapEndnodesTool));
+    registry.register(Box::new(tools::PointsAlongLinesTool));
+    registry.register(Box::new(tools::DensifyFeaturesTool));
     registry.register(Box::new(tools::SplitVectorLinesTool));
     registry.register(Box::new(tools::StandardDeviationOverlayTool));
     registry.register(Box::new(tools::SplitWithLinesTool));
@@ -432,6 +442,12 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::UnionTool));
     registry.register(Box::new(tools::UpdateNodataCellsTool));
     registry.register(Box::new(tools::TravellingSalesmanProblemTool));
+    registry.register(Box::new(tools::RandomPointsInPolygonTool));
+    registry.register(Box::new(tools::VectorSummaryStatisticsTool));
+    registry.register(Box::new(tools::RenameFieldTool));
+    registry.register(Box::new(tools::DeleteFieldTool));
+    registry.register(Box::new(tools::AddFieldTool));
+    registry.register(Box::new(tools::LinePolygonClipTool));
         registry.register(Box::new(tools::ConstructVectorTinTool));
         registry.register(Box::new(tools::VectorHexBinningTool));
     registry.register(Box::new(tools::VoronoiDiagramTool));

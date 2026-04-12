@@ -22,6 +22,8 @@ Use this index to map manual chapters to runnable examples.
 ## Lidar Workflows
 
 - `crates/wbw_python/examples/lidar_write_options.py`
+- `crates/wbw_python/examples/lidar_numpy_roundtrip_smoke_test.py`
+- `crates/wbw_python/examples/lidar_chunked_pipeline.py`
 
 ## Sensor Bundle Workflows
 

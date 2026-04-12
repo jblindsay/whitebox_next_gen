@@ -1829,6 +1829,209 @@ wbw_lidar_from_path <- function(path, session = NULL) {
     wbw_lidar_metadata(lidar_path)
   }
 
+  point_count <- function() {
+    as.numeric(lidar_point_count(lidar_path))
+  }
+
+  normalize_lidar_fields <- function(fields) {
+    if (is.null(fields)) {
+      return(c("x", "y", "z"))
+    }
+    if (!is.character(fields) || length(fields) < 1L) {
+      stop("fields must be a non-empty character vector.", call. = FALSE)
+    }
+    fields <- trimws(fields)
+    if (any(!nzchar(fields))) {
+      stop("fields must not contain empty names.", call. = FALSE)
+    }
+    fields
+  }
+
+  to_matrix <- function(fields = c("x", "y", "z")) {
+    fields <- normalize_lidar_fields(fields)
+    payload <- jsonlite::fromJSON(
+      lidar_columns_json(
+        lidar_path,
+        jsonlite::toJSON(fields, auto_unbox = FALSE, null = "null")
+      ),
+      simplifyVector = FALSE
+    )
+
+    columns <- lapply(payload$columns %||% list(), as.numeric)
+    if (length(columns) == 0L) {
+      return(matrix(numeric(0), nrow = 0L, ncol = 0L))
+    }
+
+    mat <- do.call(cbind, columns)
+    storage.mode(mat) <- "double"
+    colnames(mat) <- payload$fields %||% fields
+    mat
+  }
+
+  to_data_frame <- function(fields = c("x", "y", "z")) {
+    mat <- to_matrix(fields = fields)
+    as.data.frame(mat, stringsAsFactors = FALSE)
+  }
+
+  to_matrix_chunks <- function(chunk_size,
+                               fields = c("x", "y", "z")) {
+    if (!is.numeric(chunk_size) || length(chunk_size) != 1L || is.na(chunk_size) || chunk_size < 1) {
+      stop("chunk_size must be a positive number.", call. = FALSE)
+    }
+    chunk_size <- as.integer(chunk_size)
+    fields <- normalize_lidar_fields(fields)
+
+    mat <- to_matrix(fields = fields)
+    n <- nrow(mat)
+    if (n == 0L) {
+      return(list())
+    }
+
+    starts <- seq.int(1L, n, by = chunk_size)
+    chunks <- lapply(starts, function(start_idx) {
+      end_idx <- min(start_idx + chunk_size - 1L, n)
+      mat[start_idx:end_idx, , drop = FALSE]
+    })
+    chunks
+  }
+
+  from_matrix <- function(matrix_data,
+                          output_path,
+                          overwrite = FALSE,
+                          fields = c("x", "y", "z")) {
+    if (is.null(output_path) || !is.character(output_path) || length(output_path) != 1L || !nzchar(output_path)) {
+      stop("output_path must be a non-empty string.", call. = FALSE)
+    }
+    fields <- normalize_lidar_fields(fields)
+
+    if (is.vector(matrix_data) && !is.matrix(matrix_data)) {
+      matrix_data <- matrix(matrix_data, ncol = length(fields))
+    }
+    if (!is.matrix(matrix_data)) {
+      stop("matrix_data must be a matrix or numeric vector.", call. = FALSE)
+    }
+    if (!is.numeric(matrix_data)) {
+      stop("matrix_data must be numeric.", call. = FALSE)
+    }
+    if (ncol(matrix_data) != length(fields)) {
+      stop(sprintf("matrix_data has %d columns but fields has %d entries.", ncol(matrix_data), length(fields)), call. = FALSE)
+    }
+
+    resolved <- wbw_apply_default_output_extension(output_path, kind = "lidar")
+    resolved_path <- resolved$path
+
+    output_dir <- dirname(resolved_path)
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    if (file.exists(resolved_path) && !isTRUE(overwrite)) {
+      stop(sprintf("Failed to write lidar to %s (exists; set overwrite=TRUE)", resolved_path), call. = FALSE)
+    }
+    if (file.exists(resolved_path) && isTRUE(overwrite)) {
+      unlink(resolved_path)
+    }
+
+    columns <- lapply(seq_len(ncol(matrix_data)), function(i) as.numeric(matrix_data[, i]))
+
+    out_path <- lidar_from_columns_json(
+      lidar_path,
+      resolved_path,
+      jsonlite::toJSON(fields, auto_unbox = FALSE, null = "null"),
+      jsonlite::toJSON(columns, auto_unbox = TRUE, null = "null")
+    )
+    wbw_lidar_from_path(out_path, session = session)
+  }
+
+  from_data_frame <- function(data,
+                              output_path,
+                              overwrite = FALSE,
+                              fields = NULL) {
+    if (!is.data.frame(data)) {
+      stop("data must be a data.frame.", call. = FALSE)
+    }
+    inferred <- fields
+    if (is.null(inferred)) {
+      inferred <- names(data)
+    }
+    if (is.null(inferred) || length(inferred) < 1L) {
+      stop("fields must be provided when data has no column names.", call. = FALSE)
+    }
+    matrix_data <- as.matrix(data[, inferred, drop = FALSE])
+    storage.mode(matrix_data) <- "double"
+    from_matrix(matrix_data, output_path = output_path, overwrite = overwrite, fields = inferred)
+  }
+
+  from_matrix_chunks <- function(chunks,
+                                 output_path,
+                                 overwrite = FALSE,
+                                 fields = c("x", "y", "z")) {
+    fields <- normalize_lidar_fields(fields)
+    if (!is.list(chunks) || length(chunks) < 1L) {
+      stop("chunks must be a non-empty list of matrices.", call. = FALSE)
+    }
+
+    normalized <- lapply(seq_along(chunks), function(i) {
+      chunk <- chunks[[i]]
+      if (is.vector(chunk) && !is.matrix(chunk)) {
+        chunk <- matrix(chunk, ncol = length(fields))
+      }
+      if (!is.matrix(chunk) || !is.numeric(chunk)) {
+        stop(sprintf("chunk %d must be a numeric matrix.", i), call. = FALSE)
+      }
+      if (ncol(chunk) != length(fields)) {
+        stop(
+          sprintf(
+            "chunk %d has %d columns but fields has %d entries.",
+            i,
+            ncol(chunk),
+            length(fields)
+          ),
+          call. = FALSE
+        )
+      }
+      storage.mode(chunk) <- "double"
+      chunk
+    })
+
+    resolved <- wbw_apply_default_output_extension(output_path, kind = "lidar")
+    resolved_path <- resolved$path
+
+    output_dir <- dirname(resolved_path)
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    if (file.exists(resolved_path) && !isTRUE(overwrite)) {
+      stop(sprintf("Failed to write lidar to %s (exists; set overwrite=TRUE)", resolved_path), call. = FALSE)
+    }
+    if (file.exists(resolved_path) && isTRUE(overwrite)) {
+      unlink(resolved_path)
+    }
+
+    ext <- tolower(tools::file_ext(resolved_path))
+    # Streaming chunk rewrite is currently available for LAS/LAZ outputs.
+    if (identical(ext, "las") || identical(ext, "laz")) {
+      chunk_columns <- lapply(normalized, function(chunk) {
+        lapply(seq_len(ncol(chunk)), function(i) as.numeric(chunk[, i]))
+      })
+
+      out_path <- lidar_from_column_chunks_json(
+        lidar_path,
+        resolved_path,
+        jsonlite::toJSON(fields, auto_unbox = FALSE, null = "null"),
+        jsonlite::toJSON(chunk_columns, auto_unbox = TRUE, null = "null")
+      )
+      return(wbw_lidar_from_path(out_path, session = session))
+    }
+
+    mat <- do.call(rbind, normalized)
+    from_matrix(
+      mat,
+      output_path = resolved_path,
+      overwrite = TRUE,
+      fields = fields
+    )
+  }
+
   get_short_filename <- function() {
     basename(lidar_path)
   }
@@ -1875,7 +2078,14 @@ wbw_lidar_from_path <- function(path, session = NULL) {
   obj$file_path <- lidar_path
   obj$session <- session
   obj$metadata <- metadata
+  obj$point_count <- point_count
   obj$get_short_filename <- get_short_filename
+  obj$to_matrix <- to_matrix
+  obj$to_data_frame <- to_data_frame
+  obj$to_matrix_chunks <- to_matrix_chunks
+  obj$from_matrix <- from_matrix
+  obj$from_data_frame <- from_data_frame
+  obj$from_matrix_chunks <- from_matrix_chunks
   obj$deep_copy <- deep_copy
   obj$write <- write
   class(obj) <- c("wbw_lidar", "wbw_data_object")

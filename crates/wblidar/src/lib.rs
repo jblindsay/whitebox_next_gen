@@ -37,7 +37,11 @@ pub mod reproject;
 pub use error::{Error, Result};
 pub use frontend::{
 	read,
+	read_columns,
+	read_columns_chunked,
+	read_point_count,
 	read_with_diagnostics,
+	rewrite_columns_chunked,
 	write,
 	write_auto,
 	write_auto_with_options,
@@ -46,6 +50,9 @@ pub use frontend::{
 	LazWriteOptions,
 	LidarFormat,
 	LidarWriteOptions,
+	PointField,
+	PointColumnChunkReader,
+	PointColumnChunkRewriter,
 	PointCloud,
 	ReadDiagnostics,
 };

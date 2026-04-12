@@ -240,6 +240,41 @@ lidar_metadata_json <- function(path) {
   .Call("wrap__lidar_metadata_json", path, PACKAGE = "whiteboxworkflows")
 }
 
+lidar_point_count <- function(path) {
+  .Call("wrap__lidar_point_count", path, PACKAGE = "whiteboxworkflows")
+}
+
+lidar_columns_json <- function(path, fields_json) {
+  .Call(
+    "wrap__lidar_columns_json",
+    path,
+    fields_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+lidar_from_columns_json <- function(base_path, output_path, fields_json, columns_json) {
+  .Call(
+    "wrap__lidar_from_columns_json",
+    base_path,
+    output_path,
+    fields_json,
+    columns_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
+lidar_from_column_chunks_json <- function(base_path, output_path, fields_json, chunks_json) {
+  .Call(
+    "wrap__lidar_from_column_chunks_json",
+    base_path,
+    output_path,
+    fields_json,
+    chunks_json,
+    PACKAGE = "whiteboxworkflows"
+  )
+}
+
 sensor_bundle_metadata_json <- function(path) {
   .Call("wrap__sensor_bundle_metadata_json", path, PACKAGE = "whiteboxworkflows")
 }

@@ -1,0 +1,335 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Output Controls - Whitebox Workflows for Python User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html" class="active"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h1>
+<p>This chapter documents output controls for raster, vector, and lidar writes in WbW-Py.</p>
+<h2 id="general-principles"><a class="header" href="#general-principles">General Principles</a></h2>
+<ul>
+<li>Start with default output behavior unless you need strict reproducibility.</li>
+<li>Use <code>strict_format_options=True</code> when you want invalid option/format combinations
+to fail instead of silently ignoring options.</li>
+<li>Prefer extensionless outputs for sensible defaults when prototyping.</li>
+</ul>
+<h2 id="raster-output-controls"><a class="header" href="#raster-output-controls">Raster Output Controls</a></h2>
+<p><code>write_raster(...)</code> and <code>write_rasters(...)</code> support an <code>options</code> dictionary.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+
+wbe.write_raster(r, 'out_default.tif')
+
+wbe.write_raster(
+    r,
+    'out_cog.tif',
+    options={
+        'compress': True,
+        'strict_format_options': True,
+        'geotiff': {
+            'layout': 'cog',
+            'tile_size': 512,
+            'compression': 'deflate',
+            'bigtiff': False,
+        },
+    },
+)
+</code></pre>
+<h3 id="common-raster-profiles"><a class="header" href="#common-raster-profiles">Common Raster Profiles</a></h3>
+<pre><code class="language-python"># Stripped GeoTIFF
+wbe.write_raster(r, 'out_stripped.tif', options={
+    'geotiff': {'layout': 'stripped', 'rows_per_strip': 32},
+})
+
+# Tiled GeoTIFF
+wbe.write_raster(r, 'out_tiled.tif', options={
+    'geotiff': {'layout': 'tiled', 'tile_width': 256, 'tile_height': 256},
+})
+</code></pre>
+<h2 id="vector-output-controls"><a class="header" href="#vector-output-controls">Vector Output Controls</a></h2>
+<p><code>write_vector(...)</code> supports format-specific options.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+
+# Extensionless output defaults to GeoPackage
+wbe.write_vector(v, 'roads_copy')
+
+# GeoParquet with strict options
+wbe.write_vector(
+    v,
+    'roads.parquet',
+    options={
+        'strict_format_options': True,
+        'geoparquet': {
+            'compression': 'zstd',
+            'max_rows_per_group': 250000,
+            'write_batch_size': 8192,
+        },
+    },
+)
+</code></pre>
+<h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
+<p><code>write_lidar(...)</code> supports LAZ and COPC option blocks.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+l = wbe.read_lidar('survey.las')
+
+# LAZ controls
+wbe.write_lidar(l, 'survey_out.laz', options={
+    'laz': {'chunk_size': 25000, 'compression_level': 7},
+})
+
+# COPC controls
+wbe.write_lidar(l, 'survey_out.copc.laz', options={
+    'copc': {
+        'max_points_per_node': 75000,
+        'max_depth': 8,
+        'node_point_ordering': 'hilbert',
+    },
+})
+</code></pre>
+<h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
+<p>When no extension is provided:</p>
+<ul>
+<li>raster -&gt; <code>.tif</code> (COG-style GeoTIFF default)</li>
+<li>vector -&gt; <code>.gpkg</code></li>
+<li>lidar -&gt; <code>.copc.laz</code></li>
+</ul>
+<pre><code class="language-python">wbe.write_raster(r, 'my_raster')
+wbe.write_vector(v, 'my_vector')
+wbe.write_lidar(l, 'my_lidar')
+</code></pre>
+<h2 id="reproducibility-checklist"><a class="header" href="#reproducibility-checklist">Reproducibility Checklist</a></h2>
+<ol>
+<li>Pin output extension explicitly.</li>
+<li>Set <code>strict_format_options=True</code> when format mismatches must error.</li>
+<li>Pin codec/layout/tile parameters for raster outputs.</li>
+<li>For vector/lidar, pin format-specific compression and partitioning options.</li>
+<li>Re-open output and validate metadata before downstream analysis.</li>
+</ol>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="working-with-sensor-bundles.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="reprojection-and-crs.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="working-with-sensor-bundles.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="reprojection-and-crs.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

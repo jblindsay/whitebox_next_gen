@@ -17,10 +17,13 @@ use wblidar::e57::E57Reader;
 use wblidar::las::LasReader;
 use wblidar::ply::PlyReader;
 use wblidar::{
+    read_point_count,
     CopcWriteOptions,
     LazWriteOptions,
     LidarFormat,
     LidarWriteOptions,
+    PointColumnChunkRewriter,
+    PointField,
     PointCloud,
     PointReader,
 };
@@ -1398,6 +1401,156 @@ pub fn lidar_metadata_json(path: &str) -> Result<String, ToolError> {
     serde_json::to_string(&meta).map_err(|err| ToolError::Execution(err.to_string()))
 }
 
+pub fn lidar_point_count(path: &str) -> Result<f64, ToolError> {
+    let n = read_point_count(Path::new(path)).map_err(to_invalid_request)?;
+    Ok(n as f64)
+}
+
+pub fn lidar_columns_json(path: &str, fields_json: &str) -> Result<String, ToolError> {
+    let field_names: Vec<String> = serde_json::from_str(fields_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid fields JSON: {e}")))?;
+    if field_names.is_empty() {
+        return Err(ToolError::InvalidRequest(
+            "fields must contain at least one field name".to_string(),
+        ));
+    }
+
+    let mut fields = Vec::with_capacity(field_names.len());
+    for name in &field_names {
+        let field = PointField::from_name(name).ok_or_else(|| {
+            ToolError::InvalidRequest(format!(
+                "unsupported lidar field '{}'; expected one of x,y,z,intensity,classification,return_number,number_of_returns,scan_direction_flag,edge_of_flight_line,scan_angle,flags,user_data,point_source_id,red,green,blue,nir,gps_time,normal_x,normal_y,normal_z",
+                name
+            ))
+        })?;
+        fields.push(field);
+    }
+
+    let cloud = PointCloud::read(Path::new(path)).map_err(to_invalid_request)?;
+    let columns = cloud.extract_columns(&fields).map_err(to_invalid_request)?;
+
+    let payload = json!({
+        "fields": field_names,
+        "point_count": cloud.point_count(),
+        "columns": columns,
+    });
+    serde_json::to_string(&payload).map_err(|err| ToolError::Execution(err.to_string()))
+}
+
+pub fn lidar_from_columns_json(
+    base_path: &str,
+    output_path: &str,
+    fields_json: &str,
+    columns_json: &str,
+) -> Result<String, ToolError> {
+    let field_names: Vec<String> = serde_json::from_str(fields_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid fields JSON: {e}")))?;
+    if field_names.is_empty() {
+        return Err(ToolError::InvalidRequest(
+            "fields must contain at least one field name".to_string(),
+        ));
+    }
+
+    let columns: Vec<Vec<f64>> = serde_json::from_str(columns_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid columns JSON: {e}")))?;
+
+    let mut fields = Vec::with_capacity(field_names.len());
+    for name in &field_names {
+        let field = PointField::from_name(name).ok_or_else(|| {
+            ToolError::InvalidRequest(format!(
+                "unsupported lidar field '{}'; expected one of x,y,z,intensity,classification,return_number,number_of_returns,scan_direction_flag,edge_of_flight_line,scan_angle,flags,user_data,point_source_id,red,green,blue,nir,gps_time,normal_x,normal_y,normal_z",
+                name
+            ))
+        })?;
+        fields.push(field);
+    }
+
+    let mut cloud = PointCloud::read(Path::new(base_path)).map_err(to_invalid_request)?;
+    cloud
+        .apply_columns(&fields, &columns)
+        .map_err(to_invalid_request)?;
+
+    let mut dst_path = PathBuf::from(output_path);
+    let missing_ext = dst_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().is_empty())
+        .unwrap_or(true);
+    if missing_ext {
+        dst_path = PathBuf::from(format!("{}.copc.laz", dst_path.to_string_lossy()));
+    }
+
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+
+    cloud.write(&dst_path).map_err(to_invalid_request)?;
+    Ok(dst_path.display().to_string())
+}
+
+pub fn lidar_from_column_chunks_json(
+    base_path: &str,
+    output_path: &str,
+    fields_json: &str,
+    chunks_json: &str,
+) -> Result<String, ToolError> {
+    let field_names: Vec<String> = serde_json::from_str(fields_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid fields JSON: {e}")))?;
+    if field_names.is_empty() {
+        return Err(ToolError::InvalidRequest(
+            "fields must contain at least one field name".to_string(),
+        ));
+    }
+
+    let chunks: Vec<Vec<Vec<f64>>> = serde_json::from_str(chunks_json)
+        .map_err(|e| ToolError::InvalidRequest(format!("invalid chunks JSON: {e}")))?;
+
+    let mut fields = Vec::with_capacity(field_names.len());
+    for name in &field_names {
+        let field = PointField::from_name(name).ok_or_else(|| {
+            ToolError::InvalidRequest(format!(
+                "unsupported lidar field '{}'; expected one of x,y,z,intensity,classification,return_number,number_of_returns,scan_direction_flag,edge_of_flight_line,scan_angle,flags,user_data,point_source_id,red,green,blue,nir,gps_time,normal_x,normal_y,normal_z",
+                name
+            ))
+        })?;
+        fields.push(field);
+    }
+
+    let mut dst_path = PathBuf::from(output_path);
+    let missing_ext = dst_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().is_empty())
+        .unwrap_or(true);
+    if missing_ext {
+        dst_path = PathBuf::from(format!("{}.laz", dst_path.to_string_lossy()));
+    }
+
+    if let Some(parent) = dst_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+        }
+    }
+
+    let out_fmt = LidarFormat::detect(&dst_path).map_err(to_invalid_request)?;
+    if !matches!(out_fmt, LidarFormat::Las | LidarFormat::Laz) {
+        return Err(ToolError::InvalidRequest(
+            "lidar_from_column_chunks_json currently supports LAS/LAZ output paths".to_string(),
+        ));
+    }
+
+    let mut rewriter = PointColumnChunkRewriter::open(Path::new(base_path), &dst_path, &fields)
+        .map_err(to_invalid_request)?;
+    for chunk in &chunks {
+        rewriter.apply_chunk(chunk).map_err(to_invalid_request)?;
+    }
+    rewriter.finish().map_err(to_invalid_request)?;
+
+    Ok(dst_path.display().to_string())
+}
+
 struct CompositeRegistry {
     oss: OssRegistry,
     #[cfg(feature = "pro")]
@@ -2553,6 +2706,38 @@ mod native_exports {
     }
 
     #[extendr]
+    fn lidar_point_count(path: &str) -> extendr_api::Result<f64> {
+        super::lidar_point_count(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_columns_json(path: &str, fields_json: &str) -> extendr_api::Result<String> {
+        super::lidar_columns_json(path, fields_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_from_columns_json(
+        base_path: &str,
+        output_path: &str,
+        fields_json: &str,
+        columns_json: &str,
+    ) -> extendr_api::Result<String> {
+        super::lidar_from_columns_json(base_path, output_path, fields_json, columns_json)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_from_column_chunks_json(
+        base_path: &str,
+        output_path: &str,
+        fields_json: &str,
+        chunks_json: &str,
+    ) -> extendr_api::Result<String> {
+        super::lidar_from_column_chunks_json(base_path, output_path, fields_json, chunks_json)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn sensor_bundle_metadata_json(path: &str) -> extendr_api::Result<String> {
         super::sensor_bundle_metadata_json(path).map_err(map_extendr_err)
     }
@@ -2754,6 +2939,10 @@ mod native_exports {
         fn run_tool_json_with_progress_floating_license_id_options;
         fn generate_r_wrapper_module_with_options;
         fn lidar_metadata_json;
+        fn lidar_point_count;
+        fn lidar_columns_json;
+        fn lidar_from_columns_json;
+        fn lidar_from_column_chunks_json;
         fn sensor_bundle_metadata_json;
         fn sensor_bundle_resolve_raster_path;
         fn vector_copy_to_path;

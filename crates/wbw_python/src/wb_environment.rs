@@ -31,7 +31,7 @@ use wblidar::reproject::{
     LidarReprojectOptions,
     TransformFailurePolicy as LidarTransformFailurePolicy,
 };
-use wblidar::PointCloud;
+use wblidar::{LidarFormat, PointCloud, PointColumnChunkReader, PointField};
 use wbprojection::{
     epsg_from_srs_reference,
     identify_epsg_from_wkt_with_policy,
@@ -148,6 +148,26 @@ pub(crate) fn resolve_unary_output_path(
             parent.join(format!("{stem}_{tool_id}_{millis}.{ext}"))
         }
     }
+}
+
+fn detect_lidar_output_format(path: &Path) -> Option<LidarFormat> {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    if lower.ends_with(".copc.las") || lower.ends_with(".copc.laz") {
+        return Some(LidarFormat::Copc);
+    }
+    if lower.ends_with(".laz") {
+        return Some(LidarFormat::Laz);
+    }
+    if lower.ends_with(".las") {
+        return Some(LidarFormat::Las);
+    }
+    if lower.ends_with(".ply") {
+        return Some(LidarFormat::Ply);
+    }
+    if lower.ends_with(".e57") {
+        return Some(LidarFormat::E57);
+    }
+    None
 }
 
 fn derived_output_path(input: &Path, suffix: &str) -> PathBuf {
@@ -1422,7 +1442,7 @@ fn category_tool_summaries(
     category_slug: &str,
     subcategory: Option<&str>,
 ) -> Vec<(String, bool)> {
-    runtime
+    let mut tools: Vec<(String, bool)> = runtime
         .list_tools_json()
         .as_array()
         .cloned()
@@ -1459,7 +1479,16 @@ fn category_tool_summaries(
             );
             Some((id.to_string(), is_pro))
         })
-        .collect()
+        .collect();
+
+    // High-level remote-sensing convenience wrappers should appear in the
+    // same discovery category as other remote-sensing tools.
+    if category_slug == "remote_sensing" && subcategory.is_none() {
+        tools.push(("true_colour_composite".to_string(), false));
+        tools.push(("false_colour_composite".to_string(), false));
+    }
+
+    tools
 }
 
 fn manifest_value_matches_category(manifest_value: &serde_json::Value, category_slug: &str) -> bool {
@@ -1553,6 +1582,33 @@ fn build_tool_info_dict(
 }
 
 fn build_tool_callable_doc(runtime: &Arc<PythonToolRuntime>, tool_id: &str, is_pro: bool) -> String {
+    if tool_id == "true_colour_composite" || tool_id == "false_colour_composite" {
+        let mut lines = Vec::new();
+        lines.push(tool_id.to_string());
+        lines.push(String::new());
+        lines.push(
+            "High-level remote-sensing helper built on create_colour_composite with sensor-bundle-aware band selection."
+                .to_string(),
+        );
+        lines.push(String::new());
+        lines.push("Call style: helper_name(bundle_root=..., output_path=None, callback=None)".to_string());
+        lines.push(String::new());
+        lines.push("Required parameters:".to_string());
+        lines.push("- bundle_root: root path of a supported optical sensor bundle".to_string());
+        lines.push(String::new());
+        lines.push("Optional parameters:".to_string());
+        lines.push("- output_path: output raster path".to_string());
+        lines.push("- callback: progress callback".to_string());
+        lines.push(String::new());
+        lines.push("Return: Raster object".to_string());
+        lines.push(String::new());
+        lines.push(
+            "Supported optical families: sentinel2_safe, landsat, planetscope, dimap, maxar_worldview. SAR families raise ValueError."
+                .to_string(),
+        );
+        return lines.join("\n");
+    }
+
     let mut lines = Vec::new();
     let title = if is_pro {
         format!("[PRO] {tool_id}")
@@ -2120,6 +2176,85 @@ impl WbCategoryToolCallable {
 
                 args_map.insert(key, value);
             }
+        }
+
+        if self.tool_id == "true_colour_composite" || self.tool_id == "false_colour_composite" {
+            let bundle_root = args_map
+                .remove("bundle_root")
+                .or_else(|| args_map.remove("input"))
+                .or_else(|| args_map.remove("bundle"))
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                .ok_or_else(|| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "true_colour_composite/false_colour_composite requires bundle_root=...",
+                    )
+                })?;
+
+            let output_path = args_map
+                .remove("output_path")
+                .or_else(|| args_map.remove("output"))
+                .and_then(|value| value.as_str().map(ToOwned::to_owned));
+
+            if !args_map.is_empty() {
+                let unexpected = args_map.keys().cloned().collect::<Vec<_>>().join(", ");
+                return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!(
+                    "unexpected keyword argument(s) for {}: {}",
+                    self.tool_id, unexpected
+                )));
+            }
+
+            let input_path = if std::path::Path::new(&bundle_root).is_absolute() {
+                std::path::PathBuf::from(&bundle_root)
+            } else {
+                self.working_directory.join(&bundle_root)
+            };
+
+            let (red_path, green_path, blue_path) = if self.tool_id == "true_colour_composite" {
+                resolve_true_colour_band_paths(&input_path)?
+            } else {
+                resolve_false_colour_band_paths(&input_path)?
+            };
+
+            let mut composed_args = serde_json::Map::new();
+            composed_args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
+            composed_args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
+            composed_args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
+            if let Some(out) = output_path {
+                composed_args.insert(
+                    "output".to_string(),
+                    json!(resolve_path_against_working_directory(&self.working_directory, &out)),
+                );
+            }
+
+            let args_json = serde_json::to_string(&serde_json::Value::Object(composed_args)).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+            })?;
+
+            let response = if let Some(cb) = callback {
+                let sink = PyCallbackSink::new(cb);
+                let r = self
+                    .runtime
+                    .run_tool_json_with_progress_sink("create_colour_composite", &args_json, &sink)
+                    .map_err(map_tool_error)?;
+                if let Some(msg) = sink.take_error() {
+                    return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+                }
+                r
+            } else {
+                self.runtime
+                    .run_tool_json_with_progress("create_colour_composite", &args_json)
+                    .map_err(map_tool_error)?
+            };
+
+            if let Some(data_object) = maybe_extract_data_object_output(
+                "remote_sensing",
+                &self.working_directory,
+                &response,
+            ) {
+                return data_object.into_py_any(py);
+            }
+
+            return json_value_to_pyobject(py, &response);
         }
 
         let args_json = serde_json::to_string(&serde_json::Value::Object(args_map)).map_err(|e| {
@@ -5138,6 +5273,421 @@ impl Lidar {
         })
     }
 
+    #[getter]
+    fn point_count(&self) -> PyResult<u64> {
+        wblidar::read_point_count(&self.file_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read lidar point count '{}': {e}",
+                self.file_path.display()
+            ))
+        })
+    }
+
+    #[pyo3(signature = (cols=None, dtype=None))]
+    fn to_numpy(
+        &self,
+        py: Python<'_>,
+        cols: Option<Vec<String>>,
+        dtype: Option<&str>,
+    ) -> PyResult<Py<PyAny>> {
+        let cloud = PointCloud::read(&self.file_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read lidar '{}': {e}",
+                self.file_path.display()
+            ))
+        })?;
+
+        let fields = parse_lidar_point_fields(cols.as_deref())?;
+        let columns = cloud.extract_columns(&fields).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "failed to extract lidar columns: {e}"
+            ))
+        })?;
+
+        let np = py.import("numpy").map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyImportError, _>(
+                "NumPy is required for Lidar.to_numpy(). Install with: pip install numpy",
+            )
+        })?;
+
+        let mut arr_cols: Vec<Py<PyAny>> = Vec::with_capacity(columns.len());
+        for col in columns {
+            let a = np.call_method1("array", (col,))?;
+            arr_cols.push(a.unbind().into_any());
+        }
+
+        let mut out = np.call_method1("column_stack", (arr_cols,))?;
+        if let Some(dt) = dtype {
+            out = out.call_method1("astype", (dt,))?;
+        }
+        Ok(out.unbind().into_any())
+    }
+
+    #[pyo3(signature = (chunk_size, cols=None, dtype=None, callback=None))]
+    fn to_numpy_chunks(
+        &self,
+        py: Python<'_>,
+        chunk_size: usize,
+        cols: Option<Vec<String>>,
+        dtype: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let fields = parse_lidar_point_fields(cols.as_deref())?;
+        let mut reader = PointColumnChunkReader::open(&self.file_path, &fields, chunk_size)
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to stream lidar columns '{}': {e}",
+                    self.file_path.display()
+                ))
+            })?;
+
+        let np = py.import("numpy").map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyImportError, _>(
+                "NumPy is required for Lidar.to_numpy_chunks(). Install with: pip install numpy",
+            )
+        })?;
+
+        let out_chunks = PyList::empty(py);
+        while let Some(columns) = reader.next_chunk().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed while reading lidar chunk '{}': {e}",
+                self.file_path.display()
+            ))
+        })? {
+            let mut arr_cols: Vec<Py<PyAny>> = Vec::with_capacity(columns.len());
+            for col in columns {
+                let a = np.call_method1("array", (col,))?;
+                arr_cols.push(a.unbind().into_any());
+            }
+
+            let mut chunk = np.call_method1("column_stack", (arr_cols,))?;
+            if let Some(dt) = dtype {
+                chunk = chunk.call_method1("astype", (dt,))?;
+            }
+
+            if let Some(cb) = callback.as_ref() {
+                cb.bind(py).call1((chunk.clone(),))?;
+            } else {
+                out_chunks.append(chunk)?;
+            }
+        }
+
+        if callback.is_some() {
+            Ok(py.None())
+        } else {
+            Ok(out_chunks.into_any().unbind())
+        }
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (array, base, output_path=None, cols=None))]
+    fn from_numpy(
+        array: &Bound<'_, PyAny>,
+        base: &Lidar,
+        output_path: Option<&str>,
+        cols: Option<Vec<String>>,
+    ) -> PyResult<Lidar> {
+        let mut cloud = PointCloud::read(&base.file_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read lidar '{}': {e}",
+                base.file_path.display()
+            ))
+        })?;
+
+        let fields = parse_lidar_point_fields(cols.as_deref())?;
+
+        let shape: Vec<usize> = array.getattr("shape")?.extract().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "array must expose a tuple-like shape attribute",
+            )
+        })?;
+        if shape.len() != 2 {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "array must be 2D with shape (point_count, column_count)",
+            ));
+        }
+
+        if shape[0] != cloud.points.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "array row count mismatch: got {}, expected {}",
+                shape[0],
+                cloud.points.len()
+            )));
+        }
+        if shape[1] != fields.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "array column count mismatch: got {}, expected {}",
+                shape[1],
+                fields.len()
+            )));
+        }
+
+        let rows: Vec<Vec<f64>> = array.call_method0("tolist")?.extract().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "array must contain numeric values coercible to float",
+            )
+        })?;
+
+        let mut columns: Vec<Vec<f64>> = fields
+            .iter()
+            .map(|_| Vec::with_capacity(rows.len()))
+            .collect();
+        for (row_idx, row_vals) in rows.iter().enumerate() {
+            if row_vals.len() != fields.len() {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "array column count mismatch on row {}: got {}, expected {}",
+                    row_idx,
+                    row_vals.len(),
+                    fields.len()
+                )));
+            }
+            for (col_idx, v) in row_vals.iter().enumerate() {
+                columns[col_idx].push(*v);
+            }
+        }
+
+        cloud.apply_columns(&fields, &columns).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "failed to apply lidar point columns: {e}"
+            ))
+        })?;
+
+        let out_path = resolve_unary_output_path(&base.file_path, "from_numpy", output_path, None);
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to create output directory '{}': {e}",
+                    parent.display()
+                ))
+            })?;
+        }
+
+        cloud.write(&out_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write lidar '{}': {e}",
+                out_path.display()
+            ))
+        })?;
+
+        Ok(Lidar { file_path: out_path })
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (chunks, base, output_path=None, cols=None))]
+    fn from_numpy_chunks(
+        chunks: &Bound<'_, PyAny>,
+        base: &Lidar,
+        output_path: Option<&str>,
+        cols: Option<Vec<String>>,
+    ) -> PyResult<Lidar> {
+        let fields = parse_lidar_point_fields(cols.as_deref())?;
+        let out_path = resolve_unary_output_path(&base.file_path, "from_numpy_chunks", output_path, None);
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to create output directory '{}': {e}",
+                    parent.display()
+                ))
+            })?;
+        }
+
+        let out_format = detect_lidar_output_format(&out_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "unable to infer lidar output format from extension for path '{}'",
+                out_path.display()
+            ))
+        })?;
+
+        // True streaming path for LAS/LAZ avoids full-cloud materialization.
+        if matches!(out_format, LidarFormat::Las | LidarFormat::Laz) {
+            let mut rewriter = wblidar::PointColumnChunkRewriter::open(
+                &base.file_path,
+                &out_path,
+                &fields,
+            )
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to initialize lidar chunk rewriter '{}': {e}",
+                    out_path.display()
+                ))
+            })?;
+
+            let iter = chunks.try_iter().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "chunks must be an iterable of 2D arrays",
+                )
+            })?;
+
+            for (chunk_idx, item) in iter.enumerate() {
+                let chunk = item?;
+                let shape: Vec<usize> = chunk.getattr("shape")?.extract().map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "each chunk must expose a tuple-like shape attribute",
+                    )
+                })?;
+                if shape.len() != 2 {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "chunk {} must be 2D with shape (rows, columns)",
+                        chunk_idx
+                    )));
+                }
+                if shape[1] != fields.len() {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "chunk {} column count mismatch: got {}, expected {}",
+                        chunk_idx,
+                        shape[1],
+                        fields.len()
+                    )));
+                }
+
+                let rows: Vec<Vec<f64>> = chunk.call_method0("tolist")?.extract().map_err(|_| {
+                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                        "chunk values must be numeric and coercible to float",
+                    )
+                })?;
+
+                let row_count = rows.len();
+                let mut columns: Vec<Vec<f64>> = fields
+                    .iter()
+                    .map(|_| Vec::with_capacity(row_count))
+                    .collect();
+                for (row_idx, row_vals) in rows.iter().enumerate() {
+                    if row_vals.len() != fields.len() {
+                        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                            "chunk {} row {} column mismatch: got {}, expected {}",
+                            chunk_idx,
+                            row_idx,
+                            row_vals.len(),
+                            fields.len()
+                        )));
+                    }
+                    for (col_idx, v) in row_vals.iter().enumerate() {
+                        columns[col_idx].push(*v);
+                    }
+                }
+
+                rewriter.apply_chunk(&columns).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "failed to apply chunk {} lidar point columns: {e}",
+                        chunk_idx
+                    ))
+                })?;
+            }
+
+            rewriter.finish().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to finalize lidar '{}': {e}",
+                    out_path.display()
+                ))
+            })?;
+
+            return Ok(Lidar { file_path: out_path });
+        }
+
+        // Fallback path for formats not yet supported by streaming chunk write.
+        let mut cloud = PointCloud::read(&base.file_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read lidar '{}': {e}",
+                base.file_path.display()
+            ))
+        })?;
+
+        let mut row_offset: usize = 0;
+
+        let iter = chunks.try_iter().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "chunks must be an iterable of 2D arrays",
+            )
+        })?;
+
+        for (chunk_idx, item) in iter.enumerate() {
+            let chunk = item?;
+            let shape: Vec<usize> = chunk.getattr("shape")?.extract().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "each chunk must expose a tuple-like shape attribute",
+                )
+            })?;
+            if shape.len() != 2 {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "chunk {} must be 2D with shape (rows, columns)",
+                    chunk_idx
+                )));
+            }
+            if shape[1] != fields.len() {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "chunk {} column count mismatch: got {}, expected {}",
+                    chunk_idx,
+                    shape[1],
+                    fields.len()
+                )));
+            }
+
+            let rows: Vec<Vec<f64>> = chunk.call_method0("tolist")?.extract().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "chunk values must be numeric and coercible to float",
+                )
+            })?;
+
+            let row_count = rows.len();
+            if row_offset.saturating_add(row_count) > cloud.points.len() {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "chunk {} exceeds lidar row count: processed {}, chunk rows {}, total points {}",
+                    chunk_idx,
+                    row_offset,
+                    row_count,
+                    cloud.points.len()
+                )));
+            }
+
+            let mut columns: Vec<Vec<f64>> = fields
+                .iter()
+                .map(|_| Vec::with_capacity(row_count))
+                .collect();
+            for (row_idx, row_vals) in rows.iter().enumerate() {
+                if row_vals.len() != fields.len() {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "chunk {} row {} column mismatch: got {}, expected {}",
+                        chunk_idx,
+                        row_idx,
+                        row_vals.len(),
+                        fields.len()
+                    )));
+                }
+                for (col_idx, v) in row_vals.iter().enumerate() {
+                    columns[col_idx].push(*v);
+                }
+            }
+
+            cloud
+                .apply_columns_range(row_offset, &fields, &columns)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "failed to apply chunk {} lidar point columns: {e}",
+                        chunk_idx
+                    ))
+                })?;
+
+            row_offset += row_count;
+        }
+
+        if row_offset != cloud.points.len() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "chunk rows did not cover full lidar: processed {}, expected {}",
+                row_offset,
+                cloud.points.len()
+            )));
+        }
+
+        cloud.write(&out_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write lidar '{}': {e}",
+                out_path.display()
+            ))
+        })?;
+
+        Ok(Lidar { file_path: out_path })
+    }
+
     #[pyo3(signature = (
         dst_epsg,
         output_path=None,
@@ -5289,6 +5839,25 @@ impl Lidar {
 
         Ok(Lidar { file_path: PathBuf::from(result_path) })
     }
+}
+
+fn parse_lidar_point_fields(cols: Option<&[String]>) -> PyResult<Vec<PointField>> {
+    let names: Vec<String> = match cols {
+        Some(v) if !v.is_empty() => v.to_vec(),
+        _ => vec!["x".to_string(), "y".to_string(), "z".to_string()],
+    };
+
+    let mut fields = Vec::with_capacity(names.len());
+    for name in names {
+        let field = PointField::from_name(&name).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "unsupported lidar column '{}'; expected one of: x,y,z,intensity,classification,return_number,number_of_returns,scan_direction_flag,edge_of_flight_line,scan_angle,flags,user_data,point_source_id,red,green,blue,nir,gps_time,normal_x,normal_y,normal_z",
+                name
+            ))
+        })?;
+        fields.push(field);
+    }
+    Ok(fields)
 }
 
 impl Raster {

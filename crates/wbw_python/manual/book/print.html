@@ -1,0 +1,1282 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Whitebox Workflows for Python User Manual</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
+<p>This manual is the long-form user guide for the WbW-Py API.</p>
+<p>Goals:</p>
+<ul>
+<li>Comprehensive API coverage.</li>
+<li>Practical, script-first learning path.</li>
+<li>Consistent chapter flow aligned with the project README.</li>
+</ul>
+<p>Documentation style rules:</p>
+<ul>
+<li>Every major concept must include executable code snippets.</li>
+<li>Each chapter should include at least one complete end-to-end script.</li>
+<li>Tool-specific parameter details are linked to tool reference docs where needed.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation-and-setup"><a class="header" href="#installation-and-setup">Installation and Setup</a></h1>
+<h2 id="development-install"><a class="header" href="#development-install">Development Install</a></h2>
+<pre><code class="language-bash">./scripts/dev_python_install.sh
+</code></pre>
+<h2 id="pro-build"><a class="header" href="#pro-build">Pro Build</a></h2>
+<pre><code class="language-bash">./scripts/dev_python_install.sh --pro
+</code></pre>
+<h2 id="smoke-tests"><a class="header" href="#smoke-tests">Smoke Tests</a></h2>
+<pre><code class="language-bash">python3 crates/wbw_python/examples/python_import_smoke_test.py
+python3 crates/wbw_python/examples/interop_roundtrip_smoke_test.py
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="build-and-preview"><a class="header" href="#build-and-preview">Build and Preview</a></h1>
+<p>This manual is structured as an mdBook project.</p>
+<h2 id="install-mdbook"><a class="header" href="#install-mdbook">Install mdBook</a></h2>
+<pre><code class="language-bash">cargo install mdbook
+</code></pre>
+<h2 id="build-the-manual"><a class="header" href="#build-the-manual">Build the Manual</a></h2>
+<p>From repository root:</p>
+<pre><code class="language-bash">cd crates/wbw_python/manual
+mdbook build
+</code></pre>
+<p>Generated HTML is written to <code>book/</code>.</p>
+<h2 id="live-preview"><a class="header" href="#live-preview">Live Preview</a></h2>
+<pre><code class="language-bash">cd crates/wbw_python/manual
+mdbook serve --open
+</code></pre>
+<h2 id="authoring-notes"><a class="header" href="#authoring-notes">Authoring Notes</a></h2>
+<ul>
+<li>Keep chapter order aligned with <code>src/SUMMARY.md</code>.</li>
+<li>Prefer runnable snippets over pseudo-code.</li>
+<li>Link chapter recipes to concrete scripts listed in the script index.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster("dem.tif")
+filled = wbe.hydrology.fill_depressions(dem)
+wbe.write_raster(filled, "dem_filled.tif")
+</code></pre>
+<h2 id="what-to-read-next"><a class="header" href="#what-to-read-next">What to Read Next</a></h2>
+<ul>
+<li>Session setup and tool visibility: <a href="./environment-and-discovery.html">Environment and Discovery</a></li>
+<li>Execution callbacks and progress: <a href="./tool-execution-and-progress.html">Tool Execution and Progress</a></li>
+<li>End-to-end workflow scripts: <a href="./script-index.html">Script Index</a></li>
+</ul>
+<h2 id="quick-start-conventions"><a class="header" href="#quick-start-conventions">Quick-Start Conventions</a></h2>
+<ul>
+<li>Prefer object-first workflows (<code>read_*</code> -&gt; transform -&gt; <code>write_*</code>).</li>
+<li>Validate tool visibility for scripted pipelines.</li>
+<li>Persist only outputs you need to keep.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="environment-and-discovery"><a class="header" href="#environment-and-discovery">Environment and Discovery</a></h1>
+<p>This chapter covers environment lifecycle and tool discovery patterns.</p>
+<h2 id="create-and-configure-environment"><a class="header" href="#create-and-configure-environment">Create and Configure Environment</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+wbe.working_directory = '/path/to/data'
+wbe.verbose = True
+
+print(wbe.version())
+print(wbe.license_type())
+</code></pre>
+<h2 id="namespace-discovery"><a class="header" href="#namespace-discovery">Namespace Discovery</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+print('categories:', wbe.categories())
+print('domains:', wbe.domain_namespaces())
+print('terrain tools sample:', wbe.terrain.list_tools()[:15])
+</code></pre>
+<h2 id="search-and-describe-tools"><a class="header" href="#search-and-describe-tools">Search and Describe Tools</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+matches = wbe.search_tools('slope')
+for m in matches[:5]:
+	print(m.get('tool_id', m))
+
+desc = wbe.describe_tool('slope')
+print(desc)
+</code></pre>
+<h2 id="validate-tool-availability"><a class="header" href="#validate-tool-availability">Validate Tool Availability</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+available = set(wbe.list_tools())
+
+required = {'fill_depressions', 'd8_flow_accum'}
+missing = sorted(required - available)
+if missing:
+	raise RuntimeError(f'Missing required tools: {missing}')
+</code></pre>
+<h2 id="category-access-patterns"><a class="header" href="#category-access-patterns">Category Access Patterns</a></h2>
+<p>Prefer direct properties when available:</p>
+<ul>
+<li><code>wbe.hydrology</code></li>
+<li><code>wbe.terrain</code></li>
+<li><code>wbe.raster</code></li>
+<li><code>wbe.vector</code></li>
+<li><code>wbe.lidar</code></li>
+<li><code>wbe.remote_sensing</code></li>
+</ul>
+<p>Use generic accessors for dynamic workflows:</p>
+<ul>
+<li><code>wbe.category(name)</code></li>
+<li><code>wbe.domain(name)</code></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
+<p>This chapter documents execution styles and progress handling.</p>
+<h2 id="object-first-execution"><a class="header" href="#object-first-execution">Object-First Execution</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+filled = wbe.hydrology.fill_depressions(dem)
+accum = wbe.hydrology.d8_flow_accum(filled)
+wbe.write_raster(accum, 'accum.tif')
+</code></pre>
+<h2 id="path-first-execution"><a class="header" href="#path-first-execution">Path-First Execution</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+result = wbe.hydrology.fill_depressions(
+	dem='dem.tif',
+	output='filled.tif',
+)
+print(result)
+</code></pre>
+<h2 id="basic-progress-callback"><a class="header" href="#basic-progress-callback">Basic Progress Callback</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+filled = wbe.hydrology.fill_depressions(
+	dem='dem.tif',
+	output='filled.tif',
+	callback=wb.print_progress,
+)
+</code></pre>
+<h2 id="custom-progress-callback"><a class="header" href="#custom-progress-callback">Custom Progress Callback</a></h2>
+<pre><code class="language-python">import json
+import re
+
+PERCENT_RE = re.compile(r'(-?\d+(?:\.\d+)?)\s*%')
+
+def on_progress(event):
+	payload = event
+	if isinstance(event, str):
+		try:
+			payload = json.loads(event)
+		except json.JSONDecodeError:
+			payload = {'message': event}
+
+	if isinstance(payload, dict):
+		pct = payload.get('percent')
+		msg = payload.get('message', '')
+		if pct is None and msg:
+			m = PERCENT_RE.search(str(msg))
+			pct = float(m.group(1)) if m else None
+		if pct is not None:
+			if pct &lt;= 1.0:
+				pct *= 100.0
+			print(f'[{int(max(0, min(100, pct))):3d}%] {msg}')
+
+# Use: callback=on_progress
+</code></pre>
+<h2 id="recommended-execution-pattern"><a class="header" href="#recommended-execution-pattern">Recommended Execution Pattern</a></h2>
+<ol>
+<li>Validate required tools.</li>
+<li>Run tool chain memory-first.</li>
+<li>Emit progress for long operations.</li>
+<li>Persist only key outputs.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-rasters"><a class="header" href="#working-with-rasters">Working with Rasters</a></h1>
+<p>This chapter documents practical raster workflows in WbW-Py with emphasis on
+inspection, iteration, modification, and persistence.</p>
+<h2 id="raster-lifecycle"><a class="header" href="#raster-lifecycle">Raster Lifecycle</a></h2>
+<p>Typical lifecycle:</p>
+<ol>
+<li>Read raster.</li>
+<li>Inspect metadata.</li>
+<li>Transform values (tool-driven or array-driven).</li>
+<li>Persist outputs with explicit options when needed.</li>
+</ol>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+meta = dem.metadata()
+
+print(meta.rows, meta.columns)
+print('EPSG:', meta.epsg_code)
+print('NoData:', meta.nodata)
+</code></pre>
+<h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
+<p>For cell-level logic, convert to NumPy and iterate safely.</p>
+<pre><code class="language-python">import numpy as np
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+a = r.to_numpy(all_bands=False, dtype='float64')
+meta = r.metadata()
+
+rows, cols = a.shape
+for row in range(rows):
+    for col in range(cols):
+        z = a[row, col]
+        if np.isfinite(z) and z != meta.nodata:
+            # Example transform: clamp negatives.
+            if z &lt; 0:
+                a[row, col] = 0.0
+</code></pre>
+<h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+base = wbe.read_raster('dem.tif')
+a = base.to_numpy(all_bands=False)
+a = a * 1.05
+
+out = wb.Raster.from_numpy(a, base, output_path='dem_scaled.tif')
+wbe.write_raster(out, 'dem_scaled_cog.tif', options={
+    'compress': True,
+    'strict_format_options': True,
+    'geotiff': {'layout': 'cog', 'tile_size': 512},
+})
+</code></pre>
+<h2 id="multi-band-iteration"><a class="header" href="#multi-band-iteration">Multi-Band Iteration</a></h2>
+<pre><code class="language-python">import numpy as np
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+rgb = wbe.read_raster('multiband.tif')
+arr = rgb.to_numpy(all_bands=True, dtype='float32')
+# arr shape is typically (bands, rows, cols)
+
+bands, rows, cols = arr.shape
+for b in range(bands):
+    for row in range(rows):
+        for col in range(cols):
+            v = arr[b, row, col]
+            if np.isfinite(v):
+                arr[b, row, col] = max(v, 0.0)
+
+wb.Raster.from_numpy(arr, rgb, output_path='multiband_clamped.tif')
+</code></pre>
+<h2 id="tool-first-raster-processing"><a class="header" href="#tool-first-raster-processing">Tool-First Raster Processing</a></h2>
+<p>Use tools for most heavy computation, then iterate only where custom logic is needed.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+filled = wbe.hydrology.fill_depressions(dem)
+slope = wbe.terrain.slope(filled)
+
+# Optional post-processing pass in NumPy.
+a = slope.to_numpy(all_bands=False)
+a[a &lt; 0] = 0
+slope_fixed = wb.Raster.from_numpy(a, slope)
+
+wbe.write_raster(slope_fixed, 'slope_fixed.tif')
+</code></pre>
+<h2 id="nodata-and-performance-guidance"><a class="header" href="#nodata-and-performance-guidance">NoData and Performance Guidance</a></h2>
+<ul>
+<li>Always check <code>metadata().nodata</code> when doing per-cell iteration.</li>
+<li>Prefer vectorized NumPy operations over nested Python loops when possible.</li>
+<li>Use tool methods (<code>wbe.hydrology.*</code>, <code>wbe.raster.*</code>, <code>wbe.terrain.*</code>) for large transforms.</li>
+<li>Persist only final outputs where possible to keep memory-first workflows efficient.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-vectors"><a class="header" href="#working-with-vectors">Working with Vectors</a></h1>
+<p>This chapter covers schema inspection, feature iteration, attribute reads/writes,
+and persistence workflows.</p>
+<h2 id="read-and-inspect"><a class="header" href="#read-and-inspect">Read and Inspect</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+
+schema = roads.schema()
+print(schema)
+print('features:', roads.feature_count())
+</code></pre>
+<h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+
+n = v.feature_count()
+for i in range(n):
+    attrs = v.attributes(i)
+    # attrs is dict-like; process values
+    print(i, attrs)
+</code></pre>
+<h2 id="read-and-update-attribute-table"><a class="header" href="#read-and-update-attribute-table">Read and Update Attribute Table</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+
+# Read one field value
+name0 = v.attribute(0, 'name')
+print('name[0]=', name0)
+
+# Update one field
+v.update_attribute(0, 'name', 'Main Street')
+
+# Update multiple fields
+v.update_attributes(1, {'speed': 50, 'class': 'collector'})
+
+# Add a new field
+v.add_field('reviewed', field_type='bool', default_value=False)
+</code></pre>
+<h2 id="persist-vector-outputs"><a class="header" href="#persist-vector-outputs">Persist Vector Outputs</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+buffered = wbe.vector.buffer_vector(roads, distance=15.0)
+
+# Extensionless output defaults to GeoPackage
+wbe.write_vector(buffered, 'roads_buffer')
+
+# Explicit output format
+wbe.write_vector(buffered, 'roads_buffer.parquet', options={
+    'strict_format_options': True,
+    'geoparquet': {'compression': 'zstd'},
+})
+</code></pre>
+<h2 id="practical-notes"><a class="header" href="#practical-notes">Practical Notes</a></h2>
+<ul>
+<li>Use <code>schema()</code> first to validate field names and types.</li>
+<li>Prefer <code>update_attributes()</code> for grouped edits to a feature.</li>
+<li>Re-read and validate after major writes, especially when switching formats.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-lidar"><a class="header" href="#working-with-lidar">Working with Lidar</a></h1>
+<p>This chapter documents lidar workflows in WbW-Py, including file-backed processing,
+metadata checks, and output controls.</p>
+<h2 id="baseline-workflow"><a class="header" href="#baseline-workflow">Baseline Workflow</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey.las')
+meta = las.metadata()
+
+print(meta.file_path)
+print('epsg:', meta.crs_epsg)
+
+normals = wbe.lidar.calculate_point_normals(las)
+wbe.write_lidar(normals, 'survey_normals.copc.laz')
+</code></pre>
+<h2 id="iterating-through-lidar-points"><a class="header" href="#iterating-through-lidar-points">Iterating Through Lidar Points</a></h2>
+<p>Stable WbW-Py lidar objects are file-backed and tool-oriented, with explicit
+columnar point access through NumPy. Direct point-by-point Python iterators are
+still not the primary API path.</p>
+<p>Recommended point-level workflow:</p>
+<ol>
+<li>Use <code>Lidar.to_numpy()</code> with selected point fields.</li>
+<li>Perform vectorized filtering/classification edits in NumPy.</li>
+<li>Write updates with <code>Lidar.from_numpy(...)</code>.</li>
+</ol>
+<pre><code class="language-python">import whitebox_workflows as wb
+import numpy as np
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey.las')
+
+arr = las.to_numpy(cols=['x', 'y', 'z', 'classification'])
+ground_mask = arr[:, 3] == 2
+arr[ground_mask, 3] = 6
+
+edited = wb.Lidar.from_numpy(
+    arr,
+    base=las,
+    cols=['x', 'y', 'z', 'classification'],
+    output_path='survey_reclassified.laz',
+)
+
+print('points:', edited.point_count)
+</code></pre>
+<h2 id="output-controls"><a class="header" href="#output-controls">Output Controls</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey.las')
+
+wbe.write_lidar(las, 'survey_out.laz', options={
+    'laz': {
+        'chunk_size': 25000,
+        'compression_level': 7,
+    },
+})
+
+wbe.write_lidar(las, 'survey_out.copc.laz', options={
+    'copc': {
+        'max_points_per_node': 75000,
+        'max_depth': 8,
+        'node_point_ordering': 'hilbert',
+    },
+})
+</code></pre>
+<h2 id="chunked-numpy-streaming"><a class="header" href="#chunked-numpy-streaming">Chunked Numpy Streaming</a></h2>
+<p>For very large point clouds, use chunked column streaming to avoid holding a
+full point matrix in memory.</p>
+<p>Recommended chunked workflow:</p>
+<ol>
+<li>Read chunks with <code>Lidar.to_numpy_chunks(...)</code>.</li>
+<li>Apply vectorized edits per chunk.</li>
+<li>Write edited chunks with <code>Lidar.from_numpy_chunks(...)</code>.</li>
+</ol>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+lidar = wbe.read_lidar('survey.las')
+
+cols = ['x', 'y', 'z', 'classification']
+chunks = lidar.to_numpy_chunks(chunk_size=200_000, cols=cols)
+
+for chunk in chunks:
+    # Reclassify non-ground points above a simple elevation threshold.
+    mask = chunk[:, 2] &gt; 250.0
+    chunk[mask, 3] = 6
+
+edited = wb.Lidar.from_numpy_chunks(
+    chunks,
+    base=lidar,
+    cols=cols,
+    output_path='survey_chunked_reclassified.laz',
+)
+
+print('points:', edited.point_count)
+</code></pre>
+<p>For callback-driven processing, pass <code>callback=</code> to <code>to_numpy_chunks(...)</code> to
+process each chunk as it is decoded. In callback mode, no list is returned.</p>
+<p>Notes:</p>
+<ul>
+<li>LAS/LAZ chunk outputs use the shared core streaming rewrite path.</li>
+<li>Other output formats currently use the existing non-streaming write path.</li>
+</ul>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ul>
+<li>Validate CRS before and after transformations.</li>
+<li>Prefer COPC output for large datasets and cloud streaming scenarios.</li>
+<li>Keep raw source lidar immutable; write derived products to new files.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="working-with-sensor-bundles"><a class="header" href="#working-with-sensor-bundles">Working with Sensor Bundles</a></h1>
+<p>This chapter documents supported sensor bundle families and common workflows.</p>
+<h2 id="supported-families"><a class="header" href="#supported-families">Supported Families</a></h2>
+<ul>
+<li>Generic auto-detect: <code>read_bundle(...)</code></li>
+<li>Landsat: <code>read_landsat(...)</code></li>
+<li>Sentinel-1 SAFE: <code>read_sentinel1(...)</code></li>
+<li>Sentinel-2 SAFE: <code>read_sentinel2(...)</code></li>
+<li>PlanetScope: <code>read_planetscope(...)</code></li>
+<li>ICEYE: <code>read_iceye(...)</code></li>
+<li>DIMAP: <code>read_dimap(...)</code></li>
+<li>Maxar/WorldView: <code>read_maxar_worldview(...)</code></li>
+<li>RADARSAT-2: <code>read_radarsat2(...)</code></li>
+<li>RCM: <code>read_rcm(...)</code></li>
+</ul>
+<h2 id="common-inspection-pattern"><a class="header" href="#common-inspection-pattern">Common Inspection Pattern</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+b = wbe.read_bundle('BUNDLE_ROOT')
+
+print('family:', b.family)
+print('bands:', b.list_band_keys())
+print('measurements:', b.list_measurement_keys())
+print('qa:', b.list_qa_keys())
+print('assets:', b.list_asset_keys())
+</code></pre>
+<h2 id="family-specific-examples"><a class="header" href="#family-specific-examples">Family-Specific Examples</a></h2>
+<h3 id="sentinel-2"><a class="header" href="#sentinel-2">Sentinel-2</a></h3>
+<pre><code class="language-python">s2 = wbe.read_sentinel2('S2_SCENE.SAFE')
+red = s2.read_band('B04')
+nir = s2.read_band('B08')
+rgb = s2.true_colour_composite(wbe, output_path='s2_true_colour.tif')
+</code></pre>
+<h3 id="landsat"><a class="header" href="#landsat">Landsat</a></h3>
+<pre><code class="language-python">ls = wbe.read_landsat('LC09_SCENE')
+print(ls.processing_level(), ls.cloud_cover_percent())
+preview = ls.read_band(ls.list_band_keys()[0])
+</code></pre>
+<h3 id="sentinel-1--sar-families"><a class="header" href="#sentinel-1--sar-families">Sentinel-1 / SAR Families</a></h3>
+<pre><code class="language-python">s1 = wbe.read_sentinel1('S1_SCENE.SAFE')
+print(s1.polarizations())
+meas = s1.read_measurement(s1.list_measurement_keys()[0])
+false_colour = s1.false_colour_composite(wbe, output_path='s1_false_colour.tif')
+</code></pre>
+<h3 id="planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm"><a class="header" href="#planetscope--iceye--dimap--maxar-worldview--radarsat-2--rcm">PlanetScope / ICEYE / DIMAP / Maxar-WorldView / RADARSAT-2 / RCM</a></h3>
+<pre><code class="language-python">for loader, path in [
+    (wbe.read_planetscope, 'PLANETSCOPE_SCENE'),
+    (wbe.read_iceye, 'ICEYE_SCENE'),
+    (wbe.read_dimap, 'DIMAP_SCENE'),
+    (wbe.read_maxar_worldview, 'MAXAR_SCENE'),
+    (wbe.read_radarsat2, 'RADARSAT2_SCENE'),
+    (wbe.read_rcm, 'RCM_SCENE'),
+]:
+    bundle = loader(path)
+    print(bundle.family, bundle.bundle_root)
+</code></pre>
+<h2 id="recommended-workflow"><a class="header" href="#recommended-workflow">Recommended Workflow</a></h2>
+<ol>
+<li>Open with family-specific reader when known.</li>
+<li>Inspect key sets (<code>list_*_keys</code>).</li>
+<li>Read representative channels.</li>
+<li>Build previews/composites for QA.</li>
+<li>Persist derived rasters and document source family + key choices.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="output-controls-1"><a class="header" href="#output-controls-1">Output Controls</a></h1>
+<p>This chapter documents output controls for raster, vector, and lidar writes in WbW-Py.</p>
+<h2 id="general-principles"><a class="header" href="#general-principles">General Principles</a></h2>
+<ul>
+<li>Start with default output behavior unless you need strict reproducibility.</li>
+<li>Use <code>strict_format_options=True</code> when you want invalid option/format combinations
+to fail instead of silently ignoring options.</li>
+<li>Prefer extensionless outputs for sensible defaults when prototyping.</li>
+</ul>
+<h2 id="raster-output-controls"><a class="header" href="#raster-output-controls">Raster Output Controls</a></h2>
+<p><code>write_raster(...)</code> and <code>write_rasters(...)</code> support an <code>options</code> dictionary.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+
+wbe.write_raster(r, 'out_default.tif')
+
+wbe.write_raster(
+    r,
+    'out_cog.tif',
+    options={
+        'compress': True,
+        'strict_format_options': True,
+        'geotiff': {
+            'layout': 'cog',
+            'tile_size': 512,
+            'compression': 'deflate',
+            'bigtiff': False,
+        },
+    },
+)
+</code></pre>
+<h3 id="common-raster-profiles"><a class="header" href="#common-raster-profiles">Common Raster Profiles</a></h3>
+<pre><code class="language-python"># Stripped GeoTIFF
+wbe.write_raster(r, 'out_stripped.tif', options={
+    'geotiff': {'layout': 'stripped', 'rows_per_strip': 32},
+})
+
+# Tiled GeoTIFF
+wbe.write_raster(r, 'out_tiled.tif', options={
+    'geotiff': {'layout': 'tiled', 'tile_width': 256, 'tile_height': 256},
+})
+</code></pre>
+<h2 id="vector-output-controls"><a class="header" href="#vector-output-controls">Vector Output Controls</a></h2>
+<p><code>write_vector(...)</code> supports format-specific options.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+
+# Extensionless output defaults to GeoPackage
+wbe.write_vector(v, 'roads_copy')
+
+# GeoParquet with strict options
+wbe.write_vector(
+    v,
+    'roads.parquet',
+    options={
+        'strict_format_options': True,
+        'geoparquet': {
+            'compression': 'zstd',
+            'max_rows_per_group': 250000,
+            'write_batch_size': 8192,
+        },
+    },
+)
+</code></pre>
+<h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
+<p><code>write_lidar(...)</code> supports LAZ and COPC option blocks.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+l = wbe.read_lidar('survey.las')
+
+# LAZ controls
+wbe.write_lidar(l, 'survey_out.laz', options={
+    'laz': {'chunk_size': 25000, 'compression_level': 7},
+})
+
+# COPC controls
+wbe.write_lidar(l, 'survey_out.copc.laz', options={
+    'copc': {
+        'max_points_per_node': 75000,
+        'max_depth': 8,
+        'node_point_ordering': 'hilbert',
+    },
+})
+</code></pre>
+<h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
+<p>When no extension is provided:</p>
+<ul>
+<li>raster -&gt; <code>.tif</code> (COG-style GeoTIFF default)</li>
+<li>vector -&gt; <code>.gpkg</code></li>
+<li>lidar -&gt; <code>.copc.laz</code></li>
+</ul>
+<pre><code class="language-python">wbe.write_raster(r, 'my_raster')
+wbe.write_vector(v, 'my_vector')
+wbe.write_lidar(l, 'my_lidar')
+</code></pre>
+<h2 id="reproducibility-checklist"><a class="header" href="#reproducibility-checklist">Reproducibility Checklist</a></h2>
+<ol>
+<li>Pin output extension explicitly.</li>
+<li>Set <code>strict_format_options=True</code> when format mismatches must error.</li>
+<li>Pin codec/layout/tile parameters for raster outputs.</li>
+<li>For vector/lidar, pin format-specific compression and partitioning options.</li>
+<li>Re-open output and validate metadata before downstream analysis.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
+<p>This chapter covers raster, vector, and lidar reprojection in WbW-Py.</p>
+<h2 id="crs-inspection"><a class="header" href="#crs-inspection">CRS Inspection</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+roads = wbe.read_vector('roads.gpkg')
+las = wbe.read_lidar('survey.las')
+
+print('raster epsg:', dem.metadata().epsg_code)
+print('vector epsg:', roads.metadata().crs_epsg)
+print('lidar epsg:', las.metadata().crs_epsg)
+</code></pre>
+<h2 id="raster-reprojection"><a class="header" href="#raster-reprojection">Raster Reprojection</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+dem_utm = wbe.reproject_raster(
+    dem,
+    dst_epsg=32618,
+    resample='bilinear',
+    x_res=10.0,
+    y_res=10.0,
+)
+
+wbe.write_raster(dem_utm, 'dem_utm_10m.tif')
+</code></pre>
+<h2 id="vector-reprojection"><a class="header" href="#vector-reprojection">Vector Reprojection</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+
+roads_utm = wbe.reproject_vector(
+    roads,
+    dst_epsg=32618,
+    failure_policy='error',
+    topology_policy='none',
+)
+
+wbe.write_vector(roads_utm, 'roads_utm.gpkg')
+</code></pre>
+<h2 id="lidar-reprojection"><a class="header" href="#lidar-reprojection">Lidar Reprojection</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+las = wbe.read_lidar('survey.las')
+
+las_utm = wbe.reproject_lidar(
+    las,
+    dst_epsg=32618,
+    use_3d_transform=False,
+    failure_policy='error',
+)
+
+wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
+</code></pre>
+<h2 id="projection-utility-namespace"><a class="header" href="#projection-utility-namespace">Projection Utility Namespace</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+wkt_3857 = wbe.projection.to_ogc_wkt(3857)
+print('epsg from wkt:', wbe.projection.identify_epsg(wkt_3857))
+
+pts = [{'x': -79.3832, 'y': 43.6532}]
+pts_utm = wbe.projection.reproject_points(pts, src_epsg=4326, dst_epsg=32618)
+print(pts_utm)
+</code></pre>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<ul>
+<li>Confirm source CRS before any reprojection.</li>
+<li>Use <code>nearest</code> for categorical raster data, <code>bilinear</code>/<code>cubic</code> for continuous data.</li>
+<li>Re-open outputs and verify CRS metadata post-transform.</li>
+<li>Keep transform options explicit for reproducible pipelines.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="topology-utilities"><a class="header" href="#topology-utilities">Topology Utilities</a></h1>
+<p>This chapter covers topology helper methods available under <code>wbe.topology</code>.</p>
+<h2 id="wkt-predicate-checks"><a class="header" href="#wkt-predicate-checks">WKT Predicate Checks</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+poly = 'POLYGON((0 0,10 0,10 10,0 10,0 0))'
+pt = 'POINT(5 5)'
+
+print('contains:', wbe.topology.contains_wkt(poly, pt))
+print('intersects:', wbe.topology.intersects_wkt(poly, pt))
+print('within:', wbe.topology.within_wkt(pt, poly))
+</code></pre>
+<h2 id="relationship-and-distance"><a class="header" href="#relationship-and-distance">Relationship and Distance</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+a = 'LINESTRING(0 0, 10 0)'
+b = 'LINESTRING(0 1, 10 1)'
+
+print('distance:', wbe.topology.distance_wkt(a, b))
+print('relate:', wbe.topology.relate_wkt(a, b))
+</code></pre>
+<h2 id="geometry-validation-and-repair"><a class="header" href="#geometry-validation-and-repair">Geometry Validation and Repair</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+invalid = 'POLYGON((0 0,4 4,4 0,0 4,0 0))'
+print('is_valid:', wbe.topology.is_valid_polygon_wkt(invalid))
+
+fixed = wbe.topology.make_valid_polygon_wkt(invalid)
+print('fixed:', fixed)
+
+buf = wbe.topology.buffer_wkt('LINESTRING(0 0, 10 0)', 1.5)
+print('buffer:', buf)
+</code></pre>
+<h2 id="feature-to-feature-relation"><a class="header" href="#feature-to-feature-relation">Feature-to-Feature Relation</a></h2>
+<p>For vector feature comparisons, use <code>vector_feature_relation(...)</code>.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+
+rel = wbe.topology.vector_feature_relation(roads, 0, roads, 1)
+print(rel)
+</code></pre>
+<h2 id="practical-guidance"><a class="header" href="#practical-guidance">Practical Guidance</a></h2>
+<ul>
+<li>Use topology utilities for fast geometry checks in validation pipelines.</li>
+<li>For complex overlays and production transforms, prefer vector tool workflows.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
+<p>This chapter summarizes practical format support exposed through WbW-Py.</p>
+<p>Backend support comes from core crates:</p>
+<ul>
+<li>Raster: <code>wbraster</code></li>
+<li>Vector: <code>wbvector</code></li>
+<li>Lidar: <code>wblidar</code></li>
+</ul>
+<h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
+<p>Commonly used raster formats include:</p>
+<ul>
+<li>GeoTIFF / BigTIFF / COG (<code>.tif</code>, <code>.tiff</code>)</li>
+<li>JPEG2000 / GeoJP2 (<code>.jp2</code>)</li>
+<li>GeoPackage raster (<code>.gpkg</code>)</li>
+<li>ENVI (<code>.hdr</code> with sidecar data)</li>
+<li>ER Mapper (<code>.ers</code>)</li>
+</ul>
+<p>Typical pattern:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+wbe.write_raster(r, 'dem_out.tif')
+</code></pre>
+<h2 id="vector-formats"><a class="header" href="#vector-formats">Vector Formats</a></h2>
+<p>Commonly used vector formats include:</p>
+<ul>
+<li>GeoPackage (<code>.gpkg</code>)</li>
+<li>Shapefile (<code>.shp</code> and sidecar dataset files)</li>
+<li>GeoJSON (<code>.geojson</code>, <code>.json</code>)</li>
+<li>GeoParquet (<code>.parquet</code>)</li>
+<li>OSM PBF read workflows (<code>.osm.pbf</code>)</li>
+</ul>
+<p>Typical pattern:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+wbe.write_vector(v, 'roads_out.gpkg')
+</code></pre>
+<h2 id="lidar-formats"><a class="header" href="#lidar-formats">Lidar Formats</a></h2>
+<p>Commonly used lidar formats include:</p>
+<ul>
+<li>LAS (<code>.las</code>)</li>
+<li>LAZ (<code>.laz</code>)</li>
+<li>COPC (<code>.copc.laz</code>)</li>
+</ul>
+<p>Typical pattern:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+l = wbe.read_lidar('survey.las')
+wbe.write_lidar(l, 'survey_out.copc.laz')
+</code></pre>
+<h2 id="sensor-bundle-families"><a class="header" href="#sensor-bundle-families">Sensor Bundle Families</a></h2>
+<p>Supported bundle readers include:</p>
+<ul>
+<li><code>read_bundle(...)</code> (auto-detect)</li>
+<li><code>read_landsat(...)</code></li>
+<li><code>read_sentinel1(...)</code></li>
+<li><code>read_sentinel2(...)</code></li>
+<li><code>read_planetscope(...)</code></li>
+<li><code>read_iceye(...)</code></li>
+<li><code>read_dimap(...)</code></li>
+<li><code>read_maxar_worldview(...)</code></li>
+<li><code>read_radarsat2(...)</code></li>
+<li><code>read_rcm(...)</code></li>
+</ul>
+<p>See <a href="./working-with-sensor-bundles.html">Working with Sensor Bundles</a> for family-specific examples.</p>
+<h2 id="validation-guidance"><a class="header" href="#validation-guidance">Validation Guidance</a></h2>
+<ol>
+<li>Prefer stable interchange formats (<code>.tif</code>, <code>.gpkg</code>, <code>.copc.laz</code>) for production pipelines.</li>
+<li>Re-open outputs and verify metadata after write operations.</li>
+<li>Use explicit options where format behavior must be reproducible.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="interoperability"><a class="header" href="#interoperability">Interoperability</a></h1>
+<p>This chapter provides practical exchange patterns between WbW-Py and common Python geospatial tooling.</p>
+<h2 id="copy-boundary-model"><a class="header" href="#copy-boundary-model">Copy-Boundary Model</a></h2>
+<ul>
+<li><code>to_numpy()</code> / <code>from_numpy()</code> are explicit in-memory exchange boundaries.</li>
+<li>Rasterio/GeoPandas/rioxarray flows are file-based boundaries.</li>
+<li>Always validate metadata after roundtrip (<code>metadata()</code>, CRS, dimensions, schema).</li>
+</ul>
+<h2 id="numpy-roundtrip"><a class="header" href="#numpy-roundtrip">NumPy Roundtrip</a></h2>
+<pre><code class="language-python">import numpy as np
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+a = r.to_numpy(dtype='float64')
+a = np.where(np.isfinite(a), a + 1.0, a)
+
+r2 = wb.Raster.from_numpy(a, r, output_path='dem_plus1.tif')
+</code></pre>
+<h2 id="rasterio-roundtrip"><a class="header" href="#rasterio-roundtrip">Rasterio Roundtrip</a></h2>
+<pre><code class="language-python">import rasterio
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+wbe.write_raster(r, 'dem_for_rasterio.tif')
+
+with rasterio.open('dem_for_rasterio.tif') as src:
+    arr = src.read(1)
+    profile = src.profile
+
+arr = arr * 1.02
+profile.update(dtype='float32', count=1)
+with rasterio.open('dem_rio_out.tif', 'w', **profile) as dst:
+    dst.write(arr.astype('float32'), 1)
+
+r_back = wbe.read_raster('dem_rio_out.tif')
+print(r_back.metadata())
+</code></pre>
+<h2 id="geopandas-and-shapely-roundtrip"><a class="header" href="#geopandas-and-shapely-roundtrip">GeoPandas and Shapely Roundtrip</a></h2>
+<pre><code class="language-python">import geopandas as gpd
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('roads.gpkg')
+wbe.write_vector(v, 'roads_for_gpd.gpkg')
+
+gdf = gpd.read_file('roads_for_gpd.gpkg')
+gdf['length_m'] = gdf.length
+gdf = gdf[gdf['length_m'] &gt; 20.0]
+gdf.to_file('roads_filtered.gpkg', driver='GPKG')
+
+v_back = wbe.read_vector('roads_filtered.gpkg')
+print(v_back.schema())
+</code></pre>
+<h2 id="xarrayrioxarray-roundtrip"><a class="header" href="#xarrayrioxarray-roundtrip">xarray/rioxarray Roundtrip</a></h2>
+<pre><code class="language-python">import rioxarray as rxr
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+wbe.write_raster(r, 'dem_for_xarray.tif')
+
+da = rxr.open_rasterio('dem_for_xarray.tif').squeeze(drop=True)
+da_smoothed = da.rolling(x=3, y=3, center=True).mean()
+da_smoothed.rio.to_raster('dem_xarray_smoothed.tif')
+
+r_back = wbe.read_raster('dem_xarray_smoothed.tif')
+print(r_back.metadata())
+</code></pre>
+<h2 id="pyproj-crs-workflow"><a class="header" href="#pyproj-crs-workflow">pyproj CRS Workflow</a></h2>
+<pre><code class="language-python">from pyproj import CRS
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+r = wbe.read_raster('dem.tif')
+
+src = CRS.from_epsg(r.metadata().epsg_code)
+dst = CRS.from_epsg(32618)
+print(src.to_string(), '-&gt;', dst.to_string())
+
+r_utm = wbe.reproject_raster(r, dst_epsg=dst.to_epsg(), resample='bilinear')
+</code></pre>
+<h2 id="validation-checklist"><a class="header" href="#validation-checklist">Validation Checklist</a></h2>
+<ol>
+<li>Check CRS after every roundtrip.</li>
+<li>Check dimensions and nodata for raster flows.</li>
+<li>Check schema and representative attributes for vector flows.</li>
+<li>Prefer stable formats (<code>.tif</code>, <code>.gpkg</code>) for routine exchange.</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="licensing"><a class="header" href="#licensing">Licensing</a></h1>
+<p>This chapter documents open, signed entitlement, and floating license startup modes.</p>
+<h2 id="open-mode"><a class="header" href="#open-mode">Open Mode</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+print('license type:', wbe.license_type())
+</code></pre>
+<h2 id="signed-entitlement-json"><a class="header" href="#signed-entitlement-json">Signed Entitlement (JSON)</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+signed_entitlement_json = '...'
+public_key_kid = 'k1'
+public_key_b64url = 'REPLACE_WITH_PROVIDER_KEY'
+
+wbe = wb.WbEnvironment.from_signed_entitlement_json(
+    signed_entitlement_json=signed_entitlement_json,
+    public_key_kid=public_key_kid,
+    public_key_b64url=public_key_b64url,
+    include_pro=True,
+    fallback_tier='open',
+)
+
+print(wbe.license_type())
+</code></pre>
+<h2 id="signed-entitlement-file"><a class="header" href="#signed-entitlement-file">Signed Entitlement (File)</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment.from_signed_entitlement_file(
+    entitlement_file='entitlement.json',
+    public_key_kid='k1',
+    public_key_b64url='REPLACE_WITH_PROVIDER_KEY',
+    include_pro=True,
+    fallback_tier='open',
+)
+</code></pre>
+<h2 id="floating-license"><a class="header" href="#floating-license">Floating License</a></h2>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment.from_floating_license_id(
+    floating_license_id='fl_12345',
+    include_pro=True,
+    fallback_tier='open',
+    provider_url='https://license.example.com',
+    machine_id='machine-01',
+    customer_id='customer-abc',
+)
+
+print(wbe.license_info())
+</code></pre>
+<h2 id="failure-handling-guidance"><a class="header" href="#failure-handling-guidance">Failure Handling Guidance</a></h2>
+<ul>
+<li>Validate startup at script entry and fail early on licensing errors.</li>
+<li>For entitlement/floating modes, keep diagnostics from thrown exceptions.</li>
+<li>Use open mode fallback only where policy permits.</li>
+</ul>
+<h2 id="security-and-operations-notes"><a class="header" href="#security-and-operations-notes">Security and Operations Notes</a></h2>
+<ul>
+<li>Do not hardcode real license secrets in source control.</li>
+<li>Prefer environment variables or secure secret stores.</li>
+<li>Log license mode and runtime version for reproducibility.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="api-reference-strategy"><a class="header" href="#api-reference-strategy">API Reference Strategy</a></h1>
+<p>Manual chapters provide narrative and recipes.</p>
+<p>Tool-by-tool parameter references remain in:</p>
+<ul>
+<li><code>TOOLS.md</code></li>
+<li><code>docs/tools_*.md</code></li>
+</ul>
+<h2 id="reference-boundaries"><a class="header" href="#reference-boundaries">Reference Boundaries</a></h2>
+<ul>
+<li>This manual explains concepts, patterns, and end-to-end examples.</li>
+<li>Tool parameter completeness lives in <code>TOOLS.md</code> and category tool docs.</li>
+<li>Type signatures and IntelliSense details are reflected in package typing assets.</li>
+</ul>
+<h2 id="navigation"><a class="header" href="#navigation">Navigation</a></h2>
+<ul>
+<li>Discovery and execution patterns: <a href="./environment-and-discovery.html">Environment and Discovery</a></li>
+<li>Data-object workflows: <a href="./working-with-rasters.html">Working with Rasters</a>, <a href="./working-with-vectors.html">Working with Vectors</a>, <a href="./working-with-lidar.html">Working with Lidar</a></li>
+<li>Concrete runnable scripts: <a href="./script-index.html">Script Index</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="script-index"><a class="header" href="#script-index">Script Index</a></h1>
+<p>Use this index to map manual chapters to runnable examples.</p>
+<h2 id="quick-start-and-core-api"><a class="header" href="#quick-start-and-core-api">Quick Start and Core API</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/quickstart_harmonized_api.py</code></li>
+<li><code>crates/wbw_python/examples/wbenvironment_example.py</code></li>
+<li><code>crates/wbw_python/examples/current_api_data_handling_demo.py</code></li>
+</ul>
+<h2 id="raster-workflows"><a class="header" href="#raster-workflows">Raster Workflows</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/raster_numpy_roundtrip.py</code></li>
+<li><code>crates/wbw_python/examples/raster_numpy_multiband_roundtrip.py</code></li>
+<li><code>crates/wbw_python/examples/unary_raster_tools_example.py</code></li>
+</ul>
+<h2 id="vector-workflows"><a class="header" href="#vector-workflows">Vector Workflows</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/vector_attributes_harmonized_api.py</code></li>
+<li><code>crates/wbw_python/examples/vector_multifile_write_demo.py</code></li>
+</ul>
+<h2 id="lidar-workflows"><a class="header" href="#lidar-workflows">Lidar Workflows</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/lidar_write_options.py</code></li>
+<li><code>crates/wbw_python/examples/lidar_numpy_roundtrip_smoke_test.py</code></li>
+<li><code>crates/wbw_python/examples/lidar_chunked_pipeline.py</code></li>
+</ul>
+<h2 id="sensor-bundle-workflows"><a class="header" href="#sensor-bundle-workflows">Sensor Bundle Workflows</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/sensor_bundle_overview.py</code></li>
+</ul>
+<h2 id="interoperability-and-validation"><a class="header" href="#interoperability-and-validation">Interoperability and Validation</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/interop_roundtrip_smoke_test.py</code></li>
+</ul>
+<h2 id="licensing-1"><a class="header" href="#licensing-1">Licensing</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/licensing_offline_example.py</code></li>
+<li><code>crates/wbw_python/examples/licensing_floating_online_example.py</code></li>
+</ul>
+<h2 id="dynamic-output-smoke-tests"><a class="header" href="#dynamic-output-smoke-tests">Dynamic Output Smoke Tests</a></h2>
+<ul>
+<li><code>crates/wbw_python/examples/dynamic_single_output_smoke_test.py</code></li>
+<li><code>crates/wbw_python/examples/dynamic_multi_output_smoke_test.py</code></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

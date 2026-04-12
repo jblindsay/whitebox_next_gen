@@ -21,30 +21,34 @@ wbe.write_lidar(normals, 'survey_normals.copc.laz')
 
 ## Iterating Through Lidar Points
 
-Current stable WbW-Py lidar objects are file-backed and tool-oriented. Direct
-point-by-point iterators are not the primary API path.
+Stable WbW-Py lidar objects are file-backed and tool-oriented, with explicit
+columnar point access through NumPy. Direct point-by-point Python iterators are
+still not the primary API path.
 
 Recommended point-level workflow:
-1. Use WbW-Py for lidar processing and reprojection.
-2. For explicit point iteration, use a point-cloud reader library on the output file.
-3. Return to WbW-Py for downstream geoprocessing.
+1. Use `Lidar.to_numpy()` with selected point fields.
+2. Perform vectorized filtering/classification edits in NumPy.
+3. Write updates with `Lidar.from_numpy(...)`.
 
 ```python
 import whitebox_workflows as wb
-# Optional external bridge for explicit point iteration.
-import laspy
+import numpy as np
 
 wbe = wb.WbEnvironment()
-las_obj = wbe.read_lidar('survey.las')
-filtered = wbe.lidar.classify_overlap_points(las_obj)
+las = wbe.read_lidar('survey.las')
 
-out_path = 'survey_filtered.laz'
-wbe.write_lidar(filtered, out_path)
+arr = las.to_numpy(cols=['x', 'y', 'z', 'classification'])
+ground_mask = arr[:, 3] == 2
+arr[ground_mask, 3] = 6
 
-las = laspy.read(out_path)
-for x, y, z in zip(las.x[:1000], las.y[:1000], las.z[:1000]):
-    # point-level logic
-    pass
+edited = wb.Lidar.from_numpy(
+    arr,
+    base=las,
+    cols=['x', 'y', 'z', 'classification'],
+    output_path='survey_reclassified.laz',
+)
+
+print('points:', edited.point_count)
 ```
 
 ## Output Controls
@@ -70,6 +74,47 @@ wbe.write_lidar(las, 'survey_out.copc.laz', options={
     },
 })
 ```
+
+## Chunked Numpy Streaming
+
+For very large point clouds, use chunked column streaming to avoid holding a
+full point matrix in memory.
+
+Recommended chunked workflow:
+1. Read chunks with `Lidar.to_numpy_chunks(...)`.
+2. Apply vectorized edits per chunk.
+3. Write edited chunks with `Lidar.from_numpy_chunks(...)`.
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+lidar = wbe.read_lidar('survey.las')
+
+cols = ['x', 'y', 'z', 'classification']
+chunks = lidar.to_numpy_chunks(chunk_size=200_000, cols=cols)
+
+for chunk in chunks:
+    # Reclassify non-ground points above a simple elevation threshold.
+    mask = chunk[:, 2] > 250.0
+    chunk[mask, 3] = 6
+
+edited = wb.Lidar.from_numpy_chunks(
+    chunks,
+    base=lidar,
+    cols=cols,
+    output_path='survey_chunked_reclassified.laz',
+)
+
+print('points:', edited.point_count)
+```
+
+For callback-driven processing, pass `callback=` to `to_numpy_chunks(...)` to
+process each chunk as it is decoded. In callback mode, no list is returned.
+
+Notes:
+- LAS/LAZ chunk outputs use the shared core streaming rewrite path.
+- Other output formats currently use the existing non-streaming write path.
 
 ## Best Practices
 

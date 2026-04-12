@@ -20,6 +20,7 @@ Use this index to map manual chapters to runnable examples.
 ## Lidar Workflows
 
 - `crates/wbw_r/r-package/whiteboxworkflows/inst/examples/lidar_object_quickstart.R`
+- `crates/wbw_r/r-package/whiteboxworkflows/inst/examples/lidar_chunked_matrix_streaming.R`
 - `crates/wbw_r/examples/lidar_write_options.R`
 
 ## Sensor Bundle Workflows

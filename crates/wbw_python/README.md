@@ -24,6 +24,7 @@ The API is in active modernization, with emphasis on:
 - [Raster output controls](#raster-output-controls)
 - [Vector output controls](#vector-output-controls)
 - [Lidar output controls](#lidar-output-controls)
+- [Chunked lidar streaming](#chunked-lidar-streaming)
 - [Memory-first execution model](#memory-first-execution-model)
 - [Reprojection patterns](#reprojection-patterns)
 - [Projection utilities](#projection-utilities)
@@ -54,6 +55,11 @@ The API is in active modernization, with emphasis on:
 - Raster and NumPy bridge:
   - `Raster.to_numpy(...)`
   - `Raster.from_numpy(...)`
+- Lidar and NumPy bridge:
+  - `Lidar.to_numpy(...)`
+  - `Lidar.from_numpy(...)`
+  - `Lidar.to_numpy_chunks(...)`
+  - `Lidar.from_numpy_chunks(...)`
 
 ## Preferred API conventions
 
@@ -358,25 +364,6 @@ wbe.write_raster(
 )
 ```
 
-### Extensionless defaults (all data objects)
-
-When `output_path` has no extension:
-
-- `write_raster(...)` writes COG-style GeoTIFF to `*.tif`
-- `write_vector(...)` writes GeoPackage to `*.gpkg`
-- `write_lidar(...)` writes COPC to `*.copc.laz`
-
-`write_lidar(...)` also accepts optional per-format write controls through
-`options={...}`.
-
-Examples:
-
-```python
-wbe.write_raster(raster, 'my_file')  # my_file.tif (COG-style default)
-wbe.write_vector(vector, 'my_file')  # my_file.gpkg
-wbe.write_lidar(lidar, 'my_file')    # my_file.copc.laz
-```
-
 ### Sensor bundle (Sentinel-2)
 
 ```python
@@ -553,7 +540,39 @@ Notes:
 ### Common lidar option profiles
 
 ```python
-# 1) LAZ write with tuned compression/chunking
+
+### Chunked lidar streaming
+
+For large point clouds, use chunked column workflows to avoid materializing the
+entire point matrix at once.
+
+Recommended flow:
+- Read chunks with `to_numpy_chunks(...)`.
+- Apply vectorized edits per chunk.
+- Write with `from_numpy_chunks(...)`.
+
+```python
+lidar = wbe.read_lidar('survey.las')
+cols = ['x', 'y', 'z', 'classification']
+
+chunks = lidar.to_numpy_chunks(chunk_size=200_000, cols=cols)
+for chunk in chunks:
+  high = chunk[:, 2] > 250.0
+  chunk[high, 3] = 6
+
+edited = wb.Lidar.from_numpy_chunks(
+  chunks,
+  base=lidar,
+  cols=cols,
+  output_path='survey_chunked_reclassified.laz',
+)
+```
+
+Notes:
+- The chunked write path uses shared core streaming rewrite for LAS/LAZ outputs.
+- Callback-driven chunk decode is supported via `to_numpy_chunks(..., callback=...)` when you prefer processing without collecting a chunk list.
+
+### LAZ write with tuned compression/chunking
 wbe.write_lidar(
   norms,
   'survey_normals.laz',
@@ -565,7 +584,7 @@ wbe.write_lidar(
   },
 )
 
-# 2) COPC write with octree controls
+### COPC write with octree controls
 wbe.write_lidar(
   norms,
   'survey_normals.copc.laz',
@@ -577,6 +596,25 @@ wbe.write_lidar(
     },
   },
 )
+```
+
+### Extensionless defaults (all data objects)
+
+When `output_path` has no extension:
+
+- `write_raster(...)` writes COG-style GeoTIFF to `*.tif`
+- `write_vector(...)` writes GeoPackage to `*.gpkg`
+- `write_lidar(...)` writes COPC to `*.copc.laz`
+
+`write_lidar(...)` also accepts optional per-format write controls through
+`options={...}`.
+
+Examples:
+
+```python
+wbe.write_raster(raster, 'my_file')  # my_file.tif (COG-style default)
+wbe.write_vector(vector, 'my_file')  # my_file.gpkg
+wbe.write_lidar(lidar, 'my_file')    # my_file.copc.laz
 ```
 
 ### Progress and feedback

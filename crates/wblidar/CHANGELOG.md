@@ -4,10 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
-## [Unreleased]
-
 ## [0.1.1] - 2026-04-11
 ### Added
+- Added chunked point-column read APIs for memory-bounded workflows:
+	- `PointColumnChunkReader`
+	- `read_columns_chunked(...)`
+- Added chunked point-column rewrite APIs for streaming LAS/LAZ updates:
+	- `PointColumnChunkRewriter`
+	- `rewrite_columns_chunked(...)`
 - Added format-aware LiDAR write options in the unified frontend API:
 	- `LidarWriteOptions`
 	- `LazWriteOptions`
@@ -20,6 +24,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	- `PointCloud::write_as_with_options(...)`
 
 ### Changed
+- Added `PointCloud::apply_columns_range(...)` to support in-place updates over
+	bounded point-index ranges, enabling chunk-by-chunk edit pipelines.
+- Public exports in `lib.rs` now include chunked read/rewrite frontend types and
+	helper functions for downstream crate reuse.
 - LAZ output now applies optional `chunk_size` and `compression_level` controls
 	when provided through the frontend write options.
 - COPC output now applies optional `max_points_per_node`, `max_depth`, and

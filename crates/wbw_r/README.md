@@ -37,6 +37,7 @@ Execution plan:
 - [Recommended API pattern](#recommended-api-pattern)
 - [Preferred vs removed APIs](#preferred-vs-removed-apis)
 - [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
+- [Lidar matrix and chunk streaming](#lidar-matrix-and-chunk-streaming)
 - [Progress and feedback model](#progress-and-feedback-model)
 - [R interoperability strategy](#r-interoperability-strategy)
 - [Interoperability behavior matrix](#interoperability-behavior-matrix)
@@ -68,7 +69,7 @@ Execution plan:
     - conversion/io: `to_array()`, `to_stars()`, `deep_copy()`, `write()`
   - `wbw_vector` wrapper with `metadata()`, `schema()`, `attributes()`, `attribute()` for reads
     and `update_attributes()`, `update_attribute()`, `add_field()` for writes; plus `to_terra()` and optional `to_sf()`
-  - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `deep_copy()`, and `write()`
+  - `wbw_lidar` wrapper with `metadata()`, `get_short_filename()`, `point_count()`, `to_matrix()`, `to_data_frame()`, `to_matrix_chunks()`, `from_matrix()`, `from_data_frame()`, `from_matrix_chunks()`, `deep_copy()`, and `write()`
   - `wbw_sensor_bundle` wrapper with `metadata()`, `list_*_keys()`, `key_summary()`, `has_key()`, `resolve_key()`, `read_any()`, `read_*()`, preview selection, and true/false-colour composite helpers
 - Discovery helpers:
   - `wbw_search_tools(...)`
@@ -124,7 +125,7 @@ Notes:
 | raster S3 arithmetic operators (`+`, `-`, `*`, `/`) | `+.wbw_raster`, `-.wbw_raster`, `*.wbw_raster`, `/.wbw_raster` | complete (unary `-` gives clear error) |
 | `Vector.schema()`, `Vector.attributes()`, `Vector.attribute()` | same methods on `wbw_vector` | complete |
 | `Vector.update_attributes()`, `Vector.update_attribute()`, `Vector.add_field()` | same methods on `wbw_vector` | complete |
-| lidar full point-cloud array roundtrip | not yet implemented — metadata and file-backed helpers only | not yet implemented |
+| lidar matrix/data-frame roundtrip | `to_matrix()`, `to_data_frame()`, `from_matrix()`, `from_data_frame()`, `to_matrix_chunks()`, `from_matrix_chunks()` | complete |
 
 ## Tool reference docs
 
@@ -173,11 +174,12 @@ Suggested run order for new users:
 | 3 | [r-package/whiteboxworkflows/inst/examples/raster_object_quickstart.R](r-package/whiteboxworkflows/inst/examples/raster_object_quickstart.R) | Typed raster wrapper quickstart |
 | 4 | [r-package/whiteboxworkflows/inst/examples/vector_object_quickstart.R](r-package/whiteboxworkflows/inst/examples/vector_object_quickstart.R) | Typed vector wrapper quickstart |
 | 5 | [r-package/whiteboxworkflows/inst/examples/lidar_object_quickstart.R](r-package/whiteboxworkflows/inst/examples/lidar_object_quickstart.R) | Typed lidar wrapper quickstart |
-| 6 | [r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R](r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
-| 7 | [r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R](r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
-| 8 | [r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R](r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R) | terra/stars raster exchange |
-| 9 | [examples/licensing_offline.R](examples/licensing_offline.R) | Signed entitlement startup |
-| 10 | [examples/licensing_floating_online.R](examples/licensing_floating_online.R) | Floating online startup |
+| 6 | [r-package/whiteboxworkflows/inst/examples/lidar_chunked_matrix_streaming.R](r-package/whiteboxworkflows/inst/examples/lidar_chunked_matrix_streaming.R) | Chunked lidar matrix streaming workflow |
+| 7 | [r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R](r-package/whiteboxworkflows/inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
+| 8 | [r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R](r-package/whiteboxworkflows/inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
+| 9 | [r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R](r-package/whiteboxworkflows/inst/examples/raster_array_roundtrip.R) | terra/stars raster exchange |
+| 10 | [examples/licensing_offline.R](examples/licensing_offline.R) | Signed entitlement startup |
+| 11 | [examples/licensing_floating_online.R](examples/licensing_floating_online.R) | Floating online startup |
 
 ## Recommended API pattern
 
@@ -280,6 +282,37 @@ print(lidar)
 
 copy <- lidar$deep_copy("points_copy.las", overwrite = TRUE)
 ```
+
+### Lidar matrix and chunk streaming
+
+For large lidar collections, prefer chunked matrix workflows to keep memory
+usage bounded during point edits.
+
+```r
+library(whiteboxworkflows)
+
+lidar <- wbw_read_lidar("points.las")
+fields <- c("x", "y", "z", "classification")
+
+chunks <- lidar$to_matrix_chunks(chunk_size = 200000, fields = fields)
+for (i in seq_along(chunks)) {
+  high <- chunks[[i]][, 3] > 250
+  chunks[[i]][high, 4] <- 6
+}
+
+edited <- lidar$from_matrix_chunks(
+  chunks,
+  output_path = "points_chunked_reclassified.laz",
+  overwrite = TRUE,
+  fields = fields
+)
+
+print(edited$point_count())
+```
+
+Notes:
+- LAS/LAZ chunk writes use shared core streaming rewrite to avoid full-cloud materialization.
+- For formats that do not yet support streaming rewrite in this path, the facade preserves behavior by falling back to in-memory assembly.
 
 ### Sensor bundle wrapper
 

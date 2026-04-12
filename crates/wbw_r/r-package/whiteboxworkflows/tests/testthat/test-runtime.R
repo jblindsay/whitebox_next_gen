@@ -615,6 +615,47 @@ test_that("wbw_read_lidar returns typed lidar wrapper", {
   expect_equal(meta$format, "las")
   expect_equal(meta$point_count, 2)
   expect_equal(meta$crs_epsg, 4326)
+  expect_equal(x$point_count(), 2)
+
+  mat <- x$to_matrix(fields = c("x", "y", "z", "classification"))
+  expect_true(is.matrix(mat))
+  expect_equal(dim(mat), c(2, 4))
+  expect_equal(colnames(mat), c("x", "y", "z", "classification"))
+
+  chunks <- x$to_matrix_chunks(
+    chunk_size = 1,
+    fields = c("x", "y", "z", "classification")
+  )
+  expect_type(chunks, "list")
+  expect_equal(length(chunks), 2)
+  expect_equal(dim(chunks[[1]]), c(1, 4))
+
+  edited <- mat
+  edited[, 4] <- c(6, 6)
+  edited_path <- file.path(out_dir, "edited_points.las")
+  edited_lidar <- x$from_matrix(
+    edited,
+    output_path = edited_path,
+    overwrite = TRUE,
+    fields = c("x", "y", "z", "classification")
+  )
+  expect_true(inherits(edited_lidar, "wbw_lidar"))
+  edited_mat <- edited_lidar$to_matrix(fields = c("classification"))
+  expect_equal(as.numeric(edited_mat[, 1]), c(6, 6))
+
+  for (i in seq_along(chunks)) {
+    chunks[[i]][, 4] <- 7
+  }
+  chunked_path <- file.path(out_dir, "edited_points_chunked.las")
+  edited_chunked <- x$from_matrix_chunks(
+    chunks,
+    output_path = chunked_path,
+    overwrite = TRUE,
+    fields = c("x", "y", "z", "classification")
+  )
+  expect_true(inherits(edited_chunked, "wbw_lidar"))
+  edited_chunked_mat <- edited_chunked$to_matrix(fields = c("classification"))
+  expect_equal(as.numeric(edited_chunked_mat[, 1]), c(7, 7))
 
   copied_path <- file.path(out_dir, "copied_points.las")
   copied <- x$deep_copy(copied_path, overwrite = TRUE)

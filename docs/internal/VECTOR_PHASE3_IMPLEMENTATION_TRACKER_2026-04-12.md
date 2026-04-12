@@ -1,0 +1,71 @@
+# Vector Phase 3 Implementation Tracker
+
+Date: 2026-04-12 (Updated 2026-04-12)
+Phase: 3 (Advanced Optimization and Multimodal)
+Status: In Progress (Kickoff)
+
+## Scope Anchors
+
+Phase 3 planned outcomes:
+1. VRP solver set (CVRP, VRPTW, Pickup/Delivery).
+2. Multimodal routing model.
+3. Network centrality and accessibility metrics.
+4. OD uncertainty and sensitivity analysis options.
+
+## Newly Created Phase 3 Specs
+
+- VECTOR_PHASE3_ADVANCED_OPTIMIZATION_SPEC_2026-04-12.md
+- VECTOR_PHASE3_MULTIMODAL_AND_ACCESSIBILITY_SPEC_2026-04-12.md
+
+## Work Breakdown
+
+### Stream A: Optimization Core (CVRP)
+- [ ] Define demand/capacity schema and feasibility constraints.
+- [ ] Implement CVRP baseline solver with deterministic seeding.
+- [ ] Add route-level diagnostics (load, stop count, distance, cost).
+- [ ] Add integration fixtures and deterministic regression tests.
+
+### Stream B: Time-Window and Pickup/Delivery Extensions
+- [ ] Implement VRPTW constraints and violation reporting.
+- [ ] Implement pickup-delivery pairing and precedence constraints.
+- [ ] Add infeasibility diagnostics and relaxation options.
+- [ ] Add benchmark scenarios for municipal/logistics workflows.
+
+### Stream C: Multimodal Routing Foundation
+- [ ] Define multimodal graph schema (mode, transfer, penalties).
+- [ ] Implement multimodal shortest-path baseline.
+- [ ] Implement transfer-aware generalized cost model.
+- [ ] Add examples for walk-drive and walk-transit patterns.
+
+### Stream D: Centrality and Accessibility Analytics
+- [ ] Implement network centrality metrics (degree/closeness/betweenness baseline).
+- [ ] Implement accessibility indices with impedance cutoffs/decay.
+- [ ] Add OD uncertainty and sensitivity options.
+- [ ] Add reproducible benchmark reports and parity checks.
+
+### Stream E: Wrapper Parity and Docs Hardening
+- [ ] Expose Stream A-D tools in Rust/Python/R runtime surfaces.
+- [ ] Refresh generated wrappers and type stubs where required.
+- [ ] Add cookbook examples for optimization and multimodal workflows.
+- [ ] Finalize Phase 3 completion checklist and regression gate commands.
+
+## Suggested Execution Order
+
+1. CVRP baseline and schema contracts.
+2. VRPTW + pickup/delivery extensions.
+3. Multimodal graph and transfer-cost baseline.
+4. Centrality/accessibility analytics.
+5. Wrapper parity and cookbook closeout.
+
+## Exit Criteria
+
+- CVRP, VRPTW, and pickup/delivery tools are available with deterministic behavior and diagnostics.
+- Multimodal routing supports transfer penalties and mode-aware paths.
+- Centrality/accessibility metrics are available with benchmark-validated outputs.
+- Rust, Python, and R wrappers expose Phase 3 MVP APIs with cookbook coverage.
+
+## Progress Log
+
+- 2026-04-12: Phase 3 kickoff tracker created.
+- 2026-04-12: Stream-level decomposition drafted from Vector GIS phased roadmap.
+- 2026-04-12: Initial Phase 3 spec artifacts created for optimization and multimodal/accessibility.

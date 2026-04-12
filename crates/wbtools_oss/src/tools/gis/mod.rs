@@ -17598,6 +17598,111 @@ fn points_along_linestring(coords: &[wbvector::Coord], spacing: f64, include_end
     out
 }
 
+fn unique_sorted_breakpoints(mut values: Vec<f64>, eps: f64) -> Vec<f64> {
+    values.sort_by(|a, b| a.total_cmp(b));
+    let mut out = Vec::<f64>::with_capacity(values.len());
+    for value in values {
+        if out
+            .last()
+            .map(|prev| (value - *prev).abs() <= eps)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        out.push(value.clamp(0.0, 1.0));
+    }
+    out
+}
+
+fn segment_intersection_t(a: TopoCoord, b: TopoCoord, c: TopoCoord, d: TopoCoord, eps: f64) -> Option<f64> {
+    let r_x = b.x - a.x;
+    let r_y = b.y - a.y;
+    let s_x = d.x - c.x;
+    let s_y = d.y - c.y;
+    let denom = r_x * s_y - r_y * s_x;
+    if denom.abs() <= eps {
+        return None;
+    }
+
+    let cax = c.x - a.x;
+    let cay = c.y - a.y;
+    let t = (cax * s_y - cay * s_x) / denom;
+    let u = (cax * r_y - cay * r_x) / denom;
+
+    if t >= -eps && t <= 1.0 + eps && u >= -eps && u <= 1.0 + eps {
+        Some(t.clamp(0.0, 1.0))
+    } else {
+        None
+    }
+}
+
+fn ring_intersection_breakpoints(a: TopoCoord, b: TopoCoord, ring: &[TopoCoord], eps: f64, out: &mut Vec<f64>) {
+    if ring.len() < 2 {
+        return;
+    }
+    for i in 0..(ring.len() - 1) {
+        if let Some(t) = segment_intersection_t(a, b, ring[i], ring[i + 1], eps) {
+            out.push(t);
+        }
+    }
+}
+
+fn clip_linestring_to_single_polygon(line: &TopoLineString, polygon: &TopoPolygon, eps: f64) -> Vec<TopoLineString> {
+    if line.coords.len() < 2 {
+        return Vec::new();
+    }
+
+    let prepared = PreparedPolygon::new(polygon.clone());
+    let mut segments = Vec::<TopoLineString>::new();
+
+    for idx in 0..(line.coords.len() - 1) {
+        let a = line.coords[idx];
+        let b = line.coords[idx + 1];
+        let mut breaks = vec![0.0, 1.0];
+        ring_intersection_breakpoints(a, b, &polygon.exterior.coords, eps, &mut breaks);
+        for hole in &polygon.holes {
+            ring_intersection_breakpoints(a, b, &hole.coords, eps, &mut breaks);
+        }
+        let breaks = unique_sorted_breakpoints(breaks, eps * 10.0);
+        for win in breaks.windows(2) {
+            let t0 = win[0];
+            let t1 = win[1];
+            if t1 - t0 <= eps {
+                continue;
+            }
+
+            let mid_t = 0.5 * (t0 + t1);
+            let mid = TopoCoord::interpolate_segment(a, b, mid_t);
+            if prepared.contains_coord(mid) {
+                let p0 = TopoCoord::interpolate_segment(a, b, t0);
+                let p1 = TopoCoord::interpolate_segment(a, b, t1);
+                if (p0.x - p1.x).abs() <= eps && (p0.y - p1.y).abs() <= eps {
+                    continue;
+                }
+                segments.push(TopoLineString::new(vec![p0, p1]));
+            }
+        }
+    }
+
+    segments
+}
+
+fn clip_linestring_to_polygons(line: &TopoLineString, polygons: &[TopoPolygon], eps: f64) -> Vec<TopoLineString> {
+    let mut out = Vec::<TopoLineString>::new();
+    for polygon in polygons {
+        out.extend(clip_linestring_to_single_polygon(line, polygon, eps));
+    }
+    out
+}
+
+fn wb_coord_from_topo(coord: &TopoCoord) -> wbvector::Coord {
+    to_wb_coord(coord)
+}
+
+fn topo_line_to_wb(line: &TopoLineString) -> wbvector::Geometry {
+    wbvector::Geometry::LineString(line.coords.iter().map(wb_coord_from_topo).collect())
+}
+
 impl Tool for ReprojectVectorTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -18397,7 +18502,7 @@ impl Tool for SpatialJoinTool {
                 ToolParamSpec { name: "join", description: "Join layer providing attributes.", required: true },
                 ToolParamSpec { name: "predicate", description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.", required: true },
                 ToolParamSpec { name: "distance", description: "Distance threshold for within_distance predicate.", required: false },
-                ToolParamSpec { name: "strategy", description: "Join strategy: first, last, count.", required: false },
+                ToolParamSpec { name: "strategy", description: "Join strategy: first, last, count, sum, mean, min, max.", required: false },
                 ToolParamSpec { name: "prefix", description: "Prefix for joined field names (default JOIN_).", required: false },
                 ToolParamSpec { name: "output", description: "Output vector path.", required: true },
             ],
@@ -18425,7 +18530,7 @@ impl Tool for SpatialJoinTool {
                 ToolParamDescriptor { name: "join".to_string(), description: "Join layer providing attributes.".to_string(), required: true },
                 ToolParamDescriptor { name: "predicate".to_string(), description: "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.".to_string(), required: true },
                 ToolParamDescriptor { name: "distance".to_string(), description: "Distance threshold for within_distance predicate.".to_string(), required: false },
-                ToolParamDescriptor { name: "strategy".to_string(), description: "Join strategy: first, last, count.".to_string(), required: false },
+                ToolParamDescriptor { name: "strategy".to_string(), description: "Join strategy: first, last, count, sum, mean, min, max.".to_string(), required: false },
                 ToolParamDescriptor { name: "prefix".to_string(), description: "Prefix for joined field names (default JOIN_).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
             ],
@@ -18472,10 +18577,11 @@ impl Tool for SpatialJoinTool {
             .unwrap_or("first")
             .to_ascii_lowercase();
         match strategy.as_str() {
-            "first" | "last" | "count" => {}
+            "first" | "last" | "count" | "sum" | "mean" | "min" | "max" => {}
             _ => {
                 return Err(ToolError::Validation(
-                    "strategy must be one of: first, last, count".to_string(),
+                    "strategy must be one of: first, last, count, sum, mean, min, max"
+                        .to_string(),
                 ))
             }
         }
@@ -18493,6 +18599,7 @@ impl Tool for SpatialJoinTool {
         let strategy = parse_optional_string_arg(args, "strategy")
             .unwrap_or("first")
             .to_ascii_lowercase();
+        let aggregate_numeric = matches!(strategy.as_str(), "sum" | "mean" | "min" | "max");
         let prefix = parse_optional_string_arg(args, "prefix").unwrap_or("JOIN_");
         let output_path = parse_vector_path_arg(args, "output")?;
 
@@ -18530,9 +18637,17 @@ impl Tool for SpatialJoinTool {
             let joined_name = format!("{}{}", prefix, field.name);
             let safe_name = sanitize_field_name_for_output(&joined_name);
             if output.schema.field_index(&safe_name).is_none() {
+                let out_type = if aggregate_numeric {
+                    match field.field_type {
+                        wbvector::FieldType::Integer | wbvector::FieldType::Float => wbvector::FieldType::Float,
+                        _ => field.field_type,
+                    }
+                } else {
+                    field.field_type
+                };
                 output
                     .schema
-                    .add_field(wbvector::FieldDef::new(&safe_name, field.field_type));
+                    .add_field(wbvector::FieldDef::new(&safe_name, out_type));
             }
         }
         if output.schema.field_index("JOIN_COUNT").is_none() {
@@ -18568,23 +18683,76 @@ impl Tool for SpatialJoinTool {
                 }
             }
 
-            let join_feature_opt = if matches.is_empty() {
-                None
-            } else {
+            if !matches.is_empty() {
                 match strategy.as_str() {
-                    "last" => join_layer.features.get(matches[matches.len() - 1]),
-                    "count" => None,
-                    _ => join_layer.features.get(matches[0]),
-                }
-            };
-
-            if let Some(join_feature) = join_feature_opt {
-                for (join_src_idx, join_value) in join_feature.attributes.iter().enumerate() {
-                    if let Some(Some(dst_idx)) = joined_field_indices.get(join_src_idx) {
-                        if *dst_idx < attrs.len() {
-                            attrs[*dst_idx] = join_value.clone();
+                    "first" | "last" => {
+                        let join_feature_opt = if strategy == "last" {
+                            join_layer.features.get(matches[matches.len() - 1])
+                        } else {
+                            join_layer.features.get(matches[0])
+                        };
+                        if let Some(join_feature) = join_feature_opt {
+                            for (join_src_idx, join_value) in join_feature.attributes.iter().enumerate() {
+                                if let Some(Some(dst_idx)) = joined_field_indices.get(join_src_idx) {
+                                    if *dst_idx < attrs.len() {
+                                        attrs[*dst_idx] = join_value.clone();
+                                    }
+                                }
+                            }
                         }
                     }
+                    "count" => {}
+                    "sum" | "mean" | "min" | "max" => {
+                        for join_src_idx in 0..join_layer.schema.len() {
+                            let Some(Some(dst_idx)) = joined_field_indices.get(join_src_idx) else {
+                                continue;
+                            };
+                            if *dst_idx >= attrs.len() {
+                                continue;
+                            }
+
+                            let field_type = join_layer.schema.fields()[join_src_idx].field_type;
+                            match field_type {
+                                wbvector::FieldType::Integer | wbvector::FieldType::Float => {
+                                    let mut values = Vec::<f64>::new();
+                                    for match_idx in matches {
+                                        if let Some(feature) = join_layer.features.get(*match_idx) {
+                                            if let Some(value) = feature.attributes.get(join_src_idx) {
+                                                match value {
+                                                    wbvector::FieldValue::Integer(v) => values.push(*v as f64),
+                                                    wbvector::FieldValue::Float(v) => values.push(*v),
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if !values.is_empty() {
+                                        let agg = match strategy.as_str() {
+                                            "sum" => values.iter().sum::<f64>(),
+                                            "mean" => values.iter().sum::<f64>() / values.len() as f64,
+                                            "min" => values.iter().copied().fold(f64::INFINITY, f64::min),
+                                            "max" => values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                                            _ => unreachable!(),
+                                        };
+                                        attrs[*dst_idx] = wbvector::FieldValue::Float(agg);
+                                    }
+                                }
+                                _ => {
+                                    for match_idx in matches {
+                                        if let Some(feature) = join_layer.features.get(*match_idx) {
+                                            if let Some(value) = feature.attributes.get(join_src_idx) {
+                                                if !matches!(value, wbvector::FieldValue::Null) {
+                                                    attrs[*dst_idx] = value.clone();
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
 
@@ -19629,7 +19797,7 @@ impl Tool for LinePolygonClipTool {
         ToolMetadata {
             id: "line_polygon_clip",
             display_name: "Line Polygon Clip",
-            summary: "Extracts line features that intersect input polygon clip geometries.",
+            summary: "Clips line features to polygon interiors and outputs clipped line segments.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -19650,7 +19818,7 @@ impl Tool for LinePolygonClipTool {
         ToolManifest {
             id: "line_polygon_clip".to_string(),
             display_name: "Line Polygon Clip".to_string(),
-            summary: "Extracts line features that intersect input polygon clip geometries.".to_string(),
+            summary: "Clips line features to polygon interiors and outputs clipped line segments.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -19661,7 +19829,7 @@ impl Tool for LinePolygonClipTool {
             defaults,
             examples: vec![ToolExample {
                 name: "line_polygon_clip_basic".to_string(),
-                description: "Retains lines that intersect the clip polygons.".to_string(),
+                description: "Returns clipped line segments inside clip polygons.".to_string(),
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "clip".to_string(), "line".to_string()],
@@ -19696,42 +19864,64 @@ impl Tool for LinePolygonClipTool {
         let clip = load_vector_arg(args, "clip")?;
         let output_path = parse_vector_path_arg(args, "output")?;
 
-        let clip_topo = collect_feature_topo_geometries(&clip)?;
-        let clip_geometries: Vec<TopoGeometry> = clip_topo.iter().filter_map(|g| g.clone()).collect();
-        let clip_index = SpatialIndex::from_geometries(&clip_geometries);
-        let input_topo = collect_feature_topo_geometries(&input)?;
+        let mut clip_polys = Vec::<TopoPolygon>::new();
+        for feature in &clip.features {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            extract_polygons_from_geometry(geometry, &mut clip_polys)?;
+        }
+        if clip_polys.is_empty() {
+            return Err(ToolError::Execution(
+                "clip layer does not contain polygon geometries".to_string(),
+            ));
+        }
+        let epsilon = 1.0e-9;
 
-        let keep: Vec<bool> = input_topo
+        let clipped_segments: Vec<Vec<(TopoLineString, Vec<wbvector::FieldValue>)>> = input
+            .features
             .par_iter()
-            .map(|maybe_line| {
-                let Some(line_geom) = maybe_line else {
-                    return false;
+            .map(|feature| {
+                let mut out = Vec::<(TopoLineString, Vec<wbvector::FieldValue>)>::new();
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return out;
                 };
-                let candidates = clip_index.query_geometry(line_geom);
-                for idx in candidates {
-                    if let Some(poly_geom) = clip_geometries.get(idx) {
-                        if intersects(line_geom, poly_geom) {
-                            return true;
+                match geometry {
+                    wbvector::Geometry::LineString(coords) => {
+                        let line = topo_line_from_coords(coords);
+                        for seg in clip_linestring_to_polygons(&line, &clip_polys, epsilon) {
+                            out.push((seg, feature.attributes.clone()));
                         }
                     }
+                    wbvector::Geometry::MultiLineString(lines) => {
+                        for coords in lines {
+                            let line = topo_line_from_coords(coords);
+                            for seg in clip_linestring_to_polygons(&line, &clip_polys, epsilon) {
+                                out.push((seg, feature.attributes.clone()));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                false
+                out
             })
             .collect();
 
         let mut output = wbvector::Layer::new(format!("{}_line_polygon_clip", input.name));
         output.schema = input.schema.clone();
         output.crs = input.crs.clone();
-        output.geom_type = input.geom_type;
+        output.geom_type = Some(wbvector::GeometryType::LineString);
 
         let total = input.features.len().max(1);
         let mut next_fid = 1u64;
-        for (index, feature) in input.features.iter().enumerate() {
-            if keep[index] {
-                let mut cloned = feature.clone();
-                cloned.fid = next_fid;
+        for (index, segments) in clipped_segments.into_iter().enumerate() {
+            for (segment, attrs) in segments {
+                output.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry: Some(topo_line_to_wb(&segment)),
+                    attributes: attrs,
+                });
                 next_fid += 1;
-                output.push(cloned);
             }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }

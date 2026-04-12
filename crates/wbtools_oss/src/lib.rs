@@ -161,6 +161,9 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ExportTableToCsvTool));
     registry.register(Box::new(tools::FixDanglingArcsTool));
     registry.register(Box::new(tools::JoinTablesTool));
+    registry.register(Box::new(tools::TopologyValidationReportTool));
+    registry.register(Box::new(tools::TopologyRuleValidateTool));
+    registry.register(Box::new(tools::TopologyRuleAutoFixTool));
     registry.register(Box::new(tools::LinesToPolygonsTool));
     registry.register(Box::new(tools::MergeTableWithCsvTool));
     registry.register(Box::new(tools::ModifyNodataValueTool));
@@ -433,6 +436,11 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SmoothVectorsTool));
     registry.register(Box::new(tools::SnapEndnodesTool));
     registry.register(Box::new(tools::PointsAlongLinesTool));
+    registry.register(Box::new(tools::LocatePointsAlongRoutesTool));
+    registry.register(Box::new(tools::RouteEventPointsFromTableTool));
+    registry.register(Box::new(tools::RouteEventLinesFromTableTool));
+    registry.register(Box::new(tools::RouteEventPointsFromLayerTool));
+    registry.register(Box::new(tools::RouteEventLinesFromLayerTool));
     registry.register(Box::new(tools::DensifyFeaturesTool));
     registry.register(Box::new(tools::SplitVectorLinesTool));
     registry.register(Box::new(tools::StandardDeviationOverlayTool));
@@ -448,6 +456,15 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::DeleteFieldTool));
     registry.register(Box::new(tools::AddFieldTool));
     registry.register(Box::new(tools::LinePolygonClipTool));
+    registry.register(Box::new(tools::ShortestPathNetworkTool));
+    registry.register(Box::new(tools::NetworkNodeDegreeTool));
+    registry.register(Box::new(tools::NetworkServiceAreaTool));
+    registry.register(Box::new(tools::MapMatchingV1Tool));
+        registry.register(Box::new(tools::NetworkTopologyAuditTool));
+    registry.register(Box::new(tools::NetworkOdCostMatrixTool));
+    registry.register(Box::new(tools::NetworkConnectedComponentsTool));
+    registry.register(Box::new(tools::NetworkRoutesFromOdTool));
+    registry.register(Box::new(tools::KShortestPathsNetworkTool));
         registry.register(Box::new(tools::ConstructVectorTinTool));
         registry.register(Box::new(tools::VectorHexBinningTool));
     registry.register(Box::new(tools::VoronoiDiagramTool));

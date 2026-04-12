@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
+use chrono::{Datelike, Timelike};
 
 mod nibble_sieve;
 pub use nibble_sieve::{NibbleTool, SieveTool};
@@ -166,11 +167,25 @@ pub struct ConcaveHullTool;
 pub struct RandomPointsInPolygonTool;
 pub struct DensifyFeaturesTool;
 pub struct PointsAlongLinesTool;
+pub struct LocatePointsAlongRoutesTool;
+pub struct RouteEventPointsFromTableTool;
+pub struct RouteEventLinesFromTableTool;
+pub struct RouteEventPointsFromLayerTool;
+pub struct RouteEventLinesFromLayerTool;
 pub struct VectorSummaryStatisticsTool;
 pub struct RenameFieldTool;
 pub struct DeleteFieldTool;
 pub struct AddFieldTool;
 pub struct LinePolygonClipTool;
+pub struct ShortestPathNetworkTool;
+pub struct NetworkNodeDegreeTool;
+pub struct NetworkServiceAreaTool;
+pub struct MapMatchingV1Tool;
+pub struct NetworkTopologyAuditTool;
+pub struct NetworkOdCostMatrixTool;
+pub struct NetworkConnectedComponentsTool;
+pub struct NetworkRoutesFromOdTool;
+pub struct KShortestPathsNetworkTool;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GisOverlayOp {
@@ -17379,6 +17394,169 @@ fn parse_optional_string_arg<'a>(args: &'a ToolArgs, key: &str) -> Option<&'a st
         .filter(|s| !s.is_empty())
 }
 
+fn detect_table_delimiter(line: &str) -> char {
+    let candidates = [',', ';', '\t', '|'];
+    candidates
+        .into_iter()
+        .max_by_key(|delimiter| line.matches(*delimiter).count())
+        .filter(|delimiter| line.contains(*delimiter))
+        .unwrap_or(',')
+}
+
+fn split_table_line(line: &str, delimiter: char) -> Vec<String> {
+    line.split(delimiter)
+        .map(|s| s.trim().trim_matches('"').to_string())
+        .collect()
+}
+
+fn parse_event_csv_table(path: &str) -> Result<(Vec<String>, Vec<Vec<String>>), ToolError> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading events csv '{}': {}", path, e)))?;
+    let mut lines = content.lines().filter(|line| !line.trim().is_empty());
+    let header_line = lines
+        .next()
+        .ok_or_else(|| ToolError::Validation("events csv is empty".to_string()))?;
+    let delimiter = detect_table_delimiter(header_line);
+    let headers = split_table_line(header_line, delimiter);
+    if headers.is_empty() {
+        return Err(ToolError::Validation("events csv header has no fields".to_string()));
+    }
+
+    let mut rows = Vec::<Vec<String>>::new();
+    for line in lines {
+        let row = split_table_line(line, delimiter);
+        if row.len() != headers.len() {
+            return Err(ToolError::Validation(format!(
+                "events csv row has {} fields but header has {}",
+                row.len(),
+                headers.len()
+            )));
+        }
+        rows.push(row);
+    }
+    Ok((headers, rows))
+}
+
+fn infer_string_field_type(samples: &[String]) -> wbvector::FieldType {
+    if samples.iter().all(|s| {
+        let trimmed = s.trim();
+        trimmed.is_empty() || trimmed.eq_ignore_ascii_case("true") || trimmed.eq_ignore_ascii_case("false")
+    }) {
+        return wbvector::FieldType::Boolean;
+    }
+    if samples.iter().all(|s| {
+        let trimmed = s.trim();
+        trimmed.is_empty() || trimmed.parse::<i64>().is_ok()
+    }) {
+        return wbvector::FieldType::Integer;
+    }
+    if samples.iter().all(|s| {
+        let trimmed = s.trim();
+        trimmed.is_empty() || trimmed.parse::<f64>().is_ok()
+    }) {
+        return wbvector::FieldType::Float;
+    }
+    wbvector::FieldType::Text
+}
+
+fn string_to_field_value(value: &str, field_type: &wbvector::FieldType) -> wbvector::FieldValue {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return wbvector::FieldValue::Null;
+    }
+    match field_type {
+        wbvector::FieldType::Boolean => trimmed
+            .parse::<bool>()
+            .map(wbvector::FieldValue::Boolean)
+            .unwrap_or_else(|_| wbvector::FieldValue::Text(trimmed.to_string())),
+        wbvector::FieldType::Integer => trimmed
+            .parse::<i64>()
+            .map(wbvector::FieldValue::Integer)
+            .unwrap_or(wbvector::FieldValue::Null),
+        wbvector::FieldType::Float => trimmed
+            .parse::<f64>()
+            .map(wbvector::FieldValue::Float)
+            .unwrap_or(wbvector::FieldValue::Null),
+        _ => wbvector::FieldValue::Text(trimmed.to_string()),
+    }
+}
+
+fn field_value_to_join_key(value: &wbvector::FieldValue) -> String {
+    match value {
+        wbvector::FieldValue::Text(v) => v.trim().to_string(),
+        wbvector::FieldValue::Integer(v) => v.to_string(),
+        wbvector::FieldValue::Float(v) => {
+            if v.fract().abs() <= 1.0e-12 {
+                (*v as i64).to_string()
+            } else {
+                v.to_string()
+            }
+        }
+        wbvector::FieldValue::Boolean(v) => v.to_string(),
+        wbvector::FieldValue::Date(v) => v.clone(),
+        wbvector::FieldValue::DateTime(v) => v.clone(),
+        wbvector::FieldValue::Null => String::new(),
+        wbvector::FieldValue::Blob(_) => String::new(),
+    }
+}
+
+fn make_unique_field_name(base: &str, used: &mut HashSet<String>) -> String {
+    let sanitized = sanitize_field_name_for_output(base);
+    if used.insert(sanitized.clone()) {
+        return sanitized;
+    }
+    for idx in 2..=9999 {
+        let candidate = format!("{}_{}", sanitized, idx);
+        if used.insert(candidate.clone()) {
+            return candidate;
+        }
+    }
+    sanitized
+}
+
+fn build_prefixed_event_fields(
+    headers: &[String],
+    rows: &[Vec<String>],
+) -> Vec<(usize, String, wbvector::FieldType)> {
+    let mut used = HashSet::<String>::new();
+    let mut out = Vec::<(usize, String, wbvector::FieldType)>::new();
+    for (idx, header) in headers.iter().enumerate() {
+        let name = make_unique_field_name(&format!("EVT_{}", header), &mut used);
+        let samples = rows.iter().map(|row| row[idx].clone()).collect::<Vec<_>>();
+        let field_type = infer_string_field_type(&samples);
+        out.push((idx, name, field_type));
+    }
+    out
+}
+
+fn field_value_to_f64(value: &wbvector::FieldValue) -> Option<f64> {
+    match value {
+        wbvector::FieldValue::Integer(v) => Some(*v as f64),
+        wbvector::FieldValue::Float(v) => Some(*v),
+        wbvector::FieldValue::Text(v) => v.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn build_prefixed_event_fields_from_layer(
+    events: &wbvector::Layer,
+) -> Vec<(usize, String, wbvector::FieldType)> {
+    let mut used = HashSet::<String>::new();
+    events
+        .schema
+        .fields()
+        .iter()
+        .enumerate()
+        .map(|(idx, field)| {
+            (
+                idx,
+                make_unique_field_name(&format!("EVT_{}", field.name), &mut used),
+                field.field_type.clone(),
+            )
+        })
+        .collect()
+}
+
 fn sanitize_field_name_for_output(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     for ch in name.chars() {
@@ -17596,6 +17774,314 @@ fn points_along_linestring(coords: &[wbvector::Coord], spacing: f64, include_end
     }
 
     out
+}
+
+fn linestring_length(coords: &[wbvector::Coord]) -> f64 {
+    coords
+        .windows(2)
+        .map(|segment| coord_dist2(&segment[0], &segment[1]).sqrt())
+        .sum()
+}
+
+fn locate_point_along_linestring(
+    point: &wbvector::Coord,
+    coords: &[wbvector::Coord],
+) -> Option<(f64, f64, wbvector::Coord)> {
+    if coords.len() < 2 {
+        return None;
+    }
+
+    let mut cumulative = 0.0;
+    let mut best_dist2 = f64::INFINITY;
+    let mut best_measure = 0.0;
+    let mut best_coord = coords[0].clone();
+
+    for segment in coords.windows(2) {
+        let a = &segment[0];
+        let b = &segment[1];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let seg_len2 = dx * dx + dy * dy;
+        if seg_len2 <= 0.0 {
+            continue;
+        }
+        let seg_len = seg_len2.sqrt();
+        let t = (((point.x - a.x) * dx + (point.y - a.y) * dy) / seg_len2).clamp(0.0, 1.0);
+        let snapped = wbvector::Coord::xy(a.x + t * dx, a.y + t * dy);
+        let dist2 = coord_dist2(point, &snapped);
+        if dist2 < best_dist2 {
+            best_dist2 = dist2;
+            best_measure = cumulative + t * seg_len;
+            best_coord = snapped;
+        }
+        cumulative += seg_len;
+    }
+
+    if best_dist2.is_finite() {
+        Some((best_measure, best_dist2.sqrt(), best_coord))
+    } else {
+        None
+    }
+}
+
+fn locate_point_along_route_geometry(
+    point: &wbvector::Coord,
+    geometry: &wbvector::Geometry,
+) -> Option<(f64, f64, wbvector::Coord)> {
+    match geometry {
+        wbvector::Geometry::LineString(coords) => locate_point_along_linestring(point, coords),
+        wbvector::Geometry::MultiLineString(lines) => {
+            let mut part_offset = 0.0;
+            let mut best: Option<(f64, f64, wbvector::Coord)> = None;
+            for line in lines {
+                if let Some((measure, offset_dist, snapped)) = locate_point_along_linestring(point, line) {
+                    let candidate = (part_offset + measure, offset_dist, snapped);
+                    if best
+                        .as_ref()
+                        .map(|current| candidate.1 < current.1)
+                        .unwrap_or(true)
+                    {
+                        best = Some(candidate);
+                    }
+                }
+                part_offset += linestring_length(line);
+            }
+            best
+        }
+        _ => None,
+    }
+}
+
+fn locate_point_on_routes(
+    point: &wbvector::Coord,
+    routes: &[(i64, wbvector::Geometry)],
+    max_offset_distance: Option<f64>,
+) -> Option<(i64, f64, f64, wbvector::Coord)> {
+    let mut best: Option<(i64, f64, f64, wbvector::Coord)> = None;
+    for (route_fid, geometry) in routes {
+        if let Some((measure, offset_dist, snapped)) = locate_point_along_route_geometry(point, geometry) {
+            if max_offset_distance.map(|limit| offset_dist <= limit).unwrap_or(true)
+                && best
+                    .as_ref()
+                    .map(|current| offset_dist < current.2)
+                    .unwrap_or(true)
+            {
+                best = Some((*route_fid, measure, offset_dist, snapped));
+            }
+        }
+    }
+    best
+}
+
+fn route_geometry_length(geometry: &wbvector::Geometry) -> f64 {
+    match geometry {
+        wbvector::Geometry::LineString(coords) => linestring_length(coords),
+        wbvector::Geometry::MultiLineString(lines) => lines.iter().map(|line| linestring_length(line)).sum(),
+        _ => 0.0,
+    }
+}
+
+fn interpolate_coord_along_segment(a: &wbvector::Coord, b: &wbvector::Coord, t: f64) -> wbvector::Coord {
+    wbvector::Coord::xy(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+}
+
+fn point_at_measure_on_linestring(coords: &[wbvector::Coord], measure: f64) -> Option<wbvector::Coord> {
+    if coords.len() < 2 || measure < 0.0 {
+        return None;
+    }
+    if measure <= 0.0 {
+        return coords.first().cloned();
+    }
+
+    let mut cumulative = 0.0;
+    for segment in coords.windows(2) {
+        let seg_len = coord_dist2(&segment[0], &segment[1]).sqrt();
+        if seg_len <= 0.0 {
+            continue;
+        }
+        let seg_end = cumulative + seg_len;
+        if measure <= seg_end + 1.0e-12 {
+            let t = ((measure - cumulative) / seg_len).clamp(0.0, 1.0);
+            return Some(interpolate_coord_along_segment(&segment[0], &segment[1], t));
+        }
+        cumulative = seg_end;
+    }
+    coords.last().cloned().filter(|_| (measure - cumulative).abs() <= 1.0e-12)
+}
+
+fn point_at_measure_on_route_geometry(geometry: &wbvector::Geometry, measure: f64) -> Option<wbvector::Coord> {
+    match geometry {
+        wbvector::Geometry::LineString(coords) => point_at_measure_on_linestring(coords, measure),
+        wbvector::Geometry::MultiLineString(lines) => {
+            let mut offset = 0.0;
+            for line in lines {
+                let len = linestring_length(line);
+                if measure <= offset + len + 1.0e-12 {
+                    return point_at_measure_on_linestring(line, (measure - offset).max(0.0));
+                }
+                offset += len;
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn slice_linestring_by_measures(
+    coords: &[wbvector::Coord],
+    start_measure: f64,
+    end_measure: f64,
+) -> Option<Vec<wbvector::Coord>> {
+    if coords.len() < 2 || end_measure < start_measure {
+        return None;
+    }
+
+    let mut out = Vec::<wbvector::Coord>::new();
+    let mut cumulative = 0.0;
+    for segment in coords.windows(2) {
+        let seg_len = coord_dist2(&segment[0], &segment[1]).sqrt();
+        if seg_len <= 0.0 {
+            continue;
+        }
+        let seg_start = cumulative;
+        let seg_end = cumulative + seg_len;
+        if seg_end < start_measure - 1.0e-12 {
+            cumulative = seg_end;
+            continue;
+        }
+        if seg_start > end_measure + 1.0e-12 {
+            break;
+        }
+
+        let local_start = if start_measure > seg_start {
+            ((start_measure - seg_start) / seg_len).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let local_end = if end_measure < seg_end {
+            ((end_measure - seg_start) / seg_len).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+
+        let start_coord = interpolate_coord_along_segment(&segment[0], &segment[1], local_start);
+        let end_coord = interpolate_coord_along_segment(&segment[0], &segment[1], local_end);
+
+        if out
+            .last()
+            .map(|last| coord_dist2(last, &start_coord) > 1.0e-20)
+            .unwrap_or(true)
+        {
+            out.push(start_coord);
+        }
+        if out
+            .last()
+            .map(|last| coord_dist2(last, &end_coord) > 1.0e-20)
+            .unwrap_or(true)
+        {
+            out.push(end_coord);
+        }
+
+        if end_measure <= seg_end + 1.0e-12 {
+            break;
+        }
+        cumulative = seg_end;
+    }
+
+    if out.len() >= 2 {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn slice_route_geometry_parts(
+    geometry: &wbvector::Geometry,
+    start_measure: f64,
+    end_measure: f64,
+) -> Option<Vec<Vec<wbvector::Coord>>> {
+    if end_measure < start_measure {
+        return None;
+    }
+    match geometry {
+        wbvector::Geometry::LineString(coords) => {
+            slice_linestring_by_measures(coords, start_measure, end_measure).map(|part| vec![part])
+        }
+        wbvector::Geometry::MultiLineString(lines) => {
+            let mut offset = 0.0;
+            let mut parts = Vec::<Vec<wbvector::Coord>>::new();
+            for line in lines {
+                let len = linestring_length(line);
+                let part_start = offset;
+                let part_end = offset + len;
+                if part_end < start_measure - 1.0e-12 {
+                    offset = part_end;
+                    continue;
+                }
+                if part_start > end_measure + 1.0e-12 {
+                    break;
+                }
+                let local_start = (start_measure - part_start).max(0.0);
+                let local_end = (end_measure - part_start).min(len);
+                if let Some(part) = slice_linestring_by_measures(line, local_start, local_end) {
+                    parts.push(part);
+                }
+                offset = part_end;
+            }
+            if parts.is_empty() { None } else { Some(parts) }
+        }
+        _ => None,
+    }
+}
+
+fn reverse_route_parts(parts: &mut Vec<Vec<wbvector::Coord>>) {
+    parts.reverse();
+    for part in parts.iter_mut() {
+        part.reverse();
+    }
+}
+
+fn build_route_lookup(
+    routes: &wbvector::Layer,
+    route_id_field: Option<&str>,
+) -> Result<HashMap<String, (i64, wbvector::Geometry, f64)>, ToolError> {
+    let route_idx = if let Some(field) = route_id_field {
+        Some(
+            routes
+                .schema
+                .field_index(field)
+                .ok_or_else(|| ToolError::Validation(format!("route_id_field '{}' not found in routes schema", field)))?,
+        )
+    } else {
+        None
+    };
+
+    let mut lookup = HashMap::<String, (i64, wbvector::Geometry, f64)>::new();
+    for feature in &routes.features {
+        let Some(geometry) = feature.geometry.clone() else {
+            continue;
+        };
+        let key = if let Some(idx) = route_idx {
+            field_value_to_join_key(feature.attributes.get(idx).unwrap_or(&wbvector::FieldValue::Null))
+        } else {
+            feature.fid.to_string()
+        };
+        if key.is_empty() {
+            continue;
+        }
+        if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+            continue;
+        }
+        let length = route_geometry_length(&geometry);
+        if lookup.insert(key.clone(), (feature.fid as i64, geometry, length)).is_some() {
+            return Err(ToolError::Validation(format!("duplicate route identifier '{}' in routes layer", key)));
+        }
+    }
+
+    if lookup.is_empty() {
+        return Err(ToolError::Execution("routes layer contains no usable line geometries".to_string()));
+    }
+    Ok(lookup)
 }
 
 fn unique_sorted_breakpoints(mut values: Vec<f64>, eps: f64) -> Vec<f64> {
@@ -18263,6 +18749,15 @@ impl Tool for SelectByLocationTool {
                 let Some(target_geom) = maybe_target_geom else {
                     return false;
                 };
+
+                if predicate == "within_distance" {
+                    let threshold = distance.unwrap_or(0.0);
+                    if let Some((_, nearest_dist)) = query_index.nearest_neighbor(target_geom) {
+                        return nearest_dist <= threshold;
+                    }
+                    return false;
+                }
+
                 let candidates = query_index.query_geometry(target_geom);
                 if candidates.is_empty() {
                     return predicate == "disjoint";
@@ -19334,6 +19829,873 @@ impl Tool for PointsAlongLinesTool {
     }
 }
 
+impl Tool for LocatePointsAlongRoutesTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "locate_points_along_routes",
+            display_name: "Locate Points Along Routes",
+            summary: "Locates point features along route lines and writes route-measure attributes.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "points", description: "Input point layer to locate along routes.", required: true },
+                ToolParamSpec { name: "max_offset_distance", description: "Optional maximum point-to-route offset distance.", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.shp"));
+        defaults.insert("points".to_string(), json!("events.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("max_offset_distance".to_string(), json!(25.0));
+        example_args.insert("output".to_string(), json!("located_points.shp"));
+
+        ToolManifest {
+            id: "locate_points_along_routes".to_string(),
+            display_name: "Locate Points Along Routes".to_string(),
+            summary: "Locates point features along route lines and writes route-measure attributes.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "points".to_string(), description: "Input point layer to locate along routes.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_offset_distance".to_string(), description: "Optional maximum point-to-route offset distance.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "locate_points_along_routes_basic".to_string(),
+                description: "Adds route-measure attributes to points by locating them on the nearest route.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "routes".to_string(), "points".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let points = load_vector_arg(args, "points")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        if points.geom_type != Some(wbvector::GeometryType::Point) {
+            return Err(ToolError::Validation("points must be a point layer".to_string()));
+        }
+        if let Some(max_offset_distance) = parse_optional_f64_arg(args, "max_offset_distance") {
+            if !max_offset_distance.is_finite() || max_offset_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_offset_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let points = load_vector_arg(args, "points")?;
+        let max_offset_distance = parse_optional_f64_arg(args, "max_offset_distance");
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let coalescer = PercentCoalescer::new(1, 99);
+
+        let route_geometries: Vec<(i64, wbvector::Geometry)> = routes
+            .features
+            .iter()
+            .filter_map(|feature| feature.geometry.clone().map(|geometry| (feature.fid as i64, geometry)))
+            .collect();
+        if route_geometries.is_empty() {
+            return Err(ToolError::Execution("routes layer contains no usable line geometries".to_string()));
+        }
+
+        let matches: Vec<Option<(i64, f64, f64, wbvector::Coord)>> = points
+            .features
+            .par_iter()
+            .map(|feature| match feature.geometry.as_ref() {
+                Some(wbvector::Geometry::Point(point)) => {
+                    locate_point_on_routes(point, &route_geometries, max_offset_distance)
+                }
+                _ => None,
+            })
+            .collect();
+
+        let mut output = points.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ROUTE_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("MEASURE", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("OFFSET", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("LOCATE_X", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("LOCATE_Y", wbvector::FieldType::Float));
+
+        let total = output.features.len().max(1);
+        for (index, (feature, located)) in output.features.iter_mut().zip(matches.into_iter()).enumerate() {
+            if let Some((route_fid, measure, offset_dist, snapped)) = located {
+                feature.attributes.push(wbvector::FieldValue::Integer(route_fid));
+                feature.attributes.push(wbvector::FieldValue::Float(measure));
+                feature.attributes.push(wbvector::FieldValue::Float(offset_dist));
+                feature.attributes.push(wbvector::FieldValue::Float(snapped.x));
+                feature.attributes.push(wbvector::FieldValue::Float(snapped.y));
+            } else {
+                feature.attributes.push(wbvector::FieldValue::Null);
+                feature.attributes.push(wbvector::FieldValue::Null);
+                feature.attributes.push(wbvector::FieldValue::Null);
+                feature.attributes.push(wbvector::FieldValue::Null);
+                feature.attributes.push(wbvector::FieldValue::Null);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventPointsFromTableTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_points_from_table",
+            display_name: "Route Event Points From Table",
+            summary: "Creates routed point events from a CSV event table and a route layer.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "events", description: "Input CSV event table path.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "CSV field containing route identifiers.", required: true },
+                ToolParamSpec { name: "measure_field", description: "CSV field containing point-event measures.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional route-layer field containing route identifiers. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("events".to_string(), json!("point_events.csv"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("measure_field".to_string(), json!("measure"));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("RID"));
+        example_args.insert("output".to_string(), json!("route_event_points.gpkg"));
+
+        ToolManifest {
+            id: "route_event_points_from_table".to_string(),
+            display_name: "Route Event Points From Table".to_string(),
+            summary: "Creates routed point events from a CSV event table and a route layer.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "events".to_string(), description: "Input CSV event table path.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "CSV field containing route identifiers.".to_string(), required: true },
+                ToolParamDescriptor { name: "measure_field".to_string(), description: "CSV field containing point-event measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional route-layer field containing route identifiers. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_points_from_table_basic".to_string(),
+                description: "Creates point events on routes from measure values stored in a CSV table.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "csv".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        let events = parse_string_arg(args, "events")?;
+        let _ = parse_string_arg(args, "event_route_field")?;
+        let _ = parse_string_arg(args, "measure_field")?;
+        if parse_optional_string_arg(args, "route_id_field").is_some() {
+            let _ = build_route_lookup(&routes, parse_optional_string_arg(args, "route_id_field"))?;
+        }
+        if std::fs::metadata(events).is_err() {
+            return Err(ToolError::Validation(format!("events csv '{}' does not exist", events)));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let route_lookup = build_route_lookup(&routes, route_id_field)?;
+        let events_path = parse_string_arg(args, "events")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let measure_field = parse_string_arg(args, "measure_field")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let (headers, rows) = parse_event_csv_table(events_path)?;
+        let route_col = headers
+            .iter()
+            .position(|h| h == event_route_field)
+            .ok_or_else(|| ToolError::Validation(format!("event_route_field '{}' not found in csv header", event_route_field)))?;
+        let measure_col = headers
+            .iter()
+            .position(|h| h == measure_field)
+            .ok_or_else(|| ToolError::Validation(format!("measure_field '{}' not found in csv header", measure_field)))?;
+
+        let event_fields = build_prefixed_event_fields(&headers, &rows);
+        let mut output = wbvector::Layer::new("route_event_points");
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = routes.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ROUTE_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("MEASURE", wbvector::FieldType::Float));
+        for (_, field_name, field_type) in &event_fields {
+            output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
+        }
+
+        let mut next_fid = 1u64;
+        for (row_idx, row) in rows.iter().enumerate() {
+            let route_key = row[route_col].trim();
+            let measure = row[measure_col].trim().parse::<f64>().map_err(|_| {
+                ToolError::Execution(format!("row {} has invalid measure '{}'", row_idx + 2, row[measure_col]))
+            })?;
+            let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
+                ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
+            })?;
+            if measure < 0.0 || measure > *route_length + 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "row {} measure {} falls outside route length {} for route '{}'",
+                    row_idx + 2,
+                    measure,
+                    route_length,
+                    route_key
+                )));
+            }
+            let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
+                ToolError::Execution(format!("row {} could not be located on route '{}'", row_idx + 2, route_key))
+            })?;
+
+            let mut attrs = vec![
+                wbvector::FieldValue::Integer(*route_fid),
+                wbvector::FieldValue::Float(measure),
+            ];
+            for (col_idx, _, field_type) in &event_fields {
+                attrs.push(string_to_field_value(&row[*col_idx], field_type));
+            }
+
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::Point(point)),
+                attributes: attrs,
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventLinesFromTableTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_lines_from_table",
+            display_name: "Route Event Lines From Table",
+            summary: "Creates routed line events from a CSV event table and a route layer using from/to measures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "events", description: "Input CSV event table path.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "CSV field containing route identifiers.", required: true },
+                ToolParamSpec { name: "from_measure_field", description: "CSV field containing start measures.", required: true },
+                ToolParamSpec { name: "to_measure_field", description: "CSV field containing end measures.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional route-layer field containing route identifiers. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("events".to_string(), json!("line_events.csv"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("to_measure_field".to_string(), json!("to_m"));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("RID"));
+        example_args.insert("output".to_string(), json!("route_event_lines.gpkg"));
+
+        ToolManifest {
+            id: "route_event_lines_from_table".to_string(),
+            display_name: "Route Event Lines From Table".to_string(),
+            summary: "Creates routed line events from a CSV event table and a route layer using from/to measures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "events".to_string(), description: "Input CSV event table path.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "CSV field containing route identifiers.".to_string(), required: true },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "CSV field containing start measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "CSV field containing end measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional route-layer field containing route identifiers. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_lines_from_table_basic".to_string(),
+                description: "Creates line events on routes from from/to measures stored in a CSV table.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string(), "csv".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        let events = parse_string_arg(args, "events")?;
+        let _ = parse_string_arg(args, "event_route_field")?;
+        let _ = parse_string_arg(args, "from_measure_field")?;
+        let _ = parse_string_arg(args, "to_measure_field")?;
+        if parse_optional_string_arg(args, "route_id_field").is_some() {
+            let _ = build_route_lookup(&routes, parse_optional_string_arg(args, "route_id_field"))?;
+        }
+        if std::fs::metadata(events).is_err() {
+            return Err(ToolError::Validation(format!("events csv '{}' does not exist", events)));
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let route_lookup = build_route_lookup(&routes, route_id_field)?;
+        let events_path = parse_string_arg(args, "events")?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let (headers, rows) = parse_event_csv_table(events_path)?;
+        let route_col = headers
+            .iter()
+            .position(|h| h == event_route_field)
+            .ok_or_else(|| ToolError::Validation(format!("event_route_field '{}' not found in csv header", event_route_field)))?;
+        let from_col = headers
+            .iter()
+            .position(|h| h == from_measure_field)
+            .ok_or_else(|| ToolError::Validation(format!("from_measure_field '{}' not found in csv header", from_measure_field)))?;
+        let to_col = headers
+            .iter()
+            .position(|h| h == to_measure_field)
+            .ok_or_else(|| ToolError::Validation(format!("to_measure_field '{}' not found in csv header", to_measure_field)))?;
+
+        let event_fields = build_prefixed_event_fields(&headers, &rows);
+        let mut output = wbvector::Layer::new("route_event_lines");
+        output.geom_type = Some(wbvector::GeometryType::MultiLineString);
+        output.crs = routes.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ROUTE_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("FROM_M", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("TO_M", wbvector::FieldType::Float));
+        for (_, field_name, field_type) in &event_fields {
+            output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
+        }
+
+        let mut next_fid = 1u64;
+        for (row_idx, row) in rows.iter().enumerate() {
+            let route_key = row[route_col].trim();
+            let from_measure = row[from_col].trim().parse::<f64>().map_err(|_| {
+                ToolError::Execution(format!("row {} has invalid from-measure '{}'", row_idx + 2, row[from_col]))
+            })?;
+            let to_measure = row[to_col].trim().parse::<f64>().map_err(|_| {
+                ToolError::Execution(format!("row {} has invalid to-measure '{}'", row_idx + 2, row[to_col]))
+            })?;
+            if (to_measure - from_measure).abs() <= 1.0e-12 {
+                return Err(ToolError::Execution(format!("row {} has equal from/to measures", row_idx + 2)));
+            }
+
+            let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
+                ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
+            })?;
+            let min_measure = from_measure.min(to_measure);
+            let max_measure = from_measure.max(to_measure);
+            if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "row {} measure range [{}, {}] falls outside route length {} for route '{}'",
+                    row_idx + 2,
+                    min_measure,
+                    max_measure,
+                    route_length,
+                    route_key
+                )));
+            }
+
+            let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
+                ToolError::Execution(format!("row {} could not be sliced on route '{}'", row_idx + 2, route_key))
+            })?;
+            if from_measure > to_measure {
+                reverse_route_parts(&mut parts);
+            }
+
+            let mut attrs = vec![
+                wbvector::FieldValue::Integer(*route_fid),
+                wbvector::FieldValue::Float(from_measure),
+                wbvector::FieldValue::Float(to_measure),
+            ];
+            for (col_idx, _, field_type) in &event_fields {
+                attrs.push(string_to_field_value(&row[*col_idx], field_type));
+            }
+
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::MultiLineString(parts)),
+                attributes: attrs,
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventPointsFromLayerTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_points_from_layer",
+            display_name: "Route Event Points From Layer",
+            summary: "Creates routed point events from an event vector layer and a route layer.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "events", description: "Input event vector layer.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "Event-layer field containing route identifiers.", required: true },
+                ToolParamSpec { name: "measure_field", description: "Event-layer field containing point-event measures.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional route-layer field containing route identifiers. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "write_event_fid", description: "Write EVENT_FID to preserve source event feature IDs (default true).", required: false },
+                ToolParamSpec { name: "write_event_xy", description: "Write source event geometry X/Y attributes (default false).", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("events".to_string(), json!("point_events.gpkg"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("measure_field".to_string(), json!("measure"));
+        defaults.insert("write_event_fid".to_string(), json!(true));
+        defaults.insert("write_event_xy".to_string(), json!(false));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("RID"));
+        example_args.insert("output".to_string(), json!("route_event_points_layer.gpkg"));
+
+        ToolManifest {
+            id: "route_event_points_from_layer".to_string(),
+            display_name: "Route Event Points From Layer".to_string(),
+            summary: "Creates routed point events from an event vector layer and a route layer.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "events".to_string(), description: "Input event vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "Event-layer field containing route identifiers.".to_string(), required: true },
+                ToolParamDescriptor { name: "measure_field".to_string(), description: "Event-layer field containing point-event measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional route-layer field containing route identifiers. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "write_event_fid".to_string(), description: "Write EVENT_FID to preserve source event feature IDs (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "write_event_xy".to_string(), description: "Write source event geometry X/Y attributes (default false).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_points_from_layer_basic".to_string(),
+                description: "Creates point events on routes from measure values in an event vector layer.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let events = load_vector_arg(args, "events")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let measure_field = parse_string_arg(args, "measure_field")?;
+        if events.schema.field_index(event_route_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "event_route_field '{}' not found in events schema",
+                event_route_field
+            )));
+        }
+        if events.schema.field_index(measure_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "measure_field '{}' not found in events schema",
+                measure_field
+            )));
+        }
+        if parse_optional_string_arg(args, "route_id_field").is_some() {
+            let _ = build_route_lookup(&routes, parse_optional_string_arg(args, "route_id_field"))?;
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let events = load_vector_arg(args, "events")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let write_event_fid = parse_bool_arg(args, "write_event_fid", true);
+        let write_event_xy = parse_bool_arg(args, "write_event_xy", false);
+        let route_lookup = build_route_lookup(&routes, route_id_field)?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let measure_field = parse_string_arg(args, "measure_field")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let route_idx = events
+            .schema
+            .field_index(event_route_field)
+            .ok_or_else(|| ToolError::Execution("event_route_field missing unexpectedly".to_string()))?;
+        let measure_idx = events
+            .schema
+            .field_index(measure_field)
+            .ok_or_else(|| ToolError::Execution("measure_field missing unexpectedly".to_string()))?;
+
+        let event_fields = build_prefixed_event_fields_from_layer(&events);
+        let mut output = wbvector::Layer::new("route_event_points_layer");
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = routes.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ROUTE_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("MEASURE", wbvector::FieldType::Float));
+        if write_event_fid {
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_FID", wbvector::FieldType::Integer));
+        }
+        if write_event_xy {
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_X", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_Y", wbvector::FieldType::Float));
+        }
+        for (_, field_name, field_type) in &event_fields {
+            output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
+        }
+
+        let mut next_fid = 1u64;
+        for (event_idx, feature) in events.features.iter().enumerate() {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
+            }
+            let measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(measure_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid measure", event_idx + 1)))?;
+
+            let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
+                ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
+            })?;
+            if measure < 0.0 || measure > *route_length + 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "event feature {} measure {} falls outside route length {}",
+                    event_idx + 1,
+                    measure,
+                    route_length
+                )));
+            }
+            let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
+                ToolError::Execution(format!("event feature {} could not be located on route", event_idx + 1))
+            })?;
+
+            let mut attrs = vec![
+                wbvector::FieldValue::Integer(*route_fid),
+                wbvector::FieldValue::Float(measure),
+            ];
+            if write_event_fid {
+                attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
+            }
+            if write_event_xy {
+                let (event_x, event_y) = match feature.geometry.as_ref() {
+                    Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
+                    Some(wbvector::Geometry::MultiPoint(points)) => {
+                        points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
+                    }
+                    _ => (None, None),
+                };
+                attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+            }
+            for (source_idx, _, _) in &event_fields {
+                attrs.push(
+                    feature
+                        .attributes
+                        .get(*source_idx)
+                        .cloned()
+                        .unwrap_or(wbvector::FieldValue::Null),
+                );
+            }
+
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::Point(point)),
+                attributes: attrs,
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for RouteEventLinesFromLayerTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "route_event_lines_from_layer",
+            display_name: "Route Event Lines From Layer",
+            summary: "Creates routed line events from an event vector layer using from/to measures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "routes", description: "Input route line layer.", required: true },
+                ToolParamSpec { name: "events", description: "Input event vector layer.", required: true },
+                ToolParamSpec { name: "event_route_field", description: "Event-layer field containing route identifiers.", required: true },
+                ToolParamSpec { name: "from_measure_field", description: "Event-layer field containing start measures.", required: true },
+                ToolParamSpec { name: "to_measure_field", description: "Event-layer field containing end measures.", required: true },
+                ToolParamSpec { name: "route_id_field", description: "Optional route-layer field containing route identifiers. Defaults to feature FID.", required: false },
+                ToolParamSpec { name: "write_event_fid", description: "Write EVENT_FID to preserve source event feature IDs (default true).", required: false },
+                ToolParamSpec { name: "write_event_xy", description: "Write source event geometry X/Y attributes (default false).", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("routes".to_string(), json!("routes.gpkg"));
+        defaults.insert("events".to_string(), json!("line_events.gpkg"));
+        defaults.insert("event_route_field".to_string(), json!("route_id"));
+        defaults.insert("from_measure_field".to_string(), json!("from_m"));
+        defaults.insert("to_measure_field".to_string(), json!("to_m"));
+        defaults.insert("write_event_fid".to_string(), json!(true));
+        defaults.insert("write_event_xy".to_string(), json!(false));
+        let mut example_args = defaults.clone();
+        example_args.insert("route_id_field".to_string(), json!("RID"));
+        example_args.insert("output".to_string(), json!("route_event_lines_layer.gpkg"));
+
+        ToolManifest {
+            id: "route_event_lines_from_layer".to_string(),
+            display_name: "Route Event Lines From Layer".to_string(),
+            summary: "Creates routed line events from an event vector layer using from/to measures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "routes".to_string(), description: "Input route line layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "events".to_string(), description: "Input event vector layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "event_route_field".to_string(), description: "Event-layer field containing route identifiers.".to_string(), required: true },
+                ToolParamDescriptor { name: "from_measure_field".to_string(), description: "Event-layer field containing start measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "to_measure_field".to_string(), description: "Event-layer field containing end measures.".to_string(), required: true },
+                ToolParamDescriptor { name: "route_id_field".to_string(), description: "Optional route-layer field containing route identifiers. Defaults to feature FID.".to_string(), required: false },
+                ToolParamDescriptor { name: "write_event_fid".to_string(), description: "Write EVENT_FID to preserve source event feature IDs (default true).".to_string(), required: false },
+                ToolParamDescriptor { name: "write_event_xy".to_string(), description: "Write source event geometry X/Y attributes (default false).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "route_event_lines_from_layer_basic".to_string(),
+                description: "Creates line events on routes from from/to measures in an event vector layer.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "linear-referencing".to_string(), "events".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let events = load_vector_arg(args, "events")?;
+        if routes.geom_type != Some(wbvector::GeometryType::LineString)
+            && routes.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("routes must be a line layer".to_string()));
+        }
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        for field in [event_route_field, from_measure_field, to_measure_field] {
+            if events.schema.field_index(field).is_none() {
+                return Err(ToolError::Validation(format!("field '{}' not found in events schema", field)));
+            }
+        }
+        if parse_optional_string_arg(args, "route_id_field").is_some() {
+            let _ = build_route_lookup(&routes, parse_optional_string_arg(args, "route_id_field"))?;
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let routes = load_vector_arg(args, "routes")?;
+        let events = load_vector_arg(args, "events")?;
+        let route_id_field = parse_optional_string_arg(args, "route_id_field");
+        let write_event_fid = parse_bool_arg(args, "write_event_fid", true);
+        let write_event_xy = parse_bool_arg(args, "write_event_xy", false);
+        let route_lookup = build_route_lookup(&routes, route_id_field)?;
+        let event_route_field = parse_string_arg(args, "event_route_field")?;
+        let from_measure_field = parse_string_arg(args, "from_measure_field")?;
+        let to_measure_field = parse_string_arg(args, "to_measure_field")?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let route_idx = events
+            .schema
+            .field_index(event_route_field)
+            .ok_or_else(|| ToolError::Execution("event_route_field missing unexpectedly".to_string()))?;
+        let from_idx = events
+            .schema
+            .field_index(from_measure_field)
+            .ok_or_else(|| ToolError::Execution("from_measure_field missing unexpectedly".to_string()))?;
+        let to_idx = events
+            .schema
+            .field_index(to_measure_field)
+            .ok_or_else(|| ToolError::Execution("to_measure_field missing unexpectedly".to_string()))?;
+
+        let event_fields = build_prefixed_event_fields_from_layer(&events);
+        let mut output = wbvector::Layer::new("route_event_lines_layer");
+        output.geom_type = Some(wbvector::GeometryType::MultiLineString);
+        output.crs = routes.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ROUTE_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("FROM_M", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("TO_M", wbvector::FieldType::Float));
+        if write_event_fid {
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_FID", wbvector::FieldType::Integer));
+        }
+        if write_event_xy {
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_X", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("EVENT_Y", wbvector::FieldType::Float));
+        }
+        for (_, field_name, field_type) in &event_fields {
+            output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
+        }
+
+        let mut next_fid = 1u64;
+        for (event_idx, feature) in events.features.iter().enumerate() {
+            let route_key = field_value_to_join_key(
+                feature
+                    .attributes
+                    .get(route_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            );
+            if route_key.is_empty() {
+                return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
+            }
+            let from_measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(from_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from-measure", event_idx + 1)))?;
+            let to_measure = field_value_to_f64(
+                feature
+                    .attributes
+                    .get(to_idx)
+                    .unwrap_or(&wbvector::FieldValue::Null),
+            )
+            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to-measure", event_idx + 1)))?;
+            if (to_measure - from_measure).abs() <= 1.0e-12 {
+                return Err(ToolError::Execution(format!("event feature {} has equal from/to measures", event_idx + 1)));
+            }
+
+            let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
+                ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
+            })?;
+            let min_measure = from_measure.min(to_measure);
+            let max_measure = from_measure.max(to_measure);
+            if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
+                return Err(ToolError::Execution(format!(
+                    "event feature {} measure range [{}, {}] falls outside route length {}",
+                    event_idx + 1,
+                    min_measure,
+                    max_measure,
+                    route_length
+                )));
+            }
+
+            let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
+                ToolError::Execution(format!("event feature {} could not be sliced on route", event_idx + 1))
+            })?;
+            if from_measure > to_measure {
+                reverse_route_parts(&mut parts);
+            }
+
+            let mut attrs = vec![
+                wbvector::FieldValue::Integer(*route_fid),
+                wbvector::FieldValue::Float(from_measure),
+                wbvector::FieldValue::Float(to_measure),
+            ];
+            if write_event_fid {
+                attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
+            }
+            if write_event_xy {
+                let (event_x, event_y) = match feature.geometry.as_ref() {
+                    Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
+                    Some(wbvector::Geometry::MultiPoint(points)) => {
+                        points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
+                    }
+                    _ => (None, None),
+                };
+                attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+            }
+            for (source_idx, _, _) in &event_fields {
+                attrs.push(
+                    feature
+                        .attributes
+                        .get(*source_idx)
+                        .cloned()
+                        .unwrap_or(wbvector::FieldValue::Null),
+                );
+            }
+
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::MultiLineString(parts)),
+                attributes: attrs,
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
 impl Tool for VectorSummaryStatisticsTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -19924,6 +21286,4134 @@ impl Tool for LinePolygonClipTool {
                 next_fid += 1;
             }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct NetworkNodeKey {
+    x: i64,
+    y: i64,
+}
+
+#[derive(Clone)]
+struct LineNetworkGraph {
+    nodes: Vec<wbvector::Coord>,
+    adjacency: Vec<Vec<(usize, f64)>>,
+}
+
+#[derive(Clone, Copy)]
+enum TemporalCostMode {
+    Multiplier,
+    Absolute,
+}
+
+#[derive(Clone, Copy)]
+enum TemporalCostFallback {
+    StaticCost,
+    Error,
+}
+
+#[derive(Clone, Copy)]
+struct TemporalCostWindow {
+    start_minute: u16,
+    end_minute: u16,
+    value: f64,
+}
+
+#[derive(Clone)]
+struct TemporalCostProfile {
+    mode: TemporalCostMode,
+    fallback: TemporalCostFallback,
+    day_of_week: u8,
+    minute_of_day: u16,
+    windows: HashMap<(String, u8), Vec<TemporalCostWindow>>,
+}
+
+impl TemporalCostProfile {
+    fn lookup(&self, edge_id: &str) -> Option<f64> {
+        let key = (edge_id.to_string(), self.day_of_week);
+        let windows = self.windows.get(&key)?;
+        windows
+            .iter()
+            .find(|w| self.minute_of_day >= w.start_minute && self.minute_of_day < w.end_minute)
+            .map(|w| w.value)
+    }
+}
+
+#[derive(Clone)]
+struct NetworkTemporalCostOptions {
+    edge_id_field_idx: usize,
+    edge_id_field_name: String,
+    profile: TemporalCostProfile,
+}
+
+fn network_node_key(coord: &wbvector::Coord, snap_tolerance: f64) -> NetworkNodeKey {
+    let scale = if snap_tolerance > 0.0 {
+        1.0 / snap_tolerance
+    } else {
+        1.0e9
+    };
+    NetworkNodeKey {
+        x: (coord.x * scale).round() as i64,
+        y: (coord.y * scale).round() as i64,
+    }
+}
+
+fn resolve_network_edge_cost_field(
+    input: &wbvector::Layer,
+    edge_cost_field: Option<&str>,
+) -> Result<Option<usize>, ToolError> {
+    let Some(field_name) = edge_cost_field else {
+        return Ok(None);
+    };
+    let idx = input
+        .schema
+        .field_index(field_name)
+        .ok_or_else(|| ToolError::Validation(format!("edge_cost_field '{}' was not found", field_name)))?;
+    let field = input
+        .schema
+        .fields()
+        .get(idx)
+        .ok_or_else(|| ToolError::Validation(format!("edge_cost_field '{}' was not found", field_name)))?;
+    if !matches!(field.field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float) {
+        return Err(ToolError::Validation(
+            "edge_cost_field must reference a numeric field".to_string(),
+        ));
+    }
+    Ok(Some(idx))
+}
+
+fn resolve_network_one_way_field(
+    input: &wbvector::Layer,
+    one_way_field: Option<&str>,
+) -> Result<Option<usize>, ToolError> {
+    let Some(field_name) = one_way_field else {
+        return Ok(None);
+    };
+    let idx = input
+        .schema
+        .field_index(field_name)
+        .ok_or_else(|| ToolError::Validation(format!("one_way_field '{}' was not found", field_name)))?;
+    Ok(Some(idx))
+}
+
+fn resolve_network_blocked_field(
+    input: &wbvector::Layer,
+    blocked_field: Option<&str>,
+) -> Result<Option<usize>, ToolError> {
+    let Some(field_name) = blocked_field else {
+        return Ok(None);
+    };
+    let idx = input
+        .schema
+        .field_index(field_name)
+        .ok_or_else(|| ToolError::Validation(format!("blocked_field '{}' was not found", field_name)))?;
+    Ok(Some(idx))
+}
+
+fn resolve_network_temporal_edge_id_field(
+    input: &wbvector::Layer,
+    temporal_edge_id_field: Option<&str>,
+) -> Result<usize, ToolError> {
+    let field_name = temporal_edge_id_field.unwrap_or("EDGE_ID");
+    input
+        .schema
+        .field_index(field_name)
+        .ok_or_else(|| ToolError::Validation(format!("temporal_edge_id_field '{}' was not found", field_name)))
+}
+
+fn parse_temporal_cost_mode_arg(args: &ToolArgs) -> Result<TemporalCostMode, ToolError> {
+    let mode = parse_optional_string_arg(args, "temporal_mode")
+        .unwrap_or("multiplier")
+        .trim()
+        .to_ascii_lowercase();
+    match mode.as_str() {
+        "multiplier" => Ok(TemporalCostMode::Multiplier),
+        "absolute" => Ok(TemporalCostMode::Absolute),
+        _ => Err(ToolError::Validation(
+            "temporal_mode must be either 'multiplier' or 'absolute'".to_string(),
+        )),
+    }
+}
+
+fn parse_temporal_fallback_arg(args: &ToolArgs) -> Result<TemporalCostFallback, ToolError> {
+    let fallback = parse_optional_string_arg(args, "temporal_fallback")
+        .unwrap_or("static_cost")
+        .trim()
+        .to_ascii_lowercase();
+    match fallback.as_str() {
+        "static_cost" => Ok(TemporalCostFallback::StaticCost),
+        "error" => Ok(TemporalCostFallback::Error),
+        _ => Err(ToolError::Validation(
+            "temporal_fallback must be either 'static_cost' or 'error'".to_string(),
+        )),
+    }
+}
+
+fn parse_departure_time_to_dow_minute(departure_time: &str) -> Result<(u8, u16), ToolError> {
+    let dt = chrono::DateTime::parse_from_rfc3339(departure_time).map_err(|e| {
+        ToolError::Validation(format!(
+            "departure_time must be RFC3339 (for example 2026-04-12T08:30:00Z): {}",
+            e
+        ))
+    })?;
+    let dow = dt.weekday().number_from_monday() as u8;
+    let minute = (dt.hour() * 60 + dt.minute()) as u16;
+    Ok((dow, minute))
+}
+
+fn parse_temporal_cost_profile_csv(
+    csv_path: &str,
+    mode: TemporalCostMode,
+    fallback: TemporalCostFallback,
+    departure_time: &str,
+) -> Result<TemporalCostProfile, ToolError> {
+    let (day_of_week, minute_of_day) = parse_departure_time_to_dow_minute(departure_time)?;
+    let content = std::fs::read_to_string(csv_path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed reading temporal_cost_profile '{}': {}",
+            csv_path, e
+        ))
+    })?;
+    let mut lines = content.lines().filter(|line| !line.trim().is_empty());
+    let header_line = lines
+        .next()
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile is empty".to_string()))?;
+    let delimiter = detect_table_delimiter(header_line);
+    let headers = split_table_line(header_line, delimiter);
+
+    let edge_id_idx = header_index(&headers, &["edge_id"])
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile missing edge_id column".to_string()))?;
+    let dow_idx = header_index(&headers, &["dow"])
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile missing dow column".to_string()))?;
+    let start_idx = header_index(&headers, &["start_minute"])
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile missing start_minute column".to_string()))?;
+    let end_idx = header_index(&headers, &["end_minute"])
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile missing end_minute column".to_string()))?;
+    let value_idx = header_index(&headers, &["value"])
+        .ok_or_else(|| ToolError::Validation("temporal_cost_profile missing value column".to_string()))?;
+
+    let mut windows = HashMap::<(String, u8), Vec<TemporalCostWindow>>::new();
+    for (line_idx, line) in lines.enumerate() {
+        let row = split_table_line(line, delimiter);
+        if row.len() != headers.len() {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} has {} fields but header has {}",
+                line_idx + 2,
+                row.len(),
+                headers.len()
+            )));
+        }
+        let edge_id = row[edge_id_idx].trim().to_string();
+        if edge_id.is_empty() {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} has empty edge_id",
+                line_idx + 2
+            )));
+        }
+        let dow = row[dow_idx]
+            .trim()
+            .parse::<u8>()
+            .map_err(|_| ToolError::Validation(format!(
+                "temporal_cost_profile row {} has invalid dow '{}': expected 1..7",
+                line_idx + 2,
+                row[dow_idx]
+            )))?;
+        if !(1..=7).contains(&dow) {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} has out-of-range dow '{}': expected 1..7",
+                line_idx + 2,
+                dow
+            )));
+        }
+        let start_minute = row[start_idx]
+            .trim()
+            .parse::<u16>()
+            .map_err(|_| ToolError::Validation(format!(
+                "temporal_cost_profile row {} has invalid start_minute '{}'",
+                line_idx + 2,
+                row[start_idx]
+            )))?;
+        let end_minute = row[end_idx]
+            .trim()
+            .parse::<u16>()
+            .map_err(|_| ToolError::Validation(format!(
+                "temporal_cost_profile row {} has invalid end_minute '{}'",
+                line_idx + 2,
+                row[end_idx]
+            )))?;
+        if start_minute > 1439 {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} has start_minute out of range: {}",
+                line_idx + 2,
+                start_minute
+            )));
+        }
+        if end_minute == 0 || end_minute > 1440 || end_minute <= start_minute {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} requires end_minute in 1..1440 and > start_minute",
+                line_idx + 2
+            )));
+        }
+        let value = row[value_idx]
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| ToolError::Validation(format!(
+                "temporal_cost_profile row {} has invalid value '{}'",
+                line_idx + 2,
+                row[value_idx]
+            )))?;
+        if !value.is_finite() || value <= 0.0 {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile row {} requires value > 0",
+                line_idx + 2
+            )));
+        }
+        windows
+            .entry((edge_id, dow))
+            .or_default()
+            .push(TemporalCostWindow {
+                start_minute,
+                end_minute,
+                value,
+            });
+    }
+
+    for ((edge_id, dow), entries) in windows.iter_mut() {
+        entries.sort_by_key(|w| w.start_minute);
+        for idx in 1..entries.len() {
+            if entries[idx].start_minute < entries[idx - 1].end_minute {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile has overlapping windows for edge_id '{}' and dow {}",
+                    edge_id, dow
+                )));
+            }
+        }
+    }
+
+    Ok(TemporalCostProfile {
+        mode,
+        fallback,
+        day_of_week,
+        minute_of_day,
+        windows,
+    })
+}
+
+fn write_temporal_profile_diagnostics(
+    profile: &TemporalCostProfile,
+    input: &wbvector::Layer,
+    edge_id_field_idx: usize,
+    report_path: &str,
+) -> Result<(), ToolError> {
+    let mut network_ids = std::collections::HashSet::<String>::new();
+    for feature in &input.features {
+        if let Some(value) = feature.attributes.get(edge_id_field_idx) {
+            let id = field_value_to_join_key(value);
+            if !id.trim().is_empty() {
+                network_ids.insert(id);
+            }
+        }
+    }
+    let profile_ids: std::collections::HashSet<String> =
+        profile.windows.keys().map(|(id, _)| id.clone()).collect();
+    let mut unmatched_profile_edge_ids: Vec<String> =
+        profile_ids.iter().filter(|id| !network_ids.contains(*id)).cloned().collect();
+    unmatched_profile_edge_ids.sort();
+    let network_edges_without_temporal_rows =
+        network_ids.iter().filter(|id| !profile_ids.contains(*id)).count();
+    let fallback_usage_count = network_ids
+        .iter()
+        .filter(|id| {
+            let key = ((*id).clone(), profile.day_of_week);
+            match profile.windows.get(&key) {
+                Some(entries) => !entries
+                    .iter()
+                    .any(|window| profile.minute_of_day >= window.start_minute && profile.minute_of_day < window.end_minute),
+                None => true,
+            }
+        })
+        .count();
+    let report_json = json!({
+        "profile_edge_id_count": profile_ids.len(),
+        "network_edge_count": input.features.len(),
+        "network_unique_edge_id_count": network_ids.len(),
+        "unmatched_profile_edge_ids": unmatched_profile_edge_ids,
+        "network_edges_without_temporal_rows": network_edges_without_temporal_rows,
+        "fallback_usage_count": fallback_usage_count,
+    });
+    let report_text = serde_json::to_string_pretty(&report_json)
+        .map_err(|e| ToolError::Execution(format!("failed serializing temporal_profile_report: {}", e)))?;
+    std::fs::write(report_path, report_text)
+        .map_err(|e| ToolError::Execution(format!("failed writing temporal_profile_report '{}': {}", report_path, e)))?;
+    Ok(())
+}
+
+fn parse_ring_costs_arg(args: &ToolArgs, max_cost: f64) -> Result<Option<Vec<f64>>, ToolError> {
+    let Some(raw) = parse_optional_string_arg(args, "ring_costs") else {
+        return Ok(None);
+    };
+    let mut values = Vec::<f64>::new();
+    for token in raw.split(',') {
+        let trimmed = token.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value = trimmed.parse::<f64>().map_err(|_| {
+            ToolError::Validation(format!(
+                "ring_costs contains non-numeric value '{}'",
+                trimmed
+            ))
+        })?;
+        if !value.is_finite() || value <= 0.0 {
+            return Err(ToolError::Validation(
+                "ring_costs values must be finite and > 0".to_string(),
+            ));
+        }
+        values.push(value);
+    }
+    if values.is_empty() {
+        return Err(ToolError::Validation(
+            "ring_costs must contain at least one numeric threshold".to_string(),
+        ));
+    }
+    values.sort_by(|a, b| a.total_cmp(b));
+    for idx in 1..values.len() {
+        if values[idx] <= values[idx - 1] {
+            return Err(ToolError::Validation(
+                "ring_costs values must be strictly increasing".to_string(),
+            ));
+        }
+    }
+    let max_ring = values[values.len() - 1];
+    if max_ring - max_cost > 1.0e-12 {
+        return Err(ToolError::Validation(format!(
+            "max_cost ({}) must be >= largest ring_costs threshold ({})",
+            max_cost, max_ring
+        )));
+    }
+    Ok(Some(values))
+}
+
+fn ring_interval_for_cost(cost: f64, max_cost: f64, ring_costs: &[f64]) -> (i64, f64, f64) {
+    let mut lower = 0.0;
+    for (idx, upper) in ring_costs.iter().enumerate() {
+        if cost <= *upper + 1.0e-12 {
+            return ((idx + 1) as i64, lower, *upper);
+        }
+        lower = *upper;
+    }
+    ((ring_costs.len() + 1) as i64, lower, max_cost)
+}
+
+fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
+    match value {
+        wbvector::FieldValue::Integer(v) => Ok(*v != 0),
+        wbvector::FieldValue::Float(v) => Ok(v.abs() > 1.0e-12),
+        wbvector::FieldValue::Boolean(v) => Ok(*v),
+        wbvector::FieldValue::Text(text) => {
+            let normalized = text.trim().to_ascii_lowercase();
+            if normalized.is_empty() {
+                Ok(false)
+            } else if ["1", "true", "t", "yes", "y", "oneway", "one_way"].contains(&normalized.as_str()) {
+                Ok(true)
+            } else if ["0", "false", "f", "no", "n", "two_way", "twoway", "both", "bidirectional"].contains(&normalized.as_str()) {
+                Ok(false)
+            } else {
+                Err(ToolError::Execution(format!(
+                    "one_way_field contains unrecognized value '{}'",
+                    text
+                )))
+            }
+        }
+        wbvector::FieldValue::Date(text) | wbvector::FieldValue::DateTime(text) => {
+            let normalized = text.trim().to_ascii_lowercase();
+            if normalized.is_empty() {
+                Ok(false)
+            } else if ["1", "true", "t", "yes", "y", "oneway", "one_way"].contains(&normalized.as_str()) {
+                Ok(true)
+            } else if ["0", "false", "f", "no", "n", "two_way", "twoway", "both", "bidirectional"].contains(&normalized.as_str()) {
+                Ok(false)
+            } else {
+                Err(ToolError::Execution(format!(
+                    "one_way_field contains unrecognized value '{}'",
+                    text
+                )))
+            }
+        }
+        wbvector::FieldValue::Blob(_) => Err(ToolError::Execution(
+            "one_way_field does not support blob values".to_string(),
+        )),
+        wbvector::FieldValue::Null => Ok(false),
+    }
+}
+
+fn field_value_to_timestamp_sort_key(value: &wbvector::FieldValue) -> Option<f64> {
+    match value {
+        wbvector::FieldValue::Integer(v) => Some(*v as f64),
+        wbvector::FieldValue::Float(v) => Some(*v),
+        wbvector::FieldValue::Text(text) | wbvector::FieldValue::Date(text) | wbvector::FieldValue::DateTime(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            if let Ok(value) = trimmed.parse::<f64>() {
+                return Some(value);
+            }
+            chrono::DateTime::parse_from_rfc3339(trimmed)
+                .ok()
+                .map(|dt| dt.timestamp_millis() as f64)
+        }
+        wbvector::FieldValue::Boolean(v) => Some(if *v { 1.0 } else { 0.0 }),
+        wbvector::FieldValue::Null | wbvector::FieldValue::Blob(_) => None,
+    }
+}
+
+#[derive(Clone)]
+struct TurnCostOptions {
+    turn_penalty: f64,
+    u_turn_penalty: f64,
+    forbid_u_turns: bool,
+    forbid_left_turns: bool,
+    forbid_right_turns: bool,
+    restricted_transitions: HashSet<(usize, usize, usize)>,
+}
+
+impl TurnCostOptions {
+    fn is_active(&self) -> bool {
+        self.turn_penalty > 0.0
+            || self.u_turn_penalty > 0.0
+            || self.forbid_u_turns
+            || self.forbid_left_turns
+            || self.forbid_right_turns
+            || !self.restricted_transitions.is_empty()
+    }
+}
+
+fn parse_network_turn_cost_options(args: &ToolArgs) -> Result<TurnCostOptions, ToolError> {
+    let turn_penalty = parse_optional_f64_arg(args, "turn_penalty").unwrap_or(0.0);
+    let u_turn_penalty = parse_optional_f64_arg(args, "u_turn_penalty").unwrap_or(0.0);
+    let forbid_u_turns = parse_bool_arg(args, "forbid_u_turns", false);
+    let forbid_left_turns = parse_bool_arg(args, "forbid_left_turns", false);
+    let forbid_right_turns = parse_bool_arg(args, "forbid_right_turns", false);
+    if !turn_penalty.is_finite() || turn_penalty < 0.0 {
+        return Err(ToolError::Validation(
+            "turn_penalty must be a finite value >= 0".to_string(),
+        ));
+    }
+    if !u_turn_penalty.is_finite() || u_turn_penalty < 0.0 {
+        return Err(ToolError::Validation(
+            "u_turn_penalty must be a finite value >= 0".to_string(),
+        ));
+    }
+    Ok(TurnCostOptions {
+        turn_penalty,
+        u_turn_penalty,
+        forbid_u_turns,
+        forbid_left_turns,
+        forbid_right_turns,
+        restricted_transitions: HashSet::new(),
+    })
+}
+
+fn header_index(headers: &[String], aliases: &[&str]) -> Option<usize> {
+    headers.iter().position(|h| {
+        let normalized = h.trim().to_ascii_lowercase();
+        aliases.iter().any(|alias| normalized == *alias)
+    })
+}
+
+fn parse_turn_restrictions_csv(
+    csv_path: &str,
+    graph: &LineNetworkGraph,
+    snap_tolerance: f64,
+) -> Result<HashSet<(usize, usize, usize)>, ToolError> {
+    let content = std::fs::read_to_string(csv_path)
+        .map_err(|e| ToolError::Execution(format!("failed reading turn_restrictions_csv '{}': {}", csv_path, e)))?;
+    let mut lines = content.lines().filter(|line| !line.trim().is_empty());
+    let header_line = lines
+        .next()
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv is empty".to_string()))?;
+    let delimiter = detect_table_delimiter(header_line);
+    let headers = split_table_line(header_line, delimiter);
+
+    let prev_x_idx = header_index(&headers, &["prev_x", "x1"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing prev_x (or x1) column".to_string()))?;
+    let prev_y_idx = header_index(&headers, &["prev_y", "y1"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing prev_y (or y1) column".to_string()))?;
+    let node_x_idx = header_index(&headers, &["node_x", "x2"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing node_x (or x2) column".to_string()))?;
+    let node_y_idx = header_index(&headers, &["node_y", "y2"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing node_y (or y2) column".to_string()))?;
+    let next_x_idx = header_index(&headers, &["next_x", "x3"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing next_x (or x3) column".to_string()))?;
+    let next_y_idx = header_index(&headers, &["next_y", "y3"])
+        .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing next_y (or y3) column".to_string()))?;
+    let forbidden_idx = header_index(&headers, &["forbidden", "is_forbidden", "restrict"]);
+
+    let snap_limit = if snap_tolerance > 0.0 {
+        snap_tolerance * 1.5
+    } else {
+        1.0e-6
+    };
+
+    let mut restricted = HashSet::<(usize, usize, usize)>::new();
+    for (line_idx, line) in lines.enumerate() {
+        let row = split_table_line(line, delimiter);
+        if row.len() != headers.len() {
+            return Err(ToolError::Validation(format!(
+                "turn_restrictions_csv row {} has {} fields but header has {}",
+                line_idx + 2,
+                row.len(),
+                headers.len()
+            )));
+        }
+
+        if let Some(idx) = forbidden_idx {
+            let v = row[idx].trim().to_ascii_lowercase();
+            if ["0", "false", "f", "no", "n"].contains(&v.as_str()) {
+                continue;
+            }
+        }
+
+        let parse_coord = |value: &str, name: &str| -> Result<f64, ToolError> {
+            value.trim().parse::<f64>().map_err(|_| {
+                ToolError::Validation(format!(
+                    "turn_restrictions_csv row {} has invalid {} value '{}'",
+                    line_idx + 2,
+                    name,
+                    value
+                ))
+            })
+        };
+
+        let prev_coord = wbvector::Coord::xy(
+            parse_coord(&row[prev_x_idx], "prev_x")?,
+            parse_coord(&row[prev_y_idx], "prev_y")?,
+        );
+        let node_coord = wbvector::Coord::xy(
+            parse_coord(&row[node_x_idx], "node_x")?,
+            parse_coord(&row[node_y_idx], "node_y")?,
+        );
+        let next_coord = wbvector::Coord::xy(
+            parse_coord(&row[next_x_idx], "next_x")?,
+            parse_coord(&row[next_y_idx], "next_y")?,
+        );
+
+        let (prev_idx, prev_dist) = nearest_network_node(&graph.nodes, &prev_coord)
+            .ok_or_else(|| ToolError::Execution("failed locating prev node for turn restriction".to_string()))?;
+        let (node_idx, node_dist) = nearest_network_node(&graph.nodes, &node_coord)
+            .ok_or_else(|| ToolError::Execution("failed locating node for turn restriction".to_string()))?;
+        let (next_idx, next_dist) = nearest_network_node(&graph.nodes, &next_coord)
+            .ok_or_else(|| ToolError::Execution("failed locating next node for turn restriction".to_string()))?;
+
+        if prev_dist > snap_limit || node_dist > snap_limit || next_dist > snap_limit {
+            return Err(ToolError::Validation(format!(
+                "turn_restrictions_csv row {} could not be snapped to network nodes within tolerance",
+                line_idx + 2
+            )));
+        }
+
+        restricted.insert((prev_idx, node_idx, next_idx));
+    }
+
+    Ok(restricted)
+}
+
+fn build_line_network_graph(
+    input: &wbvector::Layer,
+    snap_tolerance: f64,
+    edge_cost_field: Option<&str>,
+    one_way_field: Option<&str>,
+    blocked_field: Option<&str>,
+    temporal_cost_options: Option<&NetworkTemporalCostOptions>,
+) -> Result<LineNetworkGraph, ToolError> {
+    let lines = collect_layer_linework(input, false)?;
+    let edge_cost_idx = resolve_network_edge_cost_field(input, edge_cost_field)?;
+    let one_way_idx = resolve_network_one_way_field(input, one_way_field)?;
+    let blocked_idx = resolve_network_blocked_field(input, blocked_field)?;
+    let mut node_map = HashMap::<NetworkNodeKey, usize>::new();
+    let mut nodes = Vec::<wbvector::Coord>::new();
+    let mut adjacency = Vec::<Vec<(usize, f64)>>::new();
+
+    for line in &lines {
+        if line.coords.len() < 2 {
+            continue;
+        }
+        for seg_idx in 1..line.coords.len() {
+            let a = &line.coords[seg_idx - 1];
+            let b = &line.coords[seg_idx];
+            let length = coord_dist2(a, b).sqrt();
+            if length <= 0.0 {
+                continue;
+            }
+            let is_blocked = if let Some(idx) = blocked_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("blocked_field missing on feature".to_string()))?;
+                parse_one_way_flag(value)?
+            } else {
+                false
+            };
+            if is_blocked {
+                continue;
+            }
+            let edge_multiplier = if let Some(idx) = edge_cost_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("edge_cost_field missing on feature".to_string()))?;
+                let factor = field_value_to_f64(value).ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "edge_cost_field '{}' contains a non-numeric value",
+                        edge_cost_field.unwrap_or("edge_cost_field")
+                    ))
+                })?;
+                if !factor.is_finite() || factor <= 0.0 {
+                    return Err(ToolError::Execution(format!(
+                        "edge_cost_field '{}' values must be finite and > 0",
+                        edge_cost_field.unwrap_or("edge_cost_field")
+                    )));
+                }
+                factor
+            } else {
+                1.0
+            };
+            let base_cost = length * edge_multiplier;
+            let cost = if let Some(temporal) = temporal_cost_options {
+                let edge_id_value = input.features[line.source_index]
+                    .attributes
+                    .get(temporal.edge_id_field_idx)
+                    .ok_or_else(|| {
+                        ToolError::Execution(format!(
+                            "temporal_edge_id_field '{}' missing on feature",
+                            temporal.edge_id_field_name
+                        ))
+                    })?;
+                let edge_id = field_value_to_join_key(edge_id_value);
+                if edge_id.trim().is_empty() {
+                    return Err(ToolError::Execution(format!(
+                        "temporal_edge_id_field '{}' contains an empty value",
+                        temporal.edge_id_field_name
+                    )));
+                }
+                match temporal.profile.lookup(&edge_id) {
+                    Some(value) => match temporal.profile.mode {
+                        TemporalCostMode::Multiplier => base_cost * value,
+                        TemporalCostMode::Absolute => value,
+                    },
+                    None => match temporal.profile.fallback {
+                        TemporalCostFallback::StaticCost => base_cost,
+                        TemporalCostFallback::Error => {
+                            return Err(ToolError::Execution(format!(
+                                "missing temporal cost profile for edge_id '{}' at dow {} minute {}",
+                                edge_id,
+                                temporal.profile.day_of_week,
+                                temporal.profile.minute_of_day
+                            )));
+                        }
+                    },
+                }
+            } else {
+                base_cost
+            };
+            let is_one_way = if let Some(idx) = one_way_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
+                parse_one_way_flag(value)?
+            } else {
+                false
+            };
+            let u = intern_network_node(
+                &mut node_map,
+                &mut nodes,
+                &mut adjacency,
+                a,
+                snap_tolerance,
+            );
+            let v = intern_network_node(
+                &mut node_map,
+                &mut nodes,
+                &mut adjacency,
+                b,
+                snap_tolerance,
+            );
+            adjacency[u].push((v, cost));
+            if !is_one_way {
+                adjacency[v].push((u, cost));
+            }
+        }
+    }
+
+    Ok(LineNetworkGraph { nodes, adjacency })
+}
+
+fn intern_network_node(
+    node_map: &mut HashMap<NetworkNodeKey, usize>,
+    nodes: &mut Vec<wbvector::Coord>,
+    adjacency: &mut Vec<Vec<(usize, f64)>>,
+    coord: &wbvector::Coord,
+    snap_tolerance: f64,
+) -> usize {
+    let key = network_node_key(coord, snap_tolerance);
+    if let Some(idx) = node_map.get(&key).copied() {
+        return idx;
+    }
+    let idx = nodes.len();
+    nodes.push(coord.clone());
+    adjacency.push(Vec::new());
+    node_map.insert(key, idx);
+    idx
+}
+
+fn nearest_network_node(nodes: &[wbvector::Coord], target: &wbvector::Coord) -> Option<(usize, f64)> {
+    let mut best: Option<(usize, f64)> = None;
+    for (idx, node) in nodes.iter().enumerate() {
+        let dist = coord_dist2(node, target).sqrt();
+        if best.map(|(_, d)| dist < d).unwrap_or(true) {
+            best = Some((idx, dist));
+        }
+    }
+    best
+}
+
+fn collect_point_coords_from_layer(layer: &wbvector::Layer) -> Vec<(i64, wbvector::Coord)> {
+    let mut out = Vec::<(i64, wbvector::Coord)>::new();
+    for feature in &layer.features {
+        let fid = feature.fid as i64;
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        match geometry {
+            wbvector::Geometry::Point(coord) => out.push((fid, coord.clone())),
+            wbvector::Geometry::MultiPoint(coords) => {
+                for coord in coords {
+                    out.push((fid, coord.clone()));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn load_optional_vector_arg(args: &ToolArgs, key: &str) -> Result<Option<wbvector::Layer>, ToolError> {
+    if args.get(key).is_some() {
+        Ok(Some(load_vector_arg(args, key)?))
+    } else {
+        Ok(None)
+    }
+}
+
+fn apply_barrier_points_to_graph(
+    graph: &mut LineNetworkGraph,
+    barriers: Option<&wbvector::Layer>,
+    barrier_snap_distance: Option<f64>,
+) -> Result<usize, ToolError> {
+    let Some(barrier_layer) = barriers else {
+        return Ok(0);
+    };
+    let barrier_points = collect_point_coords_from_layer(barrier_layer);
+    if barrier_points.is_empty() {
+        return Ok(0);
+    }
+    let mut blocked = vec![false; graph.nodes.len()];
+    let mut blocked_count = 0usize;
+    for (_, coord) in barrier_points {
+        if let Some((idx, dist)) = nearest_network_node(&graph.nodes, &coord) {
+            if barrier_snap_distance.map(|d| dist <= d).unwrap_or(true) && !blocked[idx] {
+                blocked[idx] = true;
+                blocked_count += 1;
+            }
+        }
+    }
+    if blocked_count == 0 {
+        return Ok(0);
+    }
+    for u in 0..graph.adjacency.len() {
+        if blocked[u] {
+            graph.adjacency[u].clear();
+            continue;
+        }
+        graph.adjacency[u].retain(|(v, _)| !blocked[*v]);
+    }
+    Ok(blocked_count)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct DijkstraState {
+    cost: f64,
+    node: usize,
+    prev: usize,
+}
+
+#[derive(Clone)]
+struct PathSearchState {
+    cost: f64,
+    nodes: Vec<usize>,
+}
+
+impl Eq for DijkstraState {}
+
+impl Ord for DijkstraState {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| self.node.cmp(&other.node))
+            .then_with(|| self.prev.cmp(&other.prev))
+    }
+}
+
+impl PartialOrd for DijkstraState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Eq for PathSearchState {}
+
+impl PartialEq for PathSearchState {
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost && self.nodes == other.nodes
+    }
+}
+
+impl Ord for PathSearchState {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .cost
+            .partial_cmp(&self.cost)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| self.nodes.len().cmp(&other.nodes.len()))
+    }
+}
+
+impl PartialOrd for PathSearchState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn turn_transition_penalty(
+    graph: &LineNetworkGraph,
+    costs: &TurnCostOptions,
+    prev: usize,
+    node: usize,
+    next: usize,
+) -> f64 {
+    if prev == next {
+        return costs.u_turn_penalty;
+    }
+    let a = &graph.nodes[prev];
+    let b = &graph.nodes[node];
+    let c = &graph.nodes[next];
+    let v1x = b.x - a.x;
+    let v1y = b.y - a.y;
+    let v2x = c.x - b.x;
+    let v2y = c.y - b.y;
+    let n1 = (v1x * v1x + v1y * v1y).sqrt();
+    let n2 = (v2x * v2x + v2y * v2y).sqrt();
+    if n1 <= 0.0 || n2 <= 0.0 {
+        return 0.0;
+    }
+    let dot = (v1x * v2x + v1y * v2y) / (n1 * n2);
+    if dot <= -0.999_999 {
+        return costs.u_turn_penalty;
+    }
+    if dot >= 0.999_999 {
+        return 0.0;
+    }
+    costs.turn_penalty
+}
+
+fn is_u_turn_transition(
+    graph: &LineNetworkGraph,
+    prev: usize,
+    node: usize,
+    next: usize,
+) -> bool {
+    if prev == next {
+        return true;
+    }
+    let a = &graph.nodes[prev];
+    let b = &graph.nodes[node];
+    let c = &graph.nodes[next];
+    let v1x = b.x - a.x;
+    let v1y = b.y - a.y;
+    let v2x = c.x - b.x;
+    let v2y = c.y - b.y;
+    let n1 = (v1x * v1x + v1y * v1y).sqrt();
+    let n2 = (v2x * v2x + v2y * v2y).sqrt();
+    if n1 <= 0.0 || n2 <= 0.0 {
+        return false;
+    }
+    let dot = (v1x * v2x + v1y * v2y) / (n1 * n2);
+    dot <= -0.999_999
+}
+
+fn turn_direction(
+    graph: &LineNetworkGraph,
+    prev: usize,
+    node: usize,
+    next: usize,
+) -> i8 {
+    let a = &graph.nodes[prev];
+    let b = &graph.nodes[node];
+    let c = &graph.nodes[next];
+    let v1x = b.x - a.x;
+    let v1y = b.y - a.y;
+    let v2x = c.x - b.x;
+    let v2y = c.y - b.y;
+    let cross = v1x * v2y - v1y * v2x;
+    if cross > 1.0e-12 {
+        1
+    } else if cross < -1.0e-12 {
+        -1
+    } else {
+        0
+    }
+}
+
+fn transition_allowed(
+    graph: &LineNetworkGraph,
+    costs: &TurnCostOptions,
+    prev: usize,
+    node: usize,
+    next: usize,
+) -> bool {
+    if costs.restricted_transitions.contains(&(prev, node, next)) {
+        return false;
+    }
+    if costs.forbid_u_turns && is_u_turn_transition(graph, prev, node, next) {
+        return false;
+    }
+    let dir = turn_direction(graph, prev, node, next);
+    if costs.forbid_left_turns && dir > 0 {
+        return false;
+    }
+    if costs.forbid_right_turns && dir < 0 {
+        return false;
+    }
+    true
+}
+
+fn dijkstra_shortest_path(
+    graph: &LineNetworkGraph,
+    start: usize,
+    goal: usize,
+    costs: &TurnCostOptions,
+) -> Option<(f64, Vec<usize>)> {
+    if start == goal {
+        return Some((0.0, vec![start]));
+    }
+
+    let no_prev = usize::MAX;
+    let mut dist = HashMap::<(usize, usize), f64>::new();
+    let mut parent = HashMap::<(usize, usize), (usize, usize)>::new();
+    let mut heap = BinaryHeap::<DijkstraState>::new();
+
+    dist.insert((no_prev, start), 0.0);
+    heap.push(DijkstraState {
+        cost: 0.0,
+        node: start,
+        prev: no_prev,
+    });
+
+    let mut goal_state: Option<(usize, usize)> = None;
+    let mut goal_cost = f64::INFINITY;
+
+    while let Some(DijkstraState { cost, node, prev }) = heap.pop() {
+        let key = (prev, node);
+        let Some(best) = dist.get(&key).copied() else {
+            continue;
+        };
+        if cost > best {
+            continue;
+        }
+        if node == goal {
+            goal_state = Some(key);
+            goal_cost = cost;
+            break;
+        }
+        for (next, w) in &graph.adjacency[node] {
+            if prev != no_prev && !transition_allowed(graph, costs, prev, node, *next) {
+                continue;
+            }
+            let turn_cost = if prev == no_prev {
+                0.0
+            } else {
+                turn_transition_penalty(graph, costs, prev, node, *next)
+            };
+            let candidate = cost + *w + turn_cost;
+            let next_key = (node, *next);
+            let old = dist.get(&next_key).copied().unwrap_or(f64::INFINITY);
+            if candidate < old {
+                dist.insert(next_key, candidate);
+                parent.insert(next_key, key);
+                heap.push(DijkstraState {
+                    cost: candidate,
+                    node: next_key.1,
+                    prev: next_key.0,
+                });
+            }
+        }
+    }
+
+    let mut state = goal_state?;
+    let mut path = vec![state.1];
+    while let Some(prev_state) = parent.get(&state).copied() {
+        state = prev_state;
+        path.push(state.1);
+        if state.1 == start && state.0 == no_prev {
+            break;
+        }
+    }
+    if *path.last()? != start {
+        return None;
+    }
+    path.reverse();
+    Some((goal_cost, path))
+}
+
+fn dijkstra_all_costs(graph: &LineNetworkGraph, starts: &[usize], costs: &TurnCostOptions) -> Vec<f64> {
+    let no_prev = usize::MAX;
+    let mut dist_states = HashMap::<(usize, usize), f64>::new();
+    let mut best_node = vec![f64::INFINITY; graph.nodes.len()];
+    let mut heap = BinaryHeap::<DijkstraState>::new();
+
+    for start in starts {
+        if *start < graph.nodes.len() {
+            dist_states.insert((no_prev, *start), 0.0);
+            heap.push(DijkstraState {
+                cost: 0.0,
+                node: *start,
+                prev: no_prev,
+            });
+        }
+    }
+
+    while let Some(DijkstraState { cost, node, prev }) = heap.pop() {
+        let key = (prev, node);
+        let Some(best) = dist_states.get(&key).copied() else {
+            continue;
+        };
+        if cost > best {
+            continue;
+        }
+        if cost < best_node[node] {
+            best_node[node] = cost;
+        }
+        for (next, w) in &graph.adjacency[node] {
+            if prev != no_prev && !transition_allowed(graph, costs, prev, node, *next) {
+                continue;
+            }
+            let turn_cost = if prev == no_prev {
+                0.0
+            } else {
+                turn_transition_penalty(graph, costs, prev, node, *next)
+            };
+            let candidate = cost + *w + turn_cost;
+            let next_key = (node, *next);
+            let old = dist_states.get(&next_key).copied().unwrap_or(f64::INFINITY);
+            if candidate < old {
+                dist_states.insert(next_key, candidate);
+                heap.push(DijkstraState {
+                    cost: candidate,
+                    node: next_key.1,
+                    prev: next_key.0,
+                });
+            }
+        }
+    }
+
+    best_node
+}
+
+fn dijkstra_tree(graph: &LineNetworkGraph, start: usize) -> (Vec<f64>, Vec<Option<usize>>) {
+    let no_prev = usize::MAX;
+    let mut dist = vec![f64::INFINITY; graph.nodes.len()];
+    let mut prev = vec![None::<usize>; graph.nodes.len()];
+    let mut heap = BinaryHeap::<DijkstraState>::new();
+
+    dist[start] = 0.0;
+    heap.push(DijkstraState {
+        cost: 0.0,
+        node: start,
+        prev: no_prev,
+    });
+
+    while let Some(DijkstraState { cost, node, .. }) = heap.pop() {
+        if cost > dist[node] {
+            continue;
+        }
+        for (next, w) in &graph.adjacency[node] {
+            let candidate = cost + *w;
+            if candidate < dist[*next] {
+                dist[*next] = candidate;
+                prev[*next] = Some(node);
+                heap.push(DijkstraState {
+                    cost: candidate,
+                    node: *next,
+                    prev: node,
+                });
+            }
+        }
+    }
+
+    (dist, prev)
+}
+
+fn reconstruct_path_nodes(prev: &[Option<usize>], start: usize, goal: usize) -> Option<Vec<usize>> {
+    if start == goal {
+        return Some(vec![start]);
+    }
+    let mut path = Vec::<usize>::new();
+    let mut current = goal;
+    path.push(current);
+    while let Some(parent) = prev[current] {
+        current = parent;
+        path.push(current);
+        if current == start {
+            path.reverse();
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn k_shortest_simple_paths(
+    graph: &LineNetworkGraph,
+    start: usize,
+    goal: usize,
+    k: usize,
+    costs: &TurnCostOptions,
+) -> Vec<(f64, Vec<usize>)> {
+    if start >= graph.nodes.len() || goal >= graph.nodes.len() || k == 0 {
+        return Vec::new();
+    }
+
+    let mut heap = BinaryHeap::<PathSearchState>::new();
+    let mut results = Vec::<(f64, Vec<usize>)>::new();
+    heap.push(PathSearchState {
+        cost: 0.0,
+        nodes: vec![start],
+    });
+
+    while let Some(state) = heap.pop() {
+        let current = *state.nodes.last().unwrap_or(&start);
+        if current == goal {
+            results.push((state.cost, state.nodes));
+            if results.len() >= k {
+                break;
+            }
+            continue;
+        }
+
+        for (next, weight) in &graph.adjacency[current] {
+            if state.nodes.contains(next) {
+                continue;
+            }
+            if state.nodes.len() >= 2 {
+                let prev = state.nodes[state.nodes.len() - 2];
+                if !transition_allowed(graph, costs, prev, current, *next) {
+                    continue;
+                }
+            }
+            let turn_cost = if state.nodes.len() >= 2 {
+                let prev = state.nodes[state.nodes.len() - 2];
+                turn_transition_penalty(graph, costs, prev, current, *next)
+            } else {
+                0.0
+            };
+            let mut next_nodes = state.nodes.clone();
+            next_nodes.push(*next);
+            heap.push(PathSearchState {
+                cost: state.cost + *weight + turn_cost,
+                nodes: next_nodes,
+            });
+        }
+    }
+
+    results
+}
+
+fn connected_components_for_graph(graph: &LineNetworkGraph) -> Vec<usize> {
+    let mut component = vec![usize::MAX; graph.nodes.len()];
+    let mut component_id = 0usize;
+    for start in 0..graph.nodes.len() {
+        if component[start] != usize::MAX {
+            continue;
+        }
+        let mut stack = vec![start];
+        component[start] = component_id;
+        while let Some(node) = stack.pop() {
+            for (next, _) in &graph.adjacency[node] {
+                if component[*next] == usize::MAX {
+                    component[*next] = component_id;
+                    stack.push(*next);
+                }
+            }
+        }
+        component_id += 1;
+    }
+    component
+}
+
+impl Tool for ShortestPathNetworkTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "shortest_path_network",
+            display_name: "Shortest Path (Network)",
+            summary: "Finds the shortest path between start and end coordinates over a line network.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "start_x", description: "Start x coordinate.", required: true },
+                ToolParamSpec { name: "start_y", description: "Start y coordinate.", required: true },
+                ToolParamSpec { name: "end_x", description: "End x coordinate.", required: true },
+                ToolParamSpec { name: "end_y", description: "End y coordinate.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from start/end coordinates to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("start_x".to_string(), json!(0.0));
+        defaults.insert("start_y".to_string(), json!(0.0));
+        defaults.insert("end_x".to_string(), json!(100.0));
+        defaults.insert("end_y".to_string(), json!(100.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("shortest_path.shp"));
+
+        ToolManifest {
+            id: "shortest_path_network".to_string(),
+            display_name: "Shortest Path (Network)".to_string(),
+            summary: "Finds the shortest path between start and end coordinates over a line network.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_x".to_string(), description: "Start x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_y".to_string(), description: "Start y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_x".to_string(), description: "End x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_y".to_string(), description: "End y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from start/end coordinates to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "shortest_path_network_basic".to_string(),
+                description: "Computes shortest path between two points on a line network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "shortest-path".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation(
+                "input must be a line layer".to_string(),
+            ));
+        }
+        for name in ["start_x", "start_y", "end_x", "end_y"] {
+            let value = parse_f64_arg(args, name)?;
+            if !value.is_finite() {
+                return Err(ToolError::Validation(format!("{} must be finite", name)));
+            }
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let start = wbvector::Coord::xy(parse_f64_arg(args, "start_x")?, parse_f64_arg(args, "start_y")?);
+        let end = wbvector::Coord::xy(parse_f64_arg(args, "end_x")?, parse_f64_arg(args, "end_y")?);
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let (start_idx, start_dist) = nearest_network_node(&graph.nodes, &start)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest start node".to_string()))?;
+        let (end_idx, end_dist) = nearest_network_node(&graph.nodes, &end)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest end node".to_string()))?;
+
+        if let Some(limit) = max_snap_distance {
+            if start_dist > limit || end_dist > limit {
+                return Err(ToolError::Execution(format!(
+                    "start/end points are farther than max_snap_distance from the network (start={}, end={}, limit={})",
+                    start_dist, end_dist, limit
+                )));
+            }
+        }
+
+        let (cost, node_path) = dijkstra_shortest_path(&graph, start_idx, end_idx, &turn_costs)
+            .ok_or_else(|| ToolError::Execution("no path found between start and end nodes".to_string()))?;
+
+        let coords: Vec<wbvector::Coord> = node_path.iter().map(|idx| graph.nodes[*idx].clone()).collect();
+        let mut output = wbvector::Layer::new(format!("{}_shortest_path_network", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("START_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("END_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+        output.push(wbvector::Feature {
+            fid: 1,
+            geometry: Some(wbvector::Geometry::LineString(coords)),
+            attributes: vec![
+                wbvector::FieldValue::Integer((start_idx + 1) as i64),
+                wbvector::FieldValue::Integer((end_idx + 1) as i64),
+                wbvector::FieldValue::Float(cost),
+            ],
+        });
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NetworkNodeDegreeTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_node_degree",
+            display_name: "Network Node Degree",
+            summary: "Extracts network nodes from line features and computes node degree and node type.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_nodes.shp"));
+
+        ToolManifest {
+            id: "network_node_degree".to_string(),
+            display_name: "Network Node Degree".to_string(),
+            summary: "Extracts network nodes from line features and computes node degree and node type.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_node_degree_basic".to_string(),
+                description: "Creates a node point layer with network degree attributes.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "topology".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation(
+                "input must be a line layer".to_string(),
+            ));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None)?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let mut output = wbvector::Layer::new(format!("{}_network_node_degree", input.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("NODE_ID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("DEGREE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("NODE_TYPE", wbvector::FieldType::Text));
+
+        for (idx, node) in graph.nodes.iter().enumerate() {
+            let mut neighbors = HashSet::<usize>::new();
+            for (n, _) in &graph.adjacency[idx] {
+                neighbors.insert(*n);
+            }
+            let degree = neighbors.len() as i64;
+            let node_type = if degree <= 0 {
+                "isolated"
+            } else if degree == 1 {
+                "dead_end"
+            } else if degree == 2 {
+                "link"
+            } else {
+                "junction"
+            };
+
+            output.push(wbvector::Feature {
+                fid: (idx + 1) as u64,
+                geometry: Some(wbvector::Geometry::Point(node.clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer((idx + 1) as i64),
+                    wbvector::FieldValue::Integer(degree),
+                    wbvector::FieldValue::Text(node_type.to_string()),
+                ],
+            });
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NetworkServiceAreaTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_service_area",
+            display_name: "Network Service Area",
+            summary: "Computes reachable network nodes from origin points within a maximum network cost.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "max_cost", description: "Maximum reachable path cost.", required: true },
+                ToolParamSpec { name: "ring_costs", description: "Optional comma-separated ring thresholds for multi-ring outputs (for example: 5,10,15).", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin points to nearest network node.", required: false },
+                ToolParamSpec { name: "output_mode", description: "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output service-area vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("max_cost".to_string(), json!(1000.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("service_area_nodes.shp"));
+
+        ToolManifest {
+            id: "network_service_area".to_string(),
+            display_name: "Network Service Area".to_string(),
+            summary: "Computes reachable network nodes from origin points within a maximum network cost.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "max_cost".to_string(), description: "Maximum reachable path cost.".to_string(), required: true },
+                ToolParamDescriptor { name: "ring_costs".to_string(), description: "Optional comma-separated ring thresholds for multi-ring outputs (for example: 5,10,15).".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "output_mode".to_string(), description: "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output service-area vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_service_area_basic".to_string(),
+                description: "Finds all nodes reachable from origins within max_cost.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "service-area".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        let max_cost = parse_f64_arg(args, "max_cost")?;
+        if !max_cost.is_finite() || max_cost < 0.0 {
+            return Err(ToolError::Validation(
+                "max_cost must be a finite value >= 0".to_string(),
+            ));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(mode) = parse_optional_string_arg(args, "output_mode") {
+            let normalized = mode.to_ascii_lowercase();
+            if normalized != "nodes" && normalized != "edges" && normalized != "polygons" {
+                return Err(ToolError::Validation(
+                    "output_mode must be one of 'nodes', 'edges', or 'polygons'".to_string(),
+                ));
+            }
+        }
+        let _ = parse_ring_costs_arg(args, max_cost)?;
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let max_cost = parse_f64_arg(args, "max_cost")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let output_mode = parse_optional_string_arg(args, "output_mode")
+            .unwrap_or("nodes")
+            .to_ascii_lowercase();
+        let ring_costs = parse_ring_costs_arg(args, max_cost)?;
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let origin_points = collect_point_coords_from_layer(&origins);
+        if origin_points.is_empty() {
+            return Err(ToolError::Execution(
+                "origins layer contains no point geometries".to_string(),
+            ));
+        }
+
+        let mut snapped_origins = Vec::<(i64, usize)>::new();
+        let mut start_nodes = Vec::<usize>::new();
+        for (origin_fid, origin) in &origin_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, origin)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest origin node".to_string()))?;
+            if let Some(limit) = max_snap_distance {
+                if dist > limit {
+                    continue;
+                }
+            }
+            snapped_origins.push((*origin_fid, idx));
+            if !start_nodes.contains(&idx) {
+                start_nodes.push(idx);
+            }
+        }
+        if snapped_origins.is_empty() {
+            return Err(ToolError::Execution(
+                "no origin points snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let dist = dijkstra_all_costs(&graph, &start_nodes, &turn_costs);
+
+        let mut output = wbvector::Layer::new(format!("{}_network_service_area", input.name));
+        output.crs = input.crs.clone();
+        let mut next_fid = 1u64;
+        if output_mode == "edges" {
+            output.geom_type = Some(wbvector::GeometryType::LineString);
+            output.schema.add_field(wbvector::FieldDef::new("FROM_NODE", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("TO_NODE", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("START_COST", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("END_COST", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("EDGE_FRAC", wbvector::FieldType::Float));
+            if ring_costs.is_some() {
+                output.schema.add_field(wbvector::FieldDef::new("RING_IDX", wbvector::FieldType::Integer));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MIN", wbvector::FieldType::Float));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MAX", wbvector::FieldType::Float));
+            }
+
+            for (u, neighbors) in graph.adjacency.iter().enumerate() {
+                let start_cost = dist[u];
+                if !start_cost.is_finite() || start_cost > max_cost {
+                    continue;
+                }
+                let remaining = max_cost - start_cost;
+                if remaining <= 0.0 {
+                    continue;
+                }
+                for (v, weight) in neighbors {
+                    if *weight <= 0.0 {
+                        continue;
+                    }
+                    let frac = (remaining / *weight).min(1.0);
+                    if frac <= 0.0 {
+                        continue;
+                    }
+                    let start = &graph.nodes[u];
+                    let end = &graph.nodes[*v];
+                    let mid = wbvector::Coord::xy(
+                        start.x + (end.x - start.x) * frac,
+                        start.y + (end.y - start.y) * frac,
+                    );
+                    let coords = if frac >= 1.0 - 1.0e-12 {
+                        vec![start.clone(), end.clone()]
+                    } else {
+                        vec![start.clone(), mid]
+                    };
+                    let end_cost = start_cost + *weight * frac;
+                    let mut attrs = vec![
+                        wbvector::FieldValue::Integer((u + 1) as i64),
+                        wbvector::FieldValue::Integer((*v + 1) as i64),
+                        wbvector::FieldValue::Float(start_cost),
+                        wbvector::FieldValue::Float(end_cost),
+                        wbvector::FieldValue::Float(frac),
+                    ];
+                    if let Some(rings) = ring_costs.as_ref() {
+                        let (ring_idx, ring_min, ring_max) = ring_interval_for_cost(end_cost, max_cost, rings);
+                        attrs.push(wbvector::FieldValue::Integer(ring_idx));
+                        attrs.push(wbvector::FieldValue::Float(ring_min));
+                        attrs.push(wbvector::FieldValue::Float(ring_max));
+                    }
+                    output.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::LineString(coords)),
+                        attributes: attrs,
+                    });
+                    next_fid += 1;
+                }
+            }
+        } else if output_mode == "polygons" {
+            output.geom_type = Some(wbvector::GeometryType::Polygon);
+            output.schema.add_field(wbvector::FieldDef::new("ORIGIN_ID", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("COST_LIMIT", wbvector::FieldType::Float));
+            output.schema.add_field(wbvector::FieldDef::new("NODE_COUNT", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("FRONTIER_CT", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("PARTIAL_CT", wbvector::FieldType::Integer));
+            if ring_costs.is_some() {
+                output.schema.add_field(wbvector::FieldDef::new("RING_IDX", wbvector::FieldType::Integer));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MIN", wbvector::FieldType::Float));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MAX", wbvector::FieldType::Float));
+            }
+
+            let eps = snap_tolerance.max(1.0e-9);
+            for (origin_fid, start_idx) in snapped_origins {
+                let origin_dist = dijkstra_all_costs(&graph, &[start_idx], &turn_costs);
+                let ring_limits: Vec<f64> = if let Some(rings) = ring_costs.as_ref() {
+                    rings.clone()
+                } else {
+                    vec![max_cost]
+                };
+                let mut ring_lower = 0.0;
+                for (ring_pos, ring_limit) in ring_limits.iter().enumerate() {
+                    let reachable_nodes: Vec<usize> = graph
+                        .nodes
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, _node)| {
+                            let d = origin_dist[idx];
+                            if d.is_finite() && d <= *ring_limit {
+                                Some(idx)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    if reachable_nodes.is_empty() {
+                        ring_lower = *ring_limit;
+                        continue;
+                    }
+
+                    let mut envelope_coords: Vec<wbvector::Coord> = reachable_nodes
+                        .iter()
+                        .map(|idx| graph.nodes[*idx].clone())
+                        .collect();
+                    let mut reachable_segment_lengths = Vec::<f64>::new();
+                    let mut frontier_count = 0i64;
+                    let mut partial_count = 0i64;
+
+                    for (u, neighbors) in graph.adjacency.iter().enumerate() {
+                        let start_cost = origin_dist[u];
+                        if !start_cost.is_finite() || start_cost > *ring_limit {
+                            continue;
+                        }
+                        let remaining = *ring_limit - start_cost;
+                        if remaining <= 0.0 {
+                            continue;
+                        }
+
+                        for (v, weight) in neighbors {
+                            if *weight <= 0.0 {
+                                continue;
+                            }
+                            let frac = (remaining / *weight).min(1.0);
+                            if frac <= 0.0 {
+                                continue;
+                            }
+                            frontier_count += 1;
+                            if frac < 1.0 - 1.0e-12 {
+                                partial_count += 1;
+                            }
+
+                            let start = &graph.nodes[u];
+                            let end = &graph.nodes[*v];
+                            let frontier = wbvector::Coord::xy(
+                                start.x + (end.x - start.x) * frac,
+                                start.y + (end.y - start.y) * frac,
+                            );
+
+                            envelope_coords.push(start.clone());
+                            envelope_coords.push(frontier.clone());
+                            if frac > 0.5 {
+                                envelope_coords.push(wbvector::Coord::xy(
+                                    start.x + (end.x - start.x) * 0.5,
+                                    start.y + (end.y - start.y) * 0.5,
+                                ));
+                            }
+
+                            let dx = frontier.x - start.x;
+                            let dy = frontier.y - start.y;
+                            let seg_len = (dx * dx + dy * dy).sqrt();
+                            if seg_len > eps {
+                                reachable_segment_lengths.push(seg_len);
+                            }
+                        }
+                    }
+
+                    let geom = if envelope_coords.len() < 3 {
+                        convex_hull_polygon_for_coords(&envelope_coords, eps)
+                    } else {
+                        let mean_seg_len = if reachable_segment_lengths.is_empty() {
+                            eps * 10.0
+                        } else {
+                            reachable_segment_lengths.iter().sum::<f64>()
+                                / reachable_segment_lengths.len() as f64
+                        };
+                        let options = ConcaveHullOptions {
+                            max_edge_length: mean_seg_len.max(eps * 10.0) * 1.5,
+                            epsilon: eps,
+                            ..ConcaveHullOptions::default()
+                        };
+                        let topo_coords: Vec<TopoCoord> = envelope_coords.iter().map(to_topo_coord).collect();
+                        let hull = concave_hull_geometry_with_options(&TopoGeometry::MultiPoint(topo_coords), options);
+                        match hull {
+                            TopoGeometry::Polygon(poly) => Some(wbvector::Geometry::Polygon {
+                                exterior: to_wb_ring(&poly.exterior),
+                                interiors: to_wb_rings(&poly.holes),
+                            }),
+                            TopoGeometry::MultiPolygon(polys) => polys
+                                .iter()
+                                .max_by_key(|poly| poly.exterior.coords.len())
+                                .map(|poly| wbvector::Geometry::Polygon {
+                                    exterior: to_wb_ring(&poly.exterior),
+                                    interiors: to_wb_rings(&poly.holes),
+                                })
+                                .or_else(|| convex_hull_polygon_for_coords(&envelope_coords, eps)),
+                            _ => convex_hull_polygon_for_coords(&envelope_coords, eps),
+                        }
+                    };
+
+                    if let Some(geom) = geom {
+                        let mut attrs = vec![
+                            wbvector::FieldValue::Integer(origin_fid),
+                            wbvector::FieldValue::Float(*ring_limit),
+                            wbvector::FieldValue::Integer(reachable_nodes.len() as i64),
+                            wbvector::FieldValue::Integer(frontier_count),
+                            wbvector::FieldValue::Integer(partial_count),
+                        ];
+                        if ring_costs.is_some() {
+                            attrs.push(wbvector::FieldValue::Integer((ring_pos + 1) as i64));
+                            attrs.push(wbvector::FieldValue::Float(ring_lower));
+                            attrs.push(wbvector::FieldValue::Float(*ring_limit));
+                        }
+                        output.push(wbvector::Feature {
+                            fid: next_fid,
+                            geometry: Some(geom),
+                            attributes: attrs,
+                        });
+                        next_fid += 1;
+                    }
+                    ring_lower = *ring_limit;
+                }
+            }
+        } else {
+            output.geom_type = Some(wbvector::GeometryType::Point);
+            output.schema.add_field(wbvector::FieldDef::new("NODE_ID", wbvector::FieldType::Integer));
+            output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+            if ring_costs.is_some() {
+                output.schema.add_field(wbvector::FieldDef::new("RING_IDX", wbvector::FieldType::Integer));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MIN", wbvector::FieldType::Float));
+                output.schema.add_field(wbvector::FieldDef::new("RING_MAX", wbvector::FieldType::Float));
+            }
+
+            for (idx, node) in graph.nodes.iter().enumerate() {
+                let d = dist[idx];
+                if d.is_finite() && d <= max_cost {
+                    let mut attrs = vec![
+                        wbvector::FieldValue::Integer((idx + 1) as i64),
+                        wbvector::FieldValue::Float(d),
+                    ];
+                    if let Some(rings) = ring_costs.as_ref() {
+                        let (ring_idx, ring_min, ring_max) = ring_interval_for_cost(d, max_cost, rings);
+                        attrs.push(wbvector::FieldValue::Integer(ring_idx));
+                        attrs.push(wbvector::FieldValue::Float(ring_min));
+                        attrs.push(wbvector::FieldValue::Float(ring_max));
+                    }
+                    output.push(wbvector::Feature {
+                        fid: next_fid,
+                        geometry: Some(wbvector::Geometry::Point(node.clone())),
+                        attributes: attrs,
+                    });
+                    next_fid += 1;
+                }
+            }
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for MapMatchingV1Tool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "map_matching_v1",
+            display_name: "Map Matching (v1)",
+            summary: "Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "trajectory_points", description: "Input trajectory point layer.", required: true },
+                ToolParamSpec { name: "timestamp_field", description: "Trajectory field used for time ordering.", required: true },
+                ToolParamSpec { name: "search_radius", description: "Optional candidate search radius around each trajectory point.", required: false },
+                ToolParamSpec { name: "candidate_k", description: "Optional number of nearest candidates retained per point.", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance for snapping trajectory points to network nodes.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "matched_points_output", description: "Optional output vector path for per-point diagnostics.", required: false },
+                ToolParamSpec { name: "match_report", description: "Optional JSON output path for summary diagnostics.", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path for inferred route.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("trajectory_points".to_string(), json!("trajectory_points.shp"));
+        defaults.insert("timestamp_field".to_string(), json!("timestamp"));
+        defaults.insert("candidate_k".to_string(), json!(5));
+        defaults.insert("search_radius".to_string(), json!(25.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("matched_route.shp"));
+        example_args.insert("matched_points_output".to_string(), json!("matched_points.shp"));
+
+        ToolManifest {
+            id: "map_matching_v1".to_string(),
+            display_name: "Map Matching (v1)".to_string(),
+            summary: "Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "trajectory_points".to_string(), description: "Input trajectory point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "timestamp_field".to_string(), description: "Trajectory field used for time ordering.".to_string(), required: true },
+                ToolParamDescriptor { name: "search_radius".to_string(), description: "Optional candidate search radius around each trajectory point.".to_string(), required: false },
+                ToolParamDescriptor { name: "candidate_k".to_string(), description: "Optional number of nearest candidates retained per point.".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance for snapping trajectory points to network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "matched_points_output".to_string(), description: "Optional output vector path for per-point diagnostics.".to_string(), required: false },
+                ToolParamDescriptor { name: "match_report".to_string(), description: "Optional JSON output path for summary diagnostics.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path for inferred route.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "map_matching_v1_basic".to_string(),
+                description: "Matches time-ordered trajectory points to a network and emits route and diagnostics outputs.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "map-matching".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let trajectory = load_vector_arg(args, "trajectory_points")?;
+        let timestamp_field = parse_string_arg(args, "timestamp_field")?;
+        let _ = parse_vector_path_arg(args, "output")?;
+
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if trajectory.geom_type != Some(wbvector::GeometryType::Point)
+            && trajectory.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("trajectory_points must be a point layer".to_string()));
+        }
+        if trajectory.schema.field_index(timestamp_field).is_none() {
+            return Err(ToolError::Validation(format!(
+                "timestamp_field '{}' does not exist in trajectory_points",
+                timestamp_field
+            )));
+        }
+
+        if let Some(value) = args.get("candidate_k").and_then(|v| v.as_i64()) {
+            if value <= 0 {
+                return Err(ToolError::Validation("candidate_k must be >= 1".to_string()));
+            }
+        }
+        if let Some(radius) = parse_optional_f64_arg(args, "search_radius") {
+            if !radius.is_finite() || radius <= 0.0 {
+                return Err(ToolError::Validation(
+                    "search_radius must be a finite value > 0".to_string(),
+                ));
+            }
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation("barriers must be a point layer".to_string()));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        let _ = parse_network_turn_cost_options(args)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        if let Some(points_output) = parse_optional_string_arg(args, "matched_points_output") {
+            if points_output.trim().is_empty() {
+                return Err(ToolError::Validation(
+                    "matched_points_output must be a non-empty path".to_string(),
+                ));
+            }
+        }
+        if let Some(report_path) = parse_optional_string_arg(args, "match_report") {
+            if !report_path.to_ascii_lowercase().ends_with(".json") {
+                return Err(ToolError::Validation("match_report must be a .json path".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        #[derive(Clone)]
+        struct PointCandidate {
+            projected_measure: f64,
+            offset_distance: f64,
+            snapped: wbvector::Coord,
+            node_idx: usize,
+            edge_id: String,
+        }
+
+        let input = load_vector_arg(args, "input")?;
+        let trajectory = load_vector_arg(args, "trajectory_points")?;
+        let timestamp_field = parse_string_arg(args, "timestamp_field")?;
+        let candidate_k = args
+            .get("candidate_k")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(5)
+            .max(1) as usize;
+        let search_radius = parse_optional_f64_arg(args, "search_radius").unwrap_or(25.0);
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let matched_points_output = parse_optional_string_arg(args, "matched_points_output")
+            .unwrap_or("matched_points.gpkg");
+        let match_report = parse_optional_string_arg(args, "match_report");
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            None,
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution("input network contains no usable line segments".to_string()));
+        }
+
+        let linework = collect_layer_linework(&input, false)?;
+        let edge_id_idx = input.schema.field_index("EDGE_ID");
+        let timestamp_idx = trajectory
+            .schema
+            .field_index(timestamp_field)
+            .ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "timestamp_field '{}' does not exist in trajectory_points",
+                    timestamp_field
+                ))
+            })?;
+
+        let mut observations = Vec::<(i64, f64, wbvector::Coord)>::new();
+        for feature in &trajectory.features {
+            let timestamp_key = feature
+                .attributes
+                .get(timestamp_idx)
+                .and_then(field_value_to_timestamp_sort_key)
+                .ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "trajectory feature {} has invalid timestamp_field value",
+                        feature.fid
+                    ))
+                })?;
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            match geometry {
+                wbvector::Geometry::Point(coord) => {
+                    observations.push((feature.fid as i64, timestamp_key, coord.clone()));
+                }
+                wbvector::Geometry::MultiPoint(coords) => {
+                    for coord in coords {
+                        observations.push((feature.fid as i64, timestamp_key, coord.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if observations.is_empty() {
+            return Err(ToolError::Execution(
+                "trajectory_points layer contains no point geometries".to_string(),
+            ));
+        }
+        observations.sort_by(|a, b| a.1.total_cmp(&b.1));
+
+        let mut matched_points = wbvector::Layer::new(format!("{}_map_matching_points", trajectory.name));
+        matched_points.geom_type = Some(wbvector::GeometryType::Point);
+        matched_points.crs = trajectory.crs.clone();
+        matched_points.schema.add_field(wbvector::FieldDef::new("INPUT_ID", wbvector::FieldType::Integer));
+        matched_points.schema.add_field(wbvector::FieldDef::new("MATCH_EDGE", wbvector::FieldType::Text));
+        matched_points.schema.add_field(wbvector::FieldDef::new("PROJ_MEAS", wbvector::FieldType::Float));
+        matched_points.schema.add_field(wbvector::FieldDef::new("OFFSET_DST", wbvector::FieldType::Float));
+        matched_points.schema.add_field(wbvector::FieldDef::new("CONFIDENCE", wbvector::FieldType::Float));
+        matched_points.schema.add_field(wbvector::FieldDef::new("STATUS", wbvector::FieldType::Text));
+
+        let mut observation_candidates = Vec::<Vec<PointCandidate>>::with_capacity(observations.len());
+
+        for (_obs_fid, _sort_key, point) in &observations {
+            let mut candidates = Vec::<PointCandidate>::new();
+            for line in &linework {
+                if let Some((measure, offset_distance, snapped)) = locate_point_along_linestring(point, &line.coords) {
+                    if offset_distance <= search_radius {
+                        let Some((node_idx, node_snap_dist)) = nearest_network_node(&graph.nodes, &snapped) else {
+                            continue;
+                        };
+                        if max_snap_distance.map(|limit| node_snap_dist <= limit).unwrap_or(true) {
+                            let feature = &input.features[line.source_index];
+                            let edge_id = if let Some(idx) = edge_id_idx {
+                                feature
+                                    .attributes
+                                    .get(idx)
+                                    .map(field_value_to_join_key)
+                                    .filter(|v| !v.trim().is_empty())
+                                    .unwrap_or_else(|| feature.fid.to_string())
+                            } else {
+                                feature.fid.to_string()
+                            };
+                            candidates.push(PointCandidate {
+                                projected_measure: measure,
+                                offset_distance,
+                                snapped,
+                                node_idx,
+                                edge_id,
+                            });
+                        }
+                    }
+                }
+            }
+
+            candidates.sort_by(|a, b| a.offset_distance.total_cmp(&b.offset_distance));
+            if candidates.len() > candidate_k {
+                candidates.truncate(candidate_k);
+            }
+
+            observation_candidates.push(candidates);
+        }
+
+        let matched_obs_indices: Vec<usize> = observation_candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, candidates)| if candidates.is_empty() { None } else { Some(idx) })
+            .collect();
+        if matched_obs_indices.is_empty() {
+            return Err(ToolError::Execution(
+                "map matching could not infer a route from the provided trajectory".to_string(),
+            ));
+        }
+
+        let mut selected_candidate_index_by_obs = HashMap::<usize, usize>::new();
+        {
+            let mut transition_cost_cache = HashMap::<(usize, usize), Option<f64>>::new();
+            let mut dp = Vec::<Vec<f64>>::new();
+            let mut back = Vec::<Vec<Option<(usize, bool)>>>::new();
+
+            for (step_idx, obs_idx) in matched_obs_indices.iter().copied().enumerate() {
+                let candidates = &observation_candidates[obs_idx];
+                dp.push(vec![f64::INFINITY; candidates.len()]);
+                back.push(vec![None; candidates.len()]);
+
+                if step_idx == 0 {
+                    for (cand_idx, candidate) in candidates.iter().enumerate() {
+                        dp[step_idx][cand_idx] = candidate.offset_distance;
+                    }
+                    continue;
+                }
+
+                let prev_obs_idx = matched_obs_indices[step_idx - 1];
+                let prev_candidates = &observation_candidates[prev_obs_idx];
+
+                for (cand_idx, candidate) in candidates.iter().enumerate() {
+                    let mut best_score = f64::INFINITY;
+                    let mut best_prev: Option<(usize, bool)> = None;
+
+                    for (prev_idx, prev_candidate) in prev_candidates.iter().enumerate() {
+                        let key = (prev_candidate.node_idx, candidate.node_idx);
+                        let transition_cost = if let Some(cached) = transition_cost_cache.get(&key) {
+                            *cached
+                        } else {
+                            let computed = dijkstra_shortest_path(&graph, key.0, key.1, &turn_costs)
+                                .map(|(cost, _)| cost);
+                            transition_cost_cache.insert(key, computed);
+                            computed
+                        };
+
+                        if let Some(path_cost) = transition_cost {
+                            let score = dp[step_idx - 1][prev_idx] + path_cost + candidate.offset_distance;
+                            if score < best_score {
+                                best_score = score;
+                                best_prev = Some((prev_idx, true));
+                            }
+                        }
+                    }
+
+                    if best_prev.is_none() {
+                        for (prev_idx, prev_candidate) in prev_candidates.iter().enumerate() {
+                            let jump_penalty = coord_dist2(&prev_candidate.snapped, &candidate.snapped).sqrt()
+                                + search_radius * 4.0;
+                            let score = dp[step_idx - 1][prev_idx] + jump_penalty + candidate.offset_distance;
+                            if score < best_score {
+                                best_score = score;
+                                best_prev = Some((prev_idx, false));
+                            }
+                        }
+                    }
+
+                    if let Some(prev_state) = best_prev {
+                        dp[step_idx][cand_idx] = best_score;
+                        back[step_idx][cand_idx] = Some(prev_state);
+                    }
+                }
+            }
+
+            let last_step = matched_obs_indices.len() - 1;
+            let end_candidate_idx = dp[last_step]
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map(|(idx, _)| idx)
+                .ok_or_else(|| {
+                    ToolError::Execution("map matching candidate sequence inference failed".to_string())
+                })?;
+
+            let mut best_path = vec![0usize; matched_obs_indices.len()];
+            best_path[last_step] = end_candidate_idx;
+            for step_idx in (1..=last_step).rev() {
+                let curr = best_path[step_idx];
+                let prev = back[step_idx][curr]
+                    .map(|(prev_idx, _)| prev_idx)
+                    .unwrap_or(0);
+                best_path[step_idx - 1] = prev;
+            }
+
+            for (step_idx, obs_idx) in matched_obs_indices.iter().copied().enumerate() {
+                selected_candidate_index_by_obs.insert(obs_idx, best_path[step_idx]);
+            }
+        }
+
+        let mut route_coords = Vec::<wbvector::Coord>::new();
+        let mut total_cost = 0.0;
+        let mut matched_count = 0i64;
+        let mut unmatched_count = 0i64;
+        let mut ambiguous_count = 0i64;
+        let mut disconnected_segments_count = 0i64;
+        let mut offset_values = Vec::<f64>::new();
+        let mut last_node: Option<usize> = None;
+
+        for (obs_idx, (obs_fid, _sort_key, point)) in observations.iter().enumerate() {
+            let candidates = &observation_candidates[obs_idx];
+
+            if candidates.is_empty() {
+                unmatched_count += 1;
+                matched_points.push(wbvector::Feature {
+                    fid: matched_points.features.len() as u64 + 1,
+                    geometry: Some(wbvector::Geometry::Point(point.clone())),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(*obs_fid),
+                        wbvector::FieldValue::Null,
+                        wbvector::FieldValue::Null,
+                        wbvector::FieldValue::Null,
+                        wbvector::FieldValue::Float(0.0),
+                        wbvector::FieldValue::Text("unmatched".to_string()),
+                    ],
+                });
+                continue;
+            }
+
+            let selected_idx = selected_candidate_index_by_obs
+                .get(&obs_idx)
+                .copied()
+                .unwrap_or(0)
+                .min(candidates.len() - 1);
+            let selected = candidates[selected_idx].clone();
+            let is_ambiguous = if candidates.len() > 1 {
+                let best = selected.offset_distance;
+                let second = candidates[1].offset_distance;
+                best > 0.0 && second <= best * 1.05
+            } else {
+                false
+            };
+
+            if route_coords.is_empty() {
+                route_coords.push(selected.snapped.clone());
+            }
+            if let Some(prev_node) = last_node {
+                if let Some((segment_cost, node_path)) = dijkstra_shortest_path(&graph, prev_node, selected.node_idx, &turn_costs) {
+                    total_cost += segment_cost;
+                    for (idx, node) in node_path.iter().enumerate() {
+                        let coord = graph.nodes[*node].clone();
+                        if idx == 0 {
+                            if route_coords
+                                .last()
+                                .map(|last| coord_dist2(last, &coord) > 1.0e-16)
+                                .unwrap_or(true)
+                            {
+                                route_coords.push(coord);
+                            }
+                        } else {
+                            route_coords.push(coord);
+                        }
+                    }
+                } else {
+                    disconnected_segments_count += 1;
+                    route_coords.push(selected.snapped.clone());
+                }
+            }
+
+            last_node = Some(selected.node_idx);
+            matched_count += 1;
+            if is_ambiguous {
+                ambiguous_count += 1;
+            }
+            offset_values.push(selected.offset_distance);
+            let confidence = (1.0 - (selected.offset_distance / search_radius)).clamp(0.0, 1.0);
+            matched_points.push(wbvector::Feature {
+                fid: matched_points.features.len() as u64 + 1,
+                geometry: Some(wbvector::Geometry::Point(selected.snapped.clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(*obs_fid),
+                    wbvector::FieldValue::Text(selected.edge_id),
+                    wbvector::FieldValue::Float(selected.projected_measure),
+                    wbvector::FieldValue::Float(selected.offset_distance),
+                    wbvector::FieldValue::Float(confidence),
+                    wbvector::FieldValue::Text(if is_ambiguous { "ambiguous" } else { "matched" }.to_string()),
+                ],
+            });
+        }
+
+        if route_coords.len() < 2 {
+            return Err(ToolError::Execution(
+                "map matching could not infer a route from the provided trajectory".to_string(),
+            ));
+        }
+
+        let mut route = wbvector::Layer::new(format!("{}_map_matched_route", input.name));
+        route.geom_type = Some(wbvector::GeometryType::LineString);
+        route.crs = input.crs.clone();
+        route.schema.add_field(wbvector::FieldDef::new("TRAJECTORY", wbvector::FieldType::Integer));
+        route.schema.add_field(wbvector::FieldDef::new("TOTAL_COST", wbvector::FieldType::Float));
+        route.schema.add_field(wbvector::FieldDef::new("MATCHED_PTS", wbvector::FieldType::Integer));
+        route.schema.add_field(wbvector::FieldDef::new("UNMATCHED", wbvector::FieldType::Integer));
+        route.schema.add_field(wbvector::FieldDef::new("AMBIGUOUS", wbvector::FieldType::Integer));
+        route.schema.add_field(wbvector::FieldDef::new("DISC_SEG", wbvector::FieldType::Integer));
+        route.push(wbvector::Feature {
+            fid: 1,
+            geometry: Some(wbvector::Geometry::LineString(route_coords)),
+            attributes: vec![
+                wbvector::FieldValue::Integer(1),
+                wbvector::FieldValue::Float(total_cost),
+                wbvector::FieldValue::Integer(matched_count),
+                wbvector::FieldValue::Integer(unmatched_count),
+                wbvector::FieldValue::Integer(ambiguous_count),
+                wbvector::FieldValue::Integer(disconnected_segments_count),
+            ],
+        });
+
+        let route_locator = write_vector_output(&route, output_path.trim())?;
+        let _ = write_vector_output(&matched_points, matched_points_output.trim())?;
+
+        if let Some(report_path) = match_report {
+            let mut sorted_offsets = offset_values.clone();
+            sorted_offsets.sort_by(|a, b| a.total_cmp(b));
+            let mean_offset = if sorted_offsets.is_empty() {
+                0.0
+            } else {
+                sorted_offsets.iter().sum::<f64>() / sorted_offsets.len() as f64
+            };
+            let median_offset = if sorted_offsets.is_empty() {
+                0.0
+            } else {
+                sorted_offsets[sorted_offsets.len() / 2]
+            };
+            let total_points = matched_count + unmatched_count;
+            let match_rate = if total_points == 0 {
+                0.0
+            } else {
+                matched_count as f64 / total_points as f64
+            };
+            let report_json = json!({
+                "match_rate": match_rate,
+                "mean_offset": mean_offset,
+                "median_offset": median_offset,
+                "ambiguous_count": ambiguous_count,
+                "disconnected_segments_count": disconnected_segments_count,
+            });
+            let report_text = serde_json::to_string_pretty(&report_json)
+                .map_err(|e| ToolError::Execution(format!("failed serializing match_report json: {}", e)))?;
+            std::fs::write(report_path, report_text)
+                .map_err(|e| ToolError::Execution(format!("failed writing match_report '{}': {}", report_path, e)))?;
+        }
+
+        Ok(build_vector_result(route_locator))
+    }
+}
+
+impl Tool for NetworkTopologyAuditTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_topology_audit",
+            display_name: "Network Topology Audit",
+            summary: "Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way edges for directional analysis.", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked edges to exclude from analysis.", required: false },
+                ToolParamSpec { name: "report", description: "Optional JSON output path for the audit summary report.", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path for per-node diagnostics.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_node_audit.shp"));
+        example_args.insert("report".to_string(), json!("audit_report.json"));
+
+        ToolManifest {
+            id: "network_topology_audit".to_string(),
+            display_name: "Network Topology Audit".to_string(),
+            summary: "Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way edges for directional analysis.".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked edges to exclude from analysis.".to_string(), required: false },
+                ToolParamDescriptor { name: "report".to_string(), description: "Optional JSON output path for the audit summary report.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path for per-node diagnostics.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_topology_audit_basic".to_string(),
+                description: "Writes per-node degree and component diagnostics and a summary JSON report for the input network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "diagnostics".to_string(), "topology".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        if one_way_field.is_some() {
+            let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        }
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        if blocked_field.is_some() {
+            let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let report_path = parse_optional_string_arg(args, "report");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_line_network_graph(&input, snap_tolerance, None, one_way_field, blocked_field, None)?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+        let n = graph.nodes.len();
+
+        // Compute directed in-degree and out-degree per node.
+        let mut out_degree = vec![0usize; n];
+        let mut in_degree = vec![0usize; n];
+        for u in 0..n {
+            out_degree[u] = graph.adjacency[u].len();
+            for (v, _) in &graph.adjacency[u] {
+                in_degree[*v] += 1;
+            }
+        }
+
+        // Build reverse adjacency for undirected component analysis and undirected degree.
+        let mut rev_adj: Vec<Vec<usize>> = vec![vec![]; n];
+        for u in 0..n {
+            for (v, _) in &graph.adjacency[u] {
+                rev_adj[*v].push(u);
+            }
+        }
+
+        // Compute undirected unique-neighbors count per node.
+        let mut undirected_degree = vec![0usize; n];
+        for u in 0..n {
+            let mut neighbors = std::collections::HashSet::<usize>::new();
+            for (v, _) in &graph.adjacency[u] {
+                neighbors.insert(*v);
+            }
+            for v in &rev_adj[u] {
+                neighbors.insert(*v);
+            }
+            undirected_degree[u] = neighbors.len();
+        }
+
+        // Undirected BFS-based connected components (forward + reverse edges).
+        let mut component = vec![usize::MAX; n];
+        let mut component_count = 0usize;
+        let mut component_sizes: Vec<usize> = Vec::new();
+        for start in 0..n {
+            if component[start] != usize::MAX {
+                continue;
+            }
+            let comp_id = component_count;
+            component_count += 1;
+            let mut size = 0usize;
+            let mut queue = std::collections::VecDeque::new();
+            queue.push_back(start);
+            component[start] = comp_id;
+            while let Some(u) = queue.pop_front() {
+                size += 1;
+                for (v, _) in &graph.adjacency[u] {
+                    if component[*v] == usize::MAX {
+                        component[*v] = comp_id;
+                        queue.push_back(*v);
+                    }
+                }
+                for v in &rev_adj[u] {
+                    if component[*v] == usize::MAX {
+                        component[*v] = comp_id;
+                        queue.push_back(*v);
+                    }
+                }
+            }
+            component_sizes.push(size);
+        }
+
+        // Classify each node and count anomaly types.
+        let mut isolated_count = 0i64;
+        let mut dead_end_count = 0i64;
+        let mut source_count = 0i64;
+        let mut sink_count = 0i64;
+
+        let mut output_layer = wbvector::Layer::new(format!("{}_topology_audit", input.name));
+        output_layer.geom_type = Some(wbvector::GeometryType::Point);
+        output_layer.crs = input.crs.clone();
+        output_layer.schema.add_field(wbvector::FieldDef::new("NODE_ID", wbvector::FieldType::Integer));
+        output_layer.schema.add_field(wbvector::FieldDef::new("DEG_OUT", wbvector::FieldType::Integer));
+        output_layer.schema.add_field(wbvector::FieldDef::new("DEG_IN", wbvector::FieldType::Integer));
+        output_layer.schema.add_field(wbvector::FieldDef::new("DEG_UNI", wbvector::FieldType::Integer));
+        output_layer.schema.add_field(wbvector::FieldDef::new("COMPONENT", wbvector::FieldType::Integer));
+        output_layer.schema.add_field(wbvector::FieldDef::new("NODE_TYPE", wbvector::FieldType::Text));
+
+        for u in 0..n {
+            let uni = undirected_degree[u];
+            let out = out_degree[u];
+            let inp = in_degree[u];
+            let node_type: &str = if uni == 0 {
+                isolated_count += 1;
+                "isolated"
+            } else if uni == 1 {
+                dead_end_count += 1;
+                "dead_end"
+            } else if inp == 0 && out > 0 {
+                source_count += 1;
+                "source"
+            } else if out == 0 && inp > 0 {
+                sink_count += 1;
+                "sink"
+            } else if uni == 2 {
+                "through"
+            } else {
+                "junction"
+            };
+            output_layer.push(wbvector::Feature {
+                fid: u as u64 + 1,
+                geometry: Some(wbvector::Geometry::Point(graph.nodes[u].clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(u as i64 + 1),
+                    wbvector::FieldValue::Integer(out as i64),
+                    wbvector::FieldValue::Integer(inp as i64),
+                    wbvector::FieldValue::Integer(uni as i64),
+                    wbvector::FieldValue::Integer((component[u] + 1) as i64),
+                    wbvector::FieldValue::Text(node_type.to_string()),
+                ],
+            });
+        }
+
+        let output_locator = write_vector_output(&output_layer, output_path.trim())?;
+
+        if let Some(path) = report_path {
+            let largest_component_size = component_sizes.iter().copied().max().unwrap_or(0);
+            let largest_component_share = if n == 0 {
+                0.0
+            } else {
+                largest_component_size as f64 / n as f64
+            };
+            let mut warnings: Vec<String> = Vec::new();
+            if component_count > 1 {
+                warnings.push(format!(
+                    "Network has {} disconnected components; routing between components will always fail.",
+                    component_count
+                ));
+            }
+            if isolated_count > 0 {
+                warnings.push(format!(
+                    "{} isolated node(s) detected (no connections on any edge).",
+                    isolated_count
+                ));
+            }
+            if source_count > 0 {
+                warnings.push(format!(
+                    "{} source node(s) detected (in-degree=0); these nodes cannot be reached from the rest of the network.",
+                    source_count
+                ));
+            }
+            if sink_count > 0 {
+                warnings.push(format!(
+                    "{} sink node(s) detected (out-degree=0); routing to these nodes may fail from certain origins.",
+                    sink_count
+                ));
+            }
+            let report_json = json!({
+                "node_count": n,
+                "network_feature_count": input.features.len(),
+                "component_count": component_count,
+                "largest_component_node_share": largest_component_share,
+                "dead_end_node_count": dead_end_count,
+                "isolated_node_count": isolated_count,
+                "source_node_count": source_count,
+                "sink_node_count": sink_count,
+                "potential_routing_failures": warnings,
+            });
+            let report_text = serde_json::to_string_pretty(&report_json)
+                .map_err(|e| ToolError::Execution(format!("failed serializing audit report json: {}", e)))?;
+            std::fs::write(&path, report_text)
+                .map_err(|e| ToolError::Execution(format!("failed writing audit report '{}': {}", path, e)))?;
+        }
+
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NetworkOdCostMatrixTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_od_cost_matrix",
+            display_name: "Network OD Cost Matrix",
+            summary: "Computes origin-destination shortest-path costs over a line network and writes a CSV matrix.",
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("od_matrix.csv"));
+
+        ToolManifest {
+            id: "network_od_cost_matrix".to_string(),
+            display_name: "Network OD Cost Matrix".to_string(),
+            summary: "Computes origin-destination shortest-path costs over a line network and writes a CSV matrix.".to_string(),
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_od_cost_matrix_basic".to_string(),
+                description: "Creates an OD cost matrix from origins and destinations on a line network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "od-matrix".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let output = parse_string_arg(args, "output")?;
+        if !output.to_ascii_lowercase().ends_with(".csv") {
+            return Err(ToolError::Validation("output must be a .csv path".to_string()));
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output = parse_string_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let origin_points = collect_point_coords_from_layer(&origins);
+        let destination_points = collect_point_coords_from_layer(&destinations);
+        if origin_points.is_empty() || destination_points.is_empty() {
+            return Err(ToolError::Execution(
+                "origins and destinations must contain point geometries".to_string(),
+            ));
+        }
+
+        let mut origin_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &origin_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest origin node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                origin_nodes.push((*fid, idx));
+            }
+        }
+
+        let mut destination_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &destination_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest destination node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                destination_nodes.push((*fid, idx));
+            }
+        }
+
+        if origin_nodes.is_empty() || destination_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "no origins or destinations snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let mut cache = HashMap::<usize, Vec<f64>>::new();
+        let mut csv = String::from("origin_fid,destination_fid,cost,reachable,origin_node,destination_node\n");
+
+        for (origin_fid, origin_node) in &origin_nodes {
+            let dist = cache
+                .entry(*origin_node)
+                .or_insert_with(|| dijkstra_all_costs(&graph, &[*origin_node], &turn_costs));
+            for (dest_fid, dest_node) in &destination_nodes {
+                let d = dist[*dest_node];
+                if d.is_finite() {
+                    csv.push_str(&format!(
+                        "{},{},{},true,{},{}\n",
+                        origin_fid,
+                        dest_fid,
+                        d,
+                        origin_node + 1,
+                        dest_node + 1
+                    ));
+                } else {
+                    csv.push_str(&format!(
+                        "{},{},,false,{},{}\n",
+                        origin_fid,
+                        dest_fid,
+                        origin_node + 1,
+                        dest_node + 1
+                    ));
+                }
+            }
+        }
+
+        if let Some(parent) = std::path::Path::new(output).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| ToolError::Execution(format!("failed creating output directory: {}", e)))?;
+            }
+        }
+        std::fs::write(output, csv)
+            .map_err(|e| ToolError::Execution(format!("failed writing OD CSV: {}", e)))?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for NetworkConnectedComponentsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_connected_components",
+            display_name: "Network Connected Components",
+            summary: "Assigns a connected-component ID to each line feature in a network.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_components.shp"));
+
+        ToolManifest {
+            id: "network_connected_components".to_string(),
+            display_name: "Network Connected Components".to_string(),
+            summary: "Assigns a connected-component ID to each line feature in a network.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_connected_components_basic".to_string(),
+                description: "Labels disconnected subnetworks with unique component IDs.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "components".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_line_network_graph(&input, snap_tolerance, None, None, None, None)?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+        let node_components = connected_components_for_graph(&graph);
+
+        let mut node_index_by_key = HashMap::<NetworkNodeKey, usize>::new();
+        for (idx, node) in graph.nodes.iter().enumerate() {
+            node_index_by_key.insert(network_node_key(node, snap_tolerance), idx);
+        }
+
+        let linework = collect_layer_linework(&input, false)?;
+        let mut feature_component = vec![None::<usize>; input.features.len()];
+        for line in &linework {
+            let mut comp_for_line: Option<usize> = None;
+            for coord in &line.coords {
+                let key = network_node_key(coord, snap_tolerance);
+                if let Some(node_idx) = node_index_by_key.get(&key) {
+                    comp_for_line = Some(node_components[*node_idx]);
+                    break;
+                }
+            }
+            if let Some(component_id) = comp_for_line {
+                let entry = &mut feature_component[line.source_index];
+                if entry.is_none() {
+                    *entry = Some(component_id);
+                }
+            }
+        }
+
+        let mut output = input.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("COMP_ID", wbvector::FieldType::Integer));
+        for (idx, feature) in output.features.iter_mut().enumerate() {
+            if let Some(component_id) = feature_component[idx] {
+                feature
+                    .attributes
+                    .push(wbvector::FieldValue::Integer((component_id + 1) as i64));
+            } else {
+                feature.attributes.push(wbvector::FieldValue::Null);
+            }
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NetworkRoutesFromOdTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_routes_from_od",
+            display_name: "Network Routes From OD",
+            summary: "Builds route geometries for origin-destination point pairs over a line network.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_routes.shp"));
+
+        ToolManifest {
+            id: "network_routes_from_od".to_string(),
+            display_name: "Network Routes From OD".to_string(),
+            summary: "Builds route geometries for origin-destination point pairs over a line network.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_routes_from_od_basic".to_string(),
+                description: "Creates route line features for OD point pairs on a network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "routes".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let origin_points = collect_point_coords_from_layer(&origins);
+        let destination_points = collect_point_coords_from_layer(&destinations);
+        if origin_points.is_empty() || destination_points.is_empty() {
+            return Err(ToolError::Execution(
+                "origins and destinations must contain point geometries".to_string(),
+            ));
+        }
+
+        let mut origin_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &origin_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest origin node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                origin_nodes.push((*fid, idx));
+            }
+        }
+        let mut destination_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &destination_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest destination node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                destination_nodes.push((*fid, idx));
+            }
+        }
+        if origin_nodes.is_empty() || destination_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "no origins or destinations snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let routes: Vec<(i64, i64, f64, Vec<wbvector::Coord>)> = if turn_costs.is_active() {
+            origin_nodes
+                .par_iter()
+                .flat_map_iter(|(origin_fid, origin_node)| {
+                    destination_nodes
+                        .iter()
+                        .filter_map(|(dest_fid, dest_node)| {
+                            let (cost, node_path) =
+                                dijkstra_shortest_path(&graph, *origin_node, *dest_node, &turn_costs)?;
+                            let coords = node_path
+                                .into_iter()
+                                .map(|idx| graph.nodes[idx].clone())
+                                .collect::<Vec<_>>();
+                            Some((*origin_fid, *dest_fid, cost, coords))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        } else {
+            origin_nodes
+                .par_iter()
+                .flat_map_iter(|(origin_fid, origin_node)| {
+                    let (dist, prev) = dijkstra_tree(&graph, *origin_node);
+                    destination_nodes
+                        .iter()
+                        .filter_map(|(dest_fid, dest_node)| {
+                            let cost = dist[*dest_node];
+                            if !cost.is_finite() {
+                                return None;
+                            }
+                            let node_path = reconstruct_path_nodes(&prev, *origin_node, *dest_node)?;
+                            let coords = node_path
+                                .into_iter()
+                                .map(|idx| graph.nodes[idx].clone())
+                                .collect::<Vec<_>>();
+                            Some((*origin_fid, *dest_fid, cost, coords))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
+
+        let mut output = wbvector::Layer::new(format!("{}_network_routes_from_od", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ORIGIN_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("DEST_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+
+        let mut next_fid = 1u64;
+        for (origin_fid, dest_fid, cost, coords) in routes {
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(origin_fid),
+                    wbvector::FieldValue::Integer(dest_fid),
+                    wbvector::FieldValue::Float(cost),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for KShortestPathsNetworkTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "k_shortest_paths_network",
+            display_name: "K Shortest Paths (Network)",
+            summary: "Finds the k shortest simple paths between start and end coordinates over a line network.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "start_x", description: "Start x coordinate.", required: true },
+                ToolParamSpec { name: "start_y", description: "Start y coordinate.", required: true },
+                ToolParamSpec { name: "end_x", description: "End x coordinate.", required: true },
+                ToolParamSpec { name: "end_y", description: "End y coordinate.", required: true },
+                ToolParamSpec { name: "k", description: "Number of shortest paths to return.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from start/end coordinates to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("start_x".to_string(), json!(0.0));
+        defaults.insert("start_y".to_string(), json!(0.0));
+        defaults.insert("end_x".to_string(), json!(100.0));
+        defaults.insert("end_y".to_string(), json!(100.0));
+        defaults.insert("k".to_string(), json!(3));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("k_shortest_paths.shp"));
+
+        ToolManifest {
+            id: "k_shortest_paths_network".to_string(),
+            display_name: "K Shortest Paths (Network)".to_string(),
+            summary: "Finds the k shortest simple paths between start and end coordinates over a line network.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_x".to_string(), description: "Start x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_y".to_string(), description: "Start y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_x".to_string(), description: "End x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_y".to_string(), description: "End y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "k".to_string(), description: "Number of shortest paths to return.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from start/end coordinates to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "k_shortest_paths_network_basic".to_string(),
+                description: "Computes multiple alternative simple paths between two points on a line network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "k-shortest-paths".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        for name in ["start_x", "start_y", "end_x", "end_y"] {
+            let value = parse_f64_arg(args, name)?;
+            if !value.is_finite() {
+                return Err(ToolError::Validation(format!("{} must be finite", name)));
+            }
+        }
+        let k = args
+            .get("k")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| ToolError::Validation("k must be an integer".to_string()))?;
+        if k <= 0 {
+            return Err(ToolError::Validation("k must be >= 1".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let start = wbvector::Coord::xy(parse_f64_arg(args, "start_x")?, parse_f64_arg(args, "start_y")?);
+        let end = wbvector::Coord::xy(parse_f64_arg(args, "end_x")?, parse_f64_arg(args, "end_y")?);
+        let k = args
+            .get("k")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| ToolError::Validation("k must be an integer".to_string()))?
+            as usize;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let (start_idx, start_dist) = nearest_network_node(&graph.nodes, &start)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest start node".to_string()))?;
+        let (end_idx, end_dist) = nearest_network_node(&graph.nodes, &end)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest end node".to_string()))?;
+
+        if let Some(limit) = max_snap_distance {
+            if start_dist > limit || end_dist > limit {
+                return Err(ToolError::Execution(format!(
+                    "start/end points are farther than max_snap_distance from the network (start={}, end={}, limit={})",
+                    start_dist, end_dist, limit
+                )));
+            }
+        }
+
+        let paths = k_shortest_simple_paths(&graph, start_idx, end_idx, k, &turn_costs);
+        if paths.is_empty() {
+            return Err(ToolError::Execution(
+                "no path found between start and end nodes".to_string(),
+            ));
+        }
+
+        let mut output = wbvector::Layer::new(format!("{}_k_shortest_paths_network", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("PATH_RANK", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("START_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("END_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+
+        for (idx, (cost, node_path)) in paths.into_iter().enumerate() {
+            let coords = node_path
+                .into_iter()
+                .map(|node_idx| graph.nodes[node_idx].clone())
+                .collect::<Vec<_>>();
+            output.push(wbvector::Feature {
+                fid: (idx + 1) as u64,
+                geometry: Some(wbvector::Geometry::LineString(coords)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer((idx + 1) as i64),
+                    wbvector::FieldValue::Integer((start_idx + 1) as i64),
+                    wbvector::FieldValue::Integer((end_idx + 1) as i64),
+                    wbvector::FieldValue::Float(cost),
+                ],
+            });
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;

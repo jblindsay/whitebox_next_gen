@@ -27,6 +27,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Changed
 - Started Phase 1 documentation cleanup by adding a "Preferred API conventions" section to `README.md`.
 - Improved stub guidance in `whitebox_workflows.pyi` to clarify preferred canonical methods (`metadata()` over legacy alias paths) and the topology utility-vs-tools namespace split.
+- Expanded typed Python category stubs for recent vector/network additions, including linear-referencing tools, schema-editing tools, `line_polygon_clip`, and the new network-analysis wrappers, plus conversion-category stubs for CSV/report outputs such as `network_od_cost_matrix`, `vector_summary_statistics`, and `topology_validation_report`.
 - Updated internal planning docs/checklists to reflect two constraints: pre-release
   API clarity can take priority over backward compatibility, and significant
   WbW-Py API changes should include explicit WbW-R parity decisions.

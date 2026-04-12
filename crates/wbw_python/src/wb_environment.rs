@@ -1304,6 +1304,10 @@ fn normalized_category_name_from_manifest_value(manifest_value: &serde_json::Val
 
 fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static str] {
     match category_slug {
+        "vector" => &[
+            "linear_referencing",
+            "network_analysis",
+        ],
         "raster" => &[
             "overlay_math",
             "local_neighborhood",
@@ -1334,6 +1338,28 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
     let has_tag = |needle: &str| tags.iter().any(|t| t.eq_ignore_ascii_case(needle));
 
     match (category_slug, subcategory) {
+        ("vector", "linear_referencing") => {
+            id == "points_along_lines"
+                || id == "locate_points_along_routes"
+                || id == "route_event_points_from_table"
+                || id == "route_event_lines_from_table"
+                || id == "route_event_points_from_layer"
+                || id == "route_event_lines_from_layer"
+                || has_tag("linear-referencing")
+                || has_tag("linear_referencing")
+        }
+        ("vector", "network_analysis") => {
+            id == "shortest_path_network"
+                || id == "network_node_degree"
+                || id == "network_service_area"
+                || id == "network_od_cost_matrix"
+                || id == "network_connected_components"
+                || id == "network_routes_from_od"
+                || id == "k_shortest_paths_network"
+                || id == "travelling_salesman_problem"
+                || id.starts_with("network_")
+                || has_tag("network")
+        }
         ("raster", "overlay_math") => {
             matches!(
                 id.as_str(),
@@ -3133,7 +3159,7 @@ impl Bundle {
 
     /// Create a true-colour (Red/Green/Blue) composite from this bundle.
     ///
-    /// Convenience delegate — equivalent to `wbe.true_colour_composite(self.bundle_root, ...)`.
+    /// Convenience delegate for creating a true-colour (RGB) composite from this bundle.
     /// Pass the `WbEnvironment` instance explicitly since `Bundle` holds no runtime reference.
     #[pyo3(signature = (wbe, output_path=None, callback=None))]
     fn true_colour_composite(
@@ -3142,8 +3168,9 @@ impl Bundle {
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
-        wbe.true_colour_composite(
+        wbe.run_bundle_colour_composite(
             &self.bundle_root.to_string_lossy(),
+            false,
             output_path,
             callback,
         )
@@ -3151,7 +3178,6 @@ impl Bundle {
 
     /// Create a false-colour (NIR/Red/Green) composite from this bundle.
     ///
-    /// Convenience delegate — equivalent to `wbe.false_colour_composite(self.bundle_root, ...)`.
     /// For Sentinel-2, B08 (10 m) is preferred over B8A (20 m) for the NIR channel.
     /// Pass the `WbEnvironment` instance explicitly since `Bundle` holds no runtime reference.
     #[pyo3(signature = (wbe, output_path=None, callback=None))]
@@ -3161,8 +3187,9 @@ impl Bundle {
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
-        wbe.false_colour_composite(
+        wbe.run_bundle_colour_composite(
             &self.bundle_root.to_string_lossy(),
+            true,
             output_path,
             callback,
         )
@@ -6661,7 +6688,7 @@ impl WbEnvironment {
 
 // ---------------------------------------------------------------------------
 // Sensor-bundle colour composite helpers (module-level free functions)
-// Called by WbEnvironment::true_colour_composite and false_colour_composite.
+// Used by bundle-level and category-callable true/false colour composite helpers.
 // ---------------------------------------------------------------------------
 
 /// Resolve the (red, green, blue) band paths for a true-colour (R/G/B) composite
@@ -7506,63 +7533,6 @@ impl WbEnvironment {
             )));
         }
         Ok(bundle)
-    }
-
-    /// Create a true-colour (Red/Green/Blue) composite raster from a sensor bundle.
-    ///
-    /// The correct band keys are resolved automatically for the detected bundle family.
-    /// Supported families: sentinel2_safe, landsat, planetscope, dimap, maxar_worldview.
-    /// SAR families (sentinel1_safe, iceye, radarsat2, rcm) raise a ValueError.
-    #[pyo3(signature = (bundle_root, output_path=None, callback=None))]
-    fn true_colour_composite(
-        &self,
-        bundle_root: &str,
-        output_path: Option<&str>,
-        callback: Option<Py<PyAny>>,
-    ) -> PyResult<Raster> {
-        let input_path = if std::path::Path::new(bundle_root).is_absolute() {
-            std::path::PathBuf::from(bundle_root)
-        } else {
-            self.working_directory.join(bundle_root)
-        };
-        let (red_path, green_path, blue_path) = resolve_true_colour_band_paths(&input_path)?;
-        let mut args = serde_json::Map::new();
-        args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
-        args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
-        args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
-            args.insert("output".to_string(), json!(out));
-        }
-        self._run_raster_tool_with_args("create_colour_composite", args, 0, callback)
-    }
-
-    /// Create a false-colour (NIR/Red/Green) composite raster from a sensor bundle.
-    ///
-    /// The correct band keys are resolved automatically for the detected bundle family.
-    /// For Sentinel-2, B08 (10 m) is preferred over B8A (20 m) for the NIR channel.
-    /// Supported families: sentinel2_safe, landsat, planetscope, dimap, maxar_worldview.
-    /// SAR families (sentinel1_safe, iceye, radarsat2, rcm) raise a ValueError.
-    #[pyo3(signature = (bundle_root, output_path=None, callback=None))]
-    fn false_colour_composite(
-        &self,
-        bundle_root: &str,
-        output_path: Option<&str>,
-        callback: Option<Py<PyAny>>,
-    ) -> PyResult<Raster> {
-        let input_path = if std::path::Path::new(bundle_root).is_absolute() {
-            std::path::PathBuf::from(bundle_root)
-        } else {
-            self.working_directory.join(bundle_root)
-        };
-        let (red_path, green_path, blue_path) = resolve_false_colour_band_paths(&input_path)?;
-        let mut args = serde_json::Map::new();
-        args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
-        args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
-        args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
-        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
-            args.insert("output".to_string(), json!(out));
-        }
-        self._run_raster_tool_with_args("create_colour_composite", args, 0, callback)
     }
 
     #[pyo3(signature = (
@@ -22382,6 +22352,876 @@ impl WbEnvironment {
         self._run_vector_tool_with_args("smooth_vectors", args, callback)
     }
 
+    #[pyo3(signature = (input, spacing, include_end=true, output_path=None, callback=None))]
+    fn points_along_lines(
+        &self,
+        input: &Vector,
+        spacing: f64,
+        include_end: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "points_along_lines")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("spacing".to_string(), json!(spacing));
+        args.insert("include_end".to_string(), json!(include_end));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("points_along_lines", args, callback)
+    }
+
+    #[pyo3(signature = (routes, points, max_offset_distance=None, output_path=None, callback=None))]
+    fn locate_points_along_routes(
+        &self,
+        routes: &Vector,
+        points: &Vector,
+        max_offset_distance: Option<f64>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&points.file_path, "locate_points_along_routes")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("routes".to_string(), json!(routes.file_path.to_string_lossy().to_string()));
+        args.insert("points".to_string(), json!(points.file_path.to_string_lossy().to_string()));
+        if let Some(v) = max_offset_distance {
+            args.insert("max_offset_distance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("locate_points_along_routes", args, callback)
+    }
+
+    #[pyo3(signature = (routes, events, event_route_field, measure_field, route_id_field=None, output_path=None, callback=None))]
+    fn route_event_points_from_table(
+        &self,
+        routes: &Vector,
+        events: &str,
+        event_route_field: &str,
+        measure_field: &str,
+        route_id_field: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&routes.file_path, "route_event_points")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("routes".to_string(), json!(routes.file_path.to_string_lossy().to_string()));
+        args.insert("events".to_string(), json!(events));
+        args.insert("event_route_field".to_string(), json!(event_route_field));
+        args.insert("measure_field".to_string(), json!(measure_field));
+        if let Some(v) = route_id_field {
+            args.insert("route_id_field".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("route_event_points_from_table", args, callback)
+    }
+
+    #[pyo3(signature = (routes, events, event_route_field, from_measure_field, to_measure_field, route_id_field=None, output_path=None, callback=None))]
+    fn route_event_lines_from_table(
+        &self,
+        routes: &Vector,
+        events: &str,
+        event_route_field: &str,
+        from_measure_field: &str,
+        to_measure_field: &str,
+        route_id_field: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&routes.file_path, "route_event_lines")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("routes".to_string(), json!(routes.file_path.to_string_lossy().to_string()));
+        args.insert("events".to_string(), json!(events));
+        args.insert("event_route_field".to_string(), json!(event_route_field));
+        args.insert("from_measure_field".to_string(), json!(from_measure_field));
+        args.insert("to_measure_field".to_string(), json!(to_measure_field));
+        if let Some(v) = route_id_field {
+            args.insert("route_id_field".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("route_event_lines_from_table", args, callback)
+    }
+
+    #[pyo3(signature = (routes, events, event_route_field, measure_field, route_id_field=None, write_event_fid=true, write_event_xy=false, output_path=None, callback=None))]
+    fn route_event_points_from_layer(
+        &self,
+        routes: &Vector,
+        events: &Vector,
+        event_route_field: &str,
+        measure_field: &str,
+        route_id_field: Option<&str>,
+        write_event_fid: bool,
+        write_event_xy: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&routes.file_path, "route_event_points_from_layer")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("routes".to_string(), json!(routes.file_path.to_string_lossy().to_string()));
+        args.insert("events".to_string(), json!(events.file_path.to_string_lossy().to_string()));
+        args.insert("event_route_field".to_string(), json!(event_route_field));
+        args.insert("measure_field".to_string(), json!(measure_field));
+        if let Some(v) = route_id_field {
+            args.insert("route_id_field".to_string(), json!(v));
+        }
+        args.insert("write_event_fid".to_string(), json!(write_event_fid));
+        args.insert("write_event_xy".to_string(), json!(write_event_xy));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("route_event_points_from_layer", args, callback)
+    }
+
+    #[pyo3(signature = (routes, events, event_route_field, from_measure_field, to_measure_field, route_id_field=None, write_event_fid=true, write_event_xy=false, output_path=None, callback=None))]
+    fn route_event_lines_from_layer(
+        &self,
+        routes: &Vector,
+        events: &Vector,
+        event_route_field: &str,
+        from_measure_field: &str,
+        to_measure_field: &str,
+        route_id_field: Option<&str>,
+        write_event_fid: bool,
+        write_event_xy: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&routes.file_path, "route_event_lines_from_layer")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("routes".to_string(), json!(routes.file_path.to_string_lossy().to_string()));
+        args.insert("events".to_string(), json!(events.file_path.to_string_lossy().to_string()));
+        args.insert("event_route_field".to_string(), json!(event_route_field));
+        args.insert("from_measure_field".to_string(), json!(from_measure_field));
+        args.insert("to_measure_field".to_string(), json!(to_measure_field));
+        if let Some(v) = route_id_field {
+            args.insert("route_id_field".to_string(), json!(v));
+        }
+        args.insert("write_event_fid".to_string(), json!(write_event_fid));
+        args.insert("write_event_xy".to_string(), json!(write_event_xy));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("route_event_lines_from_layer", args, callback)
+    }
+
+    #[pyo3(signature = (input, field, new_field, output_path=None, callback=None))]
+    fn rename_field(
+        &self,
+        input: &Vector,
+        field: &str,
+        new_field: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "rename_field")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("field".to_string(), json!(field));
+        args.insert("new_field".to_string(), json!(new_field));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("rename_field", args, callback)
+    }
+
+    #[pyo3(signature = (input, fields, output_path=None, callback=None))]
+    fn delete_field(
+        &self,
+        input: &Vector,
+        fields: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "delete_field")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("fields".to_string(), json!(fields));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("delete_field", args, callback)
+    }
+
+    #[pyo3(signature = (input, field, field_type, default=None, output_path=None, callback=None))]
+    fn add_field(
+        &self,
+        input: &Vector,
+        field: &str,
+        field_type: &str,
+        default: Option<&Bound<'_, PyAny>>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "add_field")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("field".to_string(), json!(field));
+        args.insert("field_type".to_string(), json!(field_type));
+        if let Some(v) = default {
+            args.insert("default".to_string(), py_any_to_json_value(v)?);
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("add_field", args, callback)
+    }
+
+    #[pyo3(signature = (input, spacing, output_path=None, callback=None))]
+    fn densify_features(
+        &self,
+        input: &Vector,
+        spacing: f64,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "densify_features")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("spacing".to_string(), json!(spacing));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("densify_features", args, callback)
+    }
+
+    #[pyo3(signature = (input, clip, output_path=None, callback=None))]
+    fn line_polygon_clip(
+        &self,
+        input: &Vector,
+        clip: &Vector,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "line_polygon_clip")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("clip".to_string(), json!(clip.file_path.to_string_lossy().to_string()));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("line_polygon_clip", args, callback)
+    }
+
+    #[pyo3(signature = (input, group_field, value_field, output_path=None, callback=None))]
+    fn vector_summary_statistics(
+        &self,
+        input: &Vector,
+        group_field: &str,
+        value_field: &str,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<String> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                let stem = input
+                    .file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("vector");
+                self.working_directory
+                    .join(format!("{}_summary.csv", stem))
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("group_field".to_string(), json!(group_field));
+        args.insert("value_field".to_string(), json!(value_field));
+        args.insert("output".to_string(), json!(output));
+        let response = run_tool_response_with_args(&self.runtime, "vector_summary_statistics", args, callback)?;
+        extract_output_string_by_key("vector_summary_statistics", &response, "path")
+    }
+
+    #[pyo3(signature = (input, output_path=None, callback=None))]
+    fn topology_validation_report(
+        &self,
+        input: &Vector,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<String> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                let stem = input
+                    .file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("vector");
+                self.working_directory
+                    .join(format!("{}_topology_report.csv", stem))
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("output".to_string(), json!(output));
+        let response = run_tool_response_with_args(&self.runtime, "topology_validation_report", args, callback)?;
+        extract_output_string_by_key("topology_validation_report", &response, "path")
+    }
+
+    #[pyo3(signature = (input, start_x, start_y, end_x, end_y, snap_tolerance=None, max_snap_distance=None, edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, temporal_cost_profile=None, temporal_edge_id_field=None, departure_time=None, temporal_mode=None, temporal_fallback=None, temporal_profile_report=None, output_path=None, callback=None))]
+    fn shortest_path_network(
+        &self,
+        input: &Vector,
+        start_x: f64,
+        start_y: f64,
+        end_x: f64,
+        end_y: f64,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "shortest_path_network")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("start_x".to_string(), json!(start_x));
+        args.insert("start_y".to_string(), json!(start_y));
+        args.insert("end_x".to_string(), json!(end_x));
+        args.insert("end_y".to_string(), json!(end_y));
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            temporal_cost_profile,
+            temporal_edge_id_field,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+            temporal_profile_report,
+        );
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("shortest_path_network", args, callback)
+    }
+
+    #[pyo3(signature = (input, snap_tolerance=None, output_path=None, callback=None))]
+    fn network_node_degree(
+        &self,
+        input: &Vector,
+        snap_tolerance: Option<f64>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "network_node_degree")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("network_node_degree", args, callback)
+    }
+
+    #[pyo3(signature = (input, origins, max_cost, snap_tolerance=None, max_snap_distance=None, output_mode="nodes", edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, temporal_cost_profile=None, temporal_edge_id_field=None, departure_time=None, temporal_mode=None, temporal_fallback=None, temporal_profile_report=None, output_path=None, callback=None))]
+    fn network_service_area(
+        &self,
+        input: &Vector,
+        origins: &Vector,
+        max_cost: f64,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        output_mode: &str,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "network_service_area")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("origins".to_string(), json!(origins.file_path.to_string_lossy().to_string()));
+        args.insert("max_cost".to_string(), json!(max_cost));
+        args.insert("output_mode".to_string(), json!(output_mode));
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            temporal_cost_profile,
+            temporal_edge_id_field,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+            temporal_profile_report,
+        );
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("network_service_area", args, callback)
+    }
+
+    #[pyo3(signature = (input, snap_tolerance=None, output_path=None, callback=None))]
+    fn network_connected_components(
+        &self,
+        input: &Vector,
+        snap_tolerance: Option<f64>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "network_connected_components")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("network_connected_components", args, callback)
+    }
+
+    #[pyo3(signature = (input, origins, destinations, snap_tolerance=None, max_snap_distance=None, edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, temporal_cost_profile=None, temporal_edge_id_field=None, departure_time=None, temporal_mode=None, temporal_fallback=None, temporal_profile_report=None, output_path=None, callback=None))]
+    fn network_routes_from_od(
+        &self,
+        input: &Vector,
+        origins: &Vector,
+        destinations: &Vector,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "network_routes_from_od")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("origins".to_string(), json!(origins.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "destinations".to_string(),
+            json!(destinations.file_path.to_string_lossy().to_string()),
+        );
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            temporal_cost_profile,
+            temporal_edge_id_field,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+            temporal_profile_report,
+        );
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("network_routes_from_od", args, callback)
+    }
+
+    #[pyo3(signature = (input, start_x, start_y, end_x, end_y, k, snap_tolerance=None, max_snap_distance=None, edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, temporal_cost_profile=None, temporal_edge_id_field=None, departure_time=None, temporal_mode=None, temporal_fallback=None, temporal_profile_report=None, output_path=None, callback=None))]
+    fn k_shortest_paths_network(
+        &self,
+        input: &Vector,
+        start_x: f64,
+        start_y: f64,
+        end_x: f64,
+        end_y: f64,
+        k: i64,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "k_shortest_paths_network")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("start_x".to_string(), json!(start_x));
+        args.insert("start_y".to_string(), json!(start_y));
+        args.insert("end_x".to_string(), json!(end_x));
+        args.insert("end_y".to_string(), json!(end_y));
+        args.insert("k".to_string(), json!(k));
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            temporal_cost_profile,
+            temporal_edge_id_field,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+            temporal_profile_report,
+        );
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("k_shortest_paths_network", args, callback)
+    }
+
+    #[pyo3(signature = (input, origins, destinations, snap_tolerance=None, max_snap_distance=None, edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, temporal_cost_profile=None, temporal_edge_id_field=None, departure_time=None, temporal_mode=None, temporal_fallback=None, temporal_profile_report=None, output_path=None, callback=None))]
+    fn network_od_cost_matrix(
+        &self,
+        input: &Vector,
+        origins: &Vector,
+        destinations: &Vector,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<String> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                let stem = input
+                    .file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("network");
+                self.working_directory
+                    .join(format!("{}_od_cost_matrix.csv", stem))
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("origins".to_string(), json!(origins.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "destinations".to_string(),
+            json!(destinations.file_path.to_string_lossy().to_string()),
+        );
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            temporal_cost_profile,
+            temporal_edge_id_field,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+            temporal_profile_report,
+        );
+        args.insert("output".to_string(), json!(output));
+        let response = run_tool_response_with_args(&self.runtime, "network_od_cost_matrix", args, callback)?;
+        extract_output_string_by_key("network_od_cost_matrix", &response, "path")
+    }
+
+    #[pyo3(signature = (input, trajectory_points, timestamp_field, search_radius=None, candidate_k=None, snap_tolerance=None, max_snap_distance=None, edge_cost_field=None, one_way_field=None, blocked_field=None, barriers=None, barrier_snap_distance=None, turn_penalty=None, u_turn_penalty=None, forbid_u_turns=false, forbid_left_turns=false, forbid_right_turns=false, turn_restrictions_csv=None, matched_points_output=None, match_report=None, output_path=None, callback=None))]
+    fn map_matching_v1(
+        &self,
+        input: &Vector,
+        trajectory_points: &Vector,
+        timestamp_field: &str,
+        search_radius: Option<f64>,
+        candidate_k: Option<i64>,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        matched_points_output: Option<&str>,
+        match_report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "map_matching_v1")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "trajectory_points".to_string(),
+            json!(trajectory_points.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("timestamp_field".to_string(), json!(timestamp_field));
+        if let Some(v) = search_radius {
+            args.insert("search_radius".to_string(), json!(v));
+        }
+        if let Some(v) = candidate_k {
+            args.insert("candidate_k".to_string(), json!(v));
+        }
+        Self::add_network_optional_args(
+            &mut args,
+            snap_tolerance,
+            max_snap_distance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            barriers,
+            barrier_snap_distance,
+            turn_penalty,
+            u_turn_penalty,
+            forbid_u_turns,
+            forbid_left_turns,
+            forbid_right_turns,
+            turn_restrictions_csv,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        if let Some(v) = matched_points_output {
+            args.insert("matched_points_output".to_string(), json!(v));
+        }
+        if let Some(v) = match_report {
+            args.insert("match_report".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("map_matching_v1", args, callback)
+    }
+
+    #[pyo3(signature = (input, snap_tolerance=None, one_way_field=None, blocked_field=None, report=None, output_path=None, callback=None))]
+    fn network_topology_audit(
+        &self,
+        input: &Vector,
+        snap_tolerance: Option<f64>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        report: Option<&str>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "network_topology_audit")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        if let Some(v) = one_way_field {
+            args.insert("one_way_field".to_string(), json!(v));
+        }
+        if let Some(v) = blocked_field {
+            args.insert("blocked_field".to_string(), json!(v));
+        }
+        if let Some(v) = report {
+            args.insert("report".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("network_topology_audit", args, callback)
+    }
+
     #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]
     fn symmetrical_difference(
         &self,
@@ -27713,6 +28553,33 @@ mod tests {
 }
 
 impl WbEnvironment {
+    fn run_bundle_colour_composite(
+        &self,
+        bundle_root: &str,
+        false_colour: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let input_path = if std::path::Path::new(bundle_root).is_absolute() {
+            std::path::PathBuf::from(bundle_root)
+        } else {
+            self.working_directory.join(bundle_root)
+        };
+        let (red_path, green_path, blue_path) = if false_colour {
+            resolve_false_colour_band_paths(&input_path)?
+        } else {
+            resolve_true_colour_band_paths(&input_path)?
+        };
+        let mut args = serde_json::Map::new();
+        args.insert("red".to_string(), json!(red_path.to_string_lossy().to_string()));
+        args.insert("green".to_string(), json!(green_path.to_string_lossy().to_string()));
+        args.insert("blue".to_string(), json!(blue_path.to_string_lossy().to_string()));
+        if let Some(out) = self.resolve_output_path_for_wd(output_path) {
+            args.insert("output".to_string(), json!(out));
+        }
+        self._run_raster_tool_with_args("create_colour_composite", args, 0, callback)
+    }
+
     fn resolve_output_path_for_wd(&self, output_path: Option<&str>) -> Option<String> {
         output_path.map(|p| {
             if p.contains("://") {
@@ -27728,6 +28595,90 @@ impl WbEnvironment {
                     .to_string()
             }
         })
+    }
+
+    fn add_network_optional_args(
+        args: &mut serde_json::Map<String, serde_json::Value>,
+        snap_tolerance: Option<f64>,
+        max_snap_distance: Option<f64>,
+        edge_cost_field: Option<&str>,
+        one_way_field: Option<&str>,
+        blocked_field: Option<&str>,
+        barriers: Option<&Vector>,
+        barrier_snap_distance: Option<f64>,
+        turn_penalty: Option<f64>,
+        u_turn_penalty: Option<f64>,
+        forbid_u_turns: bool,
+        forbid_left_turns: bool,
+        forbid_right_turns: bool,
+        turn_restrictions_csv: Option<&str>,
+        temporal_cost_profile: Option<&str>,
+        temporal_edge_id_field: Option<&str>,
+        departure_time: Option<&str>,
+        temporal_mode: Option<&str>,
+        temporal_fallback: Option<&str>,
+        temporal_profile_report: Option<&str>,
+    ) {
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        if let Some(v) = max_snap_distance {
+            args.insert("max_snap_distance".to_string(), json!(v));
+        }
+        if let Some(v) = edge_cost_field {
+            args.insert("edge_cost_field".to_string(), json!(v));
+        }
+        if let Some(v) = one_way_field {
+            args.insert("one_way_field".to_string(), json!(v));
+        }
+        if let Some(v) = blocked_field {
+            args.insert("blocked_field".to_string(), json!(v));
+        }
+        if let Some(v) = barriers {
+            args.insert(
+                "barriers".to_string(),
+                json!(v.file_path.to_string_lossy().to_string()),
+            );
+        }
+        if let Some(v) = barrier_snap_distance {
+            args.insert("barrier_snap_distance".to_string(), json!(v));
+        }
+        if let Some(v) = turn_penalty {
+            args.insert("turn_penalty".to_string(), json!(v));
+        }
+        if let Some(v) = u_turn_penalty {
+            args.insert("u_turn_penalty".to_string(), json!(v));
+        }
+        if forbid_u_turns {
+            args.insert("forbid_u_turns".to_string(), json!(true));
+        }
+        if forbid_left_turns {
+            args.insert("forbid_left_turns".to_string(), json!(true));
+        }
+        if forbid_right_turns {
+            args.insert("forbid_right_turns".to_string(), json!(true));
+        }
+        if let Some(v) = turn_restrictions_csv {
+            args.insert("turn_restrictions_csv".to_string(), json!(v));
+        }
+        if let Some(v) = temporal_cost_profile {
+            args.insert("temporal_cost_profile".to_string(), json!(v));
+        }
+        if let Some(v) = temporal_edge_id_field {
+            args.insert("temporal_edge_id_field".to_string(), json!(v));
+        }
+        if let Some(v) = departure_time {
+            args.insert("departure_time".to_string(), json!(v));
+        }
+        if let Some(v) = temporal_mode {
+            args.insert("temporal_mode".to_string(), json!(v));
+        }
+        if let Some(v) = temporal_fallback {
+            args.insert("temporal_fallback".to_string(), json!(v));
+        }
+        if let Some(v) = temporal_profile_report {
+            args.insert("temporal_profile_report".to_string(), json!(v));
+        }
     }
 
     fn _run_vector_tool_with_args(

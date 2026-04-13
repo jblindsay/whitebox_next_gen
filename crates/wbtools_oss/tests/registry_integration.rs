@@ -244,6 +244,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"add_field"));
     assert!(ids.contains(&"line_polygon_clip"));
     assert!(ids.contains(&"shortest_path_network"));
+    assert!(ids.contains(&"multimodal_shortest_path"));
     assert!(ids.contains(&"network_node_degree"));
     assert!(ids.contains(&"network_service_area"));
     assert!(ids.contains(&"network_od_cost_matrix"));
@@ -15527,6 +15528,116 @@ fn shortest_path_network_finds_connected_route() {
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn multimodal_shortest_path_transfer_penalty_changes_route() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_shortest_path_transfer");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let relaxed_out = std::env::temp_dir().join(format!("{tag}_relaxed_out.gpkg"));
+    let strict_out = std::env::temp_dir().join(format!("{tag}_strict_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+
+    // Two-mode short corridor: A(0,0)->B(1,0) walk, B->C(2,0) transit.
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add walk edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("MODE", FieldValue::Text("transit".to_string()))],
+        )
+        .expect("add transit edge");
+
+    // Single-mode detour: A->D->E->C, all walk.
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(0.0, 1.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add detour edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 1.0), Coord::xy(2.0, 1.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add detour edge 2");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 1.0), Coord::xy(2.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add detour edge 3");
+
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write multimodal network input");
+
+    let mut relaxed_args = ToolArgs::new();
+    relaxed_args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    relaxed_args.insert("start_x".to_string(), json!(0.0));
+    relaxed_args.insert("start_y".to_string(), json!(0.0));
+    relaxed_args.insert("end_x".to_string(), json!(2.0));
+    relaxed_args.insert("end_y".to_string(), json!(0.0));
+    relaxed_args.insert("mode_field".to_string(), json!("MODE"));
+    relaxed_args.insert("default_mode_speed".to_string(), json!(1.0));
+    relaxed_args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,transit:4.0"));
+    relaxed_args.insert("transfer_penalty".to_string(), json!(0.0));
+    relaxed_args.insert("max_snap_distance".to_string(), json!(0.25));
+    relaxed_args.insert("output".to_string(), json!(relaxed_out.to_string_lossy().to_string()));
+
+    let relaxed = registry
+        .run("multimodal_shortest_path", &relaxed_args, &context(&caps))
+        .expect("multimodal_shortest_path relaxed run");
+
+    let relaxed_cost = relaxed
+        .outputs
+        .get("cost")
+        .and_then(|v| v.as_f64())
+        .expect("relaxed cost output");
+    let relaxed_mode_changes = relaxed
+        .outputs
+        .get("mode_changes")
+        .and_then(|v| v.as_i64())
+        .expect("relaxed mode_changes output");
+
+    let mut strict_args = relaxed_args.clone();
+    strict_args.insert("transfer_penalty".to_string(), json!(5.0));
+    strict_args.insert("output".to_string(), json!(strict_out.to_string_lossy().to_string()));
+
+    let strict = registry
+        .run("multimodal_shortest_path", &strict_args, &context(&caps))
+        .expect("multimodal_shortest_path strict run");
+
+    let strict_cost = strict
+        .outputs
+        .get("cost")
+        .and_then(|v| v.as_f64())
+        .expect("strict cost output");
+    let strict_mode_changes = strict
+        .outputs
+        .get("mode_changes")
+        .and_then(|v| v.as_i64())
+        .expect("strict mode_changes output");
+
+    assert!(relaxed_mode_changes >= 1, "expected relaxed run to use at least one transfer");
+    assert_eq!(strict_mode_changes, 0, "expected strict run to avoid transfers");
+    assert!(strict_cost > relaxed_cost, "expected transfer penalty to increase route cost");
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&relaxed_out);
+    let _ = std::fs::remove_file(&strict_out);
 }
 
 #[test]

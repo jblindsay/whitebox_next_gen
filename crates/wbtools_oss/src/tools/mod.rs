@@ -529,6 +529,7 @@ pub use gis::DeleteFieldTool;
 pub use gis::AddFieldTool;
 pub use gis::LinePolygonClipTool;
 pub use gis::ShortestPathNetworkTool;
+pub use gis::MultimodalShortestPathTool;
 pub use gis::NetworkNodeDegreeTool;
 pub use gis::NetworkServiceAreaTool;
 pub use gis::MapMatchingV1Tool;

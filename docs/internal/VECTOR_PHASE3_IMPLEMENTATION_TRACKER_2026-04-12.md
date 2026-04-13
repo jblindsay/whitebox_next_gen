@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 3 (Advanced Optimization and Multimodal)
-Status: In Progress (Streams A-B complete; Stream C next)
+Status: In Progress (Streams A-B complete; Stream C baseline underway)
 
 ## Scope Anchors
 
@@ -32,9 +32,9 @@ Phase 3 planned outcomes:
 - [x] Add benchmark scenarios for municipal/logistics workflows.
 
 ### Stream C: Multimodal Routing Foundation
-- [ ] Define multimodal graph schema (mode, transfer, penalties).
-- [ ] Implement multimodal shortest-path baseline.
-- [ ] Implement transfer-aware generalized cost model.
+- [x] Define multimodal graph schema (mode, transfer, penalties).
+- [x] Implement multimodal shortest-path baseline.
+- [x] Implement transfer-aware generalized cost model.
 - [ ] Add examples for walk-drive and walk-transit patterns.
 
 ### Stream D: Centrality and Accessibility Analytics
@@ -112,3 +112,12 @@ Phase 3 planned outcomes:
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_relaxed_windows_serves_municipal_scenario -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_pickup_delivery_logistics_benchmark_serves_all_requests -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)
+- 2026-04-12: **STREAM C MULTIMODAL BASELINE (MODE-AWARE SHORTEST PATH)**
+	- Added `multimodal_shortest_path` tool in `wbtools_oss` with explicit multimodal graph schema (`mode_field`, `mode_speed_overrides`, `allowed_modes`, `transfer_penalty`).
+	- Implemented mode-aware shortest-path baseline with transfer-aware generalized cost accumulation.
+	- Added route diagnostics outputs (`cost`, `mode_changes`, `transfer_penalty`) and output attributes (`COST`, `MODE_CHG`, `MODE_SEQ`).
+	- Added integration coverage: `multimodal_shortest_path_transfer_penalty_changes_route`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_transfer_penalty_changes_route -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration shortest_path_network_finds_connected_route -- --nocapture` (PASS)

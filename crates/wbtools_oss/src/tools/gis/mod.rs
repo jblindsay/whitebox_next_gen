@@ -184,6 +184,7 @@ pub struct DeleteFieldTool;
 pub struct AddFieldTool;
 pub struct LinePolygonClipTool;
 pub struct ShortestPathNetworkTool;
+pub struct MultimodalShortestPathTool;
 pub struct NetworkNodeDegreeTool;
 pub struct NetworkServiceAreaTool;
 pub struct MapMatchingV1Tool;
@@ -22991,6 +22992,20 @@ struct LineNetworkGraph {
     adjacency: Vec<Vec<(usize, f64)>>,
 }
 
+#[derive(Clone)]
+struct MultimodalEdge {
+    to: usize,
+    cost: f64,
+    mode_id: usize,
+}
+
+#[derive(Clone)]
+struct MultimodalNetworkGraph {
+    nodes: Vec<wbvector::Coord>,
+    adjacency: Vec<Vec<MultimodalEdge>>,
+    mode_names: Vec<String>,
+}
+
 #[derive(Clone, Copy)]
 enum TemporalCostMode {
     Multiplier,
@@ -23741,10 +23756,260 @@ fn build_line_network_graph(
     Ok(LineNetworkGraph { nodes, adjacency })
 }
 
+fn parse_mode_weight_overrides(
+    spec: Option<&str>,
+    param_name: &str,
+) -> Result<HashMap<String, f64>, ToolError> {
+    let mut out = HashMap::<String, f64>::new();
+    let Some(raw) = spec else {
+        return Ok(out);
+    };
+    for token in raw.split(',') {
+        let item = token.trim();
+        if item.is_empty() {
+            continue;
+        }
+        let mut parts = item.splitn(2, ':');
+        let mode = parts.next().unwrap_or_default().trim().to_ascii_lowercase();
+        let value_raw = parts.next().ok_or_else(|| {
+            ToolError::Validation(format!(
+                "{} entries must be formatted as mode:value",
+                param_name
+            ))
+        })?;
+        if mode.is_empty() {
+            return Err(ToolError::Validation(format!(
+                "{} contains an empty mode key",
+                param_name
+            )));
+        }
+        let value = value_raw.trim().parse::<f64>().map_err(|_| {
+            ToolError::Validation(format!(
+                "{} contains a non-numeric value for mode '{}'",
+                param_name, mode
+            ))
+        })?;
+        if !value.is_finite() || value <= 0.0 {
+            return Err(ToolError::Validation(format!(
+                "{} values must be finite and > 0",
+                param_name
+            )));
+        }
+        out.insert(mode, value);
+    }
+    Ok(out)
+}
+
+fn parse_mode_allowlist(spec: Option<&str>) -> HashSet<String> {
+    let mut out = HashSet::<String>::new();
+    if let Some(raw) = spec {
+        for token in raw.split(',') {
+            let mode = token.trim().to_ascii_lowercase();
+            if !mode.is_empty() {
+                out.insert(mode);
+            }
+        }
+    }
+    out
+}
+
+fn intern_multimodal_mode(
+    mode_to_id: &mut HashMap<String, usize>,
+    mode_names: &mut Vec<String>,
+    mode: &str,
+) -> usize {
+    if let Some(id) = mode_to_id.get(mode).copied() {
+        return id;
+    }
+    let id = mode_names.len();
+    mode_names.push(mode.to_string());
+    mode_to_id.insert(mode.to_string(), id);
+    id
+}
+
+fn build_multimodal_network_graph(
+    input: &wbvector::Layer,
+    snap_tolerance: f64,
+    mode_field: &str,
+    default_mode_speed: f64,
+    mode_speed_overrides: &HashMap<String, f64>,
+    allowed_modes: &HashSet<String>,
+) -> Result<MultimodalNetworkGraph, ToolError> {
+    let mode_idx = input
+        .schema
+        .field_index(mode_field)
+        .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+
+    let lines = collect_layer_linework(input, false)?;
+    let mut node_map = HashMap::<NetworkNodeKey, usize>::new();
+    let mut nodes = Vec::<wbvector::Coord>::new();
+    let mut adjacency = Vec::<Vec<MultimodalEdge>>::new();
+    let mut mode_to_id = HashMap::<String, usize>::new();
+    let mut mode_names = vec!["__none__".to_string()];
+
+    for line in &lines {
+        if line.coords.len() < 2 {
+            continue;
+        }
+        let mode_value = input.features[line.source_index]
+            .attributes
+            .get(mode_idx)
+            .ok_or_else(|| ToolError::Execution("mode_field missing on feature".to_string()))?;
+        let mode = field_value_to_join_key(mode_value)
+            .trim()
+            .to_ascii_lowercase();
+        if mode.is_empty() {
+            return Err(ToolError::Execution(
+                "mode_field contains an empty value".to_string(),
+            ));
+        }
+        if !allowed_modes.is_empty() && !allowed_modes.contains(&mode) {
+            continue;
+        }
+
+        let speed = mode_speed_overrides
+            .get(&mode)
+            .copied()
+            .unwrap_or(default_mode_speed);
+        if !speed.is_finite() || speed <= 0.0 {
+            return Err(ToolError::Execution(format!(
+                "mode speed for '{}' must be finite and > 0",
+                mode
+            )));
+        }
+        let mode_id = intern_multimodal_mode(&mut mode_to_id, &mut mode_names, &mode);
+
+        for seg_idx in 1..line.coords.len() {
+            let a = &line.coords[seg_idx - 1];
+            let b = &line.coords[seg_idx];
+            let length = coord_dist2(a, b).sqrt();
+            if length <= 0.0 {
+                continue;
+            }
+            let segment_cost = length / speed;
+            let u = intern_multimodal_network_node(&mut node_map, &mut nodes, &mut adjacency, a, snap_tolerance);
+            let v = intern_multimodal_network_node(&mut node_map, &mut nodes, &mut adjacency, b, snap_tolerance);
+            adjacency[u].push(MultimodalEdge {
+                to: v,
+                cost: segment_cost,
+                mode_id,
+            });
+            adjacency[v].push(MultimodalEdge {
+                to: u,
+                cost: segment_cost,
+                mode_id,
+            });
+        }
+    }
+
+    Ok(MultimodalNetworkGraph {
+        nodes,
+        adjacency,
+        mode_names,
+    })
+}
+
+fn dijkstra_multimodal_shortest_path(
+    graph: &MultimodalNetworkGraph,
+    start: usize,
+    goal: usize,
+    transfer_penalty: f64,
+) -> Option<(f64, Vec<usize>, Vec<usize>)> {
+    if start == goal {
+        return Some((0.0, vec![start], Vec::new()));
+    }
+
+    let no_mode = 0usize;
+    let mut dist = HashMap::<(usize, usize), f64>::new();
+    let mut parent = HashMap::<(usize, usize), (usize, usize)>::new();
+    let mut heap = BinaryHeap::<DijkstraState>::new();
+
+    dist.insert((no_mode, start), 0.0);
+    heap.push(DijkstraState {
+        cost: 0.0,
+        node: start,
+        prev: no_mode,
+    });
+
+    let mut goal_state: Option<(usize, usize)> = None;
+    let mut goal_cost = f64::INFINITY;
+
+    while let Some(DijkstraState { cost, node, prev }) = heap.pop() {
+        let key = (prev, node);
+        let Some(best) = dist.get(&key).copied() else {
+            continue;
+        };
+        if cost > best {
+            continue;
+        }
+        if node == goal {
+            goal_state = Some(key);
+            goal_cost = cost;
+            break;
+        }
+
+        for edge in &graph.adjacency[node] {
+            let transfer = if prev != no_mode && prev != edge.mode_id {
+                transfer_penalty
+            } else {
+                0.0
+            };
+            let candidate = cost + edge.cost + transfer;
+            let next_key = (edge.mode_id, edge.to);
+            let old = dist.get(&next_key).copied().unwrap_or(f64::INFINITY);
+            if candidate < old {
+                dist.insert(next_key, candidate);
+                parent.insert(next_key, key);
+                heap.push(DijkstraState {
+                    cost: candidate,
+                    node: edge.to,
+                    prev: edge.mode_id,
+                });
+            }
+        }
+    }
+
+    let mut state = goal_state?;
+    let mut node_path = vec![state.1];
+    let mut mode_path = Vec::<usize>::new();
+    while let Some(prev_state) = parent.get(&state).copied() {
+        mode_path.push(state.0);
+        state = prev_state;
+        node_path.push(state.1);
+        if state.1 == start && state.0 == no_mode {
+            break;
+        }
+    }
+    if *node_path.last()? != start {
+        return None;
+    }
+    node_path.reverse();
+    mode_path.reverse();
+    Some((goal_cost, node_path, mode_path))
+}
+
 fn intern_network_node(
     node_map: &mut HashMap<NetworkNodeKey, usize>,
     nodes: &mut Vec<wbvector::Coord>,
     adjacency: &mut Vec<Vec<(usize, f64)>>,
+    coord: &wbvector::Coord,
+    snap_tolerance: f64,
+) -> usize {
+    let key = network_node_key(coord, snap_tolerance);
+    if let Some(idx) = node_map.get(&key).copied() {
+        return idx;
+    }
+    let idx = nodes.len();
+    nodes.push(coord.clone());
+    adjacency.push(Vec::new());
+    node_map.insert(key, idx);
+    idx
+}
+
+fn intern_multimodal_network_node(
+    node_map: &mut HashMap<NetworkNodeKey, usize>,
+    nodes: &mut Vec<wbvector::Coord>,
+    adjacency: &mut Vec<Vec<MultimodalEdge>>,
     coord: &wbvector::Coord,
     snap_tolerance: f64,
 ) -> usize {
@@ -24529,6 +24794,228 @@ impl Tool for ShortestPathNetworkTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for MultimodalShortestPathTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "multimodal_shortest_path",
+            display_name: "Multimodal Shortest Path",
+            summary: "Finds a mode-aware shortest path over a line network with configurable transfer penalties.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "start_x", description: "Start x coordinate.", required: true },
+                ToolParamSpec { name: "start_y", description: "Start y coordinate.", required: true },
+                ToolParamSpec { name: "end_x", description: "End x coordinate.", required: true },
+                ToolParamSpec { name: "end_y", description: "End y coordinate.", required: true },
+                ToolParamSpec { name: "mode_field", description: "Line attribute field that identifies travel mode per segment.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from start/end coordinates to nearest network node.", required: false },
+                ToolParamSpec { name: "default_mode_speed", description: "Default mode speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).", required: false },
+                ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include in routing.", required: false },
+                ToolParamSpec { name: "transfer_penalty", description: "Optional additive penalty applied each time the route changes mode.", required: false },
+                ToolParamSpec { name: "output", description: "Output line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("start_x".to_string(), json!(0.0));
+        defaults.insert("start_y".to_string(), json!(0.0));
+        defaults.insert("end_x".to_string(), json!(100.0));
+        defaults.insert("end_y".to_string(), json!(100.0));
+        defaults.insert("mode_field".to_string(), json!("MODE"));
+        defaults.insert("default_mode_speed".to_string(), json!(1.0));
+        defaults.insert("transfer_penalty".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
+        example_args.insert("output".to_string(), json!("multimodal_shortest_path.shp"));
+
+        ToolManifest {
+            id: "multimodal_shortest_path".to_string(),
+            display_name: "Multimodal Shortest Path".to_string(),
+            summary: "Finds a mode-aware shortest path over a line network with configurable transfer penalties.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_x".to_string(), description: "Start x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "start_y".to_string(), description: "Start y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_x".to_string(), description: "End x coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "end_y".to_string(), description: "End y coordinate.".to_string(), required: true },
+                ToolParamDescriptor { name: "mode_field".to_string(), description: "Line attribute field that identifies travel mode per segment.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from start/end coordinates to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "default_mode_speed".to_string(), description: "Default mode speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include in routing.".to_string(), required: false },
+                ToolParamDescriptor { name: "transfer_penalty".to_string(), description: "Optional additive penalty applied each time the route changes mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "multimodal_shortest_path_basic".to_string(),
+                description: "Routes between two coordinates using mode-aware costs and transfer penalties.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "shortest-path".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        for name in ["start_x", "start_y", "end_x", "end_y"] {
+            let value = parse_f64_arg(args, name)?;
+            if !value.is_finite() {
+                return Err(ToolError::Validation(format!("{} must be finite", name)));
+            }
+        }
+
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let _ = input
+            .schema
+            .field_index(mode_field)
+            .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        if !default_mode_speed.is_finite() || default_mode_speed <= 0.0 {
+            return Err(ToolError::Validation(
+                "default_mode_speed must be a finite value > 0".to_string(),
+            ));
+        }
+        let _ = parse_mode_weight_overrides(parse_optional_string_arg(args, "mode_speed_overrides"), "mode_speed_overrides")?;
+
+        if let Some(transfer_penalty) = parse_optional_f64_arg(args, "transfer_penalty") {
+            if !transfer_penalty.is_finite() || transfer_penalty < 0.0 {
+                return Err(ToolError::Validation(
+                    "transfer_penalty must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let start = wbvector::Coord::xy(parse_f64_arg(args, "start_x")?, parse_f64_arg(args, "start_y")?);
+        let end = wbvector::Coord::xy(parse_f64_arg(args, "end_x")?, parse_f64_arg(args, "end_y")?);
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        let mode_speed_overrides = parse_mode_weight_overrides(
+            parse_optional_string_arg(args, "mode_speed_overrides"),
+            "mode_speed_overrides",
+        )?;
+        let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
+        let transfer_penalty = parse_optional_f64_arg(args, "transfer_penalty").unwrap_or(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_multimodal_network_graph(
+            &input,
+            snap_tolerance,
+            mode_field,
+            default_mode_speed,
+            &mode_speed_overrides,
+            &allowed_modes,
+        )?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable multimodal segments".to_string(),
+            ));
+        }
+
+        let (start_idx, start_dist) = nearest_network_node(&graph.nodes, &start)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest start node".to_string()))?;
+        let (end_idx, end_dist) = nearest_network_node(&graph.nodes, &end)
+            .ok_or_else(|| ToolError::Execution("failed locating nearest end node".to_string()))?;
+
+        if let Some(limit) = max_snap_distance {
+            if start_dist > limit || end_dist > limit {
+                return Err(ToolError::Execution(format!(
+                    "start/end points are farther than max_snap_distance from the network (start={}, end={}, limit={})",
+                    start_dist, end_dist, limit
+                )));
+            }
+        }
+
+        let (cost, node_path, mode_path) = dijkstra_multimodal_shortest_path(
+            &graph,
+            start_idx,
+            end_idx,
+            transfer_penalty,
+        )
+        .ok_or_else(|| ToolError::Execution("no multimodal path found between start and end nodes".to_string()))?;
+
+        let coords: Vec<wbvector::Coord> = node_path.iter().map(|idx| graph.nodes[*idx].clone()).collect();
+        let mut mode_changes = 0i64;
+        for pair in mode_path.windows(2) {
+            if pair[0] != pair[1] {
+                mode_changes += 1;
+            }
+        }
+        let mode_seq = mode_path
+            .iter()
+            .map(|id| graph.mode_names.get(*id).cloned().unwrap_or_else(|| "unknown".to_string()))
+            .collect::<Vec<_>>()
+            .join(">");
+
+        let mut output = wbvector::Layer::new(format!("{}_multimodal_shortest_path", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("START_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("END_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("MODE_CHG", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("MODE_SEQ", wbvector::FieldType::Text));
+        output.push(wbvector::Feature {
+            fid: 1,
+            geometry: Some(wbvector::Geometry::LineString(coords)),
+            attributes: vec![
+                wbvector::FieldValue::Integer((start_idx + 1) as i64),
+                wbvector::FieldValue::Integer((end_idx + 1) as i64),
+                wbvector::FieldValue::Float(cost),
+                wbvector::FieldValue::Integer(mode_changes),
+                wbvector::FieldValue::Text(mode_seq),
+            ],
+        });
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator));
+        outputs.insert("cost".to_string(), json!(cost));
+        outputs.insert("mode_changes".to_string(), json!(mode_changes));
+        outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
+        Ok(ToolRunResult { outputs })
     }
 }
 

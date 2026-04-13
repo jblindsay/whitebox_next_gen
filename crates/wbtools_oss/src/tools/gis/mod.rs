@@ -197,6 +197,8 @@ pub struct NetworkTopologyAuditTool;
 pub struct NetworkOdCostMatrixTool;
 pub struct NetworkConnectedComponentsTool;
 pub struct NetworkRoutesFromOdTool;
+pub struct ClosestFacilityNetworkTool;
+pub struct LocationAllocationNetworkTool;
 pub struct KShortestPathsNetworkTool;
 pub struct VehicleRoutingCvrpTool;
 pub struct VehicleRoutingVrptwTool;
@@ -23655,7 +23657,7 @@ fn ring_interval_for_cost(cost: f64, max_cost: f64, ring_costs: &[f64]) -> (i64,
     ((ring_costs.len() + 1) as i64, lower, max_cost)
 }
 
-fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
+fn parse_boolean_field_flag(value: &wbvector::FieldValue, field_name: &str) -> Result<bool, ToolError> {
     match value {
         wbvector::FieldValue::Integer(v) => Ok(*v != 0),
         wbvector::FieldValue::Float(v) => Ok(v.abs() > 1.0e-12),
@@ -23670,8 +23672,8 @@ fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
                 Ok(false)
             } else {
                 Err(ToolError::Execution(format!(
-                    "one_way_field contains unrecognized value '{}'",
-                    text
+                    "{} contains unrecognized value '{}'",
+                    field_name, text
                 )))
             }
         }
@@ -23685,16 +23687,437 @@ fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
                 Ok(false)
             } else {
                 Err(ToolError::Execution(format!(
-                    "one_way_field contains unrecognized value '{}'",
-                    text
+                    "{} contains unrecognized value '{}'",
+                    field_name, text
                 )))
             }
         }
         wbvector::FieldValue::Blob(_) => Err(ToolError::Execution(
-            "one_way_field does not support blob values".to_string(),
+            format!("{} does not support blob values", field_name),
         )),
         wbvector::FieldValue::Null => Ok(false),
     }
+}
+
+fn parse_one_way_flag(value: &wbvector::FieldValue) -> Result<bool, ToolError> {
+    parse_boolean_field_flag(value, "one_way_field")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LocationAllocationSolverMode {
+    Auto,
+    Greedy,
+    Exact,
+}
+
+#[derive(Clone)]
+struct LocationAllocationFacilityCandidate {
+    fid: i64,
+    node: usize,
+    capacity: f64,
+}
+
+#[derive(Clone)]
+struct LocationAllocationEvaluation {
+    selected_indices: Vec<usize>,
+    assignments: Vec<Option<usize>>,
+    served_weight: f64,
+    served_count: usize,
+    total_alloc_cost: f64,
+}
+
+fn parse_location_allocation_solver_mode_arg(
+    args: &ToolArgs,
+) -> Result<LocationAllocationSolverMode, ToolError> {
+    match parse_optional_string_arg(args, "solver_mode")
+        .unwrap_or("auto")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "auto" => Ok(LocationAllocationSolverMode::Auto),
+        "greedy" => Ok(LocationAllocationSolverMode::Greedy),
+        "exact" => Ok(LocationAllocationSolverMode::Exact),
+        other => Err(ToolError::Validation(format!(
+            "solver_mode must be one of auto, greedy, exact; got '{}'",
+            other
+        ))),
+    }
+}
+
+fn location_allocation_lex_key(
+    selected_indices: &[usize],
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> Vec<i64> {
+    let mut values = selected_indices
+        .iter()
+        .map(|idx| facilities[*idx].fid)
+        .collect::<Vec<_>>();
+    values.sort_unstable();
+    values
+}
+
+fn location_allocation_eval_is_better(
+    candidate: &LocationAllocationEvaluation,
+    best: &LocationAllocationEvaluation,
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> bool {
+    candidate.served_weight > best.served_weight + 1.0e-12
+        || ((candidate.served_weight - best.served_weight).abs() <= 1.0e-12
+            && (candidate.served_count > best.served_count
+                || (candidate.served_count == best.served_count
+                    && (candidate.total_alloc_cost < best.total_alloc_cost - 1.0e-12
+                        || ((candidate.total_alloc_cost - best.total_alloc_cost).abs() <= 1.0e-12
+                            && location_allocation_lex_key(&candidate.selected_indices, facilities)
+                                < location_allocation_lex_key(&best.selected_indices, facilities))))))
+}
+
+fn combination_count_limited(n: usize, k: usize, limit: u64) -> u64 {
+    if k > n {
+        return 0;
+    }
+    let k = k.min(n - k);
+    if k == 0 {
+        return 1;
+    }
+    let mut acc = 1u128;
+    for i in 0..k {
+        acc = acc * (n - i) as u128 / (i + 1) as u128;
+        if acc > limit as u128 {
+            return limit + 1;
+        }
+    }
+    acc as u64
+}
+
+fn greedy_assign_location_allocation_demands(
+    cost_matrix: &[Vec<f64>],
+    demand_fids: &[i64],
+    demand_weights: &[f64],
+    selected_indices: &[usize],
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> LocationAllocationEvaluation {
+    let mut capacities_left = selected_indices
+        .iter()
+        .map(|idx| facilities[*idx].capacity)
+        .collect::<Vec<_>>();
+    let mut assignments = vec![None; demand_weights.len()];
+    let mut demand_order = (0..demand_weights.len()).collect::<Vec<_>>();
+    demand_order.sort_by(|a, b| {
+        demand_weights[*b]
+            .partial_cmp(&demand_weights[*a])
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| demand_fids[*a].cmp(&demand_fids[*b]))
+    });
+
+    let mut served_weight = 0.0;
+    let mut served_count = 0usize;
+    let mut total_alloc_cost = 0.0;
+    for d in demand_order {
+        let mut best_local: Option<(usize, f64, i64)> = None;
+        for (local_idx, facility_idx) in selected_indices.iter().enumerate() {
+            let cost = cost_matrix[d][*facility_idx];
+            if !cost.is_finite() {
+                continue;
+            }
+            let need = demand_weights[d];
+            if !capacities_left[local_idx].is_infinite() && capacities_left[local_idx] + 1.0e-12 < need {
+                continue;
+            }
+            let facility_fid = facilities[*facility_idx].fid;
+            let keep = match best_local {
+                None => true,
+                Some((_, best_cost, best_fid)) => {
+                    cost < best_cost - 1.0e-12
+                        || ((cost - best_cost).abs() <= 1.0e-12 && facility_fid < best_fid)
+                }
+            };
+            if keep {
+                best_local = Some((local_idx, cost, facility_fid));
+            }
+        }
+        let Some((local_idx, cost, _)) = best_local else {
+            continue;
+        };
+        assignments[d] = Some(selected_indices[local_idx]);
+        if !capacities_left[local_idx].is_infinite() {
+            capacities_left[local_idx] -= demand_weights[d];
+        }
+        served_weight += demand_weights[d];
+        served_count += 1;
+        total_alloc_cost += demand_weights[d] * cost;
+    }
+
+    LocationAllocationEvaluation {
+        selected_indices: selected_indices.to_vec(),
+        assignments,
+        served_weight,
+        served_count,
+        total_alloc_cost,
+    }
+}
+
+fn exact_assign_location_allocation_demands(
+    cost_matrix: &[Vec<f64>],
+    demand_fids: &[i64],
+    demand_weights: &[f64],
+    selected_indices: &[usize],
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> LocationAllocationEvaluation {
+    let mut capacities_left = selected_indices
+        .iter()
+        .map(|idx| facilities[*idx].capacity)
+        .collect::<Vec<_>>();
+    let mut demand_order = (0..demand_weights.len()).collect::<Vec<_>>();
+    demand_order.sort_by(|a, b| {
+        demand_weights[*b]
+            .partial_cmp(&demand_weights[*a])
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| demand_fids[*a].cmp(&demand_fids[*b]))
+    });
+    let mut remaining_weight = vec![0.0; demand_order.len() + 1];
+    for idx in (0..demand_order.len()).rev() {
+        remaining_weight[idx] = remaining_weight[idx + 1] + demand_weights[demand_order[idx]];
+    }
+
+    let mut current_assignments = vec![None; demand_weights.len()];
+    let mut best: Option<LocationAllocationEvaluation> = None;
+
+    fn recurse(
+        pos: usize,
+        selected_indices: &[usize],
+        facilities: &[LocationAllocationFacilityCandidate],
+        cost_matrix: &[Vec<f64>],
+        demand_weights: &[f64],
+        demand_order: &[usize],
+        remaining_weight: &[f64],
+        capacities_left: &mut [f64],
+        current_assignments: &mut [Option<usize>],
+        current_served_weight: f64,
+        current_served_count: usize,
+        current_total_cost: f64,
+        best: &mut Option<LocationAllocationEvaluation>,
+    ) {
+        if let Some(best_eval) = best.as_ref() {
+            if current_served_weight + remaining_weight[pos] < best_eval.served_weight - 1.0e-12 {
+                return;
+            }
+        }
+        if pos == demand_order.len() {
+            let candidate = LocationAllocationEvaluation {
+                selected_indices: selected_indices.to_vec(),
+                assignments: current_assignments.to_vec(),
+                served_weight: current_served_weight,
+                served_count: current_served_count,
+                total_alloc_cost: current_total_cost,
+            };
+            match best {
+                Some(best_eval)
+                    if !location_allocation_eval_is_better(&candidate, best_eval, facilities) => {}
+                _ => *best = Some(candidate),
+            }
+            return;
+        }
+
+        let demand_idx = demand_order[pos];
+        recurse(
+            pos + 1,
+            selected_indices,
+            facilities,
+            cost_matrix,
+            demand_weights,
+            demand_order,
+            remaining_weight,
+            capacities_left,
+            current_assignments,
+            current_served_weight,
+            current_served_count,
+            current_total_cost,
+            best,
+        );
+
+        for (local_idx, facility_idx) in selected_indices.iter().enumerate() {
+            let cost = cost_matrix[demand_idx][*facility_idx];
+            if !cost.is_finite() {
+                continue;
+            }
+            let need = demand_weights[demand_idx];
+            if !capacities_left[local_idx].is_infinite() && capacities_left[local_idx] + 1.0e-12 < need {
+                continue;
+            }
+            if !capacities_left[local_idx].is_infinite() {
+                capacities_left[local_idx] -= need;
+            }
+            current_assignments[demand_idx] = Some(*facility_idx);
+            recurse(
+                pos + 1,
+                selected_indices,
+                facilities,
+                cost_matrix,
+                demand_weights,
+                demand_order,
+                remaining_weight,
+                capacities_left,
+                current_assignments,
+                current_served_weight + need,
+                current_served_count + 1,
+                current_total_cost + need * cost,
+                best,
+            );
+            current_assignments[demand_idx] = None;
+            if !capacities_left[local_idx].is_infinite() {
+                capacities_left[local_idx] += need;
+            }
+        }
+    }
+
+    recurse(
+        0,
+        selected_indices,
+        facilities,
+        cost_matrix,
+        demand_weights,
+        &demand_order,
+        &remaining_weight,
+        &mut capacities_left,
+        &mut current_assignments,
+        0.0,
+        0,
+        0.0,
+        &mut best,
+    );
+
+    best.unwrap_or(LocationAllocationEvaluation {
+        selected_indices: selected_indices.to_vec(),
+        assignments: vec![None; demand_weights.len()],
+        served_weight: 0.0,
+        served_count: 0,
+        total_alloc_cost: 0.0,
+    })
+}
+
+fn solve_location_allocation_exact(
+    candidate_indices: &[usize],
+    required_indices: &[usize],
+    facility_count: usize,
+    cost_matrix: &[Vec<f64>],
+    demand_fids: &[i64],
+    demand_weights: &[f64],
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> Option<LocationAllocationEvaluation> {
+    let remaining = facility_count.checked_sub(required_indices.len())?;
+    let mut best: Option<LocationAllocationEvaluation> = None;
+
+    fn recurse(
+        start: usize,
+        remaining: usize,
+        candidate_indices: &[usize],
+        chosen: &mut Vec<usize>,
+        required_indices: &[usize],
+        cost_matrix: &[Vec<f64>],
+        demand_fids: &[i64],
+        demand_weights: &[f64],
+        facilities: &[LocationAllocationFacilityCandidate],
+        best: &mut Option<LocationAllocationEvaluation>,
+    ) {
+        if remaining == 0 {
+            let mut selected = required_indices.to_vec();
+            selected.extend(chosen.iter().copied());
+            selected.sort_unstable();
+            let candidate = exact_assign_location_allocation_demands(
+                cost_matrix,
+                demand_fids,
+                demand_weights,
+                &selected,
+                facilities,
+            );
+            match best {
+                Some(best_eval)
+                    if !location_allocation_eval_is_better(&candidate, best_eval, facilities) => {}
+                _ => *best = Some(candidate),
+            }
+            return;
+        }
+        for idx in start..=candidate_indices.len().saturating_sub(remaining) {
+            chosen.push(candidate_indices[idx]);
+            recurse(
+                idx + 1,
+                remaining - 1,
+                candidate_indices,
+                chosen,
+                required_indices,
+                cost_matrix,
+                demand_fids,
+                demand_weights,
+                facilities,
+                best,
+            );
+            chosen.pop();
+        }
+    }
+
+    let mut chosen = Vec::<usize>::new();
+    recurse(
+        0,
+        remaining,
+        candidate_indices,
+        &mut chosen,
+        required_indices,
+        cost_matrix,
+        demand_fids,
+        demand_weights,
+        facilities,
+        &mut best,
+    );
+    best
+}
+
+fn solve_location_allocation_greedy(
+    candidate_indices: &[usize],
+    required_indices: &[usize],
+    facility_count: usize,
+    cost_matrix: &[Vec<f64>],
+    demand_fids: &[i64],
+    demand_weights: &[f64],
+    facilities: &[LocationAllocationFacilityCandidate],
+) -> Option<LocationAllocationEvaluation> {
+    if required_indices.len() > facility_count {
+        return None;
+    }
+    let mut selected = required_indices.to_vec();
+    selected.sort_unstable();
+    while selected.len() < facility_count {
+        let mut best_candidate: Option<LocationAllocationEvaluation> = None;
+        for candidate_idx in candidate_indices {
+            if selected.contains(candidate_idx) {
+                continue;
+            }
+            let mut tentative = selected.clone();
+            tentative.push(*candidate_idx);
+            tentative.sort_unstable();
+            let evaluation = greedy_assign_location_allocation_demands(
+                cost_matrix,
+                demand_fids,
+                demand_weights,
+                &tentative,
+                facilities,
+            );
+            match best_candidate {
+                Some(ref best_eval)
+                    if !location_allocation_eval_is_better(&evaluation, best_eval, facilities) => {}
+                _ => best_candidate = Some(evaluation),
+            }
+        }
+        let chosen = best_candidate?;
+        selected = chosen.selected_indices;
+    }
+    Some(greedy_assign_location_allocation_demands(
+        cost_matrix,
+        demand_fids,
+        demand_weights,
+        &selected,
+        facilities,
+    ))
 }
 
 fn field_value_to_timestamp_sort_key(value: &wbvector::FieldValue) -> Option<f64> {
@@ -23726,6 +24149,7 @@ struct TurnCostOptions {
     forbid_left_turns: bool,
     forbid_right_turns: bool,
     restricted_transitions: HashSet<(usize, usize, usize)>,
+    turn_cost_overrides: HashMap<(usize, usize, usize), f64>,
 }
 
 impl TurnCostOptions {
@@ -23736,6 +24160,7 @@ impl TurnCostOptions {
             || self.forbid_left_turns
             || self.forbid_right_turns
             || !self.restricted_transitions.is_empty()
+            || !self.turn_cost_overrides.is_empty()
     }
 }
 
@@ -23762,7 +24187,13 @@ fn parse_network_turn_cost_options(args: &ToolArgs) -> Result<TurnCostOptions, T
         forbid_left_turns,
         forbid_right_turns,
         restricted_transitions: HashSet::new(),
+        turn_cost_overrides: HashMap::new(),
     })
+}
+
+struct TurnRestrictionTable {
+    restricted_transitions: HashSet<(usize, usize, usize)>,
+    turn_cost_overrides: HashMap<(usize, usize, usize), f64>,
 }
 
 fn header_index(headers: &[String], aliases: &[&str]) -> Option<usize> {
@@ -23776,7 +24207,7 @@ fn parse_turn_restrictions_csv(
     csv_path: &str,
     graph: &LineNetworkGraph,
     snap_tolerance: f64,
-) -> Result<HashSet<(usize, usize, usize)>, ToolError> {
+) -> Result<TurnRestrictionTable, ToolError> {
     let content = std::fs::read_to_string(csv_path)
         .map_err(|e| ToolError::Execution(format!("failed reading turn_restrictions_csv '{}': {}", csv_path, e)))?;
     let mut lines = content.lines().filter(|line| !line.trim().is_empty());
@@ -23799,6 +24230,7 @@ fn parse_turn_restrictions_csv(
     let next_y_idx = header_index(&headers, &["next_y", "y3"])
         .ok_or_else(|| ToolError::Validation("turn_restrictions_csv missing next_y (or y3) column".to_string()))?;
     let forbidden_idx = header_index(&headers, &["forbidden", "is_forbidden", "restrict"]);
+    let turn_cost_idx = header_index(&headers, &["turn_cost", "penalty", "cost", "extra_cost"]);
 
     let snap_limit = if snap_tolerance > 0.0 {
         snap_tolerance * 1.5
@@ -23807,6 +24239,7 @@ fn parse_turn_restrictions_csv(
     };
 
     let mut restricted = HashSet::<(usize, usize, usize)>::new();
+    let mut turn_cost_overrides = HashMap::<(usize, usize, usize), f64>::new();
     for (line_idx, line) in lines.enumerate() {
         let row = split_table_line(line, delimiter);
         if row.len() != headers.len() {
@@ -23818,12 +24251,13 @@ fn parse_turn_restrictions_csv(
             )));
         }
 
-        if let Some(idx) = forbidden_idx {
-            let v = row[idx].trim().to_ascii_lowercase();
-            if ["0", "false", "f", "no", "n"].contains(&v.as_str()) {
-                continue;
+        let row_forbidden = match forbidden_idx {
+            Some(idx) => {
+                let v = row[idx].trim().to_ascii_lowercase();
+                !["0", "false", "f", "no", "n"].contains(&v.as_str())
             }
-        }
+            None => turn_cost_idx.is_none(),
+        };
 
         let parse_coord = |value: &str, name: &str| -> Result<f64, ToolError> {
             value.trim().parse::<f64>().map_err(|_| {
@@ -23863,10 +24297,38 @@ fn parse_turn_restrictions_csv(
             )));
         }
 
-        restricted.insert((prev_idx, node_idx, next_idx));
+        let key = (prev_idx, node_idx, next_idx);
+        if row_forbidden {
+            restricted.insert(key);
+            continue;
+        }
+
+        if let Some(idx) = turn_cost_idx {
+            let raw = row[idx].trim();
+            if !raw.is_empty() {
+                let turn_cost = raw.parse::<f64>().map_err(|_| {
+                    ToolError::Validation(format!(
+                        "turn_restrictions_csv row {} has invalid turn_cost value '{}'",
+                        line_idx + 2,
+                        row[idx]
+                    ))
+                })?;
+                if !turn_cost.is_finite() || turn_cost < 0.0 {
+                    return Err(ToolError::Validation(format!(
+                        "turn_restrictions_csv row {} has non-finite or negative turn_cost '{}'",
+                        line_idx + 2,
+                        row[idx]
+                    )));
+                }
+                turn_cost_overrides.insert(key, turn_cost);
+            }
+        }
     }
 
-    Ok(restricted)
+    Ok(TurnRestrictionTable {
+        restricted_transitions: restricted,
+        turn_cost_overrides,
+    })
 }
 
 fn build_line_network_graph(
@@ -23967,6 +24429,174 @@ fn build_line_network_graph(
             } else {
                 base_cost
             };
+            let is_one_way = if let Some(idx) = one_way_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("one_way_field missing on feature".to_string()))?;
+                parse_one_way_flag(value)?
+            } else {
+                false
+            };
+            let u = intern_network_node(
+                &mut node_map,
+                &mut nodes,
+                &mut adjacency,
+                a,
+                snap_tolerance,
+            );
+            let v = intern_network_node(
+                &mut node_map,
+                &mut nodes,
+                &mut adjacency,
+                b,
+                snap_tolerance,
+            );
+            adjacency[u].push((v, cost));
+            if !is_one_way {
+                adjacency[v].push((u, cost));
+            }
+        }
+    }
+
+    Ok(LineNetworkGraph { nodes, adjacency })
+}
+
+fn build_line_network_graph_mode_aware(
+    input: &wbvector::Layer,
+    snap_tolerance: f64,
+    edge_cost_field: Option<&str>,
+    one_way_field: Option<&str>,
+    blocked_field: Option<&str>,
+    temporal_cost_options: Option<&NetworkTemporalCostOptions>,
+    mode_field: &str,
+    default_mode_speed: f64,
+    mode_speed_overrides: &HashMap<String, f64>,
+    allowed_modes: &HashSet<String>,
+) -> Result<LineNetworkGraph, ToolError> {
+    let lines = collect_layer_linework(input, false)?;
+    let edge_cost_idx = resolve_network_edge_cost_field(input, edge_cost_field)?;
+    let one_way_idx = resolve_network_one_way_field(input, one_way_field)?;
+    let blocked_idx = resolve_network_blocked_field(input, blocked_field)?;
+    let mode_idx = input
+        .schema
+        .field_index(mode_field)
+        .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+
+    let mut node_map = HashMap::<NetworkNodeKey, usize>::new();
+    let mut nodes = Vec::<wbvector::Coord>::new();
+    let mut adjacency = Vec::<Vec<(usize, f64)>>::new();
+
+    for line in &lines {
+        if line.coords.len() < 2 {
+            continue;
+        }
+
+        let mode_value = input.features[line.source_index]
+            .attributes
+            .get(mode_idx)
+            .ok_or_else(|| ToolError::Execution("mode_field missing on feature".to_string()))?;
+        let mode = field_value_to_join_key(mode_value)
+            .trim()
+            .to_ascii_lowercase();
+        if mode.is_empty() {
+            continue;
+        }
+        if !allowed_modes.is_empty() && !allowed_modes.contains(&mode) {
+            continue;
+        }
+
+        let mode_speed = mode_speed_overrides
+            .get(&mode)
+            .copied()
+            .unwrap_or(default_mode_speed);
+        if !mode_speed.is_finite() || mode_speed <= 0.0 {
+            return Err(ToolError::Execution(format!(
+                "mode speed for '{}' must be finite and > 0",
+                mode
+            )));
+        }
+
+        for seg_idx in 1..line.coords.len() {
+            let a = &line.coords[seg_idx - 1];
+            let b = &line.coords[seg_idx];
+            let length = coord_dist2(a, b).sqrt();
+            if length <= 0.0 {
+                continue;
+            }
+            let is_blocked = if let Some(idx) = blocked_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("blocked_field missing on feature".to_string()))?;
+                parse_one_way_flag(value)?
+            } else {
+                false
+            };
+            if is_blocked {
+                continue;
+            }
+            let edge_multiplier = if let Some(idx) = edge_cost_idx {
+                let value = input.features[line.source_index]
+                    .attributes
+                    .get(idx)
+                    .ok_or_else(|| ToolError::Execution("edge_cost_field missing on feature".to_string()))?;
+                let factor = field_value_to_f64(value).ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "edge_cost_field '{}' contains a non-numeric value",
+                        edge_cost_field.unwrap_or("edge_cost_field")
+                    ))
+                })?;
+                if !factor.is_finite() || factor <= 0.0 {
+                    return Err(ToolError::Execution(format!(
+                        "edge_cost_field '{}' values must be finite and > 0",
+                        edge_cost_field.unwrap_or("edge_cost_field")
+                    )));
+                }
+                factor
+            } else {
+                1.0
+            };
+
+            let base_cost = (length * edge_multiplier) / mode_speed;
+            let cost = if let Some(temporal) = temporal_cost_options {
+                let edge_id_value = input.features[line.source_index]
+                    .attributes
+                    .get(temporal.edge_id_field_idx)
+                    .ok_or_else(|| {
+                        ToolError::Execution(format!(
+                            "temporal_edge_id_field '{}' missing on feature",
+                            temporal.edge_id_field_name
+                        ))
+                    })?;
+                let edge_id = field_value_to_join_key(edge_id_value);
+                if edge_id.trim().is_empty() {
+                    return Err(ToolError::Execution(format!(
+                        "temporal_edge_id_field '{}' contains an empty value",
+                        temporal.edge_id_field_name
+                    )));
+                }
+                match temporal.profile.lookup(&edge_id) {
+                    Some(value) => match temporal.profile.mode {
+                        TemporalCostMode::Multiplier => base_cost * value,
+                        TemporalCostMode::Absolute => value,
+                    },
+                    None => match temporal.profile.fallback {
+                        TemporalCostFallback::StaticCost => base_cost,
+                        TemporalCostFallback::Error => {
+                            return Err(ToolError::Execution(format!(
+                                "missing temporal cost profile for edge_id '{}' at dow {} minute {}",
+                                edge_id,
+                                temporal.profile.day_of_week,
+                                temporal.profile.minute_of_day
+                            )));
+                        }
+                    },
+                }
+            } else {
+                base_cost
+            };
+
             let is_one_way = if let Some(idx) = one_way_idx {
                 let value = input.features[line.source_index]
                     .attributes
@@ -24522,6 +25152,9 @@ fn turn_transition_penalty(
     node: usize,
     next: usize,
 ) -> f64 {
+    if let Some(override_cost) = costs.turn_cost_overrides.get(&(prev, node, next)) {
+        return *override_cost;
+    }
     if prev == next {
         return costs.u_turn_penalty;
     }
@@ -24906,7 +25539,7 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
                 ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
                 ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
@@ -24952,7 +25585,7 @@ impl Tool for ShortestPathNetworkTool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
                 ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
@@ -25111,7 +25744,9 @@ impl Tool for ShortestPathNetworkTool {
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -26854,6 +27489,11 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin points to nearest network node.", required: false },
                 ToolParamSpec { name: "output_mode", description: "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes.", required: false },
+                ToolParamSpec { name: "polygon_merge_origins", description: "If true and output_mode='polygons', dissolve overlapping origin polygons into merged coverage per ring instead of emitting one polygon per origin.", required: false },
+                ToolParamSpec { name: "mode_field", description: "Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs.", required: false },
+                ToolParamSpec { name: "default_mode_speed", description: "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1).", required: false },
+                ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12).", required: false },
+                ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include when mode_field is provided.", required: false },
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
                 ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
@@ -26864,7 +27504,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
                 ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
                 ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
@@ -26898,6 +27538,11 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin points to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_mode".to_string(), description: "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes.".to_string(), required: false },
+                ToolParamDescriptor { name: "polygon_merge_origins".to_string(), description: "If true and output_mode='polygons', dissolve overlapping origin polygons into merged coverage per ring instead of emitting one polygon per origin.".to_string(), required: false },
+                ToolParamDescriptor { name: "mode_field".to_string(), description: "Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs.".to_string(), required: false },
+                ToolParamDescriptor { name: "default_mode_speed".to_string(), description: "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include when mode_field is provided.".to_string(), required: false },
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
                 ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
@@ -26908,7 +27553,7 @@ impl Tool for NetworkServiceAreaTool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
                 ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
@@ -26970,6 +27615,30 @@ impl Tool for NetworkServiceAreaTool {
             }
         }
         let _ = parse_ring_costs_arg(args, max_cost)?;
+        let mode_field = parse_optional_string_arg(args, "mode_field");
+        if let Some(field_name) = mode_field {
+            let _ = input
+                .schema
+                .field_index(field_name)
+                .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", field_name)))?;
+            let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+            if !default_mode_speed.is_finite() || default_mode_speed <= 0.0 {
+                return Err(ToolError::Validation(
+                    "default_mode_speed must be a finite value > 0".to_string(),
+                ));
+            }
+            let _ = parse_mode_weight_overrides(
+                parse_optional_string_arg(args, "mode_speed_overrides"),
+                "mode_speed_overrides",
+            )?;
+        } else if parse_optional_string_arg(args, "default_mode_speed").is_some()
+            || parse_optional_string_arg(args, "mode_speed_overrides").is_some()
+            || parse_optional_string_arg(args, "allowed_modes").is_some()
+        {
+            return Err(ToolError::Validation(
+                "default_mode_speed/mode_speed_overrides/allowed_modes require mode_field".to_string(),
+            ));
+        }
         if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
             if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
                 return Err(ToolError::Validation(
@@ -27043,6 +27712,14 @@ impl Tool for NetworkServiceAreaTool {
         let output_mode = parse_optional_string_arg(args, "output_mode")
             .unwrap_or("nodes")
             .to_ascii_lowercase();
+        let polygon_merge_origins = parse_bool_arg(args, "polygon_merge_origins", false);
+        let mode_field = parse_optional_string_arg(args, "mode_field");
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        let mode_speed_overrides = parse_mode_weight_overrides(
+            parse_optional_string_arg(args, "mode_speed_overrides"),
+            "mode_speed_overrides",
+        )?;
+        let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
         let ring_costs = parse_ring_costs_arg(args, max_cost)?;
         let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
         let one_way_field = parse_optional_string_arg(args, "one_way_field");
@@ -27074,17 +27751,34 @@ impl Tool for NetworkServiceAreaTool {
             None
         };
 
-        let mut graph = build_line_network_graph(
-            &input,
-            snap_tolerance,
-            edge_cost_field,
-            one_way_field,
-            blocked_field,
-            temporal_options.as_ref(),
-        )?;
+        let mut graph = if let Some(mode_field_name) = mode_field {
+            build_line_network_graph_mode_aware(
+                &input,
+                snap_tolerance,
+                edge_cost_field,
+                one_way_field,
+                blocked_field,
+                temporal_options.as_ref(),
+                mode_field_name,
+                default_mode_speed,
+                &mode_speed_overrides,
+                &allowed_modes,
+            )?
+        } else {
+            build_line_network_graph(
+                &input,
+                snap_tolerance,
+                edge_cost_field,
+                one_way_field,
+                blocked_field,
+                temporal_options.as_ref(),
+            )?
+        };
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -27189,12 +27883,30 @@ impl Tool for NetworkServiceAreaTool {
                 }
             }
         } else if output_mode == "polygons" {
+            #[derive(Clone)]
+            struct ServiceAreaPolygonRecord {
+                origin_fid: i64,
+                cost_limit: f64,
+                node_count: i64,
+                frontier_count: i64,
+                partial_count: i64,
+                ring_idx: i64,
+                ring_min: f64,
+                ring_max: f64,
+                envelope_coords: Vec<wbvector::Coord>,
+                reachable_segment_lengths: Vec<f64>,
+            }
+
             output.geom_type = Some(wbvector::GeometryType::Polygon);
-            output.schema.add_field(wbvector::FieldDef::new("ORIGIN_ID", wbvector::FieldType::Integer));
             output.schema.add_field(wbvector::FieldDef::new("COST_LIMIT", wbvector::FieldType::Float));
             output.schema.add_field(wbvector::FieldDef::new("NODE_COUNT", wbvector::FieldType::Integer));
             output.schema.add_field(wbvector::FieldDef::new("FRONTIER_CT", wbvector::FieldType::Integer));
             output.schema.add_field(wbvector::FieldDef::new("PARTIAL_CT", wbvector::FieldType::Integer));
+            if polygon_merge_origins {
+                output.schema.add_field(wbvector::FieldDef::new("ORIGIN_CT", wbvector::FieldType::Integer));
+            } else {
+                output.schema.add_field(wbvector::FieldDef::new("ORIGIN_ID", wbvector::FieldType::Integer));
+            }
             if ring_costs.is_some() {
                 output.schema.add_field(wbvector::FieldDef::new("RING_IDX", wbvector::FieldType::Integer));
                 output.schema.add_field(wbvector::FieldDef::new("RING_MIN", wbvector::FieldType::Float));
@@ -27202,6 +27914,7 @@ impl Tool for NetworkServiceAreaTool {
             }
 
             let eps = snap_tolerance.max(1.0e-9);
+            let mut polygon_records = Vec::<ServiceAreaPolygonRecord>::new();
             for (origin_fid, start_idx) in snapped_origins {
                 let origin_dist = dijkstra_all_costs(&graph, &[start_idx], &turn_costs);
                 let ring_limits: Vec<f64> = if let Some(rings) = ring_costs.as_ref() {
@@ -27319,17 +28032,116 @@ impl Tool for NetworkServiceAreaTool {
                     };
 
                     if let Some(geom) = geom {
+                        if polygon_merge_origins {
+                            polygon_records.push(ServiceAreaPolygonRecord {
+                                origin_fid,
+                                cost_limit: *ring_limit,
+                                node_count: reachable_nodes.len() as i64,
+                                frontier_count,
+                                partial_count,
+                                ring_idx: (ring_pos + 1) as i64,
+                                ring_min: ring_lower,
+                                ring_max: *ring_limit,
+                                envelope_coords,
+                                reachable_segment_lengths,
+                            });
+                        } else {
+                            let mut attrs = vec![
+                                wbvector::FieldValue::Float(*ring_limit),
+                                wbvector::FieldValue::Integer(reachable_nodes.len() as i64),
+                                wbvector::FieldValue::Integer(frontier_count),
+                                wbvector::FieldValue::Integer(partial_count),
+                                wbvector::FieldValue::Integer(origin_fid),
+                            ];
+                            if ring_costs.is_some() {
+                                attrs.push(wbvector::FieldValue::Integer((ring_pos + 1) as i64));
+                                attrs.push(wbvector::FieldValue::Float(ring_lower));
+                                attrs.push(wbvector::FieldValue::Float(*ring_limit));
+                            }
+                            output.push(wbvector::Feature {
+                                fid: next_fid,
+                                geometry: Some(geom),
+                                attributes: attrs,
+                            });
+                            next_fid += 1;
+                        }
+                    }
+                    ring_lower = *ring_limit;
+                }
+            }
+
+            if polygon_merge_origins {
+                let mut ring_groups = BTreeMap::<i64, Vec<ServiceAreaPolygonRecord>>::new();
+                for record in polygon_records {
+                    ring_groups.entry(record.ring_idx).or_default().push(record);
+                }
+
+                for (_ring_idx, records) in ring_groups {
+                    let mut origin_ids = HashSet::<i64>::new();
+                    let mut node_count = 0i64;
+                    let mut frontier_count = 0i64;
+                    let mut partial_count = 0i64;
+                    let mut cost_limit = 0.0f64;
+                    let mut ring_min = 0.0f64;
+                    let mut ring_max = 0.0f64;
+                    let mut envelope_coords = Vec::<wbvector::Coord>::new();
+                    let mut reachable_segment_lengths = Vec::<f64>::new();
+                    for record in &records {
+                        origin_ids.insert(record.origin_fid);
+                        node_count += record.node_count;
+                        frontier_count += record.frontier_count;
+                        partial_count += record.partial_count;
+                        cost_limit = cost_limit.max(record.cost_limit);
+                        ring_min = record.ring_min;
+                        ring_max = record.ring_max;
+                        envelope_coords.extend(record.envelope_coords.iter().cloned());
+                        reachable_segment_lengths.extend(record.reachable_segment_lengths.iter().copied());
+                    }
+                    let merged_geom = if envelope_coords.len() < 3 {
+                        convex_hull_polygon_for_coords(&envelope_coords, eps)
+                    } else {
+                        let mean_seg_len = if reachable_segment_lengths.is_empty() {
+                            eps * 10.0
+                        } else {
+                            reachable_segment_lengths.iter().sum::<f64>()
+                                / reachable_segment_lengths.len() as f64
+                        };
+                        let options = ConcaveHullOptions {
+                            max_edge_length: mean_seg_len.max(eps * 10.0) * 1.5,
+                            epsilon: eps,
+                            ..ConcaveHullOptions::default()
+                        };
+                        let topo_coords: Vec<TopoCoord> = envelope_coords.iter().map(to_topo_coord).collect();
+                        let hull = concave_hull_geometry_with_options(&TopoGeometry::MultiPoint(topo_coords), options);
+                        match hull {
+                            TopoGeometry::Polygon(poly) => Some(wbvector::Geometry::Polygon {
+                                exterior: to_wb_ring(&poly.exterior),
+                                interiors: to_wb_rings(&poly.holes),
+                            }),
+                            TopoGeometry::MultiPolygon(polys) => polys
+                                .iter()
+                                .max_by_key(|poly| poly.exterior.coords.len())
+                                .map(|poly| wbvector::Geometry::Polygon {
+                                    exterior: to_wb_ring(&poly.exterior),
+                                    interiors: to_wb_rings(&poly.holes),
+                                })
+                                .or_else(|| convex_hull_polygon_for_coords(&envelope_coords, eps)),
+                            _ => convex_hull_polygon_for_coords(&envelope_coords, eps),
+                        }
+                    };
+
+                    if let Some(geom) = merged_geom {
                         let mut attrs = vec![
-                            wbvector::FieldValue::Integer(origin_fid),
-                            wbvector::FieldValue::Float(*ring_limit),
-                            wbvector::FieldValue::Integer(reachable_nodes.len() as i64),
+                            wbvector::FieldValue::Float(cost_limit),
+                            wbvector::FieldValue::Integer(node_count),
                             wbvector::FieldValue::Integer(frontier_count),
                             wbvector::FieldValue::Integer(partial_count),
+                            wbvector::FieldValue::Integer(origin_ids.len() as i64),
                         ];
                         if ring_costs.is_some() {
-                            attrs.push(wbvector::FieldValue::Integer((ring_pos + 1) as i64));
-                            attrs.push(wbvector::FieldValue::Float(ring_lower));
-                            attrs.push(wbvector::FieldValue::Float(*ring_limit));
+                            attrs.push(wbvector::FieldValue::Integer(records[0].ring_idx));
+                            attrs.push(wbvector::FieldValue::Float(ring_min));
+                            attrs.push(wbvector::FieldValue::Float(ring_max));
                         }
                         output.push(wbvector::Feature {
                             fid: next_fid,
@@ -27338,7 +28150,6 @@ impl Tool for NetworkServiceAreaTool {
                         });
                         next_fid += 1;
                     }
-                    ring_lower = *ring_limit;
                 }
             }
         } else {
@@ -27405,7 +28216,7 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "matched_points_output", description: "Optional output vector path for per-point diagnostics.", required: false },
                 ToolParamSpec { name: "match_report", description: "Optional JSON output path for summary diagnostics.", required: false },
                 ToolParamSpec { name: "output", description: "Output line vector path for inferred route.", required: true },
@@ -27448,7 +28259,7 @@ impl Tool for MapMatchingV1Tool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "matched_points_output".to_string(), description: "Optional output vector path for per-point diagnostics.".to_string(), required: false },
                 ToolParamDescriptor { name: "match_report".to_string(), description: "Optional JSON output path for summary diagnostics.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path for inferred route.".to_string(), required: true },
@@ -27600,7 +28411,9 @@ impl Tool for MapMatchingV1Tool {
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution("input network contains no usable line segments".to_string()));
@@ -28247,7 +29060,7 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
                 ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
                 ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
@@ -28289,7 +29102,7 @@ impl Tool for NetworkOdCostMatrixTool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
                 ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
@@ -28455,7 +29268,9 @@ impl Tool for NetworkOdCostMatrixTool {
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -28683,7 +29498,7 @@ impl Tool for NetworkRoutesFromOdTool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
                 ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
                 ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
@@ -28725,7 +29540,7 @@ impl Tool for NetworkRoutesFromOdTool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
                 ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
@@ -28888,7 +29703,9 @@ impl Tool for NetworkRoutesFromOdTool {
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -28991,6 +29808,1041 @@ impl Tool for NetworkRoutesFromOdTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for ClosestFacilityNetworkTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "closest_facility_network",
+            display_name: "Closest Facility (Network)",
+            summary: "Finds the minimum-cost network route from each incident point to its nearest reachable facility point.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "incidents", description: "Incident/demand point layer.", required: true },
+                ToolParamSpec { name: "facilities", description: "Facility/supply point layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from incident/facility points to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output closest-facility route line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("incidents".to_string(), json!("incidents.shp"));
+        defaults.insert("facilities".to_string(), json!("facilities.shp"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("closest_facility_routes.shp"));
+
+        ToolManifest {
+            id: "closest_facility_network".to_string(),
+            display_name: "Closest Facility (Network)".to_string(),
+            summary: "Finds the minimum-cost network route from each incident point to its nearest reachable facility point.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "incidents".to_string(), description: "Incident/demand point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "facilities".to_string(), description: "Facility/supply point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from incident/facility points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output closest-facility route line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "closest_facility_network_basic".to_string(),
+                description: "Routes each incident point to the nearest reachable facility by network cost.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "closest-facility".to_string(), "routing".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let incidents = load_vector_arg(args, "incidents")?;
+        let facilities = load_vector_arg(args, "facilities")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if incidents.geom_type != Some(wbvector::GeometryType::Point)
+            && incidents.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("incidents must be a point layer".to_string()));
+        }
+        if facilities.geom_type != Some(wbvector::GeometryType::Point)
+            && facilities.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("facilities must be a point layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let incidents = load_vector_arg(args, "incidents")?;
+        let facilities = load_vector_arg(args, "facilities")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let incident_points = collect_point_coords_from_layer(&incidents);
+        let facility_points = collect_point_coords_from_layer(&facilities);
+        if incident_points.is_empty() || facility_points.is_empty() {
+            return Err(ToolError::Execution(
+                "incidents and facilities must contain point geometries".to_string(),
+            ));
+        }
+
+        let mut incident_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &incident_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest incident node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                incident_nodes.push((*fid, idx));
+            }
+        }
+
+        let mut facility_nodes = Vec::<(i64, usize)>::new();
+        for (fid, coord) in &facility_points {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest facility node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                facility_nodes.push((*fid, idx));
+            }
+        }
+
+        if incident_nodes.is_empty() || facility_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "no incidents or facilities snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let routes: Vec<(i64, i64, f64, Vec<wbvector::Coord>)> = if turn_costs.is_active() {
+            incident_nodes
+                .par_iter()
+                .filter_map(|(incident_fid, incident_node)| {
+                    let mut best: Option<(i64, f64, Vec<usize>)> = None;
+                    for (facility_fid, facility_node) in &facility_nodes {
+                        if let Some((cost, path_nodes)) =
+                            dijkstra_shortest_path(&graph, *incident_node, *facility_node, &turn_costs)
+                        {
+                            let keep = best.as_ref().map(|(_, best_cost, _)| cost < *best_cost).unwrap_or(true);
+                            if keep {
+                                best = Some((*facility_fid, cost, path_nodes));
+                            }
+                        }
+                    }
+                    let (facility_fid, cost, path_nodes) = best?;
+                    let mut coords = path_nodes
+                        .into_iter()
+                        .map(|idx| graph.nodes[idx].clone())
+                        .collect::<Vec<_>>();
+                    if coords.len() == 1 {
+                        coords.push(coords[0].clone());
+                    }
+                    Some((*incident_fid, facility_fid, cost, coords))
+                })
+                .collect()
+        } else {
+            incident_nodes
+                .par_iter()
+                .filter_map(|(incident_fid, incident_node)| {
+                    let (dist, prev) = dijkstra_tree(&graph, *incident_node);
+                    let mut best: Option<(i64, usize, f64)> = None;
+                    for (facility_fid, facility_node) in &facility_nodes {
+                        let cost = dist[*facility_node];
+                        if !cost.is_finite() {
+                            continue;
+                        }
+                        let keep = best
+                            .as_ref()
+                            .map(|(_, _, best_cost)| cost < *best_cost)
+                            .unwrap_or(true);
+                        if keep {
+                            best = Some((*facility_fid, *facility_node, cost));
+                        }
+                    }
+                    let (facility_fid, facility_node, cost) = best?;
+                    let path_nodes = reconstruct_path_nodes(&prev, *incident_node, facility_node)?;
+                    let mut coords = path_nodes
+                        .into_iter()
+                        .map(|idx| graph.nodes[idx].clone())
+                        .collect::<Vec<_>>();
+                    if coords.len() == 1 {
+                        coords.push(coords[0].clone());
+                    }
+                    Some((*incident_fid, facility_fid, cost, coords))
+                })
+                .collect()
+        };
+
+        let mut output = wbvector::Layer::new(format!("{}_closest_facility_network", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("INCIDENT_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FACILITY_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+
+        let mut next_fid = 1u64;
+        for (incident_fid, facility_fid, cost, coords) in routes {
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(incident_fid),
+                    wbvector::FieldValue::Integer(facility_fid),
+                    wbvector::FieldValue::Float(cost),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for LocationAllocationNetworkTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "location_allocation_network",
+            display_name: "Location-Allocation (Network)",
+            summary: "Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "demand_points", description: "Demand point layer to allocate.", required: true },
+                ToolParamSpec { name: "facilities", description: "Candidate facility point layer.", required: true },
+                ToolParamSpec { name: "facility_count", description: "Number of facilities to select (k).", required: true },
+                ToolParamSpec { name: "solver_mode", description: "Solver mode: auto, greedy, or exact (exact is intended for smaller problems).", required: false },
+                ToolParamSpec { name: "demand_weight_field", description: "Optional numeric demand weight field in demand_points (default weight=1).", required: false },
+                ToolParamSpec { name: "facility_capacity_field", description: "Optional numeric capacity field in facilities; capacity is consumed by demand_weight_field values.", required: false },
+                ToolParamSpec { name: "required_facility_field", description: "Optional boolean facility field marking candidates that must be selected.", required: false },
+                ToolParamSpec { name: "forbidden_facility_field", description: "Optional boolean facility field marking candidates that must not be selected.", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from demand/facility points to nearest network node.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "barriers", description: "Optional barrier point layer; nearest network nodes are blocked from traversal.", required: false },
+                ToolParamSpec { name: "barrier_snap_distance", description: "Optional max distance from each barrier point to a network node for blocking.", required: false },
+                ToolParamSpec { name: "turn_penalty", description: "Optional additive cost applied to non-straight turns at network nodes.", required: false },
+                ToolParamSpec { name: "u_turn_penalty", description: "Optional additive cost applied to U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
+                ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).", required: false },
+                ToolParamSpec { name: "output", description: "Output allocated route line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("demand_points".to_string(), json!("demand.shp"));
+        defaults.insert("facilities".to_string(), json!("facilities.shp"));
+        defaults.insert("facility_count".to_string(), json!(2));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("location_allocation_routes.shp"));
+
+        ToolManifest {
+            id: "location_allocation_network".to_string(),
+            display_name: "Location-Allocation (Network)".to_string(),
+            summary: "Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "demand_points".to_string(), description: "Demand point layer to allocate.".to_string(), required: true },
+                ToolParamDescriptor { name: "facilities".to_string(), description: "Candidate facility point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "facility_count".to_string(), description: "Number of facilities to select (k).".to_string(), required: true },
+                ToolParamDescriptor { name: "solver_mode".to_string(), description: "Solver mode: auto, greedy, or exact (exact is intended for smaller problems).".to_string(), required: false },
+                ToolParamDescriptor { name: "demand_weight_field".to_string(), description: "Optional numeric demand weight field in demand_points (default weight=1).".to_string(), required: false },
+                ToolParamDescriptor { name: "facility_capacity_field".to_string(), description: "Optional numeric capacity field in facilities; capacity is consumed by demand_weight_field values.".to_string(), required: false },
+                ToolParamDescriptor { name: "required_facility_field".to_string(), description: "Optional boolean facility field marking candidates that must be selected.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbidden_facility_field".to_string(), description: "Optional boolean facility field marking candidates that must not be selected.".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from demand/facility points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "barriers".to_string(), description: "Optional barrier point layer; nearest network nodes are blocked from traversal.".to_string(), required: false },
+                ToolParamDescriptor { name: "barrier_snap_distance".to_string(), description: "Optional max distance from each barrier point to a network node for blocking.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_penalty".to_string(), description: "Optional additive cost applied to non-straight turns at network nodes.".to_string(), required: false },
+                ToolParamDescriptor { name: "u_turn_penalty".to_string(), description: "Optional additive cost applied to U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output allocated route line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "location_allocation_network_basic".to_string(),
+                description: "Selects facilities and allocates demand points using network travel cost.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "location-allocation".to_string(), "allocation".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let demand_points = load_vector_arg(args, "demand_points")?;
+        let facilities = load_vector_arg(args, "facilities")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if demand_points.geom_type != Some(wbvector::GeometryType::Point)
+            && demand_points.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("demand_points must be a point layer".to_string()));
+        }
+        if facilities.geom_type != Some(wbvector::GeometryType::Point)
+            && facilities.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("facilities must be a point layer".to_string()));
+        }
+        let facility_count = args
+            .get("facility_count")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| ToolError::Validation("facility_count must be an integer".to_string()))?;
+        if facility_count <= 0 {
+            return Err(ToolError::Validation(
+                "facility_count must be >= 1".to_string(),
+            ));
+        }
+        let _ = parse_location_allocation_solver_mode_arg(args)?;
+        if let Some(field_name) = parse_optional_string_arg(args, "demand_weight_field") {
+            let field_idx = demand_points.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "demand_weight_field '{}' was not found",
+                    field_name
+                ))
+            })?;
+            for feature in &demand_points.features {
+                if let Some(value) = feature.attributes.get(field_idx) {
+                    if matches!(value, wbvector::FieldValue::Null) {
+                        continue;
+                    }
+                    let Some(weight) = field_value_to_f64(value) else {
+                        return Err(ToolError::Validation(format!(
+                            "demand_weight_field '{}' must contain numeric values",
+                            field_name
+                        )));
+                    };
+                    if !weight.is_finite() || weight < 0.0 {
+                        return Err(ToolError::Validation(format!(
+                            "demand_weight_field '{}' values must be finite and >= 0",
+                            field_name
+                        )));
+                    }
+                }
+            }
+        }
+        if let Some(field_name) = parse_optional_string_arg(args, "facility_capacity_field") {
+            let field_idx = facilities.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "facility_capacity_field '{}' was not found",
+                    field_name
+                ))
+            })?;
+            for feature in &facilities.features {
+                if let Some(value) = feature.attributes.get(field_idx) {
+                    if matches!(value, wbvector::FieldValue::Null) {
+                        continue;
+                    }
+                    let Some(capacity) = field_value_to_f64(value) else {
+                        return Err(ToolError::Validation(format!(
+                            "facility_capacity_field '{}' must contain numeric values",
+                            field_name
+                        )));
+                    };
+                    if !capacity.is_finite() || capacity < 0.0 {
+                        return Err(ToolError::Validation(format!(
+                            "facility_capacity_field '{}' values must be finite and >= 0",
+                            field_name
+                        )));
+                    }
+                }
+            }
+        }
+        for (arg_name, label) in [
+            ("required_facility_field", "required_facility_field"),
+            ("forbidden_facility_field", "forbidden_facility_field"),
+        ] {
+            if let Some(field_name) = parse_optional_string_arg(args, arg_name) {
+                let field_idx = facilities.schema.field_index(field_name).ok_or_else(|| {
+                    ToolError::Validation(format!("{} '{}' was not found", label, field_name))
+                })?;
+                for feature in &facilities.features {
+                    if let Some(value) = feature.attributes.get(field_idx) {
+                        parse_boolean_field_flag(value, field_name)?;
+                    }
+                }
+            }
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barrier_snap_distance) = parse_optional_f64_arg(args, "barrier_snap_distance") {
+            if !barrier_snap_distance.is_finite() || barrier_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "barrier_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(barriers) = load_optional_vector_arg(args, "barriers")? {
+            if barriers.geom_type != Some(wbvector::GeometryType::Point)
+                && barriers.geom_type != Some(wbvector::GeometryType::MultiPoint)
+            {
+                return Err(ToolError::Validation(
+                    "barriers must be a point layer".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = parse_network_turn_cost_options(args)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        if let Some(turn_restrictions_csv) = parse_optional_string_arg(args, "turn_restrictions_csv") {
+            if std::fs::metadata(turn_restrictions_csv).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "turn_restrictions_csv '{}' does not exist",
+                    turn_restrictions_csv
+                )));
+            }
+        }
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        if temporal_cost_profile.is_some() != departure_time.is_some() {
+            return Err(ToolError::Validation(
+                "temporal_cost_profile and departure_time must be provided together".to_string(),
+            ));
+        }
+        if let Some(csv_path) = temporal_cost_profile {
+            if std::fs::metadata(csv_path).is_err() {
+                return Err(ToolError::Validation(format!(
+                    "temporal_cost_profile '{}' does not exist",
+                    csv_path
+                )));
+            }
+            let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+            let _ = resolve_network_temporal_edge_id_field(&input, temporal_edge_id_field)?;
+            let _ = parse_temporal_cost_mode_arg(args)?;
+            let _ = parse_temporal_fallback_arg(args)?;
+            let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+        } else {
+            if parse_optional_string_arg(args, "temporal_edge_id_field").is_some()
+                || parse_optional_string_arg(args, "temporal_mode").is_some()
+                || parse_optional_string_arg(args, "temporal_fallback").is_some()
+            {
+                return Err(ToolError::Validation(
+                    "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let demand_points = load_vector_arg(args, "demand_points")?;
+        let facilities = load_vector_arg(args, "facilities")?;
+        let facility_count = args
+            .get("facility_count")
+            .and_then(|value| value.as_i64())
+            .ok_or_else(|| ToolError::Validation("facility_count must be an integer".to_string()))?
+            as usize;
+        let solver_mode = parse_location_allocation_solver_mode_arg(args)?;
+        let demand_weight_field = parse_optional_string_arg(args, "demand_weight_field");
+        let facility_capacity_field = parse_optional_string_arg(args, "facility_capacity_field");
+        let required_facility_field = parse_optional_string_arg(args, "required_facility_field");
+        let forbidden_facility_field = parse_optional_string_arg(args, "forbidden_facility_field");
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let barriers = load_optional_vector_arg(args, "barriers")?;
+        let barrier_snap_distance = parse_optional_f64_arg(args, "barrier_snap_distance");
+        let mut turn_costs = parse_network_turn_cost_options(args)?;
+        let turn_restrictions_csv = parse_optional_string_arg(args, "turn_restrictions_csv");
+        let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+        let departure_time = parse_optional_string_arg(args, "departure_time");
+        let temporal_mode = parse_temporal_cost_mode_arg(args)?;
+        let temporal_fallback = parse_temporal_fallback_arg(args)?;
+        let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let temporal_options = if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+            let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+            let edge_id_field_idx = resolve_network_temporal_edge_id_field(&input, Some(edge_id_field_name.as_str()))?;
+            let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+            if let Some(report_path) = parse_optional_string_arg(args, "temporal_profile_report") {
+                write_temporal_profile_diagnostics(&profile, &input, edge_id_field_idx, report_path)?;
+            }
+            Some(NetworkTemporalCostOptions {
+                edge_id_field_idx,
+                edge_id_field_name,
+                profile,
+            })
+        } else {
+            None
+        };
+
+        let mut graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            temporal_options.as_ref(),
+        )?;
+        apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
+        if let Some(path) = turn_restrictions_csv {
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
+        }
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let demand_weight_idx = match demand_weight_field {
+            Some(field_name) => Some(
+                demand_points
+                    .schema
+                    .field_index(field_name)
+                    .ok_or_else(|| ToolError::Execution(format!("demand_weight_field '{}' was not found", field_name)))?,
+            ),
+            None => None,
+        };
+        let mut demand_weight_by_fid = HashMap::<i64, f64>::new();
+        for feature in &demand_points.features {
+            let weight = if let Some(idx) = demand_weight_idx {
+                match feature.attributes.get(idx) {
+                    Some(wbvector::FieldValue::Null) | None => 0.0,
+                    Some(value) => {
+                        let parsed = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Execution("demand_weight_field contains non-numeric values".to_string())
+                        })?;
+                        if !parsed.is_finite() || parsed < 0.0 {
+                            return Err(ToolError::Execution(
+                                "demand_weight_field values must be finite and >= 0".to_string(),
+                            ));
+                        }
+                        parsed
+                    }
+                }
+            } else {
+                1.0
+            };
+            demand_weight_by_fid.insert(feature.fid as i64, weight);
+        }
+
+        let demand_coords = collect_point_coords_from_layer(&demand_points);
+        if demand_coords.is_empty() {
+            return Err(ToolError::Execution(
+                "demand_points and facilities must contain point geometries".to_string(),
+            ));
+        }
+
+        let mut demand_nodes = Vec::<(i64, usize, f64)>::new();
+        for (fid, coord) in &demand_coords {
+            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
+                .ok_or_else(|| ToolError::Execution("failed locating nearest demand node".to_string()))?;
+            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                let weight = demand_weight_by_fid.get(fid).copied().unwrap_or(1.0);
+                demand_nodes.push((*fid, idx, weight));
+            }
+        }
+
+        let facility_capacity_idx = match facility_capacity_field {
+            Some(field_name) => Some(
+                facilities
+                    .schema
+                    .field_index(field_name)
+                    .ok_or_else(|| ToolError::Execution(format!("facility_capacity_field '{}' was not found", field_name)))?,
+            ),
+            None => None,
+        };
+        let required_facility_idx = match required_facility_field {
+            Some(field_name) => Some(
+                facilities
+                    .schema
+                    .field_index(field_name)
+                    .ok_or_else(|| ToolError::Execution(format!("required_facility_field '{}' was not found", field_name)))?,
+            ),
+            None => None,
+        };
+        let forbidden_facility_idx = match forbidden_facility_field {
+            Some(field_name) => Some(
+                facilities
+                    .schema
+                    .field_index(field_name)
+                    .ok_or_else(|| ToolError::Execution(format!("forbidden_facility_field '{}' was not found", field_name)))?,
+            ),
+            None => None,
+        };
+
+        let mut facility_candidates = Vec::<LocationAllocationFacilityCandidate>::new();
+        let mut required_feature_fids = HashSet::<i64>::new();
+        let mut snapped_required_feature_fids = HashSet::<i64>::new();
+        for feature in &facilities.features {
+            let feature_fid = feature.fid as i64;
+            let capacity = if let Some(idx) = facility_capacity_idx {
+                match feature.attributes.get(idx) {
+                    Some(wbvector::FieldValue::Null) | None => f64::INFINITY,
+                    Some(value) => field_value_to_f64(value).unwrap_or(f64::INFINITY),
+                }
+            } else {
+                f64::INFINITY
+            };
+            let is_required = if let Some(idx) = required_facility_idx {
+                parse_boolean_field_flag(
+                    feature.attributes.get(idx).unwrap_or(&wbvector::FieldValue::Null),
+                    required_facility_field.unwrap_or("required_facility_field"),
+                )?
+            } else {
+                false
+            };
+            let is_forbidden = if let Some(idx) = forbidden_facility_idx {
+                parse_boolean_field_flag(
+                    feature.attributes.get(idx).unwrap_or(&wbvector::FieldValue::Null),
+                    forbidden_facility_field.unwrap_or("forbidden_facility_field"),
+                )?
+            } else {
+                false
+            };
+            if is_required && is_forbidden {
+                return Err(ToolError::Execution(format!(
+                    "facility fid {} is marked as both required and forbidden",
+                    feature_fid
+                )));
+            }
+            if is_required {
+                required_feature_fids.insert(feature_fid);
+            }
+            let Some(geometry) = feature.geometry.as_ref() else {
+                continue;
+            };
+            let coords = match geometry {
+                wbvector::Geometry::Point(coord) => vec![coord.clone()],
+                wbvector::Geometry::MultiPoint(points) => points.clone(),
+                _ => Vec::new(),
+            };
+            for coord in coords {
+                let (idx, dist) = nearest_network_node(&graph.nodes, &coord)
+                    .ok_or_else(|| ToolError::Execution("failed locating nearest facility node".to_string()))?;
+                if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                    if is_forbidden {
+                        continue;
+                    }
+                    if is_required {
+                        snapped_required_feature_fids.insert(feature_fid);
+                    }
+                    facility_candidates.push(LocationAllocationFacilityCandidate {
+                        fid: feature_fid,
+                        node: idx,
+                        capacity,
+                    });
+                }
+            }
+        }
+
+        if demand_nodes.is_empty() || facility_candidates.is_empty() {
+            return Err(ToolError::Execution(
+                "no demand points or facilities snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+        if snapped_required_feature_fids.len() < required_feature_fids.len() {
+            return Err(ToolError::Execution(
+                "one or more required facilities could not be snapped to the network within max_snap_distance".to_string(),
+            ));
+        }
+        if facility_count > facility_candidates.len() {
+            return Err(ToolError::Execution(format!(
+                "facility_count ({}) exceeds available snapped facilities ({})",
+                facility_count,
+                facility_candidates.len()
+            )));
+        }
+
+        let required_indices = facility_candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, candidate)| required_feature_fids.contains(&candidate.fid).then_some(idx))
+            .collect::<Vec<_>>();
+        if required_indices.len() > facility_count {
+            return Err(ToolError::Execution(format!(
+                "facility_count ({}) is smaller than the number of required snapped facilities ({})",
+                facility_count,
+                required_indices.len()
+            )));
+        }
+        let candidate_indices = (0..facility_candidates.len())
+            .filter(|idx| !required_indices.contains(idx))
+            .collect::<Vec<_>>();
+
+        let mut cost_matrix = vec![vec![f64::INFINITY; facility_candidates.len()]; demand_nodes.len()];
+        let mut prev_cache = Vec::<Vec<Option<usize>>>::new();
+        if turn_costs.is_active() {
+            for (d, (_, demand_node, _)) in demand_nodes.iter().enumerate() {
+                for (f, facility) in facility_candidates.iter().enumerate() {
+                    if let Some((cost, _)) = dijkstra_shortest_path(&graph, *demand_node, facility.node, &turn_costs) {
+                        cost_matrix[d][f] = cost;
+                    }
+                }
+            }
+        } else {
+            for (d, (_, demand_node, _)) in demand_nodes.iter().enumerate() {
+                let (dist, prev) = dijkstra_tree(&graph, *demand_node);
+                for (f, facility) in facility_candidates.iter().enumerate() {
+                    cost_matrix[d][f] = dist[facility.node];
+                }
+                prev_cache.push(prev);
+            }
+        }
+        let demand_fids = demand_nodes.iter().map(|(fid, _, _)| *fid).collect::<Vec<_>>();
+        let demand_weights = demand_nodes.iter().map(|(_, _, weight)| *weight).collect::<Vec<_>>();
+        let additional_needed = facility_count.saturating_sub(required_indices.len());
+        let combo_count = combination_count_limited(candidate_indices.len(), additional_needed, 20_000);
+        let use_exact = match solver_mode {
+            LocationAllocationSolverMode::Greedy => false,
+            LocationAllocationSolverMode::Exact => {
+                if demand_nodes.len() > 12 || facility_count > 8 || combo_count > 20_000 {
+                    return Err(ToolError::Execution(
+                        "solver_mode='exact' is limited to smaller problems; use solver_mode='auto' or 'greedy' for larger cases".to_string(),
+                    ));
+                }
+                true
+            }
+            LocationAllocationSolverMode::Auto => {
+                demand_nodes.len() <= 12 && facility_count <= 8 && combo_count <= 4_000
+            }
+        };
+
+        let solution = if use_exact {
+            solve_location_allocation_exact(
+                &candidate_indices,
+                &required_indices,
+                facility_count,
+                &cost_matrix,
+                &demand_fids,
+                &demand_weights,
+                &facility_candidates,
+            )
+        } else {
+            solve_location_allocation_greedy(
+                &candidate_indices,
+                &required_indices,
+                facility_count,
+                &cost_matrix,
+                &demand_fids,
+                &demand_weights,
+                &facility_candidates,
+            )
+        }
+        .ok_or_else(|| ToolError::Execution("failed to select any facilities".to_string()))?;
+
+        let mut routes = Vec::<(i64, i64, f64, f64, Vec<wbvector::Coord>)>::new();
+        for (d, assigned_facility) in solution.assignments.iter().enumerate() {
+            let Some(facility_idx) = assigned_facility else {
+                continue;
+            };
+            let demand_fid = demand_nodes[d].0;
+            let demand_node = demand_nodes[d].1;
+            let weight = demand_nodes[d].2;
+            let facility = &facility_candidates[*facility_idx];
+            let cost = cost_matrix[d][*facility_idx];
+
+            let path_nodes = if turn_costs.is_active() {
+                let Some((_, nodes)) = dijkstra_shortest_path(&graph, demand_node, facility.node, &turn_costs) else {
+                    continue;
+                };
+                nodes
+            } else {
+                let Some(nodes) = reconstruct_path_nodes(&prev_cache[d], demand_node, facility.node) else {
+                    continue;
+                };
+                nodes
+            };
+
+            let mut coords = path_nodes
+                .into_iter()
+                .map(|idx| graph.nodes[idx].clone())
+                .collect::<Vec<_>>();
+            if coords.len() == 1 {
+                coords.push(coords[0].clone());
+            }
+            routes.push((demand_fid, facility.fid, weight, cost, coords));
+        }
+
+        let mut output = wbvector::Layer::new(format!("{}_location_allocation_network", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("DEMAND_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("FACILITY_FID", wbvector::FieldType::Integer));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("WEIGHT", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+        output
+            .schema
+            .add_field(wbvector::FieldDef::new("ALLOC_COST", wbvector::FieldType::Float));
+
+        let mut next_fid = 1u64;
+        for (demand_fid, facility_fid, weight, cost, coords) in routes {
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(demand_fid),
+                    wbvector::FieldValue::Integer(facility_fid),
+                    wbvector::FieldValue::Float(weight),
+                    wbvector::FieldValue::Float(cost),
+                    wbvector::FieldValue::Float(weight * cost),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator));
+        outputs.insert("selected_facility_count".to_string(), json!(solution.selected_indices.len()));
+        outputs.insert(
+            "selected_facility_fids".to_string(),
+            json!(solution
+                .selected_indices
+                .iter()
+                .map(|idx| facility_candidates[*idx].fid)
+                .collect::<Vec<_>>()),
+        );
+        outputs.insert("served_demand_count".to_string(), json!(solution.served_count));
+        outputs.insert(
+            "unserved_demand_count".to_string(),
+            json!(demand_nodes.len().saturating_sub(solution.served_count)),
+        );
+        outputs.insert("served_demand_weight".to_string(), json!(solution.served_weight));
+        outputs.insert("total_alloc_cost".to_string(), json!(solution.total_alloc_cost));
+        outputs.insert(
+            "solver_used".to_string(),
+            json!(if use_exact { "exact" } else { "greedy" }),
+        );
+        Ok(ToolRunResult { outputs })
     }
 }
 
@@ -30833,7 +32685,7 @@ impl Tool for KShortestPathsNetworkTool {
                 ToolParamSpec { name: "forbid_u_turns", description: "If true, disallow U-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_left_turns", description: "If true, disallow left-turn transitions.", required: false },
                 ToolParamSpec { name: "forbid_right_turns", description: "If true, disallow right-turn transitions.", required: false },
-                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.", required: false },
+                ToolParamSpec { name: "turn_restrictions_csv", description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.", required: false },
                 ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
                 ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
                 ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
@@ -30881,7 +32733,7 @@ impl Tool for KShortestPathsNetworkTool {
                 ToolParamDescriptor { name: "forbid_u_turns".to_string(), description: "If true, disallow U-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_left_turns".to_string(), description: "If true, disallow left-turn transitions.".to_string(), required: false },
                 ToolParamDescriptor { name: "forbid_right_turns".to_string(), description: "If true, disallow right-turn transitions.".to_string(), required: false },
-                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of forbidden turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y.".to_string(), required: false },
+                ToolParamDescriptor { name: "turn_restrictions_csv".to_string(), description: "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
                 ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
                 ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
@@ -31050,7 +32902,9 @@ impl Tool for KShortestPathsNetworkTool {
         )?;
         apply_barrier_points_to_graph(&mut graph, barriers.as_ref(), barrier_snap_distance)?;
         if let Some(path) = turn_restrictions_csv {
-            turn_costs.restricted_transitions = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            let table = parse_turn_restrictions_csv(path, &graph, snap_tolerance)?;
+            turn_costs.restricted_transitions = table.restricted_transitions;
+            turn_costs.turn_cost_overrides = table.turn_cost_overrides;
         }
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(

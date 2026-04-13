@@ -542,6 +542,8 @@ pub use gis::NetworkTopologyAuditTool;
 pub use gis::NetworkOdCostMatrixTool;
 pub use gis::NetworkConnectedComponentsTool;
 pub use gis::NetworkRoutesFromOdTool;
+pub use gis::ClosestFacilityNetworkTool;
+pub use gis::LocationAllocationNetworkTool;
 pub use gis::KShortestPathsNetworkTool;
 pub use gis::VehicleRoutingCvrpTool;
 pub use gis::VehicleRoutingVrptwTool;

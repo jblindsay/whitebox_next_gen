@@ -255,6 +255,8 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"network_od_cost_matrix"));
     assert!(ids.contains(&"network_connected_components"));
     assert!(ids.contains(&"network_routes_from_od"));
+    assert!(ids.contains(&"closest_facility_network"));
+    assert!(ids.contains(&"location_allocation_network"));
     assert!(ids.contains(&"k_shortest_paths_network"));
     assert!(ids.contains(&"vehicle_routing_cvrp"));
     assert!(ids.contains(&"vehicle_routing_vrptw"));
@@ -18442,6 +18444,128 @@ fn network_service_area_returns_nodes_within_max_cost() {
 }
 
 #[test]
+fn network_service_area_mode_allowlist_filters_edges() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_service_area_mode_allowlist");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("MODE", FieldValue::Text("drive".to_string()))],
+        )
+        .expect("add edge 2");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add edge 3");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("max_cost".to_string(), json!(10.0));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("allowed_modes".to_string(), json!("walk"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_service_area", &args, &context(&caps))
+        .expect("network_service_area run");
+
+    let out = wbvector::read(&out_path).expect("read service area output");
+    assert_eq!(out.features.len(), 2, "expected only walk-connected nodes to be reachable");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_service_area_mode_speed_overrides_change_reachability() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_service_area_mode_speed");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add edge 2");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("max_cost".to_string(), json!(1.6));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:2.0"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_service_area", &args, &context(&caps))
+        .expect("network_service_area run");
+
+    let out = wbvector::read(&out_path).expect("read service area output");
+    assert_eq!(out.features.len(), 3, "expected speed override to make third node reachable within max_cost");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
 fn network_service_area_nodes_output_supports_ring_costs() {
     use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
 
@@ -20064,7 +20188,7 @@ fn network_service_area_polygons_output_emits_one_polygon_per_origin() {
         .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin 1");
     origins
-        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
         .expect("add origin 2");
     wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
 
@@ -20106,6 +20230,149 @@ fn network_service_area_polygons_output_emits_one_polygon_per_origin() {
         }
     }
     assert_eq!(origin_ids, BTreeSet::from([0, 1]), "expected polygons for both origin features");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_service_area_polygons_can_merge_overlapping_origins() {
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_service_area_polygons_merge_origins");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 2");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin 1");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add origin 2");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("max_cost".to_string(), json!(1.1));
+    args.insert("output_mode".to_string(), json!("polygons"));
+    args.insert("polygon_merge_origins".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_service_area", &args, &context(&caps))
+        .expect("network_service_area run");
+
+    let out = wbvector::read(&out_path).expect("read merged service area polygon output");
+    assert_eq!(out.features.len(), 1, "expected overlapping origin polygons to dissolve into one merged polygon");
+    assert!(out.schema.field_index("ORIGIN_ID").is_none(), "merged output should not expose per-origin ORIGIN_ID field");
+
+    let origin_ct_idx = out.schema.field_index("ORIGIN_CT").expect("ORIGIN_CT field");
+    let origin_ct = match &out.features[0].attributes[origin_ct_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer ORIGIN_CT, got {:?}", other),
+    };
+    assert_eq!(origin_ct, 2, "expected merged polygon to record both contributing origins");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_service_area_polygons_can_merge_origins_by_ring() {
+    use std::collections::BTreeSet;
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_service_area_polygons_merge_rings");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    for segment in [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0), (3.0, 4.0)] {
+        lines
+            .add_feature(
+                Some(Geometry::line_string(vec![Coord::xy(segment.0, 0.0), Coord::xy(segment.1, 0.0)])),
+                &[],
+            )
+            .expect("add segment");
+    }
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add origin 1");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add origin 2");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("max_cost".to_string(), json!(2.1));
+    args.insert("ring_costs".to_string(), json!("1.1,2.1"));
+    args.insert("output_mode".to_string(), json!("polygons"));
+    args.insert("polygon_merge_origins".to_string(), json!(true));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_service_area", &args, &context(&caps))
+        .expect("network_service_area run");
+
+    let out = wbvector::read(&out_path).expect("read merged ring service area polygon output");
+    assert_eq!(out.features.len(), 2, "expected one dissolved polygon per ring after merging origins");
+
+    let ring_idx = out.schema.field_index("RING_IDX").expect("RING_IDX field");
+    let origin_ct_idx = out.schema.field_index("ORIGIN_CT").expect("ORIGIN_CT field");
+    let mut rings = BTreeSet::<i64>::new();
+    for feature in &out.features {
+        let ring = match &feature.attributes[ring_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer RING_IDX, got {:?}", other),
+        };
+        rings.insert(ring);
+        let origin_ct = match &feature.attributes[origin_ct_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer ORIGIN_CT, got {:?}", other),
+        };
+        assert_eq!(origin_ct, 2, "expected each dissolved ring polygon to include both origins");
+    }
+    assert_eq!(rings, BTreeSet::from([1, 2]), "expected dissolved polygons for both requested rings");
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&origins_path);
@@ -21167,6 +21434,106 @@ fn network_od_cost_matrix_respects_turn_restrictions_csv() {
 }
 
 #[test]
+fn network_od_cost_matrix_applies_turn_cost_override_from_csv() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_od_matrix_turn_cost_override_csv");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let restrictions_csv = std::env::temp_dir().join(format!("{tag}_turns.csv"));
+    let out_csv = std::env::temp_dir().join(format!("{tag}_od.csv"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("IMP", FieldType::Float));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("IMP", FieldValue::Float(1.0))],
+        )
+        .expect("add AB");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(1.0, 1.0)])),
+            &[("IMP", FieldValue::Float(1.0))],
+        )
+        .expect("add BC");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(0.0, 1.0)])),
+            &[("IMP", FieldValue::Float(2.0))],
+        )
+        .expect("add AD");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 1.0), Coord::xy(1.0, 1.0)])),
+            &[("IMP", FieldValue::Float(2.0))],
+        )
+        .expect("add DC");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 1.0))), &[])
+        .expect("add destination");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    std::fs::write(
+        &restrictions_csv,
+        "prev_x,prev_y,node_x,node_y,next_x,next_y,forbidden,turn_cost\n0,0,1,0,1,1,false,5\n",
+    )
+    .expect("write turn override csv");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("edge_cost_field".to_string(), json!("IMP"));
+    args.insert(
+        "turn_restrictions_csv".to_string(),
+        json!(restrictions_csv.to_string_lossy().to_string()),
+    );
+    args.insert("output".to_string(), json!(out_csv.to_string_lossy().to_string()));
+    registry
+        .run("network_od_cost_matrix", &args, &context(&caps))
+        .expect("network_od_cost_matrix run");
+
+    let csv = std::fs::read_to_string(&out_csv).expect("read od csv");
+    let lines: Vec<&str> = csv.lines().collect();
+    assert_eq!(lines.len(), 2, "expected header + one OD row");
+    let parts: Vec<&str> = lines[1].split(',').collect();
+    let cost: f64 = parts[2].parse().expect("parse cost");
+    assert!(
+        (cost - 4.0).abs() < 1.0e-9,
+        "expected detour cost 4.0 when direct turn has +5 override, got {}",
+        cost
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&restrictions_csv);
+    let _ = std::fs::remove_file(&out_csv);
+}
+
+#[test]
 fn network_od_cost_matrix_temporal_profile_changes_cost_by_departure_time() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 
@@ -21810,6 +22177,571 @@ fn network_routes_from_od_respects_barrier_points() {
     let _ = std::fs::remove_file(&origins_path);
     let _ = std::fs::remove_file(&destinations_path);
     let _ = std::fs::remove_file(&barriers_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn closest_facility_network_routes_incidents_to_nearest_reachable_facility() {
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_closest_facility_network");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let incidents_path = std::env::temp_dir().join(format!("{tag}_incidents.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 2");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 3");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut incidents = Layer::new("incidents")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add incident 1");
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add incident 2");
+    wbvector::write(&incidents, &incidents_path, VectorFormat::GeoPackage).expect("write incidents");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add facility 1");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add facility 2");
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("incidents".to_string(), json!(incidents_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("closest_facility_network", &args, &context(&caps))
+        .expect("closest_facility_network run");
+
+    let out = wbvector::read(&out_path).expect("read closest facility output");
+    assert_eq!(out.features.len(), 2, "expected one route per incident");
+    let incident_idx = out.schema.field_index("INCIDENT_FID").expect("INCIDENT_FID field");
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+
+    let mut costs_by_incident = std::collections::BTreeMap::<i64, f64>::new();
+    for feature in &out.features {
+        let incident_fid = match &feature.attributes[incident_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer INCIDENT_FID, got {:?}", other),
+        };
+        let cost = match &feature.attributes[cost_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric COST, got {:?}", other),
+        };
+        costs_by_incident.insert(incident_fid, cost);
+    }
+
+    assert!(
+        costs_by_incident.values().all(|c| (*c - 1.0).abs() < 1.0e-9),
+        "expected each incident to route one edge to nearest facility"
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&incidents_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn closest_facility_network_tie_break_prefers_first_facility_feature() {
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_closest_facility_network_tie_break");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let incidents_path = std::env::temp_dir().join(format!("{tag}_incidents.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge left");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge right");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut incidents = Layer::new("incidents")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    incidents
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add center incident");
+    wbvector::write(&incidents, &incidents_path, VectorFormat::GeoPackage).expect("write incidents");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add facility first");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add facility second");
+    let expected_first_facility_fid = facilities.features[0].fid as i64;
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("incidents".to_string(), json!(incidents_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("closest_facility_network", &args, &context(&caps))
+        .expect("closest_facility_network run");
+
+    let out = wbvector::read(&out_path).expect("read closest facility output");
+    assert_eq!(out.features.len(), 1, "expected one route for one incident");
+
+    let facility_idx = out.schema.field_index("FACILITY_FID").expect("FACILITY_FID field");
+    let chosen_facility = match &out.features[0].attributes[facility_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer FACILITY_FID, got {:?}", other),
+    };
+
+    assert_eq!(
+        chosen_facility, expected_first_facility_fid,
+        "expected first facility feature to win deterministic tie-break"
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&incidents_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn location_allocation_network_selects_two_facilities_and_allocates_demand() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_location_allocation_network");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let demand_path = std::env::temp_dir().join(format!("{tag}_demand.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 2");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 3");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(3.0, 0.0), Coord::xy(4.0, 0.0)])),
+            &[],
+        )
+        .expect("add edge 4");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut demand = Layer::new("demand")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    demand.schema.add_field(FieldDef::new("W", FieldType::Float));
+    demand
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[("W", FieldValue::Float(5.0))],
+        )
+        .expect("add demand 1");
+    demand
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(4.0, 0.0))),
+            &[("W", FieldValue::Float(5.0))],
+        )
+        .expect("add demand 2");
+    wbvector::write(&demand, &demand_path, VectorFormat::GeoPackage).expect("write demand");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add facility 1");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add facility 2");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(4.0, 0.0))), &[])
+        .expect("add facility 3");
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("demand_points".to_string(), json!(demand_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("facility_count".to_string(), json!(2));
+    args.insert("demand_weight_field".to_string(), json!("W"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("location_allocation_network", &args, &context(&caps))
+        .expect("location_allocation_network run");
+
+    let out = wbvector::read(&out_path).expect("read location-allocation output");
+    assert_eq!(out.features.len(), 2, "expected one allocated route per demand point");
+
+    let facility_idx = out.schema.field_index("FACILITY_FID").expect("FACILITY_FID field");
+    let alloc_cost_idx = out.schema.field_index("ALLOC_COST").expect("ALLOC_COST field");
+
+    let mut selected_facilities = std::collections::BTreeSet::<i64>::new();
+    let mut total_alloc_cost = 0.0f64;
+    for feature in &out.features {
+        let facility_fid = match &feature.attributes[facility_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer FACILITY_FID, got {:?}", other),
+        };
+        selected_facilities.insert(facility_fid);
+
+        let alloc_cost = match &feature.attributes[alloc_cost_idx] {
+            FieldValue::Float(v) => *v,
+            FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric ALLOC_COST, got {:?}", other),
+        };
+        total_alloc_cost += alloc_cost;
+    }
+
+    assert_eq!(selected_facilities.len(), 2, "expected exactly two selected facilities");
+    assert!(
+        total_alloc_cost.abs() < 1.0e-9,
+        "expected zero weighted allocation cost for end-point facilities, got {}",
+        total_alloc_cost
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&demand_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn location_allocation_network_exact_mode_reports_exact_solver_usage() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_location_allocation_network_exact");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let demand_path = std::env::temp_dir().join(format!("{tag}_demand.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    for segment in [
+        (0.0, 1.0),
+        (1.0, 2.0),
+        (2.0, 3.0),
+    ] {
+        lines
+            .add_feature(
+                Some(Geometry::line_string(vec![Coord::xy(segment.0, 0.0), Coord::xy(segment.1, 0.0)])),
+                &[],
+            )
+            .expect("add segment");
+    }
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut demand = Layer::new("demand")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    demand
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add demand 1");
+    demand
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add demand 2");
+    wbvector::write(&demand, &demand_path, VectorFormat::GeoPackage).expect("write demand");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add facility 1");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add facility 2");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add facility 3");
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("demand_points".to_string(), json!(demand_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("facility_count".to_string(), json!(1));
+    args.insert("solver_mode".to_string(), json!("exact"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    let result = registry
+        .run("location_allocation_network", &args, &context(&caps))
+        .expect("location_allocation_network run");
+
+    assert_eq!(
+        result.outputs.get("solver_used").and_then(|v| v.as_str()),
+        Some("exact"),
+        "expected exact solver mode to be used"
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&demand_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn location_allocation_network_respects_facility_capacities() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_location_allocation_network_capacity");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let demand_path = std::env::temp_dir().join(format!("{tag}_demand.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    for segment in [
+        (0.0, 1.0),
+        (1.0, 2.0),
+        (2.0, 3.0),
+        (3.0, 4.0),
+    ] {
+        lines
+            .add_feature(
+                Some(Geometry::line_string(vec![Coord::xy(segment.0, 0.0), Coord::xy(segment.1, 0.0)])),
+                &[],
+            )
+            .expect("add segment");
+    }
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut demand = Layer::new("demand")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    demand.schema.add_field(FieldDef::new("W", FieldType::Float));
+    for x in [0.0, 1.0, 4.0] {
+        demand
+            .add_feature(Some(Geometry::Point(Coord::xy(x, 0.0))), &[("W", FieldValue::Float(1.0))])
+            .expect("add demand point");
+    }
+    wbvector::write(&demand, &demand_path, VectorFormat::GeoPackage).expect("write demand");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities.schema.add_field(FieldDef::new("CAP", FieldType::Float));
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[("CAP", FieldValue::Float(1.0))])
+        .expect("add facility 1");
+    facilities
+        .add_feature(Some(Geometry::Point(Coord::xy(4.0, 0.0))), &[("CAP", FieldValue::Float(2.0))])
+        .expect("add facility 2");
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("demand_points".to_string(), json!(demand_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("facility_count".to_string(), json!(2));
+    args.insert("demand_weight_field".to_string(), json!("W"));
+    args.insert("facility_capacity_field".to_string(), json!("CAP"));
+    args.insert("solver_mode".to_string(), json!("exact"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("location_allocation_network", &args, &context(&caps))
+        .expect("location_allocation_network run");
+
+    let out = wbvector::read(&out_path).expect("read capacity output");
+    assert_eq!(out.features.len(), 3, "expected all three demands to be served");
+
+    let facility_idx = out.schema.field_index("FACILITY_FID").expect("FACILITY_FID field");
+    let mut counts = std::collections::BTreeMap::<i64, usize>::new();
+    for feature in &out.features {
+        let facility_fid = match &feature.attributes[facility_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("expected integer FACILITY_FID, got {:?}", other),
+        };
+        *counts.entry(facility_fid).or_insert(0) += 1;
+    }
+    assert_eq!(counts.values().copied().collect::<Vec<_>>(), vec![1, 2], "expected capacities to split allocations 1/2 across the two facilities");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&demand_path);
+    let _ = std::fs::remove_file(&facilities_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn location_allocation_network_respects_required_and_forbidden_facilities() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_location_allocation_network_constraints");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let demand_path = std::env::temp_dir().join(format!("{tag}_demand.gpkg"));
+    let facilities_path = std::env::temp_dir().join(format!("{tag}_facilities.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    for segment in [
+        (0.0, 1.0),
+        (1.0, 2.0),
+        (2.0, 3.0),
+        (3.0, 4.0),
+    ] {
+        lines
+            .add_feature(
+                Some(Geometry::line_string(vec![Coord::xy(segment.0, 0.0), Coord::xy(segment.1, 0.0)])),
+                &[],
+            )
+            .expect("add segment");
+    }
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut demand = Layer::new("demand")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    demand
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add demand 1");
+    demand
+        .add_feature(Some(Geometry::Point(Coord::xy(4.0, 0.0))), &[])
+        .expect("add demand 2");
+    wbvector::write(&demand, &demand_path, VectorFormat::GeoPackage).expect("write demand");
+
+    let mut facilities = Layer::new("facilities")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    facilities.schema.add_field(FieldDef::new("REQ", FieldType::Boolean));
+    facilities.schema.add_field(FieldDef::new("BAN", FieldType::Boolean));
+    facilities
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[("REQ", FieldValue::Boolean(true)), ("BAN", FieldValue::Boolean(false))],
+        )
+        .expect("add required facility");
+    facilities
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(2.0, 0.0))),
+            &[("REQ", FieldValue::Boolean(false)), ("BAN", FieldValue::Boolean(true))],
+        )
+        .expect("add forbidden facility");
+    facilities
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(4.0, 0.0))),
+            &[("REQ", FieldValue::Boolean(false)), ("BAN", FieldValue::Boolean(false))],
+        )
+        .expect("add optional facility");
+    let required_fid = facilities.features[0].fid as i64;
+    let optional_fid = facilities.features[2].fid as i64;
+    wbvector::write(&facilities, &facilities_path, VectorFormat::GeoPackage).expect("write facilities");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("demand_points".to_string(), json!(demand_path.to_string_lossy().to_string()));
+    args.insert("facilities".to_string(), json!(facilities_path.to_string_lossy().to_string()));
+    args.insert("facility_count".to_string(), json!(2));
+    args.insert("required_facility_field".to_string(), json!("REQ"));
+    args.insert("forbidden_facility_field".to_string(), json!("BAN"));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    let result = registry
+        .run("location_allocation_network", &args, &context(&caps))
+        .expect("location_allocation_network run");
+
+    let selected = result
+        .outputs
+        .get("selected_facility_fids")
+        .and_then(|v| v.as_array())
+        .expect("selected_facility_fids array")
+        .iter()
+        .filter_map(|v| v.as_i64())
+        .collect::<Vec<_>>();
+    assert_eq!(selected, vec![required_fid, optional_fid], "expected required facility included and forbidden facility excluded");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&demand_path);
+    let _ = std::fs::remove_file(&facilities_path);
     let _ = std::fs::remove_file(&out_path);
 }
 

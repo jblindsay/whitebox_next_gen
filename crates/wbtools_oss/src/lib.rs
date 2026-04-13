@@ -476,6 +476,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::NetworkOdCostMatrixTool));
     registry.register(Box::new(tools::NetworkConnectedComponentsTool));
     registry.register(Box::new(tools::NetworkRoutesFromOdTool));
+    registry.register(Box::new(tools::ClosestFacilityNetworkTool));
+    registry.register(Box::new(tools::LocationAllocationNetworkTool));
     registry.register(Box::new(tools::KShortestPathsNetworkTool));
     registry.register(Box::new(tools::VehicleRoutingCvrpTool));
     registry.register(Box::new(tools::VehicleRoutingVrptwTool));

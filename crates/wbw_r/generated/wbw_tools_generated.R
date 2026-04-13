@@ -267,6 +267,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Clips a raster to polygon extents; outside polygon cells are set to NoData.
     run_tool("clip_raster_to_polygon", list(...))
   }
+  session$closest_facility_network <- function(...) {
+    # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
+    run_tool("closest_facility_network", list(...))
+  }
   session$closing <- function(...) {
     # Performs a morphological closing operation using a rectangular structuring element.
     run_tool("closing", list(...))
@@ -1270,6 +1274,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$locate_points_along_routes <- function(...) {
     # Locates point features along route lines and writes route-measure attributes.
     run_tool("locate_points_along_routes", list(...))
+  }
+  session$location_allocation_network <- function(...) {
+    # Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.
+    run_tool("location_allocation_network", list(...))
   }
   session$log10 <- function(...) {
     # Computes the base-10 logarithm of each raster cell.
@@ -2844,6 +2852,12 @@ clip_raster_to_polygon <- function(...) {
   session$clip_raster_to_polygon(...)
 }
 
+closest_facility_network <- function(...) {
+  # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$closest_facility_network(...)
+}
+
 closing <- function(...) {
   # Performs a morphological closing operation using a rectangular structuring element.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -4348,6 +4362,12 @@ locate_points_along_routes <- function(...) {
   # Locates point features along route lines and writes route-measure attributes.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$locate_points_along_routes(...)
+}
+
+location_allocation_network <- function(...) {
+  # Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$location_allocation_network(...)
 }
 
 log10 <- function(...) {

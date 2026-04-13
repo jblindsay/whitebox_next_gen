@@ -28,6 +28,147 @@ What still remains for these two:
 - Transit/multimodal impedance models.
 - Richer service-area outputs and generalized cartographic isochrone polygonization options.
 
+### Turn Restrictions CSV Examples (Current Behavior)
+
+The network tools that accept `turn_restrictions_csv` now support both hard restrictions and per-turn additive costs.
+
+Required columns:
+
+- `prev_x,prev_y,node_x,node_y,next_x,next_y`
+
+Optional columns:
+
+- `forbidden` (`true/false`; defaults to `true` when no turn-cost column is present)
+- one of `turn_cost`, `penalty`, `cost`, or `extra_cost` (non-negative additive turn cost)
+
+Example A: classic hard restrictions only
+
+```csv
+prev_x,prev_y,node_x,node_y,next_x,next_y
+0,0,1,0,1,1
+5,2,5,3,6,3
+```
+
+Example B: mixed restrictions and weighted turns
+
+```csv
+prev_x,prev_y,node_x,node_y,next_x,next_y,forbidden,turn_cost
+0,0,1,0,1,1,true,
+2,0,3,0,3,1,false,8.5
+4,1,5,1,5,2,false,2.0
+```
+
+Interpretation of Example B:
+
+- first row is a hard forbidden transition
+- second and third rows are allowed turns with added costs (8.5 and 2.0)
+
+Python invocation example (`network_od_cost_matrix`):
+
+```python
+from whitebox_workflows import WbEnvironment
+
+wbe = WbEnvironment()
+wbe.network_od_cost_matrix(
+      input="network.gpkg",
+      origins="origins.gpkg",
+      destinations="destinations.gpkg",
+      edge_cost_field="IMP",
+      turn_restrictions_csv="turns.csv",
+      output="od_costs.csv",
+)
+```
+
+R invocation example (`network_od_cost_matrix`):
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbe_new()
+wbe_network_od_cost_matrix(
+   wbe,
+   input = "network.gpkg",
+   origins = "origins.gpkg",
+   destinations = "destinations.gpkg",
+   edge_cost_field = "IMP",
+   turn_restrictions_csv = "turns.csv",
+   output = "od_costs.csv"
+)
+```
+
+### Service-Area Polygon Workflow Examples (Per-Origin vs Merged Coverage)
+
+`network_service_area` polygon output now supports both:
+
+- per-origin polygons (default)
+- merged coverage polygons per ring (`polygon_merge_origins = true`)
+
+Python per-origin polygons:
+
+```python
+from whitebox_workflows import WbEnvironment
+
+wbe = WbEnvironment()
+wbe.network_service_area(
+   input="network.gpkg",
+   origins="origins.gpkg",
+   max_cost=15.0,
+   output_mode="polygons",
+   output="service_area_per_origin.gpkg",
+)
+```
+
+Python merged coverage polygons (by ring):
+
+```python
+from whitebox_workflows import WbEnvironment
+
+wbe = WbEnvironment()
+wbe.network_service_area(
+   input="network.gpkg",
+   origins="origins.gpkg",
+   max_cost=15.0,
+   ring_costs="5,10,15",
+   output_mode="polygons",
+   polygon_merge_origins=True,
+   output="service_area_merged_by_ring.gpkg",
+)
+```
+
+R per-origin polygons:
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbe_new()
+wbe_network_service_area(
+   wbe,
+   input = "network.gpkg",
+   origins = "origins.gpkg",
+   max_cost = 15.0,
+   output_mode = "polygons",
+   output = "service_area_per_origin.gpkg"
+)
+```
+
+R merged coverage polygons (by ring):
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbe_new()
+wbe_network_service_area(
+   wbe,
+   input = "network.gpkg",
+   origins = "origins.gpkg",
+   max_cost = 15.0,
+   ring_costs = "5,10,15",
+   output_mode = "polygons",
+   polygon_merge_origins = TRUE,
+   output = "service_area_merged_by_ring.gpkg"
+)
+```
+
 ## Deeper Audit Corrections (2026-04-12)
 
 A second pass against runtime and wrapper surfaces found additional capabilities that were previously listed as gaps.

@@ -354,6 +354,108 @@ fn vehicle_routing_cvrp_builds_capacity_constrained_routes() {
 }
 
 #[test]
+fn vehicle_routing_cvrp_local_optimization_reduces_route_distance() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_local_opt");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let baseline_out = std::env::temp_dir().join(format!("{tag}_baseline.gpkg"));
+    let optimized_out = std::env::temp_dir().join(format!("{tag}_optimized.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(-4.0, -4.0), Coord::xy(0.0, 2.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    for coord in [(-3.0, -3.0), (-3.0, -2.0), (-3.0, -1.0), (-3.0, 1.0), (-2.0, -3.0)] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(coord.0, coord.1))),
+                &[("demand", FieldValue::Float(1.0))],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut baseline_args = ToolArgs::new();
+    baseline_args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    baseline_args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    baseline_args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    baseline_args.insert("demand_field".to_string(), json!("demand"));
+    baseline_args.insert("vehicle_capacity".to_string(), json!(10.0));
+    baseline_args.insert("max_vehicles".to_string(), json!(1));
+    baseline_args.insert("apply_local_optimization".to_string(), json!(false));
+    baseline_args.insert("output".to_string(), json!(baseline_out.to_string_lossy().to_string()));
+
+    let baseline_result = registry
+        .run("vehicle_routing_cvrp", &baseline_args, &context(&caps))
+        .expect("baseline cvrp run");
+
+    let mut optimized_args = baseline_args.clone();
+    optimized_args.insert("apply_local_optimization".to_string(), json!(true));
+    optimized_args.insert("output".to_string(), json!(optimized_out.to_string_lossy().to_string()));
+
+    let optimized_result = registry
+        .run("vehicle_routing_cvrp", &optimized_args, &context(&caps))
+        .expect("optimized cvrp run");
+
+    let baseline_routes = wbvector::read(&baseline_out).expect("read baseline routes");
+    let optimized_routes = wbvector::read(&optimized_out).expect("read optimized routes");
+    assert_eq!(baseline_routes.features.len(), 1);
+    assert_eq!(optimized_routes.features.len(), 1);
+
+    let distance_idx = baseline_routes.schema.field_index("DISTANCE").expect("DISTANCE field");
+    let baseline_distance = match &baseline_routes.features[0].attributes[distance_idx] {
+        FieldValue::Float(v) => *v,
+        other => panic!("expected float DISTANCE, got {:?}", other),
+    };
+    let optimized_distance = match &optimized_routes.features[0].attributes[distance_idx] {
+        FieldValue::Float(v) => *v,
+        other => panic!("expected float DISTANCE, got {:?}", other),
+    };
+
+    assert!(optimized_distance + 1.0e-9 < baseline_distance);
+    assert_eq!(
+        baseline_result.outputs.get("optimized_route_count").and_then(|v| v.as_u64()),
+        Some(0)
+    );
+    assert_eq!(
+        optimized_result.outputs.get("optimized_route_count").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&baseline_out);
+    let _ = std::fs::remove_file(&optimized_out);
+}
+
+#[test]
 fn vehicle_routing_vrptw_reports_lateness() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 

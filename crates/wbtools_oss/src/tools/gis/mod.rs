@@ -28024,6 +28024,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
+                ToolParamSpec { name: "apply_local_optimization", description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with visit order/load diagnostics.", required: false },
             ],
@@ -28037,6 +28038,7 @@ impl Tool for VehicleRoutingCvrpTool {
         defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
         defaults.insert("demand_field".to_string(), json!("demand"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
+        defaults.insert("apply_local_optimization".to_string(), json!(true));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("cvrp_routes.gpkg"));
 
@@ -28053,6 +28055,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
+                ToolParamDescriptor { name: "apply_local_optimization".to_string(), description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with visit order/load diagnostics.".to_string(), required: false },
             ],
@@ -28124,6 +28127,14 @@ impl Tool for VehicleRoutingCvrpTool {
             }
         }
 
+        if args.contains_key("apply_local_optimization")
+            && args.get("apply_local_optimization").and_then(|v| v.as_bool()).is_none()
+        {
+            return Err(ToolError::Validation(
+                "apply_local_optimization must be a boolean when provided".to_string(),
+            ));
+        }
+
         let _ = parse_vector_path_arg(args, "output")?;
         if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
             if path.trim().is_empty() {
@@ -28148,6 +28159,10 @@ impl Tool for VehicleRoutingCvrpTool {
             .and_then(|v| v.as_f64())
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let apply_local_optimization = args
+            .get("apply_local_optimization")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let output_path = parse_vector_path_arg(args, "output")?;
         let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
 
@@ -28162,6 +28177,51 @@ impl Tool for VehicleRoutingCvrpTool {
             fid: i64,
             coord: wbvector::Coord,
             demand: f64,
+        }
+
+        fn route_distance_from_stops(depot: &wbvector::Coord, stops: &[StopNode]) -> f64 {
+            if stops.is_empty() {
+                return 0.0;
+            }
+            let mut total = coord_dist2(depot, &stops[0].coord).sqrt();
+            for pair in stops.windows(2) {
+                total += coord_dist2(&pair[0].coord, &pair[1].coord).sqrt();
+            }
+            total + coord_dist2(&stops[stops.len() - 1].coord, depot).sqrt()
+        }
+
+        fn improve_route_two_opt(depot: &wbvector::Coord, stops: &mut Vec<StopNode>) -> bool {
+            if stops.len() < 4 {
+                return false;
+            }
+
+            let mut improved = false;
+            loop {
+                let current_distance = route_distance_from_stops(depot, stops);
+                let mut best_candidate: Option<Vec<StopNode>> = None;
+                let mut best_distance = current_distance;
+
+                for i in 0..(stops.len() - 1) {
+                    for k in (i + 1)..stops.len() {
+                        let mut candidate = stops.clone();
+                        candidate[i..=k].reverse();
+                        let candidate_distance = route_distance_from_stops(depot, &candidate);
+                        if candidate_distance + 1.0e-9 < best_distance {
+                            best_distance = candidate_distance;
+                            best_candidate = Some(candidate);
+                        }
+                    }
+                }
+
+                if let Some(candidate) = best_candidate {
+                    *stops = candidate;
+                    improved = true;
+                } else {
+                    break;
+                }
+            }
+
+            improved
         }
 
         let mut stop_nodes = Vec::<StopNode>::new();
@@ -28210,6 +28270,7 @@ impl Tool for VehicleRoutingCvrpTool {
         let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64)>::new();
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, wbvector::Coord)>::new();
         let mut infeasible_stops = 0usize;
+        let mut optimized_route_count = 0usize;
 
         while !unassigned.is_empty() {
             if let Some(limit) = max_vehicles {
@@ -28220,7 +28281,7 @@ impl Tool for VehicleRoutingCvrpTool {
 
             let mut current = depot_coord.clone();
             let mut remaining_capacity = vehicle_capacity;
-            let mut route_coords = vec![depot_coord.clone()];
+            let mut route_stops = Vec::<StopNode>::new();
             let mut route_stop_count = 0usize;
             let mut route_load = 0.0f64;
 
@@ -28258,26 +28319,33 @@ impl Tool for VehicleRoutingCvrpTool {
                 route_load += stop.demand;
                 route_stop_count += 1;
                 current = stop.coord.clone();
-                route_coords.push(stop.coord.clone());
-                assignments.push((
-                    stop.fid,
-                    vehicle_id,
-                    route_stop_count as i64,
-                    stop.demand,
-                    route_load,
-                    stop.coord,
-                ));
+                route_stops.push(stop);
             }
 
             if route_stop_count == 0 {
                 break;
             }
 
-            route_coords.push(depot_coord.clone());
-            let mut route_distance = 0.0;
-            for window in route_coords.windows(2) {
-                route_distance += coord_dist2(&window[0], &window[1]).sqrt();
+            if apply_local_optimization && improve_route_two_opt(&depot_coord, &mut route_stops) {
+                optimized_route_count += 1;
             }
+
+            let mut route_coords = vec![depot_coord.clone()];
+            let mut cumulative_load = 0.0f64;
+            for (visit_idx, stop) in route_stops.iter().enumerate() {
+                cumulative_load += stop.demand;
+                route_coords.push(stop.coord.clone());
+                assignments.push((
+                    stop.fid,
+                    vehicle_id,
+                    (visit_idx + 1) as i64,
+                    stop.demand,
+                    cumulative_load,
+                    stop.coord.clone(),
+                ));
+            }
+            route_coords.push(depot_coord.clone());
+            let route_distance = route_distance_from_stops(&depot_coord, &route_stops);
             routes.push((
                 vehicle_id,
                 route_coords,
@@ -28331,6 +28399,8 @@ impl Tool for VehicleRoutingCvrpTool {
         );
         outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+        outputs.insert("apply_local_optimization".to_string(), json!(apply_local_optimization));
+        outputs.insert("optimized_route_count".to_string(), json!(optimized_route_count));
 
         if let Some(assign_path) = assignment_output {
             let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_cvrp_assignments", stops.name));

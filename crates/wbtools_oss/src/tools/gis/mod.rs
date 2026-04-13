@@ -30862,6 +30862,8 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "max_route_distance", description: "Optional maximum travel distance per route, including return to depot.", required: false },
+                ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "max_route_time", description: "Optional maximum route duration in model time units, including return to depot.", required: false },
                 ToolParamSpec { name: "max_stops_per_vehicle", description: "Optional maximum number of stops assigned to each vehicle route.", required: false },
                 ToolParamSpec { name: "apply_local_optimization", description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).", required: false },
                 ToolParamSpec { name: "apply_simulated_annealing", description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).", required: false },
@@ -30905,6 +30907,8 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_distance".to_string(), description: "Optional maximum travel distance per route, including return to depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_time".to_string(), description: "Optional maximum route duration in model time units, including return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_stops_per_vehicle".to_string(), description: "Optional maximum number of stops assigned to each vehicle route.".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_local_optimization".to_string(), description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_simulated_annealing".to_string(), description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).".to_string(), required: false },
@@ -30987,6 +30991,22 @@ impl Tool for VehicleRoutingCvrpTool {
             if !max_route_distance.is_finite() || max_route_distance <= 0.0 {
                 return Err(ToolError::Validation(
                     "max_route_distance must be finite and > 0 when provided".to_string(),
+                ));
+            }
+        }
+
+        if let Some(travel_speed) = args.get("travel_speed").and_then(|v| v.as_f64()) {
+            if !travel_speed.is_finite() || travel_speed <= 0.0 {
+                return Err(ToolError::Validation(
+                    "travel_speed must be finite and > 0 when provided".to_string(),
+                ));
+            }
+        }
+
+        if let Some(max_route_time) = args.get("max_route_time").and_then(|v| v.as_f64()) {
+            if !max_route_time.is_finite() || max_route_time <= 0.0 {
+                return Err(ToolError::Validation(
+                    "max_route_time must be finite and > 0 when provided".to_string(),
                 ));
             }
         }
@@ -31085,6 +31105,8 @@ impl Tool for VehicleRoutingCvrpTool {
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
         let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
+        let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
         let max_stops_per_vehicle = args
             .get("max_stops_per_vehicle")
             .and_then(|v| v.as_u64())
@@ -31324,6 +31346,13 @@ impl Tool for VehicleRoutingCvrpTool {
                             continue;
                         }
                     }
+                    if let Some(max_time) = max_route_time {
+                        let projected_total = route_distance_so_far + d + coord_dist2(&stop.coord, &depot_coord).sqrt();
+                        let projected_time = projected_total / travel_speed;
+                        if projected_time > max_time + 1.0e-12 {
+                            continue;
+                        }
+                    }
                     if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
                         best_dist = d;
                         best_idx = Some(idx);
@@ -31449,6 +31478,10 @@ impl Tool for VehicleRoutingCvrpTool {
         if let Some(max_route_distance_value) = max_route_distance {
             outputs.insert("max_route_distance".to_string(), json!(max_route_distance_value));
         }
+        outputs.insert("travel_speed".to_string(), json!(travel_speed));
+        if let Some(max_route_time_value) = max_route_time {
+            outputs.insert("max_route_time".to_string(), json!(max_route_time_value));
+        }
         if let Some(max_stops_value) = max_stops_per_vehicle {
             outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
         }
@@ -31526,6 +31559,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
                 ToolParamSpec { name: "enforce_time_windows", description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).", required: false },
                 ToolParamSpec { name: "allowed_lateness", description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).", required: false },
+                ToolParamSpec { name: "depot_close_time", description: "Optional hard close time by which each route must return to depot.", required: false },
                 ToolParamSpec { name: "use_priority_scoring", description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "max_route_time", description: "Optional maximum route duration in model time units, including return to depot.", required: false },
@@ -31573,6 +31607,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "enforce_time_windows".to_string(), description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_lateness".to_string(), description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).".to_string(), required: false },
+                ToolParamDescriptor { name: "depot_close_time".to_string(), description: "Optional hard close time by which each route must return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "use_priority_scoring".to_string(), description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_time".to_string(), description: "Optional maximum route duration in model time units, including return to depot.".to_string(), required: false },
@@ -31693,6 +31728,12 @@ impl Tool for VehicleRoutingVrptwTool {
             }
         }
 
+        if let Some(depot_close_time) = args.get("depot_close_time").and_then(|v| v.as_f64()) {
+            if !depot_close_time.is_finite() {
+                return Err(ToolError::Validation("depot_close_time must be finite".to_string()));
+            }
+        }
+
         if args.get("enforce_time_windows").is_some()
             && args
                 .get("enforce_time_windows")
@@ -31787,6 +31828,7 @@ impl Tool for VehicleRoutingVrptwTool {
             .get("allowed_lateness")
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
+        let depot_close_time = args.get("depot_close_time").and_then(|v| v.as_f64());
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
         let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
         let max_stops_per_vehicle = args
@@ -31872,6 +31914,7 @@ impl Tool for VehicleRoutingVrptwTool {
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, f64, f64, f64, wbvector::Coord)>::new();
         let mut infeasible_stops = 0usize;
         let mut time_window_infeasible_stops = 0usize;
+        let mut depot_close_infeasible_stops = 0usize;
         let mut late_stop_count = 0usize;
         let mut total_lateness = 0.0f64;
 
@@ -31926,6 +31969,12 @@ impl Tool for VehicleRoutingVrptwTool {
                             continue;
                         }
                     }
+                    if let Some(close_time) = depot_close_time {
+                        let preview_return_time = preview_service_end + coord_dist2(&stop.coord, &depot_coord).sqrt() / travel_speed;
+                        if preview_return_time > close_time + 1.0e-12 {
+                            continue;
+                        }
+                    }
 
                     let better = if use_priority_scoring {
                         preview_lateness < best_lateness - 1.0e-12
@@ -31968,6 +32017,20 @@ impl Tool for VehicleRoutingVrptwTool {
                             }) {
                                 unassigned.remove(pos);
                                 time_window_infeasible_stops += 1;
+                                continue;
+                            }
+                        }
+                        if let Some(close_time) = depot_close_time {
+                            if let Some(pos) = unassigned.iter().position(|s| {
+                                let preview_travel_time = coord_dist2(&current, &s.coord).sqrt() / travel_speed;
+                                let preview_arrival = current_time + preview_travel_time;
+                                let preview_service_start = preview_arrival.max(s.tw_start);
+                                let preview_service_end = preview_service_start + s.service_time;
+                                let preview_return_time = preview_service_end + coord_dist2(&s.coord, &depot_coord).sqrt() / travel_speed;
+                                preview_return_time > close_time + 1.0e-12
+                            }) {
+                                unassigned.remove(pos);
+                                depot_close_infeasible_stops += 1;
                                 continue;
                             }
                         }
@@ -32083,18 +32146,25 @@ impl Tool for VehicleRoutingVrptwTool {
         outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
         outputs.insert(
             "unserved_stop_count".to_string(),
-            json!(unassigned.len() + infeasible_stops + time_window_infeasible_stops),
+            json!(unassigned.len() + infeasible_stops + time_window_infeasible_stops + depot_close_infeasible_stops),
         );
         outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
         outputs.insert(
             "time_window_infeasible_stop_count".to_string(),
             json!(time_window_infeasible_stops),
         );
+        outputs.insert(
+            "depot_close_infeasible_stop_count".to_string(),
+            json!(depot_close_infeasible_stops),
+        );
         outputs.insert("late_stop_count".to_string(), json!(late_stop_count));
         outputs.insert("total_lateness".to_string(), json!(total_lateness));
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
         outputs.insert("enforce_time_windows".to_string(), json!(enforce_time_windows));
         outputs.insert("allowed_lateness".to_string(), json!(allowed_lateness));
+        if let Some(close_time_value) = depot_close_time {
+            outputs.insert("depot_close_time".to_string(), json!(close_time_value));
+        }
         outputs.insert("use_priority_scoring".to_string(), json!(use_priority_scoring));
         if let Some(max_route_time_value) = max_route_time {
             outputs.insert("max_route_time".to_string(), json!(max_route_time_value));

@@ -157,9 +157,12 @@ To reduce the practical operations gap in network analysis workflows, the open-t
 
 - `vehicle_routing_cvrp`
    - `max_route_distance`: caps travel distance per route (including return to depot)
+   - `travel_speed`: enables time scaling for operational route duration checks
+   - `max_route_time`: caps route duration (distance / speed, including return to depot)
    - `max_stops_per_vehicle`: caps stop count per vehicle route
 - `vehicle_routing_vrptw`
    - `max_route_time`: caps total route duration (including return to depot)
+   - `depot_close_time`: enforces a hard return deadline to depot
    - `max_stops_per_vehicle`: caps stop count per vehicle route
 
 These are optional and preserve prior behavior when omitted.
@@ -167,7 +170,9 @@ These are optional and preserve prior behavior when omitted.
 Validation and behavior checks were added in integration tests:
 
 - `vehicle_routing_cvrp_respects_max_route_distance`
+- `vehicle_routing_cvrp_respects_max_route_time`
 - `vehicle_routing_vrptw_respects_max_route_time`
+- `vehicle_routing_vrptw_respects_depot_close_time`
 
 R merged coverage polygons (by ring):
 

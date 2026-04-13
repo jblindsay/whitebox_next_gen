@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Created 2026-04-12)
 Phase: 4 (Advanced Solvers, Batch Analytics, and Temporal Robustness)
-Status: In Progress (Planning and stream definition)
+Status: In Progress (Stream A underway; VRPTW refinement next)
 
 ## Scope Anchors
 
@@ -78,6 +78,14 @@ Rationale:
 - Easy to benchmark against current deterministic baseline.
 - Creates a reusable pattern for later VRPTW and pickup/delivery improvements.
 
+Next implementation target:
+- Stream A: Improve `vehicle_routing_vrptw` stop selection with a feasible-candidate scoring heuristic that prioritizes lateness pressure before raw nearest-neighbour distance.
+
+Reasoning:
+- Current VRPTW baseline still uses nearest-neighbour candidate choice once feasibility is checked.
+- A better scoring rule should improve route quality without requiring a full solver rewrite.
+- This is the most direct follow-on from the CVRP local-improvement work.
+
 ## Progress Log
 
 - 2026-04-12: Phase 4 tracker created after Phase 3 completion.
@@ -94,3 +102,6 @@ Rationale:
 		- `cargo check -p wbtools_oss` (PASS)
 	- Added comparative benchmark coverage: `vehicle_routing_cvrp_benchmark_local_optimization_outperforms_phase3_greedy_baseline`.
 	- Benchmarked optimized two-route total distance against the Phase 3 greedy baseline using `apply_local_optimization = false` as the baseline control.
+- 2026-04-12: Reviewed `vehicle_routing_vrptw` Phase 3 baseline to select the next Stream A refinement target.
+	- Confirmed current candidate selection is still nearest-neighbour after time-window feasibility filtering.
+	- Selected next implementation target: feasible-candidate scoring heuristic for VRPTW.

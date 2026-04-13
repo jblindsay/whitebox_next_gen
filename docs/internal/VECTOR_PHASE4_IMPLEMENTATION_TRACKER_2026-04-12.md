@@ -86,6 +86,11 @@ Reasoning:
 - Stream B is the next major unmet Phase 4 deliverable with the highest surface-area impact.
 - Metaheuristic implementation can follow once batch analytics work is underway or complete.
 
+Scheduling note:
+- `Simulated Annealing` is currently planned as a later **Phase 4** follow-on, not as the immediate next implementation step.
+- The intended sequence is: begin Stream B batch analytics work first, then return to Stream A for the first metaheuristic implementation.
+- If Phase 4 scope needs to be tightened later, `Simulated Annealing` is the most deferrable remaining Stream A enhancement, but it is still inside the current Phase 4 plan.
+
 ## Progress Log
 
 - 2026-04-12: Phase 4 tracker created after Phase 3 completion.

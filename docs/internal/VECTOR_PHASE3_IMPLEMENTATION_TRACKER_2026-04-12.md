@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 3 (Advanced Optimization and Multimodal)
-Status: In Progress (Stream A complete; Stream B VRPTW baseline underway)
+Status: In Progress (Streams A-B complete; Stream C next)
 
 ## Scope Anchors
 

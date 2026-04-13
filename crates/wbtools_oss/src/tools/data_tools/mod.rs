@@ -18,7 +18,7 @@ use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, GeometryType, L
 use wbtopology::{
     from_wkb as topology_from_wkb, overlaps as topology_overlaps, to_wkb as topology_to_wkb,
     Geometry as TopologyGeometry, Polygon as TopologyPolygon, is_simple_linestring, is_valid_polygon,
-    geometry_distance, coord_dist,
+    geometry_distance, coord_dist, Envelope as TopologyEnvelope, SpatialIndex,
     Coord as TopoCoord,
 };
 
@@ -1829,6 +1829,48 @@ struct TopologyRuleViolation {
     anchor: Coord,
 }
 
+struct IndexedPolygonFeature {
+    fid: u64,
+    anchor: Coord,
+    topo: TopologyGeometry,
+}
+
+fn build_indexed_polygon_features(input: &Layer) -> Result<Vec<IndexedPolygonFeature>, ToolError> {
+    let mut polygon_features = Vec::<IndexedPolygonFeature>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
+            continue;
+        }
+        let Some(anchor) = geometry_anchor_coord(geometry) else {
+            continue;
+        };
+        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed converting feature {} polygon geometry for topology checks: {e}",
+                feature.fid
+            ))
+        })?;
+        polygon_features.push(IndexedPolygonFeature {
+            fid: feature.fid,
+            anchor,
+            topo,
+        });
+    }
+    Ok(polygon_features)
+}
+
+fn expand_topology_envelope(env: TopologyEnvelope, distance: f64) -> TopologyEnvelope {
+    TopologyEnvelope::new(
+        env.min_x - distance,
+        env.min_y - distance,
+        env.max_x + distance,
+        env.max_y + distance,
+    )
+}
+
 fn geometry_anchor_coord(geometry: &Geometry) -> Option<Coord> {
     match geometry {
         Geometry::Point(coord) => Some(coord.clone()),
@@ -2078,6 +2120,13 @@ impl Tool for TopologyRuleValidateTool {
         ctx.progress.info("running topology_rule_validate");
         let input = read_vector_layer(&input_path, "input")?;
         let mut violations = Vec::<TopologyRuleViolation>::new();
+        let polygon_features = if rules.contains(&TopologyRuleType::PolygonMustNotOverlap)
+            || rules.contains(&TopologyRuleType::PolygonMustNotHaveGaps)
+        {
+            Some(build_indexed_polygon_features(&input)?)
+        } else {
+            None
+        };
 
         if rules.contains(&TopologyRuleType::LineMustNotSelfIntersect) {
             for feature in &input.features {
@@ -2103,42 +2152,37 @@ impl Tool for TopologyRuleValidateTool {
         }
 
         if rules.contains(&TopologyRuleType::PolygonMustNotOverlap) {
-            let mut polygon_features = Vec::<(u64, Geometry, Coord, TopologyGeometry)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
-                    continue;
-                }
-                let Some(anchor) = geometry_anchor_coord(geometry) else {
-                    continue;
-                };
-                let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed converting feature {} polygon geometry for overlap checks: {e}",
-                        feature.fid
-                    ))
-                })?;
-                polygon_features.push((feature.fid, geometry.clone(), anchor, topo));
-            }
+            let polygon_features = polygon_features.as_ref().expect("polygon features prepared");
+            let polygon_geometries = polygon_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let polygon_index = SpatialIndex::build_str(&polygon_geometries, 16);
 
-            for i in 0..polygon_features.len() {
-                for j in (i + 1)..polygon_features.len() {
-                    let (fid_a, _geom_a, anchor_a, topo_a) = &polygon_features[i];
-                    let (fid_b, _geom_b, anchor_b, topo_b) = &polygon_features[j];
+            for (i, polygon_feature) in polygon_features.iter().enumerate() {
+                let fid_a = polygon_feature.fid;
+                let anchor_a = &polygon_feature.anchor;
+                let topo_a = &polygon_feature.topo;
+                for j in polygon_index.query_geometry(topo_a) {
+                    if j <= i {
+                        continue;
+                    }
+                    let other = &polygon_features[j];
+                    let fid_b = other.fid;
+                    let anchor_b = &other.anchor;
+                    let topo_b = &other.topo;
                     if topology_overlaps(topo_a, topo_b) {
                         violations.push(TopologyRuleViolation {
                             rule_type: TopologyRuleType::PolygonMustNotOverlap,
-                            feature_fid: *fid_a as i64,
-                            related_fid: Some(*fid_b as i64),
+                            feature_fid: fid_a as i64,
+                            related_fid: Some(fid_b as i64),
                             detail: format!("overlaps with feature {}", fid_b),
                             anchor: anchor_a.clone(),
                         });
                         violations.push(TopologyRuleViolation {
                             rule_type: TopologyRuleType::PolygonMustNotOverlap,
-                            feature_fid: *fid_b as i64,
-                            related_fid: Some(*fid_a as i64),
+                            feature_fid: fid_b as i64,
+                            related_fid: Some(fid_a as i64),
                             detail: format!("overlaps with feature {}", fid_a),
                             anchor: anchor_b.clone(),
                         });
@@ -2323,43 +2367,43 @@ impl Tool for TopologyRuleValidateTool {
         }
 
         if rules.contains(&TopologyRuleType::PolygonMustNotHaveGaps) {
-            let mut polygon_features = Vec::<(u64, Geometry, Coord, TopologyGeometry)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
-                    continue;
-                }
-                let Some(anchor) = geometry_anchor_coord(geometry) else {
-                    continue;
-                };
-                let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed converting feature {} polygon geometry for gap checks: {e}",
-                        feature.fid
-                    ))
-                })?;
-                polygon_features.push((feature.fid, geometry.clone(), anchor, topo));
-            }
+            const GAP_DISTANCE_TOLERANCE: f64 = 0.001;
 
-            for i in 0..polygon_features.len() {
-                for j in (i + 1)..polygon_features.len() {
-                    let (fid_a, _geom_a, anchor_a, topo_a) = &polygon_features[i];
-                    let (fid_b, _geom_b, anchor_b, topo_b) = &polygon_features[j];
+            let polygon_features = polygon_features.as_ref().expect("polygon features prepared");
+            let polygon_geometries = polygon_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let polygon_index = SpatialIndex::build_str(&polygon_geometries, 16);
+
+            for (i, polygon_feature) in polygon_features.iter().enumerate() {
+                let fid_a = polygon_feature.fid;
+                let anchor_a = &polygon_feature.anchor;
+                let topo_a = &polygon_feature.topo;
+                let Some(envelope) = topo_a.envelope() else {
+                    continue;
+                };
+                for j in polygon_index.query_envelope(expand_topology_envelope(envelope, GAP_DISTANCE_TOLERANCE)) {
+                    if j <= i {
+                        continue;
+                    }
+                    let other = &polygon_features[j];
+                    let fid_b = other.fid;
+                    let anchor_b = &other.anchor;
+                    let topo_b = &other.topo;
                     let dist = geometry_distance(topo_a, topo_b);
-                    if dist > 1e-9 && dist < 0.001 {
+                    if dist > 1e-9 && dist < GAP_DISTANCE_TOLERANCE {
                         violations.push(TopologyRuleViolation {
                             rule_type: TopologyRuleType::PolygonMustNotHaveGaps,
-                            feature_fid: *fid_a as i64,
-                            related_fid: Some(*fid_b as i64),
+                            feature_fid: fid_a as i64,
+                            related_fid: Some(fid_b as i64),
                             detail: format!("gap of approximately {:.6} units to feature {}", dist, fid_b),
                             anchor: anchor_a.clone(),
                         });
                         violations.push(TopologyRuleViolation {
                             rule_type: TopologyRuleType::PolygonMustNotHaveGaps,
-                            feature_fid: *fid_b as i64,
-                            related_fid: Some(*fid_a as i64),
+                            feature_fid: fid_b as i64,
+                            related_fid: Some(fid_a as i64),
                             detail: format!("gap of approximately {:.6} units to feature {}", dist, fid_a),
                             anchor: anchor_b.clone(),
                         });

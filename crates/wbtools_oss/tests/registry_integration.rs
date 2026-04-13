@@ -2912,6 +2912,94 @@ fn topology_rule_validate_detects_polygon_gaps() {
 }
 
 #[test]
+fn topology_rule_validate_detects_polygon_gaps_in_sparse_set() {
+    use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_topology_rule_gaps_sparse");
+    let input_path = std::env::temp_dir().join(format!("{tag}_polys.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_violations.gpkg"));
+
+    let mut polys = Layer::new("poly_gaps_sparse")
+        .with_geom_type(GeometryType::Polygon)
+        .with_epsg(4326);
+    polys
+        .add_feature(
+            Some(Geometry::polygon(
+                vec![
+                    Coord::xy(0.0, 0.0),
+                    Coord::xy(2.0, 0.0),
+                    Coord::xy(2.0, 2.0),
+                    Coord::xy(0.0, 2.0),
+                    Coord::xy(0.0, 0.0),
+                ],
+                vec![],
+            )),
+            &[],
+        )
+        .expect("add polygon A");
+    polys
+        .add_feature(
+            Some(Geometry::polygon(
+                vec![
+                    Coord::xy(2.0005, 0.0),
+                    Coord::xy(4.0, 0.0),
+                    Coord::xy(4.0, 2.0),
+                    Coord::xy(2.0005, 2.0),
+                    Coord::xy(2.0005, 0.0),
+                ],
+                vec![],
+            )),
+            &[],
+        )
+        .expect("add polygon B (with gap)");
+    polys
+        .add_feature(
+            Some(Geometry::polygon(
+                vec![
+                    Coord::xy(100.0, 100.0),
+                    Coord::xy(102.0, 100.0),
+                    Coord::xy(102.0, 102.0),
+                    Coord::xy(100.0, 102.0),
+                    Coord::xy(100.0, 100.0),
+                ],
+                vec![],
+            )),
+            &[],
+        )
+        .expect("add distant polygon C");
+
+    wbvector::write(&polys, &input_path, VectorFormat::GeoPackage).expect("write polygon input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("rule_set".to_string(), json!(["polygon_must_not_have_gaps"]));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+
+    registry
+        .run("topology_rule_validate", &args, &context(&caps))
+        .expect("topology_rule_validate run for sparse gaps");
+
+    let out = wbvector::read(&output_path).expect("read sparse gap violations");
+    assert_eq!(out.features.len(), 2, "expected one gap violation per polygon in the near pair only");
+
+    let rule_type_idx = out.schema.field_index("RULE_TYPE").expect("RULE_TYPE field");
+    for feature in &out.features {
+        let rule_type = match &feature.attributes[rule_type_idx] {
+            FieldValue::Text(v) => v.as_str(),
+            other => panic!("expected RULE_TYPE text, got {:?}", other),
+        };
+        assert_eq!(rule_type, "polygon_must_not_have_gaps");
+    }
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
 fn topology_rule_autofix_dry_run_mode_preserves_input() {
     use wbvector::{Coord, Geometry, Layer, VectorFormat};
 

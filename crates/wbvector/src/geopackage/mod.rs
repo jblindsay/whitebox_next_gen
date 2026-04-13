@@ -151,14 +151,16 @@ fn extract_layer(db: &Db, name: &str) -> Result<Layer> {
 
     // Identify non-geometry, non-fid columns
     let all_cols = &meta.columns;
-    let fid_col  = "fid";
+    let fid_idx = all_cols.iter().position(|n| n.eq_ignore_ascii_case("fid"));
+    let geom_idx = all_cols.iter().position(|n| n.eq_ignore_ascii_case(&geom_col));
     let attr_cols: Vec<(usize, &str)> = all_cols.iter().enumerate()
-        .filter(|(_, n)| n.as_str() != fid_col && n.as_str() != geom_col)
+        .filter(|(i, _)| Some(*i) != fid_idx && Some(*i) != geom_idx)
         .map(|(i, n)| (i, n.as_str()))
         .collect();
 
     // Read all rows for schema inference
     let all_rows = db.select_all(name)?;
+    let all_rows_with_rowid = db.select_all_with_rowid(name)?;
 
     // Infer column types
     let inferred = infer_types(&all_rows, &attr_cols);
@@ -167,14 +169,12 @@ fn extract_layer(db: &Db, name: &str) -> Result<Layer> {
         layer.add_field(FieldDef::new(*col_name, ft));
     }
 
-    let geom_idx = all_cols.iter().position(|n| n == &geom_col);
-    let fid_idx  = all_cols.iter().position(|n| n == fid_col);
-
-    for (feat_idx, row) in all_rows.iter().enumerate() {
+    for (feat_idx, (rowid, row)) in all_rows_with_rowid.iter().enumerate() {
         let fid = fid_idx
             .and_then(|i| row.get(i))
             .and_then(|v| v.as_i64())
-            .unwrap_or(feat_idx as i64) as u64;
+            .unwrap_or(*rowid)
+            .max(feat_idx as i64) as u64;
 
         let geom = geom_idx
             .and_then(|i| row.get(i))
@@ -607,5 +607,53 @@ mod tests {
         let db = Db::from_bytes(std::fs::read(&path).unwrap()).unwrap();
         let rows = db.select_all("large_points").unwrap();
         assert_eq!(rows.len(), expected);
+    }
+
+    #[test]
+    fn real_mississauga_parcel_fixture_decodes_when_enabled() {
+        let enabled = std::env::var("WBVECTOR_REAL_MISSISSAUGA_GPKG_SMOKE")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if !enabled {
+            println!(
+                "Skipping wbvector Mississauga GeoPackage smoke (set WBVECTOR_REAL_MISSISSAUGA_GPKG_SMOKE=1)"
+            );
+            return;
+        }
+
+        let path = std::env::var("WBVECTOR_REAL_MISSISSAUGA_GPKG")
+            .expect("WBVECTOR_REAL_MISSISSAUGA_GPKG must point to the Mississauga parcel fixture");
+        assert!(std::fs::metadata(&path).is_ok(), "fixture path does not exist: {}", path);
+
+        let db = Db::from_bytes(std::fs::read(&path).unwrap()).unwrap();
+        let rows = db.select_all("Parcel").unwrap();
+        let rows_with_rowid = db.select_all_with_rowid("Parcel").unwrap();
+        assert!(!rows.is_empty(), "expected Parcel table rows");
+
+        assert!(rows_with_rowid[0].0 > 0, "expected positive rowid for first Parcel row");
+        assert!(matches!(rows[0][0], SqlVal::Null), "expected FID payload placeholder to be NULL");
+
+        let first_blob = rows[0][1]
+            .as_blob()
+            .expect("expected second Parcel column to be geometry blob");
+        let (geom, srs) = Geometry::from_gpkg_wkb(first_blob)
+            .expect("expected first GeoPackage geometry blob to decode");
+        assert_eq!(srs, 3857, "expected EPSG:3857 in first Mississauga geometry blob");
+        assert!(
+            matches!(geom, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)),
+            "expected polygonal geometry from Mississauga blob"
+        );
+
+        let layer = read(&path).unwrap();
+        let decoded_geometries = layer.features.iter().filter(|f| f.geometry.is_some()).count();
+        assert!(decoded_geometries > 0, "expected at least one decoded geometry in layer read");
+        assert!(layer.features[0].fid > 0, "expected rowid-backed feature fid");
+
+        println!(
+            "✓ wbvector Mississauga smoke decoded {} / {} geometries",
+            decoded_geometries,
+            layer.features.len()
+        );
     }
 }

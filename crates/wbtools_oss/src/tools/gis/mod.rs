@@ -30860,6 +30860,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "stop_points", description: "Delivery stop point layer.", required: true },
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
+                ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "max_route_distance", description: "Optional maximum travel distance per route, including return to depot.", required: false },
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
@@ -30884,6 +30885,7 @@ impl Tool for VehicleRoutingCvrpTool {
         defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
         defaults.insert("demand_field".to_string(), json!("demand"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
+        defaults.insert("vehicle_fixed_cost".to_string(), json!(0.0));
         defaults.insert("apply_local_optimization".to_string(), json!(true));
         defaults.insert("apply_simulated_annealing".to_string(), json!(false));
         defaults.insert("sa_iterations".to_string(), json!(1500));
@@ -30905,6 +30907,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
+                ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_distance".to_string(), description: "Optional maximum travel distance per route, including return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
@@ -30979,6 +30982,14 @@ impl Tool for VehicleRoutingCvrpTool {
             return Err(ToolError::Validation(
                 "vehicle_capacity must be a finite value > 0".to_string(),
             ));
+        }
+
+        if let Some(vehicle_fixed_cost) = args.get("vehicle_fixed_cost").and_then(|v| v.as_f64()) {
+            if !vehicle_fixed_cost.is_finite() || vehicle_fixed_cost < 0.0 {
+                return Err(ToolError::Validation(
+                    "vehicle_fixed_cost must be finite and >= 0 when provided".to_string(),
+                ));
+            }
         }
 
         if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
@@ -31103,6 +31114,10 @@ impl Tool for VehicleRoutingCvrpTool {
             .get("vehicle_capacity")
             .and_then(|v| v.as_f64())
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+        let vehicle_fixed_cost = args
+            .get("vehicle_fixed_cost")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
         let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
         let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
@@ -31445,6 +31460,9 @@ impl Tool for VehicleRoutingCvrpTool {
         routes_layer
             .schema
             .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("ROUTE_COST", wbvector::FieldType::Float));
 
         let mut next_fid = 1u64;
         for (veh_id, coords, stop_count, load_total, route_distance) in routes.iter() {
@@ -31456,6 +31474,7 @@ impl Tool for VehicleRoutingCvrpTool {
                     wbvector::FieldValue::Integer(*stop_count as i64),
                     wbvector::FieldValue::Float(*load_total),
                     wbvector::FieldValue::Float(*route_distance),
+                    wbvector::FieldValue::Float(*route_distance + vehicle_fixed_cost),
                 ],
             });
             next_fid += 1;
@@ -31463,11 +31482,14 @@ impl Tool for VehicleRoutingCvrpTool {
 
         let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
         let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, d)| *d).sum();
+        let total_cost = total_route_distance + vehicle_fixed_cost * routes.len() as f64;
 
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(route_output_locator));
         outputs.insert("route_count".to_string(), json!(routes.len()));
         outputs.insert("total_distance".to_string(), json!(total_route_distance));
+        outputs.insert("total_cost".to_string(), json!(total_cost));
+        outputs.insert("vehicle_fixed_cost".to_string(), json!(vehicle_fixed_cost));
         outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
         outputs.insert(
             "unserved_stop_count".to_string(),
@@ -31555,6 +31577,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "tw_end_field", description: "Numeric time-window end field in stop_points (default: tw_end).", required: false },
                 ToolParamSpec { name: "service_time_field", description: "Numeric per-stop service time field in stop_points (default: service_time).", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
+                ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "start_time", description: "Route start time in model time units (default: 0).", required: false },
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
                 ToolParamSpec { name: "enforce_time_windows", description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).", required: false },
@@ -31580,6 +31603,7 @@ impl Tool for VehicleRoutingVrptwTool {
         defaults.insert("tw_end_field".to_string(), json!("tw_end"));
         defaults.insert("service_time_field".to_string(), json!("service_time"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
+        defaults.insert("vehicle_fixed_cost".to_string(), json!(0.0));
         defaults.insert("start_time".to_string(), json!(0.0));
         defaults.insert("travel_speed".to_string(), json!(1.0));
         defaults.insert("enforce_time_windows".to_string(), json!(false));
@@ -31603,6 +31627,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "tw_end_field".to_string(), description: "Numeric time-window end field in stop_points (default: tw_end).".to_string(), required: false },
                 ToolParamDescriptor { name: "service_time_field".to_string(), description: "Numeric per-stop service time field in stop_points (default: service_time).".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
+                ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "start_time".to_string(), description: "Route start time in model time units (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "enforce_time_windows".to_string(), description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).".to_string(), required: false },
@@ -31706,6 +31731,14 @@ impl Tool for VehicleRoutingVrptwTool {
             return Err(ToolError::Validation(
                 "vehicle_capacity must be a finite value > 0".to_string(),
             ));
+        }
+
+        if let Some(vehicle_fixed_cost) = args.get("vehicle_fixed_cost").and_then(|v| v.as_f64()) {
+            if !vehicle_fixed_cost.is_finite() || vehicle_fixed_cost < 0.0 {
+                return Err(ToolError::Validation(
+                    "vehicle_fixed_cost must be finite and >= 0 when provided".to_string(),
+                ));
+            }
         }
 
         if let Some(start_time) = args.get("start_time").and_then(|v| v.as_f64()) {
@@ -31814,6 +31847,10 @@ impl Tool for VehicleRoutingVrptwTool {
             .get("vehicle_capacity")
             .and_then(|v| v.as_f64())
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+        let vehicle_fixed_cost = args
+            .get("vehicle_fixed_cost")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         let start_time = args.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
         let enforce_time_windows = args
@@ -32112,6 +32149,9 @@ impl Tool for VehicleRoutingVrptwTool {
             .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
         routes_layer
             .schema
+            .add_field(wbvector::FieldDef::new("ROUTE_COST", wbvector::FieldType::Float));
+        routes_layer
+            .schema
             .add_field(wbvector::FieldDef::new("TOTAL_TIME", wbvector::FieldType::Float));
         routes_layer
             .schema
@@ -32130,6 +32170,7 @@ impl Tool for VehicleRoutingVrptwTool {
                     wbvector::FieldValue::Integer(*stop_count as i64),
                     wbvector::FieldValue::Float(*load_total),
                     wbvector::FieldValue::Float(*route_distance),
+                    wbvector::FieldValue::Float(*route_distance + vehicle_fixed_cost),
                     wbvector::FieldValue::Float(*route_total_time),
                     wbvector::FieldValue::Integer(*route_late_stops),
                     wbvector::FieldValue::Float(*route_total_lateness),
@@ -32139,10 +32180,15 @@ impl Tool for VehicleRoutingVrptwTool {
         }
 
         let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+        let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, d, _, _, _)| *d).sum();
+        let total_cost = total_route_distance + vehicle_fixed_cost * routes.len() as f64;
 
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(route_output_locator));
         outputs.insert("route_count".to_string(), json!(routes.len()));
+        outputs.insert("total_distance".to_string(), json!(total_route_distance));
+        outputs.insert("total_cost".to_string(), json!(total_cost));
+        outputs.insert("vehicle_fixed_cost".to_string(), json!(vehicle_fixed_cost));
         outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
         outputs.insert(
             "unserved_stop_count".to_string(),

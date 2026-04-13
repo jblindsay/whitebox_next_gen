@@ -502,6 +502,91 @@ fn vehicle_routing_cvrp_respects_max_route_time() {
 }
 
 #[test]
+fn vehicle_routing_cvrp_total_cost_includes_vehicle_fixed_cost() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_fixed_cost");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(6.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    for x in [1.0, 2.0, 5.0] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, 0.0))),
+                &[("demand", FieldValue::Float(1.0))],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("vehicle_capacity".to_string(), json!(2.0));
+    args.insert("max_vehicles".to_string(), json!(2));
+    args.insert("vehicle_fixed_cost".to_string(), json!(10.0));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("vehicle_routing_cvrp", &args, &context(&caps))
+        .expect("vehicle_routing_cvrp run");
+
+    let total_distance = result
+        .outputs
+        .get("total_distance")
+        .and_then(|v| v.as_f64())
+        .expect("total_distance");
+    let total_cost = result
+        .outputs
+        .get("total_cost")
+        .and_then(|v| v.as_f64())
+        .expect("total_cost");
+    let route_count = result
+        .outputs
+        .get("route_count")
+        .and_then(|v| v.as_u64())
+        .expect("route_count") as f64;
+
+    assert!((total_cost - (total_distance + 10.0 * route_count)).abs() < 1.0e-9);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+}
+
+#[test]
 fn vehicle_routing_cvrp_local_optimization_reduces_route_distance() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 
@@ -1195,6 +1280,103 @@ fn vehicle_routing_vrptw_respects_depot_close_time() {
         Some(1)
     );
     assert_eq!(result.outputs.get("depot_close_time").and_then(|v| v.as_f64()), Some(9.0));
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+}
+
+#[test]
+fn vehicle_routing_vrptw_total_cost_includes_vehicle_fixed_cost() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_vrptw_fixed_cost");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(6.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_start", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_end", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("service_time", FieldType::Float));
+    for x in [1.0, 2.0, 5.0] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, 0.0))),
+                &[
+                    ("demand", FieldValue::Float(1.0)),
+                    ("tw_start", FieldValue::Float(0.0)),
+                    ("tw_end", FieldValue::Float(100.0)),
+                    ("service_time", FieldValue::Float(0.0)),
+                ],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("tw_start_field".to_string(), json!("tw_start"));
+    args.insert("tw_end_field".to_string(), json!("tw_end"));
+    args.insert("service_time_field".to_string(), json!("service_time"));
+    args.insert("vehicle_capacity".to_string(), json!(2.0));
+    args.insert("travel_speed".to_string(), json!(1.0));
+    args.insert("vehicle_fixed_cost".to_string(), json!(10.0));
+    args.insert("max_vehicles".to_string(), json!(2));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("vehicle_routing_vrptw", &args, &context(&caps))
+        .expect("vehicle_routing_vrptw run");
+
+    let total_distance = result
+        .outputs
+        .get("total_distance")
+        .and_then(|v| v.as_f64())
+        .expect("total_distance");
+    let total_cost = result
+        .outputs
+        .get("total_cost")
+        .and_then(|v| v.as_f64())
+        .expect("total_cost");
+    let route_count = result
+        .outputs
+        .get("route_count")
+        .and_then(|v| v.as_u64())
+        .expect("route_count") as f64;
+
+    assert!((total_cost - (total_distance + 10.0 * route_count)).abs() < 1.0e-9);
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&depot_path);

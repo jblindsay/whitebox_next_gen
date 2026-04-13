@@ -163,6 +163,7 @@ To reduce the practical operations gap in network analysis workflows, the open-t
    - `max_stops_per_vehicle`: caps stop count per vehicle route
 - `vehicle_routing_vrptw`
    - `vehicle_fixed_cost`: fixed per-route cost included in route/objective cost reporting
+   - `max_route_distance`: caps total route travel distance (including return to depot)
    - `max_route_time`: caps total route duration (including return to depot)
    - `depot_close_time`: enforces a hard return deadline to depot
    - `max_stops_per_vehicle`: caps stop count per vehicle route
@@ -175,6 +176,7 @@ Validation and behavior checks were added in integration tests:
 - `vehicle_routing_cvrp_respects_max_route_time`
 - `vehicle_routing_cvrp_total_cost_includes_vehicle_fixed_cost`
 - `vehicle_routing_vrptw_respects_max_route_time`
+- `vehicle_routing_vrptw_respects_max_route_distance`
 - `vehicle_routing_vrptw_respects_depot_close_time`
 - `vehicle_routing_vrptw_total_cost_includes_vehicle_fixed_cost`
 

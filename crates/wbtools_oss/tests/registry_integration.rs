@@ -1199,6 +1199,96 @@ fn vehicle_routing_vrptw_respects_max_route_time() {
 }
 
 #[test]
+fn vehicle_routing_vrptw_respects_max_route_distance() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_vrptw_max_route_distance");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(8.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_start", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_end", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("service_time", FieldType::Float));
+    for x in [2.0, 4.0, 6.0] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, 0.0))),
+                &[
+                    ("demand", FieldValue::Float(1.0)),
+                    ("tw_start", FieldValue::Float(0.0)),
+                    ("tw_end", FieldValue::Float(100.0)),
+                    ("service_time", FieldValue::Float(0.0)),
+                ],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("tw_start_field".to_string(), json!("tw_start"));
+    args.insert("tw_end_field".to_string(), json!("tw_end"));
+    args.insert("service_time_field".to_string(), json!("service_time"));
+    args.insert("vehicle_capacity".to_string(), json!(10.0));
+    args.insert("travel_speed".to_string(), json!(1.0));
+    args.insert("start_time".to_string(), json!(0.0));
+    args.insert("max_route_distance".to_string(), json!(8.0));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("vehicle_routing_vrptw", &args, &context(&caps))
+        .expect("vehicle_routing_vrptw run");
+
+    assert_eq!(result.outputs.get("served_stop_count").and_then(|v| v.as_u64()), Some(2));
+    assert_eq!(result.outputs.get("unserved_stop_count").and_then(|v| v.as_u64()), Some(1));
+    assert_eq!(
+        result
+            .outputs
+            .get("max_route_distance_infeasible_stop_count")
+            .and_then(|v| v.as_u64()),
+        Some(1)
+    );
+    assert_eq!(result.outputs.get("max_route_distance").and_then(|v| v.as_f64()), Some(8.0));
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+}
+
+#[test]
 fn vehicle_routing_vrptw_respects_depot_close_time() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 

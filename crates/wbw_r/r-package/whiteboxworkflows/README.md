@@ -16,6 +16,7 @@ The package API is being modernized with emphasis on:
 - [Development install](#development-install)
 - [Quick smoke test](#quick-smoke-test)
 - [Recommended examples](#recommended-examples)
+- [Network service-area workflows](#network-service-area-workflows)
 - [Recommended API pattern](#recommended-api-pattern)
 - [Preferred vs removed APIs](#preferred-vs-removed-apis)
 - [Quick start examples by workflow type](#quick-start-examples-by-workflow-type)
@@ -135,6 +136,76 @@ Rscript -e 'library(whiteboxworkflows); s <- wbw_session(); cat(length(wbw_tool_
 | 6 | [inst/examples/sensor_bundle_quickstart.R](inst/examples/sensor_bundle_quickstart.R) | Sensor bundle inspection and data access |
 | 7 | [inst/examples/sensor_bundle_multi_family_preview.R](inst/examples/sensor_bundle_multi_family_preview.R) | Multi-family bundle preview workflow |
 | 8 | [inst/examples/raster_array_roundtrip.R](inst/examples/raster_array_roundtrip.R) | terra and stars roundtrip |
+
+## Network service-area workflows
+
+Service-area analysis supports both per-origin polygons and merged polygon coverage by ring, with optional mode-aware costing.
+
+Per-origin polygons (default):
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+
+wbw_run_tool(
+  "network_service_area",
+  args = list(
+    input = "network.gpkg",
+    origins = "origins.gpkg",
+    max_cost = 15.0,
+    output_mode = "polygons",
+    output = "service_area_per_origin.gpkg"
+  ),
+  session = s
+)
+```
+
+Merged coverage polygons by ring:
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+
+wbw_run_tool(
+  "network_service_area",
+  args = list(
+    input = "network.gpkg",
+    origins = "origins.gpkg",
+    max_cost = 15.0,
+    ring_costs = "5,10,15",
+    output_mode = "polygons",
+    polygon_merge_origins = TRUE,
+    output = "service_area_merged_by_ring.gpkg"
+  ),
+  session = s
+)
+```
+
+Mode-aware service area using per-mode speeds:
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+
+wbw_run_tool(
+  "network_service_area",
+  args = list(
+    input = "network.gpkg",
+    origins = "origins.gpkg",
+    max_cost = 20.0,
+    output_mode = "edges",
+    mode_field = "MODE",
+    default_mode_speed = 1.0,
+    mode_speed_overrides = "walk:1.4,drive:12.0",
+    allowed_modes = "walk,drive",
+    output = "service_area_mode_aware.gpkg"
+  ),
+  session = s
+)
+```
 
 ## Recommended API pattern
 

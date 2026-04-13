@@ -31165,7 +31165,8 @@ fn run_vehicle_routing_cvrp_impl(args: &ToolArgs) -> Result<ToolRunResult, ToolE
     let stops = load_vector_arg(args, "stop_points")?;
     let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
     let priority_field = parse_optional_string_arg(args, "priority_field");
-    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field")
+        .or(parse_optional_string_arg(args, "allowed_route_classes_field"));
     let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
     let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
     let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
@@ -31173,7 +31174,8 @@ fn run_vehicle_routing_cvrp_impl(args: &ToolArgs) -> Result<ToolRunResult, ToolE
     let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
     let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
     let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
-    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field")
+        .or(parse_optional_string_arg(args, "vehicle_route_class_field"));
     let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
         ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
     })?;
@@ -31864,6 +31866,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
                 ToolParamSpec { name: "allowed_vehicle_profiles_field", description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).", required: false },
+                ToolParamSpec { name: "allowed_route_classes_field", description: "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.", required: false },
                 ToolParamSpec { name: "depot_id_field", description: "Optional depot ID field used in route/assignment outputs.", required: false },
                 ToolParamSpec { name: "vehicle_count_field", description: "Optional depot field for number of vehicles spawned at each depot.", required: false },
                 ToolParamSpec { name: "vehicle_capacity_field", description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.", required: false },
@@ -31872,6 +31875,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "max_route_distance_field", description: "Optional depot field overriding max_route_distance per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "max_route_time_field", description: "Optional depot field overriding max_route_time per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "vehicle_profile_field", description: "Optional depot field defining vehicle profile/category token used for stop compatibility.", required: false },
+                ToolParamSpec { name: "vehicle_route_class_field", description: "Optional alias of vehicle_profile_field for route-class compatibility rules.", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
@@ -31924,6 +31928,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_vehicle_profiles_field".to_string(), description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_route_classes_field".to_string(), description: "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.".to_string(), required: false },
                 ToolParamDescriptor { name: "depot_id_field".to_string(), description: "Optional depot ID field used in route/assignment outputs.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_count_field".to_string(), description: "Optional depot field for number of vehicles spawned at each depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity_field".to_string(), description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.".to_string(), required: false },
@@ -31932,6 +31937,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "max_route_distance_field".to_string(), description: "Optional depot field overriding max_route_distance per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_time_field".to_string(), description: "Optional depot field overriding max_route_time per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_profile_field".to_string(), description: "Optional depot field defining vehicle profile/category token used for stop compatibility.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_route_class_field".to_string(), description: "Optional alias of vehicle_profile_field for route-class compatibility rules.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
@@ -31987,7 +31993,8 @@ impl Tool for VehicleRoutingCvrpTool {
             ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
         let priority_field = parse_optional_string_arg(args, "priority_field");
-        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field")
+            .or(parse_optional_string_arg(args, "allowed_route_classes_field"));
         let priority_idx = if let Some(field_name) = priority_field {
             Some(stops.schema.field_index(field_name).ok_or_else(|| {
                 ToolError::Validation(format!("priority_field '{}' not found in stop_points", field_name))
@@ -32013,7 +32020,8 @@ impl Tool for VehicleRoutingCvrpTool {
         let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
         let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
         let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
-        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field")
+            .or(parse_optional_string_arg(args, "vehicle_route_class_field"));
         let depot_id_idx = if let Some(field_name) = depot_id_field {
             Some(depots.schema.field_index(field_name).ok_or_else(|| {
                 ToolError::Validation(format!("depot_id_field '{}' not found in depot_points", field_name))
@@ -32501,7 +32509,8 @@ fn run_vehicle_routing_vrptw_impl(args: &ToolArgs) -> Result<ToolRunResult, Tool
     let stops = load_vector_arg(args, "stop_points")?;
     let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
     let priority_field = parse_optional_string_arg(args, "priority_field");
-    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field")
+        .or(parse_optional_string_arg(args, "allowed_route_classes_field"));
     let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
     let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
     let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
@@ -32509,7 +32518,8 @@ fn run_vehicle_routing_vrptw_impl(args: &ToolArgs) -> Result<ToolRunResult, Tool
     let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
     let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
     let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
-    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field")
+        .or(parse_optional_string_arg(args, "vehicle_route_class_field"));
     let depot_close_time_field = parse_optional_string_arg(args, "depot_close_time_field");
     let break_start_field = parse_optional_string_arg(args, "break_start_field");
     let break_end_field = parse_optional_string_arg(args, "break_end_field");
@@ -33563,6 +33573,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
                 ToolParamSpec { name: "allowed_vehicle_profiles_field", description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).", required: false },
+                ToolParamSpec { name: "allowed_route_classes_field", description: "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.", required: false },
                 ToolParamSpec { name: "tw_start_field", description: "Numeric time-window start field in stop_points (default: tw_start).", required: false },
                 ToolParamSpec { name: "tw_end_field", description: "Numeric time-window end field in stop_points (default: tw_end).", required: false },
                 ToolParamSpec { name: "service_time_field", description: "Numeric per-stop service time field in stop_points (default: service_time).", required: false },
@@ -33574,6 +33585,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "max_route_distance_field", description: "Optional depot field overriding max_route_distance per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "max_route_time_field", description: "Optional depot field overriding max_route_time per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "vehicle_profile_field", description: "Optional depot field defining vehicle profile/category token used for stop compatibility.", required: false },
+                ToolParamSpec { name: "vehicle_route_class_field", description: "Optional alias of vehicle_profile_field for route-class compatibility rules.", required: false },
                 ToolParamSpec { name: "depot_close_time_field", description: "Optional depot field overriding depot_close_time per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "break_start_field", description: "Optional depot field overriding break_start_time per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "break_end_field", description: "Optional depot field overriding break_end_time per depot/vehicle template.", required: false },
@@ -33634,6 +33646,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_vehicle_profiles_field".to_string(), description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_route_classes_field".to_string(), description: "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules.".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_start_field".to_string(), description: "Numeric time-window start field in stop_points (default: tw_start).".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_end_field".to_string(), description: "Numeric time-window end field in stop_points (default: tw_end).".to_string(), required: false },
                 ToolParamDescriptor { name: "service_time_field".to_string(), description: "Numeric per-stop service time field in stop_points (default: service_time).".to_string(), required: false },
@@ -33645,6 +33658,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "max_route_distance_field".to_string(), description: "Optional depot field overriding max_route_distance per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_time_field".to_string(), description: "Optional depot field overriding max_route_time per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_profile_field".to_string(), description: "Optional depot field defining vehicle profile/category token used for stop compatibility.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_route_class_field".to_string(), description: "Optional alias of vehicle_profile_field for route-class compatibility rules.".to_string(), required: false },
                 ToolParamDescriptor { name: "depot_close_time_field".to_string(), description: "Optional depot field overriding depot_close_time per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "break_start_field".to_string(), description: "Optional depot field overriding break_start_time per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "break_end_field".to_string(), description: "Optional depot field overriding break_end_time per depot/vehicle template.".to_string(), required: false },
@@ -33703,7 +33717,8 @@ impl Tool for VehicleRoutingVrptwTool {
 
         let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
         let priority_field = parse_optional_string_arg(args, "priority_field");
-        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field")
+            .or(parse_optional_string_arg(args, "allowed_route_classes_field"));
         let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
         let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
         let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
@@ -33711,7 +33726,8 @@ impl Tool for VehicleRoutingVrptwTool {
         let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
         let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
         let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
-        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field")
+            .or(parse_optional_string_arg(args, "vehicle_route_class_field"));
         let depot_close_time_field = parse_optional_string_arg(args, "depot_close_time_field");
         let break_start_field = parse_optional_string_arg(args, "break_start_field");
         let break_end_field = parse_optional_string_arg(args, "break_end_field");

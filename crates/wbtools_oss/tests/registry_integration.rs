@@ -2224,6 +2224,103 @@ fn vehicle_routing_vrptw_depot_break_window_triggers_break_usage() {
 }
 
 #[test]
+fn vehicle_routing_cvrp_route_class_alias_fields_enforce_compatibility() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_route_class_alias");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(8.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots.schema.add_field(FieldDef::new("route_class", FieldType::Text));
+    depots
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[("route_class", FieldValue::Text("urban".to_string()))],
+        )
+        .expect("add urban depot");
+    depots
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(8.0, 0.0))),
+            &[("route_class", FieldValue::Text("rural".to_string()))],
+        )
+        .expect("add rural depot");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("allowed_class", FieldType::Text));
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(1.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("allowed_class", FieldValue::Text("urban".to_string())),
+            ],
+        )
+        .expect("add urban stop");
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(7.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("allowed_class", FieldValue::Text("rural".to_string())),
+            ],
+        )
+        .expect("add rural stop");
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("allowed_route_classes_field".to_string(), json!("allowed_class"));
+    args.insert("vehicle_route_class_field".to_string(), json!("route_class"));
+    args.insert("vehicle_capacity".to_string(), json!(3.0));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("vehicle_routing_cvrp", &args, &context(&caps))
+        .expect("vehicle_routing_cvrp run");
+
+    assert_eq!(result.outputs.get("served_stop_count").and_then(|v| v.as_u64()), Some(2));
+    assert_eq!(
+        result
+            .outputs
+            .get("compatibility_infeasible_stop_count")
+            .and_then(|v| v.as_u64()),
+        Some(0)
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+}
+
+#[test]
 fn vehicle_routing_pickup_delivery_logistics_benchmark_serves_all_requests() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 

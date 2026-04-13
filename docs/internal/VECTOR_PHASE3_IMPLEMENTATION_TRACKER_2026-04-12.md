@@ -29,7 +29,7 @@ Phase 3 planned outcomes:
 - [x] Implement VRPTW constraints and violation reporting.
 - [x] Implement pickup-delivery pairing and precedence constraints.
 - [x] Add infeasibility diagnostics and relaxation options.
-- [ ] Add benchmark scenarios for municipal/logistics workflows.
+- [x] Add benchmark scenarios for municipal/logistics workflows.
 
 ### Stream C: Multimodal Routing Foundation
 - [ ] Define multimodal graph schema (mode, transfer, penalties).
@@ -104,4 +104,11 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_hard_windows_report_infeasible_stops -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)
+- 2026-04-12: **STREAM B BENCHMARK SCENARIOS (MUNICIPAL + LOGISTICS)**
+	- Added municipal-style VRPTW relaxed-window benchmark coverage: `vehicle_routing_vrptw_relaxed_windows_serves_municipal_scenario`.
+	- Added logistics-style pickup-delivery benchmark coverage: `vehicle_routing_pickup_delivery_logistics_benchmark_serves_all_requests`.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_relaxed_windows_serves_municipal_scenario -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_pickup_delivery_logistics_benchmark_serves_all_requests -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)

@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Created 2026-04-12)
 Phase: 4 (Advanced Solvers, Batch Analytics, and Temporal Robustness)
-Status: In Progress (Stream A underway; VRPTW refinement next)
+Status: In Progress (Stream A solver evaluation complete; Stream B next candidate)
 
 ## Scope Anchors
 
@@ -23,7 +23,7 @@ Phase 4 planned outcomes:
 
 ### Stream A: Advanced Vehicle Routing Solvers
 - [x] Add local-improvement stage for CVRP route optimization.
-- [ ] Evaluate Tabu Search or Simulated Annealing for route refinement.
+- [x] Evaluate Tabu Search or Simulated Annealing for route refinement.
 - [x] Improve VRPTW insertion heuristics and infeasibility recovery.
 - [x] Add comparative benchmarks against Phase 3 greedy baselines.
 
@@ -79,12 +79,12 @@ Rationale:
 - Creates a reusable pattern for later VRPTW and pickup/delivery improvements.
 
 Next implementation target:
-- Stream A: Improve `vehicle_routing_vrptw` stop selection with a feasible-candidate scoring heuristic that prioritizes lateness pressure before raw nearest-neighbour distance.
+- Stream B: Add batched multimodal multi-origin / multi-destination runs with matrix-style outputs.
 
 Reasoning:
-- Current VRPTW baseline still uses nearest-neighbour candidate choice once feasibility is checked.
-- A better scoring rule should improve route quality without requiring a full solver rewrite.
-- This is the most direct follow-on from the CVRP local-improvement work.
+- Stream A now has two completed low-risk improvements and benchmarked baseline comparisons.
+- Stream B is the next major unmet Phase 4 deliverable with the highest surface-area impact.
+- Metaheuristic implementation can follow once batch analytics work is underway or complete.
 
 ## Progress Log
 
@@ -111,3 +111,12 @@ Reasoning:
 	- Added runtime output echo: `use_priority_scoring`.
 	- Added comparative benchmark coverage: `vehicle_routing_vrptw_benchmark_priority_scoring_reduces_total_lateness_vs_phase3_baseline`.
 	- Benchmarked total lateness reduction versus the Phase 3 baseline control path.
+- 2026-04-13: **STREAM A METAHEURISTIC EVALUATION COMPLETE**
+	- Confirmed no existing Tabu Search or Simulated Annealing implementation is present in `wbtools_oss`; the tracker item represented evaluation only, not implementation.
+	- Chose **Simulated Annealing** as the preferred first metaheuristic for future route-refinement work.
+	- Decision rationale:
+		- Lower implementation complexity than Tabu Search for the current CVRP architecture.
+		- Fits naturally on top of the existing deterministic greedy + 2-opt pipeline.
+		- Easier to gate behind an optional parameter without destabilizing current outputs.
+		- Lower state-management overhead than maintaining tabu tenure / move memory across route-set neighborhoods.
+	- Tabu Search remains a valid later follow-on if Simulated Annealing plateaus on benchmark scenarios.

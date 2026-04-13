@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 3 (Advanced Optimization and Multimodal)
-Status: In Progress (Streams A-B complete; Stream C baseline underway)
+Status: In Progress (Streams A-C complete; Stream D next)
 
 ## Scope Anchors
 
@@ -35,7 +35,7 @@ Phase 3 planned outcomes:
 - [x] Define multimodal graph schema (mode, transfer, penalties).
 - [x] Implement multimodal shortest-path baseline.
 - [x] Implement transfer-aware generalized cost model.
-- [ ] Add examples for walk-drive and walk-transit patterns.
+- [x] Add examples for walk-drive and walk-transit patterns.
 
 ### Stream D: Centrality and Accessibility Analytics
 - [ ] Implement network centrality metrics (degree/closeness/betweenness baseline).
@@ -121,3 +121,10 @@ Phase 3 planned outcomes:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_transfer_penalty_changes_route -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration shortest_path_network_finds_connected_route -- --nocapture` (PASS)
+	- Added manifest examples for `multimodal_shortest_path_walk_drive` and `multimodal_shortest_path_walk_transit` patterns.
+	- Added integration coverage for pattern examples:
+		- `multimodal_shortest_path_walk_drive_pattern`
+		- `multimodal_shortest_path_walk_transit_pattern`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_walk_drive_pattern -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_walk_transit_pattern -- --nocapture` (PASS)

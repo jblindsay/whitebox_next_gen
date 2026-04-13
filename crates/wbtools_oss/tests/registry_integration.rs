@@ -15641,6 +15641,140 @@ fn multimodal_shortest_path_transfer_penalty_changes_route() {
 }
 
 #[test]
+fn multimodal_shortest_path_walk_drive_pattern() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_shortest_path_walk_drive");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add walk segment");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(4.0, 0.0)])),
+            &[("MODE", FieldValue::Text("drive".to_string()))],
+        )
+        .expect("add drive segment");
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write multimodal network input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("start_x".to_string(), json!(0.0));
+    args.insert("start_y".to_string(), json!(0.0));
+    args.insert("end_x".to_string(), json!(4.0));
+    args.insert("end_y".to_string(), json!(0.0));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("allowed_modes".to_string(), json!("walk,drive"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,drive:3.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.5));
+    args.insert("max_snap_distance".to_string(), json!(0.25));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_shortest_path", &args, &context(&caps))
+        .expect("multimodal_shortest_path walk-drive run");
+
+    let mode_changes = result
+        .outputs
+        .get("mode_changes")
+        .and_then(|v| v.as_i64())
+        .expect("mode_changes output");
+    assert_eq!(mode_changes, 1, "walk-drive pattern should include one transfer");
+
+    let out = wbvector::read(&out_path).expect("read multimodal output");
+    let seq_idx = out.schema.field_index("MODE_SEQ").expect("MODE_SEQ field");
+    let mode_seq = match &out.features[0].attributes[seq_idx] {
+        FieldValue::Text(v) => v.clone(),
+        other => panic!("expected text MODE_SEQ, got {:?}", other),
+    };
+    assert!(mode_seq.contains("walk") && mode_seq.contains("drive"));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn multimodal_shortest_path_walk_transit_pattern() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_shortest_path_walk_transit");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add walk segment");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(5.0, 0.0)])),
+            &[("MODE", FieldValue::Text("transit".to_string()))],
+        )
+        .expect("add transit segment");
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write multimodal network input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("start_x".to_string(), json!(0.0));
+    args.insert("start_y".to_string(), json!(0.0));
+    args.insert("end_x".to_string(), json!(5.0));
+    args.insert("end_y".to_string(), json!(0.0));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("allowed_modes".to_string(), json!("walk,transit"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,transit:4.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.25));
+    args.insert("max_snap_distance".to_string(), json!(0.25));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_shortest_path", &args, &context(&caps))
+        .expect("multimodal_shortest_path walk-transit run");
+
+    let mode_changes = result
+        .outputs
+        .get("mode_changes")
+        .and_then(|v| v.as_i64())
+        .expect("mode_changes output");
+    assert_eq!(mode_changes, 1, "walk-transit pattern should include one transfer");
+
+    let out = wbvector::read(&out_path).expect("read multimodal output");
+    let seq_idx = out.schema.field_index("MODE_SEQ").expect("MODE_SEQ field");
+    let mode_seq = match &out.features[0].attributes[seq_idx] {
+        FieldValue::Text(v) => v.clone(),
+        other => panic!("expected text MODE_SEQ, got {:?}", other),
+    };
+    assert!(mode_seq.contains("walk") && mode_seq.contains("transit"));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
 fn shortest_path_network_uses_edge_cost_field_multiplier() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 

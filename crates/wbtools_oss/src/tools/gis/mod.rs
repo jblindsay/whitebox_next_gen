@@ -24833,9 +24833,21 @@ impl Tool for MultimodalShortestPathTool {
         defaults.insert("mode_field".to_string(), json!("MODE"));
         defaults.insert("default_mode_speed".to_string(), json!(1.0));
         defaults.insert("transfer_penalty".to_string(), json!(0.0));
-        let mut example_args = defaults.clone();
-        example_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
-        example_args.insert("output".to_string(), json!("multimodal_shortest_path.shp"));
+        let mut basic_args = defaults.clone();
+        basic_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
+        basic_args.insert("output".to_string(), json!("multimodal_shortest_path.shp"));
+
+        let mut walk_drive_args = defaults.clone();
+        walk_drive_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,drive:12"));
+        walk_drive_args.insert("allowed_modes".to_string(), json!("walk,drive"));
+        walk_drive_args.insert("transfer_penalty".to_string(), json!(2.0));
+        walk_drive_args.insert("output".to_string(), json!("multimodal_walk_drive_path.shp"));
+
+        let mut walk_transit_args = defaults.clone();
+        walk_transit_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
+        walk_transit_args.insert("allowed_modes".to_string(), json!("walk,transit"));
+        walk_transit_args.insert("transfer_penalty".to_string(), json!(1.0));
+        walk_transit_args.insert("output".to_string(), json!("multimodal_walk_transit_path.shp"));
 
         ToolManifest {
             id: "multimodal_shortest_path".to_string(),
@@ -24859,11 +24871,23 @@ impl Tool for MultimodalShortestPathTool {
                 ToolParamDescriptor { name: "output".to_string(), description: "Output line vector path.".to_string(), required: true },
             ],
             defaults,
-            examples: vec![ToolExample {
-                name: "multimodal_shortest_path_basic".to_string(),
-                description: "Routes between two coordinates using mode-aware costs and transfer penalties.".to_string(),
-                args: example_args,
-            }],
+            examples: vec![
+                ToolExample {
+                    name: "multimodal_shortest_path_basic".to_string(),
+                    description: "Routes between two coordinates using mode-aware costs and transfer penalties.".to_string(),
+                    args: basic_args,
+                },
+                ToolExample {
+                    name: "multimodal_shortest_path_walk_drive".to_string(),
+                    description: "Demonstrates walk-drive routing with mode filtering and transfer penalty.".to_string(),
+                    args: walk_drive_args,
+                },
+                ToolExample {
+                    name: "multimodal_shortest_path_walk_transit".to_string(),
+                    description: "Demonstrates walk-transit routing with mode filtering and transfer penalty.".to_string(),
+                    args: walk_transit_args,
+                },
+            ],
             tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "shortest-path".to_string()],
             stability: ToolStability::Experimental,
         }

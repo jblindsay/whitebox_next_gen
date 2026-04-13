@@ -23057,6 +23057,21 @@ struct NetworkTemporalCostOptions {
     profile: TemporalCostProfile,
 }
 
+#[derive(Clone)]
+struct TemporalScenarioBundleEntry {
+    scenario_name: String,
+    temporal_cost_profile: String,
+    departure_time: String,
+    temporal_mode: TemporalCostMode,
+    temporal_fallback: TemporalCostFallback,
+}
+
+#[derive(Clone)]
+struct MultimodalTemporalRunSpec {
+    scenario_name: Option<String>,
+    temporal_options: Option<NetworkTemporalCostOptions>,
+}
+
 fn network_node_key(coord: &wbvector::Coord, snap_tolerance: f64) -> NetworkNodeKey {
     let scale = if snap_tolerance > 0.0 {
         1.0 / snap_tolerance
@@ -23133,10 +23148,11 @@ fn resolve_network_temporal_edge_id_field(
 }
 
 fn parse_temporal_cost_mode_arg(args: &ToolArgs) -> Result<TemporalCostMode, ToolError> {
-    let mode = parse_optional_string_arg(args, "temporal_mode")
-        .unwrap_or("multiplier")
-        .trim()
-        .to_ascii_lowercase();
+    parse_temporal_cost_mode_value(parse_optional_string_arg(args, "temporal_mode"))
+}
+
+fn parse_temporal_cost_mode_value(mode: Option<&str>) -> Result<TemporalCostMode, ToolError> {
+    let mode = mode.unwrap_or("multiplier").trim().to_ascii_lowercase();
     match mode.as_str() {
         "multiplier" => Ok(TemporalCostMode::Multiplier),
         "absolute" => Ok(TemporalCostMode::Absolute),
@@ -23147,10 +23163,11 @@ fn parse_temporal_cost_mode_arg(args: &ToolArgs) -> Result<TemporalCostMode, Too
 }
 
 fn parse_temporal_fallback_arg(args: &ToolArgs) -> Result<TemporalCostFallback, ToolError> {
-    let fallback = parse_optional_string_arg(args, "temporal_fallback")
-        .unwrap_or("static_cost")
-        .trim()
-        .to_ascii_lowercase();
+    parse_temporal_fallback_value(parse_optional_string_arg(args, "temporal_fallback"))
+}
+
+fn parse_temporal_fallback_value(fallback: Option<&str>) -> Result<TemporalCostFallback, ToolError> {
+    let fallback = fallback.unwrap_or("static_cost").trim().to_ascii_lowercase();
     match fallback.as_str() {
         "static_cost" => Ok(TemporalCostFallback::StaticCost),
         "error" => Ok(TemporalCostFallback::Error),
@@ -23357,6 +23374,228 @@ fn write_temporal_profile_diagnostics(
     std::fs::write(report_path, report_text)
         .map_err(|e| ToolError::Execution(format!("failed writing temporal_profile_report '{}': {}", report_path, e)))?;
     Ok(())
+}
+
+fn parse_temporal_scenario_bundle_csv(
+    csv_path: &str,
+) -> Result<Vec<TemporalScenarioBundleEntry>, ToolError> {
+    let content = std::fs::read_to_string(csv_path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed reading scenario_bundle_csv '{}': {}",
+            csv_path, e
+        ))
+    })?;
+    let mut lines = content.lines().filter(|line| !line.trim().is_empty());
+    let header_line = lines
+        .next()
+        .ok_or_else(|| ToolError::Validation("scenario_bundle_csv is empty".to_string()))?;
+    let delimiter = detect_table_delimiter(header_line);
+    let headers = split_table_line(header_line, delimiter);
+
+    let scenario_idx = header_index(&headers, &["scenario", "scenario_name", "name"])
+        .ok_or_else(|| ToolError::Validation("scenario_bundle_csv missing scenario column".to_string()))?;
+    let profile_idx = header_index(&headers, &["temporal_cost_profile", "profile", "profile_path"])
+        .ok_or_else(|| ToolError::Validation("scenario_bundle_csv missing temporal_cost_profile column".to_string()))?;
+    let departure_idx = header_index(&headers, &["departure_time"])
+        .ok_or_else(|| ToolError::Validation("scenario_bundle_csv missing departure_time column".to_string()))?;
+    let temporal_mode_idx = header_index(&headers, &["temporal_mode"]);
+    let temporal_fallback_idx = header_index(&headers, &["temporal_fallback"]);
+
+    let mut scenarios = Vec::<TemporalScenarioBundleEntry>::new();
+    for (line_idx, line) in lines.enumerate() {
+        let row = split_table_line(line, delimiter);
+        if row.len() != headers.len() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv row {} has {} fields but header has {}",
+                line_idx + 2,
+                row.len(),
+                headers.len()
+            )));
+        }
+
+        let scenario_name = row[scenario_idx].trim().to_string();
+        if scenario_name.is_empty() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv row {} has empty scenario name",
+                line_idx + 2
+            )));
+        }
+        let temporal_cost_profile = row[profile_idx].trim().to_string();
+        if temporal_cost_profile.is_empty() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv row {} has empty temporal_cost_profile",
+                line_idx + 2
+            )));
+        }
+        if std::fs::metadata(&temporal_cost_profile).is_err() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv row {} references missing temporal_cost_profile '{}'",
+                line_idx + 2,
+                temporal_cost_profile
+            )));
+        }
+        let departure_time = row[departure_idx].trim().to_string();
+        if departure_time.is_empty() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv row {} has empty departure_time",
+                line_idx + 2
+            )));
+        }
+        let _ = parse_departure_time_to_dow_minute(&departure_time)?;
+        let temporal_mode = parse_temporal_cost_mode_value(
+            temporal_mode_idx.map(|idx| row[idx].trim()).filter(|value| !value.is_empty()),
+        )?;
+        let temporal_fallback = parse_temporal_fallback_value(
+            temporal_fallback_idx.map(|idx| row[idx].trim()).filter(|value| !value.is_empty()),
+        )?;
+        scenarios.push(TemporalScenarioBundleEntry {
+            scenario_name,
+            temporal_cost_profile,
+            departure_time,
+            temporal_mode,
+            temporal_fallback,
+        });
+    }
+
+    if scenarios.is_empty() {
+        return Err(ToolError::Validation(
+            "scenario_bundle_csv must contain at least one scenario row".to_string(),
+        ));
+    }
+    Ok(scenarios)
+}
+
+fn validate_multimodal_temporal_args(
+    input: &wbvector::Layer,
+    args: &ToolArgs,
+) -> Result<(), ToolError> {
+    let scenario_bundle_csv = parse_optional_string_arg(args, "scenario_bundle_csv");
+    let temporal_cost_profile = parse_optional_string_arg(args, "temporal_cost_profile");
+    let departure_time = parse_optional_string_arg(args, "departure_time");
+    let temporal_edge_id_field = parse_optional_string_arg(args, "temporal_edge_id_field");
+    let temporal_mode = parse_optional_string_arg(args, "temporal_mode");
+    let temporal_fallback = parse_optional_string_arg(args, "temporal_fallback");
+    let temporal_profile_report = parse_optional_string_arg(args, "temporal_profile_report");
+
+    if let Some(bundle_path) = scenario_bundle_csv {
+        if std::fs::metadata(bundle_path).is_err() {
+            return Err(ToolError::Validation(format!(
+                "scenario_bundle_csv '{}' does not exist",
+                bundle_path
+            )));
+        }
+        if temporal_cost_profile.is_some()
+            || departure_time.is_some()
+            || temporal_edge_id_field.is_some()
+            || temporal_mode.is_some()
+            || temporal_fallback.is_some()
+            || temporal_profile_report.is_some()
+        {
+            return Err(ToolError::Validation(
+                "scenario_bundle_csv cannot be combined with temporal_cost_profile, departure_time, temporal_edge_id_field, temporal_mode, temporal_fallback, or temporal_profile_report"
+                    .to_string(),
+            ));
+        }
+        let _ = resolve_network_temporal_edge_id_field(input, None)?;
+        let _ = parse_temporal_scenario_bundle_csv(bundle_path)?;
+        return Ok(());
+    }
+
+    if temporal_cost_profile.is_some() != departure_time.is_some() {
+        return Err(ToolError::Validation(
+            "temporal_cost_profile and departure_time must be provided together".to_string(),
+        ));
+    }
+    if let Some(csv_path) = temporal_cost_profile {
+        if std::fs::metadata(csv_path).is_err() {
+            return Err(ToolError::Validation(format!(
+                "temporal_cost_profile '{}' does not exist",
+                csv_path
+            )));
+        }
+        let _ = resolve_network_temporal_edge_id_field(input, temporal_edge_id_field)?;
+        let _ = parse_temporal_cost_mode_value(temporal_mode)?;
+        let _ = parse_temporal_fallback_value(temporal_fallback)?;
+        let _ = parse_departure_time_to_dow_minute(departure_time.unwrap_or(""))?;
+    } else if temporal_edge_id_field.is_some() || temporal_mode.is_some() || temporal_fallback.is_some() {
+        return Err(ToolError::Validation(
+            "temporal_edge_id_field/temporal_mode/temporal_fallback require temporal_cost_profile".to_string(),
+        ));
+    } else if temporal_profile_report.is_some() {
+        return Err(ToolError::Validation(
+            "temporal_profile_report requires temporal_cost_profile".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn build_network_temporal_options(
+    input: &wbvector::Layer,
+    temporal_cost_profile: Option<&str>,
+    temporal_edge_id_field: Option<&str>,
+    departure_time: Option<&str>,
+    temporal_mode: TemporalCostMode,
+    temporal_fallback: TemporalCostFallback,
+    temporal_profile_report: Option<&str>,
+) -> Result<Option<NetworkTemporalCostOptions>, ToolError> {
+    if let (Some(profile_path), Some(departure)) = (temporal_cost_profile, departure_time) {
+        let edge_id_field_name = temporal_edge_id_field.unwrap_or("EDGE_ID").to_string();
+        let edge_id_field_idx = resolve_network_temporal_edge_id_field(input, Some(edge_id_field_name.as_str()))?;
+        let profile = parse_temporal_cost_profile_csv(profile_path, temporal_mode, temporal_fallback, departure)?;
+        if let Some(report_path) = temporal_profile_report {
+            write_temporal_profile_diagnostics(&profile, input, edge_id_field_idx, report_path)?;
+        }
+        Ok(Some(NetworkTemporalCostOptions {
+            edge_id_field_idx,
+            edge_id_field_name,
+            profile,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+fn resolve_multimodal_temporal_run_specs(
+    input: &wbvector::Layer,
+    args: &ToolArgs,
+) -> Result<Vec<MultimodalTemporalRunSpec>, ToolError> {
+    if let Some(bundle_path) = parse_optional_string_arg(args, "scenario_bundle_csv") {
+        let edge_id_field_name = parse_optional_string_arg(args, "temporal_edge_id_field").unwrap_or("EDGE_ID").to_string();
+        let edge_id_field_idx = resolve_network_temporal_edge_id_field(input, Some(edge_id_field_name.as_str()))?;
+        let scenarios = parse_temporal_scenario_bundle_csv(bundle_path)?;
+        let mut run_specs = Vec::<MultimodalTemporalRunSpec>::with_capacity(scenarios.len());
+        for scenario in scenarios {
+            let profile = parse_temporal_cost_profile_csv(
+                &scenario.temporal_cost_profile,
+                scenario.temporal_mode,
+                scenario.temporal_fallback,
+                &scenario.departure_time,
+            )?;
+            run_specs.push(MultimodalTemporalRunSpec {
+                scenario_name: Some(scenario.scenario_name),
+                temporal_options: Some(NetworkTemporalCostOptions {
+                    edge_id_field_idx,
+                    edge_id_field_name: edge_id_field_name.clone(),
+                    profile,
+                }),
+            });
+        }
+        Ok(run_specs)
+    } else {
+        let temporal_options = build_network_temporal_options(
+            input,
+            parse_optional_string_arg(args, "temporal_cost_profile"),
+            parse_optional_string_arg(args, "temporal_edge_id_field"),
+            parse_optional_string_arg(args, "departure_time"),
+            parse_temporal_cost_mode_arg(args)?,
+            parse_temporal_fallback_arg(args)?,
+            parse_optional_string_arg(args, "temporal_profile_report"),
+        )?;
+        Ok(vec![MultimodalTemporalRunSpec {
+            scenario_name: None,
+            temporal_options,
+        }])
+    }
 }
 
 fn parse_ring_costs_arg(args: &ToolArgs, max_cost: f64) -> Result<Option<Vec<f64>>, ToolError> {
@@ -23839,6 +24078,7 @@ fn build_multimodal_network_graph(
     default_mode_speed: f64,
     mode_speed_overrides: &HashMap<String, f64>,
     allowed_modes: &HashSet<String>,
+    temporal_cost_options: Option<&NetworkTemporalCostOptions>,
 ) -> Result<MultimodalNetworkGraph, ToolError> {
     let mode_idx = input
         .schema
@@ -23891,7 +24131,44 @@ fn build_multimodal_network_graph(
             if length <= 0.0 {
                 continue;
             }
-            let segment_cost = length / speed;
+            let base_cost = length / speed;
+            let segment_cost = if let Some(temporal) = temporal_cost_options {
+                let edge_id_value = input.features[line.source_index]
+                    .attributes
+                    .get(temporal.edge_id_field_idx)
+                    .ok_or_else(|| {
+                        ToolError::Execution(format!(
+                            "temporal_edge_id_field '{}' missing on feature",
+                            temporal.edge_id_field_name
+                        ))
+                    })?;
+                let edge_id = field_value_to_join_key(edge_id_value);
+                if edge_id.trim().is_empty() {
+                    return Err(ToolError::Execution(format!(
+                        "temporal_edge_id_field '{}' contains an empty value",
+                        temporal.edge_id_field_name
+                    )));
+                }
+                match temporal.profile.lookup(&edge_id) {
+                    Some(value) => match temporal.profile.mode {
+                        TemporalCostMode::Multiplier => base_cost * value,
+                        TemporalCostMode::Absolute => value,
+                    },
+                    None => match temporal.profile.fallback {
+                        TemporalCostFallback::StaticCost => base_cost,
+                        TemporalCostFallback::Error => {
+                            return Err(ToolError::Execution(format!(
+                                "missing temporal cost profile for edge_id '{}' at dow {} minute {}",
+                                edge_id,
+                                temporal.profile.day_of_week,
+                                temporal.profile.minute_of_day
+                            )));
+                        }
+                    },
+                }
+            } else {
+                base_cost
+            };
             let u = intern_multimodal_network_node(&mut node_map, &mut nodes, &mut adjacency, a, snap_tolerance);
             let v = intern_multimodal_network_node(&mut node_map, &mut nodes, &mut adjacency, b, snap_tolerance);
             adjacency[u].push(MultimodalEdge {
@@ -25009,6 +25286,7 @@ impl Tool for MultimodalShortestPathTool {
             default_mode_speed,
             &mode_speed_overrides,
             &allowed_modes,
+            None,
         )?;
         if graph.nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -25090,6 +25368,13 @@ impl Tool for MultimodalOdCostMatrixTool {
                 ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).", required: false },
                 ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include in routing.", required: false },
                 ToolParamSpec { name: "transfer_penalty", description: "Optional additive penalty applied each time the route changes mode.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics when using direct temporal input.", required: false },
+                ToolParamSpec { name: "scenario_bundle_csv", description: "Optional CSV listing named temporal scenarios for comparative multi-scenario OD output.", required: false },
                 ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
             ],
         }
@@ -25124,6 +25409,13 @@ impl Tool for MultimodalOdCostMatrixTool {
                 ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include in routing.".to_string(), required: false },
                 ToolParamDescriptor { name: "transfer_penalty".to_string(), description: "Optional additive penalty applied each time the route changes mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics when using direct temporal input.".to_string(), required: false },
+                ToolParamDescriptor { name: "scenario_bundle_csv".to_string(), description: "Optional CSV listing named temporal scenarios for comparative multi-scenario OD output.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path.".to_string(), required: true },
             ],
             defaults,
@@ -25191,6 +25483,7 @@ impl Tool for MultimodalOdCostMatrixTool {
                 ));
             }
         }
+        validate_multimodal_temporal_args(&input, args)?;
         let output = parse_string_arg(args, "output")?;
         if !output.to_ascii_lowercase().ends_with(".csv") {
             return Err(ToolError::Validation("output must be a .csv path".to_string()));
@@ -25212,21 +25505,8 @@ impl Tool for MultimodalOdCostMatrixTool {
         )?;
         let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
         let transfer_penalty = parse_optional_f64_arg(args, "transfer_penalty").unwrap_or(0.0);
+        let temporal_run_specs = resolve_multimodal_temporal_run_specs(&input, args)?;
         let output = parse_string_arg(args, "output")?;
-
-        let graph = build_multimodal_network_graph(
-            &input,
-            snap_tolerance,
-            mode_field,
-            default_mode_speed,
-            &mode_speed_overrides,
-            &allowed_modes,
-        )?;
-        if graph.nodes.is_empty() {
-            return Err(ToolError::Execution(
-                "input network contains no usable multimodal segments".to_string(),
-            ));
-        }
 
         let origin_points = collect_point_coords_from_layer(&origins);
         let destination_points = collect_point_coords_from_layer(&destinations);
@@ -25236,57 +25516,115 @@ impl Tool for MultimodalOdCostMatrixTool {
             ));
         }
 
-        let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
-        let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
-        if origin_nodes.is_empty() || destination_nodes.is_empty() {
-            return Err(ToolError::Execution(
-                "no origins or destinations snapped to network within max_snap_distance".to_string(),
-            ));
+        let include_scenario = temporal_run_specs.len() > 1 || temporal_run_specs[0].scenario_name.is_some();
+        let mut reachable_pair_count = 0usize;
+        let mut unreachable_pair_count = 0usize;
+        let mut origin_count = 0usize;
+        let mut destination_count = 0usize;
+        let mut rows = Vec::<String>::new();
+
+        for run_spec in &temporal_run_specs {
+            let graph = build_multimodal_network_graph(
+                &input,
+                snap_tolerance,
+                mode_field,
+                default_mode_speed,
+                &mode_speed_overrides,
+                &allowed_modes,
+                run_spec.temporal_options.as_ref(),
+            )?;
+            if graph.nodes.is_empty() {
+                return Err(ToolError::Execution(
+                    "input network contains no usable multimodal segments".to_string(),
+                ));
+            }
+
+            let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
+            let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
+            if origin_nodes.is_empty() || destination_nodes.is_empty() {
+                return Err(ToolError::Execution(
+                    "no origins or destinations snapped to network within max_snap_distance".to_string(),
+                ));
+            }
+            origin_count = origin_nodes.len();
+            destination_count = destination_nodes.len();
+            let scenario_name = run_spec.scenario_name.as_deref().unwrap_or("default").to_string();
+
+            let scenario_rows: Vec<String> = origin_nodes
+                .par_iter()
+                .flat_map_iter(|(origin_fid, origin_node)| {
+                    destination_nodes
+                        .iter()
+                        .map(|(dest_fid, dest_node)| {
+                            if let Some((cost, _node_path, mode_path)) = dijkstra_multimodal_shortest_path(
+                                &graph,
+                                *origin_node,
+                                *dest_node,
+                                transfer_penalty,
+                            ) {
+                                let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
+                                if include_scenario {
+                                    format!(
+                                        "{},{},{},{},true,{},{},{},{}\n",
+                                        scenario_name,
+                                        origin_fid,
+                                        dest_fid,
+                                        cost,
+                                        mode_changes,
+                                        mode_seq,
+                                        origin_node + 1,
+                                        dest_node + 1,
+                                    )
+                                } else {
+                                    format!(
+                                        "{},{},{},true,{},{},{},{}\n",
+                                        origin_fid,
+                                        dest_fid,
+                                        cost,
+                                        mode_changes,
+                                        mode_seq,
+                                        origin_node + 1,
+                                        dest_node + 1,
+                                    )
+                                }
+                            } else if include_scenario {
+                                format!(
+                                    "{},{},{},,false,,,{},{}\n",
+                                    scenario_name,
+                                    origin_fid,
+                                    dest_fid,
+                                    origin_node + 1,
+                                    dest_node + 1,
+                                )
+                            } else {
+                                format!(
+                                    "{},{},,false,,,{},{}\n",
+                                    origin_fid,
+                                    dest_fid,
+                                    origin_node + 1,
+                                    dest_node + 1,
+                                )
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            let scenario_reachable = scenario_rows.iter().filter(|row| row.contains(",true,")).count();
+            reachable_pair_count += scenario_reachable;
+            unreachable_pair_count += scenario_rows.len().saturating_sub(scenario_reachable);
+            rows.extend(scenario_rows);
         }
 
-        let rows: Vec<String> = origin_nodes
-            .par_iter()
-            .flat_map_iter(|(origin_fid, origin_node)| {
-                destination_nodes
-                    .iter()
-                    .map(|(dest_fid, dest_node)| {
-                        if let Some((cost, _node_path, mode_path)) = dijkstra_multimodal_shortest_path(
-                            &graph,
-                            *origin_node,
-                            *dest_node,
-                            transfer_penalty,
-                        ) {
-                            let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
-                            format!(
-                                "{},{},{},true,{},{},{},{}\n",
-                                origin_fid,
-                                dest_fid,
-                                cost,
-                                mode_changes,
-                                mode_seq,
-                                origin_node + 1,
-                                dest_node + 1,
-                            )
-                        } else {
-                            format!(
-                                "{},{},,false,,,{},{}\n",
-                                origin_fid,
-                                dest_fid,
-                                origin_node + 1,
-                                dest_node + 1,
-                            )
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
-        let reachable_pair_count = rows.iter().filter(|row| row.contains(",true,")).count();
-        let unreachable_pair_count = rows.len().saturating_sub(reachable_pair_count);
-
-        let mut csv = String::from(
-            "origin_fid,destination_fid,cost,reachable,mode_changes,mode_sequence,origin_node,destination_node\n",
-        );
+        let mut csv = if include_scenario {
+            String::from(
+                "scenario,origin_fid,destination_fid,cost,reachable,mode_changes,mode_sequence,origin_node,destination_node\n",
+            )
+        } else {
+            String::from(
+                "origin_fid,destination_fid,cost,reachable,mode_changes,mode_sequence,origin_node,destination_node\n",
+            )
+        };
         for row in rows {
             csv.push_str(&row);
         }
@@ -25302,8 +25640,9 @@ impl Tool for MultimodalOdCostMatrixTool {
 
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(output));
-        outputs.insert("origin_count".to_string(), json!(origin_nodes.len()));
-        outputs.insert("destination_count".to_string(), json!(destination_nodes.len()));
+        outputs.insert("origin_count".to_string(), json!(origin_count));
+        outputs.insert("destination_count".to_string(), json!(destination_count));
+        outputs.insert("scenario_count".to_string(), json!(temporal_run_specs.len()));
         outputs.insert("reachable_pair_count".to_string(), json!(reachable_pair_count));
         outputs.insert("unreachable_pair_count".to_string(), json!(unreachable_pair_count));
         outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
@@ -25330,6 +25669,13 @@ impl Tool for MultimodalRoutesFromOdTool {
                 ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).", required: false },
                 ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include in routing.", required: false },
                 ToolParamSpec { name: "transfer_penalty", description: "Optional additive penalty applied each time the route changes mode.", required: false },
+                ToolParamSpec { name: "temporal_cost_profile", description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).", required: false },
+                ToolParamSpec { name: "temporal_edge_id_field", description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).", required: false },
+                ToolParamSpec { name: "departure_time", description: "Optional RFC3339 departure time used for temporal profile lookup.", required: false },
+                ToolParamSpec { name: "temporal_mode", description: "Optional temporal interpretation mode: multiplier or absolute.", required: false },
+                ToolParamSpec { name: "temporal_fallback", description: "Optional fallback when temporal row is missing: static_cost or error.", required: false },
+                ToolParamSpec { name: "temporal_profile_report", description: "Optional JSON output path for temporal profile diagnostics when using direct temporal input.", required: false },
+                ToolParamSpec { name: "scenario_bundle_csv", description: "Optional CSV listing named temporal scenarios for comparative multi-scenario route output.", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
             ],
         }
@@ -25364,6 +25710,13 @@ impl Tool for MultimodalRoutesFromOdTool {
                 ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include in routing.".to_string(), required: false },
                 ToolParamDescriptor { name: "transfer_penalty".to_string(), description: "Optional additive penalty applied each time the route changes mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_cost_profile".to_string(), description: "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value).".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_edge_id_field".to_string(), description: "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID).".to_string(), required: false },
+                ToolParamDescriptor { name: "departure_time".to_string(), description: "Optional RFC3339 departure time used for temporal profile lookup.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_mode".to_string(), description: "Optional temporal interpretation mode: multiplier or absolute.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_fallback".to_string(), description: "Optional fallback when temporal row is missing: static_cost or error.".to_string(), required: false },
+                ToolParamDescriptor { name: "temporal_profile_report".to_string(), description: "Optional JSON output path for temporal profile diagnostics when using direct temporal input.".to_string(), required: false },
+                ToolParamDescriptor { name: "scenario_bundle_csv".to_string(), description: "Optional CSV listing named temporal scenarios for comparative multi-scenario route output.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
             ],
             defaults,
@@ -25431,6 +25784,7 @@ impl Tool for MultimodalRoutesFromOdTool {
                 ));
             }
         }
+        validate_multimodal_temporal_args(&input, args)?;
         let _ = parse_vector_path_arg(args, "output")?;
         Ok(())
     }
@@ -25449,21 +25803,8 @@ impl Tool for MultimodalRoutesFromOdTool {
         )?;
         let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
         let transfer_penalty = parse_optional_f64_arg(args, "transfer_penalty").unwrap_or(0.0);
+        let temporal_run_specs = resolve_multimodal_temporal_run_specs(&input, args)?;
         let output_path = parse_vector_path_arg(args, "output")?;
-
-        let graph = build_multimodal_network_graph(
-            &input,
-            snap_tolerance,
-            mode_field,
-            default_mode_speed,
-            &mode_speed_overrides,
-            &allowed_modes,
-        )?;
-        if graph.nodes.is_empty() {
-            return Err(ToolError::Execution(
-                "input network contains no usable multimodal segments".to_string(),
-            ));
-        }
 
         let origin_points = collect_point_coords_from_layer(&origins);
         let destination_points = collect_point_coords_from_layer(&destinations);
@@ -25473,49 +25814,13 @@ impl Tool for MultimodalRoutesFromOdTool {
             ));
         }
 
-        let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
-        let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
-        if origin_nodes.is_empty() || destination_nodes.is_empty() {
-            return Err(ToolError::Execution(
-                "no origins or destinations snapped to network within max_snap_distance".to_string(),
-            ));
-        }
-
-        let routes: Vec<(i64, i64, usize, usize, f64, i64, String, Vec<wbvector::Coord>)> = origin_nodes
-            .par_iter()
-            .flat_map_iter(|(origin_fid, origin_node)| {
-                destination_nodes
-                    .iter()
-                    .filter_map(|(dest_fid, dest_node)| {
-                        let (cost, node_path, mode_path) = dijkstra_multimodal_shortest_path(
-                            &graph,
-                            *origin_node,
-                            *dest_node,
-                            transfer_penalty,
-                        )?;
-                        let coords = node_path
-                            .iter()
-                            .map(|idx| graph.nodes[*idx].clone())
-                            .collect::<Vec<_>>();
-                        let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
-                        Some((
-                            *origin_fid,
-                            *dest_fid,
-                            *origin_node,
-                            *dest_node,
-                            cost,
-                            mode_changes,
-                            mode_seq,
-                            coords,
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-
         let mut output = wbvector::Layer::new(format!("{}_multimodal_routes_from_od", input.name));
         output.geom_type = Some(wbvector::GeometryType::LineString);
         output.crs = input.crs.clone();
+        let include_scenario = temporal_run_specs.len() > 1 || temporal_run_specs[0].scenario_name.is_some();
+        if include_scenario {
+            output.schema.add_field(wbvector::FieldDef::new("SCENARIO", wbvector::FieldType::Text));
+        }
         output.schema.add_field(wbvector::FieldDef::new("ORIGIN_FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("DEST_FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("ORIGIN_NODE", wbvector::FieldType::Integer));
@@ -25525,21 +25830,86 @@ impl Tool for MultimodalRoutesFromOdTool {
         output.schema.add_field(wbvector::FieldDef::new("MODE_SEQ", wbvector::FieldType::Text));
 
         let mut next_fid = 1u64;
-        for (origin_fid, dest_fid, origin_node, dest_node, cost, mode_changes, mode_seq, coords) in routes {
-            output.push(wbvector::Feature {
-                fid: next_fid,
-                geometry: Some(wbvector::Geometry::LineString(coords)),
-                attributes: vec![
-                    wbvector::FieldValue::Integer(origin_fid),
-                    wbvector::FieldValue::Integer(dest_fid),
-                    wbvector::FieldValue::Integer((origin_node + 1) as i64),
-                    wbvector::FieldValue::Integer((dest_node + 1) as i64),
-                    wbvector::FieldValue::Float(cost),
-                    wbvector::FieldValue::Integer(mode_changes),
-                    wbvector::FieldValue::Text(mode_seq),
-                ],
-            });
-            next_fid += 1;
+        let mut origin_count = 0usize;
+        let mut destination_count = 0usize;
+        for run_spec in &temporal_run_specs {
+            let graph = build_multimodal_network_graph(
+                &input,
+                snap_tolerance,
+                mode_field,
+                default_mode_speed,
+                &mode_speed_overrides,
+                &allowed_modes,
+                run_spec.temporal_options.as_ref(),
+            )?;
+            if graph.nodes.is_empty() {
+                return Err(ToolError::Execution(
+                    "input network contains no usable multimodal segments".to_string(),
+                ));
+            }
+
+            let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
+            let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
+            if origin_nodes.is_empty() || destination_nodes.is_empty() {
+                return Err(ToolError::Execution(
+                    "no origins or destinations snapped to network within max_snap_distance".to_string(),
+                ));
+            }
+            origin_count = origin_nodes.len();
+            destination_count = destination_nodes.len();
+            let scenario_name = run_spec.scenario_name.as_deref().unwrap_or("default").to_string();
+
+            let routes: Vec<(i64, i64, usize, usize, f64, i64, String, Vec<wbvector::Coord>)> = origin_nodes
+                .par_iter()
+                .flat_map_iter(|(origin_fid, origin_node)| {
+                    destination_nodes
+                        .iter()
+                        .filter_map(|(dest_fid, dest_node)| {
+                            let (cost, node_path, mode_path) = dijkstra_multimodal_shortest_path(
+                                &graph,
+                                *origin_node,
+                                *dest_node,
+                                transfer_penalty,
+                            )?;
+                            let coords = node_path
+                                .iter()
+                                .map(|idx| graph.nodes[*idx].clone())
+                                .collect::<Vec<_>>();
+                            let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
+                            Some((
+                                *origin_fid,
+                                *dest_fid,
+                                *origin_node,
+                                *dest_node,
+                                cost,
+                                mode_changes,
+                                mode_seq,
+                                coords,
+                            ))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            for (origin_fid, dest_fid, origin_node, dest_node, cost, mode_changes, mode_seq, coords) in routes {
+                let mut attributes = Vec::<wbvector::FieldValue>::new();
+                if include_scenario {
+                    attributes.push(wbvector::FieldValue::Text(scenario_name.clone()));
+                }
+                attributes.push(wbvector::FieldValue::Integer(origin_fid));
+                attributes.push(wbvector::FieldValue::Integer(dest_fid));
+                attributes.push(wbvector::FieldValue::Integer((origin_node + 1) as i64));
+                attributes.push(wbvector::FieldValue::Integer((dest_node + 1) as i64));
+                attributes.push(wbvector::FieldValue::Float(cost));
+                attributes.push(wbvector::FieldValue::Integer(mode_changes));
+                attributes.push(wbvector::FieldValue::Text(mode_seq));
+                output.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry: Some(wbvector::Geometry::LineString(coords)),
+                    attributes,
+                });
+                next_fid += 1;
+            }
         }
 
         let route_count = output.features.len();
@@ -25547,8 +25917,9 @@ impl Tool for MultimodalRoutesFromOdTool {
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(output_locator));
         outputs.insert("route_count".to_string(), json!(route_count));
-        outputs.insert("origin_count".to_string(), json!(origin_nodes.len()));
-        outputs.insert("destination_count".to_string(), json!(destination_nodes.len()));
+        outputs.insert("origin_count".to_string(), json!(origin_count));
+        outputs.insert("destination_count".to_string(), json!(destination_count));
+        outputs.insert("scenario_count".to_string(), json!(temporal_run_specs.len()));
         outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
         Ok(ToolRunResult { outputs })
     }

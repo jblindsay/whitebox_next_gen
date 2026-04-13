@@ -16305,6 +16305,254 @@ fn multimodal_routes_from_od_outputs_route_geometry_and_modes() {
 }
 
 #[test]
+fn multimodal_od_cost_matrix_applies_temporal_cost_profile() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_od_cost_matrix_temporal");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let profile_path = std::env::temp_dir().join(format!("{tag}_profile.csv"));
+    let out_csv = std::env::temp_dir().join(format!("{tag}_od.csv"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[
+                ("MODE", FieldValue::Text("walk".to_string())),
+                ("EDGE_ID", FieldValue::Text("w1".to_string())),
+            ],
+        )
+        .expect("add walk edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[
+                ("MODE", FieldValue::Text("transit".to_string())),
+                ("EDGE_ID", FieldValue::Text("t1".to_string())),
+            ],
+        )
+        .expect("add transit edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[
+                ("MODE", FieldValue::Text("transit".to_string())),
+                ("EDGE_ID", FieldValue::Text("t2".to_string())),
+            ],
+        )
+        .expect("add transit edge 2");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add destination");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    std::fs::write(
+        &profile_path,
+        "edge_id,dow,start_minute,end_minute,value\nt1,1,480,600,10\nt2,1,480,600,10\n",
+    )
+    .expect("write temporal profile");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,transit:2.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.5));
+    args.insert("temporal_cost_profile".to_string(), json!(profile_path.to_string_lossy().to_string()));
+    args.insert("departure_time".to_string(), json!("2026-04-13T08:30:00Z"));
+    args.insert("temporal_mode".to_string(), json!("multiplier"));
+    args.insert("output".to_string(), json!(out_csv.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_od_cost_matrix", &args, &context(&caps))
+        .expect("multimodal_od_cost_matrix temporal run");
+
+    let scenario_count = result
+        .outputs
+        .get("scenario_count")
+        .and_then(|v| v.as_u64())
+        .expect("scenario_count output");
+    assert_eq!(scenario_count, 1);
+
+    let csv = std::fs::read_to_string(&out_csv).expect("read multimodal temporal od csv");
+    let lines: Vec<&str> = csv.lines().collect();
+    assert_eq!(lines.len(), 2, "expected header + one OD row");
+    let row: Vec<&str> = lines[1].split(',').collect();
+    let cost: f64 = row[2].parse().expect("parse temporal cost");
+    assert!((cost - 11.5).abs() < 1.0e-9, "expected temporal multiplier cost 11.5, got {}", cost);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&profile_path);
+    let _ = std::fs::remove_file(&out_csv);
+}
+
+#[test]
+fn multimodal_routes_from_od_writes_scenario_bundle_outputs() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_routes_from_od_scenarios");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let baseline_profile_path = std::env::temp_dir().join(format!("{tag}_baseline.csv"));
+    let peak_profile_path = std::env::temp_dir().join(format!("{tag}_peak.csv"));
+    let scenario_bundle_path = std::env::temp_dir().join(format!("{tag}_scenarios.csv"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines.schema.add_field(FieldDef::new("EDGE_ID", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[
+                ("MODE", FieldValue::Text("walk".to_string())),
+                ("EDGE_ID", FieldValue::Text("w1".to_string())),
+            ],
+        )
+        .expect("add walk edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[
+                ("MODE", FieldValue::Text("drive".to_string())),
+                ("EDGE_ID", FieldValue::Text("d1".to_string())),
+            ],
+        )
+        .expect("add drive edge");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add destination");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    std::fs::write(
+        &baseline_profile_path,
+        "edge_id,dow,start_minute,end_minute,value\nd1,1,480,600,1\n",
+    )
+    .expect("write baseline temporal profile");
+    std::fs::write(
+        &peak_profile_path,
+        "edge_id,dow,start_minute,end_minute,value\nd1,1,480,600,4\n",
+    )
+    .expect("write peak temporal profile");
+    std::fs::write(
+        &scenario_bundle_path,
+        format!(
+            "scenario,temporal_cost_profile,departure_time,temporal_mode\nbaseline,{},2026-04-13T08:30:00Z,multiplier\npeak,{},2026-04-13T08:30:00Z,multiplier\n",
+            baseline_profile_path.to_string_lossy(),
+            peak_profile_path.to_string_lossy()
+        ),
+    )
+    .expect("write scenario bundle");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("allowed_modes".to_string(), json!("walk,drive"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,drive:2.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.25));
+    args.insert("scenario_bundle_csv".to_string(), json!(scenario_bundle_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_routes_from_od", &args, &context(&caps))
+        .expect("multimodal_routes_from_od scenario run");
+
+    let scenario_count = result
+        .outputs
+        .get("scenario_count")
+        .and_then(|v| v.as_u64())
+        .expect("scenario_count output");
+    assert_eq!(scenario_count, 2);
+
+    let out = wbvector::read(&out_path).expect("read multimodal scenario routes output");
+    assert_eq!(out.features.len(), 2, "expected one route per scenario");
+    let scenario_idx = out.schema.field_index("SCENARIO").expect("SCENARIO field");
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+
+    let first_scenario = match &out.features[0].attributes[scenario_idx] {
+        FieldValue::Text(v) => v.clone(),
+        other => panic!("expected text SCENARIO, got {:?}", other),
+    };
+    let second_scenario = match &out.features[1].attributes[scenario_idx] {
+        FieldValue::Text(v) => v.clone(),
+        other => panic!("expected text SCENARIO, got {:?}", other),
+    };
+    assert_eq!(first_scenario, "baseline");
+    assert_eq!(second_scenario, "peak");
+
+    let baseline_cost = match &out.features[0].attributes[cost_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric COST, got {:?}", other),
+    };
+    let peak_cost = match &out.features[1].attributes[cost_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric COST, got {:?}", other),
+    };
+    assert!((baseline_cost - 2.25).abs() < 1.0e-9, "expected baseline cost 2.25, got {}", baseline_cost);
+    assert!((peak_cost - 5.25).abs() < 1.0e-9, "expected peak cost 5.25, got {}", peak_cost);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&baseline_profile_path);
+    let _ = std::fs::remove_file(&peak_profile_path);
+    let _ = std::fs::remove_file(&scenario_bundle_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
 fn shortest_path_network_uses_edge_cost_field_multiplier() {
     use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
 

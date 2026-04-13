@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Created 2026-04-12)
 Phase: 4 (Advanced Solvers, Batch Analytics, and Temporal Robustness)
-Status: In Progress (Stream A solver evaluation complete; Stream B next candidate)
+Status: In Progress (Streams A-C implemented; Stream D next candidate)
 
 ## Scope Anchors
 
@@ -34,9 +34,9 @@ Phase 4 planned outcomes:
 - [x] Add regression tests for repeated and batched path queries.
 
 ### Stream C: Temporal Robustness and Scenario Modelling
-- [ ] Extend multimodal and OD tools with time-dependent edge profiles.
-- [ ] Add scenario bundles for peak / off-peak / disruption analysis.
-- [ ] Support comparative outputs across scenarios in a single run.
+- [x] Extend multimodal and OD tools with time-dependent edge profiles.
+- [x] Add scenario bundles for peak / off-peak / disruption analysis.
+- [x] Support comparative outputs across scenarios in a single run.
 - [ ] Add benchmark fixtures for temporal routing and uncertainty workflows.
 
 ### Stream D: Performance and Scalability Hardening
@@ -47,7 +47,7 @@ Phase 4 planned outcomes:
 
 ### Stream E: Wrapper UX and Cookbook Expansion
 - [ ] Add optional high-level convenience methods in Python where justified.
-- [ ] Expand R and Python cookbooks with Phase 4 scenarios.
+- [x] Expand R and Python cookbooks with Phase 4 scenarios.
 - [ ] Regenerate any wrappers or stubs needed for new public APIs.
 - [ ] Finalize Phase 4 regression gate commands and release checklist.
 
@@ -131,3 +131,12 @@ Scheduling note:
 	- Reused the existing multimodal graph builder and transfer-penalty routing logic so single-route and batched outputs stay behaviorally aligned.
 	- Added downstream analytics fields including reachability, mode-change count, mode sequence, and snapped node IDs.
 	- Added integration coverage for registration, OD matrix CSV output, and batched route geometry/mode summaries.
+- 2026-04-13: **STREAM C TEMPORAL MULTIMODAL ANALYTICS IMPLEMENTED**
+	- Extended `multimodal_od_cost_matrix` with direct `temporal_cost_profile` + `departure_time` inputs and optional temporal diagnostics.
+	- Extended both `multimodal_od_cost_matrix` and `multimodal_routes_from_od` with `scenario_bundle_csv` support for named peak / off-peak / disruption comparisons in one run.
+	- Added scenario-aware outputs: `scenario_count`, scenario-tagged CSV rows, and `SCENARIO` route attributes for batched vector outputs.
+	- Added focused integration coverage for temporal cost application and multi-scenario route export.
+	- Added Python and R cookbook examples covering batched multimodal temporal OD matrices and scenario-comparative route export.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)

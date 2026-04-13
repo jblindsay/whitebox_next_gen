@@ -40,7 +40,7 @@ Phase 4 planned outcomes:
 - [ ] Add benchmark fixtures for temporal routing and uncertainty workflows.
 
 ### Stream D: Performance and Scalability Hardening
-- [ ] Add spatial indexing for snapping origins/destinations to networks.
+- [x] Add spatial indexing for snapping origins/destinations to networks.
 - [ ] Reduce repeated shortest-path cost where multi-query reuse is possible.
 - [ ] Evaluate parallel execution for OD sensitivity and accessibility batches.
 - [ ] Publish large-network benchmark reports and runtime targets.
@@ -137,6 +137,12 @@ Scheduling note:
 	- Added scenario-aware outputs: `scenario_count`, scenario-tagged CSV rows, and `SCENARIO` route attributes for batched vector outputs.
 	- Added focused integration coverage for temporal cost application and multi-scenario route export.
 	- Added Python and R cookbook examples covering batched multimodal temporal OD matrices and scenario-comparative route export.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-13: **STREAM D KICKOFF: SPATIAL INDEXED MULTIMODAL SNAPPING**
+	- Replaced brute-force nearest-node scans in multimodal batch OD snapping with a KD-tree index built over network nodes.
+	- Updated `snap_points_to_network_nodes` to use indexed nearest-neighbour lookups for origin/destination snapping.
 	- Validation commands:
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)

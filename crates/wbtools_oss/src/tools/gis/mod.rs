@@ -24291,11 +24291,26 @@ fn snap_points_to_network_nodes(
     max_snap_distance: Option<f64>,
     point_kind: &str,
 ) -> Result<Vec<(i64, usize)>, ToolError> {
+    let mut node_index = KdTree::new(2);
+    for (idx, node) in graph_nodes.iter().enumerate() {
+        node_index
+            .add([node.x, node.y], idx)
+            .map_err(|e| ToolError::Execution(format!("failed building {} snap index: {e}", point_kind)))?;
+    }
+
     let mut snapped = Vec::<(i64, usize)>::new();
     for (fid, coord) in points {
-        let (idx, dist) = nearest_network_node(graph_nodes, coord).ok_or_else(|| {
-            ToolError::Execution(format!("failed locating nearest {} node", point_kind))
-        })?;
+        let nearest = node_index
+            .nearest(&[coord.x, coord.y], 1, &squared_euclidean)
+            .map_err(|e| ToolError::Execution(format!("{} snap query failed: {e}", point_kind)))?;
+        let Some((dist_sq, idx_ref)) = nearest.first() else {
+            return Err(ToolError::Execution(format!(
+                "failed locating nearest {} node",
+                point_kind
+            )));
+        };
+        let idx = **idx_ref;
+        let dist = dist_sq.sqrt();
         if max_snap_distance.map(|limit| dist <= limit).unwrap_or(true) {
             snapped.push((*fid, idx));
         }

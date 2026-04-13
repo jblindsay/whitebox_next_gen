@@ -246,6 +246,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"shortest_path_network"));
     assert!(ids.contains(&"multimodal_shortest_path"));
     assert!(ids.contains(&"network_centrality_metrics"));
+    assert!(ids.contains(&"network_accessibility_metrics"));
     assert!(ids.contains(&"network_node_degree"));
     assert!(ids.contains(&"network_service_area"));
     assert!(ids.contains(&"network_od_cost_matrix"));
@@ -15940,6 +15941,119 @@ fn network_centrality_metrics_identifies_middle_node_as_most_central() {
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_decay() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_accessibility_metrics");
+    let network_path = std::env::temp_dir().join(format!("{tag}_net.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_ori.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_dst.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    // Create a linear network segment (A-B-C)
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add segment 1");
+    network
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add segment 2");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage)
+        .expect("write network input");
+
+    // Single origin at A (x=0)
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[],
+        )
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage)
+        .expect("write origins");
+
+    // Two destinations at B and C (x=1 and x=2)
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(1.0, 0.0))),
+            &[],
+        )
+        .expect("add destination 1");
+    destinations
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(2.0, 0.0))),
+            &[],
+        )
+        .expect("add destination 2");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    // Test 1: No cutoff or decay (count all reachable)
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args, &context(&caps))
+        .expect("network_accessibility_metrics run");
+
+    let out = wbvector::read(&output_path).expect("read accessibility output");
+    assert_eq!(out.features.len(), 1, "expected one origin feature");
+
+    let access_idx = out.schema.field_index("ACCESSIBILITY").expect("ACCESSIBILITY field");
+    let accessibility = match &out.features[0].attributes[access_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        wbvector::FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric ACCESSIBILITY, got {:?}", other),
+    };
+    assert_eq!(accessibility, 2.0, "expected accessibility count of 2 destinations");
+
+    // Test 2: With impedance cutoff (only first destination reachable)
+    let output_path2 = std::env::temp_dir().join(format!("{tag}_out2.gpkg"));
+    let mut args2 = ToolArgs::new();
+    args2.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args2.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args2.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args2.insert("impedance_cutoff".to_string(), json!(1.2));
+    args2.insert("output".to_string(), json!(output_path2.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args2, &context(&caps))
+        .expect("network_accessibility_metrics run with cutoff");
+
+    let out2 = wbvector::read(&output_path2).expect("read accessibility with cutoff");
+    let accessibility2 = match &out2.features[0].attributes[access_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        wbvector::FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric ACCESSIBILITY, got {:?}", other),
+    };
+    assert_eq!(accessibility2, 1.0, "expected accessibility count of 1 destination with cutoff");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&output_path);
+    let _ = std::fs::remove_file(&output_path2);
 }
 
 #[test]

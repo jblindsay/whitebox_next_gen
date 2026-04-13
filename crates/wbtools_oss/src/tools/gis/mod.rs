@@ -186,6 +186,7 @@ pub struct LinePolygonClipTool;
 pub struct ShortestPathNetworkTool;
 pub struct MultimodalShortestPathTool;
 pub struct NetworkCentralityMetricsTool;
+pub struct NetworkAccessibilityMetricsTool;
 pub struct NetworkNodeDegreeTool;
 pub struct NetworkServiceAreaTool;
 pub struct MapMatchingV1Tool;
@@ -25208,6 +25209,263 @@ impl Tool for NetworkCentralityMetricsTool {
                     wbvector::FieldValue::Float(closeness[idx]),
                     wbvector::FieldValue::Float(betweenness[idx]),
                 ],
+            });
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for NetworkAccessibilityMetricsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_accessibility_metrics",
+            display_name: "Network Accessibility Metrics",
+            summary: "Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "impedance_cutoff", description: "Optional maximum distance threshold for counting reachable destinations (default: infinite).", required: false },
+                ToolParamSpec { name: "decay_function", description: "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility.", required: false },
+                ToolParamSpec { name: "decay_parameter", description: "Optional decay parameter (lambda for exponential, rate for linear).", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path (origins with accessibility metrics).", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(0.0));
+        defaults.insert("decay_function".to_string(), json!("none"));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("origins_accessibility.shp"));
+
+        ToolManifest {
+            id: "network_accessibility_metrics".to_string(),
+            display_name: "Network Accessibility Metrics".to_string(),
+            summary: "Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "impedance_cutoff".to_string(), description: "Optional maximum distance threshold for counting reachable destinations (default: infinite).".to_string(), required: false },
+                ToolParamDescriptor { name: "decay_function".to_string(), description: "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility.".to_string(), required: false },
+                ToolParamDescriptor { name: "decay_parameter".to_string(), description: "Optional decay parameter (lambda for exponential, rate for linear).".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path (origins with accessibility metrics).".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_accessibility_metrics_basic".to_string(),
+                description: "Computes accessibility index for origins to destinations within cutoff distance.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "accessibility".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap.is_finite() || max_snap < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(cutoff) = parse_optional_f64_arg(args, "impedance_cutoff") {
+            if !cutoff.is_finite() || cutoff <= 0.0 {
+                return Err(ToolError::Validation(
+                    "impedance_cutoff must be a finite value > 0".to_string(),
+                ));
+            }
+        }
+        if let Some(decay_fn) = parse_optional_string_arg(args, "decay_function") {
+            let norm = decay_fn.to_ascii_lowercase();
+            if norm != "none" && norm != "linear" && norm != "exponential" {
+                return Err(ToolError::Validation(
+                    "decay_function must be one of 'none', 'linear', or 'exponential'".to_string(),
+                ));
+            }
+        }
+        if let Some(decay_param) = parse_optional_f64_arg(args, "decay_parameter") {
+            if !decay_param.is_finite() || decay_param <= 0.0 {
+                return Err(ToolError::Validation(
+                    "decay_parameter must be a finite value > 0".to_string(),
+                ));
+            }
+        }
+
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance").unwrap_or(f64::INFINITY);
+        let impedance_cutoff = parse_optional_f64_arg(args, "impedance_cutoff").unwrap_or(f64::INFINITY);
+        let decay_function = parse_optional_string_arg(args, "decay_function")
+            .unwrap_or_else(|| "none")
+            .to_ascii_lowercase();
+        let decay_parameter = parse_optional_f64_arg(args, "decay_parameter").unwrap_or(1.0);
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            None,
+        )?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        // Collect origin coordinates and snap to network
+        let mut origin_coords = Vec::new();
+        for feature in &origins.features {
+            if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
+                origin_coords.push(coord.clone());
+            }
+        }
+
+        // Collect destination coordinates and snap to network
+        let mut dest_coords = Vec::new();
+        for feature in &destinations.features {
+            if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
+                dest_coords.push(coord.clone());
+            }
+        }
+
+        let mut output = wbvector::Layer::new(format!("{}_accessibility", origins.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = origins.crs.clone();
+
+        // Copy field schema from origins
+        for field in origins.schema.fields() {
+            output.schema.add_field(field.clone());
+        }
+        output.schema.add_field(wbvector::FieldDef::new("ACCESSIBILITY", wbvector::FieldType::Float));
+
+        for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
+            // Find nearest network node to origin
+            let origin_node = match nearest_network_node(&graph.nodes, orig_coord) {
+                Some((node_idx, dist)) => {
+                    if dist > max_snap_distance {
+                        // Origin too far from network; skip
+                        let mut attrs = origins.features[orig_idx].attributes.clone();
+                        attrs.push(wbvector::FieldValue::Float(0.0));
+                        output.push(wbvector::Feature {
+                            fid: (orig_idx + 1) as u64,
+                            geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
+                            attributes: attrs,
+                        });
+                        continue;
+                    }
+                    node_idx
+                }
+                None => {
+                    // No network node found; skip
+                    let mut attrs = origins.features[orig_idx].attributes.clone();
+                    attrs.push(wbvector::FieldValue::Float(0.0));
+                    output.push(wbvector::Feature {
+                        fid: (orig_idx + 1) as u64,
+                        geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
+                        attributes: attrs,
+                    });
+                    continue;
+                }
+            };
+
+            // Compute single-source shortest paths from origin
+            let (dist, _) = dijkstra_tree(&graph, origin_node);
+
+            // Compute accessibility score
+            let mut accessibility = 0.0f64;
+            for dest_coord in &dest_coords {
+                // Find nearest network node to destination
+                if let Some((dest_node, snap_dist)) = nearest_network_node(&graph.nodes, dest_coord) {
+                    if snap_dist <= max_snap_distance && dist[dest_node].is_finite() {
+                        let total_dist = dist[dest_node] + snap_dist;
+                        if total_dist <= impedance_cutoff {
+                            // Destination is reachable within cutoff
+                            let weight = match decay_function.as_str() {
+                                "exponential" => (-decay_parameter * total_dist).exp(),
+                                "linear" => (1.0 - (decay_parameter * total_dist / impedance_cutoff)).max(0.0),
+                                _ => 1.0, // 'none' or default
+                            };
+                            accessibility += weight;
+                        }
+                    }
+                }
+            }
+
+            let mut attrs = origins.features[orig_idx].attributes.clone();
+            attrs.push(wbvector::FieldValue::Float(accessibility));
+            output.push(wbvector::Feature {
+                fid: (orig_idx + 1) as u64,
+                geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
+                attributes: attrs,
             });
         }
 

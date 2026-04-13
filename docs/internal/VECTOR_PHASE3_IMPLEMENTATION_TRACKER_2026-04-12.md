@@ -135,3 +135,15 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration network_centrality_metrics_identifies_middle_node_as_most_central -- --nocapture` (PASS)
+- 2026-04-12: **STREAM D ACCESSIBILITY METRICS BASELINE (IMPEDANCE CUTOFF + DECAY)**
+	- Added `network_accessibility_metrics` tool in `wbtools_oss` with impedance cutoff and distance-decay functions.
+	- Implemented origin-side accessibility scoring with reachability thresholds and optional exponential/linear decay.
+	- Tool snaps origins and destinations to network, computes single-source shortest paths per origin, and applies cutoff/decay to accumulated destination accessibility.
+	- Output attributes: origin features retained with added `ACCESSIBILITY` index (float).
+	- Parameters: `impedance_cutoff` (max distance), `decay_function` ('none', 'linear', 'exponential'), `decay_parameter` (rate/lambda), plus standard network impedance controls.
+	- Added integration coverage: `network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_decay` (validates cutoff filtering and baseline accessibility counting).
+	- Wired tool export (tools/mod.rs), registry registration (lib.rs), and registry assertion test.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_decay -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools -- --nocapture` (PASS)

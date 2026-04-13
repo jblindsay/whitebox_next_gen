@@ -465,6 +465,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::ShortestPathNetworkTool));
     registry.register(Box::new(tools::MultimodalShortestPathTool));
     registry.register(Box::new(tools::NetworkCentralityMetricsTool));
+    registry.register(Box::new(tools::NetworkAccessibilityMetricsTool));
     registry.register(Box::new(tools::NetworkNodeDegreeTool));
     registry.register(Box::new(tools::NetworkServiceAreaTool));
     registry.register(Box::new(tools::MapMatchingV1Tool));

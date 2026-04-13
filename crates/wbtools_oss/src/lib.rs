@@ -472,6 +472,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::NetworkRoutesFromOdTool));
     registry.register(Box::new(tools::KShortestPathsNetworkTool));
     registry.register(Box::new(tools::VehicleRoutingCvrpTool));
+    registry.register(Box::new(tools::VehicleRoutingVrptwTool));
         registry.register(Box::new(tools::ConstructVectorTinTool));
         registry.register(Box::new(tools::VectorHexBinningTool));
     registry.register(Box::new(tools::VoronoiDiagramTool));

@@ -193,6 +193,7 @@ pub struct NetworkConnectedComponentsTool;
 pub struct NetworkRoutesFromOdTool;
 pub struct KShortestPathsNetworkTool;
 pub struct VehicleRoutingCvrpTool;
+pub struct VehicleRoutingVrptwTool;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GisOverlayOp {
@@ -27156,6 +27157,514 @@ impl Tool for VehicleRoutingCvrpTool {
                         wbvector::FieldValue::Integer(visit_seq),
                         wbvector::FieldValue::Float(demand),
                         wbvector::FieldValue::Float(cum_load),
+                    ],
+                });
+                fid += 1;
+            }
+
+            let assignment_locator = write_vector_output(&assignment_layer, assign_path.trim())?;
+            outputs.insert("assignment_output".to_string(), json!(assignment_locator));
+        }
+
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for VehicleRoutingVrptwTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "vehicle_routing_vrptw",
+            display_name: "Vehicle Routing (VRPTW)",
+            summary: "Builds capacity-constrained routes with time-window diagnostics using a deterministic nearest-neighbour baseline.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "network", description: "Input line network layer (validated for contract parity).", required: true },
+                ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
+                ToolParamSpec { name: "stop_points", description: "Delivery stop point layer with demand and time-window fields.", required: true },
+                ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
+                ToolParamSpec { name: "tw_start_field", description: "Numeric time-window start field in stop_points (default: tw_start).", required: false },
+                ToolParamSpec { name: "tw_end_field", description: "Numeric time-window end field in stop_points (default: tw_end).", required: false },
+                ToolParamSpec { name: "service_time_field", description: "Numeric per-stop service time field in stop_points (default: service_time).", required: false },
+                ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
+                ToolParamSpec { name: "start_time", description: "Route start time in model time units (default: 0).", required: false },
+                ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
+                ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
+                ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with time-window diagnostics.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("network".to_string(), json!("network.gpkg"));
+        defaults.insert("depot_points".to_string(), json!("depots.gpkg"));
+        defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
+        defaults.insert("demand_field".to_string(), json!("demand"));
+        defaults.insert("tw_start_field".to_string(), json!("tw_start"));
+        defaults.insert("tw_end_field".to_string(), json!("tw_end"));
+        defaults.insert("service_time_field".to_string(), json!("service_time"));
+        defaults.insert("vehicle_capacity".to_string(), json!(100.0));
+        defaults.insert("start_time".to_string(), json!(0.0));
+        defaults.insert("travel_speed".to_string(), json!(1.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("vrptw_routes.gpkg"));
+
+        ToolManifest {
+            id: "vehicle_routing_vrptw".to_string(),
+            display_name: "Vehicle Routing (VRPTW)".to_string(),
+            summary: "Builds capacity-constrained routes with time-window diagnostics using a deterministic nearest-neighbour baseline.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "network".to_string(), description: "Input line network layer (validated for contract parity).".to_string(), required: true },
+                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
+                ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer with demand and time-window fields.".to_string(), required: true },
+                ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
+                ToolParamDescriptor { name: "tw_start_field".to_string(), description: "Numeric time-window start field in stop_points (default: tw_start).".to_string(), required: false },
+                ToolParamDescriptor { name: "tw_end_field".to_string(), description: "Numeric time-window end field in stop_points (default: tw_end).".to_string(), required: false },
+                ToolParamDescriptor { name: "service_time_field".to_string(), description: "Numeric per-stop service time field in stop_points (default: service_time).".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
+                ToolParamDescriptor { name: "start_time".to_string(), description: "Route start time in model time units (default: 0).".to_string(), required: false },
+                ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with time-window diagnostics.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "vehicle_routing_vrptw_basic".to_string(),
+                description: "Builds baseline VRPTW routes and reports time-window diagnostics.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string(), "time-window".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let network = load_vector_arg(args, "network")?;
+        if network.geom_type != Some(wbvector::GeometryType::LineString)
+            && network.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("network must be a line layer".to_string()));
+        }
+
+        let depots = load_vector_arg(args, "depot_points")?;
+        if depots.geom_type != Some(wbvector::GeometryType::Point)
+            && depots.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("depot_points must be a point layer".to_string()));
+        }
+
+        let stops = load_vector_arg(args, "stop_points")?;
+        if stops.geom_type != Some(wbvector::GeometryType::Point)
+            && stops.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("stop_points must be a point layer".to_string()));
+        }
+
+        let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
+        let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
+        let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
+
+        let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+            ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
+        })?;
+        let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
+            ToolError::Validation(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
+        })?;
+        let tw_end_idx = stops.schema.field_index(tw_end_field).ok_or_else(|| {
+            ToolError::Validation(format!("tw_end_field '{}' not found in stop_points", tw_end_field))
+        })?;
+        let service_time_idx = stops.schema.field_index(service_time_field).ok_or_else(|| {
+            ToolError::Validation(format!("service_time_field '{}' not found in stop_points", service_time_field))
+        })?;
+
+        for feature in &stops.features {
+            let demand = feature
+                .attributes
+                .get(demand_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Validation(format!("missing/invalid demand value for stop fid {}", feature.fid)))?;
+            let tw_start = feature
+                .attributes
+                .get(tw_start_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Validation(format!("missing/invalid tw_start value for stop fid {}", feature.fid)))?;
+            let tw_end = feature
+                .attributes
+                .get(tw_end_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Validation(format!("missing/invalid tw_end value for stop fid {}", feature.fid)))?;
+            let service_time = feature
+                .attributes
+                .get(service_time_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Validation(format!("missing/invalid service_time value for stop fid {}", feature.fid)))?;
+            if demand < 0.0 || !demand.is_finite() {
+                return Err(ToolError::Validation("demand values must be finite and >= 0".to_string()));
+            }
+            if service_time < 0.0 || !service_time.is_finite() {
+                return Err(ToolError::Validation("service_time values must be finite and >= 0".to_string()));
+            }
+            if !tw_start.is_finite() || !tw_end.is_finite() || tw_end < tw_start {
+                return Err(ToolError::Validation("time-window values must be finite and satisfy tw_end >= tw_start".to_string()));
+            }
+        }
+
+        let vehicle_capacity = args
+            .get("vehicle_capacity")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| ToolError::Validation("vehicle_capacity is required and must be numeric".to_string()))?;
+        if !vehicle_capacity.is_finite() || vehicle_capacity <= 0.0 {
+            return Err(ToolError::Validation(
+                "vehicle_capacity must be a finite value > 0".to_string(),
+            ));
+        }
+
+        if let Some(start_time) = args.get("start_time").and_then(|v| v.as_f64()) {
+            if !start_time.is_finite() {
+                return Err(ToolError::Validation("start_time must be finite".to_string()));
+            }
+        }
+
+        if let Some(travel_speed) = args.get("travel_speed").and_then(|v| v.as_f64()) {
+            if !travel_speed.is_finite() || travel_speed <= 0.0 {
+                return Err(ToolError::Validation("travel_speed must be finite and > 0".to_string()));
+            }
+        }
+
+        if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
+            if max_vehicles == 0 {
+                return Err(ToolError::Validation("max_vehicles must be >= 1 when provided".to_string()));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
+            if path.trim().is_empty() {
+                return Err(ToolError::Validation(
+                    "assignment_output cannot be an empty path".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let network = load_vector_arg(args, "network")?;
+        let depots = load_vector_arg(args, "depot_points")?;
+        let stops = load_vector_arg(args, "stop_points")?;
+        let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
+        let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
+        let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
+        let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+            ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
+        })?;
+        let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
+            ToolError::Execution(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
+        })?;
+        let tw_end_idx = stops.schema.field_index(tw_end_field).ok_or_else(|| {
+            ToolError::Execution(format!("tw_end_field '{}' not found in stop_points", tw_end_field))
+        })?;
+        let service_time_idx = stops.schema.field_index(service_time_field).ok_or_else(|| {
+            ToolError::Execution(format!("service_time_field '{}' not found in stop_points", service_time_field))
+        })?;
+
+        let vehicle_capacity = args
+            .get("vehicle_capacity")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+        let start_time = args.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
+
+        let depot_coord = collect_point_coords_from_layer(&depots)
+            .into_iter()
+            .map(|(_, c)| c)
+            .next()
+            .ok_or_else(|| ToolError::Execution("depot_points contains no point geometries".to_string()))?;
+
+        #[derive(Clone)]
+        struct StopNode {
+            fid: i64,
+            coord: wbvector::Coord,
+            demand: f64,
+            tw_start: f64,
+            tw_end: f64,
+            service_time: f64,
+        }
+
+        let mut stop_nodes = Vec::<StopNode>::new();
+        for feature in &stops.features {
+            let Some(geom) = feature.geometry.as_ref() else {
+                continue;
+            };
+            let coord = match geom {
+                wbvector::Geometry::Point(c) => c.clone(),
+                wbvector::Geometry::MultiPoint(coords) => {
+                    let Some(first) = coords.first() else {
+                        continue;
+                    };
+                    first.clone()
+                }
+                _ => continue,
+            };
+
+            let demand = feature
+                .attributes
+                .get(demand_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Execution(format!("missing/invalid demand for stop fid {}", feature.fid)))?;
+            let tw_start = feature
+                .attributes
+                .get(tw_start_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Execution(format!("missing/invalid tw_start for stop fid {}", feature.fid)))?;
+            let tw_end = feature
+                .attributes
+                .get(tw_end_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Execution(format!("missing/invalid tw_end for stop fid {}", feature.fid)))?;
+            let service_time = feature
+                .attributes
+                .get(service_time_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Execution(format!("missing/invalid service_time for stop fid {}", feature.fid)))?;
+
+            stop_nodes.push(StopNode {
+                fid: feature.fid as i64,
+                coord,
+                demand,
+                tw_start,
+                tw_end,
+                service_time,
+            });
+        }
+
+        if stop_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "stop_points contains no usable point features".to_string(),
+            ));
+        }
+
+        stop_nodes.sort_by_key(|s| s.fid);
+        let mut unassigned = stop_nodes;
+        let mut vehicle_id = 1i64;
+        let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64, f64, i64, f64)>::new();
+        let mut assignments = Vec::<(i64, i64, i64, f64, f64, f64, f64, f64, wbvector::Coord)>::new();
+        let mut infeasible_stops = 0usize;
+        let mut late_stop_count = 0usize;
+        let mut total_lateness = 0.0f64;
+
+        while !unassigned.is_empty() {
+            if let Some(limit) = max_vehicles {
+                if routes.len() >= limit {
+                    break;
+                }
+            }
+
+            let mut current = depot_coord.clone();
+            let mut current_time = start_time;
+            let mut remaining_capacity = vehicle_capacity;
+            let mut route_coords = vec![depot_coord.clone()];
+            let mut route_stop_count = 0usize;
+            let mut route_load = 0.0f64;
+            let mut route_late_stops = 0i64;
+            let mut route_total_lateness = 0.0f64;
+
+            loop {
+                let mut best_idx: Option<usize> = None;
+                let mut best_dist = f64::INFINITY;
+                for (idx, stop) in unassigned.iter().enumerate() {
+                    if stop.demand > remaining_capacity + 1.0e-12 {
+                        continue;
+                    }
+                    let d = coord_dist2(&current, &stop.coord).sqrt();
+                    if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
+                        best_dist = d;
+                        best_idx = Some(idx);
+                    }
+                }
+
+                let Some(idx) = best_idx else {
+                    if route_stop_count == 0 {
+                        if let Some(pos) = unassigned
+                            .iter()
+                            .position(|s| s.demand > vehicle_capacity + 1.0e-12)
+                        {
+                            unassigned.remove(pos);
+                            infeasible_stops += 1;
+                            continue;
+                        }
+                    }
+                    break;
+                };
+
+                let stop = unassigned.remove(idx);
+                let travel_dist = coord_dist2(&current, &stop.coord).sqrt();
+                let travel_time = travel_dist / travel_speed;
+                let arrival_time = current_time + travel_time;
+                let service_start = arrival_time.max(stop.tw_start);
+                let lateness = (service_start - stop.tw_end).max(0.0);
+
+                if lateness > 0.0 {
+                    late_stop_count += 1;
+                    route_late_stops += 1;
+                    total_lateness += lateness;
+                    route_total_lateness += lateness;
+                }
+
+                current_time = service_start + stop.service_time;
+                remaining_capacity -= stop.demand;
+                route_load += stop.demand;
+                route_stop_count += 1;
+                current = stop.coord.clone();
+                route_coords.push(stop.coord.clone());
+                assignments.push((
+                    stop.fid,
+                    vehicle_id,
+                    route_stop_count as i64,
+                    stop.demand,
+                    route_load,
+                    arrival_time,
+                    service_start,
+                    lateness,
+                    stop.coord,
+                ));
+            }
+
+            if route_stop_count == 0 {
+                break;
+            }
+
+            route_coords.push(depot_coord.clone());
+            let mut route_distance = 0.0;
+            for window in route_coords.windows(2) {
+                route_distance += coord_dist2(&window[0], &window[1]).sqrt();
+            }
+            let return_time = coord_dist2(&current, &depot_coord).sqrt() / travel_speed;
+            let route_total_time = (current_time - start_time) + return_time;
+            routes.push((
+                vehicle_id,
+                route_coords,
+                route_stop_count,
+                route_load,
+                route_distance,
+                route_total_time,
+                route_late_stops,
+                route_total_lateness,
+            ));
+            vehicle_id += 1;
+        }
+
+        let mut routes_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw", network.name));
+        routes_layer.geom_type = Some(wbvector::GeometryType::LineString);
+        routes_layer.crs = network.crs.clone();
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("STOP_COUNT", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("LOAD_TOTAL", wbvector::FieldType::Float));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("TOTAL_TIME", wbvector::FieldType::Float));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("LATE_STOPS", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("TOTAL_LATENESS", wbvector::FieldType::Float));
+
+        let mut next_fid = 1u64;
+        for (veh_id, coords, stop_count, load_total, route_distance, route_total_time, route_late_stops, route_total_lateness) in routes.iter() {
+            routes_layer.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords.clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(*veh_id),
+                    wbvector::FieldValue::Integer(*stop_count as i64),
+                    wbvector::FieldValue::Float(*load_total),
+                    wbvector::FieldValue::Float(*route_distance),
+                    wbvector::FieldValue::Float(*route_total_time),
+                    wbvector::FieldValue::Integer(*route_late_stops),
+                    wbvector::FieldValue::Float(*route_total_lateness),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(route_output_locator));
+        outputs.insert("route_count".to_string(), json!(routes.len()));
+        outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
+        outputs.insert(
+            "unserved_stop_count".to_string(),
+            json!(unassigned.len() + infeasible_stops),
+        );
+        outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
+        outputs.insert("late_stop_count".to_string(), json!(late_stop_count));
+        outputs.insert("total_lateness".to_string(), json!(total_lateness));
+        outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+
+        if let Some(assign_path) = assignment_output {
+            let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw_assignments", stops.name));
+            assignment_layer.geom_type = Some(wbvector::GeometryType::Point);
+            assignment_layer.crs = stops.crs.clone();
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("STOP_FID", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("VISIT_SEQ", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("DEMAND", wbvector::FieldType::Float));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("CUM_LOAD", wbvector::FieldType::Float));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("ARRIVAL_T", wbvector::FieldType::Float));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("SERVICE_T", wbvector::FieldType::Float));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("LATENESS", wbvector::FieldType::Float));
+
+            let mut fid = 1u64;
+            for (stop_fid, veh_id, visit_seq, demand, cum_load, arrival_t, service_t, lateness, coord) in assignments {
+                assignment_layer.push(wbvector::Feature {
+                    fid,
+                    geometry: Some(wbvector::Geometry::Point(coord)),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(stop_fid),
+                        wbvector::FieldValue::Integer(veh_id),
+                        wbvector::FieldValue::Integer(visit_seq),
+                        wbvector::FieldValue::Float(demand),
+                        wbvector::FieldValue::Float(cum_load),
+                        wbvector::FieldValue::Float(arrival_t),
+                        wbvector::FieldValue::Float(service_t),
+                        wbvector::FieldValue::Float(lateness),
                     ],
                 });
                 fid += 1;

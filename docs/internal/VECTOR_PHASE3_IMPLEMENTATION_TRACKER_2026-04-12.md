@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 3 (Advanced Optimization and Multimodal)
-Status: In Progress (Stream A MVP underway)
+Status: In Progress (Stream A complete; Stream B VRPTW baseline underway)
 
 ## Scope Anchors
 
@@ -26,7 +26,7 @@ Phase 3 planned outcomes:
 - [x] Add integration fixtures and deterministic regression tests.
 
 ### Stream B: Time-Window and Pickup/Delivery Extensions
-- [ ] Implement VRPTW constraints and violation reporting.
+- [x] Implement VRPTW constraints and violation reporting.
 - [ ] Implement pickup-delivery pairing and precedence constraints.
 - [ ] Add infeasibility diagnostics and relaxation options.
 - [ ] Add benchmark scenarios for municipal/logistics workflows.
@@ -78,3 +78,11 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_cvrp_builds_capacity_constrained_routes -- --nocapture` (PASS)
+- 2026-04-12: **STREAM B VRPTW BASELINE IMPLEMENTATION**
+	- Added `vehicle_routing_vrptw` in `wbtools_oss` with demand/capacity/time-window/service-time contract validation.
+	- Implemented deterministic nearest-neighbour routing with per-stop diagnostics (`ARRIVAL_T`, `SERVICE_T`, `LATENESS`) and route diagnostics (`TOTAL_TIME`, `LATE_STOPS`, `TOTAL_LATENESS`).
+	- Added runtime outputs: `late_stop_count` and `total_lateness` for governance/reporting.
+	- Added integration coverage: `vehicle_routing_vrptw_reports_lateness`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_reports_lateness -- --nocapture` (PASS)

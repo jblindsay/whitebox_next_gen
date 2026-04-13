@@ -251,6 +251,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"network_routes_from_od"));
     assert!(ids.contains(&"k_shortest_paths_network"));
     assert!(ids.contains(&"vehicle_routing_cvrp"));
+    assert!(ids.contains(&"vehicle_routing_vrptw"));
     assert!(ids.contains(&"block_minimum"));
     assert!(ids.contains(&"block_maximum"));
     assert!(ids.contains(&"aggregate_raster"));
@@ -339,6 +340,118 @@ fn vehicle_routing_cvrp_builds_capacity_constrained_routes() {
         .expect("unserved_stop_count");
     assert_eq!(served, 3);
     assert_eq!(unserved, 0);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+    let _ = std::fs::remove_file(&assign_out);
+}
+
+#[test]
+fn vehicle_routing_vrptw_reports_lateness() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_vrptw_lateness");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+    let assign_out = std::env::temp_dir().join(format!("{tag}_assign.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(4.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_start", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_end", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("service_time", FieldType::Float));
+
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(1.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("tw_start", FieldValue::Float(0.0)),
+                ("tw_end", FieldValue::Float(10.0)),
+                ("service_time", FieldValue::Float(1.0)),
+            ],
+        )
+        .expect("add stop 1");
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(3.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("tw_start", FieldValue::Float(0.0)),
+                ("tw_end", FieldValue::Float(2.0)),
+                ("service_time", FieldValue::Float(1.0)),
+            ],
+        )
+        .expect("add stop 2");
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("tw_start_field".to_string(), json!("tw_start"));
+    args.insert("tw_end_field".to_string(), json!("tw_end"));
+    args.insert("service_time_field".to_string(), json!("service_time"));
+    args.insert("vehicle_capacity".to_string(), json!(10.0));
+    args.insert("travel_speed".to_string(), json!(1.0));
+    args.insert("start_time".to_string(), json!(0.0));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+    args.insert(
+        "assignment_output".to_string(),
+        json!(assign_out.to_string_lossy().to_string()),
+    );
+
+    let result = registry
+        .run("vehicle_routing_vrptw", &args, &context(&caps))
+        .expect("vehicle_routing_vrptw run");
+
+    let late_count = result
+        .outputs
+        .get("late_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("late_stop_count output");
+    let total_lateness = result
+        .outputs
+        .get("total_lateness")
+        .and_then(|v| v.as_f64())
+        .expect("total_lateness output");
+    assert!(late_count >= 1, "expected at least one late stop");
+    assert!(total_lateness > 0.0, "expected positive lateness");
+
+    let routes = wbvector::read(&routes_out).expect("read routes");
+    assert_eq!(routes.features.len(), 1);
+    let assignments = wbvector::read(&assign_out).expect("read assignments");
+    assert_eq!(assignments.features.len(), 2);
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&depot_path);

@@ -27,7 +27,7 @@ Phase 3 planned outcomes:
 
 ### Stream B: Time-Window and Pickup/Delivery Extensions
 - [x] Implement VRPTW constraints and violation reporting.
-- [ ] Implement pickup-delivery pairing and precedence constraints.
+- [x] Implement pickup-delivery pairing and precedence constraints.
 - [ ] Add infeasibility diagnostics and relaxation options.
 - [ ] Add benchmark scenarios for municipal/logistics workflows.
 
@@ -86,3 +86,13 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_reports_lateness -- --nocapture` (PASS)
+- 2026-04-12: **STREAM B PICKUP-DELIVERY BASELINE IMPLEMENTATION**
+	- Added `vehicle_routing_pickup_delivery` in `wbtools_oss` with request pairing contract validation (`request_id_field`, `stop_type_field`) and precedence enforcement.
+	- Implemented deterministic nearest-neighbour request assignment with capacity checks at pickup, immediate paired delivery, and route diagnostics (`REQUEST_COUNT`, `STOP_COUNT`, `DISTANCE`, `MAX_LOAD`).
+	- Added runtime outputs: `served_request_count`, `unserved_request_count`, and `infeasible_request_count`.
+	- Added optional assignment diagnostics with per-visit request metadata (`REQUEST_ID`, `STOP_ROLE`, `VISIT_SEQ`, `LOAD_AFTER`).
+	- Added integration coverage: `vehicle_routing_pickup_delivery_enforces_pair_precedence`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_pickup_delivery_enforces_pair_precedence -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)

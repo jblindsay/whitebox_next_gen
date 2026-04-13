@@ -252,6 +252,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"k_shortest_paths_network"));
     assert!(ids.contains(&"vehicle_routing_cvrp"));
     assert!(ids.contains(&"vehicle_routing_vrptw"));
+    assert!(ids.contains(&"vehicle_routing_pickup_delivery"));
     assert!(ids.contains(&"block_minimum"));
     assert!(ids.contains(&"block_maximum"));
     assert!(ids.contains(&"aggregate_raster"));
@@ -452,6 +453,156 @@ fn vehicle_routing_vrptw_reports_lateness() {
     assert_eq!(routes.features.len(), 1);
     let assignments = wbvector::read(&assign_out).expect("read assignments");
     assert_eq!(assignments.features.len(), 2);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+    let _ = std::fs::remove_file(&assign_out);
+}
+
+#[test]
+fn vehicle_routing_pickup_delivery_enforces_pair_precedence() {
+    use std::collections::HashMap;
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_pickup_delivery");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+    let assign_out = std::env::temp_dir().join(format!("{tag}_assign.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(12.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("request_id", FieldType::Text));
+    stops.schema.add_field(FieldDef::new("stop_type", FieldType::Text));
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+
+    for (x, request_id, stop_type, demand) in [
+        (1.0, "R1", "pickup", 3.0),
+        (5.0, "R1", "delivery", 3.0),
+        (2.0, "R2", "pickup", 2.0),
+        (8.0, "R2", "delivery", 2.0),
+    ] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, 0.0))),
+                &[
+                    ("request_id", FieldValue::Text(request_id.to_string())),
+                    ("stop_type", FieldValue::Text(stop_type.to_string())),
+                    ("demand", FieldValue::Float(demand)),
+                ],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("request_id_field".to_string(), json!("request_id"));
+    args.insert("stop_type_field".to_string(), json!("stop_type"));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("vehicle_capacity".to_string(), json!(5.0));
+    args.insert("max_vehicles".to_string(), json!(1));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+    args.insert(
+        "assignment_output".to_string(),
+        json!(assign_out.to_string_lossy().to_string()),
+    );
+
+    let result = registry
+        .run("vehicle_routing_pickup_delivery", &args, &context(&caps))
+        .expect("vehicle_routing_pickup_delivery run");
+
+    let served = result
+        .outputs
+        .get("served_request_count")
+        .and_then(|v| v.as_u64())
+        .expect("served_request_count output");
+    let unserved = result
+        .outputs
+        .get("unserved_request_count")
+        .and_then(|v| v.as_u64())
+        .expect("unserved_request_count output");
+    assert_eq!(served, 2);
+    assert_eq!(unserved, 0);
+
+    let routes = wbvector::read(&routes_out).expect("read routes");
+    assert_eq!(routes.features.len(), 1, "expected one route for two requests");
+
+    let assignments = wbvector::read(&assign_out).expect("read assignments");
+    assert_eq!(assignments.features.len(), 4, "expected pickup+delivery for each request");
+
+    let request_idx = assignments
+        .schema
+        .field_index("REQUEST_ID")
+        .expect("assignment REQUEST_ID field");
+    let role_idx = assignments
+        .schema
+        .field_index("STOP_ROLE")
+        .expect("assignment STOP_ROLE field");
+    let seq_idx = assignments
+        .schema
+        .field_index("VISIT_SEQ")
+        .expect("assignment VISIT_SEQ field");
+
+    let mut visit_map: HashMap<String, (Option<i64>, Option<i64>)> = HashMap::new();
+    for feature in &assignments.features {
+        let request_id = match &feature.attributes[request_idx] {
+            FieldValue::Text(v) => v.clone(),
+            other => panic!("unexpected REQUEST_ID value: {other:?}"),
+        };
+        let stop_role = match &feature.attributes[role_idx] {
+            FieldValue::Text(v) => v.as_str(),
+            other => panic!("unexpected STOP_ROLE value: {other:?}"),
+        };
+        let visit_seq = match &feature.attributes[seq_idx] {
+            FieldValue::Integer(v) => *v,
+            other => panic!("unexpected VISIT_SEQ value: {other:?}"),
+        };
+
+        let entry = visit_map.entry(request_id).or_insert((None, None));
+        if stop_role == "pickup" {
+            entry.0 = Some(visit_seq);
+        } else if stop_role == "delivery" {
+            entry.1 = Some(visit_seq);
+        } else {
+            panic!("unexpected STOP_ROLE value: {stop_role}");
+        }
+    }
+
+    for (request_id, (pickup_seq, delivery_seq)) in visit_map {
+        let p = pickup_seq.unwrap_or_else(|| panic!("missing pickup visit for request {request_id}"));
+        let d = delivery_seq.unwrap_or_else(|| panic!("missing delivery visit for request {request_id}"));
+        assert!(p < d, "pickup must precede delivery for request {request_id}");
+    }
 
     let _ = std::fs::remove_file(&network_path);
     let _ = std::fs::remove_file(&depot_path);

@@ -194,6 +194,7 @@ pub struct NetworkRoutesFromOdTool;
 pub struct KShortestPathsNetworkTool;
 pub struct VehicleRoutingCvrpTool;
 pub struct VehicleRoutingVrptwTool;
+pub struct VehicleRoutingPickupDeliveryTool;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GisOverlayOp {
@@ -27665,6 +27666,596 @@ impl Tool for VehicleRoutingVrptwTool {
                         wbvector::FieldValue::Float(arrival_t),
                         wbvector::FieldValue::Float(service_t),
                         wbvector::FieldValue::Float(lateness),
+                    ],
+                });
+                fid += 1;
+            }
+
+            let assignment_locator = write_vector_output(&assignment_layer, assign_path.trim())?;
+            outputs.insert("assignment_output".to_string(), json!(assignment_locator));
+        }
+
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for VehicleRoutingPickupDeliveryTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "vehicle_routing_pickup_delivery",
+            display_name: "Vehicle Routing (Pickup-Delivery)",
+            summary: "Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "network", description: "Input line network layer (validated for contract parity).", required: true },
+                ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
+                ToolParamSpec { name: "stop_points", description: "Stop point layer containing paired pickup and delivery records.", required: true },
+                ToolParamSpec { name: "request_id_field", description: "Request identifier field in stop_points used to pair pickup and delivery records (default: request_id).", required: false },
+                ToolParamSpec { name: "stop_type_field", description: "Stop type field in stop_points containing pickup/delivery labels (default: stop_type).", required: false },
+                ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points; pickup demand is loaded and delivered demand is ignored (default: demand).", required: false },
+                ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
+                ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
+                ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
+                ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with request and precedence diagnostics.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("network".to_string(), json!("network.gpkg"));
+        defaults.insert("depot_points".to_string(), json!("depots.gpkg"));
+        defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
+        defaults.insert("request_id_field".to_string(), json!("request_id"));
+        defaults.insert("stop_type_field".to_string(), json!("stop_type"));
+        defaults.insert("demand_field".to_string(), json!("demand"));
+        defaults.insert("vehicle_capacity".to_string(), json!(100.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("pickup_delivery_routes.gpkg"));
+
+        ToolManifest {
+            id: "vehicle_routing_pickup_delivery".to_string(),
+            display_name: "Vehicle Routing (Pickup-Delivery)".to_string(),
+            summary: "Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "network".to_string(), description: "Input line network layer (validated for contract parity).".to_string(), required: true },
+                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
+                ToolParamDescriptor { name: "stop_points".to_string(), description: "Stop point layer containing paired pickup and delivery records.".to_string(), required: true },
+                ToolParamDescriptor { name: "request_id_field".to_string(), description: "Request identifier field in stop_points used to pair pickup and delivery records (default: request_id).".to_string(), required: false },
+                ToolParamDescriptor { name: "stop_type_field".to_string(), description: "Stop type field in stop_points containing pickup/delivery labels (default: stop_type).".to_string(), required: false },
+                ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points; pickup demand is loaded and delivered demand is ignored (default: demand).".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
+                ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with request and precedence diagnostics.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "vehicle_routing_pickup_delivery_basic".to_string(),
+                description: "Builds baseline pickup-delivery routes and writes route lines.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string(), "pickup-delivery".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let network = load_vector_arg(args, "network")?;
+        if network.geom_type != Some(wbvector::GeometryType::LineString)
+            && network.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("network must be a line layer".to_string()));
+        }
+
+        let depots = load_vector_arg(args, "depot_points")?;
+        if depots.geom_type != Some(wbvector::GeometryType::Point)
+            && depots.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("depot_points must be a point layer".to_string()));
+        }
+
+        let stops = load_vector_arg(args, "stop_points")?;
+        if stops.geom_type != Some(wbvector::GeometryType::Point)
+            && stops.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("stop_points must be a point layer".to_string()));
+        }
+
+        let request_id_field = parse_optional_string_arg(args, "request_id_field").unwrap_or("request_id");
+        let stop_type_field = parse_optional_string_arg(args, "stop_type_field").unwrap_or("stop_type");
+        let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+
+        let request_idx = stops.schema.field_index(request_id_field).ok_or_else(|| {
+            ToolError::Validation(format!("request_id_field '{}' not found in stop_points", request_id_field))
+        })?;
+        let stop_type_idx = stops.schema.field_index(stop_type_field).ok_or_else(|| {
+            ToolError::Validation(format!("stop_type_field '{}' not found in stop_points", stop_type_field))
+        })?;
+        let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+            ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
+        })?;
+
+        fn parse_stop_role(value: &str) -> Option<bool> {
+            match value.trim().to_ascii_lowercase().as_str() {
+                "pickup" | "pick_up" | "p" | "collect" => Some(true),
+                "delivery" | "dropoff" | "drop_off" | "d" => Some(false),
+                _ => None,
+            }
+        }
+
+        let mut request_roles = HashMap::<String, (usize, usize)>::new();
+        for feature in &stops.features {
+            let request_key = feature
+                .attributes
+                .get(request_idx)
+                .map(field_value_to_join_key)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if request_key.is_empty() {
+                return Err(ToolError::Validation(format!(
+                    "request_id_field '{}' contains empty value for stop fid {}",
+                    request_id_field, feature.fid
+                )));
+            }
+
+            let stop_type_text = feature
+                .attributes
+                .get(stop_type_idx)
+                .map(field_value_to_join_key)
+                .unwrap_or_default();
+            let is_pickup = parse_stop_role(&stop_type_text).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "stop_type_field '{}' must contain pickup/delivery values; invalid value '{}' for stop fid {}",
+                    stop_type_field, stop_type_text, feature.fid
+                ))
+            })?;
+
+            let demand = feature
+                .attributes
+                .get(demand_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Validation(format!("missing/invalid demand value for stop fid {}", feature.fid)))?;
+            if !demand.is_finite() || demand < 0.0 {
+                return Err(ToolError::Validation("demand values must be finite and >= 0".to_string()));
+            }
+
+            let entry = request_roles.entry(request_key).or_insert((0, 0));
+            if is_pickup {
+                entry.0 += 1;
+            } else {
+                entry.1 += 1;
+            }
+        }
+
+        if request_roles.is_empty() {
+            return Err(ToolError::Validation(
+                "stop_points contains no usable pickup-delivery records".to_string(),
+            ));
+        }
+
+        for (request_id, (pickup_count, delivery_count)) in request_roles {
+            if pickup_count != 1 || delivery_count != 1 {
+                return Err(ToolError::Validation(format!(
+                    "request '{}' must have exactly one pickup and one delivery (found pickup={}, delivery={})",
+                    request_id, pickup_count, delivery_count
+                )));
+            }
+        }
+
+        let vehicle_capacity = args
+            .get("vehicle_capacity")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| ToolError::Validation("vehicle_capacity is required and must be numeric".to_string()))?;
+        if !vehicle_capacity.is_finite() || vehicle_capacity <= 0.0 {
+            return Err(ToolError::Validation(
+                "vehicle_capacity must be a finite value > 0".to_string(),
+            ));
+        }
+
+        if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
+            if max_vehicles == 0 {
+                return Err(ToolError::Validation("max_vehicles must be >= 1 when provided".to_string()));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
+            if path.trim().is_empty() {
+                return Err(ToolError::Validation(
+                    "assignment_output cannot be an empty path".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let network = load_vector_arg(args, "network")?;
+        let depots = load_vector_arg(args, "depot_points")?;
+        let stops = load_vector_arg(args, "stop_points")?;
+        let request_id_field = parse_optional_string_arg(args, "request_id_field").unwrap_or("request_id");
+        let stop_type_field = parse_optional_string_arg(args, "stop_type_field").unwrap_or("stop_type");
+        let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let request_idx = stops.schema.field_index(request_id_field).ok_or_else(|| {
+            ToolError::Execution(format!("request_id_field '{}' not found in stop_points", request_id_field))
+        })?;
+        let stop_type_idx = stops.schema.field_index(stop_type_field).ok_or_else(|| {
+            ToolError::Execution(format!("stop_type_field '{}' not found in stop_points", stop_type_field))
+        })?;
+        let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+            ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
+        })?;
+        let vehicle_capacity = args
+            .get("vehicle_capacity")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+        let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
+
+        fn parse_stop_role(value: &str) -> Option<bool> {
+            match value.trim().to_ascii_lowercase().as_str() {
+                "pickup" | "pick_up" | "p" | "collect" => Some(true),
+                "delivery" | "dropoff" | "drop_off" | "d" => Some(false),
+                _ => None,
+            }
+        }
+
+        let depot_coord = collect_point_coords_from_layer(&depots)
+            .into_iter()
+            .map(|(_, c)| c)
+            .next()
+            .ok_or_else(|| ToolError::Execution("depot_points contains no point geometries".to_string()))?;
+
+        #[derive(Clone)]
+        struct RequestPartial {
+            pickup_fid: Option<i64>,
+            pickup_coord: Option<wbvector::Coord>,
+            pickup_demand: Option<f64>,
+            delivery_fid: Option<i64>,
+            delivery_coord: Option<wbvector::Coord>,
+        }
+
+        #[derive(Clone)]
+        struct RequestNode {
+            request_id: String,
+            pickup_fid: i64,
+            pickup_coord: wbvector::Coord,
+            delivery_fid: i64,
+            delivery_coord: wbvector::Coord,
+            demand: f64,
+        }
+
+        let mut request_map = HashMap::<String, RequestPartial>::new();
+        for feature in &stops.features {
+            let Some(geom) = feature.geometry.as_ref() else {
+                continue;
+            };
+            let coord = match geom {
+                wbvector::Geometry::Point(c) => c.clone(),
+                wbvector::Geometry::MultiPoint(coords) => {
+                    let Some(first) = coords.first() else {
+                        continue;
+                    };
+                    first.clone()
+                }
+                _ => continue,
+            };
+
+            let request_id = feature
+                .attributes
+                .get(request_idx)
+                .map(field_value_to_join_key)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if request_id.is_empty() {
+                return Err(ToolError::Execution(format!(
+                    "request_id_field '{}' contains empty value for stop fid {}",
+                    request_id_field, feature.fid
+                )));
+            }
+
+            let stop_type_text = feature
+                .attributes
+                .get(stop_type_idx)
+                .map(field_value_to_join_key)
+                .unwrap_or_default();
+            let is_pickup = parse_stop_role(&stop_type_text).ok_or_else(|| {
+                ToolError::Execution(format!(
+                    "stop_type_field '{}' must contain pickup/delivery values; invalid value '{}' for stop fid {}",
+                    stop_type_field, stop_type_text, feature.fid
+                ))
+            })?;
+
+            let demand = feature
+                .attributes
+                .get(demand_idx)
+                .and_then(field_value_to_f64)
+                .ok_or_else(|| ToolError::Execution(format!("missing/invalid demand for stop fid {}", feature.fid)))?;
+            if !demand.is_finite() || demand < 0.0 {
+                return Err(ToolError::Execution("demand values must be finite and >= 0".to_string()));
+            }
+
+            let entry = request_map.entry(request_id).or_insert(RequestPartial {
+                pickup_fid: None,
+                pickup_coord: None,
+                pickup_demand: None,
+                delivery_fid: None,
+                delivery_coord: None,
+            });
+
+            if is_pickup {
+                if entry.pickup_fid.is_some() {
+                    return Err(ToolError::Execution(
+                        "each request must have exactly one pickup record".to_string(),
+                    ));
+                }
+                entry.pickup_fid = Some(feature.fid as i64);
+                entry.pickup_coord = Some(coord);
+                entry.pickup_demand = Some(demand);
+            } else {
+                if entry.delivery_fid.is_some() {
+                    return Err(ToolError::Execution(
+                        "each request must have exactly one delivery record".to_string(),
+                    ));
+                }
+                entry.delivery_fid = Some(feature.fid as i64);
+                entry.delivery_coord = Some(coord);
+            }
+        }
+
+        let mut requests = Vec::<RequestNode>::new();
+        for (request_id, partial) in request_map {
+            let pickup_fid = partial.pickup_fid.ok_or_else(|| {
+                ToolError::Execution(format!("request '{}' missing pickup record", request_id))
+            })?;
+            let pickup_coord = partial.pickup_coord.ok_or_else(|| {
+                ToolError::Execution(format!("request '{}' missing pickup geometry", request_id))
+            })?;
+            let delivery_fid = partial.delivery_fid.ok_or_else(|| {
+                ToolError::Execution(format!("request '{}' missing delivery record", request_id))
+            })?;
+            let delivery_coord = partial.delivery_coord.ok_or_else(|| {
+                ToolError::Execution(format!("request '{}' missing delivery geometry", request_id))
+            })?;
+            let demand = partial.pickup_demand.ok_or_else(|| {
+                ToolError::Execution(format!("request '{}' missing pickup demand", request_id))
+            })?;
+            requests.push(RequestNode {
+                request_id,
+                pickup_fid,
+                pickup_coord,
+                delivery_fid,
+                delivery_coord,
+                demand,
+            });
+        }
+
+        if requests.is_empty() {
+            return Err(ToolError::Execution(
+                "stop_points contains no usable pickup-delivery requests".to_string(),
+            ));
+        }
+
+        requests.sort_by(|a, b| a.request_id.cmp(&b.request_id));
+        let mut unassigned = requests;
+        let mut vehicle_id = 1i64;
+        let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, usize, f64, f64)>::new();
+        let mut assignments = Vec::<(i64, String, String, i64, i64, f64, f64, wbvector::Coord)>::new();
+        let mut infeasible_requests = 0usize;
+
+        while !unassigned.is_empty() {
+            if let Some(limit) = max_vehicles {
+                if routes.len() >= limit {
+                    break;
+                }
+            }
+
+            let mut current = depot_coord.clone();
+            let mut current_load = 0.0f64;
+            let mut max_load = 0.0f64;
+            let mut route_coords = vec![depot_coord.clone()];
+            let mut route_request_count = 0usize;
+            let mut route_stop_count = 0usize;
+            let mut visit_seq = 0i64;
+
+            loop {
+                let mut best_idx: Option<usize> = None;
+                let mut best_dist = f64::INFINITY;
+                for (idx, request) in unassigned.iter().enumerate() {
+                    if request.demand > vehicle_capacity + 1.0e-12 {
+                        continue;
+                    }
+                    if current_load + request.demand > vehicle_capacity + 1.0e-12 {
+                        continue;
+                    }
+                    let d = coord_dist2(&current, &request.pickup_coord).sqrt();
+                    if d < best_dist
+                        || (d == best_dist
+                            && best_idx
+                                .map(|i| request.request_id < unassigned[i].request_id)
+                                .unwrap_or(true))
+                    {
+                        best_dist = d;
+                        best_idx = Some(idx);
+                    }
+                }
+
+                let Some(idx) = best_idx else {
+                    if route_request_count == 0 {
+                        if let Some(pos) = unassigned
+                            .iter()
+                            .position(|r| r.demand > vehicle_capacity + 1.0e-12)
+                        {
+                            unassigned.remove(pos);
+                            infeasible_requests += 1;
+                            continue;
+                        }
+                    }
+                    break;
+                };
+
+                let request = unassigned.remove(idx);
+
+                current_load += request.demand;
+                if current_load > max_load {
+                    max_load = current_load;
+                }
+                visit_seq += 1;
+                route_stop_count += 1;
+                route_coords.push(request.pickup_coord.clone());
+                assignments.push((
+                    request.pickup_fid,
+                    request.request_id.clone(),
+                    "pickup".to_string(),
+                    vehicle_id,
+                    visit_seq,
+                    request.demand,
+                    current_load,
+                    request.pickup_coord.clone(),
+                ));
+
+                visit_seq += 1;
+                route_stop_count += 1;
+                route_coords.push(request.delivery_coord.clone());
+                current = request.delivery_coord.clone();
+                current_load = (current_load - request.demand).max(0.0);
+                assignments.push((
+                    request.delivery_fid,
+                    request.request_id,
+                    "delivery".to_string(),
+                    vehicle_id,
+                    visit_seq,
+                    request.demand,
+                    current_load,
+                    request.delivery_coord,
+                ));
+
+                route_request_count += 1;
+            }
+
+            if route_request_count == 0 {
+                break;
+            }
+
+            route_coords.push(depot_coord.clone());
+            let mut route_distance = 0.0;
+            for window in route_coords.windows(2) {
+                route_distance += coord_dist2(&window[0], &window[1]).sqrt();
+            }
+            routes.push((
+                vehicle_id,
+                route_coords,
+                route_request_count,
+                route_stop_count,
+                route_distance,
+                max_load,
+            ));
+            vehicle_id += 1;
+        }
+
+        let mut routes_layer = wbvector::Layer::new(format!("{}_vehicle_routing_pickup_delivery", network.name));
+        routes_layer.geom_type = Some(wbvector::GeometryType::LineString);
+        routes_layer.crs = network.crs.clone();
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("REQUEST_COUNT", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("STOP_COUNT", wbvector::FieldType::Integer));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
+        routes_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("MAX_LOAD", wbvector::FieldType::Float));
+
+        let mut next_fid = 1u64;
+        for (veh_id, coords, request_count, stop_count, route_distance, max_load) in routes.iter() {
+            routes_layer.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords.clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(*veh_id),
+                    wbvector::FieldValue::Integer(*request_count as i64),
+                    wbvector::FieldValue::Integer(*stop_count as i64),
+                    wbvector::FieldValue::Float(*route_distance),
+                    wbvector::FieldValue::Float(*max_load),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(route_output_locator));
+        outputs.insert("route_count".to_string(), json!(routes.len()));
+        outputs.insert(
+            "served_request_count".to_string(),
+            json!(assignments.len() / 2),
+        );
+        outputs.insert(
+            "unserved_request_count".to_string(),
+            json!(unassigned.len() + infeasible_requests),
+        );
+        outputs.insert(
+            "infeasible_request_count".to_string(),
+            json!(infeasible_requests),
+        );
+        outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+
+        if let Some(assign_path) = assignment_output {
+            let mut assignment_layer = wbvector::Layer::new(format!(
+                "{}_vehicle_routing_pickup_delivery_assignments",
+                stops.name
+            ));
+            assignment_layer.geom_type = Some(wbvector::GeometryType::Point);
+            assignment_layer.crs = stops.crs.clone();
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("STOP_FID", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("REQUEST_ID", wbvector::FieldType::Text));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("STOP_ROLE", wbvector::FieldType::Text));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("VISIT_SEQ", wbvector::FieldType::Integer));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("DEMAND", wbvector::FieldType::Float));
+            assignment_layer
+                .schema
+                .add_field(wbvector::FieldDef::new("LOAD_AFTER", wbvector::FieldType::Float));
+
+            let mut fid = 1u64;
+            for (stop_fid, request_id, stop_role, veh_id, visit_seq, demand, load_after, coord) in assignments {
+                assignment_layer.push(wbvector::Feature {
+                    fid,
+                    geometry: Some(wbvector::Geometry::Point(coord)),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(stop_fid),
+                        wbvector::FieldValue::Text(request_id),
+                        wbvector::FieldValue::Text(stop_role),
+                        wbvector::FieldValue::Integer(veh_id),
+                        wbvector::FieldValue::Integer(visit_seq),
+                        wbvector::FieldValue::Float(demand),
+                        wbvector::FieldValue::Float(load_after),
                     ],
                 });
                 fid += 1;

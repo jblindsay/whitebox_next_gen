@@ -28,10 +28,10 @@ Phase 4 planned outcomes:
 - [x] Add comparative benchmarks against Phase 3 greedy baselines.
 
 ### Stream B: Batch Multimodal and Matrix Analytics
-- [ ] Add multi-origin / multi-destination multimodal shortest-path runs.
-- [ ] Support OD matrix outputs for multimodal accessibility workflows.
-- [ ] Add batch result formats suitable for downstream analytics.
-- [ ] Add regression tests for repeated and batched path queries.
+- [x] Add multi-origin / multi-destination multimodal shortest-path runs.
+- [x] Support OD matrix outputs for multimodal accessibility workflows.
+- [x] Add batch result formats suitable for downstream analytics.
+- [x] Add regression tests for repeated and batched path queries.
 
 ### Stream C: Temporal Robustness and Scenario Modelling
 - [ ] Extend multimodal and OD tools with time-dependent edge profiles.
@@ -125,3 +125,9 @@ Scheduling note:
 		- Easier to gate behind an optional parameter without destabilizing current outputs.
 		- Lower state-management overhead than maintaining tabu tenure / move memory across route-set neighborhoods.
 	- Tabu Search remains a valid later follow-on if Simulated Annealing plateaus on benchmark scenarios.
+- 2026-04-13: **STREAM B MULTIMODAL BATCH ANALYTICS IMPLEMENTED**
+	- Added `multimodal_od_cost_matrix` for multi-origin / multi-destination multimodal cost matrices written to CSV.
+	- Added `multimodal_routes_from_od` for batched route geometry output across multimodal OD pairs.
+	- Reused the existing multimodal graph builder and transfer-penalty routing logic so single-route and batched outputs stay behaviorally aligned.
+	- Added downstream analytics fields including reachability, mode-change count, mode sequence, and snapped node IDs.
+	- Added integration coverage for registration, OD matrix CSV output, and batched route geometry/mode summaries.

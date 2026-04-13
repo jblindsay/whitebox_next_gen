@@ -245,6 +245,8 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"line_polygon_clip"));
     assert!(ids.contains(&"shortest_path_network"));
     assert!(ids.contains(&"multimodal_shortest_path"));
+    assert!(ids.contains(&"multimodal_od_cost_matrix"));
+    assert!(ids.contains(&"multimodal_routes_from_od"));
     assert!(ids.contains(&"network_centrality_metrics"));
     assert!(ids.contains(&"network_accessibility_metrics"));
     assert!(ids.contains(&"od_sensitivity_analysis"));
@@ -16087,6 +16089,218 @@ fn multimodal_shortest_path_walk_transit_pattern() {
     assert!(mode_seq.contains("walk") && mode_seq.contains("transit"));
 
     let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn multimodal_od_cost_matrix_writes_expected_batch_rows() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_od_cost_matrix");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let out_csv = std::env::temp_dir().join(format!("{tag}_od.csv"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add walk edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("MODE", FieldValue::Text("transit".to_string()))],
+        )
+        .expect("add transit edge 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(2.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[("MODE", FieldValue::Text("transit".to_string()))],
+        )
+        .expect("add transit edge 2");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin A");
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(1.0, 0.0))), &[])
+        .expect("add origin B");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(2.0, 0.0))), &[])
+        .expect("add destination C");
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add destination D");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,transit:2.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.5));
+    args.insert("output".to_string(), json!(out_csv.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_od_cost_matrix", &args, &context(&caps))
+        .expect("multimodal_od_cost_matrix run");
+
+    let reachable_pair_count = result
+        .outputs
+        .get("reachable_pair_count")
+        .and_then(|v| v.as_u64())
+        .expect("reachable_pair_count output");
+    assert_eq!(reachable_pair_count, 4, "expected all OD pairs to be reachable");
+
+    let csv = std::fs::read_to_string(&out_csv).expect("read multimodal od csv");
+    let lines: Vec<&str> = csv.lines().collect();
+    assert_eq!(lines.len(), 5, "expected header + four OD rows");
+    let first_parts: Vec<&str> = lines[1].split(',').collect();
+    assert_eq!(first_parts.len(), 8);
+    assert_eq!(first_parts[3], "true");
+    let first_cost: f64 = first_parts[2].parse().expect("parse first cost");
+    assert!((first_cost - 2.0).abs() < 1.0e-9, "expected 2.0 cost from origin A to destination C, got {}", first_cost);
+
+    let last_parts: Vec<&str> = lines[4].split(',').collect();
+    let last_cost: f64 = last_parts[2].parse().expect("parse last cost");
+    assert!((last_cost - 1.0).abs() < 1.0e-9, "expected 1.0 cost from origin B to destination D, got {}", last_cost);
+    assert_eq!(last_parts[4], "0", "expected no mode changes for pure transit route");
+    assert!(last_parts[5].contains("transit"));
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&out_csv);
+}
+
+#[test]
+fn multimodal_routes_from_od_outputs_route_geometry_and_modes() {
+    use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_multimodal_routes_from_od");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_origins.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_destinations.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines.schema.add_field(FieldDef::new("MODE", FieldType::Text));
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("MODE", FieldValue::Text("walk".to_string()))],
+        )
+        .expect("add walk edge");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(3.0, 0.0)])),
+            &[("MODE", FieldValue::Text("drive".to_string()))],
+        )
+        .expect("add drive edge");
+    wbvector::write(&lines, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage).expect("write origins");
+
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(Some(Geometry::Point(Coord::xy(3.0, 0.0))), &[])
+        .expect("add destination");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("mode_field".to_string(), json!("MODE"));
+    args.insert("allowed_modes".to_string(), json!("walk,drive"));
+    args.insert("mode_speed_overrides".to_string(), json!("walk:1.0,drive:2.0"));
+    args.insert("transfer_penalty".to_string(), json!(0.25));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("multimodal_routes_from_od", &args, &context(&caps))
+        .expect("multimodal_routes_from_od run");
+
+    let route_count = result
+        .outputs
+        .get("route_count")
+        .and_then(|v| v.as_u64())
+        .expect("route_count output");
+    assert_eq!(route_count, 1, "expected one reachable multimodal route");
+
+    let out = wbvector::read(&out_path).expect("read multimodal routes output");
+    assert_eq!(out.features.len(), 1, "expected one route feature");
+    let cost_idx = out.schema.field_index("COST").expect("COST field");
+    let mode_changes_idx = out.schema.field_index("MODE_CHG").expect("MODE_CHG field");
+    let mode_seq_idx = out.schema.field_index("MODE_SEQ").expect("MODE_SEQ field");
+
+    let cost = match &out.features[0].attributes[cost_idx] {
+        FieldValue::Float(v) => *v,
+        FieldValue::Integer(v) => *v as f64,
+        other => panic!("expected numeric COST, got {:?}", other),
+    };
+    assert!((cost - 2.25).abs() < 1.0e-9, "expected walk+drive cost 2.25, got {}", cost);
+
+    let mode_changes = match &out.features[0].attributes[mode_changes_idx] {
+        FieldValue::Integer(v) => *v,
+        other => panic!("expected integer MODE_CHG, got {:?}", other),
+    };
+    assert_eq!(mode_changes, 1, "expected one mode change");
+
+    let mode_seq = match &out.features[0].attributes[mode_seq_idx] {
+        FieldValue::Text(v) => v.clone(),
+        other => panic!("expected text MODE_SEQ, got {:?}", other),
+    };
+    assert!(mode_seq.contains("walk") && mode_seq.contains("drive"));
+
+    match out.features[0].geometry.as_ref().expect("route geometry") {
+        Geometry::LineString(coords) => {
+            assert_eq!(coords.len(), 3, "expected route through transfer node");
+            assert!((coords[0].x - 0.0).abs() < 1.0e-9);
+            assert!((coords[2].x - 3.0).abs() < 1.0e-9);
+        }
+        other => panic!("expected linestring route geometry, got {:?}", other),
+    }
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
     let _ = std::fs::remove_file(&out_path);
 }
 

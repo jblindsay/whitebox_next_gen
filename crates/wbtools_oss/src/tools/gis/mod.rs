@@ -185,6 +185,8 @@ pub struct AddFieldTool;
 pub struct LinePolygonClipTool;
 pub struct ShortestPathNetworkTool;
 pub struct MultimodalShortestPathTool;
+pub struct MultimodalOdCostMatrixTool;
+pub struct MultimodalRoutesFromOdTool;
 pub struct NetworkCentralityMetricsTool;
 pub struct NetworkAccessibilityMetricsTool;
 pub struct OdSensitivityAnalysisTool;
@@ -23991,6 +23993,39 @@ fn dijkstra_multimodal_shortest_path(
     Some((goal_cost, node_path, mode_path))
 }
 
+fn multimodal_mode_summary(graph: &MultimodalNetworkGraph, mode_path: &[usize]) -> (i64, String) {
+    let mut mode_changes = 0i64;
+    for pair in mode_path.windows(2) {
+        if pair[0] != pair[1] {
+            mode_changes += 1;
+        }
+    }
+    let mode_seq = mode_path
+        .iter()
+        .map(|id| graph.mode_names.get(*id).cloned().unwrap_or_else(|| "unknown".to_string()))
+        .collect::<Vec<_>>()
+        .join(">");
+    (mode_changes, mode_seq)
+}
+
+fn snap_points_to_network_nodes(
+    graph_nodes: &[wbvector::Coord],
+    points: &[(i64, wbvector::Coord)],
+    max_snap_distance: Option<f64>,
+    point_kind: &str,
+) -> Result<Vec<(i64, usize)>, ToolError> {
+    let mut snapped = Vec::<(i64, usize)>::new();
+    for (fid, coord) in points {
+        let (idx, dist) = nearest_network_node(graph_nodes, coord).ok_or_else(|| {
+            ToolError::Execution(format!("failed locating nearest {} node", point_kind))
+        })?;
+        if max_snap_distance.map(|limit| dist <= limit).unwrap_or(true) {
+            snapped.push((*fid, idx));
+        }
+    }
+    Ok(snapped)
+}
+
 fn intern_network_node(
     node_map: &mut HashMap<NetworkNodeKey, usize>,
     nodes: &mut Vec<wbvector::Coord>,
@@ -25004,17 +25039,7 @@ impl Tool for MultimodalShortestPathTool {
         .ok_or_else(|| ToolError::Execution("no multimodal path found between start and end nodes".to_string()))?;
 
         let coords: Vec<wbvector::Coord> = node_path.iter().map(|idx| graph.nodes[*idx].clone()).collect();
-        let mut mode_changes = 0i64;
-        for pair in mode_path.windows(2) {
-            if pair[0] != pair[1] {
-                mode_changes += 1;
-            }
-        }
-        let mode_seq = mode_path
-            .iter()
-            .map(|id| graph.mode_names.get(*id).cloned().unwrap_or_else(|| "unknown".to_string()))
-            .collect::<Vec<_>>()
-            .join(">");
+        let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
 
         let mut output = wbvector::Layer::new(format!("{}_multimodal_shortest_path", input.name));
         output.geom_type = Some(wbvector::GeometryType::LineString);
@@ -25041,6 +25066,489 @@ impl Tool for MultimodalShortestPathTool {
         outputs.insert("path".to_string(), json!(output_locator));
         outputs.insert("cost".to_string(), json!(cost));
         outputs.insert("mode_changes".to_string(), json!(mode_changes));
+        outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for MultimodalOdCostMatrixTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "multimodal_od_cost_matrix",
+            display_name: "Multimodal OD Cost Matrix",
+            summary: "Computes batched multimodal OD costs and mode summaries between origin and destination point sets.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "mode_field", description: "Line attribute field that identifies travel mode per segment.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "default_mode_speed", description: "Default mode speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).", required: false },
+                ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include in routing.", required: false },
+                ToolParamSpec { name: "transfer_penalty", description: "Optional additive penalty applied each time the route changes mode.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        defaults.insert("mode_field".to_string(), json!("MODE"));
+        defaults.insert("default_mode_speed".to_string(), json!(1.0));
+        defaults.insert("transfer_penalty".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
+        example_args.insert("output".to_string(), json!("multimodal_od_matrix.csv"));
+
+        ToolManifest {
+            id: "multimodal_od_cost_matrix".to_string(),
+            display_name: "Multimodal OD Cost Matrix".to_string(),
+            summary: "Computes batched multimodal OD costs and mode summaries between origin and destination point sets.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "mode_field".to_string(), description: "Line attribute field that identifies travel mode per segment.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "default_mode_speed".to_string(), description: "Default mode speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include in routing.".to_string(), required: false },
+                ToolParamDescriptor { name: "transfer_penalty".to_string(), description: "Optional additive penalty applied each time the route changes mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "multimodal_od_cost_matrix_basic".to_string(),
+                description: "Creates a multimodal OD matrix with route cost and mode-sequence summaries.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "od-matrix".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let _ = input
+            .schema
+            .field_index(mode_field)
+            .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        if !default_mode_speed.is_finite() || default_mode_speed <= 0.0 {
+            return Err(ToolError::Validation(
+                "default_mode_speed must be a finite value > 0".to_string(),
+            ));
+        }
+        let _ = parse_mode_weight_overrides(parse_optional_string_arg(args, "mode_speed_overrides"), "mode_speed_overrides")?;
+        if let Some(transfer_penalty) = parse_optional_f64_arg(args, "transfer_penalty") {
+            if !transfer_penalty.is_finite() || transfer_penalty < 0.0 {
+                return Err(ToolError::Validation(
+                    "transfer_penalty must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let output = parse_string_arg(args, "output")?;
+        if !output.to_ascii_lowercase().ends_with(".csv") {
+            return Err(ToolError::Validation("output must be a .csv path".to_string()));
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        let mode_speed_overrides = parse_mode_weight_overrides(
+            parse_optional_string_arg(args, "mode_speed_overrides"),
+            "mode_speed_overrides",
+        )?;
+        let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
+        let transfer_penalty = parse_optional_f64_arg(args, "transfer_penalty").unwrap_or(0.0);
+        let output = parse_string_arg(args, "output")?;
+
+        let graph = build_multimodal_network_graph(
+            &input,
+            snap_tolerance,
+            mode_field,
+            default_mode_speed,
+            &mode_speed_overrides,
+            &allowed_modes,
+        )?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable multimodal segments".to_string(),
+            ));
+        }
+
+        let origin_points = collect_point_coords_from_layer(&origins);
+        let destination_points = collect_point_coords_from_layer(&destinations);
+        if origin_points.is_empty() || destination_points.is_empty() {
+            return Err(ToolError::Execution(
+                "origins and destinations must contain point geometries".to_string(),
+            ));
+        }
+
+        let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
+        let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
+        if origin_nodes.is_empty() || destination_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "no origins or destinations snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let rows: Vec<String> = origin_nodes
+            .par_iter()
+            .flat_map_iter(|(origin_fid, origin_node)| {
+                destination_nodes
+                    .iter()
+                    .map(|(dest_fid, dest_node)| {
+                        if let Some((cost, _node_path, mode_path)) = dijkstra_multimodal_shortest_path(
+                            &graph,
+                            *origin_node,
+                            *dest_node,
+                            transfer_penalty,
+                        ) {
+                            let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
+                            format!(
+                                "{},{},{},true,{},{},{},{}\n",
+                                origin_fid,
+                                dest_fid,
+                                cost,
+                                mode_changes,
+                                mode_seq,
+                                origin_node + 1,
+                                dest_node + 1,
+                            )
+                        } else {
+                            format!(
+                                "{},{},,false,,,{},{}\n",
+                                origin_fid,
+                                dest_fid,
+                                origin_node + 1,
+                                dest_node + 1,
+                            )
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let reachable_pair_count = rows.iter().filter(|row| row.contains(",true,")).count();
+        let unreachable_pair_count = rows.len().saturating_sub(reachable_pair_count);
+
+        let mut csv = String::from(
+            "origin_fid,destination_fid,cost,reachable,mode_changes,mode_sequence,origin_node,destination_node\n",
+        );
+        for row in rows {
+            csv.push_str(&row);
+        }
+
+        if let Some(parent) = std::path::Path::new(output).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| ToolError::Execution(format!("failed creating output directory: {}", e)))?;
+            }
+        }
+        std::fs::write(output, csv)
+            .map_err(|e| ToolError::Execution(format!("failed writing multimodal OD CSV: {}", e)))?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output));
+        outputs.insert("origin_count".to_string(), json!(origin_nodes.len()));
+        outputs.insert("destination_count".to_string(), json!(destination_nodes.len()));
+        outputs.insert("reachable_pair_count".to_string(), json!(reachable_pair_count));
+        outputs.insert("unreachable_pair_count".to_string(), json!(unreachable_pair_count));
+        outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for MultimodalRoutesFromOdTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "multimodal_routes_from_od",
+            display_name: "Multimodal Routes From OD",
+            summary: "Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "mode_field", description: "Line attribute field that identifies travel mode per segment.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "default_mode_speed", description: "Default mode speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "mode_speed_overrides", description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).", required: false },
+                ToolParamSpec { name: "allowed_modes", description: "Optional comma-separated allow-list of modes to include in routing.", required: false },
+                ToolParamSpec { name: "transfer_penalty", description: "Optional additive penalty applied each time the route changes mode.", required: false },
+                ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        defaults.insert("mode_field".to_string(), json!("MODE"));
+        defaults.insert("default_mode_speed".to_string(), json!(1.0));
+        defaults.insert("transfer_penalty".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("mode_speed_overrides".to_string(), json!("walk:1.4,transit:8"));
+        example_args.insert("output".to_string(), json!("multimodal_routes_from_od.gpkg"));
+
+        ToolManifest {
+            id: "multimodal_routes_from_od".to_string(),
+            display_name: "Multimodal Routes From OD".to_string(),
+            summary: "Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "mode_field".to_string(), description: "Line attribute field that identifies travel mode per segment.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "default_mode_speed".to_string(), description: "Default mode speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "mode_speed_overrides".to_string(), description: "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_modes".to_string(), description: "Optional comma-separated allow-list of modes to include in routing.".to_string(), required: false },
+                ToolParamDescriptor { name: "transfer_penalty".to_string(), description: "Optional additive penalty applied each time the route changes mode.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "multimodal_routes_from_od_basic".to_string(),
+                description: "Creates route lines for each reachable multimodal origin-destination pair.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "multimodal".to_string(), "routes".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let _ = input
+            .schema
+            .field_index(mode_field)
+            .ok_or_else(|| ToolError::Validation(format!("mode_field '{}' was not found", mode_field)))?;
+
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        if let Some(max_snap_distance) = parse_optional_f64_arg(args, "max_snap_distance") {
+            if !max_snap_distance.is_finite() || max_snap_distance < 0.0 {
+                return Err(ToolError::Validation(
+                    "max_snap_distance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        if !default_mode_speed.is_finite() || default_mode_speed <= 0.0 {
+            return Err(ToolError::Validation(
+                "default_mode_speed must be a finite value > 0".to_string(),
+            ));
+        }
+        let _ = parse_mode_weight_overrides(parse_optional_string_arg(args, "mode_speed_overrides"), "mode_speed_overrides")?;
+        if let Some(transfer_penalty) = parse_optional_f64_arg(args, "transfer_penalty") {
+            if !transfer_penalty.is_finite() || transfer_penalty < 0.0 {
+                return Err(ToolError::Validation(
+                    "transfer_penalty must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let mode_field = parse_string_arg(args, "mode_field")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance");
+        let default_mode_speed = parse_optional_f64_arg(args, "default_mode_speed").unwrap_or(1.0);
+        let mode_speed_overrides = parse_mode_weight_overrides(
+            parse_optional_string_arg(args, "mode_speed_overrides"),
+            "mode_speed_overrides",
+        )?;
+        let allowed_modes = parse_mode_allowlist(parse_optional_string_arg(args, "allowed_modes"));
+        let transfer_penalty = parse_optional_f64_arg(args, "transfer_penalty").unwrap_or(0.0);
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_multimodal_network_graph(
+            &input,
+            snap_tolerance,
+            mode_field,
+            default_mode_speed,
+            &mode_speed_overrides,
+            &allowed_modes,
+        )?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable multimodal segments".to_string(),
+            ));
+        }
+
+        let origin_points = collect_point_coords_from_layer(&origins);
+        let destination_points = collect_point_coords_from_layer(&destinations);
+        if origin_points.is_empty() || destination_points.is_empty() {
+            return Err(ToolError::Execution(
+                "origins and destinations must contain point geometries".to_string(),
+            ));
+        }
+
+        let origin_nodes = snap_points_to_network_nodes(&graph.nodes, &origin_points, max_snap_distance, "origin")?;
+        let destination_nodes = snap_points_to_network_nodes(&graph.nodes, &destination_points, max_snap_distance, "destination")?;
+        if origin_nodes.is_empty() || destination_nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "no origins or destinations snapped to network within max_snap_distance".to_string(),
+            ));
+        }
+
+        let routes: Vec<(i64, i64, usize, usize, f64, i64, String, Vec<wbvector::Coord>)> = origin_nodes
+            .par_iter()
+            .flat_map_iter(|(origin_fid, origin_node)| {
+                destination_nodes
+                    .iter()
+                    .filter_map(|(dest_fid, dest_node)| {
+                        let (cost, node_path, mode_path) = dijkstra_multimodal_shortest_path(
+                            &graph,
+                            *origin_node,
+                            *dest_node,
+                            transfer_penalty,
+                        )?;
+                        let coords = node_path
+                            .iter()
+                            .map(|idx| graph.nodes[*idx].clone())
+                            .collect::<Vec<_>>();
+                        let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
+                        Some((
+                            *origin_fid,
+                            *dest_fid,
+                            *origin_node,
+                            *dest_node,
+                            cost,
+                            mode_changes,
+                            mode_seq,
+                            coords,
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let mut output = wbvector::Layer::new(format!("{}_multimodal_routes_from_od", input.name));
+        output.geom_type = Some(wbvector::GeometryType::LineString);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("ORIGIN_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("DEST_FID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("ORIGIN_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("DEST_NODE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("MODE_CHG", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("MODE_SEQ", wbvector::FieldType::Text));
+
+        let mut next_fid = 1u64;
+        for (origin_fid, dest_fid, origin_node, dest_node, cost, mode_changes, mode_seq, coords) in routes {
+            output.push(wbvector::Feature {
+                fid: next_fid,
+                geometry: Some(wbvector::Geometry::LineString(coords)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(origin_fid),
+                    wbvector::FieldValue::Integer(dest_fid),
+                    wbvector::FieldValue::Integer((origin_node + 1) as i64),
+                    wbvector::FieldValue::Integer((dest_node + 1) as i64),
+                    wbvector::FieldValue::Float(cost),
+                    wbvector::FieldValue::Integer(mode_changes),
+                    wbvector::FieldValue::Text(mode_seq),
+                ],
+            });
+            next_fid += 1;
+        }
+
+        let route_count = output.features.len();
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator));
+        outputs.insert("route_count".to_string(), json!(route_count));
+        outputs.insert("origin_count".to_string(), json!(origin_nodes.len()));
+        outputs.insert("destination_count".to_string(), json!(destination_nodes.len()));
         outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
         Ok(ToolRunResult { outputs })
     }

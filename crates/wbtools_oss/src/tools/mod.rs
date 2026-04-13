@@ -530,6 +530,8 @@ pub use gis::AddFieldTool;
 pub use gis::LinePolygonClipTool;
 pub use gis::ShortestPathNetworkTool;
 pub use gis::MultimodalShortestPathTool;
+pub use gis::MultimodalOdCostMatrixTool;
+pub use gis::MultimodalRoutesFromOdTool;
 pub use gis::NetworkCentralityMetricsTool;
 pub use gis::NetworkAccessibilityMetricsTool;
 pub use gis::OdSensitivityAnalysisTool;

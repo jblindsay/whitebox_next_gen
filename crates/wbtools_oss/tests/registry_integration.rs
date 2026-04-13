@@ -250,9 +250,101 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"network_connected_components"));
     assert!(ids.contains(&"network_routes_from_od"));
     assert!(ids.contains(&"k_shortest_paths_network"));
+    assert!(ids.contains(&"vehicle_routing_cvrp"));
     assert!(ids.contains(&"block_minimum"));
     assert!(ids.contains(&"block_maximum"));
     assert!(ids.contains(&"aggregate_raster"));
+}
+
+#[test]
+fn vehicle_routing_cvrp_builds_capacity_constrained_routes() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_basic");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+    let assign_out = std::env::temp_dir().join(format!("{tag}_assign.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(12.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    for (x, demand) in [(1.0, 2.0), (2.5, 2.0), (10.0, 2.0)] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, 0.0))),
+                &[("demand", FieldValue::Float(demand))],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("vehicle_capacity".to_string(), json!(4.0));
+    args.insert("max_vehicles".to_string(), json!(2));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+    args.insert(
+        "assignment_output".to_string(),
+        json!(assign_out.to_string_lossy().to_string()),
+    );
+
+    let result = registry
+        .run("vehicle_routing_cvrp", &args, &context(&caps))
+        .expect("vehicle_routing_cvrp run");
+
+    let routes = wbvector::read(&routes_out).expect("read routes");
+    assert_eq!(routes.features.len(), 2, "expected two routes under capacity 4.0");
+
+    let assignments = wbvector::read(&assign_out).expect("read assignments");
+    assert_eq!(assignments.features.len(), 3, "all stops should be assigned");
+
+    let served = result
+        .outputs
+        .get("served_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("served_stop_count");
+    let unserved = result
+        .outputs
+        .get("unserved_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("unserved_stop_count");
+    assert_eq!(served, 3);
+    assert_eq!(unserved, 0);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+    let _ = std::fs::remove_file(&assign_out);
 }
 
 #[test]

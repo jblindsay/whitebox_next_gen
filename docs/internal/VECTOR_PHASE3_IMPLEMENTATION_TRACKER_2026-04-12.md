@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Updated 2026-04-12)
 Phase: 3 (Advanced Optimization and Multimodal)
-Status: In Progress (Kickoff)
+Status: In Progress (Stream A MVP underway)
 
 ## Scope Anchors
 
@@ -20,10 +20,10 @@ Phase 3 planned outcomes:
 ## Work Breakdown
 
 ### Stream A: Optimization Core (CVRP)
-- [ ] Define demand/capacity schema and feasibility constraints.
-- [ ] Implement CVRP baseline solver with deterministic seeding.
-- [ ] Add route-level diagnostics (load, stop count, distance, cost).
-- [ ] Add integration fixtures and deterministic regression tests.
+- [x] Define demand/capacity schema and feasibility constraints.
+- [x] Implement CVRP baseline solver with deterministic seeding.
+- [x] Add route-level diagnostics (load, stop count, distance, cost).
+- [x] Add integration fixtures and deterministic regression tests.
 
 ### Stream B: Time-Window and Pickup/Delivery Extensions
 - [ ] Implement VRPTW constraints and violation reporting.
@@ -69,3 +69,12 @@ Phase 3 planned outcomes:
 - 2026-04-12: Phase 3 kickoff tracker created.
 - 2026-04-12: Stream-level decomposition drafted from Vector GIS phased roadmap.
 - 2026-04-12: Initial Phase 3 spec artifacts created for optimization and multimodal/accessibility.
+- 2026-04-12: **STREAM A MVP IMPLEMENTATION (CVRP baseline)**
+	- Added `vehicle_routing_cvrp` in `wbtools_oss` with demand/capacity validation and deterministic nearest-neighbour capacity-constrained route construction.
+	- Added route diagnostics outputs (`route_count`, `served_stop_count`, `unserved_stop_count`, `infeasible_stop_count`) and per-route attributes (`VEHICLE_ID`, `STOP_COUNT`, `LOAD_TOTAL`, `DISTANCE`).
+	- Added optional assignment diagnostics layer (`assignment_output`) with `STOP_FID`, `VEHICLE_ID`, `VISIT_SEQ`, `DEMAND`, `CUM_LOAD`.
+	- Wired tool export and default registry registration.
+	- Added integration coverage: `vehicle_routing_cvrp_builds_capacity_constrained_routes`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_cvrp_builds_capacity_constrained_routes -- --nocapture` (PASS)

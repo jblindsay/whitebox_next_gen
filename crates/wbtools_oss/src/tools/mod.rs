@@ -537,6 +537,7 @@ pub use gis::NetworkOdCostMatrixTool;
 pub use gis::NetworkConnectedComponentsTool;
 pub use gis::NetworkRoutesFromOdTool;
 pub use gis::KShortestPathsNetworkTool;
+pub use gis::VehicleRoutingCvrpTool;
 pub use gis::VoronoiDiagramTool;
 pub use gis::WeightedOverlayTool;
 pub use gis::WeightedSumTool;

@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Created 2026-04-12)
 Phase: 4 (Advanced Solvers, Batch Analytics, and Temporal Robustness)
-Status: In Progress (Streams A-C implemented; Stream D next candidate)
+Status: In Progress (Streams A-D implemented; Stream E next candidate)
 
 ## Scope Anchors
 
@@ -43,10 +43,10 @@ Phase 4 planned outcomes:
 - [x] Add spatial indexing for snapping origins/destinations to networks.
 - [x] Reduce repeated shortest-path cost where multi-query reuse is possible.
 - [x] Evaluate parallel execution for OD sensitivity and accessibility batches.
-- [ ] Publish large-network benchmark reports and runtime targets.
+- [x] Publish large-network benchmark reports and runtime targets.
 
 ### Stream E: Wrapper UX and Cookbook Expansion
-- [ ] Add optional high-level convenience methods in Python where justified.
+- [ ] Add optional high-level convenience methods in Python and R where justified.
 - [x] Expand R and Python cookbooks with Phase 4 scenarios.
 - [ ] Regenerate any wrappers or stubs needed for new public APIs.
 - [ ] Finalize Phase 4 regression gate commands and release checklist.
@@ -172,3 +172,12 @@ Scheduling note:
 		- `cargo test -p wbtools_oss --test registry_integration stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and_sample_size -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-13: **STREAM D STEP 4: GUELPH LARGE-NETWORK BENCHMARK REPORT PUBLISHED**
+	- Ran repeated fixture-based timing runs on Guelph StreetCentrelines with sampled Hydrant origins/destinations.
+	- Published benchmark report with mean runtimes, measured speedups, and explicit runtime targets:
+		- `docs/internal/VECTOR_PHASE4_STREAM_D_GUELPH_BENCHMARK_REPORT_2026-04-13.md`
+	- Stored benchmark artifacts and raw timing table under:
+		- `target/benchmarks/phase4_stream_d/`
+	- Confirmed measurable parallel speedups on the fixture:
+		- `network_accessibility_metrics`: 2.00x faster with `parallel_execution=true`
+		- `od_sensitivity_analysis`: 4.04x faster with `parallel_execution=true`

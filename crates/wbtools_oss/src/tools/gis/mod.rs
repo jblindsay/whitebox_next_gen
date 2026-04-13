@@ -30846,6 +30846,81 @@ impl Tool for LocationAllocationNetworkTool {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum VehicleRoutingStopPriority {
+    Low,
+    Normal,
+    High,
+    Required,
+}
+
+impl VehicleRoutingStopPriority {
+    fn rank(self) -> i32 {
+        match self {
+            VehicleRoutingStopPriority::Low => 0,
+            VehicleRoutingStopPriority::Normal => 1,
+            VehicleRoutingStopPriority::High => 2,
+            VehicleRoutingStopPriority::Required => 3,
+        }
+    }
+
+    fn is_required(self) -> bool {
+        matches!(self, VehicleRoutingStopPriority::Required)
+    }
+}
+
+fn parse_vehicle_routing_stop_priority(
+    value: &wbvector::FieldValue,
+    field_name: &str,
+) -> Result<VehicleRoutingStopPriority, ToolError> {
+    match value {
+        wbvector::FieldValue::Integer(v) => Ok(match *v {
+            3.. => VehicleRoutingStopPriority::Required,
+            2 => VehicleRoutingStopPriority::High,
+            1 => VehicleRoutingStopPriority::Normal,
+            _ => VehicleRoutingStopPriority::Low,
+        }),
+        wbvector::FieldValue::Float(v) => Ok(if !v.is_finite() {
+            VehicleRoutingStopPriority::Normal
+        } else if *v >= 3.0 {
+            VehicleRoutingStopPriority::Required
+        } else if *v >= 2.0 {
+            VehicleRoutingStopPriority::High
+        } else if *v >= 1.0 {
+            VehicleRoutingStopPriority::Normal
+        } else {
+            VehicleRoutingStopPriority::Low
+        }),
+        wbvector::FieldValue::Text(text)
+        | wbvector::FieldValue::Date(text)
+        | wbvector::FieldValue::DateTime(text) => {
+            let normalized = text.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "required" | "must" | "critical" => Ok(VehicleRoutingStopPriority::Required),
+                "high" | "urgent" | "priority" => Ok(VehicleRoutingStopPriority::High),
+                "normal" | "medium" | "default" | "standard" | "" => {
+                    Ok(VehicleRoutingStopPriority::Normal)
+                }
+                "low" | "optional" | "defer" => Ok(VehicleRoutingStopPriority::Low),
+                _ => Err(ToolError::Execution(format!(
+                    "{} contains unrecognized priority value '{}'",
+                    field_name, text
+                ))),
+            }
+        }
+        wbvector::FieldValue::Boolean(v) => Ok(if *v {
+            VehicleRoutingStopPriority::Required
+        } else {
+            VehicleRoutingStopPriority::Normal
+        }),
+        wbvector::FieldValue::Blob(_) => Err(ToolError::Execution(format!(
+            "{} does not support blob values",
+            field_name
+        ))),
+        wbvector::FieldValue::Null => Ok(VehicleRoutingStopPriority::Normal),
+    }
+}
+
 impl Tool for VehicleRoutingCvrpTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
@@ -30859,6 +30934,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
                 ToolParamSpec { name: "stop_points", description: "Delivery stop point layer.", required: true },
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
+                ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
@@ -30884,6 +30960,7 @@ impl Tool for VehicleRoutingCvrpTool {
         defaults.insert("depot_points".to_string(), json!("depots.gpkg"));
         defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
         defaults.insert("demand_field".to_string(), json!("demand"));
+        defaults.insert("priority_field".to_string(), json!("priority"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
         defaults.insert("vehicle_fixed_cost".to_string(), json!(0.0));
         defaults.insert("apply_local_optimization".to_string(), json!(true));
@@ -30906,6 +30983,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
                 ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
+                ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
@@ -30959,6 +31037,14 @@ impl Tool for VehicleRoutingCvrpTool {
         let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
             ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
+        let priority_field = parse_optional_string_arg(args, "priority_field");
+        let priority_idx = if let Some(field_name) = priority_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("priority_field '{}' not found in stop_points", field_name))
+            })?)
+        } else {
+            None
+        };
 
         for feature in &stops.features {
             if let Some(value) = feature.attributes.get(demand_idx) {
@@ -30970,6 +31056,14 @@ impl Tool for VehicleRoutingCvrpTool {
                         "demand_field '{}' must contain numeric values",
                         demand_field
                     )));
+                }
+            }
+            if let Some(idx) = priority_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    let _ = parse_vehicle_routing_stop_priority(
+                        value,
+                        priority_field.unwrap_or("priority_field"),
+                    )?;
                 }
             }
         }
@@ -31107,9 +31201,17 @@ impl Tool for VehicleRoutingCvrpTool {
         let depots = load_vector_arg(args, "depot_points")?;
         let stops = load_vector_arg(args, "stop_points")?;
         let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let priority_field = parse_optional_string_arg(args, "priority_field");
         let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
             ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
+        let priority_idx = if let Some(field_name) = priority_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Execution(format!("priority_field '{}' not found in stop_points", field_name))
+            })?)
+        } else {
+            None
+        };
         let vehicle_capacity = args
             .get("vehicle_capacity")
             .and_then(|v| v.as_f64())
@@ -31164,6 +31266,7 @@ impl Tool for VehicleRoutingCvrpTool {
             fid: i64,
             coord: wbvector::Coord,
             demand: f64,
+            priority: VehicleRoutingStopPriority,
         }
 
         fn route_distance_from_stops(depot: &wbvector::Coord, stops: &[StopNode]) -> f64 {
@@ -31305,10 +31408,21 @@ impl Tool for VehicleRoutingCvrpTool {
                     feature.fid
                 )));
             }
+            let priority = priority_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .map(|value| {
+                    parse_vehicle_routing_stop_priority(
+                        value,
+                        priority_field.unwrap_or("priority_field"),
+                    )
+                })
+                .transpose()?
+                .unwrap_or(VehicleRoutingStopPriority::Normal);
             stop_nodes.push(StopNode {
                 fid: feature.fid as i64,
                 coord,
                 demand,
+                priority,
             });
         }
 
@@ -31323,6 +31437,7 @@ impl Tool for VehicleRoutingCvrpTool {
         let mut vehicle_id = 1i64;
         let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64)>::new();
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, wbvector::Coord)>::new();
+        let total_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
         let mut infeasible_stops = 0usize;
         let mut optimized_route_count = 0usize;
         let mut annealed_route_count = 0usize;
@@ -31350,6 +31465,7 @@ impl Tool for VehicleRoutingCvrpTool {
 
                 let mut best_idx: Option<usize> = None;
                 let mut best_dist = f64::INFINITY;
+                let mut best_priority_rank = i32::MIN;
                 for (idx, stop) in unassigned.iter().enumerate() {
                     if stop.demand > remaining_capacity + 1.0e-12 {
                         continue;
@@ -31368,7 +31484,13 @@ impl Tool for VehicleRoutingCvrpTool {
                             continue;
                         }
                     }
-                    if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
+                    let better = stop.priority.rank() > best_priority_rank
+                        || (stop.priority.rank() == best_priority_rank
+                            && (d < best_dist
+                                || ((d - best_dist).abs() <= 1.0e-12
+                                    && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)));
+                    if better {
+                        best_priority_rank = stop.priority.rank();
                         best_dist = d;
                         best_idx = Some(idx);
                     }
@@ -31496,6 +31618,15 @@ impl Tool for VehicleRoutingCvrpTool {
             json!(unassigned.len() + infeasible_stops),
         );
         outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
+        let unserved_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
+        outputs.insert(
+            "served_required_stop_count".to_string(),
+            json!(total_required_stop_count.saturating_sub(unserved_required_stop_count)),
+        );
+        outputs.insert(
+            "unserved_required_stop_count".to_string(),
+            json!(unserved_required_stop_count),
+        );
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
         if let Some(max_route_distance_value) = max_route_distance {
             outputs.insert("max_route_distance".to_string(), json!(max_route_distance_value));
@@ -31573,6 +31704,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
                 ToolParamSpec { name: "stop_points", description: "Delivery stop point layer with demand and time-window fields.", required: true },
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
+                ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
                 ToolParamSpec { name: "tw_start_field", description: "Numeric time-window start field in stop_points (default: tw_start).", required: false },
                 ToolParamSpec { name: "tw_end_field", description: "Numeric time-window end field in stop_points (default: tw_end).", required: false },
                 ToolParamSpec { name: "service_time_field", description: "Numeric per-stop service time field in stop_points (default: service_time).", required: false },
@@ -31600,6 +31732,7 @@ impl Tool for VehicleRoutingVrptwTool {
         defaults.insert("depot_points".to_string(), json!("depots.gpkg"));
         defaults.insert("stop_points".to_string(), json!("stops.gpkg"));
         defaults.insert("demand_field".to_string(), json!("demand"));
+        defaults.insert("priority_field".to_string(), json!("priority"));
         defaults.insert("tw_start_field".to_string(), json!("tw_start"));
         defaults.insert("tw_end_field".to_string(), json!("tw_end"));
         defaults.insert("service_time_field".to_string(), json!("service_time"));
@@ -31624,6 +31757,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
                 ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer with demand and time-window fields.".to_string(), required: true },
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
+                ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_start_field".to_string(), description: "Numeric time-window start field in stop_points (default: tw_start).".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_end_field".to_string(), description: "Numeric time-window end field in stop_points (default: tw_end).".to_string(), required: false },
                 ToolParamDescriptor { name: "service_time_field".to_string(), description: "Numeric per-stop service time field in stop_points (default: service_time).".to_string(), required: false },
@@ -31676,6 +31810,7 @@ impl Tool for VehicleRoutingVrptwTool {
         }
 
         let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let priority_field = parse_optional_string_arg(args, "priority_field");
         let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
         let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
         let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
@@ -31683,6 +31818,13 @@ impl Tool for VehicleRoutingVrptwTool {
         let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
             ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
+        let priority_idx = if let Some(field_name) = priority_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("priority_field '{}' not found in stop_points", field_name))
+            })?)
+        } else {
+            None
+        };
         let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
             ToolError::Validation(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
         })?;
@@ -31722,6 +31864,13 @@ impl Tool for VehicleRoutingVrptwTool {
             }
             if !tw_start.is_finite() || !tw_end.is_finite() || tw_end < tw_start {
                 return Err(ToolError::Validation("time-window values must be finite and satisfy tw_end >= tw_start".to_string()));
+            }
+            if let Some(idx) = priority_idx {
+                let value = feature.attributes.get(idx).unwrap_or(&wbvector::FieldValue::Null);
+                let _ = parse_vehicle_routing_stop_priority(
+                    value,
+                    priority_field.unwrap_or("priority_field"),
+                )?;
             }
         }
 
@@ -31837,12 +31986,20 @@ impl Tool for VehicleRoutingVrptwTool {
         let depots = load_vector_arg(args, "depot_points")?;
         let stops = load_vector_arg(args, "stop_points")?;
         let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+        let priority_field = parse_optional_string_arg(args, "priority_field");
         let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
         let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
         let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
         let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
             ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
+        let priority_idx = if let Some(field_name) = priority_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Execution(format!("priority_field '{}' not found in stop_points", field_name))
+            })?)
+        } else {
+            None
+        };
         let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
             ToolError::Execution(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
         })?;
@@ -31897,6 +32054,7 @@ impl Tool for VehicleRoutingVrptwTool {
             fid: i64,
             coord: wbvector::Coord,
             demand: f64,
+            priority: VehicleRoutingStopPriority,
             tw_start: f64,
             tw_end: f64,
             service_time: f64,
@@ -31938,11 +32096,22 @@ impl Tool for VehicleRoutingVrptwTool {
                 .get(service_time_idx)
                 .and_then(field_value_to_f64)
                 .ok_or_else(|| ToolError::Execution(format!("missing/invalid service_time for stop fid {}", feature.fid)))?;
+            let priority = priority_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .map(|value| {
+                    parse_vehicle_routing_stop_priority(
+                        value,
+                        priority_field.unwrap_or("priority_field"),
+                    )
+                })
+                .transpose()?
+                .unwrap_or(VehicleRoutingStopPriority::Normal);
 
             stop_nodes.push(StopNode {
                 fid: feature.fid as i64,
                 coord,
                 demand,
+                priority,
                 tw_start,
                 tw_end,
                 service_time,
@@ -31957,6 +32126,7 @@ impl Tool for VehicleRoutingVrptwTool {
 
         stop_nodes.sort_by_key(|s| s.fid);
         let mut unassigned = stop_nodes;
+        let total_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
         let mut vehicle_id = 1i64;
         let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64, f64, i64, f64)>::new();
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, f64, f64, f64, wbvector::Coord)>::new();
@@ -31995,6 +32165,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 let mut best_dist = f64::INFINITY;
                 let mut best_lateness = f64::INFINITY;
                 let mut best_slack = f64::INFINITY;
+                let mut best_priority_rank = i32::MIN;
                 let mut best_fid = i64::MAX;
                 for (idx, stop) in unassigned.iter().enumerate() {
                     if stop.demand > remaining_capacity + 1.0e-12 {
@@ -32034,18 +32205,23 @@ impl Tool for VehicleRoutingVrptwTool {
                     }
 
                     let better = if use_priority_scoring {
-                        preview_lateness < best_lateness - 1.0e-12
-                            || ((preview_lateness - best_lateness).abs() <= 1.0e-12
-                                && (preview_slack < best_slack - 1.0e-12
-                                    || ((preview_slack - best_slack).abs() <= 1.0e-12
-                                        && (d < best_dist - 1.0e-12
-                                            || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)))))
+                        stop.priority.rank() > best_priority_rank
+                            || (stop.priority.rank() == best_priority_rank
+                                && (preview_lateness < best_lateness - 1.0e-12
+                                    || ((preview_lateness - best_lateness).abs() <= 1.0e-12
+                                        && (preview_slack < best_slack - 1.0e-12
+                                            || ((preview_slack - best_slack).abs() <= 1.0e-12
+                                                && (d < best_dist - 1.0e-12
+                                                    || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)))))))
                     } else {
-                        d < best_dist - 1.0e-12
-                            || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)
+                        stop.priority.rank() > best_priority_rank
+                            || (stop.priority.rank() == best_priority_rank
+                                && (d < best_dist - 1.0e-12
+                                    || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)))
                     };
 
                     if better {
+                        best_priority_rank = stop.priority.rank();
                         best_dist = d;
                         best_lateness = preview_lateness;
                         best_slack = preview_slack;
@@ -32243,6 +32419,15 @@ impl Tool for VehicleRoutingVrptwTool {
         outputs.insert(
             "max_route_distance_infeasible_stop_count".to_string(),
             json!(max_route_distance_infeasible_stops),
+        );
+        let unserved_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
+        outputs.insert(
+            "served_required_stop_count".to_string(),
+            json!(total_required_stop_count.saturating_sub(unserved_required_stop_count)),
+        );
+        outputs.insert(
+            "unserved_required_stop_count".to_string(),
+            json!(unserved_required_stop_count),
         );
         outputs.insert("late_stop_count".to_string(), json!(late_stop_count));
         outputs.insert("total_lateness".to_string(), json!(total_lateness));

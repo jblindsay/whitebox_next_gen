@@ -1016,6 +1016,124 @@ fn vehicle_routing_vrptw_relaxed_windows_serves_municipal_scenario() {
 }
 
 #[test]
+fn vehicle_routing_vrptw_benchmark_priority_scoring_reduces_total_lateness_vs_phase3_baseline() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_vrptw_phase4_benchmark");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let baseline_out = std::env::temp_dir().join(format!("{tag}_baseline.gpkg"));
+    let scored_out = std::env::temp_dir().join(format!("{tag}_scored.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(4.0, 2.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_start", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_end", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("service_time", FieldType::Float));
+
+    for (x, y, tw_end) in [
+        (1.0, 0.0, 5.0),
+        (2.0, 0.0, 5.0),
+        (3.0, 0.0, 5.0),
+        (4.0, 0.0, 6.0),
+        (0.0, 2.0, 2.0),
+    ] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, y))),
+                &[
+                    ("demand", FieldValue::Float(1.0)),
+                    ("tw_start", FieldValue::Float(0.0)),
+                    ("tw_end", FieldValue::Float(tw_end)),
+                    ("service_time", FieldValue::Float(0.5)),
+                ],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut baseline_args = ToolArgs::new();
+    baseline_args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    baseline_args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    baseline_args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    baseline_args.insert("demand_field".to_string(), json!("demand"));
+    baseline_args.insert("tw_start_field".to_string(), json!("tw_start"));
+    baseline_args.insert("tw_end_field".to_string(), json!("tw_end"));
+    baseline_args.insert("service_time_field".to_string(), json!("service_time"));
+    baseline_args.insert("vehicle_capacity".to_string(), json!(10.0));
+    baseline_args.insert("travel_speed".to_string(), json!(1.0));
+    baseline_args.insert("start_time".to_string(), json!(0.0));
+    baseline_args.insert("max_vehicles".to_string(), json!(1));
+    baseline_args.insert("use_priority_scoring".to_string(), json!(false));
+    baseline_args.insert("output".to_string(), json!(baseline_out.to_string_lossy().to_string()));
+
+    let baseline_result = registry
+        .run("vehicle_routing_vrptw", &baseline_args, &context(&caps))
+        .expect("vrptw baseline run");
+
+    let mut scored_args = baseline_args.clone();
+    scored_args.insert("use_priority_scoring".to_string(), json!(true));
+    scored_args.insert("output".to_string(), json!(scored_out.to_string_lossy().to_string()));
+
+    let scored_result = registry
+        .run("vehicle_routing_vrptw", &scored_args, &context(&caps))
+        .expect("vrptw scored run");
+
+    let baseline_lateness = baseline_result
+        .outputs
+        .get("total_lateness")
+        .and_then(|v| v.as_f64())
+        .expect("baseline total_lateness");
+    let scored_lateness = scored_result
+        .outputs
+        .get("total_lateness")
+        .and_then(|v| v.as_f64())
+        .expect("scored total_lateness");
+
+    assert!(scored_lateness + 1.0e-9 < baseline_lateness);
+    assert_eq!(
+        baseline_result.outputs.get("use_priority_scoring").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        scored_result.outputs.get("use_priority_scoring").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&baseline_out);
+    let _ = std::fs::remove_file(&scored_out);
+}
+
+#[test]
 fn vehicle_routing_pickup_delivery_logistics_benchmark_serves_all_requests() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 

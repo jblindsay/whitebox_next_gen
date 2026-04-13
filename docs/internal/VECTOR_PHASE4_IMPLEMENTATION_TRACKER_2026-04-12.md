@@ -24,7 +24,7 @@ Phase 4 planned outcomes:
 ### Stream A: Advanced Vehicle Routing Solvers
 - [x] Add local-improvement stage for CVRP route optimization.
 - [ ] Evaluate Tabu Search or Simulated Annealing for route refinement.
-- [ ] Improve VRPTW insertion heuristics and infeasibility recovery.
+- [x] Improve VRPTW insertion heuristics and infeasibility recovery.
 - [x] Add comparative benchmarks against Phase 3 greedy baselines.
 
 ### Stream B: Batch Multimodal and Matrix Analytics
@@ -105,3 +105,9 @@ Reasoning:
 - 2026-04-12: Reviewed `vehicle_routing_vrptw` Phase 3 baseline to select the next Stream A refinement target.
 	- Confirmed current candidate selection is still nearest-neighbour after time-window feasibility filtering.
 	- Selected next implementation target: feasible-candidate scoring heuristic for VRPTW.
+- 2026-04-13: **STREAM A VRPTW PRIORITY SCORING HEURISTIC IMPLEMENTED**
+	- Extended `vehicle_routing_vrptw` with `use_priority_scoring` (default: `true`).
+	- Added deterministic feasible-candidate ranking by projected lateness, then projected slack, then travel distance, with nearest-neighbour baseline still available via `use_priority_scoring = false`.
+	- Added runtime output echo: `use_priority_scoring`.
+	- Added comparative benchmark coverage: `vehicle_routing_vrptw_benchmark_priority_scoring_reduces_total_lateness_vs_phase3_baseline`.
+	- Benchmarked total lateness reduction versus the Phase 3 baseline control path.

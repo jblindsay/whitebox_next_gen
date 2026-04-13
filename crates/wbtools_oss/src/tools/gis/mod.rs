@@ -28453,7 +28453,7 @@ impl Tool for VehicleRoutingVrptwTool {
         ToolMetadata {
             id: "vehicle_routing_vrptw",
             display_name: "Vehicle Routing (VRPTW)",
-            summary: "Builds capacity-constrained routes with time-window diagnostics using a deterministic nearest-neighbour baseline.",
+            summary: "Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28469,6 +28469,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
                 ToolParamSpec { name: "enforce_time_windows", description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).", required: false },
                 ToolParamSpec { name: "allowed_lateness", description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).", required: false },
+                ToolParamSpec { name: "use_priority_scoring", description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with time-window diagnostics.", required: false },
@@ -28490,13 +28491,14 @@ impl Tool for VehicleRoutingVrptwTool {
         defaults.insert("travel_speed".to_string(), json!(1.0));
         defaults.insert("enforce_time_windows".to_string(), json!(false));
         defaults.insert("allowed_lateness".to_string(), json!(0.0));
+        defaults.insert("use_priority_scoring".to_string(), json!(true));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("vrptw_routes.gpkg"));
 
         ToolManifest {
             id: "vehicle_routing_vrptw".to_string(),
             display_name: "Vehicle Routing (VRPTW)".to_string(),
-            summary: "Builds capacity-constrained routes with time-window diagnostics using a deterministic nearest-neighbour baseline.".to_string(),
+            summary: "Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28512,6 +28514,7 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "enforce_time_windows".to_string(), description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_lateness".to_string(), description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).".to_string(), required: false },
+                ToolParamDescriptor { name: "use_priority_scoring".to_string(), description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with time-window diagnostics.".to_string(), required: false },
@@ -28640,6 +28643,17 @@ impl Tool for VehicleRoutingVrptwTool {
             ));
         }
 
+        if args.get("use_priority_scoring").is_some()
+            && args
+                .get("use_priority_scoring")
+                .and_then(|v| v.as_bool())
+                .is_none()
+        {
+            return Err(ToolError::Validation(
+                "use_priority_scoring must be a boolean when provided".to_string(),
+            ));
+        }
+
         if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
             if max_vehicles == 0 {
                 return Err(ToolError::Validation("max_vehicles must be >= 1 when provided".to_string()));
@@ -28688,6 +28702,10 @@ impl Tool for VehicleRoutingVrptwTool {
             .get("enforce_time_windows")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
+        let use_priority_scoring = args
+            .get("use_priority_scoring")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
         let allowed_lateness = args
             .get("allowed_lateness")
             .and_then(|v| v.as_f64())
@@ -28794,22 +28812,42 @@ impl Tool for VehicleRoutingVrptwTool {
             loop {
                 let mut best_idx: Option<usize> = None;
                 let mut best_dist = f64::INFINITY;
+                let mut best_lateness = f64::INFINITY;
+                let mut best_slack = f64::INFINITY;
+                let mut best_fid = i64::MAX;
                 for (idx, stop) in unassigned.iter().enumerate() {
                     if stop.demand > remaining_capacity + 1.0e-12 {
                         continue;
                     }
+                    let d = coord_dist2(&current, &stop.coord).sqrt();
+                    let preview_travel_time = d / travel_speed;
+                    let preview_arrival = current_time + preview_travel_time;
+                    let preview_service_start = preview_arrival.max(stop.tw_start);
+                    let preview_lateness = (preview_service_start - stop.tw_end).max(0.0);
+                    let preview_slack = stop.tw_end - preview_service_start;
                     if enforce_time_windows {
-                        let preview_travel_time = coord_dist2(&current, &stop.coord).sqrt() / travel_speed;
-                        let preview_arrival = current_time + preview_travel_time;
-                        let preview_service_start = preview_arrival.max(stop.tw_start);
-                        let preview_lateness = (preview_service_start - stop.tw_end).max(0.0);
                         if preview_lateness > allowed_lateness + 1.0e-12 {
                             continue;
                         }
                     }
-                    let d = coord_dist2(&current, &stop.coord).sqrt();
-                    if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
+
+                    let better = if use_priority_scoring {
+                        preview_lateness < best_lateness - 1.0e-12
+                            || ((preview_lateness - best_lateness).abs() <= 1.0e-12
+                                && (preview_slack < best_slack - 1.0e-12
+                                    || ((preview_slack - best_slack).abs() <= 1.0e-12
+                                        && (d < best_dist - 1.0e-12
+                                            || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)))))
+                    } else {
+                        d < best_dist - 1.0e-12
+                            || ((d - best_dist).abs() <= 1.0e-12 && stop.fid < best_fid)
+                    };
+
+                    if better {
                         best_dist = d;
+                        best_lateness = preview_lateness;
+                        best_slack = preview_slack;
+                        best_fid = stop.fid;
                         best_idx = Some(idx);
                     }
                 }
@@ -28961,6 +28999,7 @@ impl Tool for VehicleRoutingVrptwTool {
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
         outputs.insert("enforce_time_windows".to_string(), json!(enforce_time_windows));
         outputs.insert("allowed_lateness".to_string(), json!(allowed_lateness));
+        outputs.insert("use_priority_scoring".to_string(), json!(use_priority_scoring));
 
         if let Some(assign_path) = assignment_output {
             let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw_assignments", stops.name));

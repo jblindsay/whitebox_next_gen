@@ -42,7 +42,7 @@ Phase 4 planned outcomes:
 ### Stream D: Performance and Scalability Hardening
 - [x] Add spatial indexing for snapping origins/destinations to networks.
 - [x] Reduce repeated shortest-path cost where multi-query reuse is possible.
-- [ ] Evaluate parallel execution for OD sensitivity and accessibility batches.
+- [x] Evaluate parallel execution for OD sensitivity and accessibility batches.
 - [ ] Publish large-network benchmark reports and runtime targets.
 
 ### Stream E: Wrapper UX and Cookbook Expansion
@@ -160,4 +160,15 @@ Scheduling note:
 		- `cargo test -p wbtools_oss --test registry_integration extend_vector_lines_runs_end_to_end -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration polygon_axes_run_end_to_end -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration lidar_phase2_batch_b_tools_run_end_to_end -- --nocapture` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-13: **STREAM D STEP 3: PARALLEL EXECUTION EVALUATION FOR ANALYTICS BATCHES**
+	- Added optional `parallel_execution` parameter (default `true`) to `network_accessibility_metrics`.
+	- Added optional `parallel_execution` parameter (default `true`) to `od_sensitivity_analysis`.
+	- Implemented parallel origin evaluation paths and shared destination snapping reuse in both tools.
+	- Preserved deterministic behavior by keeping sequential fallback paths when `parallel_execution=false`.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_decay -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration od_sensitivity_analysis_computes_perturbed_od_costs_with_variance -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and_sample_size -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)

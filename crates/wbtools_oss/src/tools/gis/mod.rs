@@ -26163,6 +26163,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
                 ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "parallel_execution", description: "If true (default), evaluate origins in parallel for faster accessibility computation.", required: false },
                 ToolParamSpec { name: "output", description: "Output point vector path (origins with accessibility metrics).", required: true },
             ],
         }
@@ -26196,6 +26197,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
                 ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
                 ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "parallel_execution".to_string(), description: "If true (default), evaluate origins in parallel for faster accessibility computation.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path (origins with accessibility metrics).".to_string(), required: true },
             ],
             defaults,
@@ -26291,6 +26293,7 @@ impl Tool for NetworkAccessibilityMetricsTool {
         let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
         let one_way_field = parse_optional_string_arg(args, "one_way_field");
         let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let parallel_execution = parse_bool_arg(args, "parallel_execution", true);
         let output_path = parse_vector_path_arg(args, "output")?;
 
         let graph = build_line_network_graph(
@@ -26308,20 +26311,25 @@ impl Tool for NetworkAccessibilityMetricsTool {
         }
 
         // Collect origin coordinates and snap to network
-        let mut origin_coords = Vec::new();
+        let mut origin_coords = Vec::<wbvector::Coord>::new();
         for feature in &origins.features {
             if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
                 origin_coords.push(coord.clone());
             }
         }
 
-        // Collect destination coordinates and snap to network
+        // Collect destination coordinates and snap to network once for reuse.
         let mut dest_coords = Vec::new();
         for feature in &destinations.features {
             if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
                 dest_coords.push(coord.clone());
             }
         }
+        let snapped_destinations: Vec<(usize, f64)> = dest_coords
+            .iter()
+            .filter_map(|dest_coord| nearest_network_node(&graph.nodes, dest_coord))
+            .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+            .collect();
 
         let mut output = wbvector::Layer::new(format!("{}_accessibility", origins.name));
         output.geom_type = Some(wbvector::GeometryType::Point);
@@ -26333,64 +26341,54 @@ impl Tool for NetworkAccessibilityMetricsTool {
         }
         output.schema.add_field(wbvector::FieldDef::new("ACCESSIBILITY", wbvector::FieldType::Float));
 
-        for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
-            // Find nearest network node to origin
-            let origin_node = match nearest_network_node(&graph.nodes, orig_coord) {
-                Some((node_idx, dist)) => {
-                    if dist > max_snap_distance {
-                        // Origin too far from network; skip
-                        let mut attrs = origins.features[orig_idx].attributes.clone();
-                        attrs.push(wbvector::FieldValue::Float(0.0));
-                        output.push(wbvector::Feature {
-                            fid: (orig_idx + 1) as u64,
-                            geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
-                            attributes: attrs,
-                        });
-                        continue;
-                    }
-                    node_idx
-                }
-                None => {
-                    // No network node found; skip
-                    let mut attrs = origins.features[orig_idx].attributes.clone();
-                    attrs.push(wbvector::FieldValue::Float(0.0));
-                    output.push(wbvector::Feature {
-                        fid: (orig_idx + 1) as u64,
-                        geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
-                        attributes: attrs,
-                    });
-                    continue;
-                }
-            };
-
-            // Compute single-source shortest paths from origin
-            let (dist, _) = dijkstra_tree(&graph, origin_node);
-
-            // Compute accessibility score
-            let mut accessibility = 0.0f64;
-            for dest_coord in &dest_coords {
-                // Find nearest network node to destination
-                if let Some((dest_node, snap_dist)) = nearest_network_node(&graph.nodes, dest_coord) {
-                    if snap_dist <= max_snap_distance && dist[dest_node].is_finite() {
-                        let total_dist = dist[dest_node] + snap_dist;
-                        if total_dist <= impedance_cutoff {
-                            // Destination is reachable within cutoff
-                            let weight = match decay_function.as_str() {
-                                "exponential" => (-decay_parameter * total_dist).exp(),
-                                "linear" => (1.0 - (decay_parameter * total_dist / impedance_cutoff)).max(0.0),
-                                _ => 1.0, // 'none' or default
-                            };
-                            accessibility += weight;
+        let calc_origin_accessibility = |orig_idx: usize, orig_coord: &wbvector::Coord| {
+            let accessibility = if let Some((origin_node, dist)) = nearest_network_node(&graph.nodes, orig_coord) {
+                if dist > max_snap_distance {
+                    0.0
+                } else {
+                    let (dist_to_nodes, _) = dijkstra_tree(&graph, origin_node);
+                    let mut score = 0.0f64;
+                    for (dest_node, snap_dist) in &snapped_destinations {
+                        if dist_to_nodes[*dest_node].is_finite() {
+                            let total_dist = dist_to_nodes[*dest_node] + *snap_dist;
+                            if total_dist <= impedance_cutoff {
+                                let weight = match decay_function.as_str() {
+                                    "exponential" => (-decay_parameter * total_dist).exp(),
+                                    "linear" => (1.0 - (decay_parameter * total_dist / impedance_cutoff)).max(0.0),
+                                    _ => 1.0,
+                                };
+                                score += weight;
+                            }
                         }
                     }
+                    score
                 }
-            }
+            } else {
+                0.0
+            };
+            (orig_idx, accessibility)
+        };
 
+        let per_origin_accessibility = if parallel_execution {
+            origin_coords
+                .par_iter()
+                .enumerate()
+                .map(|(orig_idx, orig_coord)| calc_origin_accessibility(orig_idx, orig_coord))
+                .collect::<Vec<_>>()
+        } else {
+            origin_coords
+                .iter()
+                .enumerate()
+                .map(|(orig_idx, orig_coord)| calc_origin_accessibility(orig_idx, orig_coord))
+                .collect::<Vec<_>>()
+        };
+
+        for (orig_idx, accessibility) in per_origin_accessibility {
             let mut attrs = origins.features[orig_idx].attributes.clone();
             attrs.push(wbvector::FieldValue::Float(accessibility));
             output.push(wbvector::Feature {
                 fid: (orig_idx + 1) as u64,
-                geometry: Some(wbvector::Geometry::Point(orig_coord.clone())),
+                geometry: Some(wbvector::Geometry::Point(origin_coords[orig_idx].clone())),
                 attributes: attrs,
             });
         }
@@ -26419,6 +26417,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
                 ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges.", required: false },
                 ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges.", required: false },
+                ToolParamSpec { name: "parallel_execution", description: "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs.", required: false },
                 ToolParamSpec { name: "output", description: "Output CSV path with OD pairs and sensitivity statistics.", required: true },
             ],
         }
@@ -26452,6 +26451,7 @@ impl Tool for OdSensitivityAnalysisTool {
                 ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
                 ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges.".to_string(), required: false },
                 ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges.".to_string(), required: false },
+                ToolParamDescriptor { name: "parallel_execution".to_string(), description: "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path with OD pairs and sensitivity statistics.".to_string(), required: true },
             ],
             defaults,
@@ -26530,6 +26530,7 @@ impl Tool for OdSensitivityAnalysisTool {
         let edge_cost_field = parse_string_arg(args, "edge_cost_field")?;
         let one_way_field = parse_optional_string_arg(args, "one_way_field");
         let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let parallel_execution = parse_bool_arg(args, "parallel_execution", true);
         let output_path = parse_vector_path_arg(args, "output")?;
 
         let range_str = parse_optional_string_arg(args, "impedance_disturbance_range")
@@ -26565,22 +26566,57 @@ impl Tool for OdSensitivityAnalysisTool {
             }
         }
 
+        let snapped_origins: Vec<(usize, usize)> = origin_coords
+            .iter()
+            .enumerate()
+            .filter_map(|(orig_idx, orig_coord)| {
+                nearest_network_node(&graph.nodes, orig_coord)
+                    .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+                    .map(|(origin_node, _)| (orig_idx, origin_node))
+            })
+            .collect();
+        let snapped_destinations: Vec<(usize, f64)> = dest_coords
+            .iter()
+            .filter_map(|dest_coord| nearest_network_node(&graph.nodes, dest_coord))
+            .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+            .collect();
+
         // Compute baseline OD costs
-        let mut baseline_costs = Vec::new();
-        for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
-            if let Some((origin_node, snap_dist)) = nearest_network_node(&graph.nodes, orig_coord) {
-                if snap_dist <= max_snap_distance {
-                    let (dist, _) = dijkstra_tree(&graph, origin_node);
-                    for dest_coord in &dest_coords {
-                        if let Some((dest_node, dest_snap)) = nearest_network_node(&graph.nodes, dest_coord) {
-                            if dest_snap <= max_snap_distance && dist[dest_node].is_finite() {
-                                baseline_costs.push((orig_idx, dest_node, dist[dest_node] + dest_snap));
+        let baseline_costs = if parallel_execution {
+            snapped_origins
+                .par_iter()
+                .flat_map_iter(|(orig_idx, origin_node)| {
+                    let (dist, _) = dijkstra_tree(&graph, *origin_node);
+                    snapped_destinations
+                        .iter()
+                        .filter_map(|(dest_node, dest_snap)| {
+                            if dist[*dest_node].is_finite() {
+                                Some((*orig_idx, *dest_node, dist[*dest_node] + *dest_snap))
+                            } else {
+                                None
                             }
-                        }
-                    }
-                }
-            }
-        }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            snapped_origins
+                .iter()
+                .flat_map(|(orig_idx, origin_node)| {
+                    let (dist, _) = dijkstra_tree(&graph, *origin_node);
+                    snapped_destinations
+                        .iter()
+                        .filter_map(|(dest_node, dest_snap)| {
+                            if dist[*dest_node].is_finite() {
+                                Some((*orig_idx, *dest_node, dist[*dest_node] + *dest_snap))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
 
         // For each Monte Carlo sample, perturb edge costs and collect results
         let mut cost_samples: HashMap<(usize, usize), Vec<f64>> = HashMap::new();
@@ -26602,23 +26638,47 @@ impl Tool for OdSensitivityAnalysisTool {
                     }
                 }
 
-                // Compute OD costs with perturbed graph
-                for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
-                    if let Some((origin_node, snap_dist)) = nearest_network_node(&perturbed_graph.nodes, orig_coord) {
-                        if snap_dist <= max_snap_distance {
-                            let (dist, _) = dijkstra_tree(&perturbed_graph, origin_node);
-                            for (_dest_idx, dest_coord) in dest_coords.iter().enumerate() {
-                                if let Some((dest_node, dest_snap)) = nearest_network_node(&perturbed_graph.nodes, dest_coord) {
-                                    if dest_snap <= max_snap_distance && dist[dest_node].is_finite() {
-                                        let total_cost = dist[dest_node] + dest_snap;
-                                        cost_samples.entry((orig_idx, dest_node))
-                                            .or_insert_with(Vec::new)
-                                            .push(total_cost);
+                // Compute OD costs with perturbed graph.
+                let perturbed_results = if parallel_execution {
+                    snapped_origins
+                        .par_iter()
+                        .flat_map_iter(|(orig_idx, origin_node)| {
+                            let (dist, _) = dijkstra_tree(&perturbed_graph, *origin_node);
+                            snapped_destinations
+                                .iter()
+                                .filter_map(|(dest_node, dest_snap)| {
+                                    if dist[*dest_node].is_finite() {
+                                        Some(((*orig_idx, *dest_node), dist[*dest_node] + *dest_snap))
+                                    } else {
+                                        None
                                     }
-                                }
-                            }
-                        }
-                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    snapped_origins
+                        .iter()
+                        .flat_map(|(orig_idx, origin_node)| {
+                            let (dist, _) = dijkstra_tree(&perturbed_graph, *origin_node);
+                            snapped_destinations
+                                .iter()
+                                .filter_map(|(dest_node, dest_snap)| {
+                                    if dist[*dest_node].is_finite() {
+                                        Some(((*orig_idx, *dest_node), dist[*dest_node] + *dest_snap))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>()
+                };
+                for ((orig_idx, dest_node), total_cost) in perturbed_results {
+                    cost_samples
+                        .entry((orig_idx, dest_node))
+                        .or_insert_with(Vec::new)
+                        .push(total_cost);
                 }
             }
         }

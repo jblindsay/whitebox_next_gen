@@ -30861,6 +30861,8 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
+                ToolParamSpec { name: "max_route_distance", description: "Optional maximum travel distance per route, including return to depot.", required: false },
+                ToolParamSpec { name: "max_stops_per_vehicle", description: "Optional maximum number of stops assigned to each vehicle route.", required: false },
                 ToolParamSpec { name: "apply_local_optimization", description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).", required: false },
                 ToolParamSpec { name: "apply_simulated_annealing", description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).", required: false },
                 ToolParamSpec { name: "sa_iterations", description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).", required: false },
@@ -30902,6 +30904,8 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_distance".to_string(), description: "Optional maximum travel distance per route, including return to depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_stops_per_vehicle".to_string(), description: "Optional maximum number of stops assigned to each vehicle route.".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_local_optimization".to_string(), description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_simulated_annealing".to_string(), description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).".to_string(), required: false },
                 ToolParamDescriptor { name: "sa_iterations".to_string(), description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).".to_string(), required: false },
@@ -30976,6 +30980,22 @@ impl Tool for VehicleRoutingCvrpTool {
         if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
             if max_vehicles == 0 {
                 return Err(ToolError::Validation("max_vehicles must be >= 1 when provided".to_string()));
+            }
+        }
+
+        if let Some(max_route_distance) = args.get("max_route_distance").and_then(|v| v.as_f64()) {
+            if !max_route_distance.is_finite() || max_route_distance <= 0.0 {
+                return Err(ToolError::Validation(
+                    "max_route_distance must be finite and > 0 when provided".to_string(),
+                ));
+            }
+        }
+
+        if let Some(max_stops_per_vehicle) = args.get("max_stops_per_vehicle").and_then(|v| v.as_u64()) {
+            if max_stops_per_vehicle == 0 {
+                return Err(ToolError::Validation(
+                    "max_stops_per_vehicle must be >= 1 when provided".to_string(),
+                ));
             }
         }
 
@@ -31064,6 +31084,11 @@ impl Tool for VehicleRoutingCvrpTool {
             .and_then(|v| v.as_f64())
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
+        let max_stops_per_vehicle = args
+            .get("max_stops_per_vehicle")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
         let apply_local_optimization = args
             .get("apply_local_optimization")
             .and_then(|v| v.as_bool())
@@ -31277,8 +31302,15 @@ impl Tool for VehicleRoutingCvrpTool {
             let mut route_stops = Vec::<StopNode>::new();
             let mut route_stop_count = 0usize;
             let mut route_load = 0.0f64;
+            let mut route_distance_so_far = 0.0f64;
 
             loop {
+                if let Some(max_stops) = max_stops_per_vehicle {
+                    if route_stop_count >= max_stops {
+                        break;
+                    }
+                }
+
                 let mut best_idx: Option<usize> = None;
                 let mut best_dist = f64::INFINITY;
                 for (idx, stop) in unassigned.iter().enumerate() {
@@ -31286,6 +31318,12 @@ impl Tool for VehicleRoutingCvrpTool {
                         continue;
                     }
                     let d = coord_dist2(&current, &stop.coord).sqrt();
+                    if let Some(max_dist) = max_route_distance {
+                        let projected_total = route_distance_so_far + d + coord_dist2(&stop.coord, &depot_coord).sqrt();
+                        if projected_total > max_dist + 1.0e-12 {
+                            continue;
+                        }
+                    }
                     if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
                         best_dist = d;
                         best_idx = Some(idx);
@@ -31308,6 +31346,8 @@ impl Tool for VehicleRoutingCvrpTool {
                 };
 
                 let stop = unassigned.remove(idx);
+                let travel_dist = coord_dist2(&current, &stop.coord).sqrt();
+                route_distance_so_far += travel_dist;
                 remaining_capacity -= stop.demand;
                 route_load += stop.demand;
                 route_stop_count += 1;
@@ -31406,6 +31446,12 @@ impl Tool for VehicleRoutingCvrpTool {
         );
         outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+        if let Some(max_route_distance_value) = max_route_distance {
+            outputs.insert("max_route_distance".to_string(), json!(max_route_distance_value));
+        }
+        if let Some(max_stops_value) = max_stops_per_vehicle {
+            outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
+        }
         outputs.insert("apply_local_optimization".to_string(), json!(apply_local_optimization));
         outputs.insert("optimized_route_count".to_string(), json!(optimized_route_count));
         outputs.insert("apply_simulated_annealing".to_string(), json!(apply_simulated_annealing));
@@ -31482,6 +31528,8 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "allowed_lateness", description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).", required: false },
                 ToolParamSpec { name: "use_priority_scoring", description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
+                ToolParamSpec { name: "max_route_time", description: "Optional maximum route duration in model time units, including return to depot.", required: false },
+                ToolParamSpec { name: "max_stops_per_vehicle", description: "Optional maximum number of stops assigned to each vehicle route.", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with time-window diagnostics.", required: false },
             ],
@@ -31527,6 +31575,8 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "allowed_lateness".to_string(), description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "use_priority_scoring".to_string(), description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_time".to_string(), description: "Optional maximum route duration in model time units, including return to depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_stops_per_vehicle".to_string(), description: "Optional maximum number of stops assigned to each vehicle route.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with time-window diagnostics.".to_string(), required: false },
             ],
@@ -31671,6 +31721,22 @@ impl Tool for VehicleRoutingVrptwTool {
             }
         }
 
+        if let Some(max_route_time) = args.get("max_route_time").and_then(|v| v.as_f64()) {
+            if !max_route_time.is_finite() || max_route_time <= 0.0 {
+                return Err(ToolError::Validation(
+                    "max_route_time must be finite and > 0 when provided".to_string(),
+                ));
+            }
+        }
+
+        if let Some(max_stops_per_vehicle) = args.get("max_stops_per_vehicle").and_then(|v| v.as_u64()) {
+            if max_stops_per_vehicle == 0 {
+                return Err(ToolError::Validation(
+                    "max_stops_per_vehicle must be >= 1 when provided".to_string(),
+                ));
+            }
+        }
+
         let _ = parse_vector_path_arg(args, "output")?;
         if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
             if path.trim().is_empty() {
@@ -31722,6 +31788,11 @@ impl Tool for VehicleRoutingVrptwTool {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+        let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
+        let max_stops_per_vehicle = args
+            .get("max_stops_per_vehicle")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
         let output_path = parse_vector_path_arg(args, "output")?;
         let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
 
@@ -31821,6 +31892,12 @@ impl Tool for VehicleRoutingVrptwTool {
             let mut route_total_lateness = 0.0f64;
 
             loop {
+                if let Some(max_stops) = max_stops_per_vehicle {
+                    if route_stop_count >= max_stops {
+                        break;
+                    }
+                }
+
                 let mut best_idx: Option<usize> = None;
                 let mut best_dist = f64::INFINITY;
                 let mut best_lateness = f64::INFINITY;
@@ -31836,8 +31913,16 @@ impl Tool for VehicleRoutingVrptwTool {
                     let preview_service_start = preview_arrival.max(stop.tw_start);
                     let preview_lateness = (preview_service_start - stop.tw_end).max(0.0);
                     let preview_slack = stop.tw_end - preview_service_start;
+                    let preview_service_end = preview_service_start + stop.service_time;
+                    let preview_total_time = (preview_service_end - start_time)
+                        + coord_dist2(&stop.coord, &depot_coord).sqrt() / travel_speed;
                     if enforce_time_windows {
                         if preview_lateness > allowed_lateness + 1.0e-12 {
+                            continue;
+                        }
+                    }
+                    if let Some(max_time) = max_route_time {
+                        if preview_total_time > max_time + 1.0e-12 {
                             continue;
                         }
                     }
@@ -32011,6 +32096,12 @@ impl Tool for VehicleRoutingVrptwTool {
         outputs.insert("enforce_time_windows".to_string(), json!(enforce_time_windows));
         outputs.insert("allowed_lateness".to_string(), json!(allowed_lateness));
         outputs.insert("use_priority_scoring".to_string(), json!(use_priority_scoring));
+        if let Some(max_route_time_value) = max_route_time {
+            outputs.insert("max_route_time".to_string(), json!(max_route_time_value));
+        }
+        if let Some(max_stops_value) = max_stops_per_vehicle {
+            outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
+        }
 
         if let Some(assign_path) = assignment_output {
             let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw_assignments", stops.name));

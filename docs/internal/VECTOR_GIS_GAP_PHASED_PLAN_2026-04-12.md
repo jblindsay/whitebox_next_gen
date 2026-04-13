@@ -151,6 +151,24 @@ wbe_network_service_area(
 )
 ```
 
+### Vehicle Routing Practical Constraints Added (2026-04-13)
+
+To reduce the practical operations gap in network analysis workflows, the open-tier vehicle routing tools now expose additional per-route controls:
+
+- `vehicle_routing_cvrp`
+   - `max_route_distance`: caps travel distance per route (including return to depot)
+   - `max_stops_per_vehicle`: caps stop count per vehicle route
+- `vehicle_routing_vrptw`
+   - `max_route_time`: caps total route duration (including return to depot)
+   - `max_stops_per_vehicle`: caps stop count per vehicle route
+
+These are optional and preserve prior behavior when omitted.
+
+Validation and behavior checks were added in integration tests:
+
+- `vehicle_routing_cvrp_respects_max_route_distance`
+- `vehicle_routing_vrptw_respects_max_route_time`
+
 R merged coverage polygons (by ring):
 
 ```r

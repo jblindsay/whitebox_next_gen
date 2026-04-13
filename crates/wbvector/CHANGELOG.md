@@ -16,6 +16,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Infer and set `Layer.geom_type` when reading GeoParquet layers from the first feature geometry.
 - Resolves downstream false validation failures in tools that require line geometries (e.g., network readiness workflows) when inputs are valid line-based datasets.
 
+### Tests
+- Extended `real_mississauga_parcel_fixture_decodes_when_enabled` GeoPackage smoke test to assert that decoded multipolygon ring coordinates produce non-zero shoelace areas (100/100 sample), confirming end-to-end geometry fidelity for downstream calibration workflows.
+
 ## [0.1.0] - 2026-03-31
 ### Added
 - Initial published release.

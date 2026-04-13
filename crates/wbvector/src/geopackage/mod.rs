@@ -650,10 +650,26 @@ mod tests {
         assert!(decoded_geometries > 0, "expected at least one decoded geometry in layer read");
         assert!(layer.features[0].fid > 0, "expected rowid-backed feature fid");
 
+        // Verify that decoded MultiPolygon rings have non-zero shoelace area.
+        let areas_nonzero = layer.features.iter().take(100).filter(|f| {
+            match &f.geometry {
+                Some(Geometry::MultiPolygon(polys)) => polys.iter().any(|(ext, _)| {
+                    ext.signed_area().abs() > 0.0
+                }),
+                Some(Geometry::Polygon { exterior, .. }) => exterior.signed_area().abs() > 0.0,
+                _ => false,
+            }
+        }).count();
+        assert!(
+            areas_nonzero > 0,
+            "expected at least one decoded Mississauga parcel to have non-zero shoelace area"
+        );
+
         println!(
-            "✓ wbvector Mississauga smoke decoded {} / {} geometries",
+            "✓ wbvector Mississauga smoke decoded {} / {} geometries, {} / 100 sampled have non-zero area",
             decoded_geometries,
-            layer.features.len()
+            layer.features.len(),
+            areas_nonzero
         );
     }
 }

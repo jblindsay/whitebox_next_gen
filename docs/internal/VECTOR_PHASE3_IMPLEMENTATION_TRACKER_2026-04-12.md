@@ -38,7 +38,7 @@ Phase 3 planned outcomes:
 - [x] Add examples for walk-drive and walk-transit patterns.
 
 ### Stream D: Centrality and Accessibility Analytics
-- [ ] Implement network centrality metrics (degree/closeness/betweenness baseline).
+- [x] Implement network centrality metrics (degree/closeness/betweenness baseline).
 - [ ] Implement accessibility indices with impedance cutoffs/decay.
 - [ ] Add OD uncertainty and sensitivity options.
 - [ ] Add reproducible benchmark reports and parity checks.
@@ -128,3 +128,10 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_walk_drive_pattern -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_shortest_path_walk_transit_pattern -- --nocapture` (PASS)
+- 2026-04-12: **STREAM D CENTRALITY BASELINE (DEGREE/CLOSENESS/BETWEENNESS)**
+	- Added `network_centrality_metrics` tool in `wbtools_oss` with optional impedance and directionality controls (`edge_cost_field`, `one_way_field`, `blocked_field`).
+	- Implemented baseline node centrality outputs (`DEGREE`, `CLOSENESS`, `BETWEENNESS`) over network graph nodes.
+	- Added integration coverage: `network_centrality_metrics_identifies_middle_node_as_most_central`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration network_centrality_metrics_identifies_middle_node_as_most_central -- --nocapture` (PASS)

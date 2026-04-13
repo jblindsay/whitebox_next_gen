@@ -245,6 +245,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"line_polygon_clip"));
     assert!(ids.contains(&"shortest_path_network"));
     assert!(ids.contains(&"multimodal_shortest_path"));
+    assert!(ids.contains(&"network_centrality_metrics"));
     assert!(ids.contains(&"network_node_degree"));
     assert!(ids.contains(&"network_service_area"));
     assert!(ids.contains(&"network_od_cost_matrix"));
@@ -15856,6 +15857,86 @@ fn shortest_path_network_uses_edge_cost_field_multiplier() {
         other => panic!("expected linestring path geometry, got {:?}", other),
     };
     assert!(coords.iter().any(|c| (c.y - 1.0).abs() < 1.0e-9));
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&out_path);
+}
+
+#[test]
+fn network_centrality_metrics_identifies_middle_node_as_most_central() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_network_centrality_metrics_line");
+    let input_path = std::env::temp_dir().join(format!("{tag}_in.gpkg"));
+    let out_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    let mut lines = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[],
+        )
+        .expect("add segment 1");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[],
+        )
+        .expect("add segment 2");
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write network input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(out_path.to_string_lossy().to_string()));
+    registry
+        .run("network_centrality_metrics", &args, &context(&caps))
+        .expect("network_centrality_metrics run");
+
+    let out = wbvector::read(&out_path).expect("read centrality output");
+    assert_eq!(out.features.len(), 3, "expected three graph nodes");
+
+    let node_idx = out.schema.field_index("NODE_ID").expect("NODE_ID field");
+    let close_idx = out.schema.field_index("CLOSENESS").expect("CLOSENESS field");
+    let betw_idx = out.schema.field_index("BETWEENNESS").expect("BETWEENNESS field");
+
+    let mut closeness_by_node = std::collections::HashMap::<i64, f64>::new();
+    let mut betweenness_by_node = std::collections::HashMap::<i64, f64>::new();
+    for feature in &out.features {
+        let node_id = match &feature.attributes[node_idx] {
+            wbvector::FieldValue::Integer(v) => *v,
+            other => panic!("expected integer NODE_ID, got {:?}", other),
+        };
+        let closeness = match &feature.attributes[close_idx] {
+            wbvector::FieldValue::Float(v) => *v,
+            wbvector::FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric CLOSENESS, got {:?}", other),
+        };
+        let betweenness = match &feature.attributes[betw_idx] {
+            wbvector::FieldValue::Float(v) => *v,
+            wbvector::FieldValue::Integer(v) => *v as f64,
+            other => panic!("expected numeric BETWEENNESS, got {:?}", other),
+        };
+        closeness_by_node.insert(node_id, closeness);
+        betweenness_by_node.insert(node_id, betweenness);
+    }
+
+    let middle_closeness = *closeness_by_node.get(&2).expect("middle node closeness");
+    let end1_closeness = *closeness_by_node.get(&1).expect("end node 1 closeness");
+    let end2_closeness = *closeness_by_node.get(&3).expect("end node 2 closeness");
+    assert!(middle_closeness > end1_closeness);
+    assert!(middle_closeness > end2_closeness);
+
+    let middle_betweenness = *betweenness_by_node.get(&2).expect("middle node betweenness");
+    let end1_betweenness = *betweenness_by_node.get(&1).expect("end node 1 betweenness");
+    let end2_betweenness = *betweenness_by_node.get(&3).expect("end node 2 betweenness");
+    assert!(middle_betweenness > end1_betweenness);
+    assert!(middle_betweenness > end2_betweenness);
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&out_path);

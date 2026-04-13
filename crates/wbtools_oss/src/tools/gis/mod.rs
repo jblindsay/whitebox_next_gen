@@ -185,6 +185,7 @@ pub struct AddFieldTool;
 pub struct LinePolygonClipTool;
 pub struct ShortestPathNetworkTool;
 pub struct MultimodalShortestPathTool;
+pub struct NetworkCentralityMetricsTool;
 pub struct NetworkNodeDegreeTool;
 pub struct NetworkServiceAreaTool;
 pub struct MapMatchingV1Tool;
@@ -25040,6 +25041,178 @@ impl Tool for MultimodalShortestPathTool {
         outputs.insert("mode_changes".to_string(), json!(mode_changes));
         outputs.insert("transfer_penalty".to_string(), json!(transfer_penalty));
         Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for NetworkCentralityMetricsTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "network_centrality_metrics",
+            display_name: "Network Centrality Metrics",
+            summary: "Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "edge_cost_field", description: "Optional numeric line field used as an impedance multiplier for segment length.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks).", required: false },
+                ToolParamSpec { name: "output", description: "Output point vector path.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("snap_tolerance".to_string(), json!(0.0));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("network_centrality.gpkg"));
+
+        ToolManifest {
+            id: "network_centrality_metrics".to_string(),
+            display_name: "Network Centrality Metrics".to_string(),
+            summary: "Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Optional numeric line field used as an impedance multiplier for segment length.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only).".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output point vector path.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "network_centrality_metrics_basic".to_string(),
+                description: "Computes node-level centrality metrics for a line network.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "centrality".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if let Some(tol) = parse_optional_f64_arg(args, "snap_tolerance") {
+            if !tol.is_finite() || tol < 0.0 {
+                return Err(ToolError::Validation(
+                    "snap_tolerance must be a finite value >= 0".to_string(),
+                ));
+            }
+        }
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let _ = resolve_network_edge_cost_field(&input, edge_cost_field)?;
+        let _ = resolve_network_one_way_field(&input, one_way_field)?;
+        let _ = resolve_network_blocked_field(&input, blocked_field)?;
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let edge_cost_field = parse_optional_string_arg(args, "edge_cost_field");
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let graph = build_line_network_graph(
+            &input,
+            snap_tolerance,
+            edge_cost_field,
+            one_way_field,
+            blocked_field,
+            None,
+        )?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let n = graph.nodes.len();
+        let mut neighbors = vec![HashSet::<usize>::new(); n];
+        for u in 0..n {
+            for (v, _) in &graph.adjacency[u] {
+                neighbors[u].insert(*v);
+                neighbors[*v].insert(u);
+            }
+        }
+
+        let mut degree = vec![0i64; n];
+        for i in 0..n {
+            degree[i] = neighbors[i].len() as i64;
+        }
+
+        let mut closeness = vec![0.0f64; n];
+        let mut betweenness = vec![0.0f64; n];
+        for s in 0..n {
+            let (dist, prev) = dijkstra_tree(&graph, s);
+
+            let mut reachable = 0usize;
+            let mut dist_sum = 0.0f64;
+            for t in 0..n {
+                if t == s || !dist[t].is_finite() {
+                    continue;
+                }
+                reachable += 1;
+                dist_sum += dist[t];
+                if let Some(path) = reconstruct_path_nodes(&prev, s, t) {
+                    if path.len() > 2 {
+                        for node in path.iter().skip(1).take(path.len() - 2) {
+                            betweenness[*node] += 1.0;
+                        }
+                    }
+                }
+            }
+            if reachable > 0 && dist_sum > 0.0 {
+                closeness[s] = reachable as f64 / dist_sum;
+            }
+        }
+
+        if n > 2 {
+            let norm = ((n - 1) * (n - 2)) as f64;
+            if norm > 0.0 {
+                for v in &mut betweenness {
+                    *v /= norm;
+                }
+            }
+        }
+
+        let mut output = wbvector::Layer::new(format!("{}_network_centrality", input.name));
+        output.geom_type = Some(wbvector::GeometryType::Point);
+        output.crs = input.crs.clone();
+        output.schema.add_field(wbvector::FieldDef::new("NODE_ID", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("DEGREE", wbvector::FieldType::Integer));
+        output.schema.add_field(wbvector::FieldDef::new("CLOSENESS", wbvector::FieldType::Float));
+        output.schema.add_field(wbvector::FieldDef::new("BETWEENNESS", wbvector::FieldType::Float));
+
+        for (idx, coord) in graph.nodes.iter().enumerate() {
+            output.push(wbvector::Feature {
+                fid: (idx + 1) as u64,
+                geometry: Some(wbvector::Geometry::Point(coord.clone())),
+                attributes: vec![
+                    wbvector::FieldValue::Integer((idx + 1) as i64),
+                    wbvector::FieldValue::Integer(degree[idx]),
+                    wbvector::FieldValue::Float(closeness[idx]),
+                    wbvector::FieldValue::Float(betweenness[idx]),
+                ],
+            });
+        }
+
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
     }
 }
 

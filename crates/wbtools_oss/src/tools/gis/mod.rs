@@ -187,6 +187,7 @@ pub struct ShortestPathNetworkTool;
 pub struct MultimodalShortestPathTool;
 pub struct NetworkCentralityMetricsTool;
 pub struct NetworkAccessibilityMetricsTool;
+pub struct OdSensitivityAnalysisTool;
 pub struct NetworkNodeDegreeTool;
 pub struct NetworkServiceAreaTool;
 pub struct MapMatchingV1Tool;
@@ -25471,6 +25472,268 @@ impl Tool for NetworkAccessibilityMetricsTool {
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for OdSensitivityAnalysisTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "od_sensitivity_analysis",
+            display_name: "OD Sensitivity Analysis",
+            summary: "Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input line network layer.", required: true },
+                ToolParamSpec { name: "origins", description: "Origin point layer.", required: true },
+                ToolParamSpec { name: "destinations", description: "Destination point layer.", required: true },
+                ToolParamSpec { name: "edge_cost_field", description: "Required numeric line field used as an impedance multiplier for perturbation analysis.", required: true },
+                ToolParamSpec { name: "impedance_disturbance_range", description: "Range for cost perturbation as 'min_factor,max_factor' (e.g., '0.8,1.2' for ±20% variation).", required: false },
+                ToolParamSpec { name: "monte_carlo_samples", description: "Number of Monte Carlo samples for perturbation analysis (default 1, max 100).", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Optional node snapping tolerance for graph construction.", required: false },
+                ToolParamSpec { name: "max_snap_distance", description: "Optional max distance from origin/destination points to nearest network node.", required: false },
+                ToolParamSpec { name: "one_way_field", description: "Optional line field marking one-way digitized edges.", required: false },
+                ToolParamSpec { name: "blocked_field", description: "Optional line field marking blocked/closed edges.", required: false },
+                ToolParamSpec { name: "output", description: "Output CSV path with OD pairs and sensitivity statistics.", required: true },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("network.shp"));
+        defaults.insert("origins".to_string(), json!("origins.shp"));
+        defaults.insert("destinations".to_string(), json!("destinations.shp"));
+        defaults.insert("edge_cost_field".to_string(), json!("cost"));
+        defaults.insert("impedance_disturbance_range".to_string(), json!("0.8,1.2"));
+        defaults.insert("monte_carlo_samples".to_string(), json!(10));
+        let mut example_args = defaults.clone();
+        example_args.insert("output".to_string(), json!("od_sensitivity.csv"));
+
+        ToolManifest {
+            id: "od_sensitivity_analysis".to_string(),
+            display_name: "OD Sensitivity Analysis".to_string(),
+            summary: "Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.".to_string(),
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input line network layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "origins".to_string(), description: "Origin point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "destinations".to_string(), description: "Destination point layer.".to_string(), required: true },
+                ToolParamDescriptor { name: "edge_cost_field".to_string(), description: "Required numeric line field used as an impedance multiplier for perturbation analysis.".to_string(), required: true },
+                ToolParamDescriptor { name: "impedance_disturbance_range".to_string(), description: "Range for cost perturbation as 'min_factor,max_factor' (e.g., '0.8,1.2' for ±20% variation).".to_string(), required: false },
+                ToolParamDescriptor { name: "monte_carlo_samples".to_string(), description: "Number of Monte Carlo samples for perturbation analysis (default 1, max 100).".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Optional node snapping tolerance for graph construction.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_snap_distance".to_string(), description: "Optional max distance from origin/destination points to nearest network node.".to_string(), required: false },
+                ToolParamDescriptor { name: "one_way_field".to_string(), description: "Optional line field marking one-way digitized edges.".to_string(), required: false },
+                ToolParamDescriptor { name: "blocked_field".to_string(), description: "Optional line field marking blocked/closed edges.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path with OD pairs and sensitivity statistics.".to_string(), required: true },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "od_sensitivity_analysis_basic".to_string(),
+                description: "Computes OD costs with Monte Carlo impedance perturbation sensitivity.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["vector".to_string(), "network".to_string(), "sensitivity".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+
+        if input.geom_type != Some(wbvector::GeometryType::LineString)
+            && input.geom_type != Some(wbvector::GeometryType::MultiLineString)
+        {
+            return Err(ToolError::Validation("input must be a line layer".to_string()));
+        }
+        if origins.geom_type != Some(wbvector::GeometryType::Point)
+            && origins.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("origins must be a point layer".to_string()));
+        }
+        if destinations.geom_type != Some(wbvector::GeometryType::Point)
+            && destinations.geom_type != Some(wbvector::GeometryType::MultiPoint)
+        {
+            return Err(ToolError::Validation("destinations must be a point layer".to_string()));
+        }
+
+        let edge_cost_field = parse_string_arg(args, "edge_cost_field")?;
+        let _ = resolve_network_edge_cost_field(&input, Some(edge_cost_field))?;
+
+        if let Some(range_str) = parse_optional_string_arg(args, "impedance_disturbance_range") {
+            let parts: Vec<&str> = range_str.split(',').map(str::trim).collect();
+            if parts.len() != 2 {
+                return Err(ToolError::Validation(
+                    "impedance_disturbance_range must be 'min_factor,max_factor'".to_string(),
+                ));
+            }
+            let min_factor: f64 = parts[0].parse().map_err(|_| {
+                ToolError::Validation("impedance_disturbance_range min_factor must be numeric".to_string())
+            })?;
+            let max_factor: f64 = parts[1].parse().map_err(|_| {
+                ToolError::Validation("impedance_disturbance_range max_factor must be numeric".to_string())
+            })?;
+            if !min_factor.is_finite() || !max_factor.is_finite() || min_factor <= 0.0 || max_factor <= 0.0 {
+                return Err(ToolError::Validation(
+                    "impedance_disturbance_range factors must be positive and finite".to_string(),
+                ));
+            }
+        }
+
+        if let Some(samples) = parse_optional_f64_arg(args, "monte_carlo_samples") {
+            if !samples.is_finite() || samples < 1.0 || samples > 100.0 {
+                return Err(ToolError::Validation(
+                    "monte_carlo_samples must be between 1 and 100".to_string(),
+                ));
+            }
+        }
+
+        let _ = parse_vector_path_arg(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input = load_vector_arg(args, "input")?;
+        let origins = load_vector_arg(args, "origins")?;
+        let destinations = load_vector_arg(args, "destinations")?;
+        let snap_tolerance = parse_optional_f64_arg(args, "snap_tolerance").unwrap_or(0.0);
+        let max_snap_distance = parse_optional_f64_arg(args, "max_snap_distance").unwrap_or(f64::INFINITY);
+        let edge_cost_field = parse_string_arg(args, "edge_cost_field")?;
+        let one_way_field = parse_optional_string_arg(args, "one_way_field");
+        let blocked_field = parse_optional_string_arg(args, "blocked_field");
+        let output_path = parse_vector_path_arg(args, "output")?;
+
+        let range_str = parse_optional_string_arg(args, "impedance_disturbance_range")
+            .unwrap_or_else(|| "0.8,1.2");
+        let range_parts: Vec<&str> = range_str.split(',').map(str::trim).collect();
+        let min_factor: f64 = range_parts[0].parse().map_err(|_| {
+            ToolError::Validation("impedance_disturbance_range min_factor must be numeric".to_string())
+        })?;
+        let max_factor: f64 = range_parts[1].parse().map_err(|_| {
+            ToolError::Validation("impedance_disturbance_range max_factor must be numeric".to_string())
+        })?;
+
+        let num_samples = parse_optional_f64_arg(args, "monte_carlo_samples").unwrap_or(1.0) as usize;
+        let num_samples = num_samples.min(100).max(1);
+
+        let graph = build_line_network_graph(&input, snap_tolerance, Some(edge_cost_field), one_way_field, blocked_field, None)?;
+        if graph.nodes.is_empty() {
+            return Err(ToolError::Execution(
+                "input network contains no usable line segments".to_string(),
+            ));
+        }
+
+        let mut origin_coords = Vec::new();
+        for feature in &origins.features {
+            if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
+                origin_coords.push(coord.clone());
+            }
+        }
+        let mut dest_coords = Vec::new();
+        for feature in &destinations.features {
+            if let Some(wbvector::Geometry::Point(coord)) = &feature.geometry {
+                dest_coords.push(coord.clone());
+            }
+        }
+
+        // Compute baseline OD costs
+        let mut baseline_costs = Vec::new();
+        for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
+            if let Some((origin_node, snap_dist)) = nearest_network_node(&graph.nodes, orig_coord) {
+                if snap_dist <= max_snap_distance {
+                    let (dist, _) = dijkstra_tree(&graph, origin_node);
+                    for dest_coord in &dest_coords {
+                        if let Some((dest_node, dest_snap)) = nearest_network_node(&graph.nodes, dest_coord) {
+                            if dest_snap <= max_snap_distance && dist[dest_node].is_finite() {
+                                baseline_costs.push((orig_idx, dest_node, dist[dest_node] + dest_snap));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // For each Monte Carlo sample, perturb edge costs and collect results
+        let mut cost_samples: HashMap<(usize, usize), Vec<f64>> = HashMap::new();
+        for baseline in &baseline_costs {
+            cost_samples.insert((baseline.0, baseline.1), vec![baseline.2]);
+        }
+
+        for sample_idx in 0..num_samples {
+            if num_samples > 1 && sample_idx > 0 {
+                // Create perturbed graph for this sample
+                let mut perturbed_graph = graph.clone();
+                let mut rng_seed = (sample_idx as u64).wrapping_mul(12345);
+                for adj_list in &mut perturbed_graph.adjacency {
+                    for (_, cost) in adj_list {
+                        // Simple LCG for deterministic randomness
+                        rng_seed = rng_seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                        let rand_factor = min_factor + ((rng_seed as f64 / u64::MAX as f64) * (max_factor - min_factor));
+                        *cost *= rand_factor;
+                    }
+                }
+
+                // Compute OD costs with perturbed graph
+                for (orig_idx, orig_coord) in origin_coords.iter().enumerate() {
+                    if let Some((origin_node, snap_dist)) = nearest_network_node(&perturbed_graph.nodes, orig_coord) {
+                        if snap_dist <= max_snap_distance {
+                            let (dist, _) = dijkstra_tree(&perturbed_graph, origin_node);
+                            for (_dest_idx, dest_coord) in dest_coords.iter().enumerate() {
+                                if let Some((dest_node, dest_snap)) = nearest_network_node(&perturbed_graph.nodes, dest_coord) {
+                                    if dest_snap <= max_snap_distance && dist[dest_node].is_finite() {
+                                        let total_cost = dist[dest_node] + dest_snap;
+                                        cost_samples.entry((orig_idx, dest_node))
+                                            .or_insert_with(Vec::new)
+                                            .push(total_cost);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Compute statistics for each OD pair
+        let mut output_lines = vec!["origin_id,destination_id,baseline_cost,mean_cost,stdev_cost,min_cost,max_cost".to_string()];
+        for ((orig_idx, dest_node), samples) in cost_samples.iter() {
+            if samples.len() > 0 {
+                let baseline = samples[0];
+                let mean = samples.iter().sum::<f64>() / samples.len() as f64;
+                let variance = samples.iter()
+                    .map(|x| (x - mean).powi(2))
+                    .sum::<f64>() / samples.len() as f64;
+                let stdev = variance.sqrt();
+                let min_cost = samples.iter().cloned().fold(f64::INFINITY, f64::min);
+                let max_cost = samples.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+                output_lines.push(format!(
+                    "{},{},{:.6},{:.6},{:.6},{:.6},{:.6}",
+                    orig_idx + 1,
+                    dest_node + 1,
+                    baseline,
+                    mean,
+                    stdev,
+                    min_cost,
+                    max_cost
+                ));
+            }
+        }
+
+        let csv_content = output_lines.join("\n");
+        std::fs::write(&output_path, csv_content)
+            .map_err(|e| ToolError::Execution(format!("failed writing output CSV: {}", e)))?;
+
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("output".to_string(), json!(output_path));
+        outputs.insert("samples_computed".to_string(), json!(num_samples));
+        outputs.insert("od_pairs_analyzed".to_string(), json!(cost_samples.len()));
+
+        Ok(ToolRunResult { outputs })
     }
 }
 

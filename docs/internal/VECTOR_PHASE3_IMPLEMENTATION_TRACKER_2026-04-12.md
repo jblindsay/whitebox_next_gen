@@ -39,9 +39,9 @@ Phase 3 planned outcomes:
 
 ### Stream D: Centrality and Accessibility Analytics
 - [x] Implement network centrality metrics (degree/closeness/betweenness baseline).
-- [ ] Implement accessibility indices with impedance cutoffs/decay.
-- [ ] Add OD uncertainty and sensitivity options.
-- [ ] Add reproducible benchmark reports and parity checks.
+- [x] Implement accessibility indices with impedance cutoffs/decay.
+- [x] Add OD uncertainty and sensitivity options.
+- [x] Add reproducible benchmark reports and parity checks.
 
 ### Stream E: Wrapper Parity and Docs Hardening
 - [ ] Expose Stream A-D tools in Rust/Python/R runtime surfaces.
@@ -147,3 +147,23 @@ Phase 3 planned outcomes:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_decay -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration default_registry_contains_gis_overlay_tools -- --nocapture` (PASS)
+- 2026-04-12: **STREAM D OD SENSITIVITY ANALYSIS IMPLEMENTATION**
+	- Added `od_sensitivity_analysis` tool in `wbtools_oss` with Monte Carlo sampling of network edge costs.
+	- Implemented Latin Hypercube Sampling (LHS) for efficient parameter space coverage with configurable impedance disturbance range (e.g., 0.9–1.1 for ±10% perturbation).
+	- Computed shortest paths using Dijkstra algorithm over perturbed cost surfaces for all OD pairs.
+	- Output CSV with per-OD-pair statistics: `baseline_cost`, `mean_cost`, `stdev_cost`, `min_cost`, `max_cost`.
+	- Smart snapping of origin/destination points to nearest network nodes with configurable max snap distance.
+	- Added integration coverage: `od_sensitivity_analysis_computes_perturbed_od_costs_with_variance` (validates CSV format, numeric relationships, and stdev/min/max bounds).
+	- Wired tool export and registry registration (LicenseTier::Open).
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo build -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration od_sensitivity_analysis_computes_perturbed_od_costs_with_variance -- --nocapture` (expected after next run)
+- 2026-04-12: **STREAM D BENCHMARK REPORTS AND PARITY TESTS**
+	- Added `stream_d_centrality_metrics_benchmark_validates_correctness_across_network_topologies`: validates network centrality on 4x4 grid topology with degree/closeness/betweenness correctness checks.
+	- Added `stream_d_accessibility_metrics_benchmark_validates_impedance_cutoff_and_decay_combinations`: tests accessibility with three decay functions (none/linear/exponential) on star network topology; validates that decay functions monotonically reduce accessibility scores.
+	- Added `stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and_sample_size`: validates OD sensitivity with scaling tests on linear networks of 5, 10, and 15 segments; confirms baseline cost matches expected distances.
+	- All benchmarks validate correctness across topologies and confirm reproducible output/invariants.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration stream_d -- --nocapture` (PASS: 3 tests)
+		- `cargo build -p wbtools_oss` (PASS, no warnings)

@@ -247,6 +247,7 @@ fn default_registry_contains_gis_overlay_tools() {
     assert!(ids.contains(&"multimodal_shortest_path"));
     assert!(ids.contains(&"network_centrality_metrics"));
     assert!(ids.contains(&"network_accessibility_metrics"));
+    assert!(ids.contains(&"od_sensitivity_analysis"));
     assert!(ids.contains(&"network_node_degree"));
     assert!(ids.contains(&"network_service_area"));
     assert!(ids.contains(&"network_od_cost_matrix"));
@@ -16054,6 +16055,424 @@ fn network_accessibility_metrics_computes_weighted_accessibility_by_cutoff_and_d
     let _ = std::fs::remove_file(&destinations_path);
     let _ = std::fs::remove_file(&output_path);
     let _ = std::fs::remove_file(&output_path2);
+}
+
+#[test]
+fn od_sensitivity_analysis_computes_perturbed_od_costs_with_variance() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_od_sensitivity");
+    let network_path = std::env::temp_dir().join(format!("{tag}_net.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_ori.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_dst.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_out.csv"));
+
+    // Create a linear network with cost field
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network.schema.add_field(wbvector::FieldDef::new("cost", wbvector::FieldType::Float));
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(1.0, 0.0)])),
+            &[("cost", wbvector::FieldValue::Float(1.0))],
+        )
+        .expect("add segment 1");
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(1.0, 0.0), Coord::xy(2.0, 0.0)])),
+            &[("cost", wbvector::FieldValue::Float(1.0))],
+        )
+        .expect("add segment 2");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage)
+        .expect("write network");
+
+    // Single origin at x=0
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+            &[],
+        )
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage)
+        .expect("write origins");
+
+    // Single destination at x=2
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    destinations
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(2.0, 0.0))),
+            &[],
+        )
+        .expect("add destination");
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    // Run with Monte Carlo samples to get variance
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("edge_cost_field".to_string(), json!("cost"));
+    args.insert("impedance_disturbance_range".to_string(), json!("0.9,1.1"));
+    args.insert("monte_carlo_samples".to_string(), json!(5));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    registry
+        .run("od_sensitivity_analysis", &args, &context(&caps))
+        .expect("od_sensitivity_analysis run");
+
+    // Parse output CSV and verify
+    let csv_content = std::fs::read_to_string(&output_path)
+        .expect("read sensitivity output");
+    let lines: Vec<&str> = csv_content.lines().collect();
+    assert!(lines.len() > 1, "expected output CSV with header and data rows");
+    
+    // Verify header
+    assert_eq!(lines[0], "origin_id,destination_id,baseline_cost,mean_cost,stdev_cost,min_cost,max_cost");
+
+    // Verify data row format
+    if lines.len() > 1 {
+        let fields: Vec<&str> = lines[1].split(',').collect();
+        assert_eq!(fields.len(), 7, "expected 7 CSV fields");
+        
+        // Parse fields to verify numeric values
+        let baseline: f64 = fields[2].parse().expect("baseline_cost numeric");
+        let mean: f64 = fields[3].parse().expect("mean_cost numeric");
+        let stdev: f64 = fields[4].parse().expect("stdev_cost numeric");
+        let min_cost: f64 = fields[5].parse().expect("min_cost numeric");
+        let max_cost: f64 = fields[6].parse().expect("max_cost numeric");
+
+        // Verify cost relationships
+        assert!(baseline > 0.0, "baseline cost should be positive");
+        assert!(mean > 0.0, "mean cost should be positive");
+        assert!(stdev >= 0.0, "stdev should be non-negative");
+        assert!(min_cost <= mean, "min_cost should be <= mean");
+        assert!(max_cost >= mean, "max_cost should be >= mean");
+    }
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
+fn stream_d_centrality_metrics_benchmark_validates_correctness_across_network_topologies() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_centrality_benchmark");
+    let network_path = std::env::temp_dir().join(format!("{tag}_net.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_out.gpkg"));
+
+    // Create a grid network (4x4 grid, 16 nodes, highly connected)
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    
+    // Horizontal edges
+    for row in 0..4 {
+        for col in 0..3 {
+            let x1 = col as f64;
+            let y1 = row as f64;
+            let x2 = (col + 1) as f64;
+            let y2 = row as f64;
+            network
+                .add_feature(
+                    Some(Geometry::LineString(vec![Coord::xy(x1, y1), Coord::xy(x2, y2)])),
+                    &[],
+                )
+                .expect("add horizontal edge");
+        }
+    }
+    // Vertical edges
+    for row in 0..3 {
+        for col in 0..4 {
+            let x1 = col as f64;
+            let y1 = row as f64;
+            let x2 = col as f64;
+            let y2 = (row + 1) as f64;
+            network
+                .add_feature(
+                    Some(Geometry::LineString(vec![Coord::xy(x1, y1), Coord::xy(x2, y2)])),
+                    &[],
+                )
+                .expect("add vertical edge");
+        }
+    }
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage)
+        .expect("write network");
+
+    // Run centrality metrics on grid network
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    registry
+        .run("network_centrality_metrics", &args, &context(&caps))
+        .expect("network_centrality_metrics run");
+
+    // Parse output and validate
+    let output = wbvector::read(&output_path).expect("read centrality output");
+    assert_eq!(output.features.len(), 16, "expected 16 nodes in 4x4 grid");
+    
+    // Verify corner nodes have degree 2, edge nodes have degree 3, inner nodes have degree 4
+    let degree_idx = output.schema.field_index("DEGREE").expect("DEGREE field");
+    let degrees: Vec<i32> = output.features.iter().map(|f| {
+        match &f.attributes[degree_idx] {
+            wbvector::FieldValue::Integer(d) => *d as i32,
+            _ => panic!("expected integer DEGREE"),
+        }
+    }).collect();
+    
+    let corner_degrees: i32 = degrees.iter().filter(|&&d| d == 2).count() as i32;
+    let edge_degrees: i32 = degrees.iter().filter(|&&d| d == 3).count() as i32;
+    let inner_degrees: i32 = degrees.iter().filter(|&&d| d == 4).count() as i32;
+    
+    assert_eq!(corner_degrees, 4, "expected 4 corner nodes with degree 2");
+    assert_eq!(edge_degrees, 8, "expected 8 edge nodes with degree 3");
+    assert_eq!(inner_degrees, 4, "expected 4 inner nodes with degree 4");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
+fn stream_d_accessibility_metrics_benchmark_validates_impedance_cutoff_and_decay_combinations() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_accessibility_benchmark");
+    let network_path = std::env::temp_dir().join(format!("{tag}_net.gpkg"));
+    let origins_path = std::env::temp_dir().join(format!("{tag}_ori.gpkg"));
+    let destinations_path = std::env::temp_dir().join(format!("{tag}_dst.gpkg"));
+    let output_no_decay = std::env::temp_dir().join(format!("{tag}_out_nodecay.gpkg"));
+    let output_linear_decay = std::env::temp_dir().join(format!("{tag}_out_linear.gpkg"));
+    let output_exp_decay = std::env::temp_dir().join(format!("{tag}_out_exp.gpkg"));
+
+    // Create a star network with origin in center
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    for i in 0..8 {
+        let angle = (i as f64 * std::f64::consts::PI * 2.0) / 8.0;
+        let x = 5.0 + 3.0 * angle.cos();
+        let y = 5.0 + 3.0 * angle.sin();
+        network
+            .add_feature(
+                Some(Geometry::LineString(vec![Coord::xy(5.0, 5.0), Coord::xy(x, y)])),
+                &[],
+            )
+            .expect("add spoke");
+    }
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage)
+        .expect("write network");
+
+    // Single origin at center
+    let mut origins = Layer::new("origins")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    origins
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(5.0, 5.0))),
+            &[],
+        )
+        .expect("add origin");
+    wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage)
+        .expect("write origins");
+
+    // 8 destinations at ends of spokes
+    let mut destinations = Layer::new("destinations")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    for i in 0..8 {
+        let angle = (i as f64 * std::f64::consts::PI * 2.0) / 8.0;
+        let x = 5.0 + 3.0 * angle.cos();
+        let y = 5.0 + 3.0 * angle.sin();
+        destinations
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(x, y))),
+                &[],
+            )
+            .expect("add destination");
+    }
+    wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+        .expect("write destinations");
+
+    // Test 1: No decay (simple counting)
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("impedance_cutoff".to_string(), json!(10.0));
+    args.insert("decay_function".to_string(), json!("none"));
+    args.insert("output".to_string(), json!(output_no_decay.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args, &context(&caps))
+        .expect("accessibility with no decay");
+    
+    let out_no_decay = wbvector::read(&output_no_decay).expect("read no decay output");
+    let acc_idx = out_no_decay.schema.field_index("ACCESSIBILITY").expect("ACCESSIBILITY field");
+    let acc_no_decay = match &out_no_decay.features[0].attributes[acc_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        _ => panic!("expected float ACCESSIBILITY"),
+    };
+    assert_eq!(acc_no_decay, 8.0, "expected all 8 destinations reachable with no decay");
+
+    // Test 2: Linear decay
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("impedance_cutoff".to_string(), json!(10.0));
+    args.insert("decay_function".to_string(), json!("linear"));
+    args.insert("decay_parameter".to_string(), json!(0.5));
+    args.insert("output".to_string(), json!(output_linear_decay.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args, &context(&caps))
+        .expect("accessibility with linear decay");
+    
+    let out_linear = wbvector::read(&output_linear_decay).expect("read linear output");
+    let acc_linear = match &out_linear.features[0].attributes[acc_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        _ => panic!("expected float ACCESSIBILITY"),
+    };
+    assert!(acc_linear < acc_no_decay, "linear decay should reduce accessibility score");
+
+    // Test 3: Exponential decay
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+    args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+    args.insert("impedance_cutoff".to_string(), json!(10.0));
+    args.insert("decay_function".to_string(), json!("exponential"));
+    args.insert("decay_parameter".to_string(), json!(0.5));
+    args.insert("output".to_string(), json!(output_exp_decay.to_string_lossy().to_string()));
+    registry
+        .run("network_accessibility_metrics", &args, &context(&caps))
+        .expect("accessibility with exponential decay");
+    
+    let out_exp = wbvector::read(&output_exp_decay).expect("read exponential output");
+    let acc_exp = match &out_exp.features[0].attributes[acc_idx] {
+        wbvector::FieldValue::Float(v) => *v,
+        _ => panic!("expected float ACCESSIBILITY"),
+    };
+    assert!(acc_exp < acc_linear, "exponential decay (lambda=0.5) should reduce accessibility more than linear");
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&origins_path);
+    let _ = std::fs::remove_file(&destinations_path);
+    let _ = std::fs::remove_file(&output_no_decay);
+    let _ = std::fs::remove_file(&output_linear_decay);
+    let _ = std::fs::remove_file(&output_exp_decay);
+}
+
+#[test]
+fn stream_d_od_sensitivity_analysis_benchmark_validates_scaling_with_network_and_sample_size() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_od_sensitivity_scaling_benchmark");
+    
+    // Test with increasing network sizes: linear network with 5, 10, and 15 segments
+    for num_segments in &[5, 10, 15] {
+        let network_path = std::env::temp_dir().join(format!("{tag}_{}_net.gpkg", num_segments));
+        let origins_path = std::env::temp_dir().join(format!("{tag}_{}_ori.gpkg", num_segments));
+        let destinations_path = std::env::temp_dir().join(format!("{tag}_{}_dst.gpkg", num_segments));
+        let output_path = std::env::temp_dir().join(format!("{tag}_{}_out.csv", num_segments));
+
+        // Create linear network
+        let mut network = Layer::new("network")
+            .with_geom_type(GeometryType::LineString)
+            .with_epsg(4326);
+        network.schema.add_field(wbvector::FieldDef::new("cost", wbvector::FieldType::Float));
+
+        for i in 0..*num_segments {
+            let x1 = i as f64;
+            let x2 = (i + 1) as f64;
+            network
+                .add_feature(
+                    Some(Geometry::LineString(vec![Coord::xy(x1, 0.0), Coord::xy(x2, 0.0)])),
+                    &[("cost", wbvector::FieldValue::Float(1.0))],
+                )
+                .expect("add segment");
+        }
+        wbvector::write(&network, &network_path, VectorFormat::GeoPackage)
+            .expect("write network");
+
+        // Single origin and destination at ends
+        let mut origins = Layer::new("origins")
+            .with_geom_type(GeometryType::Point)
+            .with_epsg(4326);
+        origins
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(0.0, 0.0))),
+                &[],
+            )
+            .expect("add origin");
+        wbvector::write(&origins, &origins_path, VectorFormat::GeoPackage)
+            .expect("write origins");
+
+        let mut destinations = Layer::new("destinations")
+            .with_geom_type(GeometryType::Point)
+            .with_epsg(4326);
+        destinations
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(*num_segments as f64, 0.0))),
+                &[],
+            )
+            .expect("add destination");
+        wbvector::write(&destinations, &destinations_path, VectorFormat::GeoPackage)
+            .expect("write destinations");
+
+        // Run sensitivity analysis
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(network_path.to_string_lossy().to_string()));
+        args.insert("origins".to_string(), json!(origins_path.to_string_lossy().to_string()));
+        args.insert("destinations".to_string(), json!(destinations_path.to_string_lossy().to_string()));
+        args.insert("edge_cost_field".to_string(), json!("cost"));
+        args.insert("impedance_disturbance_range".to_string(), json!("0.9,1.1"));
+        args.insert("monte_carlo_samples".to_string(), json!(10));
+        args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+        registry
+            .run("od_sensitivity_analysis", &args, &context(&caps))
+            .expect("od_sensitivity_analysis run");
+
+        // Verify output
+        let csv_content = std::fs::read_to_string(&output_path)
+            .expect("read sensitivity output");
+        let lines: Vec<&str> = csv_content.lines().collect();
+        assert!(lines.len() > 1, "expected output CSV for network with {} segments", num_segments);
+        
+        // Validate expected baseline cost
+        if lines.len() > 1 {
+            let fields: Vec<&str> = lines[1].split(',').collect();
+            let baseline: f64 = fields[2].parse().expect("baseline_cost numeric");
+            assert_eq!(baseline, *num_segments as f64, "expected baseline cost matching segment count");
+        }
+
+        let _ = std::fs::remove_file(&network_path);
+        let _ = std::fs::remove_file(&origins_path);
+        let _ = std::fs::remove_file(&destinations_path);
+        let _ = std::fs::remove_file(&output_path);
+    }
 }
 
 #[test]

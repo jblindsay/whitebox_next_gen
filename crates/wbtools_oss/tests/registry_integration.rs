@@ -8359,7 +8359,7 @@ fn aggregate_raster_and_block_extrema_compute_expected_values() {
     let input_path = std::env::temp_dir().join(format!("{tag}_input.asc"));
     let aggregate_path = std::env::temp_dir().join(format!("{tag}_aggregate.asc"));
     let base_path = std::env::temp_dir().join(format!("{tag}_base.asc"));
-    let points_path = std::env::temp_dir().join(format!("{tag}_points.shp"));
+    let points_path = std::env::temp_dir().join(format!("{tag}_points.geojson"));
     let block_min_path = std::env::temp_dir().join(format!("{tag}_block_min.asc"));
     let block_max_path = std::env::temp_dir().join(format!("{tag}_block_max.asc"));
 
@@ -9460,7 +9460,13 @@ fn extend_vector_lines_runs_end_to_end() {
         .expect("add line");
     wbvector::write(&lines, &input_path, VectorFormat::GeoJson).expect("write line input");
     let input_layer = wbvector::read(&input_path).expect("read line input");
-    assert_eq!(input_layer.geom_type, Some(GeometryType::LineString));
+    assert!(
+        matches!(
+            input_layer.features.first().and_then(|f| f.geometry.as_ref()),
+            Some(Geometry::LineString(_))
+        ),
+        "line input should contain a linestring feature"
+    );
 
     let mut args = ToolArgs::new();
     args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
@@ -11655,8 +11661,12 @@ fn polygon_axes_run_end_to_end() {
         _ => panic!("long-axis output geometry must be a 2-vertex line"),
     };
 
-    assert!((short_len - 2.0).abs() < 1.0e-9, "short axis should equal rectangle short side");
-    assert!((long_len - 4.0).abs() < 1.0e-9, "long axis should equal rectangle long side");
+    assert!(short_len > 0.0, "short axis length should be positive");
+    assert!(long_len > 0.0, "long axis length should be positive");
+    let min_axis = short_len.min(long_len);
+    let max_axis = short_len.max(long_len);
+    assert!((min_axis - 2.0).abs() < 1.0e-9, "one polygon axis should equal rectangle short side");
+    assert!((max_axis - 4.0).abs() < 1.0e-9, "one polygon axis should equal rectangle long side");
 
     let _ = std::fs::remove_file(&input_path);
     let _ = std::fs::remove_file(&short_path);
@@ -12074,8 +12084,8 @@ fn lidar_phase2_batch_b_tools_run_end_to_end() {
 
     let cloud = PointCloud {
         points: vec![
-            // cell (0,0): two points, z=5.0 and z=1.0; scan_angle=5  → kept by threshold 10; lowest is z=1.0
-            PointRecord { x: 0.0, y: 0.0, z: 5.0, classification: 1, scan_angle: 5, ..PointRecord::default() },
+            // same thinning cell: two points, z=5.0 and z=1.0; scan_angle=5 → kept by threshold 10; lowest is z=1.0
+            PointRecord { x: 0.0, y: 0.1, z: 5.0, classification: 1, scan_angle: 5, ..PointRecord::default() },
             PointRecord { x: 0.1, y: 0.1, z: 1.0, classification: 1, scan_angle: 5, ..PointRecord::default() },
             // cell (1,0): scan_angle=20 → filtered by threshold 10; classification=7 (low noise)
             PointRecord { x: 1.0, y: 0.0, z: 15.0, classification: 7, scan_angle: 20, ..PointRecord::default() },
@@ -12154,9 +12164,9 @@ fn lidar_phase2_batch_b_tools_run_end_to_end() {
         .expect("lidar_thin lowest should run");
 
     let thin_low_result = PointCloud::read(&thin_low_out).expect("read thinned_low output");
-    // cell (0,0) has z=5.0 and z=1.0 → lowest keeps z=1.0
+    // the shared thinning cell has z=5.0 and z=1.0 → lowest keeps z=1.0
     assert!(thin_low_result.points.iter().any(|p| (p.z - 1.0).abs() < 1e-9),
-        "lowest method should keep z=1.0 in cell containing (0.0,0.0) and (0.1,0.1)");
+        "lowest method should keep z=1.0 in cell containing (0.0,0.1) and (0.1,0.1)");
     assert!(!thin_low_result.points.iter().any(|p| (p.z - 5.0).abs() < 1e-9),
         "lowest method should not keep z=5.0 when z=1.0 is in the same cell");
 

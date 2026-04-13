@@ -24197,10 +24197,20 @@ fn dijkstra_multimodal_shortest_path(
     goal: usize,
     transfer_penalty: f64,
 ) -> Option<(f64, Vec<usize>, Vec<usize>)> {
-    if start == goal {
-        return Some((0.0, vec![start], Vec::new()));
-    }
+    let search = dijkstra_multimodal_from_source(graph, start, transfer_penalty);
+    reconstruct_multimodal_path(&search, start, goal)
+}
 
+struct MultimodalSourceSearch {
+    parent: HashMap<(usize, usize), (usize, usize)>,
+    best_state_by_node: HashMap<usize, (usize, f64)>,
+}
+
+fn dijkstra_multimodal_from_source(
+    graph: &MultimodalNetworkGraph,
+    start: usize,
+    transfer_penalty: f64,
+) -> MultimodalSourceSearch {
     let no_mode = 0usize;
     let mut dist = HashMap::<(usize, usize), f64>::new();
     let mut parent = HashMap::<(usize, usize), (usize, usize)>::new();
@@ -24213,9 +24223,6 @@ fn dijkstra_multimodal_shortest_path(
         prev: no_mode,
     });
 
-    let mut goal_state: Option<(usize, usize)> = None;
-    let mut goal_cost = f64::INFINITY;
-
     while let Some(DijkstraState { cost, node, prev }) = heap.pop() {
         let key = (prev, node);
         let Some(best) = dist.get(&key).copied() else {
@@ -24223,11 +24230,6 @@ fn dijkstra_multimodal_shortest_path(
         };
         if cost > best {
             continue;
-        }
-        if node == goal {
-            goal_state = Some(key);
-            goal_cost = cost;
-            break;
         }
 
         for edge in &graph.adjacency[node] {
@@ -24251,10 +24253,39 @@ fn dijkstra_multimodal_shortest_path(
         }
     }
 
-    let mut state = goal_state?;
+    let mut best_state_by_node = HashMap::<usize, (usize, f64)>::new();
+    for ((mode, node), cost) in &dist {
+        match best_state_by_node.get(node).copied() {
+            Some((_, best_cost)) if *cost >= best_cost => {}
+            _ => {
+                best_state_by_node.insert(*node, (*mode, *cost));
+            }
+        }
+    }
+
+    MultimodalSourceSearch {
+        parent,
+        best_state_by_node,
+    }
+}
+
+fn reconstruct_multimodal_path(
+    search: &MultimodalSourceSearch,
+    start: usize,
+    goal: usize,
+) -> Option<(f64, Vec<usize>, Vec<usize>)> {
+    if start == goal {
+        return Some((0.0, vec![start], Vec::new()));
+    }
+
+    let no_mode = 0usize;
+    let (goal_mode, goal_cost) = search.best_state_by_node.get(&goal).copied()?;
+    let goal_state = (goal_mode, goal);
+
+    let mut state = goal_state;
     let mut node_path = vec![state.1];
     let mut mode_path = Vec::<usize>::new();
-    while let Some(prev_state) = parent.get(&state).copied() {
+    while let Some(prev_state) = search.parent.get(&state).copied() {
         mode_path.push(state.0);
         state = prev_state;
         node_path.push(state.1);
@@ -25568,14 +25599,14 @@ impl Tool for MultimodalOdCostMatrixTool {
             let scenario_rows: Vec<String> = origin_nodes
                 .par_iter()
                 .flat_map_iter(|(origin_fid, origin_node)| {
+                    let source_search = dijkstra_multimodal_from_source(&graph, *origin_node, transfer_penalty);
                     destination_nodes
                         .iter()
                         .map(|(dest_fid, dest_node)| {
-                            if let Some((cost, _node_path, mode_path)) = dijkstra_multimodal_shortest_path(
-                                &graph,
+                            if let Some((cost, _node_path, mode_path)) = reconstruct_multimodal_path(
+                                &source_search,
                                 *origin_node,
                                 *dest_node,
-                                transfer_penalty,
                             ) {
                                 let (mode_changes, mode_seq) = multimodal_mode_summary(&graph, &mode_path);
                                 if include_scenario {
@@ -25877,14 +25908,14 @@ impl Tool for MultimodalRoutesFromOdTool {
             let routes: Vec<(i64, i64, usize, usize, f64, i64, String, Vec<wbvector::Coord>)> = origin_nodes
                 .par_iter()
                 .flat_map_iter(|(origin_fid, origin_node)| {
+                    let source_search = dijkstra_multimodal_from_source(&graph, *origin_node, transfer_penalty);
                     destination_nodes
                         .iter()
                         .filter_map(|(dest_fid, dest_node)| {
-                            let (cost, node_path, mode_path) = dijkstra_multimodal_shortest_path(
-                                &graph,
+                            let (cost, node_path, mode_path) = reconstruct_multimodal_path(
+                                &source_search,
                                 *origin_node,
                                 *dest_node,
-                                transfer_penalty,
                             )?;
                             let coords = node_path
                                 .iter()

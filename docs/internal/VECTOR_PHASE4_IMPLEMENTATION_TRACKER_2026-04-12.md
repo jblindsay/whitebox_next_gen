@@ -41,7 +41,7 @@ Phase 4 planned outcomes:
 
 ### Stream D: Performance and Scalability Hardening
 - [x] Add spatial indexing for snapping origins/destinations to networks.
-- [ ] Reduce repeated shortest-path cost where multi-query reuse is possible.
+- [x] Reduce repeated shortest-path cost where multi-query reuse is possible.
 - [ ] Evaluate parallel execution for OD sensitivity and accessibility batches.
 - [ ] Publish large-network benchmark reports and runtime targets.
 
@@ -145,4 +145,19 @@ Scheduling note:
 	- Updated `snap_points_to_network_nodes` to use indexed nearest-neighbour lookups for origin/destination snapping.
 	- Validation commands:
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-13: **STREAM D STEP 2: MULTI-QUERY SHORTEST-PATH REUSE IMPLEMENTED**
+	- Added reusable multimodal single-source search and reconstruction helpers for batched OD workflows.
+	- Updated `multimodal_od_cost_matrix` and `multimodal_routes_from_od` to run one source search per origin and reuse the result for all destination queries.
+	- Preserved route reconstruction outputs (cost, mode changes, mode sequence, and route geometry) while reducing repeated path-expansion work.
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration dinf_pointer_runs_on_geographic_dem -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration dinf_flow_accum_scales_geographic_pointer_input -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration fd8_flow_accum_scales_geographic_dem -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration flow_accum_full_workflow_scales_geographic_dem -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration aggregate_raster_and_block_extrema_compute_expected_values -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration extend_vector_lines_runs_end_to_end -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration polygon_axes_run_end_to_end -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration lidar_phase2_batch_b_tools_run_end_to_end -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)

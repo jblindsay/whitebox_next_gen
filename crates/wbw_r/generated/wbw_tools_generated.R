@@ -1491,6 +1491,18 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Produces weighted multi-azimuth shaded-relief.
     run_tool("multidirectional_hillshade", list(...))
   }
+  session$multimodal_od_cost_matrix <- function(...) {
+    # Computes batched multimodal OD costs and mode summaries between origin and destination point sets.
+    run_tool("multimodal_od_cost_matrix", list(...))
+  }
+  session$multimodal_routes_from_od <- function(...) {
+    # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
+    run_tool("multimodal_routes_from_od", list(...))
+  }
+  session$multimodal_shortest_path <- function(...) {
+    # Finds a mode-aware shortest path over a line network with configurable transfer penalties.
+    run_tool("multimodal_shortest_path", list(...))
+  }
   session$multipart_to_singlepart <- function(...) {
     # Converts a vector containing multi-part features into one with only single-part features.
     run_tool("multipart_to_singlepart", list(...))
@@ -1558,6 +1570,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$negate <- function(...) {
     # Negates each non-nodata raster cell value.
     run_tool("negate", list(...))
+  }
+  session$network_accessibility_metrics <- function(...) {
+    # Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.
+    run_tool("network_accessibility_metrics", list(...))
+  }
+  session$network_centrality_metrics <- function(...) {
+    # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
+    run_tool("network_centrality_metrics", list(...))
   }
   session$network_connected_components <- function(...) {
     # Assigns a connected-component ID to each line feature in a network.
@@ -1630,6 +1650,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$num_upslope_neighbours <- function(...) {
     # Counts the number of 8-neighbour cells higher than each DEM cell.
     run_tool("num_upslope_neighbours", list(...))
+  }
+  session$od_sensitivity_analysis <- function(...) {
+    # Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.
+    run_tool("od_sensitivity_analysis", list(...))
   }
   session$olympic_filter <- function(...) {
     # Performs Olympic smoothing by averaging local values excluding min and max.
@@ -2406,6 +2430,18 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$vector_summary_statistics <- function(...) {
     # Computes grouped summary statistics for a numeric field and writes the result to CSV.
     run_tool("vector_summary_statistics", list(...))
+  }
+  session$vehicle_routing_cvrp <- function(...) {
+    # Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.
+    run_tool("vehicle_routing_cvrp", list(...))
+  }
+  session$vehicle_routing_pickup_delivery <- function(...) {
+    # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
+    run_tool("vehicle_routing_pickup_delivery", list(...))
+  }
+  session$vehicle_routing_vrptw <- function(...) {
+    # Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.
+    run_tool("vehicle_routing_vrptw", list(...))
   }
   session$vertical_excess_curvature <- function(...) {
     # Calculates vertical excess curvature from a DEM.
@@ -4644,6 +4680,24 @@ multidirectional_hillshade <- function(...) {
   session$multidirectional_hillshade(...)
 }
 
+multimodal_od_cost_matrix <- function(...) {
+  # Computes batched multimodal OD costs and mode summaries between origin and destination point sets.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$multimodal_od_cost_matrix(...)
+}
+
+multimodal_routes_from_od <- function(...) {
+  # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$multimodal_routes_from_od(...)
+}
+
+multimodal_shortest_path <- function(...) {
+  # Finds a mode-aware shortest path over a line network with configurable transfer penalties.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$multimodal_shortest_path(...)
+}
+
 multipart_to_singlepart <- function(...) {
   # Converts a vector containing multi-part features into one with only single-part features.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
@@ -4744,6 +4798,18 @@ negate <- function(...) {
   # Negates each non-nodata raster cell value.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$negate(...)
+}
+
+network_accessibility_metrics <- function(...) {
+  # Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$network_accessibility_metrics(...)
+}
+
+network_centrality_metrics <- function(...) {
+  # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$network_centrality_metrics(...)
 }
 
 network_connected_components <- function(...) {
@@ -4852,6 +4918,12 @@ num_upslope_neighbours <- function(...) {
   # Counts the number of 8-neighbour cells higher than each DEM cell.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$num_upslope_neighbours(...)
+}
+
+od_sensitivity_analysis <- function(...) {
+  # Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$od_sensitivity_analysis(...)
 }
 
 olympic_filter <- function(...) {
@@ -6016,6 +6088,24 @@ vector_summary_statistics <- function(...) {
   # Computes grouped summary statistics for a numeric field and writes the result to CSV.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$vector_summary_statistics(...)
+}
+
+vehicle_routing_cvrp <- function(...) {
+  # Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$vehicle_routing_cvrp(...)
+}
+
+vehicle_routing_pickup_delivery <- function(...) {
+  # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$vehicle_routing_pickup_delivery(...)
+}
+
+vehicle_routing_vrptw <- function(...) {
+  # Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$vehicle_routing_vrptw(...)
 }
 
 vertical_excess_curvature <- function(...) {

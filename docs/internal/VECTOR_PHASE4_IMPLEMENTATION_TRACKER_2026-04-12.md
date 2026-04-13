@@ -48,7 +48,7 @@ Phase 4 planned outcomes:
 ### Stream E: Wrapper UX and Cookbook Expansion
 - [ ] Add optional high-level convenience methods in Python and R where justified.
 - [x] Expand R and Python cookbooks with Phase 4 scenarios.
-- [ ] Regenerate any wrappers or stubs needed for new public APIs.
+- [x] Regenerate any wrappers or stubs needed for new public APIs.
 - [x] Finalize Phase 4 regression gate commands and release checklist.
 
 ## Suggested Execution Order
@@ -193,3 +193,9 @@ Scheduling note:
 	- Published a dedicated Phase 4 regression gate and release checklist document:
 		- `docs/internal/PHASE4_REGRESSION_GATES_AND_RELEASE_CHECKLIST_2026-04-13.md`
 	- Included targeted commands for Stream A-D Phase 4 additions, compile gates, wrapper smoke checks, and benchmark artifact verification.
+- 2026-04-13: **STREAM E STEP: WRAPPER/STUB SURFACES REFRESHED FOR PHASE 4 APIS**
+	- Regenerated open-tier R wrapper modules:
+		- `crates/wbw_r/generated/wbw_tools_generated.R`
+		- `crates/wbw_r/r-package/whiteboxworkflows/R/zz_generated_wrappers.R`
+	- Verified Phase 4 APIs are now present in generated R surfaces (`multimodal_od_cost_matrix`, `multimodal_routes_from_od`, `network_accessibility_metrics`, `od_sensitivity_analysis`).
+	- Confirmed Python wrapper surface remains generic via `run_tool` and existing `.pyi` declarations; no additional Python stub regeneration was required for registry-exposed tool IDs.

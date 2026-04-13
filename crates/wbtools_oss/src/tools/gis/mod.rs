@@ -27190,6 +27190,8 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "start_time", description: "Route start time in model time units (default: 0).", required: false },
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
+                ToolParamSpec { name: "enforce_time_windows", description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).", required: false },
+                ToolParamSpec { name: "allowed_lateness", description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with time-window diagnostics.", required: false },
@@ -27209,6 +27211,8 @@ impl Tool for VehicleRoutingVrptwTool {
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
         defaults.insert("start_time".to_string(), json!(0.0));
         defaults.insert("travel_speed".to_string(), json!(1.0));
+        defaults.insert("enforce_time_windows".to_string(), json!(false));
+        defaults.insert("allowed_lateness".to_string(), json!(0.0));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("vrptw_routes.gpkg"));
 
@@ -27229,6 +27233,8 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "start_time".to_string(), description: "Route start time in model time units (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
+                ToolParamDescriptor { name: "enforce_time_windows".to_string(), description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_lateness".to_string(), description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with time-window diagnostics.".to_string(), required: false },
@@ -27338,6 +27344,25 @@ impl Tool for VehicleRoutingVrptwTool {
             }
         }
 
+        if let Some(allowed_lateness) = args.get("allowed_lateness").and_then(|v| v.as_f64()) {
+            if !allowed_lateness.is_finite() || allowed_lateness < 0.0 {
+                return Err(ToolError::Validation(
+                    "allowed_lateness must be finite and >= 0".to_string(),
+                ));
+            }
+        }
+
+        if args.get("enforce_time_windows").is_some()
+            && args
+                .get("enforce_time_windows")
+                .and_then(|v| v.as_bool())
+                .is_none()
+        {
+            return Err(ToolError::Validation(
+                "enforce_time_windows must be a boolean when provided".to_string(),
+            ));
+        }
+
         if let Some(max_vehicles) = args.get("max_vehicles").and_then(|v| v.as_u64()) {
             if max_vehicles == 0 {
                 return Err(ToolError::Validation("max_vehicles must be >= 1 when provided".to_string()));
@@ -27382,6 +27407,14 @@ impl Tool for VehicleRoutingVrptwTool {
             .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
         let start_time = args.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
         let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
+        let enforce_time_windows = args
+            .get("enforce_time_windows")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let allowed_lateness = args
+            .get("allowed_lateness")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
         let output_path = parse_vector_path_arg(args, "output")?;
         let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
@@ -27461,6 +27494,7 @@ impl Tool for VehicleRoutingVrptwTool {
         let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64, f64, i64, f64)>::new();
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, f64, f64, f64, wbvector::Coord)>::new();
         let mut infeasible_stops = 0usize;
+        let mut time_window_infeasible_stops = 0usize;
         let mut late_stop_count = 0usize;
         let mut total_lateness = 0.0f64;
 
@@ -27487,6 +27521,15 @@ impl Tool for VehicleRoutingVrptwTool {
                     if stop.demand > remaining_capacity + 1.0e-12 {
                         continue;
                     }
+                    if enforce_time_windows {
+                        let preview_travel_time = coord_dist2(&current, &stop.coord).sqrt() / travel_speed;
+                        let preview_arrival = current_time + preview_travel_time;
+                        let preview_service_start = preview_arrival.max(stop.tw_start);
+                        let preview_lateness = (preview_service_start - stop.tw_end).max(0.0);
+                        if preview_lateness > allowed_lateness + 1.0e-12 {
+                            continue;
+                        }
+                    }
                     let d = coord_dist2(&current, &stop.coord).sqrt();
                     if d < best_dist || (d == best_dist && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid) {
                         best_dist = d;
@@ -27503,6 +27546,19 @@ impl Tool for VehicleRoutingVrptwTool {
                             unassigned.remove(pos);
                             infeasible_stops += 1;
                             continue;
+                        }
+                        if enforce_time_windows {
+                            if let Some(pos) = unassigned.iter().position(|s| {
+                                let preview_travel_time = coord_dist2(&current, &s.coord).sqrt() / travel_speed;
+                                let preview_arrival = current_time + preview_travel_time;
+                                let preview_service_start = preview_arrival.max(s.tw_start);
+                                let preview_lateness = (preview_service_start - s.tw_end).max(0.0);
+                                preview_lateness > allowed_lateness + 1.0e-12
+                            }) {
+                                unassigned.remove(pos);
+                                time_window_infeasible_stops += 1;
+                                continue;
+                            }
                         }
                     }
                     break;
@@ -27616,12 +27672,18 @@ impl Tool for VehicleRoutingVrptwTool {
         outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
         outputs.insert(
             "unserved_stop_count".to_string(),
-            json!(unassigned.len() + infeasible_stops),
+            json!(unassigned.len() + infeasible_stops + time_window_infeasible_stops),
         );
         outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
+        outputs.insert(
+            "time_window_infeasible_stop_count".to_string(),
+            json!(time_window_infeasible_stops),
+        );
         outputs.insert("late_stop_count".to_string(), json!(late_stop_count));
         outputs.insert("total_lateness".to_string(), json!(total_lateness));
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+        outputs.insert("enforce_time_windows".to_string(), json!(enforce_time_windows));
+        outputs.insert("allowed_lateness".to_string(), json!(allowed_lateness));
 
         if let Some(assign_path) = assignment_output {
             let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw_assignments", stops.name));

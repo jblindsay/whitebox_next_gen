@@ -462,6 +462,118 @@ fn vehicle_routing_vrptw_reports_lateness() {
 }
 
 #[test]
+fn vehicle_routing_vrptw_hard_windows_report_infeasible_stops() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_vrptw_hard_windows");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let routes_out = std::env::temp_dir().join(format!("{tag}_routes.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(0.0, 0.0), Coord::xy(4.0, 0.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_start", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("tw_end", FieldType::Float));
+    stops.schema.add_field(FieldDef::new("service_time", FieldType::Float));
+
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(1.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("tw_start", FieldValue::Float(0.0)),
+                ("tw_end", FieldValue::Float(10.0)),
+                ("service_time", FieldValue::Float(1.0)),
+            ],
+        )
+        .expect("add stop 1");
+    stops
+        .add_feature(
+            Some(Geometry::Point(Coord::xy(3.0, 0.0))),
+            &[
+                ("demand", FieldValue::Float(1.0)),
+                ("tw_start", FieldValue::Float(0.0)),
+                ("tw_end", FieldValue::Float(2.0)),
+                ("service_time", FieldValue::Float(1.0)),
+            ],
+        )
+        .expect("add stop 2");
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut args = ToolArgs::new();
+    args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    args.insert("demand_field".to_string(), json!("demand"));
+    args.insert("tw_start_field".to_string(), json!("tw_start"));
+    args.insert("tw_end_field".to_string(), json!("tw_end"));
+    args.insert("service_time_field".to_string(), json!("service_time"));
+    args.insert("vehicle_capacity".to_string(), json!(10.0));
+    args.insert("travel_speed".to_string(), json!(1.0));
+    args.insert("start_time".to_string(), json!(0.0));
+    args.insert("enforce_time_windows".to_string(), json!(true));
+    args.insert("allowed_lateness".to_string(), json!(0.0));
+    args.insert("output".to_string(), json!(routes_out.to_string_lossy().to_string()));
+
+    let result = registry
+        .run("vehicle_routing_vrptw", &args, &context(&caps))
+        .expect("vehicle_routing_vrptw hard-window run");
+
+    let served = result
+        .outputs
+        .get("served_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("served_stop_count output");
+    let unserved = result
+        .outputs
+        .get("unserved_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("unserved_stop_count output");
+    let tw_infeasible = result
+        .outputs
+        .get("time_window_infeasible_stop_count")
+        .and_then(|v| v.as_u64())
+        .expect("time_window_infeasible_stop_count output");
+    assert_eq!(served, 1, "strict windows should only serve first stop");
+    assert_eq!(unserved, 1, "strict windows should leave one stop unserved");
+    assert_eq!(tw_infeasible, 1, "strict windows should report one infeasible stop");
+
+    let routes = wbvector::read(&routes_out).expect("read routes");
+    assert_eq!(routes.features.len(), 1);
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&routes_out);
+}
+
+#[test]
 fn vehicle_routing_pickup_delivery_enforces_pair_precedence() {
     use std::collections::HashMap;
     use wbvector::{FieldDef, FieldType, FieldValue};

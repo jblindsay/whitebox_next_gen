@@ -28,7 +28,7 @@ Phase 3 planned outcomes:
 ### Stream B: Time-Window and Pickup/Delivery Extensions
 - [x] Implement VRPTW constraints and violation reporting.
 - [x] Implement pickup-delivery pairing and precedence constraints.
-- [ ] Add infeasibility diagnostics and relaxation options.
+- [x] Add infeasibility diagnostics and relaxation options.
 - [ ] Add benchmark scenarios for municipal/logistics workflows.
 
 ### Stream C: Multimodal Routing Foundation
@@ -95,4 +95,13 @@ Phase 3 planned outcomes:
 	- Validation commands:
 		- `cargo check -p wbtools_oss` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_pickup_delivery_enforces_pair_precedence -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)
+- 2026-04-12: **STREAM B INFEASIBILITY + RELAXATION CONTROLS (VRPTW)**
+	- Extended `vehicle_routing_vrptw` with `enforce_time_windows` and `allowed_lateness` parameters for strict-window operation and configurable lateness relaxation.
+	- Added explicit infeasibility diagnostic output: `time_window_infeasible_stop_count`.
+	- Added runtime echo outputs for governance/reproducibility: `enforce_time_windows`, `allowed_lateness`.
+	- Added integration coverage: `vehicle_routing_vrptw_hard_windows_report_infeasible_stops`.
+	- Validation commands:
+		- `cargo check -p wbtools_oss` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_vrptw_hard_windows_report_infeasible_stops -- --nocapture` (PASS)
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_ -- --nocapture` (PASS)

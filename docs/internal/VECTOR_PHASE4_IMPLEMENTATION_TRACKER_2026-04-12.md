@@ -37,7 +37,7 @@ Phase 4 planned outcomes:
 - [x] Extend multimodal and OD tools with time-dependent edge profiles.
 - [x] Add scenario bundles for peak / off-peak / disruption analysis.
 - [x] Support comparative outputs across scenarios in a single run.
-- [ ] Add benchmark fixtures for temporal routing and uncertainty workflows.
+- [x] Add benchmark fixtures for temporal routing and uncertainty workflows.
 
 ### Stream D: Performance and Scalability Hardening
 - [x] Add spatial indexing for snapping origins/destinations to networks.
@@ -49,7 +49,7 @@ Phase 4 planned outcomes:
 - [ ] Add optional high-level convenience methods in Python and R where justified.
 - [x] Expand R and Python cookbooks with Phase 4 scenarios.
 - [ ] Regenerate any wrappers or stubs needed for new public APIs.
-- [ ] Finalize Phase 4 regression gate commands and release checklist.
+- [x] Finalize Phase 4 regression gate commands and release checklist.
 
 ## Suggested Execution Order
 
@@ -140,6 +140,14 @@ Scheduling note:
 	- Validation commands:
 		- `cargo test -p wbtools_oss --test registry_integration multimodal_ -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)
+- 2026-04-13: **STREAM C BENCHMARK FIXTURES FOR TEMPORAL + UNCERTAINTY WORKFLOWS ADDED**
+	- Added temporal-routing benchmark fixture coverage in `registry_integration`:
+		- `stream_c_temporal_routing_benchmark_fixture_switches_modes_across_scenarios`
+	- Added uncertainty benchmark fixture coverage in `registry_integration`:
+		- `stream_c_uncertainty_benchmark_fixture_wider_disturbance_increases_variance`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration stream_c_temporal_routing_benchmark_fixture_switches_modes_across_scenarios -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration stream_c_uncertainty_benchmark_fixture_wider_disturbance_increases_variance -- --nocapture` (PASS)
 - 2026-04-13: **STREAM D KICKOFF: SPATIAL INDEXED MULTIMODAL SNAPPING**
 	- Replaced brute-force nearest-node scans in multimodal batch OD snapping with a KD-tree index built over network nodes.
 	- Updated `snap_points_to_network_nodes` to use indexed nearest-neighbour lookups for origin/destination snapping.
@@ -181,3 +189,7 @@ Scheduling note:
 	- Confirmed measurable parallel speedups on the fixture:
 		- `network_accessibility_metrics`: 2.00x faster with `parallel_execution=true`
 		- `od_sensitivity_analysis`: 4.04x faster with `parallel_execution=true`
+- 2026-04-13: **STREAM E STEP: PHASE 4 REGRESSION GATES + RELEASE CHECKLIST FINALIZED**
+	- Published a dedicated Phase 4 regression gate and release checklist document:
+		- `docs/internal/PHASE4_REGRESSION_GATES_AND_RELEASE_CHECKLIST_2026-04-13.md`
+	- Included targeted commands for Stream A-D Phase 4 additions, compile gates, wrapper smoke checks, and benchmark artifact verification.

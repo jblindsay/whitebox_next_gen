@@ -2,7 +2,7 @@
 
 Date: 2026-04-12 (Created 2026-04-12)
 Phase: 4 (Advanced Solvers, Batch Analytics, and Temporal Robustness)
-Status: In Progress (Streams A-D implemented; Stream E next candidate)
+Status: Complete (Streams A-E implemented)
 
 ## Scope Anchors
 
@@ -46,7 +46,7 @@ Phase 4 planned outcomes:
 - [x] Publish large-network benchmark reports and runtime targets.
 
 ### Stream E: Wrapper UX and Cookbook Expansion
-- [ ] Add optional high-level convenience methods in Python and R where justified.
+- [x] Add optional high-level convenience methods in Python and R where justified.
 - [x] Expand R and Python cookbooks with Phase 4 scenarios.
 - [x] Regenerate any wrappers or stubs needed for new public APIs.
 - [x] Finalize Phase 4 regression gate commands and release checklist.
@@ -198,4 +198,21 @@ Scheduling note:
 		- `crates/wbw_r/generated/wbw_tools_generated.R`
 		- `crates/wbw_r/r-package/whiteboxworkflows/R/zz_generated_wrappers.R`
 	- Verified Phase 4 APIs are now present in generated R surfaces (`multimodal_od_cost_matrix`, `multimodal_routes_from_od`, `network_accessibility_metrics`, `od_sensitivity_analysis`).
-	- Confirmed Python wrapper surface remains generic via `run_tool` and existing `.pyi` declarations; no additional Python stub regeneration was required for registry-exposed tool IDs.
+	- Confirmed Python wrapper surface remains generic via `run_tool` and existing `.pyi` declarations.
+- 2026-04-13: **STREAM E STEP: OPTIONAL HIGH-LEVEL CONVENIENCE METHODS ADDED (PYTHON + R)**
+	- Added Python `WbEnvironment` convenience methods for common Phase 4 workflows:
+		- `analyze_multimodal_od_scenarios`
+		- `export_multimodal_routes_for_od_pairs`
+		- `compute_network_accessibility`
+		- `analyze_od_cost_sensitivity`
+	- Added equivalent R `wbw_session` convenience methods with optional arguments and clean pass-through to underlying tools:
+		- `analyze_multimodal_od_scenarios`
+		- `export_multimodal_routes_for_od_pairs`
+		- `compute_network_accessibility`
+		- `analyze_od_cost_sensitivity`
+	- Validation commands:
+		- `python3 -m py_compile crates/wbw_python/whitebox_workflows/__init__.py` (PASS)
+		- `python3 - <<'PY' ... hasattr(wbw.WbEnvironment, 'analyze_multimodal_od_scenarios') ... PY` (PASS)
+		- `Rscript -e "parse(file='crates/wbw_r/r-package/whiteboxworkflows/R/facade.R'); cat('OK\\n')"` (PASS)
+		- `cargo check -p wbw_r` (PASS)
+	- Scheduling note respected: this Stream E wrapper UX work does not implement Simulated Annealing; Simulated Annealing remains a later Phase 4 follow-on per plan.

@@ -200,6 +200,134 @@ wbw_build_session <- function(floating_license_id = NULL,
     wbw_topology_buffer_wkt(wkt, distance)
   }
 
+  session$analyze_multimodal_od_scenarios <- function(input,
+                                                       origins,
+                                                       destinations,
+                                                       output,
+                                                       mode_field = "MODE",
+                                                       allowed_modes = NULL,
+                                                       mode_speed_overrides = NULL,
+                                                       transfer_penalty = NULL,
+                                                       edge_cost_field = NULL,
+                                                       max_snap_distance = NULL,
+                                                       scenario_bundle_csv = NULL,
+                                                       temporal_cost_profile = NULL,
+                                                       departure_time = NULL,
+                                                       temporal_mode = NULL,
+                                                       parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        mode_field = mode_field,
+        allowed_modes = allowed_modes,
+        mode_speed_overrides = mode_speed_overrides,
+        transfer_penalty = transfer_penalty,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        scenario_bundle_csv = scenario_bundle_csv,
+        temporal_cost_profile = temporal_cost_profile,
+        departure_time = departure_time,
+        temporal_mode = temporal_mode,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("multimodal_od_cost_matrix", args)
+  }
+
+  session$export_multimodal_routes_for_od_pairs <- function(input,
+                                                             origins,
+                                                             destinations,
+                                                             output,
+                                                             mode_field = "MODE",
+                                                             allowed_modes = NULL,
+                                                             mode_speed_overrides = NULL,
+                                                             transfer_penalty = NULL,
+                                                             edge_cost_field = NULL,
+                                                             max_snap_distance = NULL,
+                                                             scenario_bundle_csv = NULL,
+                                                             temporal_cost_profile = NULL,
+                                                             departure_time = NULL,
+                                                             temporal_mode = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        mode_field = mode_field,
+        allowed_modes = allowed_modes,
+        mode_speed_overrides = mode_speed_overrides,
+        transfer_penalty = transfer_penalty,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        scenario_bundle_csv = scenario_bundle_csv,
+        temporal_cost_profile = temporal_cost_profile,
+        departure_time = departure_time,
+        temporal_mode = temporal_mode
+      )
+    )
+    session$run_tool("multimodal_routes_from_od", args)
+  }
+
+  session$compute_network_accessibility <- function(input,
+                                                    origins,
+                                                    destinations,
+                                                    output,
+                                                    edge_cost_field = NULL,
+                                                    max_snap_distance = NULL,
+                                                    impedance_cutoff = NULL,
+                                                    decay_function = NULL,
+                                                    decay_parameter = NULL,
+                                                    parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        impedance_cutoff = impedance_cutoff,
+        decay_function = decay_function,
+        decay_parameter = decay_parameter,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("network_accessibility_metrics", args)
+  }
+
+  session$analyze_od_cost_sensitivity <- function(input,
+                                                  origins,
+                                                  destinations,
+                                                  output,
+                                                  edge_cost_field = NULL,
+                                                  max_snap_distance = NULL,
+                                                  impedance_disturbance_range = NULL,
+                                                  monte_carlo_samples = NULL,
+                                                  parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        impedance_disturbance_range = impedance_disturbance_range,
+        monte_carlo_samples = monte_carlo_samples,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("od_sensitivity_analysis", args)
+  }
+
   class(session) <- unique(c("wbw_session", class(session)))
   session
 }

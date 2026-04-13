@@ -30921,20 +30921,957 @@ fn parse_vehicle_routing_stop_priority(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VehicleRoutingObjectiveMode {
+    MinimizeDistance,
+    MinimizeVehicles,
+    MinimizeCost,
+    MinimizeLateness,
+}
+
+impl VehicleRoutingObjectiveMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            VehicleRoutingObjectiveMode::MinimizeDistance => "minimize_distance",
+            VehicleRoutingObjectiveMode::MinimizeVehicles => "minimize_vehicles",
+            VehicleRoutingObjectiveMode::MinimizeCost => "minimize_cost",
+            VehicleRoutingObjectiveMode::MinimizeLateness => "minimize_lateness",
+        }
+    }
+}
+
+fn parse_vehicle_routing_objective_mode(
+    value: &str,
+    field_name: &str,
+) -> Result<VehicleRoutingObjectiveMode, ToolError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "minimize_distance" | "distance" | "shortest" => {
+            Ok(VehicleRoutingObjectiveMode::MinimizeDistance)
+        }
+        "minimize_vehicles" | "vehicles" | "fewest_vehicles" | "vehicle_count" => {
+            Ok(VehicleRoutingObjectiveMode::MinimizeVehicles)
+        }
+        "minimize_cost" | "cost" => Ok(VehicleRoutingObjectiveMode::MinimizeCost),
+        "minimize_lateness" | "lateness" | "time_window" => {
+            Ok(VehicleRoutingObjectiveMode::MinimizeLateness)
+        }
+        other => Err(ToolError::Validation(format!(
+            "{} must be one of minimize_distance, minimize_vehicles, minimize_cost, minimize_lateness; got '{}'",
+            field_name, other
+        ))),
+    }
+}
+
+fn parse_vehicle_routing_profile_tokens(
+    value: &wbvector::FieldValue,
+    field_name: &str,
+) -> Result<Vec<String>, ToolError> {
+    match value {
+        wbvector::FieldValue::Blob(_) => Err(ToolError::Execution(format!(
+            "{} does not support blob values",
+            field_name
+        ))),
+        wbvector::FieldValue::Null => Ok(Vec::new()),
+        _ => {
+            let raw = field_value_to_join_key(value);
+            let mut tokens = Vec::<String>::new();
+            for token in raw.split(|c: char| matches!(c, ',' | ';' | '|')) {
+                let normalized = token.trim().to_ascii_lowercase();
+                if !normalized.is_empty() && !tokens.contains(&normalized) {
+                    tokens.push(normalized);
+                }
+            }
+            Ok(tokens)
+        }
+    }
+}
+
+fn vehicle_routing_profile_is_compatible(required_profiles: &[String], vehicle_profile: &str) -> bool {
+    if required_profiles.is_empty() {
+        return true;
+    }
+    let normalized = vehicle_profile.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+    required_profiles.iter().any(|token| token == &normalized)
+}
+
+fn min_optional_limit(a: Option<f64>, b: Option<f64>) -> Option<f64> {
+    match (a, b) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
+#[derive(Clone)]
+struct VehicleRoutingCvrpStopNode {
+    fid: i64,
+    coord: wbvector::Coord,
+    demand: f64,
+    priority: VehicleRoutingStopPriority,
+    allowed_profiles: Vec<String>,
+}
+
+#[derive(Clone)]
+struct VehicleRoutingFleetVehicle {
+    depot_id: String,
+    depot_coord: wbvector::Coord,
+    capacity: f64,
+    fixed_cost: f64,
+    travel_speed: f64,
+    max_route_distance: Option<f64>,
+    max_route_time: Option<f64>,
+    profile: String,
+    depot_close_time: Option<f64>,
+    break_start_time: Option<f64>,
+    break_end_time: Option<f64>,
+    break_duration: f64,
+}
+
+#[derive(Clone)]
+struct VehicleRoutingCvrpPlannedRoute {
+    vehicle_index: usize,
+    route_stops: Vec<VehicleRoutingCvrpStopNode>,
+    stop_count: usize,
+    load: f64,
+    distance: f64,
+    served_required_count: usize,
+}
+
+fn vehicle_routing_cvrp_route_distance(
+    depot: &wbvector::Coord,
+    stops: &[VehicleRoutingCvrpStopNode],
+) -> f64 {
+    if stops.is_empty() {
+        return 0.0;
+    }
+    let mut total = coord_dist2(depot, &stops[0].coord).sqrt();
+    for pair in stops.windows(2) {
+        total += coord_dist2(&pair[0].coord, &pair[1].coord).sqrt();
+    }
+    total + coord_dist2(&stops[stops.len() - 1].coord, depot).sqrt()
+}
+
+fn vehicle_routing_cvrp_improve_two_opt(
+    depot: &wbvector::Coord,
+    stops: &mut Vec<VehicleRoutingCvrpStopNode>,
+) -> bool {
+    if stops.len() < 4 {
+        return false;
+    }
+
+    let mut improved = false;
+    loop {
+        let current_distance = vehicle_routing_cvrp_route_distance(depot, stops);
+        let mut best_candidate: Option<Vec<VehicleRoutingCvrpStopNode>> = None;
+        let mut best_distance = current_distance;
+
+        for i in 0..(stops.len() - 1) {
+            for k in (i + 1)..stops.len() {
+                let mut candidate = stops.clone();
+                candidate[i..=k].reverse();
+                let candidate_distance = vehicle_routing_cvrp_route_distance(depot, &candidate);
+                if candidate_distance + 1.0e-9 < best_distance {
+                    best_distance = candidate_distance;
+                    best_candidate = Some(candidate);
+                }
+            }
+        }
+
+        if let Some(candidate) = best_candidate {
+            *stops = candidate;
+            improved = true;
+        } else {
+            break;
+        }
+    }
+
+    improved
+}
+
+fn vehicle_routing_cvrp_improve_simulated_annealing(
+    depot: &wbvector::Coord,
+    stops: &mut Vec<VehicleRoutingCvrpStopNode>,
+    iterations: usize,
+    initial_temperature: f64,
+    cooling_rate: f64,
+    seed: u64,
+) -> bool {
+    if stops.len() < 3 || iterations == 0 {
+        return false;
+    }
+
+    use rand::rngs::StdRng;
+    use rand::{RngExt, SeedableRng};
+
+    let original_distance = vehicle_routing_cvrp_route_distance(depot, stops);
+    let mut current = stops.clone();
+    let mut current_distance = original_distance;
+    let mut best = current.clone();
+    let mut best_distance = current_distance;
+
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut temperature = initial_temperature.max(1.0e-9);
+    for _ in 0..iterations {
+        let n = current.len();
+        if n < 3 {
+            break;
+        }
+
+        let i = rng.random_range(0..n);
+        let mut j = rng.random_range(0..n);
+        if i == j {
+            j = (j + 1) % n;
+        }
+        let (a, b) = if i < j { (i, j) } else { (j, i) };
+
+        let mut candidate = current.clone();
+        if rng.random::<f64>() < 0.5 {
+            candidate[a..=b].reverse();
+        } else {
+            candidate.swap(a, b);
+        }
+
+        let candidate_distance = vehicle_routing_cvrp_route_distance(depot, &candidate);
+        let delta = candidate_distance - current_distance;
+        let accept = delta <= 0.0 || rng.random::<f64>() < (-delta / temperature).exp();
+
+        if accept {
+            current = candidate;
+            current_distance = candidate_distance;
+            if current_distance + 1.0e-9 < best_distance {
+                best_distance = current_distance;
+                best = current.clone();
+            }
+        }
+
+        temperature = (temperature * cooling_rate).max(1.0e-9);
+    }
+
+    if best_distance + 1.0e-9 < original_distance {
+        *stops = best;
+        true
+    } else {
+        false
+    }
+}
+
+fn run_vehicle_routing_cvrp_impl(args: &ToolArgs) -> Result<ToolRunResult, ToolError> {
+    let network = load_vector_arg(args, "network")?;
+    let depots = load_vector_arg(args, "depot_points")?;
+    let stops = load_vector_arg(args, "stop_points")?;
+    let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+    let priority_field = parse_optional_string_arg(args, "priority_field");
+    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+    let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
+    let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
+    let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
+    let vehicle_fixed_cost_field = parse_optional_string_arg(args, "vehicle_fixed_cost_field");
+    let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
+    let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
+    let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
+    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+    let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+        ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
+    })?;
+    let priority_idx = if let Some(field_name) = priority_field {
+        Some(stops.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("priority_field '{}' not found in stop_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let allowed_profiles_idx = if let Some(field_name) = allowed_vehicle_profiles_field {
+        Some(stops.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!(
+                "allowed_vehicle_profiles_field '{}' not found in stop_points",
+                field_name
+            ))
+        })?)
+    } else {
+        None
+    };
+    let depot_id_idx = if let Some(field_name) = depot_id_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("depot_id_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_count_idx = if let Some(field_name) = vehicle_count_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_count_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_capacity_idx = if let Some(field_name) = vehicle_capacity_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_capacity_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_fixed_cost_idx = if let Some(field_name) = vehicle_fixed_cost_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_fixed_cost_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let travel_speed_idx = if let Some(field_name) = travel_speed_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("travel_speed_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let max_route_distance_idx = if let Some(field_name) = max_route_distance_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("max_route_distance_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let max_route_time_idx = if let Some(field_name) = max_route_time_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("max_route_time_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_profile_idx = if let Some(field_name) = vehicle_profile_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_profile_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_capacity = args
+        .get("vehicle_capacity")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+    let vehicle_fixed_cost = args
+        .get("vehicle_fixed_cost")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+    let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
+    let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
+    let max_stops_per_vehicle = args
+        .get("max_stops_per_vehicle")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize);
+    let apply_local_optimization = args
+        .get("apply_local_optimization")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let apply_simulated_annealing = args
+        .get("apply_simulated_annealing")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let sa_iterations = args
+        .get("sa_iterations")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1500) as usize;
+    let sa_initial_temperature = args
+        .get("sa_initial_temperature")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0);
+    let sa_cooling_rate = args
+        .get("sa_cooling_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.995);
+    let sa_seed = args.get("sa_seed").and_then(|v| v.as_u64()).unwrap_or(42);
+    let objective_mode = parse_optional_string_arg(args, "objective_mode")
+        .map(|value| parse_vehicle_routing_objective_mode(value, "objective_mode"))
+        .transpose()?
+        .unwrap_or(VehicleRoutingObjectiveMode::MinimizeDistance);
+    if objective_mode == VehicleRoutingObjectiveMode::MinimizeLateness {
+        return Err(ToolError::Execution(
+            "objective_mode=minimize_lateness is only supported by vehicle_routing_vrptw"
+                .to_string(),
+        ));
+    }
+    let output_path = parse_vector_path_arg(args, "output")?;
+    let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
+    let consume_vehicle_templates = vehicle_count_field.is_some();
+
+    let mut stop_nodes = Vec::<VehicleRoutingCvrpStopNode>::new();
+    for feature in &stops.features {
+        let Some(geom) = feature.geometry.as_ref() else {
+            continue;
+        };
+        let coord = match geom {
+            wbvector::Geometry::Point(c) => c.clone(),
+            wbvector::Geometry::MultiPoint(coords) => {
+                let Some(first) = coords.first() else {
+                    continue;
+                };
+                first.clone()
+            }
+            _ => continue,
+        };
+        let demand = feature
+            .attributes
+            .get(demand_idx)
+            .and_then(field_value_to_f64)
+            .unwrap_or(0.0);
+        if !demand.is_finite() || demand < 0.0 {
+            return Err(ToolError::Execution(format!(
+                "invalid demand value for stop fid {}",
+                feature.fid
+            )));
+        }
+        let priority = priority_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(|value| parse_vehicle_routing_stop_priority(value, priority_field.unwrap_or("priority_field")))
+            .transpose()?
+            .unwrap_or(VehicleRoutingStopPriority::Normal);
+        let allowed_profiles = allowed_profiles_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(|value| {
+                parse_vehicle_routing_profile_tokens(
+                    value,
+                    allowed_vehicle_profiles_field.unwrap_or("allowed_vehicle_profiles_field"),
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        stop_nodes.push(VehicleRoutingCvrpStopNode {
+            fid: feature.fid as i64,
+            coord,
+            demand,
+            priority,
+            allowed_profiles,
+        });
+    }
+
+    if stop_nodes.is_empty() {
+        return Err(ToolError::Execution(
+            "stop_points contains no usable point features".to_string(),
+        ));
+    }
+
+    let mut vehicles = Vec::<VehicleRoutingFleetVehicle>::new();
+    for feature in &depots.features {
+        let Some(geom) = feature.geometry.as_ref() else {
+            continue;
+        };
+        let depot_coord = match geom {
+            wbvector::Geometry::Point(c) => c.clone(),
+            wbvector::Geometry::MultiPoint(coords) => {
+                let Some(first) = coords.first() else {
+                    continue;
+                };
+                first.clone()
+            }
+            _ => continue,
+        };
+        let base_depot_id = depot_id_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(field_value_to_join_key)
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or_else(|| feature.fid.to_string());
+        let vehicle_count = vehicle_count_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .map(|v| v.round() as usize)
+            .unwrap_or(1);
+        let capacity = vehicle_capacity_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(vehicle_capacity);
+        let fixed_cost = vehicle_fixed_cost_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(vehicle_fixed_cost);
+        let speed = travel_speed_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(travel_speed);
+        let route_distance_limit = min_optional_limit(
+            max_route_distance,
+            max_route_distance_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .and_then(field_value_to_f64),
+        );
+        let route_time_limit = min_optional_limit(
+            max_route_time,
+            max_route_time_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .and_then(field_value_to_f64),
+        );
+        let profile = vehicle_profile_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(field_value_to_join_key)
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        for replica_idx in 0..vehicle_count {
+            let depot_id = if vehicle_count == 1 {
+                base_depot_id.clone()
+            } else {
+                format!("{}:{}", base_depot_id, replica_idx + 1)
+            };
+            vehicles.push(VehicleRoutingFleetVehicle {
+                depot_id,
+                depot_coord: depot_coord.clone(),
+                capacity,
+                fixed_cost,
+                travel_speed: speed,
+                max_route_distance: route_distance_limit,
+                max_route_time: route_time_limit,
+                profile: profile.clone(),
+                depot_close_time: None,
+                break_start_time: None,
+                break_end_time: None,
+                break_duration: 0.0,
+            });
+        }
+    }
+
+    if vehicles.is_empty() {
+        return Err(ToolError::Execution(
+            "depot_points contains no usable point geometries".to_string(),
+        ));
+    }
+
+    let build_route = |vehicle: &VehicleRoutingFleetVehicle,
+                       unassigned: &[VehicleRoutingCvrpStopNode]|
+     -> Option<VehicleRoutingCvrpPlannedRoute> {
+        let mut current = vehicle.depot_coord.clone();
+        let mut remaining_capacity = vehicle.capacity;
+        let mut route_stops = Vec::<VehicleRoutingCvrpStopNode>::new();
+        let mut route_stop_count = 0usize;
+        let mut route_load = 0.0f64;
+        let mut route_distance_so_far = 0.0f64;
+        let mut used = vec![false; unassigned.len()];
+
+        loop {
+            if let Some(max_stops) = max_stops_per_vehicle {
+                if route_stop_count >= max_stops {
+                    break;
+                }
+            }
+
+            let mut best_idx: Option<usize> = None;
+            let mut best_dist = f64::INFINITY;
+            let mut best_priority_rank = i32::MIN;
+            let mut best_demand = f64::NEG_INFINITY;
+            let mut best_cost = f64::INFINITY;
+            for (idx, stop) in unassigned.iter().enumerate() {
+                if used[idx] || stop.demand > remaining_capacity + 1.0e-12 {
+                    continue;
+                }
+                if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile) {
+                    continue;
+                }
+                let d = coord_dist2(&current, &stop.coord).sqrt();
+                if let Some(max_dist) = vehicle.max_route_distance {
+                    let projected_total =
+                        route_distance_so_far + d + coord_dist2(&stop.coord, &vehicle.depot_coord).sqrt();
+                    if projected_total > max_dist + 1.0e-12 {
+                        continue;
+                    }
+                }
+                if let Some(max_time) = vehicle.max_route_time {
+                    let projected_total =
+                        route_distance_so_far + d + coord_dist2(&stop.coord, &vehicle.depot_coord).sqrt();
+                    let projected_time = projected_total / vehicle.travel_speed;
+                    if projected_time > max_time + 1.0e-12 {
+                        continue;
+                    }
+                }
+                let candidate_cost = d + if route_stop_count == 0 { vehicle.fixed_cost } else { 0.0 };
+                let better = stop.priority.rank() > best_priority_rank
+                    || (stop.priority.rank() == best_priority_rank
+                        && match objective_mode {
+                            VehicleRoutingObjectiveMode::MinimizeVehicles => {
+                                stop.demand > best_demand + 1.0e-12
+                                    || ((stop.demand - best_demand).abs() <= 1.0e-12
+                                        && (d < best_dist - 1.0e-12
+                                            || ((d - best_dist).abs() <= 1.0e-12
+                                                && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)))
+                            }
+                            VehicleRoutingObjectiveMode::MinimizeCost => {
+                                candidate_cost < best_cost - 1.0e-12
+                                    || ((candidate_cost - best_cost).abs() <= 1.0e-12
+                                        && (d < best_dist - 1.0e-12
+                                            || ((d - best_dist).abs() <= 1.0e-12
+                                                && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)))
+                            }
+                            _ => {
+                                d < best_dist - 1.0e-12
+                                    || ((d - best_dist).abs() <= 1.0e-12
+                                        && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)
+                            }
+                        });
+                if better {
+                    best_priority_rank = stop.priority.rank();
+                    best_dist = d;
+                    best_demand = stop.demand;
+                    best_cost = candidate_cost;
+                    best_idx = Some(idx);
+                }
+            }
+
+            let Some(idx) = best_idx else {
+                break;
+            };
+            let stop = unassigned[idx].clone();
+            used[idx] = true;
+            let travel_dist = coord_dist2(&current, &stop.coord).sqrt();
+            route_distance_so_far += travel_dist;
+            remaining_capacity -= stop.demand;
+            route_load += stop.demand;
+            route_stop_count += 1;
+            current = stop.coord.clone();
+            route_stops.push(stop);
+        }
+
+        if route_stop_count == 0 {
+            None
+        } else {
+            Some(VehicleRoutingCvrpPlannedRoute {
+                vehicle_index: 0,
+                stop_count: route_stop_count,
+                load: route_load,
+                distance: vehicle_routing_cvrp_route_distance(&vehicle.depot_coord, &route_stops),
+                served_required_count: route_stops.iter().filter(|stop| stop.priority.is_required()).count(),
+                route_stops,
+            })
+        }
+    };
+
+    stop_nodes.sort_by_key(|s| s.fid);
+    let mut unassigned = stop_nodes;
+    let total_required_stop_count = unassigned.iter().filter(|stop| stop.priority.is_required()).count();
+    let mut vehicle_id = 1i64;
+    let mut routes = Vec::<(i64, String, String, Vec<wbvector::Coord>, usize, f64, f64, f64)>::new();
+    let mut assignments = Vec::<(i64, i64, String, String, i64, f64, f64, wbvector::Coord)>::new();
+    let mut infeasible_stops = 0usize;
+    let mut compatibility_infeasible_stops = 0usize;
+    let mut optimized_route_count = 0usize;
+    let mut annealed_route_count = 0usize;
+
+    while !unassigned.is_empty() {
+        if let Some(limit) = max_vehicles {
+            if routes.len() >= limit {
+                break;
+            }
+        }
+
+        let mut best_plan: Option<VehicleRoutingCvrpPlannedRoute> = None;
+        for (vehicle_index, vehicle) in vehicles.iter().enumerate() {
+            let Some(mut plan) = build_route(vehicle, &unassigned) else {
+                continue;
+            };
+            plan.vehicle_index = vehicle_index;
+            let replace = if let Some(current_best) = &best_plan {
+                if plan.served_required_count != current_best.served_required_count {
+                    plan.served_required_count > current_best.served_required_count
+                } else {
+                    match objective_mode {
+                        VehicleRoutingObjectiveMode::MinimizeVehicles => {
+                            plan.stop_count > current_best.stop_count
+                                || (plan.stop_count == current_best.stop_count
+                                    && (plan.load > current_best.load + 1.0e-12
+                                        || ((plan.load - current_best.load).abs() <= 1.0e-12
+                                            && plan.distance < current_best.distance - 1.0e-12)))
+                        }
+                        VehicleRoutingObjectiveMode::MinimizeCost => {
+                            let plan_vehicle = &vehicles[plan.vehicle_index];
+                            let best_vehicle = &vehicles[current_best.vehicle_index];
+                            let plan_cost_per_stop =
+                                (plan.distance + plan_vehicle.fixed_cost) / plan.stop_count as f64;
+                            let best_cost_per_stop = (current_best.distance + best_vehicle.fixed_cost)
+                                / current_best.stop_count as f64;
+                            plan_cost_per_stop < best_cost_per_stop - 1.0e-12
+                                || ((plan_cost_per_stop - best_cost_per_stop).abs() <= 1.0e-12
+                                    && (plan.stop_count > current_best.stop_count
+                                        || (plan.stop_count == current_best.stop_count
+                                            && plan.distance < current_best.distance - 1.0e-12)))
+                        }
+                        _ => {
+                            let plan_distance_per_stop = plan.distance / plan.stop_count as f64;
+                            let best_distance_per_stop = current_best.distance / current_best.stop_count as f64;
+                            plan_distance_per_stop < best_distance_per_stop - 1.0e-12
+                                || ((plan_distance_per_stop - best_distance_per_stop).abs() <= 1.0e-12
+                                    && (plan.stop_count > current_best.stop_count
+                                        || (plan.stop_count == current_best.stop_count
+                                            && plan.distance < current_best.distance - 1.0e-12)))
+                        }
+                    }
+                }
+            } else {
+                true
+            };
+            if replace {
+                best_plan = Some(plan);
+            }
+        }
+
+        let Some(plan) = best_plan else {
+            if let Some(pos) = unassigned.iter().position(|stop| {
+                !vehicles.iter().any(|vehicle| {
+                    vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                })
+            }) {
+                unassigned.remove(pos);
+                compatibility_infeasible_stops += 1;
+                continue;
+            }
+            let max_capacity = vehicles.iter().map(|vehicle| vehicle.capacity).fold(0.0, f64::max);
+            if let Some(pos) = unassigned.iter().position(|stop| stop.demand > max_capacity + 1.0e-12) {
+                unassigned.remove(pos);
+                infeasible_stops += 1;
+                continue;
+            }
+            break;
+        };
+
+        let vehicle = if consume_vehicle_templates {
+            vehicles.remove(plan.vehicle_index)
+        } else {
+            vehicles[plan.vehicle_index].clone()
+        };
+        let mut route_stops = plan.route_stops;
+        if apply_local_optimization
+            && vehicle_routing_cvrp_improve_two_opt(&vehicle.depot_coord, &mut route_stops)
+        {
+            optimized_route_count += 1;
+        }
+        if apply_simulated_annealing
+            && vehicle_routing_cvrp_improve_simulated_annealing(
+                &vehicle.depot_coord,
+                &mut route_stops,
+                sa_iterations,
+                sa_initial_temperature,
+                sa_cooling_rate,
+                sa_seed.wrapping_add(vehicle_id as u64),
+            )
+        {
+            annealed_route_count += 1;
+        }
+
+        let mut route_coords = vec![vehicle.depot_coord.clone()];
+        let mut cumulative_load = 0.0f64;
+        for (visit_idx, stop) in route_stops.iter().enumerate() {
+            cumulative_load += stop.demand;
+            route_coords.push(stop.coord.clone());
+            assignments.push((
+                stop.fid,
+                vehicle_id,
+                vehicle.depot_id.clone(),
+                vehicle.profile.clone(),
+                (visit_idx + 1) as i64,
+                stop.demand,
+                cumulative_load,
+                stop.coord.clone(),
+            ));
+        }
+        route_coords.push(vehicle.depot_coord.clone());
+        let route_distance = vehicle_routing_cvrp_route_distance(&vehicle.depot_coord, &route_stops);
+        let route_load: f64 = route_stops.iter().map(|stop| stop.demand).sum();
+        let route_stop_count = route_stops.len();
+        routes.push((
+            vehicle_id,
+            vehicle.depot_id.clone(),
+            vehicle.profile.clone(),
+            route_coords,
+            route_stop_count,
+            route_load,
+            route_distance,
+            route_distance + vehicle.fixed_cost,
+        ));
+        let assigned_fids = route_stops.iter().map(|stop| stop.fid).collect::<HashSet<_>>();
+        unassigned.retain(|stop| !assigned_fids.contains(&stop.fid));
+        vehicle_id += 1;
+    }
+
+    let mut routes_layer = wbvector::Layer::new(format!("{}_vehicle_routing_cvrp", network.name));
+    routes_layer.geom_type = Some(wbvector::GeometryType::LineString);
+    routes_layer.crs = network.crs.clone();
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("DEPOT_ID", wbvector::FieldType::Text));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("VEH_PROFILE", wbvector::FieldType::Text));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("STOP_COUNT", wbvector::FieldType::Integer));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("LOAD_TOTAL", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("ROUTE_COST", wbvector::FieldType::Float));
+
+    let mut next_fid = 1u64;
+    for (veh_id, depot_id, profile, coords, stop_count, load_total, route_distance, route_cost) in &routes {
+        routes_layer.push(wbvector::Feature {
+            fid: next_fid,
+            geometry: Some(wbvector::Geometry::LineString(coords.clone())),
+            attributes: vec![
+                wbvector::FieldValue::Integer(*veh_id),
+                wbvector::FieldValue::Text(depot_id.clone()),
+                wbvector::FieldValue::Text(profile.clone()),
+                wbvector::FieldValue::Integer(*stop_count as i64),
+                wbvector::FieldValue::Float(*load_total),
+                wbvector::FieldValue::Float(*route_distance),
+                wbvector::FieldValue::Float(*route_cost),
+            ],
+        });
+        next_fid += 1;
+    }
+
+    let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+    let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, _, _, distance, _)| *distance).sum();
+    let total_cost: f64 = routes.iter().map(|(_, _, _, _, _, _, _, route_cost)| *route_cost).sum();
+
+    let mut outputs = BTreeMap::new();
+    outputs.insert("path".to_string(), json!(route_output_locator));
+    outputs.insert("route_count".to_string(), json!(routes.len()));
+    outputs.insert("total_distance".to_string(), json!(total_route_distance));
+    outputs.insert("total_cost".to_string(), json!(total_cost));
+    outputs.insert("vehicle_fixed_cost".to_string(), json!(vehicle_fixed_cost));
+    outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
+    outputs.insert(
+        "unserved_stop_count".to_string(),
+        json!(unassigned.len() + infeasible_stops + compatibility_infeasible_stops),
+    );
+    outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
+    outputs.insert(
+        "compatibility_infeasible_stop_count".to_string(),
+        json!(compatibility_infeasible_stops),
+    );
+    let unserved_required_stop_count = unassigned.iter().filter(|stop| stop.priority.is_required()).count();
+    outputs.insert(
+        "served_required_stop_count".to_string(),
+        json!(total_required_stop_count.saturating_sub(unserved_required_stop_count)),
+    );
+    outputs.insert(
+        "unserved_required_stop_count".to_string(),
+        json!(unserved_required_stop_count),
+    );
+    outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+    if let Some(max_route_distance_value) = max_route_distance {
+        outputs.insert("max_route_distance".to_string(), json!(max_route_distance_value));
+    }
+    outputs.insert("travel_speed".to_string(), json!(travel_speed));
+    if let Some(max_route_time_value) = max_route_time {
+        outputs.insert("max_route_time".to_string(), json!(max_route_time_value));
+    }
+    if let Some(max_stops_value) = max_stops_per_vehicle {
+        outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
+    }
+    outputs.insert("objective_mode".to_string(), json!(objective_mode.as_str()));
+    outputs.insert(
+        "available_vehicle_count".to_string(),
+        json!(if consume_vehicle_templates {
+            vehicles.len() + routes.len()
+        } else {
+            max_vehicles.unwrap_or(vehicles.len())
+        }),
+    );
+    outputs.insert("apply_local_optimization".to_string(), json!(apply_local_optimization));
+    outputs.insert("optimized_route_count".to_string(), json!(optimized_route_count));
+    outputs.insert("apply_simulated_annealing".to_string(), json!(apply_simulated_annealing));
+    outputs.insert("annealed_route_count".to_string(), json!(annealed_route_count));
+    outputs.insert("sa_iterations".to_string(), json!(sa_iterations));
+    outputs.insert("sa_initial_temperature".to_string(), json!(sa_initial_temperature));
+    outputs.insert("sa_cooling_rate".to_string(), json!(sa_cooling_rate));
+    outputs.insert("sa_seed".to_string(), json!(sa_seed));
+
+    if let Some(assign_path) = assignment_output {
+        let mut assignment_layer = wbvector::Layer::new(format!(
+            "{}_vehicle_routing_cvrp_assignments",
+            stops.name
+        ));
+        assignment_layer.geom_type = Some(wbvector::GeometryType::Point);
+        assignment_layer.crs = stops.crs.clone();
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("STOP_FID", wbvector::FieldType::Integer));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("DEPOT_ID", wbvector::FieldType::Text));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("VEH_PROFILE", wbvector::FieldType::Text));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("VISIT_SEQ", wbvector::FieldType::Integer));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("DEMAND", wbvector::FieldType::Float));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("CUM_LOAD", wbvector::FieldType::Float));
+
+        let mut fid = 1u64;
+        for (stop_fid, veh_id, depot_id, profile, visit_seq, demand, cum_load, coord) in assignments {
+            assignment_layer.push(wbvector::Feature {
+                fid,
+                geometry: Some(wbvector::Geometry::Point(coord)),
+                attributes: vec![
+                    wbvector::FieldValue::Integer(stop_fid),
+                    wbvector::FieldValue::Integer(veh_id),
+                    wbvector::FieldValue::Text(depot_id),
+                    wbvector::FieldValue::Text(profile),
+                    wbvector::FieldValue::Integer(visit_seq),
+                    wbvector::FieldValue::Float(demand),
+                    wbvector::FieldValue::Float(cum_load),
+                ],
+            });
+            fid += 1;
+        }
+
+        let assignment_locator = write_vector_output(&assignment_layer, assign_path.trim())?;
+        outputs.insert("assignment_output".to_string(), json!(assignment_locator));
+    }
+
+    Ok(ToolRunResult { outputs })
+}
+
 impl Tool for VehicleRoutingCvrpTool {
     fn metadata(&self) -> ToolMetadata {
         ToolMetadata {
             id: "vehicle_routing_cvrp",
             display_name: "Vehicle Routing (CVRP)",
-            summary: "Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.",
+            summary: "Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "network", description: "Input line network layer (validated for contract parity).", required: true },
-                ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
+                ToolParamSpec { name: "depot_points", description: "Depot point layer; each point can contribute one or more vehicles.", required: true },
                 ToolParamSpec { name: "stop_points", description: "Delivery stop point layer.", required: true },
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
+                ToolParamSpec { name: "allowed_vehicle_profiles_field", description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).", required: false },
+                ToolParamSpec { name: "depot_id_field", description: "Optional depot ID field used in route/assignment outputs.", required: false },
+                ToolParamSpec { name: "vehicle_count_field", description: "Optional depot field for number of vehicles spawned at each depot.", required: false },
+                ToolParamSpec { name: "vehicle_capacity_field", description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "vehicle_fixed_cost_field", description: "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "travel_speed_field", description: "Optional depot field overriding travel_speed per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "max_route_distance_field", description: "Optional depot field overriding max_route_distance per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "max_route_time_field", description: "Optional depot field overriding max_route_time per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "vehicle_profile_field", description: "Optional depot field defining vehicle profile/category token used for stop compatibility.", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
@@ -30942,6 +31879,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "travel_speed", description: "Travel speed in coordinate-units per time unit (default: 1).", required: false },
                 ToolParamSpec { name: "max_route_time", description: "Optional maximum route duration in model time units, including return to depot.", required: false },
                 ToolParamSpec { name: "max_stops_per_vehicle", description: "Optional maximum number of stops assigned to each vehicle route.", required: false },
+                ToolParamSpec { name: "objective_mode", description: "Route-construction objective: minimize_distance, minimize_vehicles, or minimize_cost.", required: false },
                 ToolParamSpec { name: "apply_local_optimization", description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).", required: false },
                 ToolParamSpec { name: "apply_simulated_annealing", description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).", required: false },
                 ToolParamSpec { name: "sa_iterations", description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).", required: false },
@@ -30963,6 +31901,7 @@ impl Tool for VehicleRoutingCvrpTool {
         defaults.insert("priority_field".to_string(), json!("priority"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
         defaults.insert("vehicle_fixed_cost".to_string(), json!(0.0));
+        defaults.insert("objective_mode".to_string(), json!("minimize_distance"));
         defaults.insert("apply_local_optimization".to_string(), json!(true));
         defaults.insert("apply_simulated_annealing".to_string(), json!(false));
         defaults.insert("sa_iterations".to_string(), json!(1500));
@@ -30975,15 +31914,24 @@ impl Tool for VehicleRoutingCvrpTool {
         ToolManifest {
             id: "vehicle_routing_cvrp".to_string(),
             display_name: "Vehicle Routing (CVRP)".to_string(),
-            summary: "Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.".to_string(),
+            summary: "Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "network".to_string(), description: "Input line network layer (validated for contract parity).".to_string(), required: true },
-                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
+                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; each point can contribute one or more vehicles.".to_string(), required: true },
                 ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer.".to_string(), required: true },
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_vehicle_profiles_field".to_string(), description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).".to_string(), required: false },
+                ToolParamDescriptor { name: "depot_id_field".to_string(), description: "Optional depot ID field used in route/assignment outputs.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_count_field".to_string(), description: "Optional depot field for number of vehicles spawned at each depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_capacity_field".to_string(), description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_fixed_cost_field".to_string(), description: "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "travel_speed_field".to_string(), description: "Optional depot field overriding travel_speed per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_distance_field".to_string(), description: "Optional depot field overriding max_route_distance per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_time_field".to_string(), description: "Optional depot field overriding max_route_time per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_profile_field".to_string(), description: "Optional depot field defining vehicle profile/category token used for stop compatibility.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
@@ -30991,6 +31939,7 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "travel_speed".to_string(), description: "Travel speed in coordinate-units per time unit (default: 1).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_time".to_string(), description: "Optional maximum route duration in model time units, including return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_stops_per_vehicle".to_string(), description: "Optional maximum number of stops assigned to each vehicle route.".to_string(), required: false },
+                ToolParamDescriptor { name: "objective_mode".to_string(), description: "Route-construction objective: minimize_distance, minimize_vehicles, or minimize_cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_local_optimization".to_string(), description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_simulated_annealing".to_string(), description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).".to_string(), required: false },
                 ToolParamDescriptor { name: "sa_iterations".to_string(), description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).".to_string(), required: false },
@@ -31038,9 +31987,85 @@ impl Tool for VehicleRoutingCvrpTool {
             ToolError::Validation(format!("demand_field '{}' not found in stop_points", demand_field))
         })?;
         let priority_field = parse_optional_string_arg(args, "priority_field");
+        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
         let priority_idx = if let Some(field_name) = priority_field {
             Some(stops.schema.field_index(field_name).ok_or_else(|| {
                 ToolError::Validation(format!("priority_field '{}' not found in stop_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let allowed_profiles_idx = if let Some(field_name) = allowed_vehicle_profiles_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "allowed_vehicle_profiles_field '{}' not found in stop_points",
+                    field_name
+                ))
+            })?)
+        } else {
+            None
+        };
+
+        let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
+        let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
+        let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
+        let vehicle_fixed_cost_field = parse_optional_string_arg(args, "vehicle_fixed_cost_field");
+        let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
+        let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
+        let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
+        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+        let depot_id_idx = if let Some(field_name) = depot_id_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("depot_id_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_count_idx = if let Some(field_name) = vehicle_count_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_count_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_capacity_idx = if let Some(field_name) = vehicle_capacity_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_capacity_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_fixed_cost_idx = if let Some(field_name) = vehicle_fixed_cost_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_fixed_cost_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let travel_speed_idx = if let Some(field_name) = travel_speed_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("travel_speed_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let max_route_distance_idx = if let Some(field_name) = max_route_distance_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("max_route_distance_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let max_route_time_idx = if let Some(field_name) = max_route_time_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("max_route_time_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_profile_idx = if let Some(field_name) = vehicle_profile_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_profile_field '{}' not found in depot_points", field_name))
             })?)
         } else {
             None
@@ -31064,6 +32089,119 @@ impl Tool for VehicleRoutingCvrpTool {
                         value,
                         priority_field.unwrap_or("priority_field"),
                     )?;
+                }
+            }
+            if let Some(idx) = allowed_profiles_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    let _ = parse_vehicle_routing_profile_tokens(
+                        value,
+                        allowed_vehicle_profiles_field.unwrap_or("allowed_vehicle_profiles_field"),
+                    )?;
+                }
+            }
+        }
+
+        for feature in &depots.features {
+            if let Some(idx) = depot_id_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if matches!(value, wbvector::FieldValue::Blob(_)) {
+                        return Err(ToolError::Validation(
+                            "depot_id_field does not support blob values".to_string(),
+                        ));
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_count_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let count = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_count_field must contain numeric values".to_string())
+                        })?;
+                        if !count.is_finite() || count < 1.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_count_field values must be finite and >= 1".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_capacity_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let capacity = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_capacity_field must contain numeric values".to_string())
+                        })?;
+                        if !capacity.is_finite() || capacity <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_capacity_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_fixed_cost_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let fixed_cost = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_fixed_cost_field must contain numeric values".to_string())
+                        })?;
+                        if !fixed_cost.is_finite() || fixed_cost < 0.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_fixed_cost_field values must be finite and >= 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = travel_speed_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let speed = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("travel_speed_field must contain numeric values".to_string())
+                        })?;
+                        if !speed.is_finite() || speed <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "travel_speed_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = max_route_distance_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let max_distance = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("max_route_distance_field must contain numeric values".to_string())
+                        })?;
+                        if !max_distance.is_finite() || max_distance <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "max_route_distance_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = max_route_time_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let max_time = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("max_route_time_field must contain numeric values".to_string())
+                        })?;
+                        if !max_time.is_finite() || max_time <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "max_route_time_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_profile_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if matches!(value, wbvector::FieldValue::Blob(_)) {
+                        return Err(ToolError::Validation(
+                            "vehicle_profile_field does not support blob values".to_string(),
+                        ));
+                    }
                 }
             }
         }
@@ -31185,6 +32323,15 @@ impl Tool for VehicleRoutingCvrpTool {
             ));
         }
 
+        if let Some(mode) = parse_optional_string_arg(args, "objective_mode") {
+            let parsed = parse_vehicle_routing_objective_mode(mode, "objective_mode")?;
+            if parsed == VehicleRoutingObjectiveMode::MinimizeLateness {
+                return Err(ToolError::Validation(
+                    "objective_mode=minimize_lateness is only supported by vehicle_routing_vrptw".to_string(),
+                ));
+            }
+        }
+
         let _ = parse_vector_path_arg(args, "output")?;
         if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
             if path.trim().is_empty() {
@@ -31197,498 +32344,1208 @@ impl Tool for VehicleRoutingCvrpTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let network = load_vector_arg(args, "network")?;
-        let depots = load_vector_arg(args, "depot_points")?;
-        let stops = load_vector_arg(args, "stop_points")?;
-        let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
-        let priority_field = parse_optional_string_arg(args, "priority_field");
-        let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
-            ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
-        })?;
-        let priority_idx = if let Some(field_name) = priority_field {
-            Some(stops.schema.field_index(field_name).ok_or_else(|| {
-                ToolError::Execution(format!("priority_field '{}' not found in stop_points", field_name))
-            })?)
+        run_vehicle_routing_cvrp_impl(args)
+    }
+}
+
+#[derive(Clone)]
+struct VehicleRoutingVrptwStopNode {
+    fid: i64,
+    coord: wbvector::Coord,
+    demand: f64,
+    priority: VehicleRoutingStopPriority,
+    tw_start: f64,
+    tw_end: f64,
+    service_time: f64,
+    allowed_profiles: Vec<String>,
+}
+
+#[derive(Clone)]
+struct VehicleRoutingVrptwPlannedRoute {
+    vehicle_index: usize,
+    route_stops: Vec<VehicleRoutingVrptwStopNode>,
+    stop_count: usize,
+    load: f64,
+    distance: f64,
+    total_time: f64,
+    late_stops: i64,
+    total_lateness: f64,
+    served_required_count: usize,
+    break_taken: bool,
+    break_start_time: Option<f64>,
+}
+
+#[derive(Clone, Copy)]
+struct VehicleRoutingVrptwVisitProjection {
+    arrival_time: f64,
+    service_start: f64,
+    service_end: f64,
+    lateness: f64,
+    slack: f64,
+    distance_to_stop: f64,
+    projected_total_distance: f64,
+    projected_return_arrival: f64,
+    projected_total_time: f64,
+    break_taken_after_service: bool,
+    break_started_before_service: Option<f64>,
+    break_started_before_return: Option<f64>,
+}
+
+fn vehicle_routing_apply_break_before_segment(
+    current_time: f64,
+    segment_end_without_break: f64,
+    break_start_time: Option<f64>,
+    break_end_time: Option<f64>,
+    break_duration: f64,
+    break_taken: bool,
+) -> Option<(f64, bool, Option<f64>)> {
+    if break_taken || break_duration <= 0.0 {
+        return Some((current_time, break_taken, None));
+    }
+    let (Some(break_start), Some(break_end)) = (break_start_time, break_end_time) else {
+        return Some((current_time, break_taken, None));
+    };
+    if segment_end_without_break <= break_start + 1.0e-12 {
+        return Some((current_time, break_taken, None));
+    }
+    if current_time > break_end + 1.0e-12 {
+        return None;
+    }
+    let break_begin = current_time.max(break_start);
+    if break_begin > break_end + 1.0e-12 {
+        return None;
+    }
+    Some((break_begin + break_duration, true, Some(break_begin)))
+}
+
+fn vehicle_routing_project_vrptw_visit(
+    vehicle: &VehicleRoutingFleetVehicle,
+    current_coord: &wbvector::Coord,
+    current_time: f64,
+    route_distance_so_far: f64,
+    route_start_time: f64,
+    break_taken: bool,
+    stop: &VehicleRoutingVrptwStopNode,
+) -> Option<VehicleRoutingVrptwVisitProjection> {
+    let distance_to_stop = coord_dist2(current_coord, &stop.coord).sqrt();
+    let travel_time = distance_to_stop / vehicle.travel_speed;
+    let segment_end_without_break = current_time + travel_time + stop.service_time;
+    let (depart_time, break_taken_after_departure, break_started_before_service) =
+        vehicle_routing_apply_break_before_segment(
+            current_time,
+            segment_end_without_break,
+            vehicle.break_start_time,
+            vehicle.break_end_time,
+            vehicle.break_duration,
+            break_taken,
+        )?;
+    let arrival_time = depart_time + travel_time;
+    let service_start = arrival_time.max(stop.tw_start);
+    let service_end = service_start + stop.service_time;
+    let lateness = (service_start - stop.tw_end).max(0.0);
+    let slack = stop.tw_end - service_start;
+    let return_distance = coord_dist2(&stop.coord, &vehicle.depot_coord).sqrt();
+    let return_travel_time = return_distance / vehicle.travel_speed;
+    let (return_depart_time, _, break_started_before_return) = vehicle_routing_apply_break_before_segment(
+        service_end,
+        service_end + return_travel_time,
+        vehicle.break_start_time,
+        vehicle.break_end_time,
+        vehicle.break_duration,
+        break_taken_after_departure,
+    )?;
+    let projected_return_arrival = return_depart_time + return_travel_time;
+    Some(VehicleRoutingVrptwVisitProjection {
+        arrival_time,
+        service_start,
+        service_end,
+        lateness,
+        slack,
+        distance_to_stop,
+        projected_total_distance: route_distance_so_far + distance_to_stop + return_distance,
+        projected_return_arrival,
+        projected_total_time: projected_return_arrival - route_start_time,
+        break_taken_after_service: break_taken_after_departure,
+        break_started_before_service,
+        break_started_before_return,
+    })
+}
+
+fn vehicle_routing_project_vrptw_return(
+    vehicle: &VehicleRoutingFleetVehicle,
+    current_coord: &wbvector::Coord,
+    current_time: f64,
+    break_taken: bool,
+) -> Option<(f64, f64, bool, Option<f64>)> {
+    let return_distance = coord_dist2(current_coord, &vehicle.depot_coord).sqrt();
+    let return_travel_time = return_distance / vehicle.travel_speed;
+    let (depart_time, break_taken_after_return, break_start_time) = vehicle_routing_apply_break_before_segment(
+        current_time,
+        current_time + return_travel_time,
+        vehicle.break_start_time,
+        vehicle.break_end_time,
+        vehicle.break_duration,
+        break_taken,
+    )?;
+    Some((
+        return_distance,
+        depart_time + return_travel_time,
+        break_taken_after_return,
+        break_start_time,
+    ))
+}
+
+fn run_vehicle_routing_vrptw_impl(args: &ToolArgs) -> Result<ToolRunResult, ToolError> {
+    let network = load_vector_arg(args, "network")?;
+    let depots = load_vector_arg(args, "depot_points")?;
+    let stops = load_vector_arg(args, "stop_points")?;
+    let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
+    let priority_field = parse_optional_string_arg(args, "priority_field");
+    let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+    let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
+    let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
+    let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
+    let vehicle_fixed_cost_field = parse_optional_string_arg(args, "vehicle_fixed_cost_field");
+    let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
+    let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
+    let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
+    let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+    let depot_close_time_field = parse_optional_string_arg(args, "depot_close_time_field");
+    let break_start_field = parse_optional_string_arg(args, "break_start_field");
+    let break_end_field = parse_optional_string_arg(args, "break_end_field");
+    let break_duration_field = parse_optional_string_arg(args, "break_duration_field");
+    let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
+    let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
+    let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
+
+    let demand_idx = stops.schema.field_index(demand_field).ok_or_else(|| {
+        ToolError::Execution(format!("demand_field '{}' not found in stop_points", demand_field))
+    })?;
+    let priority_idx = if let Some(field_name) = priority_field {
+        Some(stops.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("priority_field '{}' not found in stop_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let allowed_profiles_idx = if let Some(field_name) = allowed_vehicle_profiles_field {
+        Some(stops.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!(
+                "allowed_vehicle_profiles_field '{}' not found in stop_points",
+                field_name
+            ))
+        })?)
+    } else {
+        None
+    };
+    let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
+        ToolError::Execution(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
+    })?;
+    let tw_end_idx = stops.schema.field_index(tw_end_field).ok_or_else(|| {
+        ToolError::Execution(format!("tw_end_field '{}' not found in stop_points", tw_end_field))
+    })?;
+    let service_time_idx = stops.schema.field_index(service_time_field).ok_or_else(|| {
+        ToolError::Execution(format!("service_time_field '{}' not found in stop_points", service_time_field))
+    })?;
+    let depot_id_idx = if let Some(field_name) = depot_id_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("depot_id_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_count_idx = if let Some(field_name) = vehicle_count_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_count_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_capacity_idx = if let Some(field_name) = vehicle_capacity_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_capacity_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_fixed_cost_idx = if let Some(field_name) = vehicle_fixed_cost_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_fixed_cost_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let travel_speed_idx = if let Some(field_name) = travel_speed_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("travel_speed_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let max_route_distance_idx = if let Some(field_name) = max_route_distance_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("max_route_distance_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let max_route_time_idx = if let Some(field_name) = max_route_time_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("max_route_time_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let vehicle_profile_idx = if let Some(field_name) = vehicle_profile_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("vehicle_profile_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let depot_close_idx = if let Some(field_name) = depot_close_time_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("depot_close_time_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let break_start_idx = if let Some(field_name) = break_start_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("break_start_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let break_end_idx = if let Some(field_name) = break_end_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("break_end_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+    let break_duration_idx = if let Some(field_name) = break_duration_field {
+        Some(depots.schema.field_index(field_name).ok_or_else(|| {
+            ToolError::Execution(format!("break_duration_field '{}' not found in depot_points", field_name))
+        })?)
+    } else {
+        None
+    };
+
+    let vehicle_capacity = args
+        .get("vehicle_capacity")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
+    let vehicle_fixed_cost = args
+        .get("vehicle_fixed_cost")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let start_time = args.get("start_time").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let enforce_time_windows = args
+        .get("enforce_time_windows")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let use_priority_scoring = args
+        .get("use_priority_scoring")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let allowed_lateness = args
+        .get("allowed_lateness")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let depot_close_time = args.get("depot_close_time").and_then(|v| v.as_f64());
+    let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
+    let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
+    let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
+    let max_stops_per_vehicle = args
+        .get("max_stops_per_vehicle")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize);
+    let global_break_start = args.get("break_start_time").and_then(|v| v.as_f64());
+    let global_break_end = args.get("break_end_time").and_then(|v| v.as_f64());
+    let global_break_duration = args.get("break_duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let objective_mode = parse_optional_string_arg(args, "objective_mode")
+        .map(|value| parse_vehicle_routing_objective_mode(value, "objective_mode"))
+        .transpose()?
+        .unwrap_or(if use_priority_scoring {
+            VehicleRoutingObjectiveMode::MinimizeLateness
         } else {
-            None
+            VehicleRoutingObjectiveMode::MinimizeDistance
+        });
+    let output_path = parse_vector_path_arg(args, "output")?;
+    let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
+    let consume_vehicle_templates = vehicle_count_field.is_some();
+
+    let mut stop_nodes = Vec::<VehicleRoutingVrptwStopNode>::new();
+    for feature in &stops.features {
+        let Some(geom) = feature.geometry.as_ref() else {
+            continue;
         };
-        let vehicle_capacity = args
-            .get("vehicle_capacity")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| ToolError::Execution("vehicle_capacity is required and must be numeric".to_string()))?;
-        let vehicle_fixed_cost = args
-            .get("vehicle_fixed_cost")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-        let max_vehicles = args.get("max_vehicles").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let max_route_distance = args.get("max_route_distance").and_then(|v| v.as_f64());
-        let travel_speed = args.get("travel_speed").and_then(|v| v.as_f64()).unwrap_or(1.0);
-        let max_route_time = args.get("max_route_time").and_then(|v| v.as_f64());
-        let max_stops_per_vehicle = args
-            .get("max_stops_per_vehicle")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize);
-        let apply_local_optimization = args
-            .get("apply_local_optimization")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-        let apply_simulated_annealing = args
-            .get("apply_simulated_annealing")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let sa_iterations = args
-            .get("sa_iterations")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1500) as usize;
-        let sa_initial_temperature = args
-            .get("sa_initial_temperature")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0);
-        let sa_cooling_rate = args
-            .get("sa_cooling_rate")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.995);
-        let sa_seed = args
-            .get("sa_seed")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(42);
-        let output_path = parse_vector_path_arg(args, "output")?;
-        let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
-
-        let depot_coord = collect_point_coords_from_layer(&depots)
-            .into_iter()
-            .map(|(_, c)| c)
-            .next()
-            .ok_or_else(|| ToolError::Execution("depot_points contains no point geometries".to_string()))?;
-
-        #[derive(Clone)]
-        struct StopNode {
-            fid: i64,
-            coord: wbvector::Coord,
-            demand: f64,
-            priority: VehicleRoutingStopPriority,
-        }
-
-        fn route_distance_from_stops(depot: &wbvector::Coord, stops: &[StopNode]) -> f64 {
-            if stops.is_empty() {
-                return 0.0;
+        let coord = match geom {
+            wbvector::Geometry::Point(c) => c.clone(),
+            wbvector::Geometry::MultiPoint(coords) => {
+                let Some(first) = coords.first() else {
+                    continue;
+                };
+                first.clone()
             }
-            let mut total = coord_dist2(depot, &stops[0].coord).sqrt();
-            for pair in stops.windows(2) {
-                total += coord_dist2(&pair[0].coord, &pair[1].coord).sqrt();
+            _ => continue,
+        };
+        let demand = feature
+            .attributes
+            .get(demand_idx)
+            .and_then(field_value_to_f64)
+            .ok_or_else(|| ToolError::Execution(format!("missing/invalid demand for stop fid {}", feature.fid)))?;
+        let tw_start = feature
+            .attributes
+            .get(tw_start_idx)
+            .and_then(field_value_to_f64)
+            .ok_or_else(|| ToolError::Execution(format!("missing/invalid tw_start for stop fid {}", feature.fid)))?;
+        let tw_end = feature
+            .attributes
+            .get(tw_end_idx)
+            .and_then(field_value_to_f64)
+            .ok_or_else(|| ToolError::Execution(format!("missing/invalid tw_end for stop fid {}", feature.fid)))?;
+        let service_time = feature
+            .attributes
+            .get(service_time_idx)
+            .and_then(field_value_to_f64)
+            .ok_or_else(|| ToolError::Execution(format!("missing/invalid service_time for stop fid {}", feature.fid)))?;
+        let priority = priority_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(|value| parse_vehicle_routing_stop_priority(value, priority_field.unwrap_or("priority_field")))
+            .transpose()?
+            .unwrap_or(VehicleRoutingStopPriority::Normal);
+        let allowed_profiles = allowed_profiles_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(|value| {
+                parse_vehicle_routing_profile_tokens(
+                    value,
+                    allowed_vehicle_profiles_field.unwrap_or("allowed_vehicle_profiles_field"),
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        stop_nodes.push(VehicleRoutingVrptwStopNode {
+            fid: feature.fid as i64,
+            coord,
+            demand,
+            priority,
+            tw_start,
+            tw_end,
+            service_time,
+            allowed_profiles,
+        });
+    }
+
+    if stop_nodes.is_empty() {
+        return Err(ToolError::Execution(
+            "stop_points contains no usable point features".to_string(),
+        ));
+    }
+
+    let mut vehicles = Vec::<VehicleRoutingFleetVehicle>::new();
+    for feature in &depots.features {
+        let Some(geom) = feature.geometry.as_ref() else {
+            continue;
+        };
+        let depot_coord = match geom {
+            wbvector::Geometry::Point(c) => c.clone(),
+            wbvector::Geometry::MultiPoint(coords) => {
+                let Some(first) = coords.first() else {
+                    continue;
+                };
+                first.clone()
             }
-            total + coord_dist2(&stops[stops.len() - 1].coord, depot).sqrt()
-        }
-
-        fn improve_route_two_opt(depot: &wbvector::Coord, stops: &mut Vec<StopNode>) -> bool {
-            if stops.len() < 4 {
-                return false;
-            }
-
-            let mut improved = false;
-            loop {
-                let current_distance = route_distance_from_stops(depot, stops);
-                let mut best_candidate: Option<Vec<StopNode>> = None;
-                let mut best_distance = current_distance;
-
-                for i in 0..(stops.len() - 1) {
-                    for k in (i + 1)..stops.len() {
-                        let mut candidate = stops.clone();
-                        candidate[i..=k].reverse();
-                        let candidate_distance = route_distance_from_stops(depot, &candidate);
-                        if candidate_distance + 1.0e-9 < best_distance {
-                            best_distance = candidate_distance;
-                            best_candidate = Some(candidate);
-                        }
-                    }
-                }
-
-                if let Some(candidate) = best_candidate {
-                    *stops = candidate;
-                    improved = true;
-                } else {
-                    break;
-                }
-            }
-
-            improved
-        }
-
-        fn improve_route_simulated_annealing(
-            depot: &wbvector::Coord,
-            stops: &mut Vec<StopNode>,
-            iterations: usize,
-            initial_temperature: f64,
-            cooling_rate: f64,
-            seed: u64,
-        ) -> bool {
-            if stops.len() < 3 || iterations == 0 {
-                return false;
-            }
-
-            use rand::rngs::StdRng;
-            use rand::{RngExt, SeedableRng};
-
-            let original_distance = route_distance_from_stops(depot, stops);
-            let mut current = stops.clone();
-            let mut current_distance = original_distance;
-            let mut best = current.clone();
-            let mut best_distance = current_distance;
-
-            let mut rng = StdRng::seed_from_u64(seed);
-            let mut temperature = initial_temperature.max(1.0e-9);
-            for _ in 0..iterations {
-                let n = current.len();
-                if n < 3 {
-                    break;
-                }
-
-                let i = rng.random_range(0..n);
-                let mut j = rng.random_range(0..n);
-                if i == j {
-                    j = (j + 1) % n;
-                }
-                let (a, b) = if i < j { (i, j) } else { (j, i) };
-
-                let mut candidate = current.clone();
-                if rng.random::<f64>() < 0.5 {
-                    candidate[a..=b].reverse();
-                } else {
-                    candidate.swap(a, b);
-                }
-
-                let candidate_distance = route_distance_from_stops(depot, &candidate);
-                let delta = candidate_distance - current_distance;
-                let accept = delta <= 0.0 || rng.random::<f64>() < (-delta / temperature).exp();
-
-                if accept {
-                    current = candidate;
-                    current_distance = candidate_distance;
-                    if current_distance + 1.0e-9 < best_distance {
-                        best_distance = current_distance;
-                        best = current.clone();
-                    }
-                }
-
-                temperature = (temperature * cooling_rate).max(1.0e-9);
-            }
-
-            if best_distance + 1.0e-9 < original_distance {
-                *stops = best;
-                true
-            } else {
-                false
-            }
-        }
-
-        let mut stop_nodes = Vec::<StopNode>::new();
-        for feature in &stops.features {
-            let Some(geom) = feature.geometry.as_ref() else {
-                continue;
-            };
-            let coord = match geom {
-                wbvector::Geometry::Point(c) => c.clone(),
-                wbvector::Geometry::MultiPoint(coords) => {
-                    let Some(first) = coords.first() else {
-                        continue;
-                    };
-                    first.clone()
-                }
-                _ => continue,
-            };
-
-            let demand = feature
-                .attributes
-                .get(demand_idx)
-                .and_then(field_value_to_f64)
-                .unwrap_or(0.0);
-            if !demand.is_finite() || demand < 0.0 {
-                return Err(ToolError::Execution(format!(
-                    "invalid demand value for stop fid {}",
-                    feature.fid
-                )));
-            }
-            let priority = priority_idx
+            _ => continue,
+        };
+        let base_depot_id = depot_id_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(field_value_to_join_key)
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or_else(|| feature.fid.to_string());
+        let vehicle_count = vehicle_count_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .map(|v| v.round() as usize)
+            .unwrap_or(1);
+        let capacity = vehicle_capacity_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(vehicle_capacity);
+        let fixed_cost = vehicle_fixed_cost_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(vehicle_fixed_cost);
+        let speed = travel_speed_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(travel_speed);
+        let route_distance_limit = min_optional_limit(
+            max_route_distance,
+            max_route_distance_idx
                 .and_then(|idx| feature.attributes.get(idx))
-                .map(|value| {
-                    parse_vehicle_routing_stop_priority(
-                        value,
-                        priority_field.unwrap_or("priority_field"),
-                    )
-                })
-                .transpose()?
-                .unwrap_or(VehicleRoutingStopPriority::Normal);
-            stop_nodes.push(StopNode {
-                fid: feature.fid as i64,
-                coord,
-                demand,
-                priority,
+                .and_then(field_value_to_f64),
+        );
+        let route_time_limit = min_optional_limit(
+            max_route_time,
+            max_route_time_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .and_then(field_value_to_f64),
+        );
+        let profile = vehicle_profile_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .map(field_value_to_join_key)
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        let close_time = min_optional_limit(
+            depot_close_time,
+            depot_close_idx
+                .and_then(|idx| feature.attributes.get(idx))
+                .and_then(field_value_to_f64),
+        );
+        let break_start = break_start_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .or(global_break_start);
+        let break_end = break_end_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .or(global_break_end);
+        let break_duration = break_duration_idx
+            .and_then(|idx| feature.attributes.get(idx))
+            .and_then(field_value_to_f64)
+            .unwrap_or(global_break_duration);
+        for replica_idx in 0..vehicle_count {
+            let depot_id = if vehicle_count == 1 {
+                base_depot_id.clone()
+            } else {
+                format!("{}:{}", base_depot_id, replica_idx + 1)
+            };
+            vehicles.push(VehicleRoutingFleetVehicle {
+                depot_id,
+                depot_coord: depot_coord.clone(),
+                capacity,
+                fixed_cost,
+                travel_speed: speed,
+                max_route_distance: route_distance_limit,
+                max_route_time: route_time_limit,
+                profile: profile.clone(),
+                depot_close_time: close_time,
+                break_start_time: break_start,
+                break_end_time: break_end,
+                break_duration,
             });
         }
+    }
 
-        if stop_nodes.is_empty() {
-            return Err(ToolError::Execution(
-                "stop_points contains no usable point features".to_string(),
-            ));
-        }
+    if vehicles.is_empty() {
+        return Err(ToolError::Execution(
+            "depot_points contains no usable point geometries".to_string(),
+        ));
+    }
 
-        stop_nodes.sort_by_key(|s| s.fid);
-        let mut unassigned = stop_nodes;
-        let mut vehicle_id = 1i64;
-        let mut routes = Vec::<(i64, Vec<wbvector::Coord>, usize, f64, f64)>::new();
-        let mut assignments = Vec::<(i64, i64, i64, f64, f64, wbvector::Coord)>::new();
-        let total_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
-        let mut infeasible_stops = 0usize;
-        let mut optimized_route_count = 0usize;
-        let mut annealed_route_count = 0usize;
+    let build_route = |vehicle: &VehicleRoutingFleetVehicle,
+                       unassigned: &[VehicleRoutingVrptwStopNode]|
+     -> Option<VehicleRoutingVrptwPlannedRoute> {
+        let mut current = vehicle.depot_coord.clone();
+        let mut current_time = start_time;
+        let mut remaining_capacity = vehicle.capacity;
+        let mut route_stops = Vec::<VehicleRoutingVrptwStopNode>::new();
+        let mut route_stop_count = 0usize;
+        let mut route_load = 0.0f64;
+        let mut route_distance_so_far = 0.0f64;
+        let mut route_late_stops = 0i64;
+        let mut route_total_lateness = 0.0f64;
+        let mut break_taken = false;
+        let mut route_break_start_time = None;
+        let mut used = vec![false; unassigned.len()];
 
-        while !unassigned.is_empty() {
-            if let Some(limit) = max_vehicles {
-                if routes.len() >= limit {
+        loop {
+            if let Some(max_stops) = max_stops_per_vehicle {
+                if route_stop_count >= max_stops {
                     break;
                 }
             }
 
-            let mut current = depot_coord.clone();
-            let mut remaining_capacity = vehicle_capacity;
-            let mut route_stops = Vec::<StopNode>::new();
-            let mut route_stop_count = 0usize;
-            let mut route_load = 0.0f64;
-            let mut route_distance_so_far = 0.0f64;
-
-            loop {
-                if let Some(max_stops) = max_stops_per_vehicle {
-                    if route_stop_count >= max_stops {
-                        break;
-                    }
+            let mut best_idx: Option<usize> = None;
+            let mut best_dist = f64::INFINITY;
+            let mut best_lateness = f64::INFINITY;
+            let mut best_slack = f64::INFINITY;
+            let mut best_priority_rank = i32::MIN;
+            let mut best_demand = f64::NEG_INFINITY;
+            let mut best_cost = f64::INFINITY;
+            for (idx, stop) in unassigned.iter().enumerate() {
+                if used[idx] || stop.demand > remaining_capacity + 1.0e-12 {
+                    continue;
                 }
-
-                let mut best_idx: Option<usize> = None;
-                let mut best_dist = f64::INFINITY;
-                let mut best_priority_rank = i32::MIN;
-                for (idx, stop) in unassigned.iter().enumerate() {
-                    if stop.demand > remaining_capacity + 1.0e-12 {
+                if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile) {
+                    continue;
+                }
+                let Some(projection) = vehicle_routing_project_vrptw_visit(
+                    vehicle,
+                    &current,
+                    current_time,
+                    route_distance_so_far,
+                    start_time,
+                    break_taken,
+                    stop,
+                ) else {
+                    continue;
+                };
+                if enforce_time_windows && projection.lateness > allowed_lateness + 1.0e-12 {
+                    continue;
+                }
+                if let Some(max_distance) = vehicle.max_route_distance {
+                    if projection.projected_total_distance > max_distance + 1.0e-12 {
                         continue;
                     }
-                    let d = coord_dist2(&current, &stop.coord).sqrt();
-                    if let Some(max_dist) = max_route_distance {
-                        let projected_total = route_distance_so_far + d + coord_dist2(&stop.coord, &depot_coord).sqrt();
-                        if projected_total > max_dist + 1.0e-12 {
-                            continue;
-                        }
-                    }
-                    if let Some(max_time) = max_route_time {
-                        let projected_total = route_distance_so_far + d + coord_dist2(&stop.coord, &depot_coord).sqrt();
-                        let projected_time = projected_total / travel_speed;
-                        if projected_time > max_time + 1.0e-12 {
-                            continue;
-                        }
-                    }
-                    let better = stop.priority.rank() > best_priority_rank
-                        || (stop.priority.rank() == best_priority_rank
-                            && (d < best_dist
-                                || ((d - best_dist).abs() <= 1.0e-12
-                                    && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)));
-                    if better {
-                        best_priority_rank = stop.priority.rank();
-                        best_dist = d;
-                        best_idx = Some(idx);
+                }
+                if let Some(max_time) = vehicle.max_route_time {
+                    if projection.projected_total_time > max_time + 1.0e-12 {
+                        continue;
                     }
                 }
-
-                let Some(idx) = best_idx else {
-                    if route_stop_count == 0 {
-                        // Remaining stop cannot fit even on an empty vehicle route.
-                        if let Some(pos) = unassigned
-                            .iter()
-                            .position(|s| s.demand > vehicle_capacity + 1.0e-12)
-                        {
-                            unassigned.remove(pos);
-                            infeasible_stops += 1;
-                            continue;
-                        }
+                if let Some(close_time) = vehicle.depot_close_time {
+                    if projection.projected_return_arrival > close_time + 1.0e-12 {
+                        continue;
                     }
-                    break;
-                };
-
-                let stop = unassigned.remove(idx);
-                let travel_dist = coord_dist2(&current, &stop.coord).sqrt();
-                route_distance_so_far += travel_dist;
-                remaining_capacity -= stop.demand;
-                route_load += stop.demand;
-                route_stop_count += 1;
-                current = stop.coord.clone();
-                route_stops.push(stop);
+                }
+                let candidate_cost = projection.distance_to_stop
+                    + if route_stop_count == 0 { vehicle.fixed_cost } else { 0.0 };
+                let better = stop.priority.rank() > best_priority_rank
+                    || (stop.priority.rank() == best_priority_rank
+                        && match objective_mode {
+                            VehicleRoutingObjectiveMode::MinimizeVehicles => {
+                                stop.demand > best_demand + 1.0e-12
+                                    || ((stop.demand - best_demand).abs() <= 1.0e-12
+                                        && (projection.distance_to_stop < best_dist - 1.0e-12
+                                            || ((projection.distance_to_stop - best_dist).abs() <= 1.0e-12
+                                                && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)))
+                            }
+                            VehicleRoutingObjectiveMode::MinimizeCost => {
+                                candidate_cost < best_cost - 1.0e-12
+                                    || ((candidate_cost - best_cost).abs() <= 1.0e-12
+                                        && (projection.distance_to_stop < best_dist - 1.0e-12
+                                            || ((projection.distance_to_stop - best_dist).abs() <= 1.0e-12
+                                                && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)))
+                            }
+                            VehicleRoutingObjectiveMode::MinimizeLateness => {
+                                projection.lateness < best_lateness - 1.0e-12
+                                    || ((projection.lateness - best_lateness).abs() <= 1.0e-12
+                                        && (projection.slack < best_slack - 1.0e-12
+                                            || ((projection.slack - best_slack).abs() <= 1.0e-12
+                                                && (projection.distance_to_stop < best_dist - 1.0e-12
+                                                    || ((projection.distance_to_stop - best_dist).abs() <= 1.0e-12
+                                                        && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)))))
+                            }
+                            VehicleRoutingObjectiveMode::MinimizeDistance => {
+                                projection.distance_to_stop < best_dist - 1.0e-12
+                                    || ((projection.distance_to_stop - best_dist).abs() <= 1.0e-12
+                                        && stop.fid < unassigned[best_idx.unwrap_or(idx)].fid)
+                            }
+                        });
+                if better {
+                    best_priority_rank = stop.priority.rank();
+                    best_dist = projection.distance_to_stop;
+                    best_lateness = projection.lateness;
+                    best_slack = projection.slack;
+                    best_demand = stop.demand;
+                    best_cost = candidate_cost;
+                    best_idx = Some(idx);
+                }
             }
 
-            if route_stop_count == 0 {
+            let Some(idx) = best_idx else {
+                break;
+            };
+
+            let stop = unassigned[idx].clone();
+            let projection = vehicle_routing_project_vrptw_visit(
+                vehicle,
+                &current,
+                current_time,
+                route_distance_so_far,
+                start_time,
+                break_taken,
+                &stop,
+            )?;
+            if projection.lateness > 0.0 {
+                route_late_stops += 1;
+                route_total_lateness += projection.lateness;
+            }
+            if route_break_start_time.is_none() {
+                route_break_start_time = projection.break_started_before_service;
+            }
+            used[idx] = true;
+            remaining_capacity -= stop.demand;
+            route_load += stop.demand;
+            route_stop_count += 1;
+            route_distance_so_far += projection.distance_to_stop;
+            current = stop.coord.clone();
+            current_time = projection.service_end;
+            break_taken = projection.break_taken_after_service;
+            route_stops.push(stop);
+        }
+
+        if route_stop_count == 0 {
+            return None;
+        }
+
+        let (return_distance, return_arrival, break_taken_after_return, return_break_start) =
+            vehicle_routing_project_vrptw_return(
+                vehicle,
+                &current,
+                current_time,
+                break_taken,
+            )?;
+        if route_break_start_time.is_none() {
+            route_break_start_time = return_break_start;
+        }
+        Some(VehicleRoutingVrptwPlannedRoute {
+            vehicle_index: 0,
+            stop_count: route_stop_count,
+            load: route_load,
+            distance: route_distance_so_far + return_distance,
+            total_time: return_arrival - start_time,
+            late_stops: route_late_stops,
+            total_lateness: route_total_lateness,
+            served_required_count: route_stops.iter().filter(|stop| stop.priority.is_required()).count(),
+            route_stops,
+            break_taken: break_taken_after_return,
+            break_start_time: route_break_start_time,
+        })
+    };
+
+    stop_nodes.sort_by_key(|stop| stop.fid);
+    let mut unassigned = stop_nodes;
+    let total_required_stop_count = unassigned.iter().filter(|stop| stop.priority.is_required()).count();
+    let mut vehicle_id = 1i64;
+    let mut routes = Vec::<(i64, String, String, Vec<wbvector::Coord>, usize, f64, f64, f64, f64, i64, f64, bool, Option<f64>)>::new();
+    let mut assignments = Vec::<(i64, i64, String, String, i64, f64, f64, f64, f64, f64, wbvector::Coord)>::new();
+    let mut infeasible_stops = 0usize;
+    let mut time_window_infeasible_stops = 0usize;
+    let mut depot_close_infeasible_stops = 0usize;
+    let mut max_route_distance_infeasible_stops = 0usize;
+    let mut compatibility_infeasible_stops = 0usize;
+    let mut break_window_infeasible_stops = 0usize;
+    let mut late_stop_count = 0usize;
+    let mut total_lateness = 0.0f64;
+    let mut break_route_count = 0usize;
+
+    while !unassigned.is_empty() {
+        if let Some(limit) = max_vehicles {
+            if routes.len() >= limit {
                 break;
             }
-
-            if apply_local_optimization && improve_route_two_opt(&depot_coord, &mut route_stops) {
-                optimized_route_count += 1;
-            }
-            if apply_simulated_annealing
-                && improve_route_simulated_annealing(
-                    &depot_coord,
-                    &mut route_stops,
-                    sa_iterations,
-                    sa_initial_temperature,
-                    sa_cooling_rate,
-                    sa_seed.wrapping_add(vehicle_id as u64),
-                )
-            {
-                annealed_route_count += 1;
-            }
-
-            let mut route_coords = vec![depot_coord.clone()];
-            let mut cumulative_load = 0.0f64;
-            for (visit_idx, stop) in route_stops.iter().enumerate() {
-                cumulative_load += stop.demand;
-                route_coords.push(stop.coord.clone());
-                assignments.push((
-                    stop.fid,
-                    vehicle_id,
-                    (visit_idx + 1) as i64,
-                    stop.demand,
-                    cumulative_load,
-                    stop.coord.clone(),
-                ));
-            }
-            route_coords.push(depot_coord.clone());
-            let route_distance = route_distance_from_stops(&depot_coord, &route_stops);
-            routes.push((
-                vehicle_id,
-                route_coords,
-                route_stop_count,
-                route_load,
-                route_distance,
-            ));
-            vehicle_id += 1;
         }
 
-        let mut routes_layer = wbvector::Layer::new(format!("{}_vehicle_routing_cvrp", network.name));
-        routes_layer.geom_type = Some(wbvector::GeometryType::LineString);
-        routes_layer.crs = network.crs.clone();
-        routes_layer
+        let mut best_plan: Option<VehicleRoutingVrptwPlannedRoute> = None;
+        for (vehicle_index, vehicle) in vehicles.iter().enumerate() {
+            let Some(mut plan) = build_route(vehicle, &unassigned) else {
+                continue;
+            };
+            plan.vehicle_index = vehicle_index;
+            let replace = if let Some(current_best) = &best_plan {
+                if plan.served_required_count != current_best.served_required_count {
+                    plan.served_required_count > current_best.served_required_count
+                } else {
+                    match objective_mode {
+                        VehicleRoutingObjectiveMode::MinimizeVehicles => {
+                            plan.stop_count > current_best.stop_count
+                                || (plan.stop_count == current_best.stop_count
+                                    && (plan.load > current_best.load + 1.0e-12
+                                        || ((plan.load - current_best.load).abs() <= 1.0e-12
+                                            && plan.total_time < current_best.total_time - 1.0e-12)))
+                        }
+                        VehicleRoutingObjectiveMode::MinimizeCost => {
+                            let plan_vehicle = &vehicles[plan.vehicle_index];
+                            let best_vehicle = &vehicles[current_best.vehicle_index];
+                            let plan_cost_per_stop =
+                                (plan.distance + plan_vehicle.fixed_cost) / plan.stop_count as f64;
+                            let best_cost_per_stop = (current_best.distance + best_vehicle.fixed_cost)
+                                / current_best.stop_count as f64;
+                            plan_cost_per_stop < best_cost_per_stop - 1.0e-12
+                                || ((plan_cost_per_stop - best_cost_per_stop).abs() <= 1.0e-12
+                                    && (plan.stop_count > current_best.stop_count
+                                        || (plan.stop_count == current_best.stop_count
+                                            && plan.total_time < current_best.total_time - 1.0e-12)))
+                        }
+                        VehicleRoutingObjectiveMode::MinimizeLateness => {
+                            let plan_lateness_per_stop = plan.total_lateness / plan.stop_count as f64;
+                            let best_lateness_per_stop =
+                                current_best.total_lateness / current_best.stop_count as f64;
+                            plan_lateness_per_stop < best_lateness_per_stop - 1.0e-12
+                                || ((plan_lateness_per_stop - best_lateness_per_stop).abs() <= 1.0e-12
+                                    && (plan.stop_count > current_best.stop_count
+                                        || (plan.stop_count == current_best.stop_count
+                                            && plan.distance < current_best.distance - 1.0e-12)))
+                        }
+                        VehicleRoutingObjectiveMode::MinimizeDistance => {
+                            let plan_distance_per_stop = plan.distance / plan.stop_count as f64;
+                            let best_distance_per_stop = current_best.distance / current_best.stop_count as f64;
+                            plan_distance_per_stop < best_distance_per_stop - 1.0e-12
+                                || ((plan_distance_per_stop - best_distance_per_stop).abs() <= 1.0e-12
+                                    && (plan.stop_count > current_best.stop_count
+                                        || (plan.stop_count == current_best.stop_count
+                                            && plan.total_time < current_best.total_time - 1.0e-12)))
+                        }
+                    }
+                }
+            } else {
+                true
+            };
+            if replace {
+                best_plan = Some(plan);
+            }
+        }
+
+        let Some(plan) = best_plan else {
+            if let Some(pos) = unassigned.iter().position(|stop| {
+                !vehicles.iter().any(|vehicle| {
+                    vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                })
+            }) {
+                unassigned.remove(pos);
+                compatibility_infeasible_stops += 1;
+                continue;
+            }
+            let max_capacity = vehicles.iter().map(|vehicle| vehicle.capacity).fold(0.0, f64::max);
+            if let Some(pos) = unassigned.iter().position(|stop| stop.demand > max_capacity + 1.0e-12) {
+                unassigned.remove(pos);
+                infeasible_stops += 1;
+                continue;
+            }
+            if enforce_time_windows {
+                if let Some(pos) = unassigned.iter().position(|stop| {
+                    vehicles.iter().all(|vehicle| {
+                        if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                            || stop.demand > vehicle.capacity + 1.0e-12
+                        {
+                            return true;
+                        }
+                        vehicle_routing_project_vrptw_visit(
+                            vehicle,
+                            &vehicle.depot_coord,
+                            start_time,
+                            0.0,
+                            start_time,
+                            false,
+                            stop,
+                        )
+                        .map(|projection| projection.lateness > allowed_lateness + 1.0e-12)
+                        .unwrap_or(true)
+                    })
+                }) {
+                    unassigned.remove(pos);
+                    time_window_infeasible_stops += 1;
+                    continue;
+                }
+            }
+            if let Some(pos) = unassigned.iter().position(|stop| {
+                vehicles.iter().all(|vehicle| {
+                    if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                        || stop.demand > vehicle.capacity + 1.0e-12
+                    {
+                        return true;
+                    }
+                    vehicle_routing_project_vrptw_visit(
+                        vehicle,
+                        &vehicle.depot_coord,
+                        start_time,
+                        0.0,
+                        start_time,
+                        false,
+                        stop,
+                    )
+                    .map(|projection| {
+                        vehicle
+                            .depot_close_time
+                            .map(|close_time| projection.projected_return_arrival > close_time + 1.0e-12)
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
+                })
+            }) {
+                unassigned.remove(pos);
+                depot_close_infeasible_stops += 1;
+                continue;
+            }
+            if let Some(pos) = unassigned.iter().position(|stop| {
+                vehicles.iter().all(|vehicle| {
+                    if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                        || stop.demand > vehicle.capacity + 1.0e-12
+                    {
+                        return true;
+                    }
+                    vehicle_routing_project_vrptw_visit(
+                        vehicle,
+                        &vehicle.depot_coord,
+                        start_time,
+                        0.0,
+                        start_time,
+                        false,
+                        stop,
+                    )
+                    .map(|projection| {
+                        vehicle
+                            .max_route_distance
+                            .map(|max_distance| projection.projected_total_distance > max_distance + 1.0e-12)
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
+                })
+            }) {
+                unassigned.remove(pos);
+                max_route_distance_infeasible_stops += 1;
+                continue;
+            }
+            if let Some(pos) = unassigned.iter().position(|stop| {
+                vehicles.iter().all(|vehicle| {
+                    if !vehicle_routing_profile_is_compatible(&stop.allowed_profiles, &vehicle.profile)
+                        || stop.demand > vehicle.capacity + 1.0e-12
+                    {
+                        return true;
+                    }
+                    vehicle_routing_project_vrptw_visit(
+                        vehicle,
+                        &vehicle.depot_coord,
+                        start_time,
+                        0.0,
+                        start_time,
+                        false,
+                        stop,
+                    )
+                    .is_none()
+                })
+            }) {
+                unassigned.remove(pos);
+                break_window_infeasible_stops += 1;
+                continue;
+            }
+            break;
+        };
+
+        let vehicle = if consume_vehicle_templates {
+            vehicles.remove(plan.vehicle_index)
+        } else {
+            vehicles[plan.vehicle_index].clone()
+        };
+        let mut current_time = start_time;
+        let mut current = vehicle.depot_coord.clone();
+        let mut route_distance_so_far = 0.0f64;
+        let mut route_coords = vec![vehicle.depot_coord.clone()];
+        let mut cumulative_load = 0.0f64;
+        let mut break_taken = false;
+        let mut route_break_start = None;
+        for (visit_idx, stop) in plan.route_stops.iter().enumerate() {
+            let projection = vehicle_routing_project_vrptw_visit(
+                &vehicle,
+                &current,
+                current_time,
+                route_distance_so_far,
+                start_time,
+                break_taken,
+                stop,
+            )
+            .ok_or_else(|| ToolError::Execution("route projection failed during VRPTW write-out".to_string()))?;
+            if route_break_start.is_none() {
+                route_break_start = projection.break_started_before_service;
+            }
+            cumulative_load += stop.demand;
+            route_distance_so_far += projection.distance_to_stop;
+            current = stop.coord.clone();
+            current_time = projection.service_end;
+            break_taken = projection.break_taken_after_service;
+            route_coords.push(stop.coord.clone());
+            if projection.lateness > 0.0 {
+                late_stop_count += 1;
+                total_lateness += projection.lateness;
+            }
+            assignments.push((
+                stop.fid,
+                vehicle_id,
+                vehicle.depot_id.clone(),
+                vehicle.profile.clone(),
+                (visit_idx + 1) as i64,
+                stop.demand,
+                cumulative_load,
+                projection.arrival_time,
+                projection.service_start,
+                projection.lateness,
+                stop.coord.clone(),
+            ));
+        }
+        let (_, _, final_break_taken, return_break_start) = vehicle_routing_project_vrptw_return(
+            &vehicle,
+            &current,
+            current_time,
+            break_taken,
+        )
+        .ok_or_else(|| ToolError::Execution("return projection failed during VRPTW write-out".to_string()))?;
+        if route_break_start.is_none() {
+            route_break_start = return_break_start;
+        }
+        if final_break_taken {
+            break_route_count += 1;
+        }
+        route_coords.push(vehicle.depot_coord.clone());
+        routes.push((
+            vehicle_id,
+            vehicle.depot_id.clone(),
+            vehicle.profile.clone(),
+            route_coords,
+            plan.stop_count,
+            plan.load,
+            plan.distance,
+            plan.distance + vehicle.fixed_cost,
+            plan.total_time,
+            plan.late_stops,
+            plan.total_lateness,
+            final_break_taken,
+            route_break_start,
+        ));
+        let assigned_fids = plan.route_stops.iter().map(|stop| stop.fid).collect::<HashSet<_>>();
+        unassigned.retain(|stop| !assigned_fids.contains(&stop.fid));
+        vehicle_id += 1;
+    }
+
+    let mut routes_layer = wbvector::Layer::new(format!("{}_vehicle_routing_vrptw", network.name));
+    routes_layer.geom_type = Some(wbvector::GeometryType::LineString);
+    routes_layer.crs = network.crs.clone();
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("DEPOT_ID", wbvector::FieldType::Text));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("VEH_PROFILE", wbvector::FieldType::Text));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("STOP_COUNT", wbvector::FieldType::Integer));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("LOAD_TOTAL", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("ROUTE_COST", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("TOTAL_TIME", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("LATE_STOPS", wbvector::FieldType::Integer));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("TOTAL_LATENESS", wbvector::FieldType::Float));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("BREAK_TAKEN", wbvector::FieldType::Boolean));
+    routes_layer
+        .schema
+        .add_field(wbvector::FieldDef::new("BREAK_START", wbvector::FieldType::Float));
+
+    let mut next_fid = 1u64;
+    for (
+        veh_id,
+        depot_id,
+        profile,
+        coords,
+        stop_count,
+        load_total,
+        route_distance,
+        route_cost,
+        route_total_time,
+        route_late_stops,
+        route_total_lateness,
+        break_taken,
+        break_start,
+    ) in &routes
+    {
+        routes_layer.push(wbvector::Feature {
+            fid: next_fid,
+            geometry: Some(wbvector::Geometry::LineString(coords.clone())),
+            attributes: vec![
+                wbvector::FieldValue::Integer(*veh_id),
+                wbvector::FieldValue::Text(depot_id.clone()),
+                wbvector::FieldValue::Text(profile.clone()),
+                wbvector::FieldValue::Integer(*stop_count as i64),
+                wbvector::FieldValue::Float(*load_total),
+                wbvector::FieldValue::Float(*route_distance),
+                wbvector::FieldValue::Float(*route_cost),
+                wbvector::FieldValue::Float(*route_total_time),
+                wbvector::FieldValue::Integer(*route_late_stops),
+                wbvector::FieldValue::Float(*route_total_lateness),
+                wbvector::FieldValue::Boolean(*break_taken),
+                break_start
+                    .map(wbvector::FieldValue::Float)
+                    .unwrap_or(wbvector::FieldValue::Null),
+            ],
+        });
+        next_fid += 1;
+    }
+
+    let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+    let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, _, _, distance, _, _, _, _, _, _)| *distance).sum();
+    let total_cost: f64 = routes.iter().map(|(_, _, _, _, _, _, _, cost, _, _, _, _, _)| *cost).sum();
+
+    let mut outputs = BTreeMap::new();
+    outputs.insert("path".to_string(), json!(route_output_locator));
+    outputs.insert("route_count".to_string(), json!(routes.len()));
+    outputs.insert("total_distance".to_string(), json!(total_route_distance));
+    outputs.insert("total_cost".to_string(), json!(total_cost));
+    outputs.insert("vehicle_fixed_cost".to_string(), json!(vehicle_fixed_cost));
+    outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
+    outputs.insert(
+        "unserved_stop_count".to_string(),
+        json!(unassigned.len()
+            + infeasible_stops
+            + time_window_infeasible_stops
+            + depot_close_infeasible_stops
+            + max_route_distance_infeasible_stops
+            + compatibility_infeasible_stops
+            + break_window_infeasible_stops),
+    );
+    outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
+    outputs.insert(
+        "time_window_infeasible_stop_count".to_string(),
+        json!(time_window_infeasible_stops),
+    );
+    outputs.insert(
+        "depot_close_infeasible_stop_count".to_string(),
+        json!(depot_close_infeasible_stops),
+    );
+    outputs.insert(
+        "max_route_distance_infeasible_stop_count".to_string(),
+        json!(max_route_distance_infeasible_stops),
+    );
+    outputs.insert(
+        "compatibility_infeasible_stop_count".to_string(),
+        json!(compatibility_infeasible_stops),
+    );
+    outputs.insert(
+        "break_window_infeasible_stop_count".to_string(),
+        json!(break_window_infeasible_stops),
+    );
+    let unserved_required_stop_count = unassigned.iter().filter(|stop| stop.priority.is_required()).count();
+    outputs.insert(
+        "served_required_stop_count".to_string(),
+        json!(total_required_stop_count.saturating_sub(unserved_required_stop_count)),
+    );
+    outputs.insert(
+        "unserved_required_stop_count".to_string(),
+        json!(unserved_required_stop_count),
+    );
+    outputs.insert("late_stop_count".to_string(), json!(late_stop_count));
+    outputs.insert("total_lateness".to_string(), json!(total_lateness));
+    outputs.insert("break_route_count".to_string(), json!(break_route_count));
+    outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
+    outputs.insert("enforce_time_windows".to_string(), json!(enforce_time_windows));
+    outputs.insert("allowed_lateness".to_string(), json!(allowed_lateness));
+    if let Some(close_time_value) = depot_close_time {
+        outputs.insert("depot_close_time".to_string(), json!(close_time_value));
+    }
+    if let Some(max_distance_value) = max_route_distance {
+        outputs.insert("max_route_distance".to_string(), json!(max_distance_value));
+    }
+    if let Some(max_route_time_value) = max_route_time {
+        outputs.insert("max_route_time".to_string(), json!(max_route_time_value));
+    }
+    if let Some(max_stops_value) = max_stops_per_vehicle {
+        outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
+    }
+    outputs.insert("travel_speed".to_string(), json!(travel_speed));
+    outputs.insert("use_priority_scoring".to_string(), json!(use_priority_scoring));
+    outputs.insert("objective_mode".to_string(), json!(objective_mode.as_str()));
+    outputs.insert(
+        "available_vehicle_count".to_string(),
+        json!(if consume_vehicle_templates {
+            vehicles.len() + routes.len()
+        } else {
+            max_vehicles.unwrap_or(vehicles.len())
+        }),
+    );
+    if let Some(value) = global_break_start {
+        outputs.insert("break_start_time".to_string(), json!(value));
+    }
+    if let Some(value) = global_break_end {
+        outputs.insert("break_end_time".to_string(), json!(value));
+    }
+    if global_break_duration > 0.0 {
+        outputs.insert("break_duration".to_string(), json!(global_break_duration));
+    }
+
+    if let Some(assign_path) = assignment_output {
+        let mut assignment_layer = wbvector::Layer::new(format!(
+            "{}_vehicle_routing_vrptw_assignments",
+            stops.name
+        ));
+        assignment_layer.geom_type = Some(wbvector::GeometryType::Point);
+        assignment_layer.crs = stops.crs.clone();
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("STOP_FID", wbvector::FieldType::Integer));
+        assignment_layer
             .schema
             .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
-        routes_layer
+        assignment_layer
             .schema
-            .add_field(wbvector::FieldDef::new("STOP_COUNT", wbvector::FieldType::Integer));
-        routes_layer
+            .add_field(wbvector::FieldDef::new("DEPOT_ID", wbvector::FieldType::Text));
+        assignment_layer
             .schema
-            .add_field(wbvector::FieldDef::new("LOAD_TOTAL", wbvector::FieldType::Float));
-        routes_layer
+            .add_field(wbvector::FieldDef::new("VEH_PROFILE", wbvector::FieldType::Text));
+        assignment_layer
             .schema
-            .add_field(wbvector::FieldDef::new("DISTANCE", wbvector::FieldType::Float));
-        routes_layer
+            .add_field(wbvector::FieldDef::new("VISIT_SEQ", wbvector::FieldType::Integer));
+        assignment_layer
             .schema
-            .add_field(wbvector::FieldDef::new("ROUTE_COST", wbvector::FieldType::Float));
+            .add_field(wbvector::FieldDef::new("DEMAND", wbvector::FieldType::Float));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("CUM_LOAD", wbvector::FieldType::Float));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("ARRIVAL_T", wbvector::FieldType::Float));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("SERVICE_T", wbvector::FieldType::Float));
+        assignment_layer
+            .schema
+            .add_field(wbvector::FieldDef::new("LATENESS", wbvector::FieldType::Float));
 
-        let mut next_fid = 1u64;
-        for (veh_id, coords, stop_count, load_total, route_distance) in routes.iter() {
-            routes_layer.push(wbvector::Feature {
-                fid: next_fid,
-                geometry: Some(wbvector::Geometry::LineString(coords.clone())),
+        let mut fid = 1u64;
+        for (stop_fid, veh_id, depot_id, profile, visit_seq, demand, cum_load, arrival_t, service_t, lateness, coord) in assignments {
+            assignment_layer.push(wbvector::Feature {
+                fid,
+                geometry: Some(wbvector::Geometry::Point(coord)),
                 attributes: vec![
-                    wbvector::FieldValue::Integer(*veh_id),
-                    wbvector::FieldValue::Integer(*stop_count as i64),
-                    wbvector::FieldValue::Float(*load_total),
-                    wbvector::FieldValue::Float(*route_distance),
-                    wbvector::FieldValue::Float(*route_distance + vehicle_fixed_cost),
+                    wbvector::FieldValue::Integer(stop_fid),
+                    wbvector::FieldValue::Integer(veh_id),
+                    wbvector::FieldValue::Text(depot_id),
+                    wbvector::FieldValue::Text(profile),
+                    wbvector::FieldValue::Integer(visit_seq),
+                    wbvector::FieldValue::Float(demand),
+                    wbvector::FieldValue::Float(cum_load),
+                    wbvector::FieldValue::Float(arrival_t),
+                    wbvector::FieldValue::Float(service_t),
+                    wbvector::FieldValue::Float(lateness),
                 ],
             });
-            next_fid += 1;
+            fid += 1;
         }
 
-        let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
-        let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, d)| *d).sum();
-        let total_cost = total_route_distance + vehicle_fixed_cost * routes.len() as f64;
-
-        let mut outputs = BTreeMap::new();
-        outputs.insert("path".to_string(), json!(route_output_locator));
-        outputs.insert("route_count".to_string(), json!(routes.len()));
-        outputs.insert("total_distance".to_string(), json!(total_route_distance));
-        outputs.insert("total_cost".to_string(), json!(total_cost));
-        outputs.insert("vehicle_fixed_cost".to_string(), json!(vehicle_fixed_cost));
-        outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
-        outputs.insert(
-            "unserved_stop_count".to_string(),
-            json!(unassigned.len() + infeasible_stops),
-        );
-        outputs.insert("infeasible_stop_count".to_string(), json!(infeasible_stops));
-        let unserved_required_stop_count = unassigned.iter().filter(|s| s.priority.is_required()).count();
-        outputs.insert(
-            "served_required_stop_count".to_string(),
-            json!(total_required_stop_count.saturating_sub(unserved_required_stop_count)),
-        );
-        outputs.insert(
-            "unserved_required_stop_count".to_string(),
-            json!(unserved_required_stop_count),
-        );
-        outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
-        if let Some(max_route_distance_value) = max_route_distance {
-            outputs.insert("max_route_distance".to_string(), json!(max_route_distance_value));
-        }
-        outputs.insert("travel_speed".to_string(), json!(travel_speed));
-        if let Some(max_route_time_value) = max_route_time {
-            outputs.insert("max_route_time".to_string(), json!(max_route_time_value));
-        }
-        if let Some(max_stops_value) = max_stops_per_vehicle {
-            outputs.insert("max_stops_per_vehicle".to_string(), json!(max_stops_value));
-        }
-        outputs.insert("apply_local_optimization".to_string(), json!(apply_local_optimization));
-        outputs.insert("optimized_route_count".to_string(), json!(optimized_route_count));
-        outputs.insert("apply_simulated_annealing".to_string(), json!(apply_simulated_annealing));
-        outputs.insert("annealed_route_count".to_string(), json!(annealed_route_count));
-        outputs.insert("sa_iterations".to_string(), json!(sa_iterations));
-        outputs.insert("sa_initial_temperature".to_string(), json!(sa_initial_temperature));
-        outputs.insert("sa_cooling_rate".to_string(), json!(sa_cooling_rate));
-        outputs.insert("sa_seed".to_string(), json!(sa_seed));
-
-        if let Some(assign_path) = assignment_output {
-            let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_cvrp_assignments", stops.name));
-            assignment_layer.geom_type = Some(wbvector::GeometryType::Point);
-            assignment_layer.crs = stops.crs.clone();
-            assignment_layer
-                .schema
-                .add_field(wbvector::FieldDef::new("STOP_FID", wbvector::FieldType::Integer));
-            assignment_layer
-                .schema
-                .add_field(wbvector::FieldDef::new("VEHICLE_ID", wbvector::FieldType::Integer));
-            assignment_layer
-                .schema
-                .add_field(wbvector::FieldDef::new("VISIT_SEQ", wbvector::FieldType::Integer));
-            assignment_layer
-                .schema
-                .add_field(wbvector::FieldDef::new("DEMAND", wbvector::FieldType::Float));
-            assignment_layer
-                .schema
-                .add_field(wbvector::FieldDef::new("CUM_LOAD", wbvector::FieldType::Float));
-
-            let mut fid = 1u64;
-            for (stop_fid, veh_id, visit_seq, demand, cum_load, coord) in assignments {
-                assignment_layer.push(wbvector::Feature {
-                    fid,
-                    geometry: Some(wbvector::Geometry::Point(coord)),
-                    attributes: vec![
-                        wbvector::FieldValue::Integer(stop_fid),
-                        wbvector::FieldValue::Integer(veh_id),
-                        wbvector::FieldValue::Integer(visit_seq),
-                        wbvector::FieldValue::Float(demand),
-                        wbvector::FieldValue::Float(cum_load),
-                    ],
-                });
-                fid += 1;
-            }
-
-            let assignment_locator = write_vector_output(&assignment_layer, assign_path.trim())?;
-            outputs.insert("assignment_output".to_string(), json!(assignment_locator));
-        }
-
-        Ok(ToolRunResult { outputs })
+        let assignment_locator = write_vector_output(&assignment_layer, assign_path.trim())?;
+        outputs.insert("assignment_output".to_string(), json!(assignment_locator));
     }
+
+    Ok(ToolRunResult { outputs })
 }
 
 impl Tool for VehicleRoutingVrptwTool {
@@ -31696,18 +33553,31 @@ impl Tool for VehicleRoutingVrptwTool {
         ToolMetadata {
             id: "vehicle_routing_vrptw",
             display_name: "Vehicle Routing (VRPTW)",
-            summary: "Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.",
+            summary: "Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "network", description: "Input line network layer (validated for contract parity).", required: true },
-                ToolParamSpec { name: "depot_points", description: "Depot point layer; first point is used as the active depot in this baseline implementation.", required: true },
+                ToolParamSpec { name: "depot_points", description: "Depot point layer; each point can contribute one or more vehicles.", required: true },
                 ToolParamSpec { name: "stop_points", description: "Delivery stop point layer with demand and time-window fields.", required: true },
                 ToolParamSpec { name: "demand_field", description: "Numeric demand field in stop_points (default: demand).", required: false },
                 ToolParamSpec { name: "priority_field", description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.", required: false },
+                ToolParamSpec { name: "allowed_vehicle_profiles_field", description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).", required: false },
                 ToolParamSpec { name: "tw_start_field", description: "Numeric time-window start field in stop_points (default: tw_start).", required: false },
                 ToolParamSpec { name: "tw_end_field", description: "Numeric time-window end field in stop_points (default: tw_end).", required: false },
                 ToolParamSpec { name: "service_time_field", description: "Numeric per-stop service time field in stop_points (default: service_time).", required: false },
+                ToolParamSpec { name: "depot_id_field", description: "Optional depot ID field used in route/assignment outputs.", required: false },
+                ToolParamSpec { name: "vehicle_count_field", description: "Optional depot field for number of vehicles spawned at each depot.", required: false },
+                ToolParamSpec { name: "vehicle_capacity_field", description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "vehicle_fixed_cost_field", description: "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "travel_speed_field", description: "Optional depot field overriding travel_speed per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "max_route_distance_field", description: "Optional depot field overriding max_route_distance per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "max_route_time_field", description: "Optional depot field overriding max_route_time per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "vehicle_profile_field", description: "Optional depot field defining vehicle profile/category token used for stop compatibility.", required: false },
+                ToolParamSpec { name: "depot_close_time_field", description: "Optional depot field overriding depot_close_time per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "break_start_field", description: "Optional depot field overriding break_start_time per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "break_end_field", description: "Optional depot field overriding break_end_time per depot/vehicle template.", required: false },
+                ToolParamSpec { name: "break_duration_field", description: "Optional depot field overriding break_duration per depot/vehicle template.", required: false },
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "vehicle_fixed_cost", description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).", required: false },
                 ToolParamSpec { name: "start_time", description: "Route start time in model time units (default: 0).", required: false },
@@ -31715,11 +33585,15 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamSpec { name: "enforce_time_windows", description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).", required: false },
                 ToolParamSpec { name: "allowed_lateness", description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).", required: false },
                 ToolParamSpec { name: "depot_close_time", description: "Optional hard close time by which each route must return to depot.", required: false },
+                ToolParamSpec { name: "break_start_time", description: "Optional global break-window start time for all vehicles.", required: false },
+                ToolParamSpec { name: "break_end_time", description: "Optional global break-window end time for all vehicles.", required: false },
+                ToolParamSpec { name: "break_duration", description: "Optional global break duration applied once per route when break window is intersected.", required: false },
                 ToolParamSpec { name: "use_priority_scoring", description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).", required: false },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "max_route_distance", description: "Optional maximum route travel distance, including return to depot.", required: false },
                 ToolParamSpec { name: "max_route_time", description: "Optional maximum route duration in model time units, including return to depot.", required: false },
                 ToolParamSpec { name: "max_stops_per_vehicle", description: "Optional maximum number of stops assigned to each vehicle route.", required: false },
+                ToolParamSpec { name: "objective_mode", description: "Route-construction objective: minimize_lateness, minimize_distance, minimize_vehicles, or minimize_cost.", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with time-window diagnostics.", required: false },
             ],
@@ -31743,24 +33617,38 @@ impl Tool for VehicleRoutingVrptwTool {
         defaults.insert("enforce_time_windows".to_string(), json!(false));
         defaults.insert("allowed_lateness".to_string(), json!(0.0));
         defaults.insert("use_priority_scoring".to_string(), json!(true));
+        defaults.insert("objective_mode".to_string(), json!("minimize_lateness"));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("vrptw_routes.gpkg"));
 
         ToolManifest {
             id: "vehicle_routing_vrptw".to_string(),
             display_name: "Vehicle Routing (VRPTW)".to_string(),
-            summary: "Builds capacity-constrained routes with time-window diagnostics using deterministic feasible-candidate scoring with optional nearest-neighbour baseline behavior.".to_string(),
+            summary: "Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "network".to_string(), description: "Input line network layer (validated for contract parity).".to_string(), required: true },
-                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; first point is used as the active depot in this baseline implementation.".to_string(), required: true },
+                ToolParamDescriptor { name: "depot_points".to_string(), description: "Depot point layer; each point can contribute one or more vehicles.".to_string(), required: true },
                 ToolParamDescriptor { name: "stop_points".to_string(), description: "Delivery stop point layer with demand and time-window fields.".to_string(), required: true },
                 ToolParamDescriptor { name: "demand_field".to_string(), description: "Numeric demand field in stop_points (default: demand).".to_string(), required: false },
                 ToolParamDescriptor { name: "priority_field".to_string(), description: "Optional stop priority field using values like required/high/normal/low or numeric ranks.".to_string(), required: false },
+                ToolParamDescriptor { name: "allowed_vehicle_profiles_field".to_string(), description: "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited).".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_start_field".to_string(), description: "Numeric time-window start field in stop_points (default: tw_start).".to_string(), required: false },
                 ToolParamDescriptor { name: "tw_end_field".to_string(), description: "Numeric time-window end field in stop_points (default: tw_end).".to_string(), required: false },
                 ToolParamDescriptor { name: "service_time_field".to_string(), description: "Numeric per-stop service time field in stop_points (default: service_time).".to_string(), required: false },
+                ToolParamDescriptor { name: "depot_id_field".to_string(), description: "Optional depot ID field used in route/assignment outputs.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_count_field".to_string(), description: "Optional depot field for number of vehicles spawned at each depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_capacity_field".to_string(), description: "Optional depot field overriding vehicle_capacity per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_fixed_cost_field".to_string(), description: "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "travel_speed_field".to_string(), description: "Optional depot field overriding travel_speed per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_distance_field".to_string(), description: "Optional depot field overriding max_route_distance per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "max_route_time_field".to_string(), description: "Optional depot field overriding max_route_time per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "vehicle_profile_field".to_string(), description: "Optional depot field defining vehicle profile/category token used for stop compatibility.".to_string(), required: false },
+                ToolParamDescriptor { name: "depot_close_time_field".to_string(), description: "Optional depot field overriding depot_close_time per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_start_field".to_string(), description: "Optional depot field overriding break_start_time per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_end_field".to_string(), description: "Optional depot field overriding break_end_time per depot/vehicle template.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_duration_field".to_string(), description: "Optional depot field overriding break_duration per depot/vehicle template.".to_string(), required: false },
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "vehicle_fixed_cost".to_string(), description: "Optional fixed cost charged per dispatched vehicle/route (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "start_time".to_string(), description: "Route start time in model time units (default: 0).".to_string(), required: false },
@@ -31768,11 +33656,15 @@ impl Tool for VehicleRoutingVrptwTool {
                 ToolParamDescriptor { name: "enforce_time_windows".to_string(), description: "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false).".to_string(), required: false },
                 ToolParamDescriptor { name: "allowed_lateness".to_string(), description: "Maximum lateness tolerated when enforce_time_windows=true (default: 0).".to_string(), required: false },
                 ToolParamDescriptor { name: "depot_close_time".to_string(), description: "Optional hard close time by which each route must return to depot.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_start_time".to_string(), description: "Optional global break-window start time for all vehicles.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_end_time".to_string(), description: "Optional global break-window end time for all vehicles.".to_string(), required: false },
+                ToolParamDescriptor { name: "break_duration".to_string(), description: "Optional global break duration applied once per route when break window is intersected.".to_string(), required: false },
                 ToolParamDescriptor { name: "use_priority_scoring".to_string(), description: "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true).".to_string(), required: false },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_distance".to_string(), description: "Optional maximum route travel distance, including return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_route_time".to_string(), description: "Optional maximum route duration in model time units, including return to depot.".to_string(), required: false },
                 ToolParamDescriptor { name: "max_stops_per_vehicle".to_string(), description: "Optional maximum number of stops assigned to each vehicle route.".to_string(), required: false },
+                ToolParamDescriptor { name: "objective_mode".to_string(), description: "Route-construction objective: minimize_lateness, minimize_distance, minimize_vehicles, or minimize_cost.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with time-window diagnostics.".to_string(), required: false },
             ],
@@ -31811,6 +33703,19 @@ impl Tool for VehicleRoutingVrptwTool {
 
         let demand_field = parse_optional_string_arg(args, "demand_field").unwrap_or("demand");
         let priority_field = parse_optional_string_arg(args, "priority_field");
+        let allowed_vehicle_profiles_field = parse_optional_string_arg(args, "allowed_vehicle_profiles_field");
+        let depot_id_field = parse_optional_string_arg(args, "depot_id_field");
+        let vehicle_count_field = parse_optional_string_arg(args, "vehicle_count_field");
+        let vehicle_capacity_field = parse_optional_string_arg(args, "vehicle_capacity_field");
+        let vehicle_fixed_cost_field = parse_optional_string_arg(args, "vehicle_fixed_cost_field");
+        let travel_speed_field = parse_optional_string_arg(args, "travel_speed_field");
+        let max_route_distance_field = parse_optional_string_arg(args, "max_route_distance_field");
+        let max_route_time_field = parse_optional_string_arg(args, "max_route_time_field");
+        let vehicle_profile_field = parse_optional_string_arg(args, "vehicle_profile_field");
+        let depot_close_time_field = parse_optional_string_arg(args, "depot_close_time_field");
+        let break_start_field = parse_optional_string_arg(args, "break_start_field");
+        let break_end_field = parse_optional_string_arg(args, "break_end_field");
+        let break_duration_field = parse_optional_string_arg(args, "break_duration_field");
         let tw_start_field = parse_optional_string_arg(args, "tw_start_field").unwrap_or("tw_start");
         let tw_end_field = parse_optional_string_arg(args, "tw_end_field").unwrap_or("tw_end");
         let service_time_field = parse_optional_string_arg(args, "service_time_field").unwrap_or("service_time");
@@ -31825,6 +33730,16 @@ impl Tool for VehicleRoutingVrptwTool {
         } else {
             None
         };
+        let allowed_profiles_idx = if let Some(field_name) = allowed_vehicle_profiles_field {
+            Some(stops.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "allowed_vehicle_profiles_field '{}' not found in stop_points",
+                    field_name
+                ))
+            })?)
+        } else {
+            None
+        };
         let tw_start_idx = stops.schema.field_index(tw_start_field).ok_or_else(|| {
             ToolError::Validation(format!("tw_start_field '{}' not found in stop_points", tw_start_field))
         })?;
@@ -31834,6 +33749,90 @@ impl Tool for VehicleRoutingVrptwTool {
         let service_time_idx = stops.schema.field_index(service_time_field).ok_or_else(|| {
             ToolError::Validation(format!("service_time_field '{}' not found in stop_points", service_time_field))
         })?;
+        let depot_id_idx = if let Some(field_name) = depot_id_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("depot_id_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_count_idx = if let Some(field_name) = vehicle_count_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_count_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_capacity_idx = if let Some(field_name) = vehicle_capacity_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_capacity_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_fixed_cost_idx = if let Some(field_name) = vehicle_fixed_cost_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_fixed_cost_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let travel_speed_idx = if let Some(field_name) = travel_speed_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("travel_speed_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let max_route_distance_idx = if let Some(field_name) = max_route_distance_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("max_route_distance_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let max_route_time_idx = if let Some(field_name) = max_route_time_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("max_route_time_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let vehicle_profile_idx = if let Some(field_name) = vehicle_profile_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("vehicle_profile_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let depot_close_idx = if let Some(field_name) = depot_close_time_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("depot_close_time_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let break_start_idx = if let Some(field_name) = break_start_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("break_start_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let break_end_idx = if let Some(field_name) = break_end_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("break_end_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
+        let break_duration_idx = if let Some(field_name) = break_duration_field {
+            Some(depots.schema.field_index(field_name).ok_or_else(|| {
+                ToolError::Validation(format!("break_duration_field '{}' not found in depot_points", field_name))
+            })?)
+        } else {
+            None
+        };
 
         for feature in &stops.features {
             let demand = feature
@@ -31871,6 +33870,186 @@ impl Tool for VehicleRoutingVrptwTool {
                     value,
                     priority_field.unwrap_or("priority_field"),
                 )?;
+            }
+            if let Some(idx) = allowed_profiles_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    let _ = parse_vehicle_routing_profile_tokens(
+                        value,
+                        allowed_vehicle_profiles_field.unwrap_or("allowed_vehicle_profiles_field"),
+                    )?;
+                }
+            }
+        }
+
+        for feature in &depots.features {
+            if let Some(idx) = depot_id_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if matches!(value, wbvector::FieldValue::Blob(_)) {
+                        return Err(ToolError::Validation(
+                            "depot_id_field does not support blob values".to_string(),
+                        ));
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_count_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let count = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_count_field must contain numeric values".to_string())
+                        })?;
+                        if !count.is_finite() || count < 1.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_count_field values must be finite and >= 1".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_capacity_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let capacity = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_capacity_field must contain numeric values".to_string())
+                        })?;
+                        if !capacity.is_finite() || capacity <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_capacity_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_fixed_cost_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let fixed_cost = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("vehicle_fixed_cost_field must contain numeric values".to_string())
+                        })?;
+                        if !fixed_cost.is_finite() || fixed_cost < 0.0 {
+                            return Err(ToolError::Validation(
+                                "vehicle_fixed_cost_field values must be finite and >= 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = travel_speed_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let speed = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("travel_speed_field must contain numeric values".to_string())
+                        })?;
+                        if !speed.is_finite() || speed <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "travel_speed_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = max_route_distance_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let max_distance = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("max_route_distance_field must contain numeric values".to_string())
+                        })?;
+                        if !max_distance.is_finite() || max_distance <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "max_route_distance_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = max_route_time_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let max_time = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("max_route_time_field must contain numeric values".to_string())
+                        })?;
+                        if !max_time.is_finite() || max_time <= 0.0 {
+                            return Err(ToolError::Validation(
+                                "max_route_time_field values must be finite and > 0".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            if let Some(idx) = vehicle_profile_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if matches!(value, wbvector::FieldValue::Blob(_)) {
+                        return Err(ToolError::Validation(
+                            "vehicle_profile_field does not support blob values".to_string(),
+                        ));
+                    }
+                }
+            }
+            if let Some(idx) = depot_close_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let close_time = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("depot_close_time_field must contain numeric values".to_string())
+                        })?;
+                        if !close_time.is_finite() {
+                            return Err(ToolError::Validation(
+                                "depot_close_time_field values must be finite".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+            let mut break_start: Option<f64> = None;
+            let mut break_end: Option<f64> = None;
+            if let Some(idx) = break_start_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let start = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("break_start_field must contain numeric values".to_string())
+                        })?;
+                        if !start.is_finite() {
+                            return Err(ToolError::Validation(
+                                "break_start_field values must be finite".to_string(),
+                            ));
+                        }
+                        break_start = Some(start);
+                    }
+                }
+            }
+            if let Some(idx) = break_end_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let end = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("break_end_field must contain numeric values".to_string())
+                        })?;
+                        if !end.is_finite() {
+                            return Err(ToolError::Validation(
+                                "break_end_field values must be finite".to_string(),
+                            ));
+                        }
+                        break_end = Some(end);
+                    }
+                }
+            }
+            if let (Some(start), Some(end)) = (break_start, break_end) {
+                if end < start {
+                    return Err(ToolError::Validation(
+                        "break_end_field values must be >= break_start_field values".to_string(),
+                    ));
+                }
+            }
+            if let Some(idx) = break_duration_idx {
+                if let Some(value) = feature.attributes.get(idx) {
+                    if !matches!(value, wbvector::FieldValue::Null) {
+                        let duration = field_value_to_f64(value).ok_or_else(|| {
+                            ToolError::Validation("break_duration_field must contain numeric values".to_string())
+                        })?;
+                        if !duration.is_finite() || duration < 0.0 {
+                            return Err(ToolError::Validation(
+                                "break_duration_field values must be finite and >= 0".to_string(),
+                            ));
+                        }
+                    }
+                }
             }
         }
 
@@ -31916,6 +34095,47 @@ impl Tool for VehicleRoutingVrptwTool {
             if !depot_close_time.is_finite() {
                 return Err(ToolError::Validation("depot_close_time must be finite".to_string()));
             }
+        }
+
+        let global_break_start = args.get("break_start_time").and_then(|v| v.as_f64());
+        if args.contains_key("break_start_time") && global_break_start.is_none() {
+            return Err(ToolError::Validation(
+                "break_start_time must be numeric when provided".to_string(),
+            ));
+        }
+        if let Some(value) = global_break_start {
+            if !value.is_finite() {
+                return Err(ToolError::Validation("break_start_time must be finite".to_string()));
+            }
+        }
+        let global_break_end = args.get("break_end_time").and_then(|v| v.as_f64());
+        if args.contains_key("break_end_time") && global_break_end.is_none() {
+            return Err(ToolError::Validation(
+                "break_end_time must be numeric when provided".to_string(),
+            ));
+        }
+        if let Some(value) = global_break_end {
+            if !value.is_finite() {
+                return Err(ToolError::Validation("break_end_time must be finite".to_string()));
+            }
+        }
+        if let (Some(start), Some(end)) = (global_break_start, global_break_end) {
+            if end < start {
+                return Err(ToolError::Validation(
+                    "break_end_time must be >= break_start_time".to_string(),
+                ));
+            }
+        }
+        if let Some(duration) = args.get("break_duration").and_then(|v| v.as_f64()) {
+            if !duration.is_finite() || duration < 0.0 {
+                return Err(ToolError::Validation(
+                    "break_duration must be finite and >= 0 when provided".to_string(),
+                ));
+            }
+        } else if args.contains_key("break_duration") {
+            return Err(ToolError::Validation(
+                "break_duration must be numeric when provided".to_string(),
+            ));
         }
 
         if args.get("enforce_time_windows").is_some()
@@ -31970,6 +34190,10 @@ impl Tool for VehicleRoutingVrptwTool {
             }
         }
 
+        if let Some(mode) = parse_optional_string_arg(args, "objective_mode") {
+            let _ = parse_vehicle_routing_objective_mode(mode, "objective_mode")?;
+        }
+
         let _ = parse_vector_path_arg(args, "output")?;
         if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
             if path.trim().is_empty() {
@@ -31982,6 +34206,8 @@ impl Tool for VehicleRoutingVrptwTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        return run_vehicle_routing_vrptw_impl(args);
+
         let network = load_vector_arg(args, "network")?;
         let depots = load_vector_arg(args, "depot_points")?;
         let stops = load_vector_arg(args, "stop_points")?;

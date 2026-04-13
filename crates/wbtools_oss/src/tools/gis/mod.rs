@@ -29010,6 +29010,11 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamSpec { name: "vehicle_capacity", description: "Per-vehicle capacity (> 0).", required: true },
                 ToolParamSpec { name: "max_vehicles", description: "Optional maximum number of vehicles/routes to construct.", required: false },
                 ToolParamSpec { name: "apply_local_optimization", description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).", required: false },
+                ToolParamSpec { name: "apply_simulated_annealing", description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).", required: false },
+                ToolParamSpec { name: "sa_iterations", description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).", required: false },
+                ToolParamSpec { name: "sa_initial_temperature", description: "Initial simulated annealing temperature (> 0, default: 1.0).", required: false },
+                ToolParamSpec { name: "sa_cooling_rate", description: "Simulated annealing cooling multiplier in (0, 1); default 0.995.", required: false },
+                ToolParamSpec { name: "sa_seed", description: "Optional deterministic random seed for simulated annealing (default: 42).", required: false },
                 ToolParamSpec { name: "output", description: "Output route line vector path.", required: true },
                 ToolParamSpec { name: "assignment_output", description: "Optional stop assignment point output with visit order/load diagnostics.", required: false },
             ],
@@ -29024,6 +29029,11 @@ impl Tool for VehicleRoutingCvrpTool {
         defaults.insert("demand_field".to_string(), json!("demand"));
         defaults.insert("vehicle_capacity".to_string(), json!(100.0));
         defaults.insert("apply_local_optimization".to_string(), json!(true));
+        defaults.insert("apply_simulated_annealing".to_string(), json!(false));
+        defaults.insert("sa_iterations".to_string(), json!(1500));
+        defaults.insert("sa_initial_temperature".to_string(), json!(1.0));
+        defaults.insert("sa_cooling_rate".to_string(), json!(0.995));
+        defaults.insert("sa_seed".to_string(), json!(42));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("cvrp_routes.gpkg"));
 
@@ -29041,13 +29051,18 @@ impl Tool for VehicleRoutingCvrpTool {
                 ToolParamDescriptor { name: "vehicle_capacity".to_string(), description: "Per-vehicle capacity (> 0).".to_string(), required: true },
                 ToolParamDescriptor { name: "max_vehicles".to_string(), description: "Optional maximum number of vehicles/routes to construct.".to_string(), required: false },
                 ToolParamDescriptor { name: "apply_local_optimization".to_string(), description: "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true).".to_string(), required: false },
+                ToolParamDescriptor { name: "apply_simulated_annealing".to_string(), description: "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false).".to_string(), required: false },
+                ToolParamDescriptor { name: "sa_iterations".to_string(), description: "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500).".to_string(), required: false },
+                ToolParamDescriptor { name: "sa_initial_temperature".to_string(), description: "Initial simulated annealing temperature (> 0, default: 1.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "sa_cooling_rate".to_string(), description: "Simulated annealing cooling multiplier in (0, 1); default 0.995.".to_string(), required: false },
+                ToolParamDescriptor { name: "sa_seed".to_string(), description: "Optional deterministic random seed for simulated annealing (default: 42).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output route line vector path.".to_string(), required: true },
                 ToolParamDescriptor { name: "assignment_output".to_string(), description: "Optional stop assignment point output with visit order/load diagnostics.".to_string(), required: false },
             ],
             defaults,
             examples: vec![ToolExample {
                 name: "vehicle_routing_cvrp_basic".to_string(),
-                description: "Builds CVRP routes and writes route lines with local optimization enabled by default.".to_string(),
+                description: "Builds CVRP routes and writes route lines with deterministic local optimization and optional simulated annealing controls.".to_string(),
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string()],
@@ -29120,6 +29135,59 @@ impl Tool for VehicleRoutingCvrpTool {
             ));
         }
 
+        if args.contains_key("apply_simulated_annealing")
+            && args.get("apply_simulated_annealing").and_then(|v| v.as_bool()).is_none()
+        {
+            return Err(ToolError::Validation(
+                "apply_simulated_annealing must be a boolean when provided".to_string(),
+            ));
+        }
+
+        if let Some(iterations) = args.get("sa_iterations") {
+            let Some(value) = iterations.as_u64() else {
+                return Err(ToolError::Validation(
+                    "sa_iterations must be an integer >= 1 when provided".to_string(),
+                ));
+            };
+            if value == 0 {
+                return Err(ToolError::Validation(
+                    "sa_iterations must be >= 1 when provided".to_string(),
+                ));
+            }
+        }
+
+        if let Some(temp) = args.get("sa_initial_temperature") {
+            let Some(value) = temp.as_f64() else {
+                return Err(ToolError::Validation(
+                    "sa_initial_temperature must be numeric when provided".to_string(),
+                ));
+            };
+            if !value.is_finite() || value <= 0.0 {
+                return Err(ToolError::Validation(
+                    "sa_initial_temperature must be finite and > 0".to_string(),
+                ));
+            }
+        }
+
+        if let Some(rate) = args.get("sa_cooling_rate") {
+            let Some(value) = rate.as_f64() else {
+                return Err(ToolError::Validation(
+                    "sa_cooling_rate must be numeric when provided".to_string(),
+                ));
+            };
+            if !value.is_finite() || value <= 0.0 || value >= 1.0 {
+                return Err(ToolError::Validation(
+                    "sa_cooling_rate must be finite and in (0, 1)".to_string(),
+                ));
+            }
+        }
+
+        if args.contains_key("sa_seed") && args.get("sa_seed").and_then(|v| v.as_u64()).is_none() {
+            return Err(ToolError::Validation(
+                "sa_seed must be an integer when provided".to_string(),
+            ));
+        }
+
         let _ = parse_vector_path_arg(args, "output")?;
         if let Some(path) = parse_optional_string_arg(args, "assignment_output") {
             if path.trim().is_empty() {
@@ -29148,6 +29216,26 @@ impl Tool for VehicleRoutingCvrpTool {
             .get("apply_local_optimization")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
+        let apply_simulated_annealing = args
+            .get("apply_simulated_annealing")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let sa_iterations = args
+            .get("sa_iterations")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1500) as usize;
+        let sa_initial_temperature = args
+            .get("sa_initial_temperature")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let sa_cooling_rate = args
+            .get("sa_cooling_rate")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.995);
+        let sa_seed = args
+            .get("sa_seed")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(42);
         let output_path = parse_vector_path_arg(args, "output")?;
         let assignment_output = parse_optional_string_arg(args, "assignment_output").map(|s| s.to_string());
 
@@ -29209,6 +29297,73 @@ impl Tool for VehicleRoutingCvrpTool {
             improved
         }
 
+        fn improve_route_simulated_annealing(
+            depot: &wbvector::Coord,
+            stops: &mut Vec<StopNode>,
+            iterations: usize,
+            initial_temperature: f64,
+            cooling_rate: f64,
+            seed: u64,
+        ) -> bool {
+            if stops.len() < 3 || iterations == 0 {
+                return false;
+            }
+
+            use rand::rngs::StdRng;
+            use rand::{RngExt, SeedableRng};
+
+            let original_distance = route_distance_from_stops(depot, stops);
+            let mut current = stops.clone();
+            let mut current_distance = original_distance;
+            let mut best = current.clone();
+            let mut best_distance = current_distance;
+
+            let mut rng = StdRng::seed_from_u64(seed);
+            let mut temperature = initial_temperature.max(1.0e-9);
+            for _ in 0..iterations {
+                let n = current.len();
+                if n < 3 {
+                    break;
+                }
+
+                let i = rng.random_range(0..n);
+                let mut j = rng.random_range(0..n);
+                if i == j {
+                    j = (j + 1) % n;
+                }
+                let (a, b) = if i < j { (i, j) } else { (j, i) };
+
+                let mut candidate = current.clone();
+                if rng.random::<f64>() < 0.5 {
+                    candidate[a..=b].reverse();
+                } else {
+                    candidate.swap(a, b);
+                }
+
+                let candidate_distance = route_distance_from_stops(depot, &candidate);
+                let delta = candidate_distance - current_distance;
+                let accept = delta <= 0.0 || rng.random::<f64>() < (-delta / temperature).exp();
+
+                if accept {
+                    current = candidate;
+                    current_distance = candidate_distance;
+                    if current_distance + 1.0e-9 < best_distance {
+                        best_distance = current_distance;
+                        best = current.clone();
+                    }
+                }
+
+                temperature = (temperature * cooling_rate).max(1.0e-9);
+            }
+
+            if best_distance + 1.0e-9 < original_distance {
+                *stops = best;
+                true
+            } else {
+                false
+            }
+        }
+
         let mut stop_nodes = Vec::<StopNode>::new();
         for feature in &stops.features {
             let Some(geom) = feature.geometry.as_ref() else {
@@ -29256,6 +29411,7 @@ impl Tool for VehicleRoutingCvrpTool {
         let mut assignments = Vec::<(i64, i64, i64, f64, f64, wbvector::Coord)>::new();
         let mut infeasible_stops = 0usize;
         let mut optimized_route_count = 0usize;
+        let mut annealed_route_count = 0usize;
 
         while !unassigned.is_empty() {
             if let Some(limit) = max_vehicles {
@@ -29313,6 +29469,18 @@ impl Tool for VehicleRoutingCvrpTool {
 
             if apply_local_optimization && improve_route_two_opt(&depot_coord, &mut route_stops) {
                 optimized_route_count += 1;
+            }
+            if apply_simulated_annealing
+                && improve_route_simulated_annealing(
+                    &depot_coord,
+                    &mut route_stops,
+                    sa_iterations,
+                    sa_initial_temperature,
+                    sa_cooling_rate,
+                    sa_seed.wrapping_add(vehicle_id as u64),
+                )
+            {
+                annealed_route_count += 1;
             }
 
             let mut route_coords = vec![depot_coord.clone()];
@@ -29388,6 +29556,12 @@ impl Tool for VehicleRoutingCvrpTool {
         outputs.insert("vehicle_capacity".to_string(), json!(vehicle_capacity));
         outputs.insert("apply_local_optimization".to_string(), json!(apply_local_optimization));
         outputs.insert("optimized_route_count".to_string(), json!(optimized_route_count));
+        outputs.insert("apply_simulated_annealing".to_string(), json!(apply_simulated_annealing));
+        outputs.insert("annealed_route_count".to_string(), json!(annealed_route_count));
+        outputs.insert("sa_iterations".to_string(), json!(sa_iterations));
+        outputs.insert("sa_initial_temperature".to_string(), json!(sa_initial_temperature));
+        outputs.insert("sa_cooling_rate".to_string(), json!(sa_cooling_rate));
+        outputs.insert("sa_seed".to_string(), json!(sa_seed));
 
         if let Some(assign_path) = assignment_output {
             let mut assignment_layer = wbvector::Layer::new(format!("{}_vehicle_routing_cvrp_assignments", stops.name));

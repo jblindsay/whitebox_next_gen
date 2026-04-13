@@ -551,6 +551,115 @@ fn vehicle_routing_cvrp_benchmark_local_optimization_outperforms_phase3_greedy_b
 }
 
 #[test]
+fn vehicle_routing_cvrp_simulated_annealing_refines_or_matches_baseline_distance() {
+    use wbvector::{FieldDef, FieldType, FieldValue};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_vehicle_routing_cvrp_simulated_annealing");
+    let network_path = std::env::temp_dir().join(format!("{tag}_network.gpkg"));
+    let depot_path = std::env::temp_dir().join(format!("{tag}_depots.gpkg"));
+    let stops_path = std::env::temp_dir().join(format!("{tag}_stops.gpkg"));
+    let baseline_out = std::env::temp_dir().join(format!("{tag}_baseline.gpkg"));
+    let annealed_out = std::env::temp_dir().join(format!("{tag}_annealed.gpkg"));
+
+    let mut network = Layer::new("network")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    network
+        .add_feature(
+            Some(Geometry::LineString(vec![Coord::xy(-4.0, -4.0), Coord::xy(2.0, 2.0)])),
+            &[],
+        )
+        .expect("add network line");
+    wbvector::write(&network, &network_path, VectorFormat::GeoPackage).expect("write network");
+
+    let mut depots = Layer::new("depots")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    depots
+        .add_feature(Some(Geometry::Point(Coord::xy(0.0, 0.0))), &[])
+        .expect("add depot point");
+    wbvector::write(&depots, &depot_path, VectorFormat::GeoPackage).expect("write depots");
+
+    let mut stops = Layer::new("stops")
+        .with_geom_type(GeometryType::Point)
+        .with_epsg(4326);
+    stops.schema.add_field(FieldDef::new("demand", FieldType::Float));
+    for coord in [(-3.0, -3.0), (-3.0, -2.0), (-3.0, -1.0), (-3.0, 1.0), (-2.0, -3.0)] {
+        stops
+            .add_feature(
+                Some(Geometry::Point(Coord::xy(coord.0, coord.1))),
+                &[("demand", FieldValue::Float(1.0))],
+            )
+            .expect("add stop");
+    }
+    wbvector::write(&stops, &stops_path, VectorFormat::GeoPackage).expect("write stops");
+
+    let mut baseline_args = ToolArgs::new();
+    baseline_args.insert("network".to_string(), json!(network_path.to_string_lossy().to_string()));
+    baseline_args.insert("depot_points".to_string(), json!(depot_path.to_string_lossy().to_string()));
+    baseline_args.insert("stop_points".to_string(), json!(stops_path.to_string_lossy().to_string()));
+    baseline_args.insert("demand_field".to_string(), json!("demand"));
+    baseline_args.insert("vehicle_capacity".to_string(), json!(10.0));
+    baseline_args.insert("max_vehicles".to_string(), json!(1));
+    baseline_args.insert("apply_local_optimization".to_string(), json!(false));
+    baseline_args.insert("apply_simulated_annealing".to_string(), json!(false));
+    baseline_args.insert("output".to_string(), json!(baseline_out.to_string_lossy().to_string()));
+
+    let baseline_result = registry
+        .run("vehicle_routing_cvrp", &baseline_args, &context(&caps))
+        .expect("baseline cvrp run");
+
+    let mut annealed_args = baseline_args.clone();
+    annealed_args.insert("apply_simulated_annealing".to_string(), json!(true));
+    annealed_args.insert("sa_iterations".to_string(), json!(4000));
+    annealed_args.insert("sa_initial_temperature".to_string(), json!(1.0));
+    annealed_args.insert("sa_cooling_rate".to_string(), json!(0.995));
+    annealed_args.insert("sa_seed".to_string(), json!(7));
+    annealed_args.insert("output".to_string(), json!(annealed_out.to_string_lossy().to_string()));
+
+    let annealed_result = registry
+        .run("vehicle_routing_cvrp", &annealed_args, &context(&caps))
+        .expect("annealed cvrp run");
+
+    let baseline_distance = baseline_result
+        .outputs
+        .get("total_distance")
+        .and_then(|v| v.as_f64())
+        .expect("baseline total_distance");
+    let annealed_distance = annealed_result
+        .outputs
+        .get("total_distance")
+        .and_then(|v| v.as_f64())
+        .expect("annealed total_distance");
+
+    assert!(
+        annealed_distance <= baseline_distance + 1.0e-9,
+        "simulated annealing should refine or match baseline distance"
+    );
+    assert_eq!(
+        annealed_result
+            .outputs
+            .get("apply_simulated_annealing")
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        annealed_result.outputs.get("sa_seed").and_then(|v| v.as_u64()),
+        Some(7)
+    );
+
+    let _ = std::fs::remove_file(&network_path);
+    let _ = std::fs::remove_file(&depot_path);
+    let _ = std::fs::remove_file(&stops_path);
+    let _ = std::fs::remove_file(&baseline_out);
+    let _ = std::fs::remove_file(&annealed_out);
+}
+
+#[test]
 fn vehicle_routing_vrptw_reports_lateness() {
     use wbvector::{FieldDef, FieldType, FieldValue};
 

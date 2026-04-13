@@ -90,6 +90,7 @@ Scheduling note:
 - `Simulated Annealing` is currently planned as a later **Phase 4** follow-on, not as the immediate next implementation step.
 - The intended sequence is: begin Stream B batch analytics work first, then return to Stream A for the first metaheuristic implementation.
 - If Phase 4 scope needs to be tightened later, `Simulated Annealing` is the most deferrable remaining Stream A enhancement, but it is still inside the current Phase 4 plan.
+- Update 2026-04-13: sequence guidance was superseded by explicit user direction to implement Simulated Annealing after Stream E momentum; implementation is now complete.
 
 ## Progress Log
 
@@ -215,4 +216,19 @@ Scheduling note:
 		- `python3 - <<'PY' ... hasattr(wbw.WbEnvironment, 'analyze_multimodal_od_scenarios') ... PY` (PASS)
 		- `Rscript -e "parse(file='crates/wbw_r/r-package/whiteboxworkflows/R/facade.R'); cat('OK\\n')"` (PASS)
 		- `cargo check -p wbw_r` (PASS)
-	- Scheduling note respected: this Stream E wrapper UX work does not implement Simulated Annealing; Simulated Annealing remains a later Phase 4 follow-on per plan.
+	- Scheduling note status at this step: Stream E wrapper UX work itself did not implement Simulated Annealing.
+- 2026-04-13: **STREAM A FOLLOW-ON: SIMULATED ANNEALING REFINEMENT IMPLEMENTED FOR CVRP (USER-DIRECTED)**
+	- Extended `vehicle_routing_cvrp` with optional simulated annealing controls:
+		- `apply_simulated_annealing` (default `false`)
+		- `sa_iterations` (default `1500`)
+		- `sa_initial_temperature` (default `1.0`)
+		- `sa_cooling_rate` (default `0.995`)
+		- `sa_seed` (default `42`)
+	- Added deterministic seeded annealing pass per route and output diagnostics:
+		- `apply_simulated_annealing`, `annealed_route_count`, and SA parameter echoes.
+	- Added focused integration coverage:
+		- `vehicle_routing_cvrp_simulated_annealing_refines_or_matches_baseline_distance`
+	- Validation commands:
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_cvrp_local_optimization_reduces_route_distance -- --nocapture` (PASS)
+		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_cvrp_simulated_annealing_refines_or_matches_baseline_distance -- --nocapture` (PASS)
+		- `cargo check -p wbtools_oss` (PASS)

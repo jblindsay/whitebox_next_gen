@@ -25,7 +25,7 @@ Phase 4 planned outcomes:
 - [x] Add local-improvement stage for CVRP route optimization.
 - [ ] Evaluate Tabu Search or Simulated Annealing for route refinement.
 - [ ] Improve VRPTW insertion heuristics and infeasibility recovery.
-- [ ] Add comparative benchmarks against Phase 3 greedy baselines.
+- [x] Add comparative benchmarks against Phase 3 greedy baselines.
 
 ### Stream B: Batch Multimodal and Matrix Analytics
 - [ ] Add multi-origin / multi-destination multimodal shortest-path runs.
@@ -87,8 +87,10 @@ Rationale:
 	- Extended `vehicle_routing_cvrp` with `apply_local_optimization` (default: `true`).
 	- Added deterministic 2-opt local search on each constructed route after greedy assignment.
 	- Preserved Phase 3 baseline behavior by allowing `apply_local_optimization = false` for regression comparison.
-	- Added runtime outputs: `apply_local_optimization` and `optimized_route_count`.
+	- Added runtime outputs: `apply_local_optimization`, `optimized_route_count`, and `total_distance`.
 	- Added regression coverage: `vehicle_routing_cvrp_local_optimization_reduces_route_distance`.
 	- Validation commands:
 		- `cargo test -p wbtools_oss --test registry_integration vehicle_routing_cvrp_local_optimization_reduces_route_distance -- --nocapture` (PASS)
 		- `cargo check -p wbtools_oss` (PASS)
+	- Added comparative benchmark coverage: `vehicle_routing_cvrp_benchmark_local_optimization_outperforms_phase3_greedy_baseline`.
+	- Benchmarked optimized two-route total distance against the Phase 3 greedy baseline using `apply_local_optimization = false` as the baseline control.

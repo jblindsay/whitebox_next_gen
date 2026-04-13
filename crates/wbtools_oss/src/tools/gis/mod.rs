@@ -28014,7 +28014,7 @@ impl Tool for VehicleRoutingCvrpTool {
         ToolMetadata {
             id: "vehicle_routing_cvrp",
             display_name: "Vehicle Routing (CVRP)",
-            summary: "Builds capacity-constrained delivery routes from depot and stop points using a deterministic nearest-neighbour baseline.",
+            summary: "Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.",
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28045,7 +28045,7 @@ impl Tool for VehicleRoutingCvrpTool {
         ToolManifest {
             id: "vehicle_routing_cvrp".to_string(),
             display_name: "Vehicle Routing (CVRP)".to_string(),
-            summary: "Builds capacity-constrained delivery routes from depot and stop points using a deterministic nearest-neighbour baseline.".to_string(),
+            summary: "Builds capacity-constrained delivery routes from depot and stop points using deterministic greedy construction with optional local optimization.".to_string(),
             category: ToolCategory::Vector,
             license_tier: LicenseTier::Open,
             params: vec![
@@ -28062,7 +28062,7 @@ impl Tool for VehicleRoutingCvrpTool {
             defaults,
             examples: vec![ToolExample {
                 name: "vehicle_routing_cvrp_basic".to_string(),
-                description: "Builds baseline CVRP routes and writes route lines.".to_string(),
+                description: "Builds CVRP routes and writes route lines with local optimization enabled by default.".to_string(),
                 args: example_args,
             }],
             tags: vec!["vector".to_string(), "network".to_string(), "routing".to_string(), "optimization".to_string()],
@@ -28388,10 +28388,12 @@ impl Tool for VehicleRoutingCvrpTool {
         }
 
         let route_output_locator = write_vector_output(&routes_layer, output_path.trim())?;
+        let total_route_distance: f64 = routes.iter().map(|(_, _, _, _, d)| *d).sum();
 
         let mut outputs = BTreeMap::new();
         outputs.insert("path".to_string(), json!(route_output_locator));
         outputs.insert("route_count".to_string(), json!(routes.len()));
+        outputs.insert("total_distance".to_string(), json!(total_route_distance));
         outputs.insert("served_stop_count".to_string(), json!(assignments.len()));
         outputs.insert(
             "unserved_stop_count".to_string(),

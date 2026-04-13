@@ -1835,6 +1835,15 @@ struct IndexedPolygonFeature {
     topo: TopologyGeometry,
 }
 
+struct IndexedLineFeature {
+    topo: TopologyGeometry,
+}
+
+struct LineEndpointRecord {
+    fid: u64,
+    coord: Coord,
+}
+
 fn build_indexed_polygon_features(input: &Layer) -> Result<Vec<IndexedPolygonFeature>, ToolError> {
     let mut polygon_features = Vec::<IndexedPolygonFeature>::new();
     for feature in &input.features {
@@ -1860,6 +1869,65 @@ fn build_indexed_polygon_features(input: &Layer) -> Result<Vec<IndexedPolygonFea
         });
     }
     Ok(polygon_features)
+}
+
+fn build_indexed_line_features(input: &Layer) -> Result<Vec<IndexedLineFeature>, ToolError> {
+    let mut line_features = Vec::<IndexedLineFeature>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        if !matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
+            continue;
+        }
+        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed converting feature {} line geometry for topology checks: {e}",
+                feature.fid
+            ))
+        })?;
+        line_features.push(IndexedLineFeature { topo });
+    }
+    Ok(line_features)
+}
+
+fn collect_line_endpoint_records(input: &Layer) -> Vec<LineEndpointRecord> {
+    let mut line_endpoints = Vec::<LineEndpointRecord>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        match geometry {
+            Geometry::LineString(coords) => {
+                if coords.len() >= 2 {
+                    line_endpoints.push(LineEndpointRecord {
+                        fid: feature.fid,
+                        coord: coords[0].clone(),
+                    });
+                    line_endpoints.push(LineEndpointRecord {
+                        fid: feature.fid,
+                        coord: coords[coords.len() - 1].clone(),
+                    });
+                }
+            }
+            Geometry::MultiLineString(parts) => {
+                for part in parts {
+                    if part.len() >= 2 {
+                        line_endpoints.push(LineEndpointRecord {
+                            fid: feature.fid,
+                            coord: part[0].clone(),
+                        });
+                        line_endpoints.push(LineEndpointRecord {
+                            fid: feature.fid,
+                            coord: part[part.len() - 1].clone(),
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    line_endpoints
 }
 
 fn expand_topology_envelope(env: TopologyEnvelope, distance: f64) -> TopologyEnvelope {
@@ -2127,6 +2195,18 @@ impl Tool for TopologyRuleValidateTool {
         } else {
             None
         };
+        let line_features = if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
+            Some(build_indexed_line_features(&input)?)
+        } else {
+            None
+        };
+        let line_endpoints = if rules.contains(&TopologyRuleType::LineMustNotHaveDangles)
+            || rules.contains(&TopologyRuleType::LineEndpointsMustSnapWithinTolerance)
+        {
+            Some(collect_line_endpoint_records(&input))
+        } else {
+            None
+        };
 
         if rules.contains(&TopologyRuleType::LineMustNotSelfIntersect) {
             for feature in &input.features {
@@ -2192,15 +2272,12 @@ impl Tool for TopologyRuleValidateTool {
         }
 
         if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
-            let mut lines = Vec::<(u64, Geometry)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                if matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
-                    lines.push((feature.fid, geometry.clone()));
-                }
-            }
+            let line_features = line_features.as_ref().expect("line features prepared");
+            let line_geometries = line_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let line_index = SpatialIndex::build_str(&line_geometries, 16);
 
             for feature in &input.features {
                 let Some(geometry) = feature.geometry.as_ref() else {
@@ -2221,13 +2298,9 @@ impl Tool for TopologyRuleValidateTool {
                     ))
                 })?;
 
-                for (_line_fid, line_geom) in &lines {
-                    let line_topo = topology_from_wkb(&line_geom.to_wkb()).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed converting line geometry for coverage checks: {e}"
-                        ))
-                    })?;
-                    let dist = geometry_distance(&point_topo, &line_topo);
+                for line_idx in line_index.query_geometry(&point_topo) {
+                    let line_topo = &line_features[line_idx].topo;
+                    let dist = geometry_distance(&point_topo, line_topo);
                     if dist < 1e-9 {
                         covered = true;
                         break;
@@ -2247,66 +2320,45 @@ impl Tool for TopologyRuleValidateTool {
         }
 
         if rules.contains(&TopologyRuleType::LineMustNotHaveDangles) {
-            let mut line_endpoints = Vec::<(u64, Vec<Coord>)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                let endpoints: Vec<Coord> = match geometry {
-                    Geometry::LineString(coords) => {
-                        if coords.len() >= 2 {
-                            vec![coords[0].clone(), coords[coords.len() - 1].clone()]
-                        } else {
-                            continue;
-                        }
-                    }
-                    Geometry::MultiLineString(parts) => {
-                        let mut eps = Vec::<Coord>::new();
-                        for part in parts {
-                            if part.len() >= 2 {
-                                eps.push(part[0].clone());
-                                eps.push(part[part.len() - 1].clone());
-                            }
-                        }
-                        if eps.is_empty() {
-                            continue;
-                        }
-                        eps
-                    }
-                    _ => continue,
-                };
-                line_endpoints.push((feature.fid, endpoints));
-            }
+            const DANGLE_EPSILON: f64 = 1e-9;
 
-            for (fid_a, endpoints_a) in &line_endpoints {
-                for endpoint_a in endpoints_a {
-                    let mut connected = false;
-                    for (fid_b, endpoints_b) in &line_endpoints {
-                        if fid_a == fid_b {
-                            continue;
-                        }
-                        for endpoint_b in endpoints_b {
-                            if coord_dist(
-                                TopoCoord::xy(endpoint_a.x, endpoint_a.y),
-                                TopoCoord::xy(endpoint_b.x, endpoint_b.y)
-                            ) < 1e-9 {
-                                connected = true;
-                                break;
-                            }
-                        }
-                        if connected {
-                            break;
-                        }
+            let line_endpoints = line_endpoints.as_ref().expect("line endpoints prepared");
+            let endpoint_geometries = line_endpoints
+                .iter()
+                .map(|endpoint| TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y)))
+                .collect::<Vec<_>>();
+            let endpoint_index = SpatialIndex::build_str(&endpoint_geometries, 16);
+
+            for endpoint in line_endpoints {
+                let mut connected = false;
+                let env = TopologyEnvelope::new(
+                    endpoint.coord.x - DANGLE_EPSILON,
+                    endpoint.coord.y - DANGLE_EPSILON,
+                    endpoint.coord.x + DANGLE_EPSILON,
+                    endpoint.coord.y + DANGLE_EPSILON,
+                );
+                for candidate_idx in endpoint_index.query_envelope(env) {
+                    let candidate = &line_endpoints[candidate_idx];
+                    if candidate.fid == endpoint.fid {
+                        continue;
                     }
-                    if !connected {
-                        violations.push(TopologyRuleViolation {
-                            rule_type: TopologyRuleType::LineMustNotHaveDangles,
-                            feature_fid: *fid_a as i64,
-                            related_fid: None,
-                            detail: format!("endpoint at ({}, {}) does not connect to other lines", endpoint_a.x, endpoint_a.y),
-                            anchor: endpoint_a.clone(),
-                        });
+                    if coord_dist(
+                        TopoCoord::xy(endpoint.coord.x, endpoint.coord.y),
+                        TopoCoord::xy(candidate.coord.x, candidate.coord.y),
+                    ) < DANGLE_EPSILON
+                    {
+                        connected = true;
+                        break;
                     }
+                }
+                if !connected {
+                    violations.push(TopologyRuleViolation {
+                        rule_type: TopologyRuleType::LineMustNotHaveDangles,
+                        feature_fid: endpoint.fid as i64,
+                        related_fid: None,
+                        detail: format!("endpoint at ({}, {}) does not connect to other lines", endpoint.coord.x, endpoint.coord.y),
+                        anchor: endpoint.coord.clone(),
+                    });
                 }
             }
         }
@@ -2317,50 +2369,29 @@ impl Tool for TopologyRuleValidateTool {
                 .and_then(|v| v.as_f64())
                 .unwrap_or(1.0);
 
-            let mut line_endpoints = Vec::<(u64, Coord)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                match geometry {
-                    Geometry::LineString(coords) => {
-                        if coords.len() >= 2 {
-                            line_endpoints.push((feature.fid, coords[0].clone()));
-                            line_endpoints.push((feature.fid, coords[coords.len() - 1].clone()));
-                        }
-                    }
-                    Geometry::MultiLineString(parts) => {
-                        for part in parts {
-                            if part.len() >= 2 {
-                                line_endpoints.push((feature.fid, part[0].clone()));
-                                line_endpoints.push((feature.fid, part[part.len() - 1].clone()));
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            let line_endpoints = line_endpoints.as_ref().expect("line endpoints prepared");
+            let endpoint_geometries = line_endpoints
+                .iter()
+                .map(|endpoint| TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y)))
+                .collect::<Vec<_>>();
+            let endpoint_index = SpatialIndex::build_str(&endpoint_geometries, 16);
 
-            for i in 0..line_endpoints.len() {
-                let (fid_a, endpoint_a) = &line_endpoints[i];
-                let mut nearest_dist = f64::INFINITY;
-                for j in (i + 1)..line_endpoints.len() {
-                    let (_fid_b, endpoint_b) = &line_endpoints[j];
-                    let dist = coord_dist(
-                        TopoCoord::xy(endpoint_a.x, endpoint_a.y),
-                        TopoCoord::xy(endpoint_b.x, endpoint_b.y)
-                    );
-                    if dist < nearest_dist && dist > 1e-9 {
-                        nearest_dist = dist;
-                    }
-                }
+            for (i, endpoint) in line_endpoints.iter().enumerate() {
+                let point_geom = TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y));
+                let nearest_dist = endpoint_index
+                    .nearest_k(&point_geom, 3)
+                    .into_iter()
+                    .filter(|(candidate_idx, _)| *candidate_idx != i)
+                    .map(|(_, distance)| distance)
+                    .find(|distance| *distance > 1e-9)
+                    .unwrap_or(f64::INFINITY);
                 if nearest_dist > snap_tolerance {
                     violations.push(TopologyRuleViolation {
                         rule_type: TopologyRuleType::LineEndpointsMustSnapWithinTolerance,
-                        feature_fid: *fid_a as i64,
+                        feature_fid: endpoint.fid as i64,
                         related_fid: None,
-                        detail: format!("endpoint at ({}, {}) does not snap within tolerance {}", endpoint_a.x, endpoint_a.y, snap_tolerance),
-                        anchor: endpoint_a.clone(),
+                        detail: format!("endpoint at ({}, {}) does not snap within tolerance {}", endpoint.coord.x, endpoint.coord.y, snap_tolerance),
+                        anchor: endpoint.coord.clone(),
                     });
                 }
             }

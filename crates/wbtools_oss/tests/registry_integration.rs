@@ -2834,6 +2834,72 @@ fn topology_rule_validate_detects_endpoint_snap_violations() {
 }
 
 #[test]
+fn topology_rule_validate_endpoint_snap_is_order_independent() {
+    use wbvector::{Coord, Geometry, Layer, VectorFormat};
+
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+    let caps = OpenOnly;
+
+    let tag = unique_tag("wbtools_oss_topology_rule_snap_order");
+    let input_path = std::env::temp_dir().join(format!("{tag}_lines.gpkg"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_violations.gpkg"));
+
+    let mut lines = Layer::new("line_snapping_order")
+        .with_geom_type(GeometryType::LineString)
+        .with_epsg(4326);
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![
+                Coord::xy(10.0, 0.0),
+                Coord::xy(20.0, 0.0),
+            ])),
+            &[],
+        )
+        .expect("add far line");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![
+                Coord::xy(0.1, 0.0),
+                Coord::xy(1.1, 0.0),
+            ])),
+            &[],
+        )
+        .expect("add near line second");
+    lines
+        .add_feature(
+            Some(Geometry::line_string(vec![
+                Coord::xy(0.0, 0.0),
+                Coord::xy(1.0, 0.0),
+            ])),
+            &[],
+        )
+        .expect("add near line third");
+
+    wbvector::write(&lines, &input_path, VectorFormat::GeoPackage).expect("write line input");
+
+    let mut args = ToolArgs::new();
+    args.insert("input".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("rule_set".to_string(), json!(["line_endpoints_must_snap_within_tolerance"]));
+    args.insert("snap_tolerance".to_string(), json!(0.2));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+
+    registry
+        .run("topology_rule_validate", &args, &context(&caps))
+        .expect("topology_rule_validate run for order-independent snap");
+
+    let out = wbvector::read(&output_path).expect("read snap violations");
+    assert_eq!(
+        out.features.len(),
+        2,
+        "only the distant line endpoints should violate snap tolerance"
+    );
+
+    let _ = std::fs::remove_file(&input_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
 fn topology_rule_validate_detects_polygon_gaps() {
     use wbvector::{Coord, FieldValue, Geometry, Layer, VectorFormat};
 

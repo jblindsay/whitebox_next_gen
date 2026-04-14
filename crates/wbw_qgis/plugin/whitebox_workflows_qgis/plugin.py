@@ -44,8 +44,12 @@ except Exception:  # pragma: no cover
         def __init__(self, *_args, **_kwargs):
             pass
 
+        class _Action:
+            def setEnabled(self, *_args, **_kwargs):
+                return None
+
         def addAction(self, _label):
-            return object()
+            return self._Action()
 
         def exec(self, *_args, **_kwargs):
             return None
@@ -245,6 +249,10 @@ class WhiteboxWorkflowsPlugin:
 
     def _show_tool_context_menu(self, source: str, tool_id: str, global_pos):
         menu = QMenu(self.iface.mainWindow())
+
+        src = "Results" if source == "results" else "Favorites"
+        title_action = menu.addAction(f"From: {src}")
+        title_action.setEnabled(False)
 
         open_action = menu.addAction("Open Tool")
         if self._dock_panel is not None and self._dock_panel.is_favorite(tool_id):

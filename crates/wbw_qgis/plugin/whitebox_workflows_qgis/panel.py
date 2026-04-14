@@ -68,6 +68,9 @@ except Exception:  # pragma: no cover
         def row(self, *_args, **_kwargs):
             return -1
 
+        def currentRow(self):
+            return -1
+
     class QListWidgetItem(_DummyWidget):  # type: ignore[override]
         pass
 
@@ -104,6 +107,12 @@ class WhiteboxDockPanel(QDockWidget):
         self._show_locked_checkbox.setChecked(True)
         self._matches_label = QLabel("Matches: 0")
         self._results_list = QListWidget()
+
+        self._favorites_label = QLabel("Favorite Tools")
+        self._favorites_list = QListWidget()
+        self._favorite_add_button = QPushButton("Add Selected to Favorites")
+        self._favorite_remove_button = QPushButton("Remove Selected Favorite")
+
         self._recent_label = QLabel("Recent Tools")
         self._recent_list = QListWidget()
 
@@ -120,6 +129,10 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._show_locked_checkbox)
         layout.addWidget(self._matches_label)
         layout.addWidget(self._results_list)
+        layout.addWidget(self._favorites_label)
+        layout.addWidget(self._favorites_list)
+        layout.addWidget(self._favorite_add_button)
+        layout.addWidget(self._favorite_remove_button)
         layout.addWidget(self._recent_label)
         layout.addWidget(self._recent_list)
         layout.addWidget(self._refresh_button)
@@ -130,6 +143,8 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._catalog: list[dict[str, Any]] = []
         self._filtered_tool_ids: list[str] = []
+        self._favorite_tool_ids: list[str] = []
+        self._favorite_display_ids: list[str] = []
         self._recent_tool_ids: list[str] = []
         self._search_box.textChanged.connect(self._on_search_text_changed)
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
@@ -159,6 +174,21 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._recent_list.itemDoubleClicked.connect(_open_recent)
 
+    def on_open_favorite_tool(self, callback):
+        def _open_favorite(item):
+            row = self._favorites_list.row(item)
+            if row < 0 or row >= len(self._favorite_display_ids):
+                return
+            callback(self._favorite_display_ids[row])
+
+        self._favorites_list.itemDoubleClicked.connect(_open_favorite)
+
+    def on_add_favorite(self, callback):
+        self._favorite_add_button.clicked.connect(callback)
+
+    def on_remove_favorite(self, callback):
+        self._favorite_remove_button.clicked.connect(callback)
+
     def update_state(
         self,
         *,
@@ -181,12 +211,47 @@ class WhiteboxDockPanel(QDockWidget):
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)
         self._refresh_results(self._search_box.text())
+        self._refresh_favorites_list()
+
+    def set_favorites(self, tool_ids: list[str]) -> None:
+        self._favorite_tool_ids = list(tool_ids)
+        self._refresh_results(self._search_box.text())
+        self._refresh_favorites_list()
+
+    def selected_result_tool_id(self) -> str:
+        row = self._results_list.currentRow()
+        if row < 0 or row >= len(self._filtered_tool_ids):
+            return ""
+        return self._filtered_tool_ids[row]
+
+    def selected_favorite_tool_id(self) -> str:
+        row = self._favorites_list.currentRow()
+        if row < 0 or row >= len(self._favorite_display_ids):
+            return ""
+        return self._favorite_display_ids[row]
 
     def set_recent_tools(self, tool_ids: list[str]) -> None:
         self._recent_tool_ids = list(tool_ids)
         self._recent_list.clear()
         for tool_id in self._recent_tool_ids:
             self._recent_list.addItem(QListWidgetItem(tool_id))
+
+    def _refresh_favorites_list(self) -> None:
+        self._favorites_list.clear()
+        self._favorite_display_ids = []
+
+        catalog_by_id = {str(item.get("id", "")): item for item in self._catalog}
+        for tool_id in self._favorite_tool_ids:
+            item = catalog_by_id.get(tool_id)
+            if item is None:
+                label = tool_id
+            else:
+                display_name = str(item.get("display_name", tool_id))
+                is_locked = bool(item.get("locked", False))
+                badge = "[LOCKED] " if is_locked else ""
+                label = f"{badge}{display_name} ({tool_id})"
+            self._favorites_list.addItem(QListWidgetItem(label))
+            self._favorite_display_ids.append(tool_id)
 
     def _on_search_text_changed(self, text: str) -> None:
         self._refresh_results(text)
@@ -226,7 +291,8 @@ class WhiteboxDockPanel(QDockWidget):
             display_name = str(item.get("display_name", tool_id))
             category = str(item.get("category", "General"))
             badge = "[LOCKED] " if is_locked else ""
-            label = f"{badge}{display_name} ({tool_id}) — {category}"
+            star = "[FAV] " if tool_id in self._favorite_tool_ids else ""
+            label = f"{star}{badge}{display_name} ({tool_id}) — {category}"
 
             self._results_list.addItem(QListWidgetItem(label))
             self._filtered_tool_ids.append(tool_id)

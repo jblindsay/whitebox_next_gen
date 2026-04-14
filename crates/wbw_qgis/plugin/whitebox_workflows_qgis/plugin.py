@@ -54,8 +54,10 @@ class WhiteboxWorkflowsPlugin:
         self._panel_action = None
         self._dock_panel = None
         self._recent_tool_ids: list[str] = []
+        self._favorite_tool_ids: list[str] = []
         self._max_recent_tools = 8
         self._settings_key_recent = "whitebox_workflows/recent_tools"
+        self._settings_key_favorites = "whitebox_workflows/favorite_tools"
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -68,6 +70,7 @@ class WhiteboxWorkflowsPlugin:
         self._provider_registered = True
 
         self._load_recent_tools()
+        self._load_favorite_tools()
 
         self._install_panel()
         self._install_actions()
@@ -105,6 +108,9 @@ class WhiteboxWorkflowsPlugin:
         panel.on_diagnostics(self._show_diagnostics)
         panel.on_open_tool(self._open_tool_from_panel)
         panel.on_open_recent_tool(self._open_tool_from_recent)
+        panel.on_open_favorite_tool(self._open_tool_from_favorite)
+        panel.on_add_favorite(self._add_selected_favorite)
+        panel.on_remove_favorite(self._remove_selected_favorite)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
 
@@ -122,6 +128,9 @@ class WhiteboxWorkflowsPlugin:
     def _open_tool_from_recent(self, tool_id: str):
         self._open_tool_from_panel(tool_id)
 
+    def _open_tool_from_favorite(self, tool_id: str):
+        self._open_tool_from_panel(tool_id)
+
     def _record_recent_tool(self, tool_id: str):
         if tool_id in self._recent_tool_ids:
             self._recent_tool_ids.remove(tool_id)
@@ -131,6 +140,33 @@ class WhiteboxWorkflowsPlugin:
         if self._dock_panel is not None:
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
         self._save_recent_tools()
+
+    def _add_selected_favorite(self, *_args):
+        if self._dock_panel is None:
+            return
+        tool_id = self._dock_panel.selected_result_tool_id()
+        if not tool_id:
+            self._notify_warning("Select a tool in the results list to add a favorite.")
+            return
+        if tool_id in self._favorite_tool_ids:
+            self._notify_info(f"Already a favorite: {tool_id}")
+            return
+        self._favorite_tool_ids.append(tool_id)
+        self._save_favorite_tools()
+        self._dock_panel.set_favorites(self._favorite_tool_ids)
+        self._notify_info(f"Added favorite: {tool_id}")
+
+    def _remove_selected_favorite(self, *_args):
+        if self._dock_panel is None:
+            return
+        tool_id = self._dock_panel.selected_favorite_tool_id()
+        if not tool_id:
+            self._notify_warning("Select a favorite entry to remove.")
+            return
+        self._favorite_tool_ids = [t for t in self._favorite_tool_ids if t != tool_id]
+        self._save_favorite_tools()
+        self._dock_panel.set_favorites(self._favorite_tool_ids)
+        self._notify_info(f"Removed favorite: {tool_id}")
 
     def _load_recent_tools(self):
         try:
@@ -146,10 +182,31 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             self._recent_tool_ids = []
 
+    def _load_favorite_tools(self):
+        try:
+            settings = QSettings()
+            raw = settings.value(self._settings_key_favorites, "")
+            if not raw:
+                return
+            parsed = json.loads(str(raw))
+            if not isinstance(parsed, list):
+                return
+            cleaned = [str(x) for x in parsed if str(x).strip()]
+            self._favorite_tool_ids = cleaned
+        except Exception:
+            self._favorite_tool_ids = []
+
     def _save_recent_tools(self):
         try:
             settings = QSettings()
             settings.setValue(self._settings_key_recent, json.dumps(self._recent_tool_ids))
+        except Exception:
+            pass
+
+    def _save_favorite_tools(self):
+        try:
+            settings = QSettings()
+            settings.setValue(self._settings_key_favorites, json.dumps(self._favorite_tool_ids))
         except Exception:
             pass
 
@@ -210,6 +267,7 @@ class WhiteboxWorkflowsPlugin:
 
         if self._dock_panel is not None:
             self._dock_panel.set_catalog(catalog)
+            self._dock_panel.set_favorites(self._favorite_tool_ids)
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
@@ -247,6 +305,7 @@ class WhiteboxWorkflowsPlugin:
 
     def unload(self):
         self._save_recent_tools()
+        self._save_favorite_tools()
         if self._dock_panel is not None:
             unregister_dock_widget(self.iface, self._dock_panel)
             self._dock_panel = None

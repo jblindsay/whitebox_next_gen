@@ -171,3 +171,38 @@ def unregister_dock_widget(iface, dock) -> bool:
         return True
     except Exception:
         return False
+
+
+def open_processing_algorithm_dialog(iface, provider_id: str, tool_id: str) -> bool:
+    """Open a processing algorithm dialog with API fallbacks.
+
+    Returns True if any known host API successfully opens a dialog.
+    """
+    full_id = f"{provider_id}:{tool_id}"
+
+    candidates = [
+        ("showProcessingAlgorithmDialog", (full_id, {})),
+        ("showProcessingAlgorithmDialog", (tool_id, {})),
+        ("openProcessingAlgorithmDialog", (full_id, {})),
+        ("openProcessingAlgorithmDialog", (tool_id, {})),
+        ("execAlgorithmDialog", (full_id, {})),
+        ("execAlgorithmDialog", (tool_id, {})),
+        ("showProcessingAlgorithmDialog", (full_id,)),
+        ("showProcessingAlgorithmDialog", (tool_id,)),
+        ("openProcessingAlgorithmDialog", (full_id,)),
+        ("openProcessingAlgorithmDialog", (tool_id,)),
+    ]
+
+    for method_name, args in candidates:
+        method = getattr(iface, method_name, None)
+        if method is None:
+            continue
+        try:
+            method(*args)
+            return True
+        except TypeError:
+            continue
+        except Exception:
+            continue
+
+    return False

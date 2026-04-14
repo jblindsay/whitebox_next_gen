@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
+    open_processing_algorithm_dialog,
     qgis_major_version,
     qgis_version_string,
     register_dock_widget,
@@ -87,8 +88,19 @@ class WhiteboxWorkflowsPlugin:
         panel = WhiteboxDockPanel(self.iface.mainWindow())
         panel.on_refresh(self._refresh_catalog)
         panel.on_diagnostics(self._show_diagnostics)
+        panel.on_open_tool(self._open_tool_from_panel)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
+
+    def _open_tool_from_panel(self, tool_id: str):
+        provider_id = self.provider.id()
+        opened = open_processing_algorithm_dialog(self.iface, provider_id, tool_id)
+        if opened:
+            self._notify_info(f"Opening tool: {tool_id}")
+        else:
+            self._notify_warning(
+                f"Unable to open dialog for {tool_id}; host processing API not available."
+            )
 
     def _toggle_panel(self, *_args):
         panel = self._dock_panel

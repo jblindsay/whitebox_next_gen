@@ -1,0 +1,7 @@
+<p>This tool normalizes an input LiDAR point cloud (<code>input</code>) such that point z-values in the output LAS file (<code>output</code>) are converted from elevations to heights above the ground, specifically the height above the nearest ground-classified point. The input LAS file must have ground-classified points, otherwise the tool will return an error. The <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#lidar_tophat_transform">lidar_tophat_transform</a> tool can be used to perform the normalization if a ground classification is lacking.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#lidar_tophat_transform">lidar_tophat_transform</a></p> <h2>Function Signature</h2> <p><code>def height_above_ground(self, input: Lidar) -&gt; Lidar: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

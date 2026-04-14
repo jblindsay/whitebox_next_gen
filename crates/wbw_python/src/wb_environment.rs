@@ -8135,18 +8135,18 @@ impl WbEnvironment {
 
     /// [PRO] service_area_planning_and_coverage_optimization — network-based multi-ring service-area planning.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (network, facilities, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, callback=None))]
+    #[pyo3(signature = (network, facilities, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, callback=None))]
     fn service_area_planning_and_coverage_optimization(
         &self,
         network: &Vector,
         facilities: &Vector,
-        demand_points: Option<&Vector>,
-        ring_costs: Vec<f64>,
-        scenarios: Option<&str>,
         service_areas: &str,
         uncovered_demand: &str,
         scenario_summary_csv: &str,
         ranked_candidates_csv: &str,
+        demand_points: Option<&Vector>,
+        ring_costs: Vec<f64>,
+        scenarios: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, Vector, String, String)> {
         let mut args = serde_json::Map::new();
@@ -8217,21 +8217,21 @@ impl WbEnvironment {
 
     /// [PRO] route_event_governance_for_linear_assets — validate and optionally remediate route event governance issues.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (events, route_id_field, from_measure_field, to_measure_field, gap_tolerance=0.0, overlap_tolerance=0.0, auto_fix=false, domain_rules_json=None, governed_events, issues_csv, corrected_events=None, governance_report, remediation_queue_csv=None, callback=None))]
+    #[pyo3(signature = (events, route_id_field, from_measure_field, to_measure_field, governed_events, issues_csv, governance_report, gap_tolerance=0.0, overlap_tolerance=0.0, auto_fix=false, domain_rules_json=None, corrected_events=None, remediation_queue_csv=None, callback=None))]
     fn route_event_governance_for_linear_assets(
         &self,
         events: &Vector,
         route_id_field: &str,
         from_measure_field: &str,
         to_measure_field: &str,
+        governed_events: &str,
+        issues_csv: &str,
+        governance_report: &str,
         gap_tolerance: f64,
         overlap_tolerance: f64,
         auto_fix: bool,
         domain_rules_json: Option<&str>,
-        governed_events: &str,
-        issues_csv: &str,
         corrected_events: Option<&str>,
-        governance_report: &str,
         remediation_queue_csv: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, String, Option<Vector>, String, Option<String>)> {
@@ -8313,17 +8313,17 @@ impl WbEnvironment {
     }
 
     /// [PRO] utility_corridor_encroachment_and_access_planning — rank corridor hotspots and field access response priorities.
-    #[pyo3(signature = (corridors, encroachments, access_points, corridor_influence_distance=30.0, high_risk_distance=10.0, hotspots, priority_csv, planning_report, response_queue_csv=None, callback=None))]
+    #[pyo3(signature = (corridors, encroachments, access_points, hotspots, priority_csv, planning_report, corridor_influence_distance=30.0, high_risk_distance=10.0, response_queue_csv=None, callback=None))]
     fn utility_corridor_encroachment_and_access_planning(
         &self,
         corridors: &Vector,
         encroachments: &Vector,
         access_points: &Vector,
-        corridor_influence_distance: f64,
-        high_risk_distance: f64,
         hotspots: &str,
         priority_csv: &str,
         planning_report: &str,
+        corridor_influence_distance: f64,
+        high_risk_distance: f64,
         response_queue_csv: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, String, String, Option<String>)> {
@@ -8399,16 +8399,16 @@ impl WbEnvironment {
 
     /// [PRO] parcel_and_land_fabric_topology_compliance_workflow — parcel topology compliance audit with optional remediation outputs.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (parcels, min_sliver_area=1.0, auto_fix=false, jurisdiction_template="generic", topology_violations, issues_csv, compliance_report, corrected_parcels=None, remediation_queue_csv=None, html_report=None, callback=None))]
+    #[pyo3(signature = (parcels, topology_violations, issues_csv, compliance_report, min_sliver_area=1.0, auto_fix=false, jurisdiction_template="generic", corrected_parcels=None, remediation_queue_csv=None, html_report=None, callback=None))]
     fn parcel_and_land_fabric_topology_compliance_workflow(
         &self,
         parcels: &Vector,
-        min_sliver_area: f64,
-        auto_fix: bool,
-        jurisdiction_template: &str,
         topology_violations: &str,
         issues_csv: &str,
         compliance_report: &str,
+        min_sliver_area: f64,
+        auto_fix: bool,
+        jurisdiction_template: &str,
         corrected_parcels: Option<&str>,
         remediation_queue_csv: Option<&str>,
         html_report: Option<&str>,
@@ -8500,20 +8500,20 @@ impl WbEnvironment {
 
     /// [PRO] emergency_scenario_routing_and_accessibility_simulator — compare baseline and disrupted accessibility scenarios.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (network, critical_facilities, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenario_csv, scenario_template="custom", scenario_block_source_field=None, baseline_service_areas, worst_case_service_areas, scenario_summary_csv, simulation_report, callback=None))]
+    #[pyo3(signature = (network, critical_facilities, scenario_csv, baseline_service_areas, worst_case_service_areas, scenario_summary_csv, simulation_report, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenario_template="custom", scenario_block_source_field=None, callback=None))]
     fn emergency_scenario_routing_and_accessibility_simulator(
         &self,
         network: &Vector,
         critical_facilities: &Vector,
-        demand_points: Option<&Vector>,
-        ring_costs: Vec<f64>,
         scenario_csv: &str,
-        scenario_template: &str,
-        scenario_block_source_field: Option<&str>,
         baseline_service_areas: &str,
         worst_case_service_areas: &str,
         scenario_summary_csv: &str,
         simulation_report: &str,
+        demand_points: Option<&Vector>,
+        ring_costs: Vec<f64>,
+        scenario_template: &str,
+        scenario_block_source_field: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, Vector, String, String)> {
         let mut args = serde_json::Map::new();
@@ -8593,19 +8593,19 @@ impl WbEnvironment {
 
     /// [PRO] market_access_and_site_intelligence_workflow — candidate-site catchment and competitive overlap analysis.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (network, sites_existing, sites_candidates, demand_surface, competition_sites=None, ring_costs=vec![5.0, 10.0, 15.0], catchments_output, overlap_analysis_output, candidate_rank_csv, executive_summary_json, market_action_queue_csv=None, callback=None))]
+    #[pyo3(signature = (network, sites_existing, sites_candidates, demand_surface, catchments_output, overlap_analysis_output, candidate_rank_csv, executive_summary_json, competition_sites=None, ring_costs=vec![5.0, 10.0, 15.0], market_action_queue_csv=None, callback=None))]
     fn market_access_and_site_intelligence_workflow(
         &self,
         network: &Vector,
         sites_existing: &Vector,
         sites_candidates: &Vector,
         demand_surface: &Vector,
-        competition_sites: Option<&Vector>,
-        ring_costs: Vec<f64>,
         catchments_output: &str,
         overlap_analysis_output: &str,
         candidate_rank_csv: &str,
         executive_summary_json: &str,
+        competition_sites: Option<&Vector>,
+        ring_costs: Vec<f64>,
         market_action_queue_csv: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<(Vector, Vector, String, String, Option<String>)> {

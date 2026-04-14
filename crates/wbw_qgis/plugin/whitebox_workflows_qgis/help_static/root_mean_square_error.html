@@ -1,0 +1,7 @@
+<p>This tool calculates the root-mean-square-error (RMSE) or root-mean-square-difference (RMSD) from two input rasters. If the two input rasters possess the same number of rows and columns, the RMSE is calucated on a cell-by-cell basis, otherwise bilinear resampling is used. In addition to RMSE, the tool also reports other common accuracy statistics including the mean verical error, the 95% confidence limit (RMSE x 1.96), and the 90% linear error (LE90), which is the 90% percentile of the residuals between two raster surfaces. The LE90 is the most robust of the reported accuracy statistics when the residuals are non-Gaussian. The LE90 requires sorting the residual values, which can be a relatively slow operation for larger rasters.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#paired_sample_t_test">paired_sample_t_test</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#wilcoxon_signed_rank_test">wilcoxon_signed_rank_test</a></p> <h2>Function Signature</h2> <p><code>def root_mean_square_error(self, input: Raster, reference: Raster) -&gt; str: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

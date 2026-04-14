@@ -1,0 +1,7 @@
+<p>This tool can be used to convert one or more LAS file, containing LiDAR data, into ASCII files. The user must specify the name(s) of the input LAS file(s) (<code>inputs</code>). Each input file will have a correspondingly named output file with a <code>.csv</code> file extension. CSV files are comma separated value files and contain tabular data with each column corresponding to a field in the table and each row a point value. Fields are separated by commas in the ASCII formatted file. The output point data, each on a separate line, will take the format:</p> <p><code>X,Y,Z,INTENSITY,CLASS,RETURN,NUM_RETURN,SCAN_ANGLE </code> If the LAS file has a point format that contains RGB data, the final three columns will contain the RED, GREEN, and BLUE values respectively. Use the <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#ascii_to_las">ascii_to_las</a> tool to convert a text file containing LiDAR point data into a LAS file.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#ascii_to_las">ascii_to_las</a></p> <h2>Function Signature</h2> <p><code>def las_to_ascii(self, input_lidar: Optional[Lidar]) -&gt; None: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .algorithm import build_algorithms
 from .bootstrap import load_whitebox_workflows
 from .discovery import discover_tool_catalog
 
@@ -37,7 +38,8 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         self.refresh_catalog()
-        # Dynamic algorithm registration will be added in the next implementation slice.
+        for alg in build_algorithms(self, self._catalog):
+            self.addAlgorithm(alg)
         return None
 
     def refresh_catalog(self, *, regenerate_help: bool = False) -> list[dict]:
@@ -71,3 +73,11 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
     @property
     def catalog(self) -> list[dict]:
         return list(self._catalog)
+
+    @property
+    def include_pro(self) -> bool:
+        return bool(self._include_pro)
+
+    @property
+    def tier(self) -> str:
+        return str(self._tier)

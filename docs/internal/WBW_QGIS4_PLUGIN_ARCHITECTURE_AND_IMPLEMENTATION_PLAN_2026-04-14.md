@@ -522,7 +522,38 @@ Deliverables:
 
 ---
 
-## 18. Immediate WbW-Py Work Items Triggered By This Plan
+## 18. Tool Help Documentation Strategy
+
+### Background
+
+The legacy `whitebox_workflows` codebase followed a **one-tool-one-file** Rust design. Each file contained a single `#[pymethods]` block with a rich `///` doc comment directly above the tool function. These Rust doc comments became Python docstrings accessible via `inspect.getdoc()`, and were the source material for the ~515 static HTML files in the old `wbw_qgis/help/` directory.
+
+The new `whitebox_next_gen` codebase uses **consolidated, category-level files** (e.g. `basic_terrain_tools.rs`, `curvature_tools.rs`). This trades compilation speed for file count but produces very large files — `wb_environment.rs` alone is ~30,000 lines. The dispatch methods in that file currently carry no `///` doc comments, so `inspect.getdoc()` returns `None` for essentially every tool and the plugin `help.py` falls back to sparse stub pages (one-liner summary + parameter table).
+
+### Design Tension
+
+Adding full per-tool `///` documentation blocks to the consolidated files is the architecturally clean solution, but it would expand already large files dramatically and create a maintenance burden. The one-tool-one-file approach solves that at the cost of compile time, which is a real constraint for a large Rust project.
+
+There is no perfect answer. The strategy below manages this tension pragmatically.
+
+### Hybrid Help Documentation Strategy (Adopted)
+
+**Tier 1 — Legacy tools (immediate):** Bundle the existing 515 HTML files from `whitebox_workflows/wbw_qgis/help/` as a static asset alongside the plugin (`whitebox_workflows_qgis/help_static/`). Update `help.py` to prefer a bundled file by `tool_id` lookup and fall back to the dynamically-generated stub only when no bundled file exists. This gives full, high-quality help for all legacy-era tools today without any new writing work.
+
+**Tier 2 — New tools (ongoing):** For tools added to `wbtools_oss` or `wbtools_pro` after the legacy migration, write a standalone `help/<tool_id>.html` in the plugin source tree at authoring time. No requirement to backfill `///` docstrings into the large Rust source files.
+
+**Tier 3 — Future structural consideration:** If the consolidated-file approach is ever revisited (e.g. per-category feature modules with separate help modules), a proper `///` docstring layer becomes viable again. This is not planned but the door is open.
+
+### Implementation Notes for `help.py`
+
+- `get_help_url(tool_id)` should check `help_static/` bundled files first, then the user cache, then fall back to generating from the manifest.
+- `generate_help_files()` should skip tools that already have a bundled file unless `force=True`.
+- The bundled `help_static/` directory should be committed to the plugin source tree (not gitignored) so it ships with the plugin on installation.
+- When a WbW-Py upgrade adds new tools not covered by bundled HTML, the generated stub is acceptable as a temporary placeholder until a handcrafted file is added.
+
+---
+
+## 19. Immediate WbW-Py Work Items Triggered By This Plan
 
 To support the plugin, WbW-Py should prioritize:
 
@@ -536,7 +567,7 @@ To support the plugin, WbW-Py should prioritize:
 
 ---
 
-## 19. Non-Goals For Initial Delivery
+## 20. Non-Goals For Initial Delivery
 
 The first plugin release should not attempt to solve everything.
 
@@ -549,7 +580,7 @@ Not initial goals:
 
 ---
 
-## 20. Summary
+## 21. Summary
 
 This plan treats the QGIS plugin as a top-tier product surface for the Whitebox ecosystem.
 

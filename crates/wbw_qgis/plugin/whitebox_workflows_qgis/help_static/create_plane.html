@@ -1,0 +1,7 @@
+<p>This tool can be used to create a new raster with values that are determined by the equation of a simple plane. The user must specify the name of a base raster (<code>base</code>) from which the output raster coordinate and dimensional information will be taken. In addition the user must specify the values of the planar slope gradient (S; <code>gradient</code>; <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#aspect">aspect</a>) in degrees, the planar slope direction or aspect (A; 0 to 360 degrees), and an constant value (k; <code>constant</code>). The equation of the plane is as follows:</p> <blockquote> <p>Z = tan(S) × sin(A - 180) × X + tan(S) × cos(A - 180) × Y + k</p> </blockquote> <p>where X and Y are the X and Y coordinates of each grid cell in the grid. Notice that A is the direction, or azimuth, that the plane is facing</p> <h2>Function Signature</h2> <p><code>def create_plane(self, base_file: Raster, gradient: float, aspect: float, constant: float) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

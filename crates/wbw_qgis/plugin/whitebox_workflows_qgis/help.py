@@ -1,21 +1,42 @@
 """
 Help documentation generation for the WbW QGIS plugin.
 
-Help HTML is derived from WbEnvironment method docstrings (the same source used
-by the previous Whitebox QGIS plugin) and from tool-manifest metadata obtained
-via WbW-Py's catalog JSON APIs.  Files are generated on first plugin load and
-regenerated whenever the user triggers a catalog refresh or a WbW-Py upgrade is
-detected.
+Lookup order for any tool's help HTML:
+  1. Bundled static HTML bundled in help_static/ alongside this file.
+     These are the legacy-era files generated from WbEnvironment docstrings
+     and cover all tools ported from whitebox_workflows.
+  2. User-writable cache of dynamically generated files (QGIS settings dir).
+     Generated on first access for tools not covered by bundled files.
+  3. Minimal stub built at runtime from manifest summary + param table.
 
-Generated files are stored in a user-writable cache directory and are never
-bundled as static files.  This ensures help content always reflects the
-installed version of WbW-Py.
+Regenerate the cache (step 2) via the plugin's "Refresh catalog" action
+or by calling generate_help_files(force=True).
 """
 from __future__ import annotations
 
 import inspect
 import os
 import re
+
+
+# ---------------------------------------------------------------------------
+# Bundled static help (legacy-era HTML shipped with the plugin)
+# ---------------------------------------------------------------------------
+
+def get_bundled_help_dir() -> str:
+    """Return the path to the help_static/ directory bundled with the plugin.
+
+    This directory contains pre-generated HTML for all tools ported from the
+    legacy whitebox_workflows codebase.  Files here are never regenerated at
+    runtime.
+    """
+    return os.path.join(os.path.dirname(__file__), "help_static")
+
+
+def get_bundled_help_path(tool_id: str) -> str | None:
+    """Return the bundled HTML path for *tool_id*, or None if not bundled."""
+    path = os.path.join(get_bundled_help_dir(), f"{tool_id}.html")
+    return path if os.path.isfile(path) else None
 
 
 # ---------------------------------------------------------------------------
@@ -251,13 +272,19 @@ def _help_html_from_manifest(
 def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False) -> dict[str, str]:
     """Generate help HTML files for all tools in the catalog.
 
+    Bundled static files (help_static/) are always preferred and are never
+    regenerated.  Only tools without a bundled file get a generated cache
+    entry.
+
     Args:
         wbw_module: The imported `whitebox_workflows` module.
         catalog: Tool-catalog list from `list_tool_catalog_json()`.
-        force: Re-generate even if a cached file already exists.
+        force: Re-generate cached files even if they already exist.
+            Bundled files are never overwritten regardless of this flag.
 
     Returns:
-        Mapping of tool_id → absolute path of the generated HTML file.
+        Mapping of tool_id → absolute path of the best available HTML file
+        (bundled path or generated cache path).
     """
     cache_dir = get_help_cache_dir()
     result: dict[str, str] = {}
@@ -276,6 +303,12 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
     for item in catalog:
         tool_id: str = item.get("id", "")
         if not tool_id:
+            continue
+
+        # Prefer bundled file — never regenerate it
+        bundled = get_bundled_help_path(tool_id)
+        if bundled is not None:
+            result[tool_id] = bundled
             continue
 
         display_name: str = item.get("display_name", tool_id)
@@ -306,9 +339,16 @@ def generate_help_files(wbw_module, catalog: list[dict], *, force: bool = False)
 def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
     """Return the help HTML string for a tool.
 
-    Reads from the cache if available; otherwise generates and caches it first.
-    Requires WbW-Py to be importable.
+    Lookup order: bundled static file → user cache → generate from manifest.
+    Requires WbW-Py to be importable for the generate-from-manifest fallback.
     """
+    # 1. Bundled static file
+    bundled = get_bundled_help_path(tool_id)
+    if bundled is not None:
+        with open(bundled, encoding="utf-8") as fh:
+            return fh.read()
+
+    # 2. User cache
     cache_dir = get_help_cache_dir()
     cached_path = os.path.join(cache_dir, f"{tool_id}.html")
 
@@ -348,7 +388,13 @@ def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
 
 
 def get_help_url(tool_id: str) -> str:
-    """Return a file:// URL to the cached help HTML, or empty string."""
+    """Return a file path to the best available help HTML, or empty string.
+
+    Checks bundled static files first, then the user cache.
+    """
+    bundled = get_bundled_help_path(tool_id)
+    if bundled is not None:
+        return bundled.replace("\\", "/")
     cache_dir = get_help_cache_dir()
     cached_path = os.path.join(cache_dir, f"{tool_id}.html")
     if os.path.exists(cached_path):

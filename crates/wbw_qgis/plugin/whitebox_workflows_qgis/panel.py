@@ -4,6 +4,7 @@ from typing import Any
 
 try:
     from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtGui import QKeySequence, QShortcut
     from qgis.PyQt.QtWidgets import (
         QCheckBox,
         QDockWidget,
@@ -24,6 +25,14 @@ except Exception:  # pragma: no cover
     class _DummySignal:  # type: ignore[override]
         def connect(self, *_args, **_kwargs):
             return None
+
+    class QKeySequence:  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    class QShortcut:  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            self.activated = _DummySignal()
 
     class _DummyWidget:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -179,7 +188,26 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorites_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._favorites_list.customContextMenuRequested.connect(self._on_favorites_context_menu)
 
+        self._open_tool_callback = None
         self._tool_context_menu_callback = None
+
+        # Keyboard accelerators for high-frequency workflows.
+        self._shortcut_open_result = QShortcut(QKeySequence("Return"), self)
+        self._shortcut_open_result_alt = QShortcut(QKeySequence("Enter"), self)
+        self._shortcut_toggle_favorite_ctrl = QShortcut(QKeySequence("Ctrl+D"), self)
+        self._shortcut_toggle_favorite_meta = QShortcut(QKeySequence("Meta+D"), self)
+        self._shortcut_remove_favorite_del = QShortcut(QKeySequence("Delete"), self)
+        self._shortcut_remove_favorite_back = QShortcut(QKeySequence("Backspace"), self)
+
+        self._shortcut_open_result.activated.connect(self._open_selected_result)
+        self._shortcut_open_result_alt.activated.connect(self._open_selected_result)
+        self._shortcut_toggle_favorite_ctrl.activated.connect(self._toggle_selected_favorite)
+        self._shortcut_toggle_favorite_meta.activated.connect(self._toggle_selected_favorite)
+        self._shortcut_remove_favorite_del.activated.connect(self._remove_selected_favorite_shortcut)
+        self._shortcut_remove_favorite_back.activated.connect(self._remove_selected_favorite_shortcut)
+
+        self._toggle_favorite_callback = None
+        self._remove_favorite_shortcut_callback = None
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -188,6 +216,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._diagnostics_button.clicked.connect(callback)
 
     def on_open_tool(self, callback):
+        self._open_tool_callback = callback
+
         def _open(item):
             row = self._results_list.row(item)
             if row < 0 or row >= len(self._filtered_tool_ids):
@@ -219,6 +249,12 @@ class WhiteboxDockPanel(QDockWidget):
 
     def on_remove_favorite(self, callback):
         self._favorite_remove_button.clicked.connect(callback)
+
+    def on_toggle_selected_favorite(self, callback):
+        self._toggle_favorite_callback = callback
+
+    def on_remove_selected_favorite_shortcut(self, callback):
+        self._remove_favorite_shortcut_callback = callback
 
     def on_move_favorite_up(self, callback):
         self._favorite_up_button.clicked.connect(callback)
@@ -318,6 +354,24 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _on_filter_changed(self, _value: int) -> None:
         self._refresh_results(self._search_box.text())
+
+    def _open_selected_result(self) -> None:
+        callback = getattr(self, "_open_tool_callback", None)
+        if callback is None:
+            return
+        tool_id = self.selected_result_tool_id()
+        if tool_id:
+            callback(tool_id)
+
+    def _toggle_selected_favorite(self) -> None:
+        if self._toggle_favorite_callback is None:
+            return
+        self._toggle_favorite_callback()
+
+    def _remove_selected_favorite_shortcut(self) -> None:
+        if self._remove_favorite_shortcut_callback is None:
+            return
+        self._remove_favorite_shortcut_callback()
 
     def _on_results_context_menu(self, pos) -> None:
         if self._tool_context_menu_callback is None:

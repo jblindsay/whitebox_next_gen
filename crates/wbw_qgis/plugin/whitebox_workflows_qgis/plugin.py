@@ -137,6 +137,8 @@ class WhiteboxWorkflowsPlugin:
         panel.on_open_favorite_tool(self._open_tool_from_favorite)
         panel.on_add_favorite(self._add_selected_favorite)
         panel.on_remove_favorite(self._remove_selected_favorite)
+        panel.on_toggle_selected_favorite(self._toggle_selected_result_favorite)
+        panel.on_remove_selected_favorite_shortcut(self._remove_selected_favorite)
         panel.on_move_favorite_up(self._move_selected_favorite_up)
         panel.on_move_favorite_down(self._move_selected_favorite_down)
         panel.on_clear_favorites(self._clear_favorites)
@@ -177,6 +179,17 @@ class WhiteboxWorkflowsPlugin:
             return
         tool_id = self._dock_panel.selected_result_tool_id()
         self._add_favorite_by_id(tool_id)
+
+    def _toggle_selected_result_favorite(self, *_args):
+        if self._dock_panel is None:
+            return
+        tool_id = self._dock_panel.selected_result_tool_id()
+        if not tool_id:
+            return
+        if tool_id in self._favorite_tool_ids:
+            self._remove_favorite_by_id(tool_id)
+        else:
+            self._add_favorite_by_id(tool_id)
 
     def _add_favorite_by_id(self, tool_id: str):
         if not tool_id:

@@ -84,6 +84,8 @@ class WhiteboxWorkflowsPlugin:
         self._max_recent_tools = 8
         self._settings_key_recent = "whitebox_workflows/recent_tools"
         self._settings_key_favorites = "whitebox_workflows/favorite_tools"
+        self._settings_key_quick_open = "whitebox_workflows/quick_open_top_match"
+        self._quick_open_top_match = True
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -97,6 +99,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
+        self._load_quick_open_preference()
 
         self._install_panel()
         self._install_actions()
@@ -143,9 +146,11 @@ class WhiteboxWorkflowsPlugin:
         panel.on_move_favorite_down(self._move_selected_favorite_down)
         panel.on_clear_favorites(self._clear_favorites)
         panel.on_clear_recents(self._clear_recents)
+        panel.on_quick_open_toggled(self._on_quick_open_toggled)
         panel.on_tool_context_menu(self._show_tool_context_menu)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
+            panel.set_quick_open_enabled(self._quick_open_top_match)
 
     def _open_tool_from_panel(self, tool_id: str):
         provider_id = self.provider.id()
@@ -260,6 +265,9 @@ class WhiteboxWorkflowsPlugin:
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
         self._notify_info("Cleared recent tools.")
 
+    def _on_quick_open_toggled(self, *_args):
+        self._save_quick_open_preference()
+
     def _show_tool_context_menu(self, source: str, tool_id: str, global_pos):
         menu = QMenu(self.iface.mainWindow())
 
@@ -325,6 +333,19 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             self._favorite_tool_ids = []
 
+    def _load_quick_open_preference(self):
+        try:
+            settings = QSettings()
+            raw = settings.value(self._settings_key_quick_open, True)
+            if isinstance(raw, bool):
+                self._quick_open_top_match = raw
+            elif isinstance(raw, str):
+                self._quick_open_top_match = raw.strip().lower() in ("1", "true", "yes", "on")
+            else:
+                self._quick_open_top_match = bool(raw)
+        except Exception:
+            self._quick_open_top_match = True
+
     def _save_recent_tools(self):
         try:
             settings = QSettings()
@@ -336,6 +357,15 @@ class WhiteboxWorkflowsPlugin:
         try:
             settings = QSettings()
             settings.setValue(self._settings_key_favorites, json.dumps(self._favorite_tool_ids))
+        except Exception:
+            pass
+
+    def _save_quick_open_preference(self):
+        try:
+            if self._dock_panel is not None:
+                self._quick_open_top_match = self._dock_panel.quick_open_enabled()
+            settings = QSettings()
+            settings.setValue(self._settings_key_quick_open, self._quick_open_top_match)
         except Exception:
             pass
 
@@ -435,6 +465,7 @@ class WhiteboxWorkflowsPlugin:
     def unload(self):
         self._save_recent_tools()
         self._save_favorite_tools()
+        self._save_quick_open_preference()
         if self._dock_panel is not None:
             unregister_dock_widget(self.iface, self._dock_panel)
             self._dock_panel = None

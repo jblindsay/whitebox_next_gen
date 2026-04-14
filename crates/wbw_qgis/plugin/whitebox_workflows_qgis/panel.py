@@ -277,6 +277,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_clear_recents(self, callback):
         self._recent_clear_button.clicked.connect(callback)
 
+    def on_quick_open_toggled(self, callback):
+        self._quick_open_checkbox.stateChanged.connect(callback)
+
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
 
@@ -314,6 +317,12 @@ class WhiteboxDockPanel(QDockWidget):
         if row < 0 or row >= len(self._filtered_tool_ids):
             return ""
         return self._filtered_tool_ids[row]
+
+    def quick_open_enabled(self) -> bool:
+        return bool(self._quick_open_checkbox.isChecked())
+
+    def set_quick_open_enabled(self, enabled: bool) -> None:
+        self._quick_open_checkbox.setChecked(bool(enabled))
 
     def top_result_tool_id(self) -> str:
         if not self._filtered_tool_ids:

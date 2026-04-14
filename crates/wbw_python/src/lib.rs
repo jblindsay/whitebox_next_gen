@@ -364,6 +364,66 @@ impl PythonToolRuntime {
         Value::Array(tools)
     }
 
+    fn catalog_entry_json(&self, manifest: &ToolManifest) -> Value {
+        let mut entry = json!(manifest);
+        let effective = self.effective_tier();
+        let (availability_state, locked_reason, available) = if !self.include_pro
+            && matches!(manifest.license_tier, LicenseTier::Pro | LicenseTier::Enterprise)
+        {
+            ("locked", Some("pro_not_included"), false)
+        } else if manifest.license_tier > effective {
+            ("locked", Some("tier_insufficient"), false)
+        } else {
+            ("available", None, true)
+        };
+
+        if let Value::Object(obj) = &mut entry {
+            obj.insert(
+                "license_tier_name".to_string(),
+                json!(license_tier_to_str(manifest.license_tier)),
+            );
+            obj.insert("availability_state".to_string(), json!(availability_state));
+            obj.insert("available".to_string(), json!(available));
+            obj.insert("locked".to_string(), json!(!available));
+            obj.insert("locked_reason".to_string(), json!(locked_reason));
+        }
+
+        entry
+    }
+
+    pub fn list_tool_catalog_json(&self) -> Value {
+        let tools: Vec<Value> = self
+            .build_catalog_manifests()
+            .into_iter()
+            .map(|m| self.catalog_entry_json(&m))
+            .collect();
+        Value::Array(tools)
+    }
+
+    pub fn get_tool_metadata_json(&self, tool_id: &str) -> Result<Value, ToolError> {
+        let manifest = self
+            .build_catalog_manifests()
+            .into_iter()
+            .find(|m| m.id == tool_id)
+            .ok_or_else(|| ToolError::NotFound(tool_id.to_string()))?;
+        Ok(self.catalog_entry_json(&manifest))
+    }
+
+    pub fn get_runtime_capabilities_json(&self) -> Value {
+        json!({
+            "compiled_with_pro_support": cfg!(feature = "pro"),
+            "include_pro": self.include_pro,
+            "requested_tier": license_tier_to_str(self.requested_tier),
+            "effective_tier": license_tier_to_str(self.effective_tier()),
+            "runtime_mode": match &self.runtime {
+                RuntimeMode::Tier(_) => "tier",
+                RuntimeMode::Entitled(_) => "entitled",
+            },
+            "catalog_tool_count": self.build_catalog_manifests().len(),
+            "visible_tool_count": self.visible_manifests().len(),
+        })
+    }
+
     pub fn run_tool_json(&self, tool_id: &str, args_json: &str) -> Result<Value, ToolError> {
         let args = parse_args_json(args_json)?;
 
@@ -994,6 +1054,25 @@ impl RuntimeSession {
             .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
     }
 
+    fn list_tool_catalog_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.runtime.list_tool_catalog_json())
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
+    fn get_tool_metadata_json(&self, tool_id: &str) -> PyResult<String> {
+        let out = self
+            .runtime
+            .get_tool_metadata_json(tool_id)
+            .map_err(map_tool_error)?;
+        serde_json::to_string(&out)
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
+    fn get_runtime_capabilities_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.runtime.get_runtime_capabilities_json())
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
     fn list_tools(&self) -> PyResult<Vec<String>> {
         extract_tool_ids(&self.runtime.list_tools_json())
     }
@@ -1073,6 +1152,28 @@ fn list_tools_json() -> PyResult<String> {
 }
 
 #[pyfunction]
+fn list_tool_catalog_json() -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    serde_json::to_string(&rt.list_tool_catalog_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_tool_metadata_json(tool_id: &str) -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_runtime_capabilities_json() -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    serde_json::to_string(&rt.get_runtime_capabilities_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
 fn list_tools() -> PyResult<Vec<String>> {
     let rt = PythonToolRuntime::new();
     extract_tool_ids(&rt.list_tools_json())
@@ -1085,6 +1186,34 @@ fn list_tools_json_with_options(include_pro: bool, tier: &str) -> PyResult<Strin
     let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     serde_json::to_string(&rt.list_tools_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn list_tool_catalog_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    serde_json::to_string(&rt.list_tool_catalog_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_tool_metadata_json_with_options(tool_id: &str, include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_runtime_capabilities_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    serde_json::to_string(&rt.get_runtime_capabilities_json())
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
 }
 
@@ -1552,8 +1681,14 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_class::<WbCategoryToolCallable>()?;
     m.add_class::<WbDomainNamespace>()?;
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;
+    m.add_function(wrap_pyfunction!(list_tool_catalog_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_metadata_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_runtime_capabilities_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(list_tool_catalog_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_metadata_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(get_runtime_capabilities_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_entitlement_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_entitlement_file_options, m)?)?;
@@ -1820,6 +1955,46 @@ mod tests {
             .iter()
             .any(|v| v.get("id").and_then(Value::as_str) == Some("raster_power"));
         assert!(!has_pro);
+    }
+
+    #[test]
+    fn runtime_capabilities_json_reports_runtime_state() {
+        let rt = PythonToolRuntime::new();
+        let capabilities = rt.get_runtime_capabilities_json();
+
+        assert_eq!(capabilities.get("include_pro"), Some(&json!(false)));
+        assert_eq!(capabilities.get("requested_tier"), Some(&json!("open")));
+        assert_eq!(capabilities.get("effective_tier"), Some(&json!("open")));
+        assert_eq!(capabilities.get("runtime_mode"), Some(&json!("tier")));
+    }
+
+    #[test]
+    fn tool_metadata_json_returns_known_manifest() {
+        let rt = PythonToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("abs")
+            .expect("tool metadata should exist");
+
+        assert_eq!(manifest.get("id"), Some(&json!("abs")));
+        assert_eq!(manifest.get("availability_state"), Some(&json!("available")));
+        assert_eq!(manifest.get("locked"), Some(&json!(false)));
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn tool_catalog_json_marks_locked_pro_tools_for_open_tier() {
+        let rt = PythonToolRuntime::new_with_options(true, LicenseTier::Open)
+            .expect("runtime construction should succeed");
+        let catalog = rt.list_tool_catalog_json();
+        let arr = catalog.as_array().expect("catalog should be an array");
+        let raster_power = arr
+            .iter()
+            .find(|item| item.get("id").and_then(Value::as_str) == Some("raster_power"))
+            .expect("pro tool should be present in the build catalog");
+
+        assert_eq!(raster_power.get("available"), Some(&json!(false)));
+        assert_eq!(raster_power.get("locked"), Some(&json!(true)));
+        assert_eq!(raster_power.get("locked_reason"), Some(&json!("tier_insufficient")));
     }
 
     #[test]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
     open_processing_algorithm_dialog,
@@ -17,6 +19,7 @@ from .provider import WhiteboxProcessingProvider
 
 try:
     from qgis.PyQt.QtGui import QAction
+    from qgis.PyQt.QtCore import QSettings
     from qgis.PyQt.QtWidgets import QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
@@ -26,6 +29,13 @@ except Exception:  # pragma: no cover
     class QMessageBox:  # type: ignore[override]
         @staticmethod
         def information(*_args, **_kwargs):
+            return None
+
+    class QSettings:  # type: ignore[override]
+        def value(self, *_args, **_kwargs):
+            return ""
+
+        def setValue(self, *_args, **_kwargs):
             return None
 
     class _Signal:  # type: ignore[override]
@@ -45,6 +55,7 @@ class WhiteboxWorkflowsPlugin:
         self._dock_panel = None
         self._recent_tool_ids: list[str] = []
         self._max_recent_tools = 8
+        self._settings_key_recent = "whitebox_workflows/recent_tools"
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -55,6 +66,8 @@ class WhiteboxWorkflowsPlugin:
         if not register_provider(self.iface, self.provider):
             return
         self._provider_registered = True
+
+        self._load_recent_tools()
 
         self._install_panel()
         self._install_actions()
@@ -117,6 +130,28 @@ class WhiteboxWorkflowsPlugin:
             self._recent_tool_ids = self._recent_tool_ids[: self._max_recent_tools]
         if self._dock_panel is not None:
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
+        self._save_recent_tools()
+
+    def _load_recent_tools(self):
+        try:
+            settings = QSettings()
+            raw = settings.value(self._settings_key_recent, "")
+            if not raw:
+                return
+            parsed = json.loads(str(raw))
+            if not isinstance(parsed, list):
+                return
+            cleaned = [str(x) for x in parsed if str(x).strip()]
+            self._recent_tool_ids = cleaned[: self._max_recent_tools]
+        except Exception:
+            self._recent_tool_ids = []
+
+    def _save_recent_tools(self):
+        try:
+            settings = QSettings()
+            settings.setValue(self._settings_key_recent, json.dumps(self._recent_tool_ids))
+        except Exception:
+            pass
 
     def _toggle_panel(self, *_args):
         panel = self._dock_panel
@@ -211,6 +246,7 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def unload(self):
+        self._save_recent_tools()
         if self._dock_panel is not None:
             unregister_dock_widget(self.iface, self._dock_panel)
             self._dock_panel = None

@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-14
+
+### Fixed
+- Corrected GeoTIFF/COG write-path handling to use the common chunky conversion flow for single-band and multi-band rasters, preventing inconsistent layout behavior across data types.
+
 ### Changed
 - Updated Zarr documentation terminology to remove stale "MVP" labels and
   reflect current v2/v3 local-store support more accurately.

@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-14
+
 ### Fixed
 - Read GeoPackage layers correctly when table schemas use bracket-quoted identifiers and uppercase `FID` column names.
 - Preserve GeoPackage feature IDs by falling back to SQLite rowids when `INTEGER PRIMARY KEY` payload values are stored as `NULL` aliases.

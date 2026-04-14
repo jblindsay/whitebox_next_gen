@@ -3929,7 +3929,7 @@ dependencies = [
 
 [[package]]
 name = "wbraster"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "criterion 0.5.1",
  "flate2",
@@ -4016,7 +4016,7 @@ dependencies = [
 
 [[package]]
 name = "wbvector"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "flatbuffers",
  "osmpbfreader",

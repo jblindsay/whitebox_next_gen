@@ -104,6 +104,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._show_locked_checkbox.setChecked(True)
         self._matches_label = QLabel("Matches: 0")
         self._results_list = QListWidget()
+        self._recent_label = QLabel("Recent Tools")
+        self._recent_list = QListWidget()
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
@@ -118,6 +120,8 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._show_locked_checkbox)
         layout.addWidget(self._matches_label)
         layout.addWidget(self._results_list)
+        layout.addWidget(self._recent_label)
+        layout.addWidget(self._recent_list)
         layout.addWidget(self._refresh_button)
         layout.addWidget(self._diagnostics_button)
 
@@ -126,6 +130,7 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._catalog: list[dict[str, Any]] = []
         self._filtered_tool_ids: list[str] = []
+        self._recent_tool_ids: list[str] = []
         self._search_box.textChanged.connect(self._on_search_text_changed)
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
         self._show_locked_checkbox.stateChanged.connect(self._on_filter_changed)
@@ -144,6 +149,15 @@ class WhiteboxDockPanel(QDockWidget):
             callback(self._filtered_tool_ids[row])
 
         self._results_list.itemDoubleClicked.connect(_open)
+
+    def on_open_recent_tool(self, callback):
+        def _open_recent(item):
+            row = self._recent_list.row(item)
+            if row < 0 or row >= len(self._recent_tool_ids):
+                return
+            callback(self._recent_tool_ids[row])
+
+        self._recent_list.itemDoubleClicked.connect(_open_recent)
 
     def update_state(
         self,
@@ -167,6 +181,12 @@ class WhiteboxDockPanel(QDockWidget):
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)
         self._refresh_results(self._search_box.text())
+
+    def set_recent_tools(self, tool_ids: list[str]) -> None:
+        self._recent_tool_ids = list(tool_ids)
+        self._recent_list.clear()
+        for tool_id in self._recent_tool_ids:
+            self._recent_list.addItem(QListWidgetItem(tool_id))
 
     def _on_search_text_changed(self, text: str) -> None:
         self._refresh_results(text)

@@ -43,6 +43,8 @@ class WhiteboxWorkflowsPlugin:
         self._refresh_action = None
         self._panel_action = None
         self._dock_panel = None
+        self._recent_tool_ids: list[str] = []
+        self._max_recent_tools = 8
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -89,6 +91,7 @@ class WhiteboxWorkflowsPlugin:
         panel.on_refresh(self._refresh_catalog)
         panel.on_diagnostics(self._show_diagnostics)
         panel.on_open_tool(self._open_tool_from_panel)
+        panel.on_open_recent_tool(self._open_tool_from_recent)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
 
@@ -96,11 +99,24 @@ class WhiteboxWorkflowsPlugin:
         provider_id = self.provider.id()
         opened = open_processing_algorithm_dialog(self.iface, provider_id, tool_id)
         if opened:
+            self._record_recent_tool(tool_id)
             self._notify_info(f"Opening tool: {tool_id}")
         else:
             self._notify_warning(
                 f"Unable to open dialog for {tool_id}; host processing API not available."
             )
+
+    def _open_tool_from_recent(self, tool_id: str):
+        self._open_tool_from_panel(tool_id)
+
+    def _record_recent_tool(self, tool_id: str):
+        if tool_id in self._recent_tool_ids:
+            self._recent_tool_ids.remove(tool_id)
+        self._recent_tool_ids.insert(0, tool_id)
+        if len(self._recent_tool_ids) > self._max_recent_tools:
+            self._recent_tool_ids = self._recent_tool_ids[: self._max_recent_tools]
+        if self._dock_panel is not None:
+            self._dock_panel.set_recent_tools(self._recent_tool_ids)
 
     def _toggle_panel(self, *_args):
         panel = self._dock_panel
@@ -159,6 +175,7 @@ class WhiteboxWorkflowsPlugin:
 
         if self._dock_panel is not None:
             self._dock_panel.set_catalog(catalog)
+            self._dock_panel.set_recent_tools(self._recent_tool_ids)
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
                 requested_tier=self.provider.tier,

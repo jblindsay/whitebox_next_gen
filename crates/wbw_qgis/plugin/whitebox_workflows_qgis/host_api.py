@@ -136,3 +136,38 @@ def unregister_plugin_action(iface, action, menu_label: str) -> bool:
             pass
 
     return removed
+
+
+def register_dock_widget(iface, dock) -> bool:
+    """Register plugin dock widget in QGIS UI with safe fallbacks."""
+    try:
+        from qgis.PyQt.QtCore import Qt  # type: ignore[import]
+
+        area = getattr(Qt, "LeftDockWidgetArea", None)
+    except Exception:
+        area = None
+
+    add_dock = getattr(iface, "addDockWidget", None)
+    if add_dock is None:
+        return False
+
+    try:
+        if area is None:
+            add_dock(dock)
+        else:
+            add_dock(area, dock)
+        return True
+    except Exception:
+        return False
+
+
+def unregister_dock_widget(iface, dock) -> bool:
+    """Remove plugin dock widget from QGIS UI with safe fallbacks."""
+    remove_dock = getattr(iface, "removeDockWidget", None)
+    if remove_dock is None:
+        return False
+    try:
+        remove_dock(dock)
+        return True
+    except Exception:
+        return False

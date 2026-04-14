@@ -4,11 +4,14 @@ from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
     qgis_major_version,
     qgis_version_string,
+    register_dock_widget,
     register_plugin_action,
     register_provider,
+    unregister_dock_widget,
     unregister_plugin_action,
     unregister_provider,
 )
+from .panel import WhiteboxDockPanel, summarize_catalog
 from .provider import WhiteboxProcessingProvider
 
 try:
@@ -37,6 +40,8 @@ class WhiteboxWorkflowsPlugin:
         self._menu_label = "&Whitebox Workflows"
         self._diagnostics_action = None
         self._refresh_action = None
+        self._panel_action = None
+        self._dock_panel = None
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -48,7 +53,9 @@ class WhiteboxWorkflowsPlugin:
             return
         self._provider_registered = True
 
+        self._install_panel()
         self._install_actions()
+        self._refresh_catalog(silent=True)
 
         # Helpful startup message where the host exposes a message bar.
         msg = f"Whitebox Workflows provider loaded (QGIS {qgis_version_string() or 'unknown'})."
@@ -71,7 +78,28 @@ class WhiteboxWorkflowsPlugin:
         if register_plugin_action(self.iface, refresh_action, self._menu_label):
             self._refresh_action = refresh_action
 
-    def _show_diagnostics(self):
+        panel_action = QAction("Show Whitebox Panel", self.iface.mainWindow())
+        panel_action.triggered.connect(self._toggle_panel)
+        if register_plugin_action(self.iface, panel_action, self._menu_label):
+            self._panel_action = panel_action
+
+    def _install_panel(self):
+        panel = WhiteboxDockPanel(self.iface.mainWindow())
+        panel.on_refresh(self._refresh_catalog)
+        panel.on_diagnostics(self._show_diagnostics)
+        if register_dock_widget(self.iface, panel):
+            self._dock_panel = panel
+
+    def _toggle_panel(self, *_args):
+        panel = self._dock_panel
+        if panel is None:
+            return
+        is_visible = getattr(panel, "isVisible", None)
+        set_visible = getattr(panel, "setVisible", None)
+        if callable(is_visible) and callable(set_visible):
+            set_visible(not bool(is_visible()))
+
+    def _show_diagnostics(self, *_args):
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,
             tier=self.provider.tier,
@@ -96,7 +124,7 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             pass
 
-    def _refresh_catalog(self):
+    def _refresh_catalog(self, *_args, silent: bool = False):
         try:
             catalog = self.provider.refresh_catalog(regenerate_help=True)
             refresh_algorithms = getattr(self.provider, "refreshAlgorithms", None)
@@ -106,17 +134,31 @@ class WhiteboxWorkflowsPlugin:
             self._notify_warning(f"Catalog refresh failed: {exc}")
             return
 
-        available = 0
-        locked = 0
-        for item in catalog:
-            if bool(item.get("locked", False)):
-                locked += 1
-            else:
-                available += 1
+        available, locked = summarize_catalog(catalog)
 
-        self._notify_info(
-            f"Catalog refreshed: {available} available, {locked} locked tools."
+        payload = gather_runtime_diagnostics(
+            include_pro=self.provider.include_pro,
+            tier=self.provider.tier,
         )
+        caps = payload.get("capabilities") if isinstance(payload, dict) else None
+        effective_tier = "unknown"
+        if isinstance(caps, dict):
+            effective_tier = str(caps.get("effective_tier", "unknown"))
+
+        if self._dock_panel is not None:
+            self._dock_panel.update_state(
+                status=str(payload.get("status", "unknown")),
+                requested_tier=self.provider.tier,
+                effective_tier=effective_tier,
+                available_count=available,
+                locked_count=locked,
+                qgis_version=qgis_version_string(),
+            )
+
+        if not silent:
+            self._notify_info(
+                f"Catalog refreshed: {available} available, {locked} locked tools."
+            )
 
     def _notify_info(self, message: str):
         try:
@@ -139,6 +181,12 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def unload(self):
+        if self._dock_panel is not None:
+            unregister_dock_widget(self.iface, self._dock_panel)
+            self._dock_panel = None
+        if self._panel_action is not None:
+            unregister_plugin_action(self.iface, self._panel_action, self._menu_label)
+            self._panel_action = None
         if self._refresh_action is not None:
             unregister_plugin_action(self.iface, self._refresh_action, self._menu_label)
             self._refresh_action = None

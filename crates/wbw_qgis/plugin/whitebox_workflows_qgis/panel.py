@@ -144,6 +144,9 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_label = QLabel("Recent Tools")
         self._recent_list = QListWidget()
         self._recent_clear_button = QPushButton("Clear Recents")
+        self._shortcut_hint_label = QLabel(
+            "Shortcuts: Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
+        )
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
@@ -168,6 +171,7 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._recent_label)
         layout.addWidget(self._recent_list)
         layout.addWidget(self._recent_clear_button)
+        layout.addWidget(self._shortcut_hint_label)
         layout.addWidget(self._refresh_button)
         layout.addWidget(self._diagnostics_button)
 

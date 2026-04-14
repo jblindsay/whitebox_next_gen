@@ -3992,6 +3992,7 @@ dependencies = [
  "kdtree",
  "maud",
  "rayon",
+ "regex",
  "serde_json",
  "time",
  "ureq",

@@ -32379,7 +32379,9 @@ struct VehicleRoutingVrptwPlannedRoute {
     late_stops: i64,
     total_lateness: f64,
     served_required_count: usize,
+    #[allow(dead_code)]
     break_taken: bool,
+    #[allow(dead_code)]
     break_start_time: Option<f64>,
 }
 
@@ -32396,6 +32398,7 @@ struct VehicleRoutingVrptwVisitProjection {
     projected_total_time: f64,
     break_taken_after_service: bool,
     break_started_before_service: Option<f64>,
+    #[allow(dead_code)]
     break_started_before_return: Option<f64>,
 }
 
@@ -34221,6 +34224,7 @@ impl Tool for VehicleRoutingVrptwTool {
         Ok(())
     }
 
+    #[allow(unreachable_code)]
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         return run_vehicle_routing_vrptw_impl(args);
 

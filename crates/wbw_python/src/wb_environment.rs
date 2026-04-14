@@ -8063,6 +8063,733 @@ impl WbEnvironment {
         Ok(())
     }
 
+    /// [PRO] network_readiness_and_diagnostics_intelligence — assess network QA and readiness score outputs.
+    #[pyo3(signature = (network, qa_report, diagnostics_layer, readiness_score, html_report=None, callback=None))]
+    fn network_readiness_and_diagnostics_intelligence(
+        &self,
+        network: &Vector,
+        qa_report: &str,
+        diagnostics_layer: &str,
+        readiness_score: &str,
+        html_report: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(String, Vector, String, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "qa_report".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(qa_report)).unwrap()),
+        );
+        args.insert(
+            "diagnostics_layer".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(diagnostics_layer)).unwrap()),
+        );
+        args.insert(
+            "readiness_score".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(readiness_score)).unwrap()),
+        );
+        if let Some(path) = html_report {
+            args.insert(
+                "html_report".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "network_readiness_and_diagnostics_intelligence",
+            args,
+            callback,
+        )?;
+
+        let qa_report_path = extract_output_string_by_key(
+            "network_readiness_and_diagnostics_intelligence",
+            &response,
+            "qa_report",
+        )?;
+        let diagnostics_layer_path = extract_output_path_by_key(
+            "network_readiness_and_diagnostics_intelligence",
+            &response,
+            "diagnostics_layer",
+        )?;
+        let readiness_score_path = extract_output_string_by_key(
+            "network_readiness_and_diagnostics_intelligence",
+            &response,
+            "readiness_score",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let html_report_path = outputs
+            .get("html_report")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            qa_report_path,
+            Vector {
+                file_path: diagnostics_layer_path,
+            },
+            readiness_score_path,
+            html_report_path,
+        ))
+    }
+
+    /// [PRO] service_area_planning_and_coverage_optimization — network-based multi-ring service-area planning.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (network, facilities, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenarios=None, service_areas, uncovered_demand, scenario_summary_csv, ranked_candidates_csv, callback=None))]
+    fn service_area_planning_and_coverage_optimization(
+        &self,
+        network: &Vector,
+        facilities: &Vector,
+        demand_points: Option<&Vector>,
+        ring_costs: Vec<f64>,
+        scenarios: Option<&str>,
+        service_areas: &str,
+        uncovered_demand: &str,
+        scenario_summary_csv: &str,
+        ranked_candidates_csv: &str,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, Vector, String, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        args.insert("facilities".to_string(), json!(facilities.file_path.to_string_lossy().to_string()));
+        if let Some(points) = demand_points {
+            args.insert(
+                "demand_points".to_string(),
+                json!(points.file_path.to_string_lossy().to_string()),
+            );
+        }
+        args.insert("ring_costs".to_string(), json!(ring_costs));
+        if let Some(path) = scenarios {
+            args.insert("scenarios".to_string(), json!(path));
+        }
+        args.insert(
+            "service_areas".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(service_areas)).unwrap()),
+        );
+        args.insert(
+            "uncovered_demand".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(uncovered_demand)).unwrap()),
+        );
+        args.insert(
+            "scenario_summary_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(scenario_summary_csv)).unwrap()),
+        );
+        args.insert(
+            "ranked_candidates_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(ranked_candidates_csv)).unwrap()),
+        );
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "service_area_planning_and_coverage_optimization",
+            args,
+            callback,
+        )?;
+
+        let service_areas_path = extract_output_path_by_key(
+            "service_area_planning_and_coverage_optimization",
+            &response,
+            "service_areas",
+        )?;
+        let uncovered_demand_path = extract_output_path_by_key(
+            "service_area_planning_and_coverage_optimization",
+            &response,
+            "uncovered_demand",
+        )?;
+        let scenario_summary_path = extract_output_path_by_key(
+            "service_area_planning_and_coverage_optimization",
+            &response,
+            "scenario_summary_csv",
+        )?;
+        let ranked_candidates_path = extract_output_path_by_key(
+            "service_area_planning_and_coverage_optimization",
+            &response,
+            "ranked_candidates_csv",
+        )?;
+
+        Ok((
+            Vector { file_path: service_areas_path },
+            Vector { file_path: uncovered_demand_path },
+            scenario_summary_path.to_string_lossy().to_string(),
+            ranked_candidates_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    /// [PRO] route_event_governance_for_linear_assets — validate and optionally remediate route event governance issues.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (events, route_id_field, from_measure_field, to_measure_field, gap_tolerance=0.0, overlap_tolerance=0.0, auto_fix=false, domain_rules_json=None, governed_events, issues_csv, corrected_events=None, governance_report, remediation_queue_csv=None, callback=None))]
+    fn route_event_governance_for_linear_assets(
+        &self,
+        events: &Vector,
+        route_id_field: &str,
+        from_measure_field: &str,
+        to_measure_field: &str,
+        gap_tolerance: f64,
+        overlap_tolerance: f64,
+        auto_fix: bool,
+        domain_rules_json: Option<&str>,
+        governed_events: &str,
+        issues_csv: &str,
+        corrected_events: Option<&str>,
+        governance_report: &str,
+        remediation_queue_csv: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, String, Option<Vector>, String, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("events".to_string(), json!(events.file_path.to_string_lossy().to_string()));
+        args.insert("route_id_field".to_string(), json!(route_id_field));
+        args.insert("from_measure_field".to_string(), json!(from_measure_field));
+        args.insert("to_measure_field".to_string(), json!(to_measure_field));
+        args.insert("gap_tolerance".to_string(), json!(gap_tolerance));
+        args.insert("overlap_tolerance".to_string(), json!(overlap_tolerance));
+        args.insert("auto_fix".to_string(), json!(auto_fix));
+        if let Some(path) = domain_rules_json {
+            args.insert("domain_rules_json".to_string(), json!(path));
+        }
+        args.insert(
+            "governed_events".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(governed_events)).unwrap()),
+        );
+        args.insert(
+            "issues_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(issues_csv)).unwrap()),
+        );
+        if let Some(path) = corrected_events {
+            args.insert(
+                "corrected_events".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+        args.insert(
+            "governance_report".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(governance_report)).unwrap()),
+        );
+        if let Some(path) = remediation_queue_csv {
+            args.insert(
+                "remediation_queue_csv".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "route_event_governance_for_linear_assets",
+            args,
+            callback,
+        )?;
+
+        let governed_events_path = extract_output_path_by_key(
+            "route_event_governance_for_linear_assets",
+            &response,
+            "governed_events",
+        )?;
+        let issues_csv_path = extract_output_path_by_key(
+            "route_event_governance_for_linear_assets",
+            &response,
+            "issues_csv",
+        )?;
+        let governance_report_path = extract_output_path_by_key(
+            "route_event_governance_for_linear_assets",
+            &response,
+            "governance_report",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let corrected_events_path = outputs
+            .get("corrected_events")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| Vector { file_path: PathBuf::from(p) });
+        let remediation_queue_path = outputs
+            .get("remediation_queue_csv")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            Vector { file_path: governed_events_path },
+            issues_csv_path.to_string_lossy().to_string(),
+            corrected_events_path,
+            governance_report_path.to_string_lossy().to_string(),
+            remediation_queue_path,
+        ))
+    }
+
+    /// [PRO] utility_corridor_encroachment_and_access_planning — rank corridor hotspots and field access response priorities.
+    #[pyo3(signature = (corridors, encroachments, access_points, corridor_influence_distance=30.0, high_risk_distance=10.0, hotspots, priority_csv, planning_report, response_queue_csv=None, callback=None))]
+    fn utility_corridor_encroachment_and_access_planning(
+        &self,
+        corridors: &Vector,
+        encroachments: &Vector,
+        access_points: &Vector,
+        corridor_influence_distance: f64,
+        high_risk_distance: f64,
+        hotspots: &str,
+        priority_csv: &str,
+        planning_report: &str,
+        response_queue_csv: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, String, String, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("corridors".to_string(), json!(corridors.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "encroachments".to_string(),
+            json!(encroachments.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "access_points".to_string(),
+            json!(access_points.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "corridor_influence_distance".to_string(),
+            json!(corridor_influence_distance),
+        );
+        args.insert("high_risk_distance".to_string(), json!(high_risk_distance));
+        args.insert(
+            "hotspots".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(hotspots)).unwrap()),
+        );
+        args.insert(
+            "priority_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(priority_csv)).unwrap()),
+        );
+        args.insert(
+            "planning_report".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(planning_report)).unwrap()),
+        );
+        if let Some(path) = response_queue_csv {
+            args.insert(
+                "response_queue_csv".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "utility_corridor_encroachment_and_access_planning",
+            args,
+            callback,
+        )?;
+
+        let hotspots_path = extract_output_path_by_key(
+            "utility_corridor_encroachment_and_access_planning",
+            &response,
+            "hotspots",
+        )?;
+        let priority_csv_path = extract_output_path_by_key(
+            "utility_corridor_encroachment_and_access_planning",
+            &response,
+            "priority_csv",
+        )?;
+        let planning_report_path = extract_output_path_by_key(
+            "utility_corridor_encroachment_and_access_planning",
+            &response,
+            "planning_report",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let response_queue_path = outputs
+            .get("response_queue_csv")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            Vector { file_path: hotspots_path },
+            priority_csv_path.to_string_lossy().to_string(),
+            planning_report_path.to_string_lossy().to_string(),
+            response_queue_path,
+        ))
+    }
+
+    /// [PRO] parcel_and_land_fabric_topology_compliance_workflow — parcel topology compliance audit with optional remediation outputs.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (parcels, min_sliver_area=1.0, auto_fix=false, jurisdiction_template="generic", topology_violations, issues_csv, compliance_report, corrected_parcels=None, remediation_queue_csv=None, html_report=None, callback=None))]
+    fn parcel_and_land_fabric_topology_compliance_workflow(
+        &self,
+        parcels: &Vector,
+        min_sliver_area: f64,
+        auto_fix: bool,
+        jurisdiction_template: &str,
+        topology_violations: &str,
+        issues_csv: &str,
+        compliance_report: &str,
+        corrected_parcels: Option<&str>,
+        remediation_queue_csv: Option<&str>,
+        html_report: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, String, String, Option<Vector>, Option<String>, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("parcels".to_string(), json!(parcels.file_path.to_string_lossy().to_string()));
+        args.insert("min_sliver_area".to_string(), json!(min_sliver_area));
+        args.insert("auto_fix".to_string(), json!(auto_fix));
+        args.insert("jurisdiction_template".to_string(), json!(jurisdiction_template));
+        args.insert(
+            "topology_violations".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(topology_violations)).unwrap()),
+        );
+        args.insert(
+            "issues_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(issues_csv)).unwrap()),
+        );
+        args.insert(
+            "compliance_report".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(compliance_report)).unwrap()),
+        );
+        if let Some(path) = corrected_parcels {
+            args.insert(
+                "corrected_parcels".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+        if let Some(path) = remediation_queue_csv {
+            args.insert(
+                "remediation_queue_csv".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+        if let Some(path) = html_report {
+            args.insert(
+                "html_report".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "parcel_and_land_fabric_topology_compliance_workflow",
+            args,
+            callback,
+        )?;
+
+        let topology_violations_path = extract_output_path_by_key(
+            "parcel_and_land_fabric_topology_compliance_workflow",
+            &response,
+            "topology_violations",
+        )?;
+        let issues_csv_path = extract_output_path_by_key(
+            "parcel_and_land_fabric_topology_compliance_workflow",
+            &response,
+            "issues_csv",
+        )?;
+        let compliance_report_path = extract_output_path_by_key(
+            "parcel_and_land_fabric_topology_compliance_workflow",
+            &response,
+            "compliance_report",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let corrected_parcels_path = outputs
+            .get("corrected_parcels")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| Vector { file_path: PathBuf::from(p) });
+        let remediation_queue_path = outputs
+            .get("remediation_queue_csv")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+        let html_report_path = outputs
+            .get("html_report")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            Vector {
+                file_path: topology_violations_path,
+            },
+            issues_csv_path.to_string_lossy().to_string(),
+            compliance_report_path.to_string_lossy().to_string(),
+            corrected_parcels_path,
+            remediation_queue_path,
+            html_report_path,
+        ))
+    }
+
+    /// [PRO] emergency_scenario_routing_and_accessibility_simulator — compare baseline and disrupted accessibility scenarios.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (network, critical_facilities, demand_points=None, ring_costs=vec![5.0, 10.0, 15.0], scenario_csv, scenario_template="custom", scenario_block_source_field=None, baseline_service_areas, worst_case_service_areas, scenario_summary_csv, simulation_report, callback=None))]
+    fn emergency_scenario_routing_and_accessibility_simulator(
+        &self,
+        network: &Vector,
+        critical_facilities: &Vector,
+        demand_points: Option<&Vector>,
+        ring_costs: Vec<f64>,
+        scenario_csv: &str,
+        scenario_template: &str,
+        scenario_block_source_field: Option<&str>,
+        baseline_service_areas: &str,
+        worst_case_service_areas: &str,
+        scenario_summary_csv: &str,
+        simulation_report: &str,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, Vector, String, String)> {
+        let mut args = serde_json::Map::new();
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "critical_facilities".to_string(),
+            json!(critical_facilities.file_path.to_string_lossy().to_string()),
+        );
+        if let Some(points) = demand_points {
+            args.insert(
+                "demand_points".to_string(),
+                json!(points.file_path.to_string_lossy().to_string()),
+            );
+        }
+        args.insert("ring_costs".to_string(), json!(ring_costs));
+        args.insert("scenario_csv".to_string(), json!(scenario_csv));
+        args.insert("scenario_template".to_string(), json!(scenario_template));
+        if let Some(field) = scenario_block_source_field {
+            args.insert("scenario_block_source_field".to_string(), json!(field));
+        }
+        args.insert(
+            "baseline_service_areas".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(baseline_service_areas)).unwrap()),
+        );
+        args.insert(
+            "worst_case_service_areas".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(worst_case_service_areas)).unwrap()),
+        );
+        args.insert(
+            "scenario_summary_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(scenario_summary_csv)).unwrap()),
+        );
+        args.insert(
+            "simulation_report".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(simulation_report)).unwrap()),
+        );
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "emergency_scenario_routing_and_accessibility_simulator",
+            args,
+            callback,
+        )?;
+
+        let baseline_service_areas_path = extract_output_path_by_key(
+            "emergency_scenario_routing_and_accessibility_simulator",
+            &response,
+            "baseline_service_areas",
+        )?;
+        let worst_case_service_areas_path = extract_output_path_by_key(
+            "emergency_scenario_routing_and_accessibility_simulator",
+            &response,
+            "worst_case_service_areas",
+        )?;
+        let scenario_summary_path = extract_output_path_by_key(
+            "emergency_scenario_routing_and_accessibility_simulator",
+            &response,
+            "scenario_summary_csv",
+        )?;
+        let simulation_report_path = extract_output_path_by_key(
+            "emergency_scenario_routing_and_accessibility_simulator",
+            &response,
+            "simulation_report",
+        )?;
+
+        Ok((
+            Vector {
+                file_path: baseline_service_areas_path,
+            },
+            Vector {
+                file_path: worst_case_service_areas_path,
+            },
+            scenario_summary_path.to_string_lossy().to_string(),
+            simulation_report_path.to_string_lossy().to_string(),
+        ))
+    }
+
+    /// [PRO] market_access_and_site_intelligence_workflow — candidate-site catchment and competitive overlap analysis.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (network, sites_existing, sites_candidates, demand_surface, competition_sites=None, ring_costs=vec![5.0, 10.0, 15.0], catchments_output, overlap_analysis_output, candidate_rank_csv, executive_summary_json, market_action_queue_csv=None, callback=None))]
+    fn market_access_and_site_intelligence_workflow(
+        &self,
+        network: &Vector,
+        sites_existing: &Vector,
+        sites_candidates: &Vector,
+        demand_surface: &Vector,
+        competition_sites: Option<&Vector>,
+        ring_costs: Vec<f64>,
+        catchments_output: &str,
+        overlap_analysis_output: &str,
+        candidate_rank_csv: &str,
+        executive_summary_json: &str,
+        market_action_queue_csv: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, Vector, String, String, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        args.insert(
+            "sites_existing".to_string(),
+            json!(sites_existing.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "sites_candidates".to_string(),
+            json!(sites_candidates.file_path.to_string_lossy().to_string()),
+        );
+        args.insert(
+            "demand_surface".to_string(),
+            json!(demand_surface.file_path.to_string_lossy().to_string()),
+        );
+        if let Some(sites) = competition_sites {
+            args.insert(
+                "competition_sites".to_string(),
+                json!(sites.file_path.to_string_lossy().to_string()),
+            );
+        }
+        args.insert("ring_costs".to_string(), json!(ring_costs));
+        args.insert(
+            "catchments_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(catchments_output)).unwrap()),
+        );
+        args.insert(
+            "overlap_analysis_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(overlap_analysis_output)).unwrap()),
+        );
+        args.insert(
+            "candidate_rank_csv".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(candidate_rank_csv)).unwrap()),
+        );
+        args.insert(
+            "executive_summary_json".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(executive_summary_json)).unwrap()),
+        );
+        if let Some(path) = market_action_queue_csv {
+            args.insert(
+                "market_action_queue_csv".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "market_access_and_site_intelligence_workflow",
+            args,
+            callback,
+        )?;
+
+        let catchments_output_path = extract_output_path_by_key(
+            "market_access_and_site_intelligence_workflow",
+            &response,
+            "catchments_output",
+        )?;
+        let overlap_analysis_path = extract_output_path_by_key(
+            "market_access_and_site_intelligence_workflow",
+            &response,
+            "overlap_analysis_output",
+        )?;
+        let candidate_rank_path = extract_output_path_by_key(
+            "market_access_and_site_intelligence_workflow",
+            &response,
+            "candidate_rank_csv",
+        )?;
+        let executive_summary_path = extract_output_path_by_key(
+            "market_access_and_site_intelligence_workflow",
+            &response,
+            "executive_summary_json",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let market_action_queue_path = outputs
+            .get("market_action_queue_csv")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            Vector {
+                file_path: catchments_output_path,
+            },
+            Vector {
+                file_path: overlap_analysis_path,
+            },
+            candidate_rank_path.to_string_lossy().to_string(),
+            executive_summary_path.to_string_lossy().to_string(),
+            market_action_queue_path,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (network, depots, stops, vehicles_csv, routes_output, assignment_csv_output, route_kpis_csv_output, exceptions_csv_output, objective="minimize_distance", restrictions=None, html_report=None, callback=None))]
+    fn fleet_routing_and_dispatch_optimizer(
+        &self,
+        network: &Vector,
+        depots: &Vector,
+        stops: &Vector,
+        vehicles_csv: &str,
+        routes_output: &str,
+        assignment_csv_output: &str,
+        route_kpis_csv_output: &str,
+        exceptions_csv_output: &str,
+        objective: &str,
+        restrictions: Option<&str>,
+        html_report: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Vector, String, String, String, Option<String>)> {
+        let mut args = serde_json::Map::new();
+        args.insert("network".to_string(), json!(network.file_path.to_string_lossy().to_string()));
+        args.insert("depots".to_string(), json!(depots.file_path.to_string_lossy().to_string()));
+        args.insert("stops".to_string(), json!(stops.file_path.to_string_lossy().to_string()));
+        args.insert("vehicles_csv".to_string(), json!(vehicles_csv));
+        args.insert(
+            "routes_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(routes_output)).unwrap()),
+        );
+        args.insert(
+            "assignment_csv_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(assignment_csv_output)).unwrap()),
+        );
+        args.insert(
+            "route_kpis_csv_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(route_kpis_csv_output)).unwrap()),
+        );
+        args.insert(
+            "exceptions_csv_output".to_string(),
+            json!(self.resolve_output_path_for_wd(Some(exceptions_csv_output)).unwrap()),
+        );
+        args.insert("objective".to_string(), json!(objective));
+        if let Some(path) = restrictions {
+            args.insert("restrictions".to_string(), json!(path));
+        }
+        if let Some(path) = html_report {
+            args.insert(
+                "html_report".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "fleet_routing_and_dispatch_optimizer",
+            args,
+            callback,
+        )?;
+
+        let routes_path = extract_output_path_by_key(
+            "fleet_routing_and_dispatch_optimizer",
+            &response,
+            "routes",
+        )?;
+        let assignment_csv = extract_output_string_by_key(
+            "fleet_routing_and_dispatch_optimizer",
+            &response,
+            "assignment_csv",
+        )?;
+        let route_kpis_csv = extract_output_string_by_key(
+            "fleet_routing_and_dispatch_optimizer",
+            &response,
+            "route_kpis_csv",
+        )?;
+        let exceptions_csv = extract_output_string_by_key(
+            "fleet_routing_and_dispatch_optimizer",
+            &response,
+            "exceptions_csv",
+        )?;
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let html_report_path = outputs
+            .get("html_report")
+            .and_then(|v| v.get("path").and_then(serde_json::Value::as_str).or_else(|| v.as_str()))
+            .map(|p| PathBuf::from(p).to_string_lossy().to_string());
+
+        Ok((
+            Vector { file_path: routes_path },
+            assignment_csv,
+            route_kpis_csv,
+            exceptions_csv,
+            html_report_path,
+        ))
+    }
+
     /// [PRO] yield_data_conditioning_and_qa — end-to-end yield data QA and conditioning pipeline.
     #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (
@@ -22606,6 +23333,56 @@ impl WbEnvironment {
         }
         args.insert("output".to_string(), json!(output));
         self._run_vector_tool_with_args("add_field", args, callback)
+    }
+
+    #[pyo3(signature = (input, max_edge_length, epsilon=1.0e-9, output_path=None, callback=None))]
+    fn concave_hull(
+        &self,
+        input: &Vector,
+        max_edge_length: f64,
+        epsilon: f64,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "concave_hull")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("max_edge_length".to_string(), json!(max_edge_length));
+        args.insert("epsilon".to_string(), json!(epsilon));
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("concave_hull", args, callback)
+    }
+
+    #[pyo3(signature = (input, num_points, seed=None, output_path=None, callback=None))]
+    fn random_points_in_polygon(
+        &self,
+        input: &Vector,
+        num_points: u32,
+        seed: Option<u64>,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_vector_output_path(&input.file_path, "random_points_in_polygon")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("num_points".to_string(), json!(num_points));
+        if let Some(v) = seed {
+            args.insert("seed".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("random_points_in_polygon", args, callback)
     }
 
     #[pyo3(signature = (input, spacing, output_path=None, callback=None))]

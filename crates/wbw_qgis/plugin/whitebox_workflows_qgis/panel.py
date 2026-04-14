@@ -469,7 +469,28 @@ class WhiteboxDockPanel(QDockWidget):
             self._filtered_tool_ids.append(tool_id)
             matches += 1
 
+        if matches == 0:
+            hint = self._empty_state_message(
+                query=query,
+                show_available=show_available,
+                show_locked=show_locked,
+            )
+            self._results_list.addItem(QListWidgetItem(hint))
+
         self._matches_label.setText(f"Matches: {matches}")
+
+    def _empty_state_message(
+        self,
+        *,
+        query: str,
+        show_available: bool,
+        show_locked: bool,
+    ) -> str:
+        if not show_available and not show_locked:
+            return "No matches. Enable 'Show available' and/or 'Show locked'."
+        if query:
+            return "No matches. Try a broader search or adjust filters."
+        return "No tools to display for the current filters."
 
 
 def summarize_catalog(catalog: list[dict[str, Any]]) -> tuple[int, int]:

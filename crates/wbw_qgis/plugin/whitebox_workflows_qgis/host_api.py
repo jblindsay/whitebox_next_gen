@@ -90,3 +90,49 @@ def unregister_provider(iface, provider) -> bool:
         return True
     except Exception:
         return False
+
+
+def register_plugin_action(iface, action, menu_label: str) -> bool:
+    """Register a plugin QAction in host menu/toolbar with safe fallbacks."""
+    registered = False
+
+    add_to_menu = getattr(iface, "addPluginToMenu", None)
+    if add_to_menu is not None:
+        try:
+            add_to_menu(menu_label, action)
+            registered = True
+        except Exception:
+            pass
+
+    add_toolbar_icon = getattr(iface, "addToolBarIcon", None)
+    if add_toolbar_icon is not None:
+        try:
+            add_toolbar_icon(action)
+            registered = True
+        except Exception:
+            pass
+
+    return registered
+
+
+def unregister_plugin_action(iface, action, menu_label: str) -> bool:
+    """Unregister a plugin QAction from host menu/toolbar with safe fallbacks."""
+    removed = False
+
+    remove_from_menu = getattr(iface, "removePluginMenu", None)
+    if remove_from_menu is not None:
+        try:
+            remove_from_menu(menu_label, action)
+            removed = True
+        except Exception:
+            pass
+
+    remove_toolbar_icon = getattr(iface, "removeToolBarIcon", None)
+    if remove_toolbar_icon is not None:
+        try:
+            remove_toolbar_icon(action)
+            removed = True
+        except Exception:
+            pass
+
+    return removed

@@ -9,3 +9,6 @@
 
 # Nested crate git metadata backups (local only)
 **/.git.nested_backup/
+
+# Packaged R binary artifact (keep local, do not track)
+crates/wbw_r/r-package/whiteboxworkflows/inst/libs/libwbw_r.dylib

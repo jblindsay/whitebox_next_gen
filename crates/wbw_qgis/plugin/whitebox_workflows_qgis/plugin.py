@@ -146,6 +146,7 @@ class WhiteboxWorkflowsPlugin:
             effective_tier = str(caps.get("effective_tier", "unknown"))
 
         if self._dock_panel is not None:
+            self._dock_panel.set_catalog(catalog)
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
                 requested_tier=self.provider.tier,

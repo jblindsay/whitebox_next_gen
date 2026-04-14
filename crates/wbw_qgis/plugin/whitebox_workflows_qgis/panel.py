@@ -6,6 +6,7 @@ try:
     from qgis.PyQt.QtWidgets import (
         QDockWidget,
         QLabel,
+        QLineEdit,
         QPushButton,
         QVBoxLayout,
         QWidget,
@@ -26,6 +27,16 @@ except Exception:  # pragma: no cover
     class QPushButton(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.clicked = _DummySignal()
+
+    class QLineEdit(_DummyWidget):  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            self.textChanged = _DummySignal()
+
+        def text(self):
+            return ""
+
+        def setPlaceholderText(self, *_args, **_kwargs):
+            return None
 
     class QVBoxLayout(_DummyWidget):  # type: ignore[override]
         def addWidget(self, *_args, **_kwargs):
@@ -55,6 +66,10 @@ class WhiteboxDockPanel(QDockWidget):
         self._tier_label = QLabel("Tier: unknown")
         self._catalog_label = QLabel("Catalog: unknown")
         self._version_label = QLabel("QGIS: unknown")
+        self._search_label = QLabel("Tool Search")
+        self._search_box = QLineEdit()
+        self._search_box.setPlaceholderText("Search by tool id, name, category, or summary")
+        self._matches_label = QLabel("Matches: 0")
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
@@ -63,11 +78,17 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._tier_label)
         layout.addWidget(self._catalog_label)
         layout.addWidget(self._version_label)
+        layout.addWidget(self._search_label)
+        layout.addWidget(self._search_box)
+        layout.addWidget(self._matches_label)
         layout.addWidget(self._refresh_button)
         layout.addWidget(self._diagnostics_button)
 
         container.setLayout(layout)
         self.setWidget(container)
+
+        self._catalog: list[dict[str, Any]] = []
+        self._search_box.textChanged.connect(self._on_search_text_changed)
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -93,6 +114,33 @@ class WhiteboxDockPanel(QDockWidget):
             f"Catalog: available={available_count}, locked={locked_count}"
         )
         self._version_label.setText(f"QGIS: {qgis_version or 'unknown'}")
+
+    def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
+        self._catalog = list(catalog)
+        self._update_match_count(self._search_box.text())
+
+    def _on_search_text_changed(self, text: str) -> None:
+        self._update_match_count(text)
+
+    def _update_match_count(self, text: str) -> None:
+        query = text.strip().lower()
+        if not query:
+            self._matches_label.setText(f"Matches: {len(self._catalog)}")
+            return
+
+        matches = 0
+        for item in self._catalog:
+            haystack = " ".join(
+                [
+                    str(item.get("id", "")),
+                    str(item.get("display_name", "")),
+                    str(item.get("category", "")),
+                    str(item.get("summary", "")),
+                ]
+            ).lower()
+            if query in haystack:
+                matches += 1
+        self._matches_label.setText(f"Matches: {matches}")
 
 
 def summarize_catalog(catalog: list[dict[str, Any]]) -> tuple[int, int]:

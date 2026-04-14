@@ -20,7 +20,7 @@ from .provider import WhiteboxProcessingProvider
 try:
     from qgis.PyQt.QtGui import QAction
     from qgis.PyQt.QtCore import QSettings
-    from qgis.PyQt.QtWidgets import QMessageBox
+    from qgis.PyQt.QtWidgets import QApplication, QMenu, QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -29,6 +29,28 @@ except Exception:  # pragma: no cover
     class QMessageBox:  # type: ignore[override]
         @staticmethod
         def information(*_args, **_kwargs):
+            return None
+
+    class QApplication:  # type: ignore[override]
+        @staticmethod
+        def clipboard():
+            class _Clipboard:
+                def setText(self, *_args, **_kwargs):
+                    return None
+
+            return _Clipboard()
+
+    class QMenu:  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def addAction(self, _label):
+            return object()
+
+        def exec(self, *_args, **_kwargs):
+            return None
+
+        def exec_(self, *_args, **_kwargs):
             return None
 
     class QSettings:  # type: ignore[override]
@@ -115,6 +137,7 @@ class WhiteboxWorkflowsPlugin:
         panel.on_move_favorite_down(self._move_selected_favorite_down)
         panel.on_clear_favorites(self._clear_favorites)
         panel.on_clear_recents(self._clear_recents)
+        panel.on_tool_context_menu(self._show_tool_context_menu)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
 
@@ -149,6 +172,9 @@ class WhiteboxWorkflowsPlugin:
         if self._dock_panel is None:
             return
         tool_id = self._dock_panel.selected_result_tool_id()
+        self._add_favorite_by_id(tool_id)
+
+    def _add_favorite_by_id(self, tool_id: str):
         if not tool_id:
             self._notify_warning("Select a tool in the results list to add a favorite.")
             return
@@ -164,6 +190,9 @@ class WhiteboxWorkflowsPlugin:
         if self._dock_panel is None:
             return
         tool_id = self._dock_panel.selected_favorite_tool_id()
+        self._remove_favorite_by_id(tool_id)
+
+    def _remove_favorite_by_id(self, tool_id: str):
         if not tool_id:
             self._notify_warning("Select a favorite entry to remove.")
             return
@@ -213,6 +242,39 @@ class WhiteboxWorkflowsPlugin:
         if self._dock_panel is not None:
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
         self._notify_info("Cleared recent tools.")
+
+    def _show_tool_context_menu(self, source: str, tool_id: str, global_pos):
+        menu = QMenu(self.iface.mainWindow())
+
+        open_action = menu.addAction("Open Tool")
+        if self._dock_panel is not None and self._dock_panel.is_favorite(tool_id):
+            favorite_action = menu.addAction("Remove Favorite")
+        else:
+            favorite_action = menu.addAction("Add Favorite")
+        copy_action = menu.addAction("Copy Tool ID")
+
+        selected = self._run_menu(menu, global_pos)
+        if selected is open_action:
+            self._open_tool_from_panel(tool_id)
+            return
+        if selected is favorite_action:
+            if self._dock_panel is not None and self._dock_panel.is_favorite(tool_id):
+                self._remove_favorite_by_id(tool_id)
+            else:
+                self._add_favorite_by_id(tool_id)
+            return
+        if selected is copy_action:
+            QApplication.clipboard().setText(tool_id)
+            self._notify_info(f"Copied tool id: {tool_id}")
+
+    def _run_menu(self, menu: QMenu, global_pos):
+        runner = getattr(menu, "exec", None)
+        if callable(runner):
+            return runner(global_pos)
+        runner_legacy = getattr(menu, "exec_", None)
+        if callable(runner_legacy):
+            return runner_legacy(global_pos)
+        return None
 
     def _load_recent_tools(self):
         try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 try:
+    from qgis.PyQt.QtCore import Qt
     from qgis.PyQt.QtWidgets import (
         QCheckBox,
         QDockWidget,
@@ -15,6 +16,11 @@ try:
         QWidget,
     )
 except Exception:  # pragma: no cover
+    class _QtShim:  # type: ignore[override]
+        CustomContextMenu = 0
+
+    Qt = _QtShim()  # type: ignore[assignment]
+
     class _DummySignal:  # type: ignore[override]
         def connect(self, *_args, **_kwargs):
             return None
@@ -58,6 +64,7 @@ except Exception:  # pragma: no cover
     class QListWidget(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.itemDoubleClicked = _DummySignal()
+            self.customContextMenuRequested = _DummySignal()
 
         def clear(self):
             return None
@@ -73,6 +80,12 @@ except Exception:  # pragma: no cover
 
         def setCurrentRow(self, *_args, **_kwargs):
             return None
+
+        def setContextMenuPolicy(self, *_args, **_kwargs):
+            return None
+
+        def mapToGlobal(self, pos):
+            return pos
 
     class QListWidgetItem(_DummyWidget):  # type: ignore[override]
         pass
@@ -161,6 +174,13 @@ class WhiteboxDockPanel(QDockWidget):
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
         self._show_locked_checkbox.stateChanged.connect(self._on_filter_changed)
 
+        self._results_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._results_list.customContextMenuRequested.connect(self._on_results_context_menu)
+        self._favorites_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._favorites_list.customContextMenuRequested.connect(self._on_favorites_context_menu)
+
+        self._tool_context_menu_callback = None
+
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
 
@@ -212,6 +232,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_clear_recents(self, callback):
         self._recent_clear_button.clicked.connect(callback)
 
+    def on_tool_context_menu(self, callback):
+        self._tool_context_menu_callback = callback
+
     def update_state(
         self,
         *,
@@ -259,6 +282,9 @@ class WhiteboxDockPanel(QDockWidget):
             return -1
         return row
 
+    def is_favorite(self, tool_id: str) -> bool:
+        return tool_id in self._favorite_tool_ids
+
     def select_favorite_index(self, index: int) -> None:
         if index < 0 or index >= len(self._favorite_display_ids):
             return
@@ -292,6 +318,30 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _on_filter_changed(self, _value: int) -> None:
         self._refresh_results(self._search_box.text())
+
+    def _on_results_context_menu(self, pos) -> None:
+        if self._tool_context_menu_callback is None:
+            return
+        tool_id = self.selected_result_tool_id()
+        if not tool_id:
+            return
+        self._tool_context_menu_callback(
+            "results",
+            tool_id,
+            self._results_list.mapToGlobal(pos),
+        )
+
+    def _on_favorites_context_menu(self, pos) -> None:
+        if self._tool_context_menu_callback is None:
+            return
+        tool_id = self.selected_favorite_tool_id()
+        if not tool_id:
+            return
+        self._tool_context_menu_callback(
+            "favorites",
+            tool_id,
+            self._favorites_list.mapToGlobal(pos),
+        )
 
     def _refresh_results(self, text: str) -> None:
         query = text.strip().lower()

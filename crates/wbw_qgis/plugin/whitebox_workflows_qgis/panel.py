@@ -59,6 +59,7 @@ except Exception:  # pragma: no cover
     class QLineEdit(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.textChanged = _DummySignal()
+            self.returnPressed = _DummySignal()
 
         def text(self):
             return ""
@@ -126,6 +127,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._search_label = QLabel("Tool Search")
         self._search_box = QLineEdit()
         self._search_box.setPlaceholderText("Search by tool id, name, category, or summary")
+        self._quick_open_checkbox = QCheckBox("Quick-open top match on Enter")
+        self._quick_open_checkbox.setChecked(True)
         self._show_available_checkbox = QCheckBox("Show available")
         self._show_available_checkbox.setChecked(True)
         self._show_locked_checkbox = QCheckBox("Show locked")
@@ -157,6 +160,7 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._version_label)
         layout.addWidget(self._search_label)
         layout.addWidget(self._search_box)
+        layout.addWidget(self._quick_open_checkbox)
         layout.addWidget(self._show_available_checkbox)
         layout.addWidget(self._show_locked_checkbox)
         layout.addWidget(self._matches_label)
@@ -184,6 +188,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorite_display_ids: list[str] = []
         self._recent_tool_ids: list[str] = []
         self._search_box.textChanged.connect(self._on_search_text_changed)
+        self._search_box.returnPressed.connect(self._open_quick_match)
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
         self._show_locked_checkbox.stateChanged.connect(self._on_filter_changed)
 
@@ -310,6 +315,11 @@ class WhiteboxDockPanel(QDockWidget):
             return ""
         return self._filtered_tool_ids[row]
 
+    def top_result_tool_id(self) -> str:
+        if not self._filtered_tool_ids:
+            return ""
+        return self._filtered_tool_ids[0]
+
     def selected_favorite_tool_id(self) -> str:
         row = self._favorites_list.currentRow()
         if row < 0 or row >= len(self._favorite_display_ids):
@@ -376,6 +386,16 @@ class WhiteboxDockPanel(QDockWidget):
         if self._remove_favorite_shortcut_callback is None:
             return
         self._remove_favorite_shortcut_callback()
+
+    def _open_quick_match(self) -> None:
+        if not self._quick_open_checkbox.isChecked():
+            return
+        callback = getattr(self, "_open_tool_callback", None)
+        if callback is None:
+            return
+        tool_id = self.top_result_tool_id()
+        if tool_id:
+            callback(tool_id)
 
     def _on_results_context_menu(self, pos) -> None:
         if self._tool_context_menu_callback is None:

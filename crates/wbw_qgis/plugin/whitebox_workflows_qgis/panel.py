@@ -71,6 +71,9 @@ except Exception:  # pragma: no cover
         def currentRow(self):
             return -1
 
+        def setCurrentRow(self, *_args, **_kwargs):
+            return None
+
     class QListWidgetItem(_DummyWidget):  # type: ignore[override]
         pass
 
@@ -112,6 +115,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorites_list = QListWidget()
         self._favorite_add_button = QPushButton("Add Selected to Favorites")
         self._favorite_remove_button = QPushButton("Remove Selected Favorite")
+        self._favorite_up_button = QPushButton("Move Favorite Up")
+        self._favorite_down_button = QPushButton("Move Favorite Down")
 
         self._recent_label = QLabel("Recent Tools")
         self._recent_list = QListWidget()
@@ -133,6 +138,8 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._favorites_list)
         layout.addWidget(self._favorite_add_button)
         layout.addWidget(self._favorite_remove_button)
+        layout.addWidget(self._favorite_up_button)
+        layout.addWidget(self._favorite_down_button)
         layout.addWidget(self._recent_label)
         layout.addWidget(self._recent_list)
         layout.addWidget(self._refresh_button)
@@ -189,6 +196,12 @@ class WhiteboxDockPanel(QDockWidget):
     def on_remove_favorite(self, callback):
         self._favorite_remove_button.clicked.connect(callback)
 
+    def on_move_favorite_up(self, callback):
+        self._favorite_up_button.clicked.connect(callback)
+
+    def on_move_favorite_down(self, callback):
+        self._favorite_down_button.clicked.connect(callback)
+
     def update_state(
         self,
         *,
@@ -229,6 +242,17 @@ class WhiteboxDockPanel(QDockWidget):
         if row < 0 or row >= len(self._favorite_display_ids):
             return ""
         return self._favorite_display_ids[row]
+
+    def selected_favorite_index(self) -> int:
+        row = self._favorites_list.currentRow()
+        if row < 0 or row >= len(self._favorite_display_ids):
+            return -1
+        return row
+
+    def select_favorite_index(self, index: int) -> None:
+        if index < 0 or index >= len(self._favorite_display_ids):
+            return
+        self._favorites_list.setCurrentRow(index)
 
     def set_recent_tools(self, tool_ids: list[str]) -> None:
         self._recent_tool_ids = list(tool_ids)

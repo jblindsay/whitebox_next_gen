@@ -113,6 +113,8 @@ class WhiteboxWorkflowsPlugin:
         panel.on_remove_favorite(self._remove_selected_favorite)
         panel.on_move_favorite_up(self._move_selected_favorite_up)
         panel.on_move_favorite_down(self._move_selected_favorite_down)
+        panel.on_clear_favorites(self._clear_favorites)
+        panel.on_clear_recents(self._clear_recents)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
 
@@ -197,6 +199,20 @@ class WhiteboxWorkflowsPlugin:
         self._save_favorite_tools()
         self._dock_panel.set_favorites(self._favorite_tool_ids)
         self._dock_panel.select_favorite_index(idx + 1)
+
+    def _clear_favorites(self, *_args):
+        self._favorite_tool_ids = []
+        self._save_favorite_tools()
+        if self._dock_panel is not None:
+            self._dock_panel.set_favorites(self._favorite_tool_ids)
+        self._notify_info("Cleared favorites.")
+
+    def _clear_recents(self, *_args):
+        self._recent_tool_ids = []
+        self._save_recent_tools()
+        if self._dock_panel is not None:
+            self._dock_panel.set_recent_tools(self._recent_tool_ids)
+        self._notify_info("Cleared recent tools.")
 
     def _load_recent_tools(self):
         try:

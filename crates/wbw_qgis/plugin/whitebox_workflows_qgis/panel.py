@@ -117,9 +117,11 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorite_remove_button = QPushButton("Remove Selected Favorite")
         self._favorite_up_button = QPushButton("Move Favorite Up")
         self._favorite_down_button = QPushButton("Move Favorite Down")
+        self._favorite_clear_button = QPushButton("Clear Favorites")
 
         self._recent_label = QLabel("Recent Tools")
         self._recent_list = QListWidget()
+        self._recent_clear_button = QPushButton("Clear Recents")
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
@@ -140,8 +142,10 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._favorite_remove_button)
         layout.addWidget(self._favorite_up_button)
         layout.addWidget(self._favorite_down_button)
+        layout.addWidget(self._favorite_clear_button)
         layout.addWidget(self._recent_label)
         layout.addWidget(self._recent_list)
+        layout.addWidget(self._recent_clear_button)
         layout.addWidget(self._refresh_button)
         layout.addWidget(self._diagnostics_button)
 
@@ -201,6 +205,12 @@ class WhiteboxDockPanel(QDockWidget):
 
     def on_move_favorite_down(self, callback):
         self._favorite_down_button.clicked.connect(callback)
+
+    def on_clear_favorites(self, callback):
+        self._favorite_clear_button.clicked.connect(callback)
+
+    def on_clear_recents(self, callback):
+        self._recent_clear_button.clicked.connect(callback)
 
     def update_state(
         self,

@@ -36,6 +36,7 @@ class WhiteboxWorkflowsPlugin:
         self._provider_registered = False
         self._menu_label = "&Whitebox Workflows"
         self._diagnostics_action = None
+        self._refresh_action = None
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -60,10 +61,15 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def _install_actions(self):
-        action = QAction("Runtime Diagnostics", self.iface.mainWindow())
-        action.triggered.connect(self._show_diagnostics)
-        if register_plugin_action(self.iface, action, self._menu_label):
-            self._diagnostics_action = action
+        diagnostics_action = QAction("Runtime Diagnostics", self.iface.mainWindow())
+        diagnostics_action.triggered.connect(self._show_diagnostics)
+        if register_plugin_action(self.iface, diagnostics_action, self._menu_label):
+            self._diagnostics_action = diagnostics_action
+
+        refresh_action = QAction("Refresh Catalog + Help", self.iface.mainWindow())
+        refresh_action.triggered.connect(self._refresh_catalog)
+        if register_plugin_action(self.iface, refresh_action, self._menu_label):
+            self._refresh_action = refresh_action
 
     def _show_diagnostics(self):
         payload = gather_runtime_diagnostics(
@@ -90,7 +96,52 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             pass
 
+    def _refresh_catalog(self):
+        try:
+            catalog = self.provider.refresh_catalog(regenerate_help=True)
+            refresh_algorithms = getattr(self.provider, "refreshAlgorithms", None)
+            if callable(refresh_algorithms):
+                refresh_algorithms()
+        except Exception as exc:
+            self._notify_warning(f"Catalog refresh failed: {exc}")
+            return
+
+        available = 0
+        locked = 0
+        for item in catalog:
+            if bool(item.get("locked", False)):
+                locked += 1
+            else:
+                available += 1
+
+        self._notify_info(
+            f"Catalog refreshed: {available} available, {locked} locked tools."
+        )
+
+    def _notify_info(self, message: str):
+        try:
+            bar = self.iface.messageBar()
+            push = getattr(bar, "pushInfo", None)
+            if push is not None:
+                push("Whitebox Workflows", message)
+                return
+        except Exception:
+            pass
+
+    def _notify_warning(self, message: str):
+        try:
+            bar = self.iface.messageBar()
+            push = getattr(bar, "pushWarning", None)
+            if push is not None:
+                push("Whitebox Workflows", message)
+                return
+        except Exception:
+            pass
+
     def unload(self):
+        if self._refresh_action is not None:
+            unregister_plugin_action(self.iface, self._refresh_action, self._menu_label)
+            self._refresh_action = None
         if self._diagnostics_action is not None:
             unregister_plugin_action(self.iface, self._diagnostics_action, self._menu_label)
             self._diagnostics_action = None

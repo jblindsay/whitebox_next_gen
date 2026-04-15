@@ -100,6 +100,12 @@ except Exception:  # pragma: no cover
         def setCurrentRow(self, *_args, **_kwargs):
             return None
 
+        def setFocus(self, *_args, **_kwargs):
+            return None
+
+        def count(self):
+            return 0
+
         def setContextMenuPolicy(self, *_args, **_kwargs):
             return None
 
@@ -157,7 +163,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_list = QListWidget()
         self._recent_clear_button = QPushButton("Clear Recents")
         self._shortcut_hint_label = QLabel(
-            "Shortcuts: /=focus search, Esc=clear search, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
+            "Shortcuts: /=focus search, Esc=clear search, Up/Down=jump to results, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
         )
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
@@ -215,6 +221,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_focus_search_slash = QShortcut(QKeySequence("/"), self)
         self._shortcut_focus_search_ctrlf = QShortcut(QKeySequence("Ctrl+F"), self)
         self._shortcut_focus_search_metaf = QShortcut(QKeySequence("Meta+F"), self)
+        self._shortcut_focus_results_down = QShortcut(QKeySequence("Down"), self._search_box)
+        self._shortcut_focus_results_up = QShortcut(QKeySequence("Up"), self._search_box)
         self._shortcut_clear_search_esc = QShortcut(QKeySequence("Esc"), self)
         self._shortcut_toggle_favorite_ctrl = QShortcut(QKeySequence("Ctrl+D"), self)
         self._shortcut_toggle_favorite_meta = QShortcut(QKeySequence("Meta+D"), self)
@@ -226,6 +234,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_focus_search_slash.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_ctrlf.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_metaf.activated.connect(self._focus_search_box)
+        self._shortcut_focus_results_down.activated.connect(self._focus_results_first)
+        self._shortcut_focus_results_up.activated.connect(self._focus_results_last)
         self._shortcut_clear_search_esc.activated.connect(self._clear_search_box)
         self._shortcut_toggle_favorite_ctrl.activated.connect(self._toggle_selected_favorite)
         self._shortcut_toggle_favorite_meta.activated.connect(self._toggle_selected_favorite)
@@ -419,6 +429,23 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _clear_search_box(self) -> None:
         self._search_box.clear()
+
+    def _focus_results_first(self) -> None:
+        self._focus_results_index(0)
+
+    def _focus_results_last(self) -> None:
+        self._focus_results_index(len(self._filtered_tool_ids) - 1)
+
+    def _focus_results_index(self, index: int) -> None:
+        # Use filtered tool ids count to avoid selecting empty-state hint rows.
+        if not self._filtered_tool_ids:
+            return
+        if index < 0:
+            index = 0
+        if index >= len(self._filtered_tool_ids):
+            index = len(self._filtered_tool_ids) - 1
+        self._results_list.setCurrentRow(index)
+        self._results_list.setFocus()
 
     def _open_quick_match(self) -> None:
         if not self._quick_open_checkbox.isChecked():

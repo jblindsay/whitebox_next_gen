@@ -114,6 +114,59 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_install_actions_registers_menu_actions_with_expected_handlers(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _FakeSignal:
+            def __init__(self):
+                self.callback = None
+
+            def connect(self, callback):
+                self.callback = callback
+
+        class _FakeAction:
+            def __init__(self, text, parent):
+                self.text = text
+                self.parent = parent
+                self.triggered = _FakeSignal()
+
+        registered = []
+
+        def _register_action(_iface, action, menu_label):
+            registered.append((action, menu_label))
+            return True
+
+        with patch.object(plugin, "QAction", _FakeAction), patch.object(
+            plugin, "register_plugin_action", _register_action
+        ):
+            instance._install_actions()
+
+        self.assertIsNotNone(instance._diagnostics_action)
+        self.assertIsNotNone(instance._refresh_action)
+        self.assertIsNotNone(instance._panel_action)
+
+        self.assertEqual(len(registered), 3)
+        self.assertEqual(
+            [item[0].text for item in registered],
+            [
+                "Runtime Diagnostics",
+                "Refresh Catalog + Help",
+                "Show Whitebox Panel",
+            ],
+        )
+        self.assertTrue(all(item[1] == instance._menu_label for item in registered))
+
+        diagnostics_cb = instance._diagnostics_action.triggered.callback
+        refresh_cb = instance._refresh_action.triggered.callback
+        panel_cb = instance._panel_action.triggered.callback
+        self.assertIsNotNone(diagnostics_cb)
+        self.assertIsNotNone(refresh_cb)
+        self.assertIsNotNone(panel_cb)
+        self.assertEqual(diagnostics_cb.__func__.__name__, "_show_diagnostics")
+        self.assertEqual(refresh_cb.__func__.__name__, "_refresh_catalog")
+        self.assertEqual(panel_cb.__func__.__name__, "_toggle_panel")
+
     def test_init_gui_runs_install_and_refresh_on_supported_host(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

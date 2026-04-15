@@ -114,6 +114,50 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_load_panel_ui_state_coerces_string_values(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _FakeSettings:
+            def value(self, key, default=None):
+                values = {
+                    instance._settings_key_panel_visible: "false",
+                    instance._settings_key_panel_width: "250",
+                    instance._settings_key_show_available: "0",
+                    instance._settings_key_show_locked: "yes",
+                    instance._settings_key_search_text: "flow accumulation",
+                    instance._settings_key_focus_area: "favorites",
+                }
+                return values.get(key, default)
+
+        with patch.object(plugin, "QSettings", lambda: _FakeSettings()):
+            instance._load_panel_ui_state()
+
+        self.assertFalse(instance._panel_visible)
+        self.assertEqual(instance._panel_width, 260)
+        self.assertFalse(instance._panel_show_available)
+        self.assertTrue(instance._panel_show_locked)
+        self.assertEqual(instance._panel_search_text, "flow accumulation")
+        self.assertEqual(instance._panel_focus_area, "favorites")
+
+    def test_load_panel_ui_state_uses_defaults_on_settings_error(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _BrokenSettings:
+            def value(self, *_args, **_kwargs):
+                raise RuntimeError("settings unavailable")
+
+        with patch.object(plugin, "QSettings", lambda: _BrokenSettings()):
+            instance._load_panel_ui_state()
+
+        self.assertTrue(instance._panel_visible)
+        self.assertEqual(instance._panel_width, 340)
+        self.assertTrue(instance._panel_show_available)
+        self.assertTrue(instance._panel_show_locked)
+        self.assertEqual(instance._panel_search_text, "")
+        self.assertEqual(instance._panel_focus_area, "search")
+
     def test_save_panel_ui_state_persists_panel_values_with_width_floor(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

@@ -92,12 +92,14 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_show_locked = "whitebox_workflows/show_locked"
         self._settings_key_search_text = "whitebox_workflows/search_text"
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
+        self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
         self._panel_visible = True
         self._panel_width = 340
         self._panel_show_available = True
         self._panel_show_locked = True
         self._panel_search_text = ""
         self._panel_focus_area = "search"
+        self._last_tool_id = ""
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -113,6 +115,7 @@ class WhiteboxWorkflowsPlugin:
         self._load_favorite_tools()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
+        self._load_last_tool()
 
         self._install_panel()
         self._install_actions()
@@ -184,6 +187,7 @@ class WhiteboxWorkflowsPlugin:
         provider_id = self.provider.id()
         opened = open_processing_algorithm_dialog(self.iface, provider_id, tool_id)
         if opened:
+            self._record_last_tool(tool_id)
             self._record_recent_tool(tool_id)
             self._notify_info(f"Opening tool: {tool_id}")
         else:
@@ -410,6 +414,21 @@ class WhiteboxWorkflowsPlugin:
             self._panel_search_text = ""
             self._panel_focus_area = "search"
 
+    def _load_last_tool(self):
+        try:
+            settings = QSettings()
+            self._last_tool_id = str(settings.value(self._settings_key_last_tool, ""))
+        except Exception:
+            self._last_tool_id = ""
+
+    def _record_last_tool(self, tool_id: str):
+        self._last_tool_id = str(tool_id)
+        try:
+            settings = QSettings()
+            settings.setValue(self._settings_key_last_tool, self._last_tool_id)
+        except Exception:
+            pass
+
     def _coerce_bool(self, value, default: bool) -> bool:
         if isinstance(value, bool):
             return value
@@ -526,6 +545,9 @@ class WhiteboxWorkflowsPlugin:
             self._dock_panel.set_catalog(catalog)
             self._dock_panel.set_favorites(self._favorite_tool_ids)
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
+            if self._last_tool_id:
+                self._dock_panel.select_result_by_tool_id(self._last_tool_id)
+                self._dock_panel.select_favorite_by_tool_id(self._last_tool_id)
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
                 requested_tier=self.provider.tier,

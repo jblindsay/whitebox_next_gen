@@ -375,6 +375,13 @@ class WhiteboxDockPanel(QDockWidget):
             return ""
         return self._filtered_tool_ids[row]
 
+    def select_result_by_tool_id(self, tool_id: str) -> None:
+        try:
+            idx = self._filtered_tool_ids.index(str(tool_id))
+        except ValueError:
+            return
+        self._results_list.setCurrentRow(idx)
+
     def quick_open_enabled(self) -> bool:
         return bool(self._quick_open_checkbox.isChecked())
 
@@ -445,6 +452,13 @@ class WhiteboxDockPanel(QDockWidget):
         if row < 0 or row >= len(self._favorite_display_ids):
             return ""
         return self._favorite_display_ids[row]
+
+    def select_favorite_by_tool_id(self, tool_id: str) -> None:
+        try:
+            idx = self._favorite_display_ids.index(str(tool_id))
+        except ValueError:
+            return
+        self._favorites_list.setCurrentRow(idx)
 
     def selected_favorite_index(self) -> int:
         row = self._favorites_list.currentRow()

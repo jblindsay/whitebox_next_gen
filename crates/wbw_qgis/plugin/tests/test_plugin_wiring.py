@@ -18,11 +18,12 @@ class _FakeIface:
 
 class _FakePanel:
     def __init__(self, *_args, **_kwargs):
+        self._on_refresh = None
         self._on_diagnostics = None
         self._on_session_banner_clicked = None
 
-    def on_refresh(self, _callback):
-        return None
+    def on_refresh(self, callback):
+        self._on_refresh = callback
 
     def on_diagnostics(self, callback):
         self._on_diagnostics = callback
@@ -95,6 +96,27 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_install_panel_wires_refresh_callback_to_plugin_handler(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        calls = []
+        instance._refresh_catalog = lambda *_a, **_k: calls.append("refresh")
+
+        with patch.object(plugin, "WhiteboxDockPanel", _FakePanel), patch.object(
+            plugin, "register_dock_widget", lambda _iface, _panel: True
+        ):
+            instance._install_panel()
+
+        self.assertIsNotNone(instance._dock_panel)
+
+        panel_obj = instance._dock_panel
+        self.assertIsNotNone(panel_obj._on_refresh)
+
+        panel_obj._on_refresh()
+
+        self.assertEqual(calls, ["refresh"])
+
     def test_install_panel_wires_diagnostics_callbacks_to_plugin_handler(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

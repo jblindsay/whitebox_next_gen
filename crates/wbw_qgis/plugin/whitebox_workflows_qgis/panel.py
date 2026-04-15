@@ -76,6 +76,9 @@ except Exception:  # pragma: no cover
         def clear(self, *_args, **_kwargs):
             return None
 
+        def setText(self, *_args, **_kwargs):
+            return None
+
     class QVBoxLayout(_DummyWidget):  # type: ignore[override]
         def addWidget(self, *_args, **_kwargs):
             return None
@@ -249,6 +252,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._toggle_favorite_callback = None
         self._remove_favorite_shortcut_callback = None
         self._filter_state_callback = None
+        self._search_state_callback = None
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -315,6 +319,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_filter_state_changed(self, callback):
         self._filter_state_callback = callback
 
+    def on_search_state_changed(self, callback):
+        self._search_state_callback = callback
+
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
 
@@ -371,6 +378,12 @@ class WhiteboxDockPanel(QDockWidget):
     def set_show_locked_enabled(self, enabled: bool) -> None:
         self._show_locked_checkbox.setChecked(bool(enabled))
 
+    def search_text(self) -> str:
+        return str(self._search_box.text())
+
+    def set_search_text(self, text: str) -> None:
+        self._search_box.setText(str(text))
+
     def top_result_tool_id(self) -> str:
         if not self._filtered_tool_ids:
             return ""
@@ -421,6 +434,8 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _on_search_text_changed(self, text: str) -> None:
         self._refresh_results(text)
+        if self._search_state_callback is not None:
+            self._search_state_callback()
 
     def _on_filter_changed(self, _value: int) -> None:
         self._refresh_results(self._search_box.text())

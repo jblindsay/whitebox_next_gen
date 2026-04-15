@@ -114,6 +114,39 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_init_gui_runs_install_and_refresh_on_supported_host(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        calls = []
+
+        with patch.object(plugin, "qgis_major_version", lambda: 4), patch.object(
+            plugin, "register_provider", lambda _iface, _provider: True
+        ), patch.object(
+            instance,
+            "_install_panel",
+            lambda *_a, **_k: calls.append("install_panel"),
+        ), patch.object(
+            instance,
+            "_install_actions",
+            lambda *_a, **_k: calls.append("install_actions"),
+        ), patch.object(
+            instance,
+            "_refresh_catalog",
+            lambda *_a, **kwargs: calls.append(("refresh_catalog", kwargs.get("silent"))),
+        ):
+            instance.initGui()
+
+        self.assertTrue(instance._provider_registered)
+        self.assertEqual(
+            calls,
+            [
+                "install_panel",
+                "install_actions",
+                ("refresh_catalog", True),
+            ],
+        )
+
     def test_init_gui_noops_on_unsupported_qgis_major(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

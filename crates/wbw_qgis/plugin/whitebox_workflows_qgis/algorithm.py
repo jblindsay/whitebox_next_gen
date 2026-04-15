@@ -9,6 +9,7 @@ from .help import get_help_url
 
 try:
     from qgis.core import (
+        QgsPalettedRasterRenderer,
         QgsProcessing,
         QgsProcessingAlgorithm,
         QgsProcessingException,
@@ -19,6 +20,7 @@ try:
         QgsProcessingParameterRasterLayer,
         QgsProcessingParameterString,
         QgsProcessingParameterVectorLayer,
+        QgsRasterLayer,
     )
 except ImportError:  # pragma: no cover
     class QgsProcessingAlgorithm:  # type: ignore[override]
@@ -42,6 +44,8 @@ except ImportError:  # pragma: no cover
     QgsProcessingParameterRasterLayer = _Dummy
     QgsProcessingParameterString = _Dummy
     QgsProcessingParameterVectorLayer = _Dummy
+    QgsRasterLayer = _Dummy
+    QgsPalettedRasterRenderer = _Dummy
 
 
 def _normalize_group_id(text: str) -> str:
@@ -117,6 +121,71 @@ def _render_hint_summary(hints: dict[str, str]) -> str:
         return ""
     pieces = [f"{k}={v}" for k, v in sorted(hints.items())]
     return "Render hints: " + ", ".join(pieces)
+
+
+def _resolve_render_hint_for_output(
+    hints: dict[str, str],
+    output_key: str,
+    output_value: Any,
+) -> str:
+    key = str(output_key).strip()
+    value = output_value if isinstance(output_value, str) else ""
+    hint = hints.get(key) or hints.get("raster")
+    if hint is None and _is_raster_path(value):
+        hint = hints.get("default_raster")
+    return str(hint or "").strip().lower()
+
+
+def _apply_categorical_raster_render_hint(path: str, feedback) -> None:
+    # Best effort only: QGIS APIs differ by host version and build.
+    if not path or not _is_raster_path(path):
+        return
+    try:
+        layer = QgsRasterLayer(path, "whitebox_render_hint_tmp")
+    except Exception:
+        return
+
+    is_valid = getattr(layer, "isValid", None)
+    if callable(is_valid):
+        try:
+            if not bool(is_valid()):
+                return
+        except Exception:
+            return
+
+    provider_getter = getattr(layer, "dataProvider", None)
+    provider = provider_getter() if callable(provider_getter) else None
+    if provider is None:
+        return
+
+    class_data_fn = getattr(QgsPalettedRasterRenderer, "classDataFromRaster", None)
+    if not callable(class_data_fn):
+        return
+
+    classes = None
+    for args in ((provider, 1, 256), (provider, 1), (layer, 1, 256), (layer, 1)):
+        try:
+            classes = class_data_fn(*args)
+            if classes:
+                break
+        except Exception:
+            continue
+
+    if not classes:
+        return
+
+    try:
+        renderer = QgsPalettedRasterRenderer(provider, 1, classes)
+        set_renderer = getattr(layer, "setRenderer", None)
+        if callable(set_renderer):
+            set_renderer(renderer)
+        save_named_style = getattr(layer, "saveNamedStyle", None)
+        if callable(save_named_style):
+            qml_path = f"{path}.qml"
+            save_named_style(qml_path)
+            feedback.pushInfo(f"Applied categorical render hint and wrote style: {qml_path}")
+    except Exception:
+        return
 
 
 class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
@@ -340,11 +409,11 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         for key, value in list(result.items()):
             if not isinstance(value, str) or not value:
                 continue
-            hint = self._render_hints.get(key) or self._render_hints.get("raster")
-            if hint is None and _is_raster_path(value):
-                hint = self._render_hints.get("default_raster")
+            hint = _resolve_render_hint_for_output(self._render_hints, key, value)
             if hint:
                 feedback.pushInfo(f"Render hint for {key}: {hint}")
+                if hint in ("categorical", "categorical_raster"):
+                    _apply_categorical_raster_render_hint(value, feedback)
 
         return result
 

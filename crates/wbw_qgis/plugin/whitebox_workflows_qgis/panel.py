@@ -20,12 +20,17 @@ except Exception:  # pragma: no cover
     class _QtShim:  # type: ignore[override]
         CustomContextMenu = 0
         PointingHandCursor = 0
+        StrongFocus = 0
+        Key_Return = 0
+        Key_Enter = 0
+        Key_Space = 0
 
     Qt = _QtShim()  # type: ignore[assignment]
 
     class _QEventShim:  # type: ignore[override]
         FocusIn = 8
         MouseButtonRelease = 3
+        KeyPress = 6
 
     QEvent = _QEventShim()  # type: ignore[assignment]
 
@@ -56,6 +61,9 @@ except Exception:  # pragma: no cover
             return None
 
         def setCursor(self, *_args, **_kwargs):
+            return None
+
+        def setFocusPolicy(self, *_args, **_kwargs):
             return None
 
     class QPushButton(_DummyWidget):  # type: ignore[override]
@@ -158,6 +166,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._session_banner_label = QLabel("Session: tier=unknown | visible=0 | refreshed=never")
         if hasattr(self._session_banner_label, "setCursor") and hasattr(Qt, "PointingHandCursor"):
             self._session_banner_label.setCursor(Qt.PointingHandCursor)
+        if hasattr(self._session_banner_label, "setFocusPolicy") and hasattr(Qt, "StrongFocus"):
+            self._session_banner_label.setFocusPolicy(Qt.StrongFocus)
         self._tier_label = QLabel("Tier: unknown")
         self._catalog_label = QLabel("Catalog: unknown")
         self._version_label = QLabel("QGIS: unknown")
@@ -416,9 +426,9 @@ class WhiteboxDockPanel(QDockWidget):
 
         msg = str(detail or "").strip()
         if msg:
-            self._session_banner_label.setToolTip(f"Status detail: {msg}\nClick for full diagnostics")
+            self._session_banner_label.setToolTip(f"Status detail: {msg}\nClick or press Enter/Space for full diagnostics")
         else:
-            self._session_banner_label.setToolTip("Status detail: none\nClick for full diagnostics")
+            self._session_banner_label.setToolTip("Status detail: none\nClick or press Enter/Space for full diagnostics")
 
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)
@@ -488,6 +498,13 @@ class WhiteboxDockPanel(QDockWidget):
             if obj is self._session_banner_label and self._session_banner_click_callback is not None:
                 self._session_banner_click_callback()
                 return True
+
+        if event is not None and event.type() == QEvent.KeyPress:
+            if obj is self._session_banner_label and self._session_banner_click_callback is not None:
+                key = event.key() if hasattr(event, "key") else None
+                if key in (getattr(Qt, "Key_Return", None), getattr(Qt, "Key_Enter", None), getattr(Qt, "Key_Space", None)):
+                    self._session_banner_click_callback()
+                    return True
 
         if event is not None and event.type() == QEvent.FocusIn:
             area = self._focus_area_name_for_obj(obj)

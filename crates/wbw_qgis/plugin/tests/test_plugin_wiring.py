@@ -153,6 +153,22 @@ class PluginPanelWiringTests(unittest.TestCase):
 
         self.assertEqual(save_calls, [])
 
+    def test_toggle_panel_noops_when_visibility_methods_missing(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _PanelWithoutVisibilityMethods:
+            pass
+
+        instance._dock_panel = _PanelWithoutVisibilityMethods()
+
+        save_calls = []
+        instance._save_panel_ui_state = lambda *_a, **_k: save_calls.append("saved")
+
+        instance._toggle_panel()
+
+        self.assertEqual(save_calls, [])
+
     def test_install_actions_registers_menu_actions_with_expected_handlers(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

@@ -114,6 +114,51 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_apply_catalog_display_defaults_sets_favorites_when_not_persisted(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        instance._favorite_tool_ids = []
+        instance._has_persisted_favorites = False
+        instance._favorite_defaults_applied = False
+
+        save_calls = []
+        instance._save_favorite_tools = lambda *_a, **_k: save_calls.append("saved")
+
+        catalog = [
+            {"id": "tool_a", "display_default_favorite": False},
+            {"id": "tool_b", "display_default_favorite": True},
+            {"id": "tool_c", "display_default_favorite": True},
+            {"id": "tool_b", "display_default_favorite": True},
+        ]
+
+        instance._apply_catalog_display_defaults(catalog)
+
+        self.assertEqual(instance._favorite_tool_ids, ["tool_b", "tool_c"])
+        self.assertEqual(save_calls, ["saved"])
+        self.assertTrue(instance._favorite_defaults_applied)
+
+    def test_apply_catalog_display_defaults_skips_when_favorites_persisted(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        instance._favorite_tool_ids = ["existing"]
+        instance._has_persisted_favorites = True
+        instance._favorite_defaults_applied = False
+
+        save_calls = []
+        instance._save_favorite_tools = lambda *_a, **_k: save_calls.append("saved")
+
+        catalog = [
+            {"id": "tool_b", "display_default_favorite": True},
+        ]
+
+        instance._apply_catalog_display_defaults(catalog)
+
+        self.assertEqual(instance._favorite_tool_ids, ["existing"])
+        self.assertEqual(save_calls, [])
+        self.assertTrue(instance._favorite_defaults_applied)
+
     def test_load_panel_ui_state_coerces_string_values(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

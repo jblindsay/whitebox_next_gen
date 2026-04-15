@@ -82,6 +82,34 @@ class PanelInteractionTests(unittest.TestCase):
         self.assertFalse(handled)
         self.assertEqual(calls, [])
 
+    def test_hidden_by_default_tools_are_filtered_without_query(self):
+        self.dock.set_catalog(
+            [
+                {
+                    "id": "visible_tool",
+                    "display_name": "Visible Tool",
+                    "category": "Hydrology",
+                    "summary": "Always visible",
+                    "locked": False,
+                    "display_default_visible": True,
+                },
+                {
+                    "id": "hidden_tool",
+                    "display_name": "Hidden Tool",
+                    "category": "Hydrology",
+                    "summary": "Hidden until searched",
+                    "locked": False,
+                    "display_default_visible": False,
+                },
+            ]
+        )
+
+        self.dock._refresh_results("")
+        self.assertEqual(self.dock._filtered_tool_ids, ["visible_tool"])
+
+        self.dock._refresh_results("hidden")
+        self.assertEqual(self.dock._filtered_tool_ids, ["hidden_tool"])
+
 
 if __name__ == "__main__":
     unittest.main()

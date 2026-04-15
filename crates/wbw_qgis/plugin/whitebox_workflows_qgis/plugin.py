@@ -82,6 +82,8 @@ class WhiteboxWorkflowsPlugin:
         self._dock_panel = None
         self._recent_tool_ids: list[str] = []
         self._favorite_tool_ids: list[str] = []
+        self._favorite_defaults_applied = False
+        self._has_persisted_favorites = False
         self._max_recent_tools = 8
         self._settings_key_recent = "whitebox_workflows/recent_tools"
         self._settings_key_favorites = "whitebox_workflows/favorite_tools"
@@ -366,8 +368,10 @@ class WhiteboxWorkflowsPlugin:
         try:
             settings = QSettings()
             raw = settings.value(self._settings_key_favorites, "")
-            if not raw:
+            if raw is None or str(raw).strip() == "":
+                self._has_persisted_favorites = False
                 return
+            self._has_persisted_favorites = True
             parsed = json.loads(str(raw))
             if not isinstance(parsed, list):
                 return
@@ -375,6 +379,39 @@ class WhiteboxWorkflowsPlugin:
             self._favorite_tool_ids = cleaned
         except Exception:
             self._favorite_tool_ids = []
+            self._has_persisted_favorites = False
+
+    def _apply_catalog_display_defaults(self, catalog: list[dict]) -> None:
+        if self._favorite_defaults_applied:
+            return
+        if self._has_persisted_favorites:
+            self._favorite_defaults_applied = True
+            return
+        if self._favorite_tool_ids:
+            self._favorite_defaults_applied = True
+            return
+
+        defaults: list[str] = []
+        for item in catalog:
+            if bool(item.get("display_default_favorite", False)):
+                tool_id = str(item.get("id", "")).strip()
+                if tool_id:
+                    defaults.append(tool_id)
+
+        # De-duplicate while preserving order from catalog sorting.
+        deduped: list[str] = []
+        seen = set()
+        for tool_id in defaults:
+            if tool_id in seen:
+                continue
+            seen.add(tool_id)
+            deduped.append(tool_id)
+
+        if deduped:
+            self._favorite_tool_ids = deduped
+            self._save_favorite_tools()
+
+        self._favorite_defaults_applied = True
 
     def _load_quick_open_preference(self):
         try:
@@ -451,6 +488,7 @@ class WhiteboxWorkflowsPlugin:
         try:
             settings = QSettings()
             settings.setValue(self._settings_key_favorites, json.dumps(self._favorite_tool_ids))
+            self._has_persisted_favorites = True
         except Exception:
             pass
 
@@ -533,6 +571,7 @@ class WhiteboxWorkflowsPlugin:
             return
 
         available, locked = summarize_catalog(catalog)
+        self._apply_catalog_display_defaults(catalog)
 
         payload = gather_runtime_diagnostics(
             include_pro=self.provider.include_pro,

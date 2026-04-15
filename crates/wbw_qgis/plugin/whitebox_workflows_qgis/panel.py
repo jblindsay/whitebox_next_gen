@@ -729,9 +729,14 @@ class WhiteboxDockPanel(QDockWidget):
             if (not is_locked) and not show_available:
                 continue
 
+            tool_id = str(item.get("id", ""))
+            default_visible = bool(item.get("display_default_visible", True))
+            if not default_visible and not query and tool_id not in self._favorite_tool_ids:
+                continue
+
             haystack = " ".join(
                 [
-                    str(item.get("id", "")),
+                    tool_id,
                     str(item.get("display_name", "")),
                     str(item.get("category", "")),
                     str(item.get("summary", "")),
@@ -740,7 +745,6 @@ class WhiteboxDockPanel(QDockWidget):
             if query and query not in haystack:
                 continue
 
-            tool_id = str(item.get("id", ""))
             display_name = str(item.get("display_name", tool_id))
             category = str(item.get("category", "General"))
             badge = "[LOCKED] " if is_locked else ""

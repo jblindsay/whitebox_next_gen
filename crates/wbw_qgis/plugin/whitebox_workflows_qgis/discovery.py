@@ -9,7 +9,25 @@ def discover_runtime(include_pro: bool = True, tier: str = "open") -> dict:
 
 def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[dict]:
     catalog = get_tool_catalog(include_pro=include_pro, tier=tier)
-    return sorted(catalog, key=lambda item: (item.get("category", ""), item.get("display_name", ""), item.get("id", "")))
+
+    def _rank_value(item: dict) -> int:
+        raw = item.get("display_default_rank")
+        try:
+            if raw is None:
+                return 999_999
+            return int(raw)
+        except Exception:
+            return 999_999
+
+    return sorted(
+        catalog,
+        key=lambda item: (
+            _rank_value(item),
+            item.get("category", ""),
+            item.get("display_name", ""),
+            item.get("id", ""),
+        ),
+    )
 
 
 def split_catalog_by_availability(catalog: list[dict]) -> tuple[list[dict], list[dict]]:

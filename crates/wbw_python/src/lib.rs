@@ -92,6 +92,47 @@ fn validate_include_pro(include_pro: bool) -> Result<(), ToolError> {
     Ok(())
 }
 
+fn manifest_has_tag(manifest: &ToolManifest, tags: &[&str]) -> bool {
+    manifest
+        .tags
+        .iter()
+        .any(|tag| tags.iter().any(|candidate| tag.eq_ignore_ascii_case(candidate)))
+}
+
+fn manifest_display_default_rank(manifest: &ToolManifest) -> Option<i64> {
+    for tag in &manifest.tags {
+        let trimmed = tag.trim();
+        let mut rank_text: Option<&str> = None;
+        if let Some(v) = trimmed.strip_prefix("display_rank:") {
+            rank_text = Some(v);
+        } else if let Some(v) = trimmed.strip_prefix("ui_display_rank:") {
+            rank_text = Some(v);
+        } else if let Some(v) = trimmed.strip_prefix("ui:display_rank=") {
+            rank_text = Some(v);
+        }
+
+        if let Some(text) = rank_text {
+            if let Ok(parsed) = text.trim().parse::<i64>() {
+                return Some(parsed);
+            }
+        }
+    }
+    None
+}
+
+fn manifest_display_defaults(manifest: &ToolManifest) -> (bool, bool, Option<i64>) {
+    let default_hidden = manifest_has_tag(
+        manifest,
+        &["default_hidden", "ui_default_hidden", "ui:hidden_by_default"],
+    );
+    let default_favorite = manifest_has_tag(
+        manifest,
+        &["default_favorite", "ui_default_favorite", "ui:favorite_by_default"],
+    );
+    let display_rank = manifest_display_default_rank(manifest);
+    (!default_hidden, default_favorite, display_rank)
+}
+
 
 pub struct PythonToolRuntime {
     runtime: RuntimeMode,
@@ -367,6 +408,8 @@ impl PythonToolRuntime {
     fn catalog_entry_json(&self, manifest: &ToolManifest) -> Value {
         let mut entry = json!(manifest);
         let effective = self.effective_tier();
+        let (display_default_visible, display_default_favorite, display_default_rank) =
+            manifest_display_defaults(manifest);
         let (availability_state, locked_reason, available) = if !self.include_pro
             && matches!(manifest.license_tier, LicenseTier::Pro | LicenseTier::Enterprise)
         {
@@ -386,6 +429,18 @@ impl PythonToolRuntime {
             obj.insert("available".to_string(), json!(available));
             obj.insert("locked".to_string(), json!(!available));
             obj.insert("locked_reason".to_string(), json!(locked_reason));
+            obj.insert(
+                "display_default_visible".to_string(),
+                json!(display_default_visible),
+            );
+            obj.insert(
+                "display_default_favorite".to_string(),
+                json!(display_default_favorite),
+            );
+            obj.insert(
+                "display_default_rank".to_string(),
+                json!(display_default_rank),
+            );
         }
 
         entry
@@ -1978,6 +2033,18 @@ mod tests {
         assert_eq!(manifest.get("id"), Some(&json!("abs")));
         assert_eq!(manifest.get("availability_state"), Some(&json!("available")));
         assert_eq!(manifest.get("locked"), Some(&json!(false)));
+    }
+
+    #[test]
+    fn tool_catalog_entries_include_display_default_fields() {
+        let rt = PythonToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("abs")
+            .expect("tool metadata should exist");
+
+        assert_eq!(manifest.get("display_default_visible"), Some(&json!(true)));
+        assert_eq!(manifest.get("display_default_favorite"), Some(&json!(false)));
+        assert_eq!(manifest.get("display_default_rank"), Some(&Value::Null));
     }
 
     #[test]

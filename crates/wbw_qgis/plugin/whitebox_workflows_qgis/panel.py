@@ -8,6 +8,7 @@ try:
     from qgis.PyQt.QtWidgets import (
         QCheckBox,
         QDockWidget,
+        QHBoxLayout,
         QLabel,
         QLineEdit,
         QListWidget,
@@ -70,6 +71,18 @@ except Exception:  # pragma: no cover
         def __init__(self, *_args, **_kwargs):
             self.clicked = _DummySignal()
 
+        def setFlat(self, *_args, **_kwargs):
+            return None
+
+        def setCursor(self, *_args, **_kwargs):
+            return None
+
+        def setStyleSheet(self, *_args, **_kwargs):
+            return None
+
+        def setToolTip(self, *_args, **_kwargs):
+            return None
+
     class QCheckBox(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.stateChanged = _DummySignal()
@@ -106,6 +119,12 @@ except Exception:  # pragma: no cover
     class QVBoxLayout(_DummyWidget):  # type: ignore[override]
         def addWidget(self, *_args, **_kwargs):
             return None
+
+        def setContentsMargins(self, *_args, **_kwargs):
+            return None
+
+    class QHBoxLayout(QVBoxLayout):  # type: ignore[override]
+        pass
 
     class QListWidget(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
@@ -164,6 +183,24 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._status_label = QLabel("Status: unknown")
         self._session_banner_label = QLabel("Session: tier=unknown | visible=0 | refreshed=never")
+        self._session_banner_action_button = QPushButton("Open diagnostics")
+        if hasattr(self._session_banner_action_button, "setFlat"):
+            self._session_banner_action_button.setFlat(True)
+        if hasattr(self._session_banner_action_button, "setCursor") and hasattr(Qt, "PointingHandCursor"):
+            self._session_banner_action_button.setCursor(Qt.PointingHandCursor)
+        if hasattr(self._session_banner_action_button, "setStyleSheet"):
+            self._session_banner_action_button.setStyleSheet("text-align: left; color: #0D47A1; text-decoration: underline;")
+        if hasattr(self._session_banner_action_button, "setToolTip"):
+            self._session_banner_action_button.setToolTip("Open full runtime diagnostics")
+
+        self._session_banner_row = QWidget(self)
+        self._session_banner_row_layout = QHBoxLayout(self._session_banner_row)
+        if hasattr(self._session_banner_row_layout, "setContentsMargins"):
+            self._session_banner_row_layout.setContentsMargins(0, 0, 0, 0)
+        self._session_banner_row_layout.addWidget(self._session_banner_label)
+        self._session_banner_row_layout.addWidget(self._session_banner_action_button)
+        self._session_banner_row.setLayout(self._session_banner_row_layout)
+
         if hasattr(self._session_banner_label, "setCursor") and hasattr(Qt, "PointingHandCursor"):
             self._session_banner_label.setCursor(Qt.PointingHandCursor)
         if hasattr(self._session_banner_label, "setFocusPolicy") and hasattr(Qt, "StrongFocus"):
@@ -202,7 +239,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
 
         layout.addWidget(self._status_label)
-        layout.addWidget(self._session_banner_label)
+        layout.addWidget(self._session_banner_row)
         layout.addWidget(self._tier_label)
         layout.addWidget(self._catalog_label)
         layout.addWidget(self._version_label)
@@ -304,6 +341,7 @@ class WhiteboxDockPanel(QDockWidget):
     def on_diagnostics(self, callback):
         self._diagnostics_callback = callback
         self._diagnostics_button.clicked.connect(self._trigger_diagnostics)
+        self._session_banner_action_button.clicked.connect(self._trigger_diagnostics)
 
     def on_open_tool(self, callback):
         self._open_tool_callback = callback

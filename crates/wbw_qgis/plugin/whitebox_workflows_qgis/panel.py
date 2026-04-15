@@ -47,6 +47,9 @@ except Exception:  # pragma: no cover
         def setText(self, *_args, **_kwargs):
             return None
 
+        def setToolTip(self, *_args, **_kwargs):
+            return None
+
     class QPushButton(_DummyWidget):  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.clicked = _DummySignal()
@@ -368,6 +371,7 @@ class WhiteboxDockPanel(QDockWidget):
         effective_tier: str,
         visible_count: int,
         refreshed_at: str,
+        detail: str = "",
     ) -> None:
         norm = str(status).strip().lower()
         if norm == "ok":
@@ -384,6 +388,12 @@ class WhiteboxDockPanel(QDockWidget):
             f"Session: status={status_text} | tier={effective_tier} | visible={visible_count} | refreshed={refreshed_at}"
         )
         self._session_banner_label.setStyleSheet(style)
+
+        msg = str(detail or "").strip()
+        if msg:
+            self._session_banner_label.setToolTip(f"Status detail: {msg}")
+        else:
+            self._session_banner_label.setToolTip("Status detail: none")
 
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)

@@ -114,6 +114,49 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_save_panel_ui_state_persists_panel_values_with_width_floor(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _PanelState:
+            def isVisible(self):
+                return False
+
+            def width(self):
+                return 120
+
+            def show_available_enabled(self):
+                return False
+
+            def show_locked_enabled(self):
+                return True
+
+            def search_text(self):
+                return "channel heads"
+
+            def focus_area(self):
+                return "results"
+
+        class _FakeSettings:
+            def __init__(self):
+                self.values = {}
+
+            def setValue(self, key, value):
+                self.values[key] = value
+
+        settings = _FakeSettings()
+        instance._dock_panel = _PanelState()
+
+        with patch.object(plugin, "QSettings", lambda: settings):
+            instance._save_panel_ui_state()
+
+        self.assertEqual(settings.values[instance._settings_key_panel_visible], False)
+        self.assertEqual(settings.values[instance._settings_key_panel_width], 260)
+        self.assertEqual(settings.values[instance._settings_key_show_available], False)
+        self.assertEqual(settings.values[instance._settings_key_show_locked], True)
+        self.assertEqual(settings.values[instance._settings_key_search_text], "channel heads")
+        self.assertEqual(settings.values[instance._settings_key_focus_area], "results")
+
     def test_toggle_panel_flips_visibility_and_saves_state(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

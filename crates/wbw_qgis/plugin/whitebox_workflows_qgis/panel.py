@@ -51,6 +51,12 @@ except Exception:  # pragma: no cover
         def __init__(self, *_args, **_kwargs):
             pass
 
+        def eventFilter(self, *_args, **_kwargs):
+            return False
+
+        def installEventFilter(self, *_args, **_kwargs):
+            return None
+
     class QLabel(_DummyWidget):  # type: ignore[override]
         def setText(self, *_args, **_kwargs):
             return None

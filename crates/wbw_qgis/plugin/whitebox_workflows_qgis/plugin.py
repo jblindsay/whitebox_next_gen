@@ -86,6 +86,14 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_favorites = "whitebox_workflows/favorite_tools"
         self._settings_key_quick_open = "whitebox_workflows/quick_open_top_match"
         self._quick_open_top_match = True
+        self._settings_key_panel_visible = "whitebox_workflows/panel_visible"
+        self._settings_key_panel_width = "whitebox_workflows/panel_width"
+        self._settings_key_show_available = "whitebox_workflows/show_available"
+        self._settings_key_show_locked = "whitebox_workflows/show_locked"
+        self._panel_visible = True
+        self._panel_width = 340
+        self._panel_show_available = True
+        self._panel_show_locked = True
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -100,6 +108,7 @@ class WhiteboxWorkflowsPlugin:
         self._load_recent_tools()
         self._load_favorite_tools()
         self._load_quick_open_preference()
+        self._load_panel_ui_state()
 
         self._install_panel()
         self._install_actions()
@@ -147,10 +156,21 @@ class WhiteboxWorkflowsPlugin:
         panel.on_clear_favorites(self._clear_favorites)
         panel.on_clear_recents(self._clear_recents)
         panel.on_quick_open_toggled(self._on_quick_open_toggled)
+        panel.on_filter_state_changed(self._on_filter_state_changed)
         panel.on_tool_context_menu(self._show_tool_context_menu)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
             panel.set_quick_open_enabled(self._quick_open_top_match)
+            panel.set_show_available_enabled(self._panel_show_available)
+            panel.set_show_locked_enabled(self._panel_show_locked)
+            resize = getattr(panel, "resize", None)
+            if callable(resize):
+                height = getattr(panel, "height", None)
+                h = int(height()) if callable(height) else 600
+                resize(int(self._panel_width), h)
+            set_visible = getattr(panel, "setVisible", None)
+            if callable(set_visible):
+                set_visible(bool(self._panel_visible))
 
     def _open_tool_from_panel(self, tool_id: str):
         provider_id = self.provider.id()
@@ -268,6 +288,9 @@ class WhiteboxWorkflowsPlugin:
     def _on_quick_open_toggled(self, *_args):
         self._save_quick_open_preference()
 
+    def _on_filter_state_changed(self, *_args):
+        self._save_panel_ui_state()
+
     def _show_tool_context_menu(self, source: str, tool_id: str, global_pos):
         menu = QMenu(self.iface.mainWindow())
 
@@ -346,6 +369,38 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             self._quick_open_top_match = True
 
+    def _load_panel_ui_state(self):
+        try:
+            settings = QSettings()
+            self._panel_visible = self._coerce_bool(
+                settings.value(self._settings_key_panel_visible, True),
+                True,
+            )
+            width_raw = settings.value(self._settings_key_panel_width, 340)
+            self._panel_width = max(260, int(width_raw))
+            self._panel_show_available = self._coerce_bool(
+                settings.value(self._settings_key_show_available, True),
+                True,
+            )
+            self._panel_show_locked = self._coerce_bool(
+                settings.value(self._settings_key_show_locked, True),
+                True,
+            )
+        except Exception:
+            self._panel_visible = True
+            self._panel_width = 340
+            self._panel_show_available = True
+            self._panel_show_locked = True
+
+    def _coerce_bool(self, value, default: bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        if value is None:
+            return default
+        return bool(value)
+
     def _save_recent_tools(self):
         try:
             settings = QSettings()
@@ -369,6 +424,26 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             pass
 
+    def _save_panel_ui_state(self):
+        try:
+            panel = self._dock_panel
+            if panel is not None:
+                is_visible = getattr(panel, "isVisible", None)
+                if callable(is_visible):
+                    self._panel_visible = bool(is_visible())
+                width = getattr(panel, "width", None)
+                if callable(width):
+                    self._panel_width = max(260, int(width()))
+                self._panel_show_available = panel.show_available_enabled()
+                self._panel_show_locked = panel.show_locked_enabled()
+            settings = QSettings()
+            settings.setValue(self._settings_key_panel_visible, self._panel_visible)
+            settings.setValue(self._settings_key_panel_width, self._panel_width)
+            settings.setValue(self._settings_key_show_available, self._panel_show_available)
+            settings.setValue(self._settings_key_show_locked, self._panel_show_locked)
+        except Exception:
+            pass
+
     def _toggle_panel(self, *_args):
         panel = self._dock_panel
         if panel is None:
@@ -377,6 +452,7 @@ class WhiteboxWorkflowsPlugin:
         set_visible = getattr(panel, "setVisible", None)
         if callable(is_visible) and callable(set_visible):
             set_visible(not bool(is_visible()))
+            self._save_panel_ui_state()
 
     def _show_diagnostics(self, *_args):
         payload = gather_runtime_diagnostics(
@@ -466,6 +542,7 @@ class WhiteboxWorkflowsPlugin:
         self._save_recent_tools()
         self._save_favorite_tools()
         self._save_quick_open_preference()
+        self._save_panel_ui_state()
         if self._dock_panel is not None:
             unregister_dock_widget(self.iface, self._dock_panel)
             self._dock_panel = None

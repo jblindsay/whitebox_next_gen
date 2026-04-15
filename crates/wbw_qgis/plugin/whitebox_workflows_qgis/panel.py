@@ -248,6 +248,7 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._toggle_favorite_callback = None
         self._remove_favorite_shortcut_callback = None
+        self._filter_state_callback = None
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -311,6 +312,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_quick_open_toggled(self, callback):
         self._quick_open_checkbox.stateChanged.connect(callback)
 
+    def on_filter_state_changed(self, callback):
+        self._filter_state_callback = callback
+
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
 
@@ -354,6 +358,18 @@ class WhiteboxDockPanel(QDockWidget):
 
     def set_quick_open_enabled(self, enabled: bool) -> None:
         self._quick_open_checkbox.setChecked(bool(enabled))
+
+    def show_available_enabled(self) -> bool:
+        return bool(self._show_available_checkbox.isChecked())
+
+    def set_show_available_enabled(self, enabled: bool) -> None:
+        self._show_available_checkbox.setChecked(bool(enabled))
+
+    def show_locked_enabled(self) -> bool:
+        return bool(self._show_locked_checkbox.isChecked())
+
+    def set_show_locked_enabled(self, enabled: bool) -> None:
+        self._show_locked_checkbox.setChecked(bool(enabled))
 
     def top_result_tool_id(self) -> str:
         if not self._filtered_tool_ids:
@@ -408,6 +424,8 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _on_filter_changed(self, _value: int) -> None:
         self._refresh_results(self._search_box.text())
+        if self._filter_state_callback is not None:
+            self._filter_state_callback()
 
     def _open_selected_result(self) -> None:
         callback = getattr(self, "_open_tool_callback", None)

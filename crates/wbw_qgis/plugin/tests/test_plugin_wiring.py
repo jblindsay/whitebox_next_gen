@@ -114,6 +114,45 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_toggle_panel_flips_visibility_and_saves_state(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        class _TogglePanel:
+            def __init__(self):
+                self.visible = True
+                self.calls = []
+
+            def isVisible(self):
+                return self.visible
+
+            def setVisible(self, value):
+                self.calls.append(bool(value))
+                self.visible = bool(value)
+
+        panel_obj = _TogglePanel()
+        instance._dock_panel = panel_obj
+
+        save_calls = []
+        instance._save_panel_ui_state = lambda *_a, **_k: save_calls.append("saved")
+
+        instance._toggle_panel()
+
+        self.assertEqual(panel_obj.calls, [False])
+        self.assertEqual(save_calls, ["saved"])
+
+    def test_toggle_panel_noops_when_panel_missing(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        save_calls = []
+        instance._save_panel_ui_state = lambda *_a, **_k: save_calls.append("saved")
+
+        instance._dock_panel = None
+        instance._toggle_panel()
+
+        self.assertEqual(save_calls, [])
+
     def test_install_actions_registers_menu_actions_with_expected_handlers(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

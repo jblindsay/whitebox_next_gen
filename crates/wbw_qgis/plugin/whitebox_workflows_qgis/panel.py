@@ -218,6 +218,8 @@ class WhiteboxDockPanel(QDockWidget):
         # Keyboard accelerators for high-frequency workflows.
         self._shortcut_open_result = QShortcut(QKeySequence("Return"), self)
         self._shortcut_open_result_alt = QShortcut(QKeySequence("Enter"), self)
+        self._shortcut_open_result_list = QShortcut(QKeySequence("Return"), self._results_list)
+        self._shortcut_open_result_alt_list = QShortcut(QKeySequence("Enter"), self._results_list)
         self._shortcut_focus_search_slash = QShortcut(QKeySequence("/"), self)
         self._shortcut_focus_search_ctrlf = QShortcut(QKeySequence("Ctrl+F"), self)
         self._shortcut_focus_search_metaf = QShortcut(QKeySequence("Meta+F"), self)
@@ -231,6 +233,8 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._shortcut_open_result.activated.connect(self._open_selected_result)
         self._shortcut_open_result_alt.activated.connect(self._open_selected_result)
+        self._shortcut_open_result_list.activated.connect(self._open_selected_result)
+        self._shortcut_open_result_alt_list.activated.connect(self._open_selected_result)
         self._shortcut_focus_search_slash.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_ctrlf.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_metaf.activated.connect(self._focus_search_box)

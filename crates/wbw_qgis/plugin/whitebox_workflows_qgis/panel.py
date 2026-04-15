@@ -19,6 +19,7 @@ try:
 except Exception:  # pragma: no cover
     class _QtShim:  # type: ignore[override]
         CustomContextMenu = 0
+        PointingHandCursor = 0
 
     Qt = _QtShim()  # type: ignore[assignment]
 
@@ -49,6 +50,12 @@ except Exception:  # pragma: no cover
             return None
 
         def setToolTip(self, *_args, **_kwargs):
+            return None
+
+        def setStyleSheet(self, *_args, **_kwargs):
+            return None
+
+        def setCursor(self, *_args, **_kwargs):
             return None
 
     class QPushButton(_DummyWidget):  # type: ignore[override]
@@ -149,6 +156,8 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._status_label = QLabel("Status: unknown")
         self._session_banner_label = QLabel("Session: tier=unknown | visible=0 | refreshed=never")
+        if hasattr(self._session_banner_label, "setCursor") and hasattr(Qt, "PointingHandCursor"):
+            self._session_banner_label.setCursor(Qt.PointingHandCursor)
         self._tier_label = QLabel("Tier: unknown")
         self._catalog_label = QLabel("Catalog: unknown")
         self._version_label = QLabel("QGIS: unknown")
@@ -382,13 +391,13 @@ class WhiteboxDockPanel(QDockWidget):
         norm = str(status).strip().lower()
         if norm == "ok":
             status_text = "OK"
-            style = "color: #1B5E20;"
+            style = "color: #1B5E20; text-decoration: underline;"
         elif norm == "bootstrap_error":
             status_text = "BOOTSTRAP_ERROR"
-            style = "color: #E65100;"
+            style = "color: #E65100; text-decoration: underline;"
         else:
             status_text = "ERROR"
-            style = "color: #B71C1C;"
+            style = "color: #B71C1C; text-decoration: underline;"
 
         self._session_banner_label.setText(
             f"Session: status={status_text} | tier={effective_tier} | visible={visible_count} | refreshed={refreshed_at}"

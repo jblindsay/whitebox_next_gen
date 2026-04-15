@@ -185,7 +185,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_list = QListWidget()
         self._recent_clear_button = QPushButton("Clear Recents")
         self._shortcut_hint_label = QLabel(
-            "Shortcuts: /=focus search, Esc=clear search, Up/Down=jump to results, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
+            "Shortcuts: /=focus search, Esc=clear search, Up/Down=jump to results, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite, Ctrl/Cmd+Shift+D=diagnostics"
         )
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
@@ -257,6 +257,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_clear_search_esc = QShortcut(QKeySequence("Esc"), self)
         self._shortcut_toggle_favorite_ctrl = QShortcut(QKeySequence("Ctrl+D"), self)
         self._shortcut_toggle_favorite_meta = QShortcut(QKeySequence("Meta+D"), self)
+        self._shortcut_diagnostics_ctrl_shift = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
+        self._shortcut_diagnostics_meta_shift = QShortcut(QKeySequence("Meta+Shift+D"), self)
         self._shortcut_remove_favorite_del = QShortcut(QKeySequence("Delete"), self)
         self._shortcut_remove_favorite_back = QShortcut(QKeySequence("Backspace"), self)
 
@@ -272,9 +274,12 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_clear_search_esc.activated.connect(self._clear_search_box)
         self._shortcut_toggle_favorite_ctrl.activated.connect(self._toggle_selected_favorite)
         self._shortcut_toggle_favorite_meta.activated.connect(self._toggle_selected_favorite)
+        self._shortcut_diagnostics_ctrl_shift.activated.connect(self._trigger_diagnostics)
+        self._shortcut_diagnostics_meta_shift.activated.connect(self._trigger_diagnostics)
         self._shortcut_remove_favorite_del.activated.connect(self._remove_selected_favorite_shortcut)
         self._shortcut_remove_favorite_back.activated.connect(self._remove_selected_favorite_shortcut)
 
+        self._diagnostics_callback = None
         self._toggle_favorite_callback = None
         self._remove_favorite_shortcut_callback = None
         self._filter_state_callback = None
@@ -287,7 +292,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._refresh_button.clicked.connect(callback)
 
     def on_diagnostics(self, callback):
-        self._diagnostics_button.clicked.connect(callback)
+        self._diagnostics_callback = callback
+        self._diagnostics_button.clicked.connect(self._trigger_diagnostics)
 
     def on_open_tool(self, callback):
         self._open_tool_callback = callback
@@ -359,6 +365,10 @@ class WhiteboxDockPanel(QDockWidget):
 
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
+
+    def _trigger_diagnostics(self):
+        if self._diagnostics_callback is not None:
+            self._diagnostics_callback()
 
     def update_state(
         self,

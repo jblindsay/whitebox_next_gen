@@ -440,6 +440,87 @@ class PluginPanelWiringTests(unittest.TestCase):
 
         self.assertEqual(calls, ["diagnostics", "diagnostics"])
 
+    def test_show_diagnostics_falls_back_to_message_bar_when_dialog_fails(self):
+        class _IfaceWithWarningBar(_FakeIface):
+            def __init__(self):
+                self.warning_calls = []
+
+            class _Bar:
+                def __init__(self, sink):
+                    self._sink = sink
+
+                def pushWarning(self, title, text):
+                    self._sink.append((title, text))
+
+            def messageBar(self):
+                return self._Bar(self.warning_calls)
+
+        iface = _IfaceWithWarningBar()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        with patch.object(
+            plugin,
+            "gather_runtime_diagnostics",
+            lambda **_kwargs: {"status": "error", "error": "runtime not ready"},
+        ), patch.object(
+            plugin,
+            "diagnostics_text",
+            lambda _payload: "diagnostics summary",
+        ), patch.object(
+            plugin.QMessageBox,
+            "information",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dialog unavailable")),
+        ):
+            instance._show_diagnostics()
+
+        self.assertEqual(
+            iface.warning_calls,
+            [("Whitebox Workflows", "Diagnostics unavailable as dialog; see logs.")],
+        )
+
+    def test_open_tool_from_panel_records_recent_and_notifies_on_success(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        recorded_last = []
+        recorded_recent = []
+        info_calls = []
+
+        instance._record_last_tool = lambda tool_id: recorded_last.append(tool_id)
+        instance._record_recent_tool = lambda tool_id: recorded_recent.append(tool_id)
+        instance._notify_info = lambda message: info_calls.append(message)
+
+        with patch.object(plugin, "open_processing_algorithm_dialog", lambda *_args, **_kwargs: True):
+            instance._open_tool_from_panel("d8_pointer")
+
+        self.assertEqual(recorded_last, ["d8_pointer"])
+        self.assertEqual(recorded_recent, ["d8_pointer"])
+        self.assertEqual(info_calls, ["Opening tool: d8_pointer"])
+
+    def test_open_tool_from_panel_warns_when_host_dialog_unavailable(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        recorded_last = []
+        recorded_recent = []
+        warning_calls = []
+
+        instance._record_last_tool = lambda tool_id: recorded_last.append(tool_id)
+        instance._record_recent_tool = lambda tool_id: recorded_recent.append(tool_id)
+        instance._notify_warning = lambda message: warning_calls.append(message)
+
+        with patch.object(plugin, "open_processing_algorithm_dialog", lambda *_args, **_kwargs: False):
+            instance._open_tool_from_panel("d8_pointer")
+
+        self.assertEqual(recorded_last, [])
+        self.assertEqual(recorded_recent, [])
+        self.assertEqual(
+            warning_calls,
+            [
+                "Unable to open dialog for d8_pointer; host processing API not available.",
+            ],
+        )
+
     def test_unload_is_idempotent_and_clears_registered_references(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

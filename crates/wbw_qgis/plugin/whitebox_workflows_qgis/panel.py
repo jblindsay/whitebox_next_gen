@@ -73,6 +73,9 @@ except Exception:  # pragma: no cover
         def selectAll(self, *_args, **_kwargs):
             return None
 
+        def clear(self, *_args, **_kwargs):
+            return None
+
     class QVBoxLayout(_DummyWidget):  # type: ignore[override]
         def addWidget(self, *_args, **_kwargs):
             return None
@@ -154,7 +157,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_list = QListWidget()
         self._recent_clear_button = QPushButton("Clear Recents")
         self._shortcut_hint_label = QLabel(
-            "Shortcuts: /=focus search, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
+            "Shortcuts: /=focus search, Esc=clear search, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite"
         )
 
         self._refresh_button = QPushButton("Refresh Catalog + Help")
@@ -212,6 +215,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_focus_search_slash = QShortcut(QKeySequence("/"), self)
         self._shortcut_focus_search_ctrlf = QShortcut(QKeySequence("Ctrl+F"), self)
         self._shortcut_focus_search_metaf = QShortcut(QKeySequence("Meta+F"), self)
+        self._shortcut_clear_search_esc = QShortcut(QKeySequence("Esc"), self)
         self._shortcut_toggle_favorite_ctrl = QShortcut(QKeySequence("Ctrl+D"), self)
         self._shortcut_toggle_favorite_meta = QShortcut(QKeySequence("Meta+D"), self)
         self._shortcut_remove_favorite_del = QShortcut(QKeySequence("Delete"), self)
@@ -222,6 +226,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_focus_search_slash.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_ctrlf.activated.connect(self._focus_search_box)
         self._shortcut_focus_search_metaf.activated.connect(self._focus_search_box)
+        self._shortcut_clear_search_esc.activated.connect(self._clear_search_box)
         self._shortcut_toggle_favorite_ctrl.activated.connect(self._toggle_selected_favorite)
         self._shortcut_toggle_favorite_meta.activated.connect(self._toggle_selected_favorite)
         self._shortcut_remove_favorite_del.activated.connect(self._remove_selected_favorite_shortcut)
@@ -411,6 +416,9 @@ class WhiteboxDockPanel(QDockWidget):
     def _focus_search_box(self) -> None:
         self._search_box.setFocus()
         self._search_box.selectAll()
+
+    def _clear_search_box(self) -> None:
+        self._search_box.clear()
 
     def _open_quick_match(self) -> None:
         if not self._quick_open_checkbox.isChecked():

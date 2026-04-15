@@ -551,6 +551,7 @@ class WhiteboxWorkflowsPlugin:
                 self._dock_panel.select_favorite_by_tool_id(self._last_tool_id)
             refreshed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self._dock_panel.update_session_banner(
+                status=str(payload.get("status", "unknown")),
                 effective_tier=effective_tier,
                 visible_count=available + locked,
                 refreshed_at=refreshed_at,

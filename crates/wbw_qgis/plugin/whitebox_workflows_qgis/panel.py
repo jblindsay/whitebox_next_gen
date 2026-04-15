@@ -364,13 +364,26 @@ class WhiteboxDockPanel(QDockWidget):
     def update_session_banner(
         self,
         *,
+        status: str,
         effective_tier: str,
         visible_count: int,
         refreshed_at: str,
     ) -> None:
+        norm = str(status).strip().lower()
+        if norm == "ok":
+            status_text = "OK"
+            style = "color: #1B5E20;"
+        elif norm == "bootstrap_error":
+            status_text = "BOOTSTRAP_ERROR"
+            style = "color: #E65100;"
+        else:
+            status_text = "ERROR"
+            style = "color: #B71C1C;"
+
         self._session_banner_label.setText(
-            f"Session: tier={effective_tier} | visible={visible_count} | refreshed={refreshed_at}"
+            f"Session: status={status_text} | tier={effective_tier} | visible={visible_count} | refreshed={refreshed_at}"
         )
+        self._session_banner_label.setStyleSheet(style)
 
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)

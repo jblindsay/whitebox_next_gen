@@ -95,12 +95,37 @@ def _infer_kind(name: str, description: str) -> str:
     return "string"
 
 
+def _is_raster_path(path: str) -> bool:
+    p = str(path).lower()
+    return p.endswith((".tif", ".tiff", ".img", ".bil", ".flt", ".sdat", ".rdc"))
+
+
+def _coerce_render_hints(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        key = str(k).strip()
+        value = str(v).strip()
+        if key and value:
+            out[key] = value
+    return out
+
+
+def _render_hint_summary(hints: dict[str, str]) -> str:
+    if not hints:
+        return ""
+    pieces = [f"{k}={v}" for k, v in sorted(hints.items())]
+    return "Render hints: " + ", ".join(pieces)
+
+
 class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
     def __init__(self, provider, manifest: dict[str, Any]):
         super().__init__()
         self._provider = provider
         self._manifest = manifest
         self._param_kinds: list[tuple[str, str, bool]] = []
+        self._render_hints = _coerce_render_hints(self._manifest.get("render_hints", {}))
 
     def createInstance(self):
         return WhiteboxCatalogAlgorithm(self._provider, dict(self._manifest))
@@ -122,13 +147,17 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         summary = self._manifest.get("summary", "")
+        hint_text = _render_hint_summary(self._render_hints)
         if bool(self._manifest.get("locked", False)):
             reason = self._manifest.get("locked_reason", "license_tier_insufficient")
             return (
                 f"{summary}\n\n"
                 "This tool is visible in the catalog but locked for the current runtime tier.\n"
                 f"Reason: {reason}."
+                + (f"\n\n{hint_text}" if hint_text else "")
             )
+        if hint_text:
+            return f"{summary}\n\n{hint_text}"
         return summary
 
     def helpUrl(self):
@@ -306,6 +335,16 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         for name, kind, _required in self._param_kinds:
             if kind == "file_out" and name in args:
                 result[name] = args[name]
+
+        # Emit best-effort render hint messages for downstream display handling.
+        for key, value in list(result.items()):
+            if not isinstance(value, str) or not value:
+                continue
+            hint = self._render_hints.get(key) or self._render_hints.get("raster")
+            if hint is None and _is_raster_path(value):
+                hint = self._render_hints.get("default_raster")
+            if hint:
+                feedback.pushInfo(f"Render hint for {key}: {hint}")
 
         return result
 

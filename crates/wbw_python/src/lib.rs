@@ -1,7 +1,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 #[cfg(feature = "pro")]
 use std::env;
 use std::path::PathBuf;
@@ -131,6 +131,38 @@ fn manifest_display_defaults(manifest: &ToolManifest) -> (bool, bool, Option<i64
     );
     let display_rank = manifest_display_default_rank(manifest);
     (!default_hidden, default_favorite, display_rank)
+}
+
+fn manifest_render_hints(manifest: &ToolManifest) -> Value {
+    let mut hints = Map::new();
+    for tag in &manifest.tags {
+        let trimmed = tag.trim();
+        let Some(payload) = trimmed.strip_prefix("render_hint:") else {
+            continue;
+        };
+        let payload = payload.trim();
+        if payload.is_empty() {
+            continue;
+        }
+
+        if payload.eq_ignore_ascii_case("categorical")
+            || payload.eq_ignore_ascii_case("categorical_raster")
+        {
+            hints.insert("raster".to_string(), json!("categorical"));
+            continue;
+        }
+
+        if let Some((target, hint)) = payload.split_once('=') {
+            let target = target.trim();
+            let hint = hint.trim();
+            if target.is_empty() || hint.is_empty() {
+                continue;
+            }
+            hints.insert(target.to_string(), json!(hint));
+        }
+    }
+
+    Value::Object(hints)
 }
 
 
@@ -441,6 +473,7 @@ impl PythonToolRuntime {
                 "display_default_rank".to_string(),
                 json!(display_default_rank),
             );
+            obj.insert("render_hints".to_string(), manifest_render_hints(manifest));
         }
 
         entry
@@ -2045,6 +2078,32 @@ mod tests {
         assert_eq!(manifest.get("display_default_visible"), Some(&json!(true)));
         assert_eq!(manifest.get("display_default_favorite"), Some(&json!(false)));
         assert_eq!(manifest.get("display_default_rank"), Some(&Value::Null));
+        assert_eq!(manifest.get("render_hints"), Some(&json!({})));
+    }
+
+    #[test]
+    fn manifest_render_hints_parses_tag_conventions() {
+        let manifest = ToolManifest {
+            id: "demo_hint".to_string(),
+            display_name: "Demo Hint".to_string(),
+            summary: "Hint parsing".to_string(),
+            category: wbcore::ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: Vec::new(),
+            defaults: ToolArgs::new(),
+            examples: Vec::new(),
+            tags: vec![
+                "render_hint:categorical_raster".to_string(),
+                "render_hint:output=categorical".to_string(),
+                "render_hint:probability=continuous".to_string(),
+            ],
+            stability: wbcore::ToolStability::Stable,
+        };
+
+        let hints = manifest_render_hints(&manifest);
+        assert_eq!(hints.get("raster"), Some(&json!("categorical")));
+        assert_eq!(hints.get("output"), Some(&json!("categorical")));
+        assert_eq!(hints.get("probability"), Some(&json!("continuous")));
     }
 
     #[test]

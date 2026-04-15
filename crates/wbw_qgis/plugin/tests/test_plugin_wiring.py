@@ -94,6 +94,24 @@ class _FakePanel:
     def set_focus_area(self, _area):
         return None
 
+    def isVisible(self):
+        return True
+
+    def width(self):
+        return 340
+
+    def show_available_enabled(self):
+        return True
+
+    def show_locked_enabled(self):
+        return True
+
+    def search_text(self):
+        return ""
+
+    def focus_area(self):
+        return "search"
+
 
 class PluginPanelWiringTests(unittest.TestCase):
     def test_install_panel_wires_refresh_callback_to_plugin_handler(self):
@@ -139,6 +157,70 @@ class PluginPanelWiringTests(unittest.TestCase):
         panel_obj._on_session_banner_clicked()
 
         self.assertEqual(calls, ["diagnostics", "diagnostics"])
+
+    def test_unload_is_idempotent_and_clears_registered_references(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        panel_obj = _FakePanel()
+        panel_action = object()
+        refresh_action = object()
+        diagnostics_action = object()
+
+        instance._dock_panel = panel_obj
+        instance._panel_action = panel_action
+        instance._refresh_action = refresh_action
+        instance._diagnostics_action = diagnostics_action
+        instance._provider_registered = True
+
+        dock_calls = []
+        action_calls = []
+        provider_calls = []
+
+        with patch.object(
+            plugin,
+            "unregister_dock_widget",
+            lambda _iface, panel: dock_calls.append(panel) or True,
+        ), patch.object(
+            plugin,
+            "unregister_plugin_action",
+            lambda _iface, action, menu: action_calls.append((action, menu)) or True,
+        ), patch.object(
+            plugin,
+            "unregister_provider",
+            lambda _iface, _provider: provider_calls.append("provider") or True,
+        ):
+            instance.unload()
+
+            self.assertIsNone(instance._dock_panel)
+            self.assertIsNone(instance._panel_action)
+            self.assertIsNone(instance._refresh_action)
+            self.assertIsNone(instance._diagnostics_action)
+            self.assertFalse(instance._provider_registered)
+
+            self.assertEqual(dock_calls, [panel_obj])
+            self.assertEqual(
+                action_calls,
+                [
+                    (panel_action, instance._menu_label),
+                    (refresh_action, instance._menu_label),
+                    (diagnostics_action, instance._menu_label),
+                ],
+            )
+            self.assertEqual(provider_calls, ["provider"])
+
+            instance.unload()
+
+        self.assertEqual(dock_calls, [panel_obj])
+        self.assertEqual(
+            action_calls,
+            [
+                (panel_action, instance._menu_label),
+                (refresh_action, instance._menu_label),
+                (diagnostics_action, instance._menu_label),
+            ],
+        )
+        self.assertEqual(provider_calls, ["provider"])
 
 
 if __name__ == "__main__":

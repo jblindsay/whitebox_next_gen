@@ -91,11 +91,13 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_show_available = "whitebox_workflows/show_available"
         self._settings_key_show_locked = "whitebox_workflows/show_locked"
         self._settings_key_search_text = "whitebox_workflows/search_text"
+        self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._panel_visible = True
         self._panel_width = 340
         self._panel_show_available = True
         self._panel_show_locked = True
         self._panel_search_text = ""
+        self._panel_focus_area = "search"
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -160,6 +162,7 @@ class WhiteboxWorkflowsPlugin:
         panel.on_quick_open_toggled(self._on_quick_open_toggled)
         panel.on_filter_state_changed(self._on_filter_state_changed)
         panel.on_search_state_changed(self._on_search_state_changed)
+        panel.on_focus_area_changed(self._on_focus_area_changed)
         panel.on_tool_context_menu(self._show_tool_context_menu)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel
@@ -167,6 +170,7 @@ class WhiteboxWorkflowsPlugin:
             panel.set_show_available_enabled(self._panel_show_available)
             panel.set_show_locked_enabled(self._panel_show_locked)
             panel.set_search_text(self._panel_search_text)
+            panel.set_focus_area(self._panel_focus_area)
             resize = getattr(panel, "resize", None)
             if callable(resize):
                 height = getattr(panel, "height", None)
@@ -298,6 +302,9 @@ class WhiteboxWorkflowsPlugin:
     def _on_search_state_changed(self, *_args):
         self._save_panel_ui_state()
 
+    def _on_focus_area_changed(self, *_args):
+        self._save_panel_ui_state()
+
     def _show_tool_context_menu(self, source: str, tool_id: str, global_pos):
         menu = QMenu(self.iface.mainWindow())
 
@@ -394,12 +401,14 @@ class WhiteboxWorkflowsPlugin:
                 True,
             )
             self._panel_search_text = str(settings.value(self._settings_key_search_text, ""))
+            self._panel_focus_area = str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
         except Exception:
             self._panel_visible = True
             self._panel_width = 340
             self._panel_show_available = True
             self._panel_show_locked = True
             self._panel_search_text = ""
+            self._panel_focus_area = "search"
 
     def _coerce_bool(self, value, default: bool) -> bool:
         if isinstance(value, bool):
@@ -446,12 +455,14 @@ class WhiteboxWorkflowsPlugin:
                 self._panel_show_available = panel.show_available_enabled()
                 self._panel_show_locked = panel.show_locked_enabled()
                 self._panel_search_text = panel.search_text()
+                self._panel_focus_area = panel.focus_area()
             settings = QSettings()
             settings.setValue(self._settings_key_panel_visible, self._panel_visible)
             settings.setValue(self._settings_key_panel_width, self._panel_width)
             settings.setValue(self._settings_key_show_available, self._panel_show_available)
             settings.setValue(self._settings_key_show_locked, self._panel_show_locked)
             settings.setValue(self._settings_key_search_text, self._panel_search_text)
+            settings.setValue(self._settings_key_focus_area, self._panel_focus_area)
         except Exception:
             pass
 

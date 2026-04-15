@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from qgis.PyQt.QtCore import Qt
+    from qgis.PyQt.QtCore import QEvent, Qt
     from qgis.PyQt.QtGui import QKeySequence, QShortcut
     from qgis.PyQt.QtWidgets import (
         QCheckBox,
@@ -21,6 +21,11 @@ except Exception:  # pragma: no cover
         CustomContextMenu = 0
 
     Qt = _QtShim()  # type: ignore[assignment]
+
+    class _QEventShim:  # type: ignore[override]
+        FocusIn = 8
+
+    QEvent = _QEventShim()  # type: ignore[assignment]
 
     class _DummySignal:  # type: ignore[override]
         def connect(self, *_args, **_kwargs):
@@ -210,6 +215,11 @@ class WhiteboxDockPanel(QDockWidget):
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
         self._show_locked_checkbox.stateChanged.connect(self._on_filter_changed)
 
+        self._search_box.installEventFilter(self)
+        self._results_list.installEventFilter(self)
+        self._favorites_list.installEventFilter(self)
+        self._recent_list.installEventFilter(self)
+
         self._results_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._results_list.customContextMenuRequested.connect(self._on_results_context_menu)
         self._favorites_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -253,6 +263,8 @@ class WhiteboxDockPanel(QDockWidget):
         self._remove_favorite_shortcut_callback = None
         self._filter_state_callback = None
         self._search_state_callback = None
+        self._focus_area_callback = None
+        self._focus_area = "search"
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -322,6 +334,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_search_state_changed(self, callback):
         self._search_state_callback = callback
 
+    def on_focus_area_changed(self, callback):
+        self._focus_area_callback = callback
+
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
 
@@ -383,6 +398,42 @@ class WhiteboxDockPanel(QDockWidget):
 
     def set_search_text(self, text: str) -> None:
         self._search_box.setText(str(text))
+
+    def focus_area(self) -> str:
+        return str(self._focus_area)
+
+    def set_focus_area(self, area: str) -> None:
+        target = str(area).strip().lower()
+        if target == "results":
+            self._focus_results_first()
+            return
+        if target == "favorites":
+            self._favorites_list.setFocus()
+            return
+        if target == "recents":
+            self._recent_list.setFocus()
+            return
+        self._focus_search_box()
+
+    def eventFilter(self, obj, event):  # type: ignore[override]
+        if event is not None and event.type() == QEvent.FocusIn:
+            area = self._focus_area_name_for_obj(obj)
+            if area:
+                self._focus_area = area
+                if self._focus_area_callback is not None:
+                    self._focus_area_callback()
+        return super().eventFilter(obj, event)
+
+    def _focus_area_name_for_obj(self, obj) -> str:
+        if obj is self._search_box:
+            return "search"
+        if obj is self._results_list:
+            return "results"
+        if obj is self._favorites_list:
+            return "favorites"
+        if obj is self._recent_list:
+            return "recents"
+        return ""
 
     def top_result_tool_id(self) -> str:
         if not self._filtered_tool_ids:
@@ -461,6 +512,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._remove_favorite_shortcut_callback()
 
     def _focus_search_box(self) -> None:
+        self._focus_area = "search"
         self._search_box.setFocus()
         self._search_box.selectAll()
 
@@ -481,6 +533,7 @@ class WhiteboxDockPanel(QDockWidget):
             index = 0
         if index >= len(self._filtered_tool_ids):
             index = len(self._filtered_tool_ids) - 1
+        self._focus_area = "results"
         self._results_list.setCurrentRow(index)
         self._results_list.setFocus()
 

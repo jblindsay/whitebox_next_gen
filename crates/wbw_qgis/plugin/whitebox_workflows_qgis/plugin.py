@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
 from .host_api import (
@@ -548,6 +549,12 @@ class WhiteboxWorkflowsPlugin:
             if self._last_tool_id:
                 self._dock_panel.select_result_by_tool_id(self._last_tool_id)
                 self._dock_panel.select_favorite_by_tool_id(self._last_tool_id)
+            refreshed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self._dock_panel.update_session_banner(
+                effective_tier=effective_tier,
+                visible_count=available,
+                refreshed_at=refreshed_at,
+            )
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
                 requested_tier=self.provider.tier,

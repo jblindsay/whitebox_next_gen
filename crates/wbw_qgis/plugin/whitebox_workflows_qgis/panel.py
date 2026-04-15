@@ -144,6 +144,7 @@ class WhiteboxDockPanel(QDockWidget):
         layout = QVBoxLayout(container)
 
         self._status_label = QLabel("Status: unknown")
+        self._session_banner_label = QLabel("Session: tier=unknown | visible=0 | refreshed=never")
         self._tier_label = QLabel("Tier: unknown")
         self._catalog_label = QLabel("Catalog: unknown")
         self._version_label = QLabel("QGIS: unknown")
@@ -178,6 +179,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
 
         layout.addWidget(self._status_label)
+        layout.addWidget(self._session_banner_label)
         layout.addWidget(self._tier_label)
         layout.addWidget(self._catalog_label)
         layout.addWidget(self._version_label)
@@ -358,6 +360,17 @@ class WhiteboxDockPanel(QDockWidget):
             f"Catalog: available={available_count}, locked={locked_count}"
         )
         self._version_label.setText(f"QGIS: {qgis_version or 'unknown'}")
+
+    def update_session_banner(
+        self,
+        *,
+        effective_tier: str,
+        visible_count: int,
+        refreshed_at: str,
+    ) -> None:
+        self._session_banner_label.setText(
+            f"Session: tier={effective_tier} | visible={visible_count} | refreshed={refreshed_at}"
+        )
 
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)

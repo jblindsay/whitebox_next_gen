@@ -167,6 +167,7 @@ class WhiteboxWorkflowsPlugin:
         panel.on_filter_state_changed(self._on_filter_state_changed)
         panel.on_search_state_changed(self._on_search_state_changed)
         panel.on_focus_area_changed(self._on_focus_area_changed)
+        panel.on_session_banner_clicked(self._show_diagnostics)
         panel.on_tool_context_menu(self._show_tool_context_menu)
         if register_dock_widget(self.iface, panel):
             self._dock_panel = panel

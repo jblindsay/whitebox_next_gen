@@ -24,6 +24,7 @@ except Exception:  # pragma: no cover
 
     class _QEventShim:  # type: ignore[override]
         FocusIn = 8
+        MouseButtonRelease = 3
 
     QEvent = _QEventShim()  # type: ignore[assignment]
 
@@ -224,6 +225,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._results_list.installEventFilter(self)
         self._favorites_list.installEventFilter(self)
         self._recent_list.installEventFilter(self)
+        self._session_banner_label.installEventFilter(self)
 
         self._results_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._results_list.customContextMenuRequested.connect(self._on_results_context_menu)
@@ -270,6 +272,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._search_state_callback = None
         self._focus_area_callback = None
         self._focus_area = "search"
+        self._session_banner_click_callback = None
 
     def on_refresh(self, callback):
         self._refresh_button.clicked.connect(callback)
@@ -342,6 +345,9 @@ class WhiteboxDockPanel(QDockWidget):
     def on_focus_area_changed(self, callback):
         self._focus_area_callback = callback
 
+    def on_session_banner_clicked(self, callback):
+        self._session_banner_click_callback = callback
+
     def on_tool_context_menu(self, callback):
         self._tool_context_menu_callback = callback
 
@@ -391,9 +397,9 @@ class WhiteboxDockPanel(QDockWidget):
 
         msg = str(detail or "").strip()
         if msg:
-            self._session_banner_label.setToolTip(f"Status detail: {msg}")
+            self._session_banner_label.setToolTip(f"Status detail: {msg}\nClick for full diagnostics")
         else:
-            self._session_banner_label.setToolTip("Status detail: none")
+            self._session_banner_label.setToolTip("Status detail: none\nClick for full diagnostics")
 
     def set_catalog(self, catalog: list[dict[str, Any]]) -> None:
         self._catalog = list(catalog)
@@ -459,6 +465,11 @@ class WhiteboxDockPanel(QDockWidget):
         self._focus_search_box()
 
     def eventFilter(self, obj, event):  # type: ignore[override]
+        if event is not None and event.type() == QEvent.MouseButtonRelease:
+            if obj is self._session_banner_label and self._session_banner_click_callback is not None:
+                self._session_banner_click_callback()
+                return True
+
         if event is not None and event.type() == QEvent.FocusIn:
             area = self._focus_area_name_for_obj(obj)
             if area:

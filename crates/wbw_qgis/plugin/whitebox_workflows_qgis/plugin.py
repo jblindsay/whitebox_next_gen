@@ -552,7 +552,7 @@ class WhiteboxWorkflowsPlugin:
             refreshed_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self._dock_panel.update_session_banner(
                 effective_tier=effective_tier,
-                visible_count=available,
+                visible_count=available + locked,
                 refreshed_at=refreshed_at,
             )
             self._dock_panel.update_state(

@@ -114,6 +114,60 @@ class _FakePanel:
 
 
 class PluginPanelWiringTests(unittest.TestCase):
+    def test_init_gui_noops_on_unsupported_qgis_major(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        provider_calls = []
+
+        with patch.object(plugin, "qgis_major_version", lambda: 3), patch.object(
+            plugin,
+            "register_provider",
+            lambda _iface, _provider: provider_calls.append("register") or True,
+        ), patch.object(
+            instance,
+            "_install_panel",
+            lambda *_a, **_k: provider_calls.append("install_panel"),
+        ), patch.object(
+            instance,
+            "_install_actions",
+            lambda *_a, **_k: provider_calls.append("install_actions"),
+        ), patch.object(
+            instance,
+            "_refresh_catalog",
+            lambda *_a, **_k: provider_calls.append("refresh_catalog"),
+        ):
+            instance.initGui()
+
+        self.assertFalse(instance._provider_registered)
+        self.assertEqual(provider_calls, [])
+
+    def test_init_gui_stops_when_provider_registration_fails(self):
+        iface = _FakeIface()
+        instance = plugin.WhiteboxWorkflowsPlugin(iface)
+
+        setup_calls = []
+
+        with patch.object(plugin, "qgis_major_version", lambda: 4), patch.object(
+            plugin, "register_provider", lambda _iface, _provider: False
+        ), patch.object(
+            instance,
+            "_install_panel",
+            lambda *_a, **_k: setup_calls.append("install_panel"),
+        ), patch.object(
+            instance,
+            "_install_actions",
+            lambda *_a, **_k: setup_calls.append("install_actions"),
+        ), patch.object(
+            instance,
+            "_refresh_catalog",
+            lambda *_a, **_k: setup_calls.append("refresh_catalog"),
+        ):
+            instance.initGui()
+
+        self.assertFalse(instance._provider_registered)
+        self.assertEqual(setup_calls, [])
+
     def test_install_panel_wires_refresh_callback_to_plugin_handler(self):
         iface = _FakeIface()
         instance = plugin.WhiteboxWorkflowsPlugin(iface)

@@ -29,8 +29,16 @@ class DescriptionsProvider:
             descriptions_dir.mkdir(parents=True, exist_ok=True)
             return
 
-        # Load all JSON files in descriptions directory
-        for json_file in descriptions_dir.glob("*.json"):
+        # Load JSON files in deterministic precedence order:
+        # 1) auto-generated baseline first
+        # 2) manually curated files next (override baseline where overlapping)
+        files = sorted(descriptions_dir.glob("*.json"), key=lambda p: p.name)
+        ordered_files = sorted(
+            files,
+            key=lambda p: (0 if p.name == "auto_generated_tier1.json" else 1, p.name),
+        )
+
+        for json_file in ordered_files:
             try:
                 with open(json_file, "r", encoding="utf-8") as f:
                     data = json.load(f)

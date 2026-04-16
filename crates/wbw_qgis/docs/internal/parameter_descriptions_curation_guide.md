@@ -42,6 +42,12 @@ Transform parameter labels and tooltips from terse technical names into **user-f
    - Status: In development
    - Structure: See "Description Database Schema" below
 
+3. **Auto-Generated Baseline Pack** (new)
+  - Generator: `crates/wbw_qgis/plugin/scripts/generate_basic_descriptions.py`
+  - Output: `crates/wbw_qgis/plugin/whitebox_workflows_qgis/descriptions/auto_generated_tier1.json`
+  - Scope: Tier 1 tools without legacy help and without manual curated entries
+  - Purpose: Create a strong baseline quickly; manual curation still preferred for high-impact/specialized tools
+
 ### Integration Points
 
 - **`help_provider.py`**: Extracts parameter text from legacy HTML help files
@@ -171,6 +177,26 @@ Emerging remote sensing capabilities:
 
 ## Workflow: Adding New Descriptions
 
+### Automated Baseline (recommended first)
+
+1. Run:
+
+```bash
+python crates/wbw_qgis/plugin/scripts/generate_basic_descriptions.py
+```
+
+2. This generates/refreshes:
+
+`crates/wbw_qgis/plugin/whitebox_workflows_qgis/descriptions/auto_generated_tier1.json`
+
+3. Review a sample of generated entries for readability and correctness.
+4. Promote high-impact tools from auto-generated to manually curated category files.
+5. Re-run generator after adding new tools to keep baseline current.
+
+Notes:
+- Manual curated files should take precedence over generated entries.
+- Generated descriptions are intended as a usability floor, not final wording.
+
 ### For Individual Tools
 
 1. **Understand the tool**: Read the tool's backend docstring, any existing help, and run it mentally
@@ -201,7 +227,10 @@ Emerging remote sensing capabilities:
 crates/wbw_qgis/plugin/whitebox_workflows_qgis/
 ├── help_provider.py                    # Legacy help extraction
 ├── descriptions_provider.py (new)      # Curated description lookup
+├── scripts/
+│   └── generate_basic_descriptions.py  # Auto-generate baseline descriptions
 └── descriptions/                       # Curated JSON files (new)
+  ├── auto_generated_tier1.json       # Generated baseline coverage
     ├── vector_network.json
     ├── vector_spatial.json
     ├── terrain_hydrology.json

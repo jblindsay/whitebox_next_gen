@@ -113,6 +113,26 @@ class ToolHelpProvider:
             return first_sent
         return None
 
+    def get_tool_help_excerpt(self, tool_id: str, max_chars: int = 900) -> Optional[str]:
+        """Extract a richer plain-text excerpt from the Description section.
+
+        This is used in QGIS `shortHelpString` where HTML rendering is limited.
+        """
+        sections = self._parse_help(tool_id)
+        if not sections or "Description" not in sections:
+            return None
+
+        desc = self._clean_html_to_text(sections["Description"])
+        if not desc:
+            return None
+
+        # Keep up to first 2-3 sentences for readability.
+        sentences = re.split(r"(?<=[.!?])\s+", desc)
+        excerpt = " ".join(sentences[:3]).strip()
+        if len(excerpt) > max_chars:
+            excerpt = excerpt[:max_chars].rsplit(" ", 1)[0] + "..."
+        return excerpt
+
     def get_parameter_help(
         self, tool_id: str, param_name: str
     ) -> Optional[str]:

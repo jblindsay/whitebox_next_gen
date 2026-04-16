@@ -41,6 +41,8 @@ TIER1_PATTERNS = [
     "linear-referencing",
 ]
 
+MAX_LABEL_CHARS = 110
+
 
 def _normalize_spaces(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
@@ -62,6 +64,30 @@ def _humanize_param_name(name: str) -> str:
         else:
             out.append(lw.capitalize())
     return " ".join(out)
+
+
+def _humanize_bool_label(name: str) -> str:
+    n = name.lower().strip()
+    if n.startswith("enable_"):
+        return f"Enable {_humanize_param_name(n[len('enable_'):])}"
+    if n.startswith("use_"):
+        return f"Use {_humanize_param_name(n[len('use_'):])}"
+    if n.startswith("include_"):
+        return f"Include {_humanize_param_name(n[len('include_'):])}"
+    if n.startswith("keep_"):
+        return f"Keep {_humanize_param_name(n[len('keep_'):])}"
+    if n.startswith("only_"):
+        return f"Only {_humanize_param_name(n[len('only_'):])}"
+    return _humanize_param_name(name)
+
+
+def _shorten_label(label: str, max_chars: int = MAX_LABEL_CHARS) -> str:
+    if len(label) <= max_chars:
+        return label
+    trimmed = label[:max_chars].rsplit(" ", 1)[0].rstrip(".,;: ")
+    if not trimmed:
+        return label[:max_chars].rstrip() + "..."
+    return trimmed + "..."
 
 
 def _is_bool_like(name: str, desc: str) -> bool:
@@ -110,6 +136,12 @@ def _build_label(param: dict[str, Any], defaults: dict[str, Any]) -> str:
     pretty_name = _humanize_param_name(name)
     sentence = _first_sentence(desc)
 
+    if _is_bool_like(name, desc):
+        label = _humanize_bool_label(name)
+        if not required:
+            label = f"{label} [optional]"
+        return _normalize_spaces(label)
+
     if sentence:
         label = sentence
         if label and label[0].islower():
@@ -127,7 +159,7 @@ def _build_label(param: dict[str, Any], defaults: dict[str, Any]) -> str:
     if not required:
         label = f"{label} [optional]"
 
-    return _normalize_spaces(label)
+    return _shorten_label(_normalize_spaces(label))
 
 
 def _build_tooltip(param: dict[str, Any]) -> str | None:
@@ -136,7 +168,18 @@ def _build_tooltip(param: dict[str, Any]) -> str | None:
     if not desc:
         return None
 
+    name_l = name.lower()
+    enum_like_name = any(tok in name_l for tok in ("mode", "method", "strategy", "profile", "type"))
+    enum_like_desc = (
+        "|" in desc
+        or "options" in desc.lower()
+        or (":" in desc and "," in desc)
+    )
+
     if _is_bool_like(name, desc):
+        return desc
+
+    if enum_like_name or enum_like_desc:
         return desc
 
     if len(desc) > 95:

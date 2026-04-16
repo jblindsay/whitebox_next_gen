@@ -765,19 +765,35 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         return None
 
     def shortHelpString(self):
-        summary = self._manifest.get("summary", "")
+        summary = str(self._manifest.get("summary", "") or "")
+        tool_id = self.name()
+        help_provider = get_help_provider()
+        help_excerpt = help_provider.get_tool_help_excerpt(tool_id)
+        detailed_help_url = get_help_url(tool_id)
         hint_text = _render_hint_summary(self._render_hints)
         if bool(self._manifest.get("locked", False)):
             reason = self._manifest.get("locked_reason", "license_tier_insufficient")
-            return (
-                f"{summary}\n\n"
+            parts = [summary] if summary else []
+            if help_excerpt:
+                parts.append(help_excerpt)
+            parts.append(
                 "This tool is visible in the catalog but locked for the current runtime tier.\n"
                 f"Reason: {reason}."
-                + (f"\n\n{hint_text}" if hint_text else "")
             )
+            if hint_text:
+                parts.append(hint_text)
+            if detailed_help_url:
+                parts.append(f"Detailed help: {detailed_help_url}")
+            return "\n\n".join(p for p in parts if p)
+
+        parts = [summary] if summary else []
+        if help_excerpt and help_excerpt != summary:
+            parts.append(help_excerpt)
         if hint_text:
-            return f"{summary}\n\n{hint_text}"
-        return summary
+            parts.append(hint_text)
+        if detailed_help_url:
+            parts.append(f"Detailed help: {detailed_help_url}")
+        return "\n\n".join(p for p in parts if p)
 
     def helpUrl(self):
         path = self._provider.help_path_for_tool(self.name()) if self._provider else ""

@@ -19,6 +19,7 @@ The API is in active modernization, with emphasis on:
 - [Quick smoke test](#quick-smoke-test)
 - [Recommended examples](#recommended-examples)
 - [Canonical workflows](#canonical-workflows)
+- [Network service-area workflows](#network-service-area-workflows)
 - [Recommended API pattern](#recommended-api-pattern)
 - [Quick start examples by data type](#quick-start-examples-by-data-type)
 - [Raster output controls](#raster-output-controls)
@@ -214,6 +215,64 @@ Each includes one end-to-end reference script.
 | Lidar processing | `read_lidar` -> tools via `wbe.lidar` -> `write_lidar` | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) |
 | Reprojection pipeline | `reproject_raster`/`reproject_vector`/`reproject_lidar` -> targeted write | [examples/current_api_data_handling_demo.py](examples/current_api_data_handling_demo.py) |
 | Interop-first exchange | wbw object -> ecosystem bridge -> wbw object re-ingest | [examples/interop_roundtrip_smoke_test.py](examples/interop_roundtrip_smoke_test.py) |
+
+## Network service-area workflows
+
+Service-area analysis now supports both per-origin and merged polygon coverage, plus optional mode-aware costing.
+
+Per-origin polygons (default):
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+wbe.network_service_area(
+  input="network.gpkg",
+  origins="origins.gpkg",
+  max_cost=15.0,
+  output_mode="polygons",
+  output="service_area_per_origin.gpkg",
+)
+```
+
+Merged coverage polygons by ring:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+wbe.network_service_area(
+  input="network.gpkg",
+  origins="origins.gpkg",
+  max_cost=15.0,
+  ring_costs="5,10,15",
+  output_mode="polygons",
+  polygon_merge_origins=True,
+  output="service_area_merged_by_ring.gpkg",
+)
+```
+
+Mode-aware service area using per-mode speeds:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+wbe.network_service_area(
+  input="network.gpkg",
+  origins="origins.gpkg",
+  max_cost=20.0,
+  output_mode="edges",
+  mode_field="MODE",
+  default_mode_speed=1.0,
+  mode_speed_overrides="walk:1.4,drive:12.0",
+  allowed_modes="walk,drive",
+  output="service_area_mode_aware.gpkg",
+)
+```
 
 ## Recommended API pattern
 

@@ -200,6 +200,246 @@ wbw_build_session <- function(floating_license_id = NULL,
     wbw_topology_buffer_wkt(wkt, distance)
   }
 
+  session$analyze_multimodal_od_scenarios <- function(input,
+                                                       origins,
+                                                       destinations,
+                                                       output,
+                                                       mode_field = "MODE",
+                                                       allowed_modes = NULL,
+                                                       mode_speed_overrides = NULL,
+                                                       transfer_penalty = NULL,
+                                                       edge_cost_field = NULL,
+                                                       max_snap_distance = NULL,
+                                                       scenario_bundle_csv = NULL,
+                                                       temporal_cost_profile = NULL,
+                                                       departure_time = NULL,
+                                                       temporal_mode = NULL,
+                                                       parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        mode_field = mode_field,
+        allowed_modes = allowed_modes,
+        mode_speed_overrides = mode_speed_overrides,
+        transfer_penalty = transfer_penalty,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        scenario_bundle_csv = scenario_bundle_csv,
+        temporal_cost_profile = temporal_cost_profile,
+        departure_time = departure_time,
+        temporal_mode = temporal_mode,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("multimodal_od_cost_matrix", args)
+  }
+
+  session$export_multimodal_routes_for_od_pairs <- function(input,
+                                                             origins,
+                                                             destinations,
+                                                             output,
+                                                             mode_field = "MODE",
+                                                             allowed_modes = NULL,
+                                                             mode_speed_overrides = NULL,
+                                                             transfer_penalty = NULL,
+                                                             edge_cost_field = NULL,
+                                                             max_snap_distance = NULL,
+                                                             scenario_bundle_csv = NULL,
+                                                             temporal_cost_profile = NULL,
+                                                             departure_time = NULL,
+                                                             temporal_mode = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        mode_field = mode_field,
+        allowed_modes = allowed_modes,
+        mode_speed_overrides = mode_speed_overrides,
+        transfer_penalty = transfer_penalty,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        scenario_bundle_csv = scenario_bundle_csv,
+        temporal_cost_profile = temporal_cost_profile,
+        departure_time = departure_time,
+        temporal_mode = temporal_mode
+      )
+    )
+    session$run_tool("multimodal_routes_from_od", args)
+  }
+
+  session$compute_network_accessibility <- function(input,
+                                                    origins,
+                                                    destinations,
+                                                    output,
+                                                    edge_cost_field = NULL,
+                                                    max_snap_distance = NULL,
+                                                    impedance_cutoff = NULL,
+                                                    decay_function = NULL,
+                                                    decay_parameter = NULL,
+                                                    parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        impedance_cutoff = impedance_cutoff,
+        decay_function = decay_function,
+        decay_parameter = decay_parameter,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("network_accessibility_metrics", args)
+  }
+
+  session$analyze_od_cost_sensitivity <- function(input,
+                                                  origins,
+                                                  destinations,
+                                                  output,
+                                                  edge_cost_field = NULL,
+                                                  max_snap_distance = NULL,
+                                                  impedance_disturbance_range = NULL,
+                                                  monte_carlo_samples = NULL,
+                                                  parallel_execution = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        input = input,
+        origins = origins,
+        destinations = destinations,
+        output = output,
+        edge_cost_field = edge_cost_field,
+        max_snap_distance = max_snap_distance,
+        impedance_disturbance_range = impedance_disturbance_range,
+        monte_carlo_samples = monte_carlo_samples,
+        parallel_execution = parallel_execution
+      )
+    )
+    session$run_tool("od_sensitivity_analysis", args)
+  }
+
+  session$lidar_change_and_disturbance_analysis <- function(baseline_tiles,
+                                                            monitor_tiles,
+                                                            resolution = NULL,
+                                                            min_change_m = NULL,
+                                                            output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        baseline_tiles = baseline_tiles,
+        monitor_tiles = monitor_tiles,
+        resolution = resolution,
+        min_change_m = min_change_m,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("lidar_change_and_disturbance_analysis", args)
+  }
+
+  session$sidewalk_vegetation_accessibility_monitoring <- function(lidar_tiles,
+                                                                    sidewalks,
+                                                                    sidewalks_epsg = NULL,
+                                                                    resolution = NULL,
+                                                                    segment_length_m = NULL,
+                                                                    clearance_height_m = NULL,
+                                                                    buffer_distance_m = NULL,
+                                                                    output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        lidar_tiles = lidar_tiles,
+        sidewalks = sidewalks,
+        sidewalks_epsg = sidewalks_epsg,
+        resolution = resolution,
+        segment_length_m = segment_length_m,
+        clearance_height_m = clearance_height_m,
+        buffer_distance_m = buffer_distance_m,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("sidewalk_vegetation_accessibility_monitoring", args)
+  }
+
+  session$terrain_constraint_and_conflict_analysis <- function(dem,
+                                                                wetness = NULL,
+                                                                flood_risk = NULL,
+                                                                landcover_penalty = NULL,
+                                                                slope_limit_deg = NULL,
+                                                                output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        dem = dem,
+        wetness = wetness,
+        flood_risk = flood_risk,
+        landcover_penalty = landcover_penalty,
+        slope_limit_deg = slope_limit_deg,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("terrain_constraint_and_conflict_analysis", args)
+  }
+
+  session$terrain_constructability_and_cost_analysis <- function(dem,
+                                                                 existing_conflict = NULL,
+                                                                 wetness = NULL,
+                                                                 access_cost = NULL,
+                                                                 output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        dem = dem,
+        existing_conflict = existing_conflict,
+        wetness = wetness,
+        access_cost = access_cost,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("terrain_constructability_and_cost_analysis", args)
+  }
+
+  session$in_season_crop_stress_intervention_planning <- function(ndvi,
+                                                                   canopy_temperature = NULL,
+                                                                   soil_moisture = NULL,
+                                                                   output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        ndvi = ndvi,
+        canopy_temperature = canopy_temperature,
+        soil_moisture = soil_moisture,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("in_season_crop_stress_intervention_planning", args)
+  }
+
+  session$field_trafficability_and_operation_planning <- function(dem,
+                                                                   soil_moisture,
+                                                                   rainfall_forecast = NULL,
+                                                                   output_prefix = NULL) {
+    args <- Filter(
+      Negate(is.null),
+      list(
+        dem = dem,
+        soil_moisture = soil_moisture,
+        rainfall_forecast = rainfall_forecast,
+        output_prefix = output_prefix
+      )
+    )
+    session$run_tool("field_trafficability_and_operation_planning", args)
+  }
+
   class(session) <- unique(c("wbw_session", class(session)))
   session
 }

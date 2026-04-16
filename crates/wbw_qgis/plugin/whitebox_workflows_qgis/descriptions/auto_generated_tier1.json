@@ -1,0 +1,3181 @@
+{
+  "add_field": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "field": {
+        "label": "New field name. (default NEW_FIELD)."
+      },
+      "field_type": {
+        "label": "Field Type",
+        "tooltip": "Field type: integer, float, text, boolean."
+      },
+      "default": {
+        "label": "Optional default value. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "add_geometry_attributes": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "area": {
+        "label": "Include AREA field (default true). [optional]"
+      },
+      "length": {
+        "label": "Include LENGTH field (default true). [optional]"
+      },
+      "perimeter": {
+        "label": "Include PERIMETER field (default true). [optional]"
+      },
+      "centroid": {
+        "label": "Include centroid X/Y fields (default true). [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "anisotropic_diffusion_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "iterations": {
+        "label": "Number of diffusion iterations (default 10). [optional]"
+      },
+      "kappa": {
+        "label": "Edge sensitivity parameter (default 20.0). [optional]"
+      },
+      "lambda": {
+        "label": "Time-step in (0, 0.25], default 0.2. [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "assign_projection_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer."
+      },
+      "epsg": {
+        "label": "EPSG code to assign."
+      }
+    }
+  },
+  "buffer_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default features.shp)."
+      },
+      "distance": {
+        "label": "Buffer distance in map units. (default 10.0)."
+      },
+      "quadrant_segments": {
+        "label": "Arc resolution in segments per quadrant; defaults to 8. [optional]"
+      },
+      "cap_style": {
+        "label": "Line end-cap style: round, flat, or square. (default round). [optional]",
+        "tooltip": "Line end-cap style: round, flat, or square."
+      },
+      "join_style": {
+        "label": "Corner join style: round, bevel, or mitre. (default round). [optional]",
+        "tooltip": "Corner join style: round, bevel, or mitre."
+      },
+      "mitre_limit": {
+        "label": "Mitre join limit used when join_style=mitre; defaults to 5.0. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "burn_streams": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input raster layer."
+      },
+      "streams": {
+        "label": "Input vector layer."
+      },
+      "decrement_value": {
+        "label": "Decrement value. (default 5.0). [optional]"
+      },
+      "gradient_distance": {
+        "label": "Gradient distance. (default 5). [optional]"
+      },
+      "output": {
+        "label": "Output destination path."
+      }
+    }
+  },
+  "carbon_sequestration_verification_audit": {
+    "description": "",
+    "parameters": {
+      "baseline_bundle": {
+        "label": "Baseline date multiband raster. (default baseline_scene.tif)."
+      },
+      "baseline_red_band_index": {
+        "label": "Band index (0-based) for red band in baseline_bundle. (default 0). [optional]"
+      },
+      "baseline_nir_band_index": {
+        "label": "Band index (0-based) for NIR band in baseline_bundle. (default 1). [optional]"
+      },
+      "current_bundle": {
+        "label": "Current date multiband raster. (default current_scene.tif)."
+      },
+      "current_red_band_index": {
+        "label": "Band index (0-based) for red band in current_bundle. (default 0). [optional]"
+      },
+      "current_nir_band_index": {
+        "label": "Band index (0-based) for NIR band in current_bundle. (default 1). [optional]"
+      },
+      "biomass_proxy": {
+        "label": "Optional LiDAR-derived biomass proxy raster. [optional]"
+      },
+      "biome_class": {
+        "label": "Biome for carbon coefficient tuning: tropical_forest, boreal_forest, grassland_shrub, agricultural_cropland...",
+        "tooltip": "Biome for carbon coefficient tuning: tropical_forest, boreal_forest, grassland_shrub, agricultural_cropland, wetland_aquatic, none."
+      },
+      "profile": {
+        "label": "Detection sensitivity profile: conservative, balanced, aggressive. (default balanced). [optional]",
+        "tooltip": "Detection sensitivity profile: conservative, balanced, aggressive."
+      },
+      "zone_block_cells": {
+        "label": "Block aggregation size for verification zone polygons. (default 16). [optional]"
+      },
+      "baseline_date": {
+        "label": "Optional baseline capture date (YYYY-MM-DD) for temporal uncertainty estimation. [optional]"
+      },
+      "current_date": {
+        "label": "Optional current capture date (YYYY-MM-DD) for temporal uncertainty estimation. [optional]"
+      },
+      "mrv_template": {
+        "label": "MRV compliance framework: verra_vcs_vm0010, american_carbon_registry, gold_standard, none. (default none)...",
+        "tooltip": "MRV compliance framework: verra_vcs_vm0010, american_carbon_registry, gold_standard, none."
+      },
+      "methodology_reference": {
+        "label": "Optional methodology reference string for the audit contract. [optional]",
+        "tooltip": "Optional methodology reference string for the audit contract."
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default carbon_audit). [optional]"
+      }
+    }
+  },
+  "casorati_curvature": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster path or typed raster object. (default dem.tif)."
+      },
+      "z_factor": {
+        "label": "Optional z conversion factor (default 1.0). [optional]"
+      },
+      "log_transform": {
+        "label": "Optional log-transform of output values (default false). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "closest_facility_network": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "incidents": {
+        "label": "Incident/demand point layer. (default incidents.shp)."
+      },
+      "facilities": {
+        "label": "Facility/supply point layer. (default facilities.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from incident/facility points to nearest network node. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output closest-facility route line vector path."
+      }
+    }
+  },
+  "concave_hull": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "max_edge_length": {
+        "label": "Maximum edge length controlling hull detail. (default 50.0)."
+      },
+      "epsilon": {
+        "label": "Robustness epsilon (default 1e-9). [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "corridor_mapping_intelligence": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "start_features": {
+        "label": "Start feature vector path (point or polygon). (default start_features.gpkg)."
+      },
+      "end_features": {
+        "label": "End feature vector path (point or polygon). (default end_features.gpkg)."
+      },
+      "constraints": {
+        "label": "Optional exclusion zone vector path (polygons to avoid). [optional]"
+      },
+      "cost_profile": {
+        "label": "Cost weighting: slope_only | slope_roughness | conservative. (default slope_roughness). [optional]",
+        "tooltip": "Cost weighting: slope_only | slope_roughness | conservative. Default: slope_roughness."
+      },
+      "terminal_anchor_strategy": {
+        "label": "Anchor selection strategy for polygon terminals: mixed | centroid_only | boundary_only. (default mixed)...",
+        "tooltip": "Anchor selection strategy for polygon terminals: mixed | centroid_only | boundary_only. Default: mixed."
+      },
+      "corridor_tolerance": {
+        "label": "Fraction above optimal cost for the suitability band (0\u20131). (default 0.15). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default corridor). [optional]"
+      }
+    }
+  },
+  "delete_field": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "fields": {
+        "label": "Comma-delimited field names to delete. (default FIELD_A,FIELD_B)."
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "elev_above_pit_dist": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster layer. (default dem.tif)."
+      },
+      "output": {
+        "label": "Output destination path."
+      }
+    }
+  },
+  "emergency_scenario_routing_and_accessibility_simulator": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer. (default network.gpkg)."
+      },
+      "critical_facilities": {
+        "label": "Critical facility points (e.g., hospitals/fire/EMS). (default facilities.gpkg)."
+      },
+      "demand_points": {
+        "label": "Optional demand points for coverage KPI computation. [optional]"
+      },
+      "ring_costs": {
+        "label": "Required ring costs array, e.g. (default [5.0, 10.0, 15.0])."
+      },
+      "scenario_csv": {
+        "label": "Scenario CSV with columns: scenario_id,max_cost_multiplier[,blocked_value]. (default scenarios.csv).",
+        "tooltip": "Scenario CSV with columns: scenario_id,max_cost_multiplier[,blocked_value]."
+      },
+      "scenario_template": {
+        "label": "Optional scenario authoring template: custom|flood|wildfire|earthquake. (default custom). [optional]",
+        "tooltip": "Optional scenario authoring template: custom|flood|wildfire|earthquake. Applies template-specific validation guardrails."
+      },
+      "scenario_block_source_field": {
+        "label": "Optional network field used to derive scenario-specific blocked edges from blocked_value. [optional]"
+      },
+      "baseline_service_areas": {
+        "label": "Output baseline merged service-area polygons."
+      },
+      "worst_case_service_areas": {
+        "label": "Output worst-scenario service-area polygons."
+      },
+      "scenario_summary_csv": {
+        "label": "Output scenario KPI CSV with baseline deltas."
+      },
+      "simulation_report": {
+        "label": "Output JSON simulation report."
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML accessibility simulation summary report. [optional]"
+      }
+    }
+  },
+  "feature_preserving_smoothing_multiscale": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster path or typed raster object. (default dem.tif)."
+      },
+      "smoothing_amount": {
+        "label": "Overall smoothing amount in [0,1] (default 0.65). [optional]",
+        "tooltip": "Overall smoothing amount in [0,1] (default 0.65). Higher values increase the diffusion budget, especially at coarse scales."
+      },
+      "edge_preservation": {
+        "label": "Edge preservation strength in [0,1] (default 0.75). [optional]",
+        "tooltip": "Edge preservation strength in [0,1] (default 0.75). Higher values suppress smoothing across major breaks-in-slope more strongly."
+      },
+      "scale_levels": {
+        "label": "Number of pyramid levels for coarse-to-fine smoothing (default 3). [optional]"
+      },
+      "fidelity": {
+        "label": "Data-fidelity weight in screened Poisson reconstruction (default 0.45). [optional]",
+        "tooltip": "Data-fidelity weight in screened Poisson reconstruction (default 0.45). Higher values keep the result closer to the source DEM."
+      },
+      "z_factor": {
+        "label": "Optional z conversion factor (default 1.0). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "field_calculator": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "field": {
+        "label": "Output field name. (default score)."
+      },
+      "field_type": {
+        "label": "Output field type: float, integer, text. (default float). [optional]",
+        "tooltip": "Output field type: float, integer, text."
+      },
+      "expression": {
+        "label": "Expression evaluated per feature. (default VALUE * 2.0 + $area)."
+      },
+      "overwrite": {
+        "label": "Overwrite existing field if present (default true). [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "filter_vector_features_by_area": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input polygon vector layer. (default polygons.shp)."
+      },
+      "threshold": {
+        "label": "Minimum polygon area to retain, in layer coordinate units squared. (default 1000.0)."
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "fleet_routing_and_dispatch_optimizer": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Street network (LineVector). (default network.shp)."
+      },
+      "depots": {
+        "label": "Depot locations (PointVector). (default depots.shp)."
+      },
+      "stops": {
+        "label": "Stop locations (PointVector). (default stops.shp)."
+      },
+      "vehicles_csv": {
+        "label": "Vehicle specifications CSV. (default vehicles.csv)."
+      },
+      "routes_output": {
+        "label": "Output routes vector."
+      },
+      "assignment_csv_output": {
+        "label": "Output assignment CSV."
+      },
+      "route_kpis_csv_output": {
+        "label": "Output KPIs CSV."
+      },
+      "exceptions_csv_output": {
+        "label": "Output exceptions CSV."
+      },
+      "objective": {
+        "label": "Optimization objective (default: minimize_distance). [optional]"
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML fleet routing dispatch summary report. [optional]"
+      }
+    }
+  },
+  "frangi_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "scales": {
+        "label": "List of Gaussian-like scales in pixels (default [1.0, 2.0, 3.0]). [optional]"
+      },
+      "beta": {
+        "label": "Frangi beta parameter for blob suppression (default 0.5). [optional]"
+      },
+      "c": {
+        "label": "Frangi c parameter for structure sensitivity (default 15.0). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "gabor_filter_bank": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "sigma": {
+        "label": "Gaussian envelope sigma in pixels (default 2.0). [optional]"
+      },
+      "frequency": {
+        "label": "Sinusoid spatial frequency in cycles/pixel (default 0.2). [optional]"
+      },
+      "orientations": {
+        "label": "Number of orientations in the filter bank (default 6). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "guided_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "radius": {
+        "label": "Guided filter window radius in pixels (default 4). [optional]"
+      },
+      "epsilon": {
+        "label": "Regularization parameter for local variance (default 0.01). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "guided_uav_image_intake_workflow": {
+    "description": "",
+    "parameters": {
+      "images_dir": {
+        "label": "Input directory containing UAV images. (default ./images)."
+      },
+      "profile": {
+        "label": "[pro] Quality profile (fast, balanced, strict); selects the adaptive-threshold suite that drives...",
+        "tooltip": "[pro] Quality profile (fast, balanced, strict); selects the adaptive-threshold suite that drives pass/review/fail mission classification."
+      },
+      "recursive": {
+        "label": "Recursively scan subdirectories (default true). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default uav_intake). [optional]"
+      },
+      "blur_mode": {
+        "label": "Blur scoring mode: off, fast, or full. (default fast). [optional]",
+        "tooltip": "Blur scoring mode: off, fast, or full."
+      }
+    }
+  },
+  "high_pass_bilateral_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "sigma_dist": {
+        "label": "Standard deviation of the spatial (distance) Gaussian kernel, in pixels (0.5\u201320.0, default 0.75). [optional]",
+        "tooltip": "Standard deviation of the spatial (distance) Gaussian kernel, in pixels (0.5\u201320.0, default 0.75)."
+      },
+      "sigma_int": {
+        "label": "Standard deviation of the intensity Gaussian kernel, in raster-value units (default 1.0). [optional]"
+      },
+      "treat_as_rgb": {
+        "label": "Set true to force HSI-intensity filtering for packed RGB rasters before high-pass differencing. (default..."
+      },
+      "assume_three_band_rgb": {
+        "label": "When true (default), and no explicit color metadata is present, allow 3-band uint8/uint16 RGB interpretation...",
+        "tooltip": "When true (default), and no explicit color metadata is present, allow 3-band uint8/uint16 RGB interpretation."
+      },
+      "output": {
+        "label": "Optional output file path. [optional]"
+      }
+    }
+  },
+  "k_shortest_paths_network": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "start_x": {
+        "label": "Start x coordinate. (default 0.0)."
+      },
+      "start_y": {
+        "label": "Start y coordinate. (default 0.0)."
+      },
+      "end_x": {
+        "label": "End x coordinate. (default 100.0)."
+      },
+      "end_y": {
+        "label": "End y coordinate. (default 100.0)."
+      },
+      "k": {
+        "label": "Number of shortest paths to return. (default 3)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from start/end coordinates to nearest network node. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "kuwahara_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "radius": {
+        "label": "Kuwahara quadrant radius in pixels (default 2). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "landslide_susceptibility_assessment": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "rainfall_intensity": {
+        "label": "Optional rainfall intensity proxy raster normalized to [0,1]. [optional]"
+      },
+      "profile": {
+        "label": "Preset profile controlling susceptibility sensitivity: fast, balanced, or conservative. (default balanced)...",
+        "tooltip": "Preset profile controlling susceptibility sensitivity: fast, balanced, or conservative."
+      },
+      "factor_contribution_mode": {
+        "label": "Factor contribution output detail: none | basic | detailed. (default basic). [optional]",
+        "tooltip": "Factor contribution output detail: none | basic | detailed. Default: basic."
+      },
+      "susceptibility_threshold": {
+        "label": "Threshold in [0,1] for high-risk fraction reporting. (default 0.65). [optional]"
+      },
+      "max_zone_features": {
+        "label": "Maximum number of risk-zone polygon features to emit. (default 5000). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default landslide). [optional]"
+      }
+    }
+  },
+  "line_polygon_clip": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line layer. (default lines.shp)."
+      },
+      "clip": {
+        "label": "Clip polygon layer. (default clip_polygons.shp)."
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "locate_points_along_routes": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.shp)."
+      },
+      "points": {
+        "label": "Input point layer to locate along routes. (default events.shp)."
+      },
+      "max_offset_distance": {
+        "label": "Optional maximum point-to-route offset distance. [optional]"
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "location_allocation_network": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "demand_points": {
+        "label": "Demand point layer to allocate. (default demand.shp)."
+      },
+      "facilities": {
+        "label": "Candidate facility point layer. (default facilities.shp)."
+      },
+      "facility_count": {
+        "label": "Number of facilities to select (k). (default 2)."
+      },
+      "solver_mode": {
+        "label": "Solver mode: auto, greedy, or exact (exact is intended for smaller problems). [optional]",
+        "tooltip": "Solver mode: auto, greedy, or exact (exact is intended for smaller problems)."
+      },
+      "demand_weight_field": {
+        "label": "Optional numeric demand weight field in demand_points (default weight=1). [optional]"
+      },
+      "facility_capacity_field": {
+        "label": "Optional numeric capacity field in facilities; capacity is consumed by demand_weight_field values. [optional]",
+        "tooltip": "Optional numeric capacity field in facilities; capacity is consumed by demand_weight_field values."
+      },
+      "required_facility_field": {
+        "label": "Required Facility Field [optional]",
+        "tooltip": "Optional boolean facility field marking candidates that must be selected."
+      },
+      "forbidden_facility_field": {
+        "label": "Forbidden Facility Field [optional]",
+        "tooltip": "Optional boolean facility field marking candidates that must not be selected."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from demand/facility points to nearest network node. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output allocated route line vector path."
+      }
+    }
+  },
+  "map_matching_v1": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "trajectory_points": {
+        "label": "Input trajectory point layer. (default trajectory_points.shp)."
+      },
+      "timestamp_field": {
+        "label": "Trajectory field used for time ordering. (default timestamp)."
+      },
+      "search_radius": {
+        "label": "Optional candidate search radius around each trajectory point. (default 25.0). [optional]"
+      },
+      "candidate_k": {
+        "label": "Optional number of nearest candidates retained per point. (default 5). [optional]"
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance for snapping trajectory points to network nodes. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "matched_points_output": {
+        "label": "Optional output vector path for per-point diagnostics. [optional]"
+      },
+      "match_report": {
+        "label": "Optional JSON output path for summary diagnostics. [optional]"
+      },
+      "output": {
+        "label": "Output line vector path for inferred route."
+      }
+    }
+  },
+  "market_access_and_site_intelligence_workflow": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network. (default network.shp)."
+      },
+      "sites_existing": {
+        "label": "Existing own/competitor sites. (default existing_sites.shp)."
+      },
+      "sites_candidates": {
+        "label": "Candidate expansion sites. (default candidate_sites.shp)."
+      },
+      "demand_surface": {
+        "label": "Demand locations/centroids. (default demand_points.shp)."
+      },
+      "competition_sites": {
+        "label": "Competitor locations (optional). [optional]"
+      },
+      "ring_costs": {
+        "label": "Drive-time costs for catchments. (default [5.0, 10.0, 15.0])."
+      },
+      "catchments_output": {
+        "label": "Output catchments."
+      },
+      "overlap_analysis_output": {
+        "label": "Output overlap analysis."
+      },
+      "candidate_rank_csv": {
+        "label": "Output candidate ranking CSV."
+      },
+      "executive_summary_json": {
+        "label": "Output executive summary."
+      },
+      "market_action_queue_csv": {
+        "label": "Optional prioritized expansion action queue CSV. [optional]"
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML market access and site intelligence summary report. [optional]"
+      }
+    }
+  },
+  "max_elev_dev_signature": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "points": {
+        "label": "Input vector point or multipoint file path. (default sites.geojson)."
+      },
+      "min_scale": {
+        "label": "Minimum half-window radius in cells (default 1). [optional]"
+      },
+      "max_scale": {
+        "label": "Maximum half-window radius in cells (default 100). [optional]"
+      },
+      "step_size": {
+        "label": "Scale increment in cells (default 10). [optional]"
+      },
+      "output": {
+        "label": "Optional output path for the HTML signature report. [optional]"
+      }
+    }
+  },
+  "mine_site_reclamation_compliance_tracker": {
+    "description": "",
+    "parameters": {
+      "baseline_bundle": {
+        "label": "Pre-mining or early reclamation date multiband raster. (default baseline_scene.tif)."
+      },
+      "baseline_red_band_index": {
+        "label": "Band index (0-based) for red band in baseline_bundle. (default 0). [optional]"
+      },
+      "baseline_nir_band_index": {
+        "label": "Band index (0-based) for NIR band in baseline_bundle. (default 1). [optional]"
+      },
+      "current_bundle": {
+        "label": "Current monitoring date multiband raster. (default current_scene.tif)."
+      },
+      "current_red_band_index": {
+        "label": "Band index (0-based) for red band in current_bundle. (default 0). [optional]"
+      },
+      "current_nir_band_index": {
+        "label": "Band index (0-based) for NIR band in current_bundle. (default 1). [optional]"
+      },
+      "slope": {
+        "label": "Optional terrain slope raster (degrees). [optional]"
+      },
+      "reclamation_target_ndvi": {
+        "label": "Target NDVI threshold for vegetation recovery milestone. (default 0.35). [optional]"
+      },
+      "slope_stability_max_deg": {
+        "label": "Maximum acceptable slope angle for stability milestone (degrees). (default 30.0). [optional]"
+      },
+      "jurisdiction": {
+        "label": "Jurisdiction-specific compliance template. (default none). [optional]"
+      },
+      "monitoring_epoch": {
+        "label": "Monitoring epoch for multi-epoch tracking. [optional]"
+      },
+      "site_name": {
+        "label": "Optional site name or permit ID. [optional]"
+      },
+      "zone_block_cells": {
+        "label": "Block size in cells for compliance zone polygons. (default 20). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default reclamation_compliance). [optional]"
+      }
+    }
+  },
+  "minimal_dispersion_flow_algorithm": {
+    "description": "",
+    "parameters": {
+      "raster": {
+        "label": "Input raster layer."
+      },
+      "out_type": {
+        "label": "Output destination path. (default sca). [optional]",
+        "tooltip": "Output destination path."
+      },
+      "path_corrected_direction_preference": {
+        "label": "Path corrected direction preference. (default 0.0). [optional]"
+      },
+      "log_transform": {
+        "label": "Log transform. (default False). [optional]"
+      },
+      "clip": {
+        "label": "Clip. (default False). [optional]"
+      },
+      "esri_pntr": {
+        "label": "Esri pntr. (default False). [optional]"
+      },
+      "output": {
+        "label": "Output destination path."
+      }
+    }
+  },
+  "multi_sensor_fusion_monitoring": {
+    "description": "",
+    "parameters": {
+      "baseline_bundle": {
+        "label": "Baseline multiband optical bundle raster. (default baseline_scene.tif)."
+      },
+      "baseline_red_band_index": {
+        "label": "0-based red band index in baseline_bundle. (default 0). [optional]"
+      },
+      "baseline_nir_band_index": {
+        "label": "0-based NIR band index in baseline_bundle. (default 1). [optional]"
+      },
+      "change_bundle": {
+        "label": "Change-date multiband optical bundle raster. (default change_scene.tif)."
+      },
+      "change_red_band_index": {
+        "label": "0-based red band index in change_bundle. (default 0). [optional]"
+      },
+      "change_nir_band_index": {
+        "label": "0-based NIR band index in change_bundle. (default 1). [optional]"
+      },
+      "input_sar": {
+        "label": "Input SAR intensity raster. (default sar_scene.tif)."
+      },
+      "input_dem": {
+        "label": "Input DEM raster for terrain context and SAR normalization support. (default dem.tif)."
+      },
+      "pair_sar": {
+        "label": "Optional second SAR image for coherence-aware agreement. [optional]"
+      },
+      "profile": {
+        "label": "Fusion profile: fast, balanced, conservative. (default balanced). [optional]",
+        "tooltip": "Fusion profile: fast, balanced, conservative."
+      },
+      "harmonization_mode": {
+        "label": "Cross-sensor bias harmonization mode: off, robust, conservative. (default robust). [optional]",
+        "tooltip": "Cross-sensor bias harmonization mode: off, robust, conservative."
+      },
+      "high_confidence_threshold": {
+        "label": "Threshold for high-confidence change zoning in [0,1]. (default 0.8). [optional]"
+      },
+      "max_zone_features": {
+        "label": "Maximum number of high-confidence change polygons to emit. (default 25000). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default multi_sensor_fusion). [optional]"
+      }
+    }
+  },
+  "multimodal_od_cost_matrix": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "destinations": {
+        "label": "Destination point layer. (default destinations.shp)."
+      },
+      "mode_field": {
+        "label": "Line attribute field that identifies travel mode per segment. (default MODE).",
+        "tooltip": "Line attribute field that identifies travel mode per segment."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin/destination points to nearest network node. [optional]"
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include in routing. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include in routing."
+      },
+      "transfer_penalty": {
+        "label": "Optional additive penalty applied each time the route changes mode. (default 0.0). [optional]"
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics when using direct temporal input. [optional]",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics when using direct temporal input."
+      },
+      "scenario_bundle_csv": {
+        "label": "Optional CSV listing named temporal scenarios for comparative multi-scenario OD output. [optional]"
+      },
+      "output": {
+        "label": "Output CSV path."
+      }
+    }
+  },
+  "multimodal_routes_from_od": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "destinations": {
+        "label": "Destination point layer. (default destinations.shp)."
+      },
+      "mode_field": {
+        "label": "Line attribute field that identifies travel mode per segment. (default MODE).",
+        "tooltip": "Line attribute field that identifies travel mode per segment."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin/destination points to nearest network node. [optional]"
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include in routing. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include in routing."
+      },
+      "transfer_penalty": {
+        "label": "Optional additive penalty applied each time the route changes mode. (default 0.0). [optional]"
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics when using direct temporal input. [optional]",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics when using direct temporal input."
+      },
+      "scenario_bundle_csv": {
+        "label": "Optional CSV listing named temporal scenarios for comparative multi-scenario route output. [optional]"
+      },
+      "output": {
+        "label": "Output route line vector path."
+      }
+    }
+  },
+  "multimodal_shortest_path": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "start_x": {
+        "label": "Start x coordinate. (default 0.0)."
+      },
+      "start_y": {
+        "label": "Start y coordinate. (default 0.0)."
+      },
+      "end_x": {
+        "label": "End x coordinate. (default 100.0)."
+      },
+      "end_y": {
+        "label": "End y coordinate. (default 100.0)."
+      },
+      "mode_field": {
+        "label": "Line attribute field that identifies travel mode per segment. (default MODE).",
+        "tooltip": "Line attribute field that identifies travel mode per segment."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from start/end coordinates to nearest network node. [optional]"
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12,transit:8)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include in routing. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include in routing."
+      },
+      "transfer_penalty": {
+        "label": "Optional additive penalty applied each time the route changes mode. (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "multiscale_elevated_index": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster layer. (default dem.tif)."
+      },
+      "min_scale": {
+        "label": "Min scale. (default 2). [optional]"
+      },
+      "step_size": {
+        "label": "Step size. (default 1). [optional]"
+      },
+      "num_steps": {
+        "label": "Num steps. (default 100). [optional]"
+      },
+      "step_nonlinearity": {
+        "label": "Step nonlinearity. (default 1.1). [optional]"
+      },
+      "output": {
+        "label": "Output destination path."
+      },
+      "output_scale_path": {
+        "label": "Output destination path. [optional]"
+      }
+    }
+  },
+  "multiscale_low_lying_index": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster layer. (default dem.tif)."
+      },
+      "min_scale": {
+        "label": "Min scale. (default 2). [optional]"
+      },
+      "step_size": {
+        "label": "Step size. (default 1). [optional]"
+      },
+      "num_steps": {
+        "label": "Num steps. (default 100). [optional]"
+      },
+      "step_nonlinearity": {
+        "label": "Step nonlinearity. (default 1.1). [optional]"
+      },
+      "output": {
+        "label": "Output destination path."
+      },
+      "output_scale_path": {
+        "label": "Output destination path. [optional]"
+      }
+    }
+  },
+  "network_accessibility_metrics": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "destinations": {
+        "label": "Destination point layer. (default destinations.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. (default 0.0). [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin/destination points to nearest network node. [optional]"
+      },
+      "impedance_cutoff": {
+        "label": "Optional maximum distance threshold for counting reachable destinations (default: infinite). [optional]"
+      },
+      "decay_function": {
+        "label": "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility...",
+        "tooltip": "Optional decay function: 'none' (default), 'linear', or 'exponential' for distance-weighted accessibility."
+      },
+      "decay_parameter": {
+        "label": "Optional decay parameter (lambda for exponential, rate for linear). [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "parallel_execution": {
+        "label": "Parallel Execution [optional]",
+        "tooltip": "If true (default), evaluate origins in parallel for faster accessibility computation."
+      },
+      "output": {
+        "label": "Output point vector path (origins with accessibility metrics)."
+      }
+    }
+  },
+  "network_centrality_metrics": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. (default 0.0). [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks)...",
+        "tooltip": "Optional line field marking blocked/closed edges to exclude from graph construction (true/1/yes blocks)."
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "network_connected_components": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "network_node_degree": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "network_readiness_and_diagnostics_intelligence": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "qa_report": {
+        "label": "Output CSV with QA findings."
+      },
+      "diagnostics_layer": {
+        "label": "Output GeoJSON/GeoPackage with diagnostics."
+      },
+      "readiness_score": {
+        "label": "Output JSON with readiness score."
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML network readiness diagnostic summary report. [optional]"
+      }
+    }
+  },
+  "network_routes_from_od": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "destinations": {
+        "label": "Destination point layer. (default destinations.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin/destination points to nearest network node. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output route line vector path."
+      }
+    }
+  },
+  "network_service_area": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "max_cost": {
+        "label": "Maximum reachable path cost. (default 1000.0)."
+      },
+      "ring_costs": {
+        "label": "Optional comma-separated ring thresholds for multi-ring outputs (for example: 5,10,15). [optional]",
+        "tooltip": "Optional comma-separated ring thresholds for multi-ring outputs (for example: 5,10,15)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin points to nearest network node. [optional]"
+      },
+      "output_mode": {
+        "label": "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for...",
+        "tooltip": "Output mode: 'nodes' (default), 'edges' for cost-trimmed reachable edge segments, or 'polygons' for per-origin isochrone-like polygons from reachable edge envelopes."
+      },
+      "polygon_merge_origins": {
+        "label": "Polygon Merge Origins [optional]",
+        "tooltip": "If true and output_mode='polygons', dissolve overlapping origin polygons into merged coverage per ring instead of emitting one polygon per origin."
+      },
+      "mode_field": {
+        "label": "Mode Field [optional]",
+        "tooltip": "Optional line attribute field identifying travel mode per segment; enables mode-aware service-area costs."
+      },
+      "default_mode_speed": {
+        "label": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1). [optional]",
+        "tooltip": "Default mode speed in coordinate-units per time unit when mode_field is provided (default: 1)."
+      },
+      "mode_speed_overrides": {
+        "label": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12). [optional]",
+        "tooltip": "Optional comma-separated mode:speed overrides (for example: walk:1.4,drive:12)."
+      },
+      "allowed_modes": {
+        "label": "Optional comma-separated allow-list of modes to include when mode_field is provided. [optional]",
+        "tooltip": "Optional comma-separated allow-list of modes to include when mode_field is provided."
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output service-area vector path."
+      }
+    }
+  },
+  "network_topology_audit": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way edges for directional analysis. [optional]"
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked edges to exclude from analysis. [optional]"
+      },
+      "report": {
+        "label": "Optional JSON output path for the audit summary report. [optional]"
+      },
+      "output": {
+        "label": "Output point vector path for per-node diagnostics."
+      }
+    }
+  },
+  "non_local_means_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "search_radius": {
+        "label": "Search window radius in pixels (default 5). [optional]"
+      },
+      "patch_radius": {
+        "label": "Patch radius in pixels (default 1). [optional]"
+      },
+      "h": {
+        "label": "Filtering strength parameter (default 10.0). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "num_upslope_neighbours": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster layer. (default dem.tif)."
+      },
+      "output": {
+        "label": "Output destination path."
+      }
+    }
+  },
+  "od_sensitivity_analysis": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "origins": {
+        "label": "Origin point layer. (default origins.shp)."
+      },
+      "destinations": {
+        "label": "Destination point layer. (default destinations.shp)."
+      },
+      "edge_cost_field": {
+        "label": "Required numeric line field used as an impedance multiplier for perturbation analysis. (default cost)."
+      },
+      "impedance_disturbance_range": {
+        "label": "Range for cost perturbation as 'min_factor,max_factor' (e.g., '0.8,1.2' for \u00b120% variation). (default..."
+      },
+      "monte_carlo_samples": {
+        "label": "Number of Monte Carlo samples for perturbation analysis (default 1, max 100). [optional]"
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from origin/destination points to nearest network node. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges. [optional]"
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges. [optional]"
+      },
+      "parallel_execution": {
+        "label": "Parallel Execution [optional]",
+        "tooltip": "If true (default), evaluates origin searches in parallel for baseline and perturbed OD runs."
+      },
+      "output": {
+        "label": "Output CSV path with OD pairs and sensitivity statistics."
+      }
+    }
+  },
+  "parcel_and_land_fabric_topology_compliance_workflow": {
+    "description": "",
+    "parameters": {
+      "parcels": {
+        "label": "Input parcel polygon layer. (default parcels.gpkg)."
+      },
+      "min_sliver_area": {
+        "label": "Minimum area threshold under which parcels are flagged as slivers (default 1.0). [optional]"
+      },
+      "auto_fix": {
+        "label": "Auto Fix [optional]",
+        "tooltip": "If true, runs topology_rule_autofix and writes corrected output (default false)."
+      },
+      "jurisdiction_template": {
+        "label": "Optional rule-template preset (generic | ontario_mpac). (default generic). [optional]",
+        "tooltip": "Optional rule-template preset (generic | ontario_mpac). Influences default sliver threshold and report recommendations."
+      },
+      "topology_violations": {
+        "label": "Output vector path for topology rule violations."
+      },
+      "issues_csv": {
+        "label": "Output CSV path for topology validation report."
+      },
+      "compliance_report": {
+        "label": "Output JSON path for compliance summary report."
+      },
+      "corrected_parcels": {
+        "label": "Optional output vector path for auto-fix corrected parcels. [optional]"
+      },
+      "remediation_queue_csv": {
+        "label": "Optional output CSV path for prioritized remediation actions by issue type. [optional]"
+      },
+      "html_report": {
+        "label": "Optional output HTML path for the compliance dashboard report. [optional]"
+      }
+    }
+  },
+  "points_along_lines": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line layer. (default lines.shp)."
+      },
+      "spacing": {
+        "label": "Spacing distance between points. (default 50.0)."
+      },
+      "include_end": {
+        "label": "Include End [optional]",
+        "tooltip": "Include line endpoints (default true)."
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "principal_curvature_direction": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster path or typed raster object. (default dem.tif)."
+      },
+      "z_factor": {
+        "label": "Optional z conversion factor (default 1.0). [optional]"
+      },
+      "log_transform": {
+        "label": "Optional log-transform of output values (default false). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "random_points_in_polygon": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input polygon layer. (default polygons.shp)."
+      },
+      "num_points": {
+        "label": "Number of random points to create. (default 100)."
+      },
+      "seed": {
+        "label": "Optional RNG seed for reproducibility. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "registration_oriented_feature_workflow": {
+    "description": "",
+    "parameters": {
+      "mode": {
+        "label": "Pair or set (default set). [optional]",
+        "tooltip": "pair or set (default set)."
+      },
+      "images_dir": {
+        "label": "Input image directory for mode=set. (default ./images). [optional]"
+      },
+      "left_image": {
+        "label": "Left image path for mode=pair. [optional]"
+      },
+      "right_image": {
+        "label": "Right image path for mode=pair. [optional]"
+      },
+      "max_pairs": {
+        "label": "Maximum number of planned pairs for mode=set (default 50). [optional]"
+      },
+      "max_features_per_image": {
+        "label": "Maximum keypoints extracted per image (default 500). [optional]"
+      },
+      "ratio_test": {
+        "label": "Descriptor ratio-test threshold in (0,1), default 0.80. [optional]"
+      },
+      "min_matches": {
+        "label": "[pro] Minimum accepted match count per pair; drives QA gate, fallback routing, and pass/review/fail...",
+        "tooltip": "[pro] Minimum accepted match count per pair; drives QA gate, fallback routing, and pass/review/fail classification (default 24)."
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default registration_workflow). [optional]"
+      },
+      "emit_pair_match_viz": {
+        "label": "Emit side-by-side pair images with tie-point lines (default false). [optional]"
+      },
+      "max_pair_visualizations": {
+        "label": "Maximum pair visualizations to write when emit_pair_match_viz=true (default 8). [optional]"
+      },
+      "max_lines_per_pair": {
+        "label": "Maximum tie-point lines per visualization (default 150). [optional]"
+      },
+      "viz_scale": {
+        "label": "Visualization downscale factor in [0.05, 1.0], default 0.5. [optional]"
+      }
+    }
+  },
+  "rename_field": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "field": {
+        "label": "Existing field name. (default OLD_NAME)."
+      },
+      "new_field": {
+        "label": "Replacement field name. (default NEW_NAME)."
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "reproject_vector": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "epsg": {
+        "label": "Destination EPSG code. (default 4326)."
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "route_calibrate": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "control_points": {
+        "label": "Input control-point layer. (default control_points.gpkg)."
+      },
+      "control_measure_field": {
+        "label": "Control-point field containing known measure values. (default measure)."
+      },
+      "route_id_field": {
+        "label": "Optional route identifier field in routes. [optional]"
+      },
+      "control_route_id_field": {
+        "label": "Optional route identifier field in control points. [optional]"
+      },
+      "from_measure_field": {
+        "label": "Output field for route start measure (default 'from_measure'). [optional]"
+      },
+      "to_measure_field": {
+        "label": "Output field for route end measure (default 'to_measure'). [optional]"
+      },
+      "snap_tolerance": {
+        "label": "Maximum control-point offset distance from route geometry (default 1.0). [optional]"
+      },
+      "output": {
+        "label": "Output calibrated route layer."
+      }
+    }
+  },
+  "route_event_governance_for_linear_assets": {
+    "description": "",
+    "parameters": {
+      "events": {
+        "label": "Input event vector layer (GeoPackage, GeoJSON, or Shapefile). (default route_events.gpkg)."
+      },
+      "route_id_field": {
+        "label": "Field name containing route identifiers. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "Field name for interval start measure. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "Field name for interval end measure. (default to_m)."
+      },
+      "gap_tolerance": {
+        "label": "Measure gap smaller than this value is ignored (default 0.0). [optional]"
+      },
+      "overlap_tolerance": {
+        "label": "Measure overlap smaller than this value is ignored (default 0.0). [optional]"
+      },
+      "auto_fix": {
+        "label": "Automatically correct descending intervals and overlapping events (default false). [optional]"
+      },
+      "domain_rules_json": {
+        "label": "Optional JSON file path describing per-field validation rules (allowed_values, regex, min, max). [optional]",
+        "tooltip": "Optional JSON file path describing per-field validation rules (allowed_values, regex, min, max)."
+      },
+      "governed_events": {
+        "label": "Output vector path for QA-passed events."
+      },
+      "issues_csv": {
+        "label": "Output CSV path for per-event issue log."
+      },
+      "corrected_events": {
+        "label": "Output vector path for auto-corrected events (only written when auto_fix=true). [optional]"
+      },
+      "governance_report": {
+        "label": "Output JSON path for governance summary report."
+      },
+      "remediation_queue_csv": {
+        "label": "Optional output CSV path with prioritized corrective actions by issue. [optional]"
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML governance summary report. [optional]"
+      }
+    }
+  },
+  "route_event_lines_from_layer": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "events": {
+        "label": "Input event vector layer. (default line_events.gpkg)."
+      },
+      "event_route_field": {
+        "label": "Event-layer field containing route identifiers. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "Event-layer field containing start measures. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "Event-layer field containing end measures. (default to_m)."
+      },
+      "route_id_field": {
+        "label": "Optional route-layer field containing route identifiers. [optional]"
+      },
+      "write_event_fid": {
+        "label": "Write EVENT_FID to preserve source event feature IDs (default true). [optional]"
+      },
+      "write_event_xy": {
+        "label": "Write source event geometry X/Y attributes (default false). [optional]"
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "route_event_lines_from_table": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "events": {
+        "label": "Input CSV event table path. (default line_events.csv)."
+      },
+      "event_route_field": {
+        "label": "CSV field containing route identifiers. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "CSV field containing start measures. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "CSV field containing end measures. (default to_m)."
+      },
+      "route_id_field": {
+        "label": "Optional route-layer field containing route identifiers. [optional]"
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "route_event_merge": {
+    "description": "",
+    "parameters": {
+      "events": {
+        "label": "Input event layer containing route intervals. (default events.gpkg)."
+      },
+      "event_route_field": {
+        "label": "Event-layer route identifier field. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "Event-layer interval start field. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "Event-layer interval end field. (default to_m)."
+      },
+      "group_fields": {
+        "label": "Optional comma-delimited fields used for merge compatibility. [optional]",
+        "tooltip": "Optional comma-delimited fields used for merge compatibility. Defaults to all non-measure fields."
+      },
+      "gap_tolerance": {
+        "label": "Maximum gap allowed for adjacency merge (default 0.0). [optional]"
+      },
+      "conflict_mode": {
+        "label": "Overlap handling mode: error|skip (default error). [optional]",
+        "tooltip": "Overlap handling mode: error|skip (default error)."
+      },
+      "output": {
+        "label": "Output merged-event layer."
+      }
+    }
+  },
+  "route_event_overlay": {
+    "description": "",
+    "parameters": {
+      "primary_events": {
+        "label": "Primary event layer. (default primary_events.gpkg)."
+      },
+      "overlay_events": {
+        "label": "Overlay event layer. (default overlay_events.gpkg)."
+      },
+      "primary_route_field": {
+        "label": "Primary layer route identifier field. (default route_id)."
+      },
+      "primary_from_measure_field": {
+        "label": "Primary layer interval start field. (default from_m)."
+      },
+      "primary_to_measure_field": {
+        "label": "Primary layer interval end field. (default to_m)."
+      },
+      "overlay_route_field": {
+        "label": "Overlay layer route identifier field. (default route_id)."
+      },
+      "overlay_from_measure_field": {
+        "label": "Overlay layer interval start field. (default from_m)."
+      },
+      "overlay_to_measure_field": {
+        "label": "Overlay layer interval end field. (default to_m)."
+      },
+      "min_overlap_length": {
+        "label": "Minimum overlap length to keep (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output overlay layer."
+      }
+    }
+  },
+  "route_event_points_from_layer": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "events": {
+        "label": "Input event vector layer. (default point_events.gpkg)."
+      },
+      "event_route_field": {
+        "label": "Event-layer field containing route identifiers. (default route_id)."
+      },
+      "measure_field": {
+        "label": "Event-layer field containing point-event measures. (default measure)."
+      },
+      "route_id_field": {
+        "label": "Optional route-layer field containing route identifiers. [optional]"
+      },
+      "write_event_fid": {
+        "label": "Write EVENT_FID to preserve source event feature IDs (default true). [optional]"
+      },
+      "write_event_xy": {
+        "label": "Write source event geometry X/Y attributes (default false). [optional]"
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "route_event_points_from_table": {
+    "description": "",
+    "parameters": {
+      "routes": {
+        "label": "Input route line layer. (default routes.gpkg)."
+      },
+      "events": {
+        "label": "Input CSV event table path. (default point_events.csv)."
+      },
+      "event_route_field": {
+        "label": "CSV field containing route identifiers. (default route_id)."
+      },
+      "measure_field": {
+        "label": "CSV field containing point-event measures. (default measure)."
+      },
+      "route_id_field": {
+        "label": "Optional route-layer field containing route identifiers. [optional]"
+      },
+      "output": {
+        "label": "Output point vector path."
+      }
+    }
+  },
+  "route_event_split": {
+    "description": "",
+    "parameters": {
+      "events": {
+        "label": "Input event layer containing route intervals. (default events.gpkg)."
+      },
+      "boundaries": {
+        "label": "Input boundary layer containing route measure breakpoints. (default event_boundaries.gpkg)."
+      },
+      "event_route_field": {
+        "label": "Event-layer route identifier field. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "Event-layer interval start field. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "Event-layer interval end field. (default to_m)."
+      },
+      "boundary_route_field": {
+        "label": "Boundary-layer route identifier field. (default route_id)."
+      },
+      "boundary_measure_field": {
+        "label": "Boundary-layer measure field. (default measure)."
+      },
+      "min_segment_length": {
+        "label": "Optional minimum split segment length to keep (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output split-event layer."
+      }
+    }
+  },
+  "route_measure_qa": {
+    "description": "",
+    "parameters": {
+      "events": {
+        "label": "Input event layer containing route intervals. (default events.gpkg)."
+      },
+      "route_field": {
+        "label": "Route identifier field. (default route_id)."
+      },
+      "from_measure_field": {
+        "label": "Interval start field. (default from_m)."
+      },
+      "to_measure_field": {
+        "label": "Interval end field. (default to_m)."
+      },
+      "gap_tolerance": {
+        "label": "Gap tolerance (default 0.0). [optional]"
+      },
+      "overlap_tolerance": {
+        "label": "Overlap tolerance (default 0.0). [optional]"
+      },
+      "output": {
+        "label": "Output QA diagnostics layer."
+      }
+    }
+  },
+  "route_recalibrate": {
+    "description": "",
+    "parameters": {
+      "original_routes": {
+        "label": "Reference routes containing prior calibrated measures. (default routes_original.gpkg)."
+      },
+      "edited_routes": {
+        "label": "Edited routes to recalibrate. (default routes_edited.gpkg)."
+      },
+      "route_id_field": {
+        "label": "Optional shared route identifier field. [optional]"
+      },
+      "from_measure_field": {
+        "label": "Measure-start field name (default 'from_measure'). [optional]"
+      },
+      "to_measure_field": {
+        "label": "Measure-end field name (default 'to_measure'). [optional]"
+      },
+      "output": {
+        "label": "Output recalibrated route layer."
+      }
+    }
+  },
+  "savitzky_golay_2d_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "window_size": {
+        "label": "Odd window size (default 5). [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "select_by_location": {
+    "description": "",
+    "parameters": {
+      "target": {
+        "label": "Target feature layer to filter. (default target.shp)."
+      },
+      "query": {
+        "label": "Query feature layer. (default query.shp)."
+      },
+      "predicate": {
+        "label": "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance...",
+        "tooltip": "Spatial predicate: intersects, within, contains, touches, crosses, overlaps, disjoint, within_distance."
+      },
+      "distance": {
+        "label": "Distance threshold for within_distance predicate. [optional]"
+      },
+      "output": {
+        "label": "Output vector path."
+      }
+    }
+  },
+  "service_area_planning_and_coverage_optimization": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "facilities": {
+        "label": "Input facility points layer. (default facilities.shp)."
+      },
+      "demand_points": {
+        "label": "Optional demand points layer. [optional]"
+      },
+      "ring_costs": {
+        "label": "Numeric array of ring costs. (default [5.0, 10.0, 15.0])."
+      },
+      "scenarios": {
+        "label": "Optional scenario CSV. [optional]"
+      },
+      "service_areas": {
+        "label": "Output service area vectors."
+      },
+      "uncovered_demand": {
+        "label": "Output uncovered demand vectors."
+      },
+      "scenario_summary_csv": {
+        "label": "Output scenario summary CSV."
+      },
+      "ranked_candidates_csv": {
+        "label": "Output ranked candidates CSV."
+      }
+    }
+  },
+  "shortest_path_network": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input line network layer. (default network.shp)."
+      },
+      "start_x": {
+        "label": "Start x coordinate. (default 0.0)."
+      },
+      "start_y": {
+        "label": "Start y coordinate. (default 0.0)."
+      },
+      "end_x": {
+        "label": "End x coordinate. (default 100.0)."
+      },
+      "end_y": {
+        "label": "End y coordinate. (default 100.0)."
+      },
+      "snap_tolerance": {
+        "label": "Optional node snapping tolerance for graph construction. [optional]"
+      },
+      "max_snap_distance": {
+        "label": "Optional max distance from start/end coordinates to nearest network node. [optional]"
+      },
+      "edge_cost_field": {
+        "label": "Optional numeric line field used as an impedance multiplier for segment length. [optional]"
+      },
+      "one_way_field": {
+        "label": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)...",
+        "tooltip": "Optional line field marking one-way digitized edges (true/1/yes means from first to second vertex only)."
+      },
+      "blocked_field": {
+        "label": "Optional line field marking blocked/closed edges to exclude from routing (true/1/yes blocks). [optional]"
+      },
+      "barriers": {
+        "label": "Optional barrier point layer; nearest network nodes are blocked from traversal. [optional]"
+      },
+      "barrier_snap_distance": {
+        "label": "Optional max distance from each barrier point to a network node for blocking. [optional]"
+      },
+      "turn_penalty": {
+        "label": "Optional additive cost applied to non-straight turns at network nodes. [optional]"
+      },
+      "u_turn_penalty": {
+        "label": "Optional additive cost applied to U-turn transitions. [optional]"
+      },
+      "forbid_u_turns": {
+        "label": "Forbid U Turns [optional]",
+        "tooltip": "If true, disallow U-turn transitions."
+      },
+      "forbid_left_turns": {
+        "label": "Forbid Left Turns [optional]",
+        "tooltip": "If true, disallow left-turn transitions."
+      },
+      "forbid_right_turns": {
+        "label": "Forbid Right Turns [optional]",
+        "tooltip": "If true, disallow right-turn transitions."
+      },
+      "turn_restrictions_csv": {
+        "label": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. [optional]",
+        "tooltip": "Optional CSV of turn transitions using columns prev_x,prev_y,node_x,node_y,next_x,next_y. Optional columns: forbidden (default true when no turn_cost column is provided) and turn_cost (or penalty/cost/extra_cost) for per-turn additive cost."
+      },
+      "temporal_cost_profile": {
+        "label": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)...",
+        "tooltip": "Optional CSV defining time-dependent edge costs (columns: edge_id,dow,start_minute,end_minute,value)."
+      },
+      "temporal_edge_id_field": {
+        "label": "Optional network field used to match temporal_cost_profile edge_id values (default EDGE_ID). [optional]"
+      },
+      "departure_time": {
+        "label": "Optional RFC3339 departure time used for temporal profile lookup. [optional]"
+      },
+      "temporal_mode": {
+        "label": "Optional temporal interpretation mode: multiplier or absolute. [optional]",
+        "tooltip": "Optional temporal interpretation mode: multiplier or absolute."
+      },
+      "temporal_fallback": {
+        "label": "Optional fallback when temporal row is missing: static_cost or error. [optional]"
+      },
+      "temporal_profile_report": {
+        "label": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)...",
+        "tooltip": "Optional JSON output path for temporal profile diagnostics (coverage, unmatched edges, fallback usage)."
+      },
+      "output": {
+        "label": "Output line vector path."
+      }
+    }
+  },
+  "snap_endnodes": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input polyline vector layer. (default input_lines.shp)."
+      },
+      "snap_tolerance": {
+        "label": "Endpoint snapping tolerance in map units. (default 2.220446049250313e-16). [optional]"
+      },
+      "output": {
+        "label": "Output snapped polyline vector path."
+      }
+    }
+  },
+  "soil_landscape_classification": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input DEM raster. (default dem.tif)."
+      },
+      "flat_slope_threshold": {
+        "label": "Slope threshold (degrees) for flat/summit/depression. (default 3.0). [optional]"
+      },
+      "profile_curvature_threshold": {
+        "label": "Profile curvature threshold for convex/concave. (default 0.01). [optional]",
+        "tooltip": "Profile curvature threshold for convex/concave."
+      },
+      "plan_curvature_threshold": {
+        "label": "Plan curvature threshold for divergent/convergent. (default 0.01). [optional]"
+      },
+      "fine_scale": {
+        "label": "Fine-scale Gaussian smoothing radius. (default 2.0). [optional]"
+      },
+      "coarse_scale": {
+        "label": "Coarse-scale Gaussian smoothing radius. (default 8.0). [optional]"
+      },
+      "z_factor": {
+        "label": "Vertical exaggeration for slope computation. (default 1.0). [optional]"
+      },
+      "pedology_region": {
+        "label": "Regional pedology calibration pack. (default none). [optional]"
+      },
+      "output_prefix": {
+        "label": "Prefix for all output artifacts. (default soil_landscape). [optional]"
+      },
+      "landform_polygons_output": {
+        "label": "Optional output vector path for landform polygons; format inferred from extension. (default..."
+      }
+    }
+  },
+  "solar_site_suitability_analysis": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "candidate_threshold": {
+        "label": "Minimum suitability score [0,1] to emit candidate sites. (default 0.7). [optional]"
+      },
+      "max_candidate_sites": {
+        "label": "Maximum number of candidate site points to emit. (default 200). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default solar_siting). [optional]"
+      }
+    }
+  },
+  "terrain_constraint_and_conflict_analysis": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Reference DEM raster path. (default dem.tif)."
+      },
+      "wetness": {
+        "label": "Optional wetness or moisture-risk raster normalized to [0,1]. [optional]"
+      },
+      "flood_risk": {
+        "label": "Optional flood-risk raster normalized to [0,1]. [optional]"
+      },
+      "landcover_penalty": {
+        "label": "Optional landcover penalty raster normalized to [0,1]. [optional]"
+      },
+      "slope_limit_deg": {
+        "label": "Slope threshold at which terrain conflict becomes high. (default 15.0). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for conflict rasters and summary. (default terrain_conflict). [optional]"
+      }
+    }
+  },
+  "terrain_constructability_and_cost_analysis": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Reference DEM raster path. (default dem.tif)."
+      },
+      "existing_conflict": {
+        "label": "Optional terrain conflict raster from a prior workflow normalized to [0,1]. [optional]"
+      },
+      "wetness": {
+        "label": "Optional wetness raster normalized to [0,1]. [optional]"
+      },
+      "access_cost": {
+        "label": "Optional access-friction raster normalized to [0,1]. [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for constructability/cost rasters and summary. (default terrain_constructability). [optional]"
+      }
+    }
+  },
+  "terrain_corrected_optical_analytics": {
+    "description": "",
+    "parameters": {
+      "input_dem": {
+        "label": "DEM raster co-registered with optical bands. (default dem.tif)."
+      },
+      "bundle_root": {
+        "label": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades)...",
+        "tooltip": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades) used to auto-resolve required bands, QA when available, and solar metadata when explicit inputs are omitted."
+      },
+      "input_red": {
+        "label": "Red band raster (optional when bundle_root is provided). (default red.tif). [optional]"
+      },
+      "input_nir": {
+        "label": "NIR band raster (optional when bundle_root is provided). (default nir.tif). [optional]"
+      },
+      "input_green": {
+        "label": "Green band raster (optional). [optional]"
+      },
+      "input_blue": {
+        "label": "Blue band raster (optional). [optional]"
+      },
+      "solar_mode": {
+        "label": "Solar-angle resolution mode: auto, manual, metadata, datetime_location. (default auto). [optional]",
+        "tooltip": "Solar-angle resolution mode: auto, manual, metadata, datetime_location."
+      },
+      "solar_zenith_deg": {
+        "label": "Solar zenith angle in degrees (required in manual mode). (default 40.0). [optional]"
+      },
+      "solar_azimuth_deg": {
+        "label": "Solar azimuth in degrees (clockwise from north, required in manual mode). (default 165.0). [optional]"
+      },
+      "acquisition_datetime_utc": {
+        "label": "Acquisition timestamp in RFC3339 UTC for datetime_location mode. [optional]"
+      },
+      "latitude": {
+        "label": "Optional latitude for datetime_location mode. [optional]"
+      },
+      "longitude": {
+        "label": "Optional longitude for datetime_location mode. [optional]"
+      },
+      "profile": {
+        "label": "Processing profile: conservative, balanced, fast. (default balanced). [optional]",
+        "tooltip": "Processing profile: conservative, balanced, fast."
+      },
+      "cloud_threshold": {
+        "label": "Optional cloud threshold in source band units. [optional]"
+      },
+      "shadow_threshold": {
+        "label": "Optional cloud-shadow threshold in source band units. [optional]"
+      },
+      "qa_mask": {
+        "label": "Optional QA mask raster path. [optional]"
+      },
+      "qa_mask_format": {
+        "label": "QA mask encoding: auto, landsat_qa_pixel, sentinel2_scl, sentinel2_qa60, binary. (default auto). [optional]",
+        "tooltip": "QA mask encoding: auto, landsat_qa_pixel, sentinel2_scl, sentinel2_qa60, binary."
+      },
+      "mask_strategy": {
+        "label": "Mask strategy: auto, qa_only, heuristic_only, qa_plus_heuristic. (default auto). [optional]",
+        "tooltip": "Mask strategy: auto, qa_only, heuristic_only, qa_plus_heuristic."
+      },
+      "z_factor": {
+        "label": "Vertical exaggeration for slope/aspect. (default 1.0). [optional]"
+      },
+      "output_prefix": {
+        "label": "Prefix for all output artifacts. (default terrain_corrected). [optional]"
+      }
+    }
+  },
+  "topology_rule_autofix": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector path. (default input.gpkg)."
+      },
+      "rule_set": {
+        "label": "Rule configuration as JSON array/object, CSV string, or file path. (default...",
+        "tooltip": "Rule configuration as JSON array/object, CSV string, or file path. Applies fixes for supported rules only: line_endpoints_must_snap_within_tolerance, point_must_be_covered_by_line, polygon_must_not_have_gaps, line_must_not_have_dangles."
+      },
+      "snap_tolerance": {
+        "label": "Tolerance for snapping operations in coordinate units. (default 0.01). [optional]"
+      },
+      "dry_run": {
+        "label": "Dry Run [optional]",
+        "tooltip": "If true (default), emits change report without modifying input. If false, applies changes."
+      },
+      "output": {
+        "label": "Output vector path for fixed features. (default topology_fixed.gpkg). [optional]"
+      },
+      "change_report": {
+        "label": "Optional JSON change audit-trail report path. [optional]"
+      }
+    }
+  },
+  "topology_rule_validate": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector path. (default input.gpkg)."
+      },
+      "rule_set": {
+        "label": "Rule configuration as JSON array/object, CSV string, or file path. (default ['line_must_not_self_intersect'...",
+        "tooltip": "Rule configuration as JSON array/object, CSV string, or file path. Defaults to all 6 MVP rules. Supported: line_must_not_self_intersect, polygon_must_not_overlap, polygon_must_not_have_gaps, line_must_not_have_dangles, point_must_be_covered_by_line, line_endpoints_must_snap_within_tolerance."
+      },
+      "snap_tolerance": {
+        "label": "Tolerance for line_endpoints_must_snap_within_tolerance rule in coordinate units. (default 1.0). [optional]",
+        "tooltip": "Tolerance for line_endpoints_must_snap_within_tolerance rule in coordinate units. Defaults to 1.0."
+      },
+      "output": {
+        "label": "Output vector path for violations. (default topology_rule_violations.gpkg). [optional]"
+      },
+      "report": {
+        "label": "Optional JSON summary report path. [optional]"
+      }
+    }
+  },
+  "topology_validation_report": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector path. (default input.gpkg)."
+      },
+      "output": {
+        "label": "Output CSV path. (default topology_report.csv). [optional]"
+      }
+    }
+  },
+  "utility_corridor_encroachment_and_access_planning": {
+    "description": "",
+    "parameters": {
+      "corridors": {
+        "label": "Input corridor centerline layer (line geometry). (default corridors.gpkg)."
+      },
+      "encroachments": {
+        "label": "Input encroachment observations (point/line/polygon). (default encroachments.gpkg)."
+      },
+      "access_points": {
+        "label": "Input field-access points (point geometry). (default access_points.gpkg)."
+      },
+      "corridor_influence_distance": {
+        "label": "Maximum distance from corridor to keep as a hotspot (default 30.0 map units). [optional]"
+      },
+      "high_risk_distance": {
+        "label": "Distance threshold considered highest risk (default 10.0 map units). [optional]"
+      },
+      "hotspots": {
+        "label": "Output hotspot vector path."
+      },
+      "priority_csv": {
+        "label": "Output ranked hotspot CSV path."
+      },
+      "planning_report": {
+        "label": "Output planning summary JSON path."
+      },
+      "response_queue_csv": {
+        "label": "Optional output CSV path for dispatch-ready response queue with SLA guidance. [optional]"
+      },
+      "html_report": {
+        "label": "Optional output path for an HTML operations dashboard report. [optional]"
+      }
+    }
+  },
+  "vector_summary_statistics": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input vector layer. (default input.shp)."
+      },
+      "group_field": {
+        "label": "Grouping field name. (default CLASS)."
+      },
+      "value_field": {
+        "label": "Numeric value field name. (default VALUE)."
+      },
+      "output": {
+        "label": "Output CSV path."
+      }
+    }
+  },
+  "vehicle_routing_cvrp": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer (validated for contract parity). (default network.gpkg)."
+      },
+      "depot_points": {
+        "label": "Depot point layer; each point can contribute one or more vehicles. (default depots.gpkg)."
+      },
+      "stop_points": {
+        "label": "Delivery stop point layer. (default stops.gpkg)."
+      },
+      "demand_field": {
+        "label": "Numeric demand field in stop_points (default: demand). [optional]"
+      },
+      "priority_field": {
+        "label": "Optional stop priority field using values like required/high/normal/low or numeric ranks. (default priority)..."
+      },
+      "allowed_vehicle_profiles_field": {
+        "label": "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited). [optional]",
+        "tooltip": "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited)."
+      },
+      "allowed_route_classes_field": {
+        "label": "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules. [optional]"
+      },
+      "depot_id_field": {
+        "label": "Optional depot ID field used in route/assignment outputs. [optional]"
+      },
+      "vehicle_count_field": {
+        "label": "Optional depot field for number of vehicles spawned at each depot. [optional]"
+      },
+      "vehicle_capacity_field": {
+        "label": "Optional depot field overriding vehicle_capacity per depot/vehicle template. [optional]"
+      },
+      "vehicle_fixed_cost_field": {
+        "label": "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template. [optional]"
+      },
+      "travel_speed_field": {
+        "label": "Optional depot field overriding travel_speed per depot/vehicle template. [optional]"
+      },
+      "max_route_distance_field": {
+        "label": "Optional depot field overriding max_route_distance per depot/vehicle template. [optional]"
+      },
+      "max_route_time_field": {
+        "label": "Optional depot field overriding max_route_time per depot/vehicle template. [optional]"
+      },
+      "vehicle_profile_field": {
+        "label": "Optional depot field defining vehicle profile/category token used for stop compatibility. [optional]",
+        "tooltip": "Optional depot field defining vehicle profile/category token used for stop compatibility."
+      },
+      "vehicle_route_class_field": {
+        "label": "Optional alias of vehicle_profile_field for route-class compatibility rules. [optional]"
+      },
+      "vehicle_capacity": {
+        "label": "Per-vehicle capacity (> 0). (default 100.0)."
+      },
+      "vehicle_fixed_cost": {
+        "label": "Optional fixed cost charged per dispatched vehicle/route (default: 0). [optional]"
+      },
+      "max_vehicles": {
+        "label": "Optional maximum number of vehicles/routes to construct. [optional]"
+      },
+      "max_route_distance": {
+        "label": "Optional maximum travel distance per route, including return to depot. [optional]"
+      },
+      "travel_speed": {
+        "label": "Travel speed in coordinate-units per time unit (default: 1). [optional]"
+      },
+      "max_route_time": {
+        "label": "Optional maximum route duration in model time units, including return to depot. [optional]"
+      },
+      "max_stops_per_vehicle": {
+        "label": "Optional maximum number of stops assigned to each vehicle route. [optional]"
+      },
+      "objective_mode": {
+        "label": "Route-construction objective: minimize_distance, minimize_vehicles, or minimize_cost. (default...",
+        "tooltip": "Route-construction objective: minimize_distance, minimize_vehicles, or minimize_cost."
+      },
+      "apply_local_optimization": {
+        "label": "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true)...",
+        "tooltip": "When true, applies a deterministic 2-opt local improvement pass to each constructed route (default: true)."
+      },
+      "apply_simulated_annealing": {
+        "label": "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization...",
+        "tooltip": "When true, applies a seeded simulated annealing refinement pass per route after greedy/local optimization (default: false)."
+      },
+      "sa_iterations": {
+        "label": "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500)...",
+        "tooltip": "Maximum simulated annealing iterations per route when apply_simulated_annealing=true (default: 1500)."
+      },
+      "sa_initial_temperature": {
+        "label": "Initial simulated annealing temperature (> 0, default: 1.0). [optional]",
+        "tooltip": "Initial simulated annealing temperature (> 0, default: 1.0)."
+      },
+      "sa_cooling_rate": {
+        "label": "Simulated annealing cooling multiplier in (0, 1); default 0.995. [optional]"
+      },
+      "sa_seed": {
+        "label": "Optional deterministic random seed for simulated annealing (default: 42). [optional]"
+      },
+      "output": {
+        "label": "Output route line vector path."
+      },
+      "assignment_output": {
+        "label": "Optional stop assignment point output with visit order/load diagnostics. [optional]"
+      }
+    }
+  },
+  "vehicle_routing_pickup_delivery": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer (validated for contract parity). (default network.gpkg)."
+      },
+      "depot_points": {
+        "label": "Depot point layer; first point is used as the active depot in this baseline implementation. (default..."
+      },
+      "stop_points": {
+        "label": "Stop point layer containing paired pickup and delivery records. (default stops.gpkg)."
+      },
+      "request_id_field": {
+        "label": "Request identifier field in stop_points used to pair pickup and delivery records (default: request_id)...",
+        "tooltip": "Request identifier field in stop_points used to pair pickup and delivery records (default: request_id)."
+      },
+      "stop_type_field": {
+        "label": "Stop type field in stop_points containing pickup/delivery labels (default: stop_type). [optional]",
+        "tooltip": "Stop type field in stop_points containing pickup/delivery labels (default: stop_type)."
+      },
+      "demand_field": {
+        "label": "Numeric demand field in stop_points; pickup demand is loaded and delivered demand is ignored (default...",
+        "tooltip": "Numeric demand field in stop_points; pickup demand is loaded and delivered demand is ignored (default: demand)."
+      },
+      "vehicle_capacity": {
+        "label": "Per-vehicle capacity (> 0). (default 100.0)."
+      },
+      "max_vehicles": {
+        "label": "Optional maximum number of vehicles/routes to construct. [optional]"
+      },
+      "output": {
+        "label": "Output route line vector path."
+      },
+      "assignment_output": {
+        "label": "Optional stop assignment point output with request and precedence diagnostics. [optional]"
+      }
+    }
+  },
+  "vehicle_routing_vrptw": {
+    "description": "",
+    "parameters": {
+      "network": {
+        "label": "Input line network layer (validated for contract parity). (default network.gpkg)."
+      },
+      "depot_points": {
+        "label": "Depot point layer; each point can contribute one or more vehicles. (default depots.gpkg)."
+      },
+      "stop_points": {
+        "label": "Delivery stop point layer with demand and time-window fields. (default stops.gpkg)."
+      },
+      "demand_field": {
+        "label": "Numeric demand field in stop_points (default: demand). [optional]"
+      },
+      "priority_field": {
+        "label": "Optional stop priority field using values like required/high/normal/low or numeric ranks. (default priority)..."
+      },
+      "allowed_vehicle_profiles_field": {
+        "label": "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited). [optional]",
+        "tooltip": "Optional stop field listing compatible vehicle profiles (comma/semicolon/pipe-delimited)."
+      },
+      "allowed_route_classes_field": {
+        "label": "Optional alias of allowed_vehicle_profiles_field for route-class compatibility rules. [optional]"
+      },
+      "tw_start_field": {
+        "label": "Numeric time-window start field in stop_points (default: tw_start). [optional]"
+      },
+      "tw_end_field": {
+        "label": "Numeric time-window end field in stop_points (default: tw_end). [optional]"
+      },
+      "service_time_field": {
+        "label": "Numeric per-stop service time field in stop_points (default: service_time). [optional]"
+      },
+      "depot_id_field": {
+        "label": "Optional depot ID field used in route/assignment outputs. [optional]"
+      },
+      "vehicle_count_field": {
+        "label": "Optional depot field for number of vehicles spawned at each depot. [optional]"
+      },
+      "vehicle_capacity_field": {
+        "label": "Optional depot field overriding vehicle_capacity per depot/vehicle template. [optional]"
+      },
+      "vehicle_fixed_cost_field": {
+        "label": "Optional depot field overriding vehicle_fixed_cost per depot/vehicle template. [optional]"
+      },
+      "travel_speed_field": {
+        "label": "Optional depot field overriding travel_speed per depot/vehicle template. [optional]"
+      },
+      "max_route_distance_field": {
+        "label": "Optional depot field overriding max_route_distance per depot/vehicle template. [optional]"
+      },
+      "max_route_time_field": {
+        "label": "Optional depot field overriding max_route_time per depot/vehicle template. [optional]"
+      },
+      "vehicle_profile_field": {
+        "label": "Optional depot field defining vehicle profile/category token used for stop compatibility. [optional]",
+        "tooltip": "Optional depot field defining vehicle profile/category token used for stop compatibility."
+      },
+      "vehicle_route_class_field": {
+        "label": "Optional alias of vehicle_profile_field for route-class compatibility rules. [optional]"
+      },
+      "depot_close_time_field": {
+        "label": "Optional depot field overriding depot_close_time per depot/vehicle template. [optional]"
+      },
+      "break_start_field": {
+        "label": "Optional depot field overriding break_start_time per depot/vehicle template. [optional]"
+      },
+      "break_end_field": {
+        "label": "Optional depot field overriding break_end_time per depot/vehicle template. [optional]"
+      },
+      "break_duration_field": {
+        "label": "Optional depot field overriding break_duration per depot/vehicle template. [optional]"
+      },
+      "vehicle_capacity": {
+        "label": "Per-vehicle capacity (> 0). (default 100.0)."
+      },
+      "vehicle_fixed_cost": {
+        "label": "Optional fixed cost charged per dispatched vehicle/route (default: 0). [optional]"
+      },
+      "start_time": {
+        "label": "Route start time in model time units (default: 0). [optional]"
+      },
+      "travel_speed": {
+        "label": "Travel speed in coordinate-units per time unit (default: 1). [optional]"
+      },
+      "enforce_time_windows": {
+        "label": "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false)...",
+        "tooltip": "When true, only stops with lateness <= allowed_lateness are eligible for assignment (default: false)."
+      },
+      "allowed_lateness": {
+        "label": "Maximum lateness tolerated when enforce_time_windows=true (default: 0). [optional]"
+      },
+      "depot_close_time": {
+        "label": "Optional hard close time by which each route must return to depot. [optional]"
+      },
+      "break_start_time": {
+        "label": "Optional global break-window start time for all vehicles. [optional]"
+      },
+      "break_end_time": {
+        "label": "Optional global break-window end time for all vehicles. [optional]"
+      },
+      "break_duration": {
+        "label": "Optional global break duration applied once per route when break window is intersected. [optional]"
+      },
+      "use_priority_scoring": {
+        "label": "Use Priority Scoring [optional]",
+        "tooltip": "When true, ranks feasible candidates by projected lateness/slack before travel distance; when false, uses nearest-neighbour baseline (default: true)."
+      },
+      "max_vehicles": {
+        "label": "Optional maximum number of vehicles/routes to construct. [optional]"
+      },
+      "max_route_distance": {
+        "label": "Optional maximum route travel distance, including return to depot. [optional]"
+      },
+      "max_route_time": {
+        "label": "Optional maximum route duration in model time units, including return to depot. [optional]"
+      },
+      "max_stops_per_vehicle": {
+        "label": "Optional maximum number of stops assigned to each vehicle route. [optional]"
+      },
+      "objective_mode": {
+        "label": "Route-construction objective: minimize_lateness, minimize_distance, minimize_vehicles, or minimize_cost...",
+        "tooltip": "Route-construction objective: minimize_lateness, minimize_distance, minimize_vehicles, or minimize_cost."
+      },
+      "output": {
+        "label": "Output route line vector path."
+      },
+      "assignment_output": {
+        "label": "Optional stop assignment point output with time-window diagnostics. [optional]"
+      }
+    }
+  },
+  "wiener_filter": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input raster path or typed raster object. (default input.tif)."
+      },
+      "radius": {
+        "label": "Wiener local window radius in pixels (default 2). [optional]"
+      },
+      "noise_variance": {
+        "label": "Optional additive noise variance. [optional]"
+      },
+      "output": {
+        "label": "Optional output path. [optional]"
+      }
+    }
+  },
+  "wildfire_fuel_loading_and_risk_matrix": {
+    "description": "",
+    "parameters": {
+      "optical_bundle": {
+        "label": "Multispectral raster with red and NIR (and optionally SWIR) bands. (default optical_scene.tif)."
+      },
+      "red_band_index": {
+        "label": "Band index (0-based) for red band. (default 0). [optional]"
+      },
+      "nir_band_index": {
+        "label": "Band index (0-based) for NIR band. (default 1). [optional]"
+      },
+      "swir_band_index": {
+        "label": "SWIR Band Index [optional]",
+        "tooltip": "Band index (0-based) for SWIR band (optional; enables NDMI)."
+      },
+      "biomass_proxy": {
+        "label": "Optional LiDAR-derived canopy height or biomass proxy raster. [optional]"
+      },
+      "slope": {
+        "label": "Optional terrain slope raster (degrees). [optional]"
+      },
+      "aspect": {
+        "label": "Optional terrain aspect raster (degrees). [optional]"
+      },
+      "fuel_model": {
+        "label": "Fuel model for regional calibration: temperate_mixed_forest, boreal_sparse, mediterranean_shrub...",
+        "tooltip": "Fuel model for regional calibration: temperate_mixed_forest, boreal_sparse, mediterranean_shrub, tropical_dense, grassland_savanna, none."
+      },
+      "profile": {
+        "label": "Risk sensitivity profile: conservative, balanced, aggressive. (default balanced). [optional]",
+        "tooltip": "Risk sensitivity profile: conservative, balanced, aggressive."
+      },
+      "zone_block_cells": {
+        "label": "Block aggregation size for risk zone polygons. (default 20). [optional]"
+      },
+      "output_prefix": {
+        "label": "Output prefix for generated artifacts. (default wildfire_risk). [optional]"
+      }
+    }
+  },
+  "wind_turbine_siting": {
+    "description": "",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM raster path. (default dem.tif)."
+      },
+      "settlements": {
+        "label": "Input settlement vector/CSV path. (default settlements.shp)."
+      },
+      "settlements_epsg": {
+        "label": "Optional EPSG for settlements when source CRS metadata is missing (required for CSV). (default 4326)..."
+      },
+      "visibility_radius_meters": {
+        "label": "Visibility radius in meters (1000-50000). (default 5000). [optional]"
+      },
+      "min_slope_degrees": {
+        "label": "Minimum suitable slope (0-45). (default 5.0). [optional]"
+      },
+      "max_slope_degrees": {
+        "label": "Maximum suitable slope (5-60). (default 35.0). [optional]"
+      },
+      "transmission_region": {
+        "label": "Transmission grid context: dense_grid, sparse_grid, remote. (default dense_grid). [optional]",
+        "tooltip": "Transmission grid context: dense_grid, sparse_grid, remote."
+      },
+      "profile": {
+        "label": "Scoring profile: fast, balanced, quality. (default balanced). [optional]",
+        "tooltip": "Scoring profile: fast, balanced, quality."
+      },
+      "output_prefix": {
+        "label": "Prefix for output artifacts. (default wind_siting). [optional]"
+      }
+    }
+  },
+  "yield_data_conditioning_and_qa": {
+    "description": "",
+    "parameters": {
+      "input": {
+        "label": "Input yield point vector path. (default yield_points.gpkg)."
+      },
+      "output_prefix": {
+        "label": "Output prefix for all generated artifacts. (default yield_pipeline). [optional]"
+      },
+      "yield_field_name": {
+        "label": "Raw yield field name (default YIELD). [optional]"
+      },
+      "use_field_aliases": {
+        "label": "Use Field Aliases [optional]",
+        "tooltip": "If true, auto-resolve common field aliases when configured fields are missing (default true)."
+      },
+      "moisture_field_name": {
+        "label": "Optional grain moisture field name for dry-yield normalization (e.g., MOISTURE). [optional]"
+      },
+      "target_moisture_pct": {
+        "label": "Target moisture percent for dry-yield normalization when moisture_field_name is supplied. (default 15.5)..."
+      },
+      "speed_field_name": {
+        "label": "Optional speed field (km/h) for telemetry QA filtering. [optional]"
+      },
+      "heading_field_name": {
+        "label": "Optional heading field (degrees) for telemetry QA filtering. [optional]"
+      },
+      "min_speed_kmh": {
+        "label": "Minimum accepted speed in km/h when speed_field_name is supplied. (default 1.0). [optional]"
+      },
+      "max_speed_kmh": {
+        "label": "Maximum accepted speed in km/h when speed_field_name is supplied. (default 18.0). [optional]"
+      },
+      "max_heading_change_deg": {
+        "label": "Maximum allowed local heading jump in degrees when heading_field_name is supplied. (default 35.0). [optional]"
+      },
+      "header_field_name": {
+        "label": "Header/region field name used for reconciliation (default HEADER). [optional]"
+      },
+      "profile": {
+        "label": "Pipeline profile: fast, balanced, strict. (default balanced). [optional]",
+        "tooltip": "Pipeline profile: fast, balanced, strict."
+      },
+      "swath_width": {
+        "label": "Swath width for pass-aware tools (default 6.096). [optional]"
+      },
+      "edge_radius": {
+        "label": "Neighborhood radius for edge detection (profile default). [optional]"
+      },
+      "reconcile_radius": {
+        "label": "Neighborhood radius for multi-header reconciliation (profile default). [optional]"
+      },
+      "normalization_radius": {
+        "label": "Neighborhood radius for local normalization (default depends on profile). [optional]"
+      },
+      "lag_correction_mode": {
+        "label": "Optional lag correction mode for pass points: none or distance. (default none). [optional]",
+        "tooltip": "Optional lag correction mode for pass points: none or distance."
+      },
+      "lag_distance_m": {
+        "label": "Distance lag in map units for lag_correction_mode=distance. (default 0.0). [optional]"
+      },
+      "filtering_mode": {
+        "label": "Filtering mode after pass-aware smoothing: standard or robust. (default standard). [optional]",
+        "tooltip": "Filtering mode after pass-aware smoothing: standard or robust."
+      },
+      "robust_mad_threshold": {
+        "label": "MAD threshold for robust filtering mode (default depends on profile). [optional]"
+      },
+      "z_score_threshold": {
+        "label": "Outlier z-score threshold for yield filtering (profile default). [optional]"
+      },
+      "min_yield": {
+        "label": "Minimum accepted yield value. [optional]"
+      },
+      "max_yield": {
+        "label": "Maximum accepted yield value. [optional]"
+      },
+      "mean_tonnage": {
+        "label": "Optional target mean yield after reconciliation. [optional]"
+      },
+      "standardize": {
+        "label": "Standardize [optional]",
+        "tooltip": "If true, output standardized values instead of [0,1] normalization."
+      },
+      "ignore_zeros": {
+        "label": "Ignore zero-yield points during pass reconstruction. (default False). [optional]"
+      },
+      "max_change_in_heading": {
+        "label": "Maximum heading change in degrees for pass logic (default 25). [optional]"
+      }
+    }
+  }
+}

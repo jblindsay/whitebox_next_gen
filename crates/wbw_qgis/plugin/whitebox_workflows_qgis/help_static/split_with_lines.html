@@ -1,0 +1,7 @@
+<p>This tool splits the lines or polygons in one layer using the lines in another layer to define the breaking points. Intersection points between geometries in both layers are considered as split points. The input layer (<code>input</code>) can be of either POLYLINE or POLYGON VectorGeometryType and the output file will share this geometry type. The user must also specify an split layer (<code>split</code>), of POLYLINE VectorGeometryType, used to bisect the input geometries.</p> <p>Each split geometry's attribute record will contain <code>FID</code> and <code>PARENT_FID</code> values and all of the attributes (excluding <code>FID</code>'s) of the input layer.</p> <h2>See Also</h2> <p>'MergeLineSegments'</p> <h2>Function Signature</h2> <p><code>def split_with_lines(self, input: Vector, split_vector: Vector) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

@@ -1,0 +1,22 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Computes a high-pass residual by subtracting bilateral smoothing from the input raster.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">raster</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">image</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">filter</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">high-pass</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">legacy-port</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input raster path or typed raster object.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input.tif</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>sigma_dist</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Standard deviation of the spatial (distance) Gaussian kernel, in pixels (0.5–20.0, default 0.75).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>0.75</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>sigma_int</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Standard deviation of the intensity Gaussian kernel, in raster-value units (default 1.0).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>1.0</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>treat_as_rgb</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Set true to force HSI-intensity filtering for packed RGB rasters before high-pass differencing.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>False</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>assume_three_band_rgb</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>When true (default), and no explicit color metadata is present, allow 3-band uint8/uint16 RGB interpretation.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>True</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional output file path. If omitted, output remains in memory.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Applies high-pass bilateral filtering to emphasize local texture.</em></p>
+<pre><code>wbe.high_pass_bilateral_filter(assume_three_band_rgb=True, input='image.tif', output='image_highpass_bilateral.tif', sigma_dist=1.5, sigma_int=25.0, treat_as_rgb=False)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

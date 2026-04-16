@@ -59,6 +59,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Adds two rasters on a cell-by-cell basis.
     run_tool("add", list(...))
   }
+  session$add_field <- function(...) {
+    # Adds a new attribute field with an optional default value.
+    run_tool("add_field", list(...))
+  }
+  session$add_geometry_attributes <- function(...) {
+    # Adds area, length, perimeter, and centroid attributes to vector features.
+    run_tool("add_geometry_attributes", list(...))
+  }
   session$add_point_coordinates_to_table <- function(...) {
     # Copies a point layer and appends XCOORD and YCOORD attribute fields.
     run_tool("add_point_coordinates_to_table", list(...))
@@ -223,6 +231,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Applies Canny multi-stage edge detection (Gaussian blur → Sobel gradient → non-maximum suppression → double threshold → hysteresis).
     run_tool("canny_edge_detection", list(...))
   }
+  session$carbon_sequestration_verification_audit <- function(...) {
+    # Produces NDVI delta, carbon proxy change, confidence scoring, verification zone polygons, and audit-ready JSON contract for MRV and ESG reporting.
+    run_tool("carbon_sequestration_verification_audit", list(...))
+  }
   session$casorati_curvature <- function(...) {
     # Calculates Casorati curvature from a DEM.
     run_tool("casorati_curvature", list(...))
@@ -275,6 +287,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Clips a raster to polygon extents; outside polygon cells are set to NoData.
     run_tool("clip_raster_to_polygon", list(...))
   }
+  session$closest_facility_network <- function(...) {
+    # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
+    run_tool("closest_facility_network", list(...))
+  }
   session$closing <- function(...) {
     # Performs a morphological closing operation using a rectangular structuring element.
     run_tool("closing", list(...))
@@ -294,6 +310,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$compactness_ratio <- function(...) {
     # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
     run_tool("compactness_ratio", list(...))
+  }
+  session$concave_hull <- function(...) {
+    # Creates concave hull polygons around all input feature coordinates.
+    run_tool("concave_hull", list(...))
   }
   session$conditional_evaluation <- function(...) {
     # Performs if-then-else conditional evaluation on raster cells.
@@ -331,9 +351,9 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Reduces brightness fall-off away from a principal point using a cosine lens model.
     run_tool("correct_vignetting", list(...))
   }
-  session$corridor_mapping_product <- function(...) {
-    # Produces erosion potential, stream health vectors, restoration zones, and summary reporting.
-    run_tool("corridor_mapping_product", list(...))
+  session$corridor_mapping_intelligence <- function(...) {
+    # Computes terrain cost surface, least-cost route, and corridor suitability band for linear infrastructure siting.
+    run_tool("corridor_mapping_intelligence", list(...))
   }
   session$cos <- function(...) {
     # Computes the cosine of each raster cell value.
@@ -407,9 +427,17 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Subtracts 1 from each non-nodata raster cell.
     run_tool("decrement", list(...))
   }
+  session$delete_field <- function(...) {
+    # Deletes one or more attribute fields from a vector layer.
+    run_tool("delete_field", list(...))
+  }
   session$dem_void_filling <- function(...) {
     # Fills DEM voids using a secondary surface and interpolated elevation offsets for seamless fusion.
     run_tool("dem_void_filling", list(...))
+  }
+  session$densify_features <- function(...) {
+    # Adds vertices along line and polygon boundaries at a specified spacing.
+    run_tool("densify_features", list(...))
   }
   session$depth_in_sink <- function(...) {
     # Measures the depth each DEM cell lies below a depression-filled surface.
@@ -551,6 +579,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Performs directional emboss filtering.
     run_tool("emboss_filter", list(...))
   }
+  session$emergency_scenario_routing_and_accessibility_simulator <- function(...) {
+    # Simulates emergency accessibility under disruption scenarios and reports coverage deltas for critical facilities.
+    run_tool("emergency_scenario_routing_and_accessibility_simulator", list(...))
+  }
   session$equal_to <- function(...) {
     # Tests whether two rasters are equal on a cell-by-cell basis.
     run_tool("equal_to", list(...))
@@ -642,6 +674,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$fetch_analysis <- function(...) {
     # Computes upwind distance to the first topographic obstacle along a specified azimuth.
     run_tool("fetch_analysis", list(...))
+  }
+  session$field_calculator <- function(...) {
+    # Calculates a field value from an expression using feature attributes and geometry variables.
+    run_tool("field_calculator", list(...))
   }
   session$fill_burn <- function(...) {
     # Hydro-enforces a DEM by burning streams and then filling depressions.
@@ -735,6 +771,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Flattens lake elevations using minimum perimeter elevation for each polygon.
     run_tool("flatten_lakes", list(...))
   }
+  session$fleet_routing_and_dispatch_optimizer <- function(...) {
+    # Solves vehicle routing problems (CVRP/VRPTW) with capacity constraints and time windows. Produces optimized routes, stop assignments, KPIs, and exception diagnostics.
+    run_tool("fleet_routing_and_dispatch_optimizer", list(...))
+  }
   session$flightline_overlap <- function(...) {
     # Counts distinct point-source IDs per raster cell to identify overlapping flightlines.
     run_tool("flightline_overlap", list(...))
@@ -758,6 +798,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$flow_length_diff <- function(...) {
     # Computes local maximum absolute differences in downslope path length from a D8 pointer raster.
     run_tool("flow_length_diff", list(...))
+  }
+  session$forestry_structure_and_biomass_intelligence <- function(...) {
+    # Produces canopy height metrics, vertical structure classes, stand units, biomass proxy, confidence, and summary report.
+    run_tool("forestry_structure_and_biomass_intelligence", list(...))
   }
   session$frangi_filter <- function(...) {
     # Performs multiscale Frangi vesselness enhancement.
@@ -818,6 +862,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$guided_filter <- function(...) {
     # Performs edge-preserving guided filtering using local linear models.
     run_tool("guided_filter", list(...))
+  }
+  session$guided_uav_image_intake_workflow <- function(...) {
+    # Generates image inventory, QA diagnostics, and pass/review/fail intake guidance before expensive downstream processing.
+    run_tool("guided_uav_image_intake_workflow", list(...))
   }
   session$hack_stream_order <- function(...) {
     # Assigns Hack stream order to stream cells.
@@ -1026,6 +1074,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$k_nearest_mean_filter <- function(...) {
     # Performs edge-preserving k-nearest neighbor mean smoothing.
     run_tool("k_nearest_mean_filter", list(...))
+  }
+  session$k_shortest_paths_network <- function(...) {
+    # Finds the k shortest simple paths between start and end coordinates over a line network.
+    run_tool("k_shortest_paths_network", list(...))
   }
   session$kappa_index <- function(...) {
     # Computes Cohen's kappa and agreement metrics between two categorical rasters.
@@ -1247,6 +1299,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Finds line intersection points between input and overlay layers and appends parent IDs with merged attributes.
     run_tool("line_intersections", list(...))
   }
+  session$line_polygon_clip <- function(...) {
+    # Clips line features to polygon interiors and outputs clipped line segments.
+    run_tool("line_polygon_clip", list(...))
+  }
   session$line_thinning <- function(...) {
     # Reduces connected binary raster features to one-cell-wide skeleton lines.
     run_tool("line_thinning", list(...))
@@ -1274,6 +1330,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$local_hypsometric_analysis <- function(...) {
     # Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.
     run_tool("local_hypsometric_analysis", list(...))
+  }
+  session$locate_points_along_routes <- function(...) {
+    # Locates point features along route lines and writes route-measure attributes.
+    run_tool("locate_points_along_routes", list(...))
+  }
+  session$location_allocation_network <- function(...) {
+    # Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.
+    run_tool("location_allocation_network", list(...))
   }
   session$log10 <- function(...) {
     # Computes the base-10 logarithm of each raster cell.
@@ -1315,9 +1379,17 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Maps discrete elevated terrain features from a raster using descending-priority region growth.
     run_tool("map_features", list(...))
   }
+  session$map_matching_v1 <- function(...) {
+    # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
+    run_tool("map_matching_v1", list(...))
+  }
   session$map_off_terrain_objects <- function(...) {
     # Maps off-terrain object segments in DSMs using slope-constrained region growing and optional minimum feature-size filtering.
     run_tool("map_off_terrain_objects", list(...))
+  }
+  session$market_access_and_site_intelligence_workflow <- function(...) {
+    # Analyzes candidate sites for commercial expansion. Computes catchments, demand coverage, competitive positioning, and ranking.
+    run_tool("market_access_and_site_intelligence_workflow", list(...))
   }
   session$max <- function(...) {
     # Performs a MAX operation on two rasters or a raster and a constant value.
@@ -1435,6 +1507,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Computes the per-cell minimum across a raster stack, propagating NoData if any input cell is NoData.
     run_tool("min_overlay", list(...))
   }
+  session$mine_site_reclamation_compliance_tracker <- function(...) {
+    # Produces NDVI recovery rasters, reclamation progress, compliance zone polygons, and a regulatory-ready compliance contract.
+    run_tool("mine_site_reclamation_compliance_tracker", list(...))
+  }
   session$minimal_curvature <- function(...) {
     # Calculates minimal (minimum principal) curvature from a DEM.
     run_tool("minimal_curvature", list(...))
@@ -1499,6 +1575,18 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Produces weighted multi-azimuth shaded-relief.
     run_tool("multidirectional_hillshade", list(...))
   }
+  session$multimodal_od_cost_matrix <- function(...) {
+    # Computes batched multimodal OD costs and mode summaries between origin and destination point sets.
+    run_tool("multimodal_od_cost_matrix", list(...))
+  }
+  session$multimodal_routes_from_od <- function(...) {
+    # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
+    run_tool("multimodal_routes_from_od", list(...))
+  }
+  session$multimodal_shortest_path <- function(...) {
+    # Finds a mode-aware shortest path over a line network with configurable transfer penalties.
+    run_tool("multimodal_shortest_path", list(...))
+  }
   session$multipart_to_singlepart <- function(...) {
     # Converts a vector containing multi-part features into one with only single-part features.
     run_tool("multipart_to_singlepart", list(...))
@@ -1555,6 +1643,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
     run_tool("natural_neighbour_interpolation", list(...))
   }
+  session$near <- function(...) {
+    # Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.
+    run_tool("near", list(...))
+  }
   session$nearest_neighbour_interpolation <- function(...) {
     # Interpolates a raster from point samples by assigning each cell the nearest sample value.
     run_tool("nearest_neighbour_interpolation", list(...))
@@ -1562,6 +1654,42 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$negate <- function(...) {
     # Negates each non-nodata raster cell value.
     run_tool("negate", list(...))
+  }
+  session$network_accessibility_metrics <- function(...) {
+    # Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.
+    run_tool("network_accessibility_metrics", list(...))
+  }
+  session$network_centrality_metrics <- function(...) {
+    # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
+    run_tool("network_centrality_metrics", list(...))
+  }
+  session$network_connected_components <- function(...) {
+    # Assigns a connected-component ID to each line feature in a network.
+    run_tool("network_connected_components", list(...))
+  }
+  session$network_node_degree <- function(...) {
+    # Extracts network nodes from line features and computes node degree and node type.
+    run_tool("network_node_degree", list(...))
+  }
+  session$network_od_cost_matrix <- function(...) {
+    # Computes origin-destination shortest-path costs over a line network and writes a CSV matrix.
+    run_tool("network_od_cost_matrix", list(...))
+  }
+  session$network_readiness_and_diagnostics_intelligence <- function(...) {
+    # Audits network integrity and provides decision-grade readiness scoring for routing workflows.
+    run_tool("network_readiness_and_diagnostics_intelligence", list(...))
+  }
+  session$network_routes_from_od <- function(...) {
+    # Builds route geometries for origin-destination point pairs over a line network.
+    run_tool("network_routes_from_od", list(...))
+  }
+  session$network_service_area <- function(...) {
+    # Computes reachable network nodes from origin points within a maximum network cost.
+    run_tool("network_service_area", list(...))
+  }
+  session$network_topology_audit <- function(...) {
+    # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
+    run_tool("network_topology_audit", list(...))
   }
   session$new_raster_from_base_raster <- function(...) {
     # Creates a new raster using the extent, dimensions, and CRS of a base raster.
@@ -1611,6 +1739,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Counts the number of 8-neighbour cells higher than each DEM cell.
     run_tool("num_upslope_neighbours", list(...))
   }
+  session$od_sensitivity_analysis <- function(...) {
+    # Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.
+    run_tool("od_sensitivity_analysis", list(...))
+  }
   session$olympic_filter <- function(...) {
     # Performs Olympic smoothing by averaging local values excluding min and max.
     run_tool("olympic_filter", list(...))
@@ -1638,6 +1770,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$parallelepiped_classification <- function(...) {
     # Performs a supervised parallelepiped classification on multi-spectral rasters using polygon training data.
     run_tool("parallelepiped_classification", list(...))
+  }
+  session$parcel_and_land_fabric_topology_compliance_workflow <- function(...) {
+    # Runs topology compliance checks for parcel fabrics, flags overlaps/gaps/slivers, and optionally emits auto-fix candidates.
+    run_tool("parcel_and_land_fabric_topology_compliance_workflow", list(...))
   }
   session$patch_orientation <- function(...) {
     # Calculates polygon orientation (degrees from north) using reduced major axis regression and appends ORIENT.
@@ -1690,6 +1826,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$plan_curvature <- function(...) {
     # Calculates plan (contour) curvature from a DEM.
     run_tool("plan_curvature", list(...))
+  }
+  session$points_along_lines <- function(...) {
+    # Creates regularly spaced point features along input line geometries.
+    run_tool("points_along_lines", list(...))
   }
   session$polygon_area <- function(...) {
     # Calculates polygon area and appends an AREA attribute field.
@@ -1807,6 +1947,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Applies a serialized random forest regression model to multi-band predictors.
     run_tool("random_forest_regression_predict", list(...))
   }
+  session$random_points_in_polygon <- function(...) {
+    # Generates random points uniformly within input polygon geometries.
+    run_tool("random_points_in_polygon", list(...))
+  }
   session$random_sample <- function(...) {
     # Creates a raster containing randomly located sample cells with unique IDs.
     run_tool("random_sample", list(...))
@@ -1883,6 +2027,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates a rectangular polygon grid covering a vector-layer bounding extent.
     run_tool("rectangular_grid_from_vector_base", list(...))
   }
+  session$registration_oriented_feature_workflow <- function(...) {
+    # Runs lightweight keypoint-based registration diagnostics and emits tie points for downstream workflows.
+    run_tool("registration_oriented_feature_workflow", list(...))
+  }
   session$reinitialize_attribute_table <- function(...) {
     # Creates a copy of a vector layer with only a regenerated FID attribute.
     run_tool("reinitialize_attribute_table", list(...))
@@ -1931,9 +2079,17 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Removes short spur artifacts from binary raster features by iterative pruning.
     run_tool("remove_spurs", list(...))
   }
+  session$rename_field <- function(...) {
+    # Renames an attribute field in a vector layer.
+    run_tool("rename_field", list(...))
+  }
   session$repair_stream_vector_topology <- function(...) {
     # Repairs topology of vector stream network.
     run_tool("repair_stream_vector_topology", list(...))
+  }
+  session$reproject_vector <- function(...) {
+    # Reprojects an input vector layer to a destination EPSG code.
+    run_tool("reproject_vector", list(...))
   }
   session$resample <- function(...) {
     # Resamples one or more input rasters to a base raster grid or to a user-defined output cell size.
@@ -1987,13 +2143,65 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Rounds each raster cell to the nearest integer.
     run_tool("round", list(...))
   }
+  session$route_calibrate <- function(...) {
+    # Calibrates route start/end measures from control points with known measures.
+    run_tool("route_calibrate", list(...))
+  }
+  session$route_event_governance_for_linear_assets <- function(...) {
+    # Validates route events for overlap, gap, and monotonicity compliance and optionally auto-corrects detectable violations.
+    run_tool("route_event_governance_for_linear_assets", list(...))
+  }
+  session$route_event_lines_from_layer <- function(...) {
+    # Creates routed line events from an event vector layer using from/to measures.
+    run_tool("route_event_lines_from_layer", list(...))
+  }
+  session$route_event_lines_from_table <- function(...) {
+    # Creates routed line events from a CSV event table and a route layer using from/to measures.
+    run_tool("route_event_lines_from_table", list(...))
+  }
+  session$route_event_merge <- function(...) {
+    # Merges adjacent compatible route events.
+    run_tool("route_event_merge", list(...))
+  }
+  session$route_event_overlay <- function(...) {
+    # Overlays two route event layers by interval overlap.
+    run_tool("route_event_overlay", list(...))
+  }
+  session$route_event_points_from_layer <- function(...) {
+    # Creates routed point events from an event vector layer and a route layer.
+    run_tool("route_event_points_from_layer", list(...))
+  }
+  session$route_event_points_from_table <- function(...) {
+    # Creates routed point events from a CSV event table and a route layer.
+    run_tool("route_event_points_from_table", list(...))
+  }
+  session$route_event_split <- function(...) {
+    # Splits route events by per-route boundary measures.
+    run_tool("route_event_split", list(...))
+  }
+  session$route_measure_qa <- function(...) {
+    # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
+    run_tool("route_measure_qa", list(...))
+  }
+  session$route_recalibrate <- function(...) {
+    # Recalibrates edited route measures from a reference route layer while preserving route measure continuity.
+    run_tool("route_recalibrate", list(...))
+  }
   session$ruggedness_index <- function(...) {
     # Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).
     run_tool("ruggedness_index", list(...))
   }
-  session$sar_analysis_ready <- function(...) {
-    # Calibrates and terrain-normalizes SAR scenes with QA-oriented outputs and optional coherence estimation.
-    run_tool("sar_analysis_ready", list(...))
+  session$sar_analysis_readiness <- function(...) {
+    # Calibrates and terrain-normalizes SAR scenes with QA-oriented outputs and optional coherence-proxy estimation.
+    run_tool("sar_analysis_readiness", list(...))
+  }
+  session$sar_coregistration <- function(...) {
+    # SAR pair alignment with translation or experimental affine residual mode, aligned-raster output, and machine-readable QA diagnostics.
+    run_tool("sar_coregistration", list(...))
+  }
+  session$sar_interferogram_coherence <- function(...) {
+    # Single workflow for interferogram and coherence production with shared QA/provenance outputs.
+    run_tool("sar_interferogram_coherence", list(...))
   }
   session$savitzky_golay_2d_filter <- function(...) {
     # Performs 2D Savitzky-Golay smoothing.
@@ -2007,9 +2215,17 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Calculates the sediment transport index (LS factor) from specific catchment area and slope.
     run_tool("sediment_transport_index", list(...))
   }
+  session$select_by_location <- function(...) {
+    # Extracts target features that satisfy a spatial relationship to query features.
+    run_tool("select_by_location", list(...))
+  }
   session$select_tiles_by_polygon <- function(...) {
     # Copies LiDAR tiles from an input directory to an output directory when tile sample points overlap polygon geometries.
     run_tool("select_tiles_by_polygon", list(...))
+  }
+  session$service_area_planning_and_coverage_optimization <- function(...) {
+    # Generates network-derived service-area rings, uncovered demand diagnostics, and planning summary outputs.
+    run_tool("service_area_planning_and_coverage_optimization", list(...))
   }
   session$set_nodata_value <- function(...) {
     # Sets a raster nodata value and maps existing nodata cells to the specified background value.
@@ -2035,6 +2251,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Calculates the shape index surface form descriptor from a DEM.
     run_tool("shape_index", list(...))
   }
+  session$shortest_path_network <- function(...) {
+    # Finds the shortest path between start and end coordinates over a line network.
+    run_tool("shortest_path_network", list(...))
+  }
   session$shreve_stream_magnitude <- function(...) {
     # Calculates Shreve stream magnitude.
     run_tool("shreve_stream_magnitude", list(...))
@@ -2046,6 +2266,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$sigmoidal_contrast_stretch <- function(...) {
     # Performs sigmoidal contrast stretching using gain and cutoff.
     run_tool("sigmoidal_contrast_stretch", list(...))
+  }
+  session$simplify_features <- function(...) {
+    # Simplifies vector geometries using Douglas-Peucker tolerance.
+    run_tool("simplify_features", list(...))
   }
   session$sin <- function(...) {
     # Computes the sine of each raster cell value.
@@ -2114,6 +2338,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$sort_lidar <- function(...) {
     # Sorts points by one or more LiDAR properties, with optional bin sizes per criterion.
     run_tool("sort_lidar", list(...))
+  }
+  session$spatial_join <- function(...) {
+    # Joins attributes from a join layer onto target features using a spatial predicate.
+    run_tool("spatial_join", list(...))
   }
   session$spherical_std_dev_of_normals <- function(...) {
     # Calculates spherical standard deviation of local surface normals.
@@ -2231,9 +2459,9 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Computes the hyperbolic tangent of each raster cell.
     run_tool("tanh", list(...))
   }
-  session$terrain_corrected_optical <- function(...) {
+  session$terrain_corrected_optical_analytics <- function(...) {
     # Topographic C-correction of multispectral optical bands using a co-registered DEM. Outputs surface reflectance stack, correction factor, cloud/shadow mask, and quality confidence.
-    run_tool("terrain_corrected_optical", list(...))
+    run_tool("terrain_corrected_optical_analytics", list(...))
   }
   session$thicken_raster_line <- function(...) {
     # Thickens diagonal raster line segments to prevent diagonal leak-through.
@@ -2282,6 +2510,18 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$topological_stream_order <- function(...) {
     # Assigns topological stream order based on link count.
     run_tool("topological_stream_order", list(...))
+  }
+  session$topology_rule_autofix <- function(...) {
+    # Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.
+    run_tool("topology_rule_autofix", list(...))
+  }
+  session$topology_rule_validate <- function(...) {
+    # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
+    run_tool("topology_rule_validate", list(...))
+  }
+  session$topology_validation_report <- function(...) {
+    # Audits a vector layer for topology issues and writes a per-feature CSV report.
+    run_tool("topology_validation_report", list(...))
   }
   session$total_curvature <- function(...) {
     # Calculates total curvature from a DEM.
@@ -2355,6 +2595,14 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Applies a user-defined convolution kernel.
     run_tool("user_defined_weights_filter", list(...))
   }
+  session$utility_corridor_encroachment_and_access_planning <- function(...) {
+    # Prioritizes encroachment hotspots near utility corridors and assigns nearest access points for field-response planning.
+    run_tool("utility_corridor_encroachment_and_access_planning", list(...))
+  }
+  session$utility_corridor_encroachment_intelligence <- function(...) {
+    # Produces corridor encroachment risk raster, priority zones, asset risk table, confidence raster, and summary JSON.
+    run_tool("utility_corridor_encroachment_intelligence", list(...))
+  }
   session$vector_hex_binning <- function(...) {
     # Aggregates point features into hexagonal bins, counting points per hex cell.
     run_tool("vector_hex_binning", list(...))
@@ -2374,6 +2622,22 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$vector_stream_network_analysis <- function(...) {
     # Comprehensive vector stream network analysis.
     run_tool("vector_stream_network_analysis", list(...))
+  }
+  session$vector_summary_statistics <- function(...) {
+    # Computes grouped summary statistics for a numeric field and writes the result to CSV.
+    run_tool("vector_summary_statistics", list(...))
+  }
+  session$vehicle_routing_cvrp <- function(...) {
+    # Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.
+    run_tool("vehicle_routing_cvrp", list(...))
+  }
+  session$vehicle_routing_pickup_delivery <- function(...) {
+    # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
+    run_tool("vehicle_routing_pickup_delivery", list(...))
+  }
+  session$vehicle_routing_vrptw <- function(...) {
+    # Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.
+    run_tool("vehicle_routing_vrptw", list(...))
   }
   session$vertical_excess_curvature <- function(...) {
     # Calculates vertical excess curvature from a DEM.
@@ -2422,6 +2686,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$wilcoxon_signed_rank_test <- function(...) {
     # Performs a Wilcoxon signed-rank test on paired raster differences.
     run_tool("wilcoxon_signed_rank_test", list(...))
+  }
+  session$wildfire_fuel_loading_and_risk_matrix <- function(...) {
+    # Produces fuel load classification, moisture index, fire risk matrix, risk tier polygons, and summary reporting from optical + optional LiDAR and terrain inputs.
+    run_tool("wildfire_fuel_loading_and_risk_matrix", list(...))
   }
   session$wind_turbine_siting <- function(...) {
     # Workflow siting score with confidence and summary report.
@@ -2474,6 +2742,18 @@ add <- function(...) {
   # Adds two rasters on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$add(...)
+}
+
+add_field <- function(...) {
+  # Adds a new attribute field with an optional default value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add_field(...)
+}
+
+add_geometry_attributes <- function(...) {
+  # Adds area, length, perimeter, and centroid attributes to vector features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add_geometry_attributes(...)
 }
 
 add_point_coordinates_to_table <- function(...) {
@@ -2794,6 +3074,12 @@ clip_raster_to_polygon <- function(...) {
   session$clip_raster_to_polygon(...)
 }
 
+closest_facility_network <- function(...) {
+  # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$closest_facility_network(...)
+}
+
 closing <- function(...) {
   # Performs a morphological closing operation using a rectangular structuring element.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -2822,6 +3108,12 @@ compactness_ratio <- function(...) {
   # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$compactness_ratio(...)
+}
+
+concave_hull <- function(...) {
+  # Creates concave hull polygons around all input feature coordinates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$concave_hull(...)
 }
 
 conditional_evaluation <- function(...) {
@@ -2984,6 +3276,24 @@ decrement <- function(...) {
   # Subtracts 1 from each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$decrement(...)
+}
+
+delete_field <- function(...) {
+  # Deletes one or more attribute fields from a vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$delete_field(...)
+}
+
+dem_void_filling <- function(...) {
+  # Fills DEM voids using a secondary surface and interpolated elevation offsets for seamless fusion.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dem_void_filling(...)
+}
+
+densify_features <- function(...) {
+  # Adds vertices along line and polygon boundaries at a specified spacing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$densify_features(...)
 }
 
 depth_in_sink <- function(...) {
@@ -3332,6 +3642,12 @@ fetch_analysis <- function(...) {
   # Computes upwind distance to the first topographic obstacle along a specified azimuth.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fetch_analysis(...)
+}
+
+field_calculator <- function(...) {
+  # Calculates a field value from an expression using feature attributes and geometry variables.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$field_calculator(...)
 }
 
 fill_burn <- function(...) {
@@ -3796,6 +4112,12 @@ impoundment_size_index <- function(...) {
   session$impoundment_size_index(...)
 }
 
+improved_ground_point_filter <- function(...) {
+  # Multi-stage ground point filtering pipeline.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$improved_ground_point_filter(...)
+}
+
 increment <- function(...) {
   # Adds 1 to each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -3902,6 +4224,12 @@ k_nearest_mean_filter <- function(...) {
   # Performs edge-preserving k-nearest neighbor mean smoothing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$k_nearest_mean_filter(...)
+}
+
+k_shortest_paths_network <- function(...) {
+  # Finds the k shortest simple paths between start and end coordinates over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$k_shortest_paths_network(...)
 }
 
 kappa_index <- function(...) {
@@ -4216,6 +4544,12 @@ line_intersections <- function(...) {
   session$line_intersections(...)
 }
 
+line_polygon_clip <- function(...) {
+  # Clips line features to polygon interiors and outputs clipped line segments.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$line_polygon_clip(...)
+}
+
 line_thinning <- function(...) {
   # Reduces connected binary raster features to one-cell-wide skeleton lines.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -4256,6 +4590,18 @@ local_hypsometric_analysis <- function(...) {
   # Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$local_hypsometric_analysis(...)
+}
+
+locate_points_along_routes <- function(...) {
+  # Locates point features along route lines and writes route-measure attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$locate_points_along_routes(...)
+}
+
+location_allocation_network <- function(...) {
+  # Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$location_allocation_network(...)
 }
 
 log10 <- function(...) {
@@ -4316,6 +4662,12 @@ map_features <- function(...) {
   # Maps discrete elevated terrain features from a raster using descending-priority region growth.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$map_features(...)
+}
+
+map_matching_v1 <- function(...) {
+  # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$map_matching_v1(...)
 }
 
 map_off_terrain_objects <- function(...) {
@@ -4588,6 +4940,24 @@ multidirectional_hillshade <- function(...) {
   session$multidirectional_hillshade(...)
 }
 
+multimodal_od_cost_matrix <- function(...) {
+  # Computes batched multimodal OD costs and mode summaries between origin and destination point sets.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_od_cost_matrix(...)
+}
+
+multimodal_routes_from_od <- function(...) {
+  # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_routes_from_od(...)
+}
+
+multimodal_shortest_path <- function(...) {
+  # Finds a mode-aware shortest path over a line network with configurable transfer penalties.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_shortest_path(...)
+}
+
 multipart_to_singlepart <- function(...) {
   # Converts a vector containing multi-part features into one with only single-part features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -4604,6 +4974,12 @@ multiply_overlay <- function(...) {
   # Computes the per-cell product across a raster stack, propagating NoData if any input cell is NoData.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiply_overlay(...)
+}
+
+multiscale_curvatures <- function(...) {
+  # Calculates multiscale curvatures and curvature-based indices from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_curvatures(...)
 }
 
 multiscale_elevated_index <- function(...) {
@@ -4666,6 +5042,12 @@ natural_neighbour_interpolation <- function(...) {
   session$natural_neighbour_interpolation(...)
 }
 
+near <- function(...) {
+  # Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$near(...)
+}
+
 nearest_neighbour_interpolation <- function(...) {
   # Interpolates a raster from point samples by assigning each cell the nearest sample value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -4676,6 +5058,54 @@ negate <- function(...) {
   # Negates each non-nodata raster cell value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$negate(...)
+}
+
+network_accessibility_metrics <- function(...) {
+  # Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_accessibility_metrics(...)
+}
+
+network_centrality_metrics <- function(...) {
+  # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_centrality_metrics(...)
+}
+
+network_connected_components <- function(...) {
+  # Assigns a connected-component ID to each line feature in a network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_connected_components(...)
+}
+
+network_node_degree <- function(...) {
+  # Extracts network nodes from line features and computes node degree and node type.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_node_degree(...)
+}
+
+network_od_cost_matrix <- function(...) {
+  # Computes origin-destination shortest-path costs over a line network and writes a CSV matrix.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_od_cost_matrix(...)
+}
+
+network_routes_from_od <- function(...) {
+  # Builds route geometries for origin-destination point pairs over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_routes_from_od(...)
+}
+
+network_service_area <- function(...) {
+  # Computes reachable network nodes from origin points within a maximum network cost.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_service_area(...)
+}
+
+network_topology_audit <- function(...) {
+  # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_topology_audit(...)
 }
 
 new_raster_from_base_raster <- function(...) {
@@ -4748,6 +5178,12 @@ num_upslope_neighbours <- function(...) {
   # Counts the number of 8-neighbour cells higher than each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$num_upslope_neighbours(...)
+}
+
+od_sensitivity_analysis <- function(...) {
+  # Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$od_sensitivity_analysis(...)
 }
 
 olympic_filter <- function(...) {
@@ -4870,6 +5306,12 @@ plan_curvature <- function(...) {
   session$plan_curvature(...)
 }
 
+points_along_lines <- function(...) {
+  # Creates regularly spaced point features along input line geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$points_along_lines(...)
+}
+
 polygon_area <- function(...) {
   # Calculates polygon area and appends an AREA attribute field.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -4948,6 +5390,12 @@ profile_curvature <- function(...) {
   session$profile_curvature(...)
 }
 
+prune_vector_streams <- function(...) {
+  # Prunes vector stream network based on Shreve magnitude.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$prune_vector_streams(...)
+}
+
 qin_flow_accumulation <- function(...) {
   # Calculates Qin MFD flow accumulation from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -5024,6 +5472,12 @@ random_forest_regression_predict <- function(...) {
   # Applies a serialized random forest regression model to multi-band predictors.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$random_forest_regression_predict(...)
+}
+
+random_points_in_polygon <- function(...) {
+  # Generates random points uniformly within input polygon geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_points_in_polygon(...)
 }
 
 random_sample <- function(...) {
@@ -5206,10 +5660,22 @@ remove_spurs <- function(...) {
   session$remove_spurs(...)
 }
 
+rename_field <- function(...) {
+  # Renames an attribute field in a vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rename_field(...)
+}
+
 repair_stream_vector_topology <- function(...) {
   # Repairs topology of vector stream network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$repair_stream_vector_topology(...)
+}
+
+reproject_vector <- function(...) {
+  # Reprojects an input vector layer to a destination EPSG code.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reproject_vector(...)
 }
 
 resample <- function(...) {
@@ -5242,10 +5708,22 @@ rho8_pointer <- function(...) {
   session$rho8_pointer(...)
 }
 
+ridge_and_valley_vectors <- function(...) {
+  # Extracts ridge and valley centreline vectors from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ridge_and_valley_vectors(...)
+}
+
 ring_curvature <- function(...) {
   # Calculates ring curvature (squared flow-line twisting) from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ring_curvature(...)
+}
+
+river_centerlines <- function(...) {
+  # Extracts river centerlines from water raster using medial axis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$river_centerlines(...)
 }
 
 roberts_cross_filter <- function(...) {
@@ -5272,6 +5750,66 @@ round <- function(...) {
   session$round(...)
 }
 
+route_calibrate <- function(...) {
+  # Calibrates route start/end measures from control points with known measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_calibrate(...)
+}
+
+route_event_lines_from_layer <- function(...) {
+  # Creates routed line events from an event vector layer using from/to measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_lines_from_layer(...)
+}
+
+route_event_lines_from_table <- function(...) {
+  # Creates routed line events from a CSV event table and a route layer using from/to measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_lines_from_table(...)
+}
+
+route_event_merge <- function(...) {
+  # Merges adjacent compatible route events.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_merge(...)
+}
+
+route_event_overlay <- function(...) {
+  # Overlays two route event layers by interval overlap.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_overlay(...)
+}
+
+route_event_points_from_layer <- function(...) {
+  # Creates routed point events from an event vector layer and a route layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_points_from_layer(...)
+}
+
+route_event_points_from_table <- function(...) {
+  # Creates routed point events from a CSV event table and a route layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_points_from_table(...)
+}
+
+route_event_split <- function(...) {
+  # Splits route events by per-route boundary measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_split(...)
+}
+
+route_measure_qa <- function(...) {
+  # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_measure_qa(...)
+}
+
+route_recalibrate <- function(...) {
+  # Recalibrates edited route measures from a reference route layer while preserving route measure continuity.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_recalibrate(...)
+}
+
 ruggedness_index <- function(...) {
   # Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -5294,6 +5832,12 @@ sediment_transport_index <- function(...) {
   # Calculates the sediment transport index (LS factor) from specific catchment area and slope.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sediment_transport_index(...)
+}
+
+select_by_location <- function(...) {
+  # Extracts target features that satisfy a spatial relationship to query features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$select_by_location(...)
 }
 
 select_tiles_by_polygon <- function(...) {
@@ -5338,6 +5882,12 @@ shape_index <- function(...) {
   session$shape_index(...)
 }
 
+shortest_path_network <- function(...) {
+  # Finds the shortest path between start and end coordinates over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shortest_path_network(...)
+}
+
 shreve_stream_magnitude <- function(...) {
   # Calculates Shreve stream magnitude.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -5354,6 +5904,12 @@ sigmoidal_contrast_stretch <- function(...) {
   # Performs sigmoidal contrast stretching using gain and cutoff.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sigmoidal_contrast_stretch(...)
+}
+
+simplify_features <- function(...) {
+  # Simplifies vector geometries using Douglas-Peucker tolerance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$simplify_features(...)
 }
 
 sin <- function(...) {
@@ -5444,6 +6000,12 @@ sort_lidar <- function(...) {
   # Sorts points by one or more LiDAR properties, with optional bin sizes per criterion.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sort_lidar(...)
+}
+
+spatial_join <- function(...) {
+  # Joins attributes from a join layer onto target features using a spatial predicate.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$spatial_join(...)
 }
 
 spherical_std_dev_of_normals <- function(...) {
@@ -5686,6 +6248,24 @@ topological_stream_order <- function(...) {
   session$topological_stream_order(...)
 }
 
+topology_rule_autofix <- function(...) {
+  # Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_rule_autofix(...)
+}
+
+topology_rule_validate <- function(...) {
+  # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_rule_validate(...)
+}
+
+topology_validation_report <- function(...) {
+  # Audits a vector layer for topology issues and writes a per-feature CSV report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_validation_report(...)
+}
+
 total_curvature <- function(...) {
   # Calculates total curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -5818,6 +6398,30 @@ vector_stream_network_analysis <- function(...) {
   session$vector_stream_network_analysis(...)
 }
 
+vector_summary_statistics <- function(...) {
+  # Computes grouped summary statistics for a numeric field and writes the result to CSV.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_summary_statistics(...)
+}
+
+vehicle_routing_cvrp <- function(...) {
+  # Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_cvrp(...)
+}
+
+vehicle_routing_pickup_delivery <- function(...) {
+  # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_pickup_delivery(...)
+}
+
+vehicle_routing_vrptw <- function(...) {
+  # Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_vrptw(...)
+}
+
 vertical_excess_curvature <- function(...) {
   # Calculates vertical excess curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
@@ -5908,22 +6512,40 @@ brdf_surface_reflectance_consistency <- function(...) {
   session$brdf_surface_reflectance_consistency(...)
 }
 
-corridor_mapping_product <- function(...) {
-  # Produces erosion potential, stream health vectors, restoration zones, and summary reporting.
+carbon_sequestration_verification_audit <- function(...) {
+  # Produces NDVI delta, carbon proxy change, confidence scoring, verification zone polygons, and audit-ready JSON contract for MRV and ESG reporting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$corridor_mapping_product(...)
+  session$carbon_sequestration_verification_audit(...)
 }
 
-dem_void_filling <- function(...) {
-  # Fills DEM voids using a secondary surface and interpolated elevation offsets for seamless fusion.
+corridor_mapping_intelligence <- function(...) {
+  # Computes terrain cost surface, least-cost route, and corridor suitability band for linear infrastructure siting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$dem_void_filling(...)
+  session$corridor_mapping_intelligence(...)
 }
 
-improved_ground_point_filter <- function(...) {
-  # Multi-stage ground point filtering pipeline.
+emergency_scenario_routing_and_accessibility_simulator <- function(...) {
+  # Simulates emergency accessibility under disruption scenarios and reports coverage deltas for critical facilities.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$improved_ground_point_filter(...)
+  session$emergency_scenario_routing_and_accessibility_simulator(...)
+}
+
+fleet_routing_and_dispatch_optimizer <- function(...) {
+  # Solves vehicle routing problems (CVRP/VRPTW) with capacity constraints and time windows. Produces optimized routes, stop assignments, KPIs, and exception diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fleet_routing_and_dispatch_optimizer(...)
+}
+
+forestry_structure_and_biomass_intelligence <- function(...) {
+  # Produces canopy height metrics, vertical structure classes, stand units, biomass proxy, confidence, and summary report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$forestry_structure_and_biomass_intelligence(...)
+}
+
+guided_uav_image_intake_workflow <- function(...) {
+  # Generates image inventory, QA diagnostics, and pass/review/fail intake guidance before expensive downstream processing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$guided_uav_image_intake_workflow(...)
 }
 
 landslide_susceptibility_assessment <- function(...) {
@@ -5944,16 +6566,34 @@ lidar_terrain_product_suite <- function(...) {
   session$lidar_terrain_product_suite(...)
 }
 
+market_access_and_site_intelligence_workflow <- function(...) {
+  # Analyzes candidate sites for commercial expansion. Computes catchments, demand coverage, competitive positioning, and ranking.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$market_access_and_site_intelligence_workflow(...)
+}
+
+mine_site_reclamation_compliance_tracker <- function(...) {
+  # Produces NDVI recovery rasters, reclamation progress, compliance zone polygons, and a regulatory-ready compliance contract.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mine_site_reclamation_compliance_tracker(...)
+}
+
 multi_sensor_fusion_monitoring <- function(...) {
   # Produces fused change probability, sensor agreement, terrain context, and high-confidence change zones.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multi_sensor_fusion_monitoring(...)
 }
 
-multiscale_curvatures <- function(...) {
-  # Calculates multiscale curvatures and curvature-based indices from a DEM.
+network_readiness_and_diagnostics_intelligence <- function(...) {
+  # Audits network integrity and provides decision-grade readiness scoring for routing workflows.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$multiscale_curvatures(...)
+  session$network_readiness_and_diagnostics_intelligence(...)
+}
+
+parcel_and_land_fabric_topology_compliance_workflow <- function(...) {
+  # Runs topology compliance checks for parcel fabrics, flags overlaps/gaps/slivers, and optionally emits auto-fix candidates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$parcel_and_land_fabric_topology_compliance_workflow(...)
 }
 
 precision_ag_yield_zone_intelligence <- function(...) {
@@ -5968,10 +6608,10 @@ precision_irrigation_optimization <- function(...) {
   session$precision_irrigation_optimization(...)
 }
 
-prune_vector_streams <- function(...) {
-  # Prunes vector stream network based on Shreve magnitude.
+registration_oriented_feature_workflow <- function(...) {
+  # Runs lightweight keypoint-based registration diagnostics and emits tie points for downstream workflows.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$prune_vector_streams(...)
+  session$registration_oriented_feature_workflow(...)
 }
 
 remote_sensing_change_detection <- function(...) {
@@ -5980,28 +6620,40 @@ remote_sensing_change_detection <- function(...) {
   session$remote_sensing_change_detection(...)
 }
 
-ridge_and_valley_vectors <- function(...) {
-  # Extracts ridge and valley centreline vectors from a DEM.
-  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$ridge_and_valley_vectors(...)
-}
-
-river_centerlines <- function(...) {
-  # Extracts river centerlines from water raster using medial axis.
-  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$river_centerlines(...)
-}
-
 river_corridor_health_assessment <- function(...) {
   # Creates stream health scoring, erosion pressure, and restoration zones with contract summary.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$river_corridor_health_assessment(...)
 }
 
-sar_analysis_ready <- function(...) {
-  # Calibrates and terrain-normalizes SAR scenes with QA-oriented outputs and optional coherence estimation.
+route_event_governance_for_linear_assets <- function(...) {
+  # Validates route events for overlap, gap, and monotonicity compliance and optionally auto-corrects detectable violations.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$sar_analysis_ready(...)
+  session$route_event_governance_for_linear_assets(...)
+}
+
+sar_analysis_readiness <- function(...) {
+  # Calibrates and terrain-normalizes SAR scenes with QA-oriented outputs and optional coherence-proxy estimation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_analysis_readiness(...)
+}
+
+sar_coregistration <- function(...) {
+  # SAR pair alignment with translation or experimental affine residual mode, aligned-raster output, and machine-readable QA diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_coregistration(...)
+}
+
+sar_interferogram_coherence <- function(...) {
+  # Single workflow for interferogram and coherence production with shared QA/provenance outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_interferogram_coherence(...)
+}
+
+service_area_planning_and_coverage_optimization <- function(...) {
+  # Generates network-derived service-area rings, uncovered demand diagnostics, and planning summary outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$service_area_planning_and_coverage_optimization(...)
 }
 
 soil_landscape_classification <- function(...) {
@@ -6016,10 +6668,10 @@ solar_site_suitability_analysis <- function(...) {
   session$solar_site_suitability_analysis(...)
 }
 
-terrain_corrected_optical <- function(...) {
+terrain_corrected_optical_analytics <- function(...) {
   # Topographic C-correction of multispectral optical bands using a co-registered DEM. Outputs surface reflectance stack, correction factor, cloud/shadow mask, and quality confidence.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$terrain_corrected_optical(...)
+  session$terrain_corrected_optical_analytics(...)
 }
 
 time_series_change_intelligence <- function(...) {
@@ -6034,10 +6686,28 @@ urban_expansion_impact_assessment <- function(...) {
   session$urban_expansion_impact_assessment(...)
 }
 
+utility_corridor_encroachment_and_access_planning <- function(...) {
+  # Prioritizes encroachment hotspots near utility corridors and assigns nearest access points for field-response planning.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$utility_corridor_encroachment_and_access_planning(...)
+}
+
+utility_corridor_encroachment_intelligence <- function(...) {
+  # Produces corridor encroachment risk raster, priority zones, asset risk table, confidence raster, and summary JSON.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$utility_corridor_encroachment_intelligence(...)
+}
+
 wetland_hydrogeomorphic_classification <- function(...) {
   # Produces HGM class raster, confidence raster, wetland polygons, and summary reporting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$wetland_hydrogeomorphic_classification(...)
+}
+
+wildfire_fuel_loading_and_risk_matrix <- function(...) {
+  # Produces fuel load classification, moisture index, fire risk matrix, risk tier polygons, and summary reporting from optical + optional LiDAR and terrain inputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wildfire_fuel_loading_and_risk_matrix(...)
 }
 
 wind_turbine_siting <- function(...) {

@@ -1,0 +1,24 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Merges adjacent compatible route events.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">vector</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">linear-referencing</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">events</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">merge</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>events</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input event layer containing route intervals.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>events.gpkg</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>event_route_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Event-layer route identifier field.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>route_id</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>from_measure_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Event-layer interval start field.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>from_m</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>to_measure_field</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Event-layer interval end field.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>to_m</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>group_fields</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional comma-delimited fields used for merge compatibility. Defaults to all non-measure fields.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>gap_tolerance</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum gap allowed for adjacency merge (default 0.0).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>0.0</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>conflict_mode</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Overlap handling mode: error|skip (default error).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>error</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output merged-event layer.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Merges compatible adjacent events on each route.</em></p>
+<pre><code>wbe.route_event_merge(conflict_mode='error', event_route_field='route_id', events='events.gpkg', from_measure_field='from_m', gap_tolerance=0.0, group_fields='route_id,road_class,speed', output='events_merged.gpkg', to_measure_field='to_m')</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,7 @@
+<p>This tool can be used to calculate the elongation ratio for vector polygons. The elongation ratio values calculated for each vector polygon feature will be placed in the accompanying database file (.dbf) as an elongation field (ELONGATION).</p> <p>The elongation ratio (<code>E</code>) is:</p> <blockquote> <p>E = 1 - S / L</p> </blockquote> <p>Where <code>S</code> is the short-axis length, and <code>L</code> is the long-axis length. Axes lengths are determined by estimating the minimum bounding box.</p> <p>The elongation ratio provides similar information as the Linearity Index. The ratio is not an adequate measure of overall polygon narrowness, because a highly sinuous but narrow polygon will have a low linearity (elongation) owing to the compact nature of these polygon.</p> <h2>Function Signature</h2> <p><code>def elongation_ratio(self, input: Vector) -&gt; Vector: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

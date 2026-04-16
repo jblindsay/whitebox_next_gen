@@ -1,0 +1,7 @@
+<p>This tool transforms values in an input raster (<code>input</code>) into quantiles. In statistics, quantiles are cut points dividing the range of a probability distribution into continuous intervals with equal probabilities, or dividing the observations in a sample in a same way. There is one fewer quantile than the number of groups created. Thus quartiles are the three cut points that will divide a dataset into four equal-sized groups. Common quantiles have special names: for instance quartile (4-quantile), quintiles (5-quantiles), decile (10-quantile), percentile (100-quantile).  </p> <p>The user must specify the desired number of quantiles, q (<code>num_quantiles</code>), in the output raster (<code>output</code>). The output raster will contain q equal-sized groups with values 1 to q, indicating which quantile group each grid cell belongs to.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#histogram_equalization">histogram_equalization</a></p> <h2>Function Signature</h2> <p><code>def quantiles(self, raster: Raster, num_quantiles: int = 5) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

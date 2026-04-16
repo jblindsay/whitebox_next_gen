@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::fs::File;
 use std::io::BufWriter;
 use std::cmp::Ordering;
@@ -37,6 +37,14 @@ pub struct MultiscaleStdDevNormalsSignatureTool;
 ///
 /// Authors: John Lindsay and Anthony Francioni
 pub struct FeaturePreservingSmoothingTool;
+/// Feature-preserving DEM smoothing using screened Poisson reconstruction (alternative to
+/// the iterative elevation-update variant). Normal-vector smoothing is identical; the
+/// elevation reconstruction step solves a screened Poisson linear system via double-buffered
+/// Jacobi iteration instead of the ad-hoc 8-neighbour tangent-plane average.
+#[allow(dead_code)]
+pub struct FeaturePreservingSmoothingPoissonTool;
+/// Multiscale coarse-to-fine extension of feature-preserving DEM smoothing.
+pub struct FeaturePreservingSmoothingMultiscaleTool;
 pub struct FillMissingDataTool;
 pub struct RemoveOffTerrainObjectsTool;
 pub struct MapOffTerrainObjectsTool;
@@ -68,6 +76,29 @@ impl Ord for EmbankmentCell {
 }
 
 struct TerrainWindowCore;
+
+#[derive(Clone, Copy)]
+struct PoissonSmoothingSettings {
+    outer_iterations: usize,
+    normal_smoothing_strength: f32,
+    edge_sensitivity: f32,
+    lambda: f32,
+    convergence_threshold: f32,
+    outer_convergence_threshold: f32,
+    z_factor: f32,
+    use_local_adaptivity: bool,
+    local_adaptivity_strength: f32,
+    local_adaptivity_radius: usize,
+}
+
+#[derive(Clone)]
+struct RasterPyramidLevel {
+    dem: Vec<f32>,
+    rows: usize,
+    cols: usize,
+    res_x: f32,
+    res_y: f32,
+}
 
 impl TerrainWindowCore {
     fn parse_input(args: &ToolArgs) -> Result<String, ToolError> {
@@ -243,7 +274,7 @@ impl TerrainWindowCore {
             id: "feature_preserving_smoothing",
             display_name: "Feature Preserving Smoothing",
             summary: "Smooths DEM roughness while preserving breaks-in-slope using normal-vector filtering.",
-            category: ToolCategory::Raster,
+            category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
@@ -256,6 +287,86 @@ impl TerrainWindowCore {
             ],
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Feature-Preserving Smoothing – Screened Poisson variant
+    // -----------------------------------------------------------------------
+
+    #[allow(dead_code)]
+    fn feature_preserving_smoothing_poisson_manifest() -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("dem.tif"));
+        defaults.insert("normal_smoothing_strength".to_string(), json!(0.6));
+        defaults.insert("edge_sensitivity".to_string(), json!(0.7));
+        defaults.insert("outer_iterations".to_string(), json!(3));
+        defaults.insert("lambda".to_string(), json!(0.5));
+        defaults.insert("z_factor".to_string(), json!(1.0));
+
+        ToolManifest {
+            id: "feature_preserving_smoothing_poisson".to_string(),
+            display_name: "Feature Preserving Smoothing (Poisson)".to_string(),
+            summary:
+                "Smooths DEM roughness while preserving major breaks-in-slope. Each outer \
+                 iteration re-derives surface normals from the current elevation surface, \
+                 smooths the normal field using robust anisotropic diffusion, then reconstructs \
+                 elevations using a screened Poisson solve (Jacobi with early stopping). \
+                 Compared with bilateral normal filtering, robust diffusion supports stronger \
+                 progressive generalisation while still suppressing diffusion across strong \
+                 edges."
+                    .to_string(),
+            category: ToolCategory::Terrain,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
+                ToolParamDescriptor { name: "normal_smoothing_strength".to_string(), description: "Normal-field smoothing strength in [0,1] (default 0.6). Higher values apply more aggressive smoothing.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_sensitivity".to_string(), description: "Edge preservation sensitivity in [0,1] (default 0.7). Higher values preserve edges more strongly.".to_string(), required: false },
+                ToolParamDescriptor { name: "outer_iterations".to_string(), description: "Number of full outer passes (default 3).".to_string(), required: false },
+                ToolParamDescriptor { name: "lambda".to_string(), description: "Data-fidelity weight in screened Poisson solve (default 0.5). Lower values increase smoothing aggressiveness.".to_string(), required: false },
+                ToolParamDescriptor { name: "z_factor".to_string(), description: "Optional z conversion factor (default 1.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output path. If omitted, result stays in memory.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![],
+            tags: vec![
+                "geomorphometry".to_string(),
+                "terrain".to_string(),
+                "smoothing".to_string(),
+            ],
+            stability: ToolStability::Stable,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn run_feature_preserving_smoothing_poisson(
+        args: &ToolArgs,
+        ctx: &ToolContext,
+    ) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input_path = Self::parse_input(args)?;
+        let output_path = parse_optional_output_path(args, "output")?;
+        let settings = Self::parse_poisson_smoothing_settings(args);
+        let input = Self::load_raster(&input_path)?;
+        let nodata = input.nodata as f32;
+        let dem_orig = Self::raster_to_f32_vec(&input);
+        let z_cur = Self::run_poisson_smoothing_core(
+            &dem_orig,
+            input.rows,
+            input.cols,
+            nodata,
+            input.cell_size_x as f32,
+            input.cell_size_y as f32,
+            &settings,
+            None,
+        );
+
+        coalescer.emit_unit_fraction(ctx.progress, 0.9);
+        let output = Self::dem_to_output_raster(&input, &z_cur, nodata)?;
+        let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
+        Ok(Self::build_result(output_locator))
+    }
+
+    // -----------------------------------------------------------------------
 
     fn feature_preserving_smoothing_manifest() -> ToolManifest {
         let mut defaults = ToolArgs::new();
@@ -271,7 +382,7 @@ impl TerrainWindowCore {
             display_name: "Feature Preserving Smoothing".to_string(),
             summary: "Smooths DEM roughness while preserving breaks-in-slope using normal-vector filtering."
                 .to_string(),
-            category: ToolCategory::Raster,
+            category: ToolCategory::Terrain,
             license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
@@ -284,6 +395,230 @@ impl TerrainWindowCore {
             ],
             stability: ToolStability::Experimental,
         }
+    }
+
+    #[allow(dead_code)]
+    fn feature_preserving_smoothing_poisson_metadata() -> ToolMetadata {
+        ToolMetadata {
+            id: "feature_preserving_smoothing_poisson",
+            display_name: "Feature Preserving Smoothing (Poisson)",
+            summary:
+                "Feature-preserving DEM smoothing with iterative normal filtering and screened \
+                 Poisson elevation reconstruction.",
+            category: ToolCategory::Terrain,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
+                ToolParamSpec { name: "normal_smoothing_strength", description: "Normal-field smoothing strength in [0,1] (default 0.6).", required: false },
+                ToolParamSpec { name: "edge_sensitivity", description: "Edge preservation sensitivity in [0,1] (default 0.7).", required: false },
+                ToolParamSpec { name: "outer_iterations", description: "Number of full outer passes (default 3).", required: false },
+                ToolParamSpec { name: "lambda", description: "Data-fidelity weight in screened Poisson solve (default 0.5).", required: false },
+                ToolParamSpec { name: "z_factor", description: "Optional z conversion factor (default 1.0).", required: false },
+                ToolParamSpec { name: "output", description: "Optional output path. If omitted, result stays in memory.", required: false },
+            ],
+        }
+    }
+
+    fn feature_preserving_smoothing_multiscale_manifest() -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("dem.tif"));
+        defaults.insert("smoothing_amount".to_string(), json!(0.65));
+        defaults.insert("edge_preservation".to_string(), json!(0.75));
+        defaults.insert("scale_levels".to_string(), json!(3));
+        defaults.insert("fidelity".to_string(), json!(0.45));
+        defaults.insert("z_factor".to_string(), json!(1.0));
+
+        ToolManifest {
+            id: "feature_preserving_smoothing_multiscale".to_string(),
+            display_name: "Feature Preserving Smoothing (Multiscale)".to_string(),
+            summary:
+                "Smooths DEM roughness with a multiscale coarse-to-fine continuation. Each scale re-derives normals, applies adaptive robust normal-field diffusion, and reconstructs elevations with a screened Poisson solve."
+                    .to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
+                ToolParamDescriptor { name: "smoothing_amount".to_string(), description: "Overall smoothing amount in [0,1] (default 0.65). Higher values increase the diffusion budget, especially at coarse scales.".to_string(), required: false },
+                ToolParamDescriptor { name: "edge_preservation".to_string(), description: "Edge preservation strength in [0,1] (default 0.75). Higher values suppress smoothing across major breaks-in-slope more strongly.".to_string(), required: false },
+                ToolParamDescriptor { name: "scale_levels".to_string(), description: "Number of pyramid levels for coarse-to-fine smoothing (default 3).".to_string(), required: false },
+                ToolParamDescriptor { name: "fidelity".to_string(), description: "Data-fidelity weight in screened Poisson reconstruction (default 0.45). Higher values keep the result closer to the source DEM.".to_string(), required: false },
+                ToolParamDescriptor { name: "z_factor".to_string(), description: "Optional z conversion factor (default 1.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output path. If omitted, result stays in memory.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![],
+            tags: vec![
+                "geomorphometry".to_string(),
+                "terrain".to_string(),
+                "smoothing".to_string(),
+                "multiscale".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn feature_preserving_smoothing_multiscale_metadata() -> ToolMetadata {
+        ToolMetadata {
+            id: "feature_preserving_smoothing_multiscale",
+            display_name: "Feature Preserving Smoothing (Multiscale)",
+            summary:
+                "Multiscale coarse-to-fine feature-preserving DEM smoothing with adaptive normal diffusion and screened Poisson reconstruction.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
+                ToolParamSpec { name: "smoothing_amount", description: "Overall smoothing amount in [0,1] (default 0.65).", required: false },
+                ToolParamSpec { name: "edge_preservation", description: "Edge preservation strength in [0,1] (default 0.75).", required: false },
+                ToolParamSpec { name: "scale_levels", description: "Number of pyramid levels for coarse-to-fine smoothing (default 3).", required: false },
+                ToolParamSpec { name: "fidelity", description: "Data-fidelity weight in screened Poisson reconstruction (default 0.45).", required: false },
+                ToolParamSpec { name: "z_factor", description: "Optional z conversion factor (default 1.0).", required: false },
+                ToolParamSpec { name: "output", description: "Optional output path. If omitted, result stays in memory.", required: false },
+            ],
+        }
+    }
+
+    fn run_feature_preserving_smoothing_multiscale(
+        args: &ToolArgs,
+        ctx: &ToolContext,
+    ) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input_path = Self::parse_input(args)?;
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        let smoothing_amount = args
+            .get("smoothing_amount")
+            .and_then(Self::parse_f32_value)
+            .or_else(|| {
+                args.get("normal_smoothing_strength")
+                    .and_then(Self::parse_f32_value)
+            })
+            .unwrap_or(0.65)
+            .clamp(0.0, 1.0);
+        let edge_preservation = args
+            .get("edge_preservation")
+            .and_then(Self::parse_f32_value)
+            .or_else(|| args.get("edge_sensitivity").and_then(Self::parse_f32_value))
+            .or_else(|| args.get("edge_sensitive").and_then(Self::parse_f32_value))
+            .unwrap_or(0.75)
+            .clamp(0.0, 1.0);
+        let scale_levels = args
+            .get("scale_levels")
+            .or_else(|| args.get("levels"))
+            .and_then(Self::parse_usize_value)
+            .unwrap_or(3)
+            .clamp(1, 8);
+        let fidelity = args
+            .get("fidelity")
+            .and_then(Self::parse_f32_value)
+            .or_else(|| args.get("lambda").and_then(Self::parse_f32_value))
+            .unwrap_or(0.45)
+            .max(f32::EPSILON);
+        let convergence_threshold = args
+            .get("convergence_threshold")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(0.0001)
+            .max(0.0);
+        let outer_convergence_threshold = args
+            .get("outer_convergence_threshold")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(0.0)
+            .max(0.0);
+        let z_factor = args
+            .get("z_factor")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(1.0);
+
+        let input = Self::load_raster(&input_path)?;
+        let nodata = input.nodata as f32;
+        let dem_orig = Self::raster_to_f32_vec(&input);
+        let pyramid = Self::build_dem_pyramid(
+            &dem_orig,
+            input.rows,
+            input.cols,
+            input.cell_size_x as f32,
+            input.cell_size_y as f32,
+            nodata,
+            scale_levels,
+        );
+
+        coalescer.emit_unit_fraction(ctx.progress, 0.08);
+
+        let total_levels = pyramid.len();
+        let mut prev_surface: Option<Vec<f32>> = None;
+        let mut prev_rows = 0usize;
+        let mut prev_cols = 0usize;
+
+        for (level_idx, level) in pyramid.iter().rev().enumerate() {
+            let level_frac = if total_levels > 1 {
+                level_idx as f32 / (total_levels - 1) as f32
+            } else {
+                1.0
+            };
+
+            let initial_surface = if let Some(prev) = prev_surface.as_ref() {
+                let mut upsampled = Self::bilinear_upsample_dem(
+                    prev,
+                    prev_rows,
+                    prev_cols,
+                    level.rows,
+                    level.cols,
+                    nodata,
+                );
+                for idx in 0..upsampled.len() {
+                    if level.dem[idx] == nodata {
+                        upsampled[idx] = nodata;
+                    } else if upsampled[idx] == nodata || !upsampled[idx].is_finite() {
+                        upsampled[idx] = level.dem[idx];
+                    }
+                }
+                upsampled
+            } else {
+                level.dem.clone()
+            };
+
+            let level_settings = PoissonSmoothingSettings {
+                outer_iterations: ((2.0
+                    + 4.0 * smoothing_amount * (1.10 - 0.30 * level_frac))
+                    .round() as usize)
+                    .max(1),
+                normal_smoothing_strength: (smoothing_amount * (1.20 - 0.35 * level_frac))
+                    .clamp(0.0, 1.0),
+                edge_sensitivity: (edge_preservation
+                    + (1.0 - edge_preservation) * 0.20 * level_frac)
+                    .clamp(0.0, 1.0),
+                lambda: (fidelity * (0.70 + 0.60 * level_frac)).max(f32::EPSILON),
+                convergence_threshold,
+                outer_convergence_threshold,
+                z_factor,
+                use_local_adaptivity: true,
+                local_adaptivity_strength: 0.75,
+                local_adaptivity_radius: 3,
+            };
+
+            let result = Self::run_poisson_smoothing_core(
+                &level.dem,
+                level.rows,
+                level.cols,
+                nodata,
+                level.res_x,
+                level.res_y,
+                &level_settings,
+                Some(&initial_surface),
+            );
+
+            prev_rows = level.rows;
+            prev_cols = level.cols;
+            prev_surface = Some(result);
+
+            let progress = 0.08 + 0.88 * ((level_idx + 1) as f64 / total_levels as f64);
+            coalescer.emit_unit_fraction(ctx.progress, progress.min(0.98));
+        }
+
+        let final_surface = prev_surface.unwrap_or(dem_orig);
+        let output = Self::dem_to_output_raster(&input, &final_surface, nodata)?;
+        let output_locator = Self::write_or_store_output(output, output_path)?;
+        coalescer.finish(ctx.progress);
+        Ok(Self::build_result(output_locator))
     }
 
     fn normal_angle_cos(a1: f32, b1: f32, a2: f32, b2: f32) -> f32 {
@@ -400,7 +735,7 @@ impl TerrainWindowCore {
                     let z7 = sample(row as isize, col as isize - 1) * z_factor;
 
                     row_a[col] = -((z2 - z6) + 2.0 * (z3 - z7) + (z4 - z0)) / eight_res_x;
-                    row_b[col] = -((z6 - z4) + 2.0 * (z5 - z1) + (z0 - z2)) / eight_res_y;
+                    row_b[col] = -((z6 - z0) + 2.0 * (z5 - z1) + (z4 - z2)) / eight_res_y;
                 }
             });
         coalescer.emit_unit_fraction(ctx.progress, 0.2);
@@ -1421,7 +1756,7 @@ impl TerrainWindowCore {
             id: "smooth_vegetation_residual",
             display_name: "Smooth Vegetation Residual",
             summary: "Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.",
-            category: ToolCategory::Raster,
+            category: ToolCategory::Terrain,
             license_tier: LicenseTier::Pro,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
@@ -1451,7 +1786,7 @@ impl TerrainWindowCore {
             id: "smooth_vegetation_residual".to_string(),
             display_name: "Smooth Vegetation Residual".to_string(),
             summary: "Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.".to_string(),
-            category: ToolCategory::Raster,
+            category: ToolCategory::Terrain,
             license_tier: LicenseTier::Pro,
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
@@ -3291,6 +3626,658 @@ impl TerrainWindowCore {
 
     fn idx(row: usize, col: usize, cols: usize) -> usize {
         row * cols + col
+    }
+
+    fn parse_usize_value(v: &Value) -> Option<usize> {
+        if let Some(u) = v.as_u64() {
+            return Some(u as usize);
+        }
+        if let Some(i) = v.as_i64() {
+            if i >= 0 {
+                return Some(i as usize);
+            }
+        }
+        if let Some(f) = v.as_f64() {
+            if f.is_finite() && f >= 0.0 {
+                return Some(f.round() as usize);
+            }
+        }
+        if let Some(s) = v.as_str() {
+            if let Ok(u) = s.trim().parse::<usize>() {
+                return Some(u);
+            }
+            if let Ok(f) = s.trim().parse::<f64>() {
+                if f.is_finite() && f >= 0.0 {
+                    return Some(f.round() as usize);
+                }
+            }
+        }
+        None
+    }
+
+    fn parse_f32_value(v: &Value) -> Option<f32> {
+        if let Some(f) = v.as_f64() {
+            if f.is_finite() {
+                return Some(f as f32);
+            }
+        }
+        if let Some(i) = v.as_i64() {
+            return Some(i as f32);
+        }
+        if let Some(u) = v.as_u64() {
+            return Some(u as f32);
+        }
+        if let Some(s) = v.as_str() {
+            if let Ok(f) = s.trim().parse::<f32>() {
+                if f.is_finite() {
+                    return Some(f);
+                }
+            }
+        }
+        None
+    }
+
+    #[allow(dead_code)]
+    fn parse_poisson_smoothing_settings(args: &ToolArgs) -> PoissonSmoothingSettings {
+        let outer_iterations = args
+            .get("outer_iterations")
+            .or_else(|| args.get("iterations"))
+            .and_then(Self::parse_usize_value)
+            .unwrap_or(3)
+            .max(1);
+        let normal_smoothing_strength = args
+            .get("normal_smoothing_strength")
+            .and_then(Self::parse_f32_value)
+            .or_else(|| {
+                args.get("filter_size")
+                    .and_then(Self::parse_f32_value)
+                    .map(|v| ((v - 3.0) / 28.0).clamp(0.0, 1.0))
+            })
+            .unwrap_or(0.6)
+            .clamp(0.0, 1.0);
+        let edge_sensitivity = args
+            .get("edge_sensitivity")
+            .or_else(|| args.get("edge_sensitive"))
+            .and_then(Self::parse_f32_value)
+            .or_else(|| {
+                args.get("normal_diff_threshold")
+                    .and_then(Self::parse_f32_value)
+                    .map(|deg| (1.0 - ((deg - 5.0) / 35.0)).clamp(0.0, 1.0))
+            })
+            .unwrap_or(0.7)
+            .clamp(0.0, 1.0);
+        let lambda = args
+            .get("lambda")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(0.5)
+            .max(f32::EPSILON);
+        let convergence_threshold = args
+            .get("convergence_threshold")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(0.0001)
+            .max(0.0);
+        let outer_convergence_threshold = args
+            .get("outer_convergence_threshold")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(0.0)
+            .max(0.0);
+        let z_factor = args
+            .get("z_factor")
+            .and_then(Self::parse_f32_value)
+            .unwrap_or(1.0);
+
+        PoissonSmoothingSettings {
+            outer_iterations,
+            normal_smoothing_strength,
+            edge_sensitivity,
+            lambda,
+            convergence_threshold,
+            outer_convergence_threshold,
+            z_factor,
+            use_local_adaptivity: false,
+            local_adaptivity_strength: 0.0,
+            local_adaptivity_radius: 0,
+        }
+    }
+
+    fn raster_to_f32_vec(input: &Raster) -> Vec<f32> {
+        let mut dem = vec![input.nodata as f32; input.rows * input.cols];
+        for row in 0..input.rows {
+            for col in 0..input.cols {
+                dem[Self::idx(row, col, input.cols)] = input.get(0, row as isize, col as isize) as f32;
+            }
+        }
+        dem
+    }
+
+    fn dem_to_output_raster(
+        template: &Raster,
+        dem: &[f32],
+        nodata: f32,
+    ) -> Result<Raster, ToolError> {
+        let mut output = template.clone();
+        let output_rows: Vec<Vec<f64>> = (0..template.rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut row_data = vec![nodata as f64; template.cols];
+                for col in 0..template.cols {
+                    row_data[col] = dem[Self::idx(row, col, template.cols)] as f64;
+                }
+                row_data
+            })
+            .collect();
+        for (row, row_data) in output_rows.iter().enumerate() {
+            output
+                .set_row_slice(0, row as isize, row_data)
+                .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", row, e)))?;
+        }
+        Ok(output)
+    }
+
+    fn build_dem_pyramid(
+        dem_orig: &[f32],
+        rows: usize,
+        cols: usize,
+        res_x: f32,
+        res_y: f32,
+        nodata: f32,
+        requested_levels: usize,
+    ) -> Vec<RasterPyramidLevel> {
+        let mut levels = vec![RasterPyramidLevel {
+            dem: dem_orig.to_vec(),
+            rows,
+            cols,
+            res_x,
+            res_y,
+        }];
+
+        while levels.len() < requested_levels {
+            let prev = levels.last().expect("pyramid should contain a base level");
+            let next_rows = (prev.rows + 1) / 2;
+            let next_cols = (prev.cols + 1) / 2;
+            if next_rows < 64 || next_cols < 64 {
+                break;
+            }
+            if next_rows == prev.rows && next_cols == prev.cols {
+                break;
+            }
+            levels.push(Self::downsample_dem_half(prev, nodata));
+        }
+
+        levels
+    }
+
+    fn downsample_dem_half(prev: &RasterPyramidLevel, nodata: f32) -> RasterPyramidLevel {
+        let next_rows = (prev.rows + 1) / 2;
+        let next_cols = (prev.cols + 1) / 2;
+        let mut dem = vec![nodata; next_rows * next_cols];
+
+        for row in 0..next_rows {
+            for col in 0..next_cols {
+                let mut sum = 0.0f32;
+                let mut count = 0u32;
+                for rr in (row * 2)..((row * 2 + 2).min(prev.rows)) {
+                    for cc in (col * 2)..((col * 2 + 2).min(prev.cols)) {
+                        let value = prev.dem[Self::idx(rr, cc, prev.cols)];
+                        if value != nodata {
+                            sum += value;
+                            count += 1;
+                        }
+                    }
+                }
+                if count > 0 {
+                    dem[Self::idx(row, col, next_cols)] = sum / count as f32;
+                }
+            }
+        }
+
+        RasterPyramidLevel {
+            dem,
+            rows: next_rows,
+            cols: next_cols,
+            res_x: prev.res_x * 2.0,
+            res_y: prev.res_y * 2.0,
+        }
+    }
+
+    fn bilinear_upsample_dem(
+        coarse_dem: &[f32],
+        coarse_rows: usize,
+        coarse_cols: usize,
+        fine_rows: usize,
+        fine_cols: usize,
+        nodata: f32,
+    ) -> Vec<f32> {
+        let mut fine = vec![nodata; fine_rows * fine_cols];
+        if coarse_rows == 0 || coarse_cols == 0 || fine_rows == 0 || fine_cols == 0 {
+            return fine;
+        }
+
+        let row_scale = if fine_rows > 1 && coarse_rows > 1 {
+            (coarse_rows - 1) as f32 / (fine_rows - 1) as f32
+        } else {
+            0.0
+        };
+        let col_scale = if fine_cols > 1 && coarse_cols > 1 {
+            (coarse_cols - 1) as f32 / (fine_cols - 1) as f32
+        } else {
+            0.0
+        };
+
+        for row in 0..fine_rows {
+            let src_row = row as f32 * row_scale;
+            let r0 = src_row.floor() as usize;
+            let r1 = (r0 + 1).min(coarse_rows - 1);
+            let fr = src_row - r0 as f32;
+
+            for col in 0..fine_cols {
+                let src_col = col as f32 * col_scale;
+                let c0 = src_col.floor() as usize;
+                let c1 = (c0 + 1).min(coarse_cols - 1);
+                let fc = src_col - c0 as f32;
+
+                let neighbours = [
+                    (r0, c0, (1.0 - fr) * (1.0 - fc)),
+                    (r0, c1, (1.0 - fr) * fc),
+                    (r1, c0, fr * (1.0 - fc)),
+                    (r1, c1, fr * fc),
+                ];
+
+                let mut weighted_sum = 0.0f32;
+                let mut weight_sum = 0.0f32;
+                for (rr, cc, weight) in neighbours {
+                    if weight <= 0.0 {
+                        continue;
+                    }
+                    let value = coarse_dem[Self::idx(rr, cc, coarse_cols)];
+                    if value != nodata {
+                        weighted_sum += value * weight;
+                        weight_sum += weight;
+                    }
+                }
+
+                if weight_sum > 0.0 {
+                    fine[Self::idx(row, col, fine_cols)] = weighted_sum / weight_sum;
+                }
+            }
+        }
+
+        fine
+    }
+
+    fn run_poisson_smoothing_core(
+        dem_orig: &[f32],
+        rows: usize,
+        cols: usize,
+        nodata: f32,
+        res_x: f32,
+        res_y: f32,
+        settings: &PoissonSmoothingSettings,
+        initial_surface: Option<&[f32]>,
+    ) -> Vec<f32> {
+        let eight_res_x = res_x * 8.0;
+        let eight_res_y = res_y * 8.0;
+        let mut z_cur = initial_surface
+            .filter(|surface| surface.len() == dem_orig.len())
+            .map(|surface| surface.to_vec())
+            .unwrap_or_else(|| dem_orig.to_vec());
+
+        for idx in 0..z_cur.len() {
+            if dem_orig[idx] == nodata {
+                z_cur[idx] = nodata;
+            } else if z_cur[idx] == nodata || !z_cur[idx].is_finite() {
+                z_cur[idx] = dem_orig[idx];
+            }
+        }
+
+        let valid: Vec<bool> = dem_orig.iter().map(|&v| v != nodata).collect();
+        let mut normals_a = vec![0.0f32; rows * cols];
+        let mut normals_b = vec![0.0f32; rows * cols];
+        let mut smooth_a = vec![0.0f32; rows * cols];
+        let mut smooth_b = vec![0.0f32; rows * cols];
+        let mut z_nxt = vec![nodata; rows * cols];
+        let mut diff_a_nxt = vec![0.0f32; rows * cols];
+        let mut diff_b_nxt = vec![0.0f32; rows * cols];
+        let mut z_prev_outer = vec![nodata; rows * cols];
+
+        const MAX_JACOBI: usize = 200;
+
+        for _ in 0..settings.outer_iterations {
+            if settings.outer_convergence_threshold > 0.0 {
+                z_prev_outer.copy_from_slice(&z_cur);
+            }
+
+            normals_a
+                .par_chunks_mut(cols)
+                .zip(normals_b.par_chunks_mut(cols))
+                .enumerate()
+                .for_each(|(row, (row_a, row_b))| {
+                    for col in 0..cols {
+                        let z = z_cur[row * cols + col];
+                        if z == nodata {
+                            continue;
+                        }
+                        let sample = |r: isize, c: isize| -> f32 {
+                            if r < 0 || c < 0 || r >= rows as isize || c >= cols as isize {
+                                z
+                            } else {
+                                let v = z_cur[r as usize * cols + c as usize];
+                                if v == nodata { z } else { v }
+                            }
+                        };
+                        let z0 = sample(row as isize - 1, col as isize - 1) * settings.z_factor;
+                        let z1 = sample(row as isize - 1, col as isize) * settings.z_factor;
+                        let z2 = sample(row as isize - 1, col as isize + 1) * settings.z_factor;
+                        let z3 = sample(row as isize, col as isize + 1) * settings.z_factor;
+                        let z4 = sample(row as isize + 1, col as isize + 1) * settings.z_factor;
+                        let z5 = sample(row as isize + 1, col as isize) * settings.z_factor;
+                        let z6 = sample(row as isize + 1, col as isize - 1) * settings.z_factor;
+                        let z7 = sample(row as isize, col as isize - 1) * settings.z_factor;
+                        row_a[col] = -((z2 - z6) + 2.0 * (z3 - z7) + (z4 - z0)) / eight_res_x;
+                        row_b[col] = -((z6 - z0) + 2.0 * (z5 - z1) + (z4 - z2)) / eight_res_y;
+                    }
+                });
+
+            smooth_a.copy_from_slice(&normals_a);
+            smooth_b.copy_from_slice(&normals_b);
+
+            let diffusion_iterations =
+                (2.0 + 78.0 * settings.normal_smoothing_strength).round() as usize;
+            let tau = 0.10 + 0.14 * settings.normal_smoothing_strength;
+
+            let (sum_mag2, count_mag) = (0..rows * cols)
+                .into_par_iter()
+                .map(|idx| {
+                    if !valid[idx] {
+                        return (0.0f64, 0usize);
+                    }
+                    let row = idx / cols;
+                    let col = idx % cols;
+                    let mut s = 0.0f64;
+                    let mut n = 0usize;
+                    if col + 1 < cols {
+                        let ni = row * cols + (col + 1);
+                        if valid[ni] {
+                            let da = normals_a[ni] - normals_a[idx];
+                            let db = normals_b[ni] - normals_b[idx];
+                            s += (da * da + db * db) as f64;
+                            n += 1;
+                        }
+                    }
+                    if row + 1 < rows {
+                        let ni = (row + 1) * cols + col;
+                        if valid[ni] {
+                            let da = normals_a[ni] - normals_a[idx];
+                            let db = normals_b[ni] - normals_b[idx];
+                            s += (da * da + db * db) as f64;
+                            n += 1;
+                        }
+                    }
+                    (s, n)
+                })
+                .reduce(|| (0.0f64, 0usize), |a, b| (a.0 + b.0, a.1 + b.1));
+
+            let sigma = if count_mag > 0 {
+                (sum_mag2 / count_mag as f64).sqrt() as f32
+            } else {
+                0.1
+            }
+            .max(1.0e-6);
+            let kappa_factor = 0.2 + (1.0 - settings.edge_sensitivity) * 2.0;
+            let kappa_base = sigma * kappa_factor;
+            let gradient_scale = (1.0
+                - 0.85
+                    * settings.normal_smoothing_strength.powf(1.15)
+                    * (1.0 - 0.5 * settings.edge_sensitivity))
+                .clamp(0.12, 1.0);
+
+            // Local scale-adaptive conductance map for heterogeneous terrain.
+            // Kept disabled for the current single-scale Poisson tool to preserve behavior.
+            let mut kappa_base_map: Option<Vec<f32>> = None;
+            if settings.use_local_adaptivity && settings.local_adaptivity_strength > 0.0 {
+                let adaptivity = settings.local_adaptivity_strength.clamp(0.0, 1.0);
+                let radius = settings.local_adaptivity_radius.max(1) as isize;
+
+                let mut grad_mag = vec![0.0f32; rows * cols];
+                grad_mag
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(row, row_grad)| {
+                        for col in 0..cols {
+                            let idx = row * cols + col;
+                            if !valid[idx] {
+                                continue;
+                            }
+                            let a0 = normals_a[idx];
+                            let b0 = normals_b[idx];
+                            let mut sum_g = 0.0f32;
+                            let mut n_g = 0u32;
+
+                            macro_rules! add_grad {
+                                ($r:expr, $c:expr) => {
+                                    if $r >= 0
+                                        && $c >= 0
+                                        && ($r as usize) < rows
+                                        && ($c as usize) < cols
+                                    {
+                                        let ni = $r as usize * cols + $c as usize;
+                                        if valid[ni] {
+                                            let da = normals_a[ni] - a0;
+                                            let db = normals_b[ni] - b0;
+                                            sum_g += (da * da + db * db).sqrt();
+                                            n_g += 1;
+                                        }
+                                    }
+                                };
+                            }
+
+                            add_grad!(row as isize, col as isize + 1);
+                            add_grad!(row as isize, col as isize - 1);
+                            add_grad!(row as isize + 1, col as isize);
+                            add_grad!(row as isize - 1, col as isize);
+                            row_grad[col] = if n_g > 0 { sum_g / n_g as f32 } else { 0.0 };
+                        }
+                    });
+
+                let mut grad_sum = vec![0.0f64; rows * cols];
+                let mut grad_count = vec![0i64; rows * cols];
+                for row in 0..rows {
+                    let mut row_sum = 0.0f64;
+                    let mut row_count = 0i64;
+                    for col in 0..cols {
+                        let idx = Self::idx(row, col, cols);
+                        if valid[idx] {
+                            row_sum += grad_mag[idx] as f64;
+                            row_count += 1;
+                        }
+                        if row > 0 {
+                            let above = Self::idx(row - 1, col, cols);
+                            grad_sum[idx] = row_sum + grad_sum[above];
+                            grad_count[idx] = row_count + grad_count[above];
+                        } else {
+                            grad_sum[idx] = row_sum;
+                            grad_count[idx] = row_count;
+                        }
+                    }
+                }
+
+                let mut local_map = vec![kappa_base; rows * cols];
+                for row in 0..rows {
+                    for col in 0..cols {
+                        let idx = Self::idx(row, col, cols);
+                        if !valid[idx] {
+                            continue;
+                        }
+                        let y1 = (row as isize - radius).max(0) as usize;
+                        let x1 = (col as isize - radius).max(0) as usize;
+                        let y2 = (row as isize + radius).min(rows as isize - 1) as usize;
+                        let x2 = (col as isize + radius).min(cols as isize - 1) as usize;
+                        let n = Self::rect_count(&grad_count, cols, y1, x1, y2, x2);
+                        if n <= 0 {
+                            continue;
+                        }
+                        let local_mean = (Self::rect_sum(&grad_sum, cols, y1, x1, y2, x2)
+                            / n as f64) as f32;
+                        let local_sigma = local_mean.max(1.0e-6);
+                        let blended_sigma =
+                            ((1.0 - adaptivity) * sigma + adaptivity * local_sigma).max(1.0e-6);
+                        local_map[idx] = blended_sigma * kappa_factor;
+                    }
+                }
+
+                kappa_base_map = Some(local_map);
+            }
+
+            for it in 0..diffusion_iterations {
+                let decay = if diffusion_iterations > 1 {
+                    1.0 - 0.50 * (it as f32 / (diffusion_iterations - 1) as f32)
+                } else {
+                    1.0
+                };
+                let kappa = (kappa_base * decay).max(1.0e-6);
+                let kappa2_inv_global = 1.0 / (kappa * kappa);
+                let kappa_base_map_ref = kappa_base_map.as_ref();
+
+                diff_a_nxt
+                    .par_chunks_mut(cols)
+                    .zip(diff_b_nxt.par_chunks_mut(cols))
+                    .enumerate()
+                    .for_each(|(row, (row_an, row_bn))| {
+                        for col in 0..cols {
+                            let idx = row * cols + col;
+                            if !valid[idx] {
+                                row_an[col] = 0.0;
+                                row_bn[col] = 0.0;
+                                continue;
+                            }
+
+                            let a0 = smooth_a[idx];
+                            let b0 = smooth_b[idx];
+                            let kappa2_inv = if let Some(local_map) = kappa_base_map_ref {
+                                let local_kappa = (local_map[idx] * decay).max(1.0e-6);
+                                1.0 / (local_kappa * local_kappa)
+                            } else {
+                                kappa2_inv_global
+                            };
+                            let mut flux_a = 0.0f32;
+                            let mut flux_b = 0.0f32;
+
+                            let mut add_flux = |r: isize, c: isize| {
+                                if r < 0 || c < 0 || r >= rows as isize || c >= cols as isize {
+                                    return;
+                                }
+                                let ni = r as usize * cols + c as usize;
+                                if !valid[ni] {
+                                    return;
+                                }
+                                let da = smooth_a[ni] - a0;
+                                let db = smooth_b[ni] - b0;
+                                let mag2 = da * da + db * db;
+                                let g = 1.0 / (1.0 + mag2 * kappa2_inv);
+                                flux_a += g * da;
+                                flux_b += g * db;
+                            };
+
+                            add_flux(row as isize, col as isize + 1);
+                            add_flux(row as isize, col as isize - 1);
+                            add_flux(row as isize + 1, col as isize);
+                            add_flux(row as isize - 1, col as isize);
+
+                            row_an[col] = a0 + tau * flux_a;
+                            row_bn[col] = b0 + tau * flux_b;
+                        }
+                    });
+
+                std::mem::swap(&mut smooth_a, &mut diff_a_nxt);
+                std::mem::swap(&mut smooth_b, &mut diff_b_nxt);
+            }
+
+            let div: Vec<f32> = (0..rows * cols)
+                .into_par_iter()
+                .map(|idx| {
+                    if !valid[idx] {
+                        return 0.0f32;
+                    }
+                    let row = idx / cols;
+                    let col = idx % cols;
+                    let a_curr = smooth_a[idx] * gradient_scale;
+                    let a_left = if col > 0 && valid[row * cols + col - 1] {
+                        smooth_a[row * cols + col - 1] * gradient_scale
+                    } else {
+                        a_curr
+                    };
+                    let b_curr = smooth_b[idx] * gradient_scale;
+                    let b_up = if row > 0 && valid[(row - 1) * cols + col] {
+                        smooth_b[(row - 1) * cols + col] * gradient_scale
+                    } else {
+                        b_curr
+                    };
+                    (a_curr - a_left) * res_x + (b_curr - b_up) * res_y
+                })
+                .collect();
+
+            for _ in 0..MAX_JACOBI {
+                let max_change: f32 = z_nxt
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .map(|(row, row_nxt)| {
+                        let mut local_max = 0.0f32;
+                        for col in 0..cols {
+                            let idx = row * cols + col;
+                            if !valid[idx] {
+                                row_nxt[col] = nodata;
+                                continue;
+                            }
+                            let mut sum_nbr = 0.0f32;
+                            let mut n_nbr = 0u32;
+                            macro_rules! try_nbr {
+                                ($r:expr, $c:expr) => {
+                                    if $r >= 0
+                                        && $c >= 0
+                                        && ($r as usize) < rows
+                                        && ($c as usize) < cols
+                                    {
+                                        let ni = $r as usize * cols + $c as usize;
+                                        if valid[ni] {
+                                            sum_nbr += z_cur[ni];
+                                            n_nbr += 1;
+                                        }
+                                    }
+                                };
+                            }
+                            try_nbr!(row as isize, col as isize + 1);
+                            try_nbr!(row as isize, col as isize - 1);
+                            try_nbr!(row as isize + 1, col as isize);
+                            try_nbr!(row as isize - 1, col as isize);
+                            let new_z = (settings.lambda * dem_orig[idx] + sum_nbr + div[idx])
+                                / (settings.lambda + n_nbr as f32);
+                            row_nxt[col] = new_z;
+                            local_max = local_max.max((new_z - z_cur[idx]).abs());
+                        }
+                        local_max
+                    })
+                    .reduce(|| 0.0_f32, f32::max);
+
+                std::mem::swap(&mut z_cur, &mut z_nxt);
+                if max_change < settings.convergence_threshold {
+                    break;
+                }
+            }
+
+            if settings.outer_convergence_threshold > 0.0 {
+                let outer_change = z_cur
+                    .par_iter()
+                    .zip(z_prev_outer.par_iter())
+                    .zip(valid.par_iter())
+                    .map(|((&a, &b), &ok)| if ok { (a - b).abs() } else { 0.0f32 })
+                    .reduce(|| 0.0f32, f32::max);
+                if outer_change < settings.outer_convergence_threshold {
+                    break;
+                }
+            }
+        }
+
+        z_cur
     }
 
     fn rect_sum(sum: &[f64], cols: usize, y1: usize, x1: usize, y2: usize, x2: usize) -> f64 {
@@ -6798,6 +7785,40 @@ impl Tool for FeaturePreservingSmoothingTool {
     }
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         TerrainWindowCore::run_feature_preserving_smoothing(args, ctx)
+    }
+}
+
+impl Tool for FeaturePreservingSmoothingPoissonTool {
+    fn metadata(&self) -> ToolMetadata {
+        TerrainWindowCore::feature_preserving_smoothing_poisson_metadata()
+    }
+    fn manifest(&self) -> ToolManifest {
+        TerrainWindowCore::feature_preserving_smoothing_poisson_manifest()
+    }
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = TerrainWindowCore::parse_input(args)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        TerrainWindowCore::run_feature_preserving_smoothing_poisson(args, ctx)
+    }
+}
+
+impl Tool for FeaturePreservingSmoothingMultiscaleTool {
+    fn metadata(&self) -> ToolMetadata {
+        TerrainWindowCore::feature_preserving_smoothing_multiscale_metadata()
+    }
+    fn manifest(&self) -> ToolManifest {
+        TerrainWindowCore::feature_preserving_smoothing_multiscale_manifest()
+    }
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = TerrainWindowCore::parse_input(args)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        TerrainWindowCore::run_feature_preserving_smoothing_multiscale(args, ctx)
     }
 }
 

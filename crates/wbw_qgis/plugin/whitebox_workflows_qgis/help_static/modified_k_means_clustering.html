@@ -1,0 +1,7 @@
+<p>This modified k-means algorithm is similar to that described by Mather and Koch (2011). The main difference between the traditional k-means and this technique is that the user does not need to specify the desired number of classes/clusters prior to running the tool. Instead, the algorithm initializes with a very liberal overestimate of the number of classes and then merges classes that have cluster centres that are separated by less than a user-defined threshold. The main difference between this algorithm and the ISODATA technique is that clusters can not be broken apart into two smaller clusters.</p> <h2>Reference</h2> <p>Mather, P. M., &amp; Koch, M. (2011). Computer processing of remotely-sensed images: an introduction. John Wiley &amp; Sons.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#k_means_clustering">k_means_clustering</a></p> <h2>Function Signature</h2> <p><code>def modified_k_means_clustering(self, input_rasters: List[Raster], output_html_file: str = "", num_start_clusters: int = 1000, merge_distance: float = 1.0, max_iterations: int = 10, percent_changed_threshold: float = 2.0) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

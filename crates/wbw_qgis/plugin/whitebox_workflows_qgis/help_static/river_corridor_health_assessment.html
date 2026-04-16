@@ -1,0 +1,62 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>River Corridor Health Assessment</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which river reaches are stable versus at-risk, and where should restoration action be prioritized?</p>
+<h3>Who It Is For</h3>
+<ul><li>Watershed restoration teams, river health analysts, and permit support consultants.</li></ul>
+<h3>Primary User</h3>
+<p>Watershed councils, conservation authorities, and environmental consulting groups.</p>
+<h3>What It Does</h3>
+<ul><li>Derives erosion-pressure context from terrain.</li><li>Scores stream reaches by sampled corridor pressure.</li><li>Emits restoration-priority line outputs for intervention planning.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Calculates per-pixel erosion pressure from slope and local roughness terms.</li><li>Samples stream vertices over the erosion raster and derives reach metrics (including high quantiles).</li><li>Converts reach scores into health classes and restoration action categories.</li><li>Indicative formula: erosion ~= a*slope_norm + b*roughness_norm; health ~= 1 - mean(erosion_samples_along_reach).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Combines raster pressure context and attributed reach-level restoration outputs in one workflow.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A watershed plan needs rapid reach triage with GIS-ready outputs for restoration budgeting.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast for rapid watershed screening.</li><li>balanced for default corridor scoring.</li><li>conservative for roughness-sensitive erosion scoring.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital elevation model used as the terrain reference surface.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>streams</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector stream network used for corridor health and restoration targeting.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>erosion_pressure</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Erosion pressure raster for river corridor condition assessment.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>corridor_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence surface for river corridor health interpretation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>stream_health_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Stream-reach health score output summarizing corridor condition.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>restoration_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Priority vector polygons highlighting restoration intervention zones.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+erosion, confidence, health, restoration, summary = wbe.river_corridor_health_assessment(
+    dem=&quot;data/dem.tif&quot;,
+    streams=&quot;data/streams.gpkg&quot;,
+    profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/river_health&quot;,
+)
+
+print(erosion)
+print(confidence)
+print(health)
+print(restoration)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,59 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Assess LiDAR point-cloud quality and compute confidence metrics for terrain extraction readiness.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>LiDAR QA and Confidence</strong></p>
+<h3>Problem It Solves</h3>
+<p>Is this LiDAR deliverable trustworthy enough for production terrain modeling, and where are the risk zones?</p>
+<h3>Who It Is For</h3>
+<ul><li>LiDAR production QA teams and data acceptance reviewers.</li></ul>
+<h3>Primary User</h3>
+<p>Survey/mapping firms, government mapping programs, and enterprise geospatial platforms.</p>
+<h3>What It Does</h3>
+<ul><li>Runs LiDAR QA workflow with ground-surface diagnostics.</li><li>Produces confidence, uncertainty, and QA flags for acceptance screening.</li><li>Supports qa_mode-driven strictness behavior (strict, balanced, permissive, auto).</li><li>Supports fast_mode for exploratory runs that skip non-critical diagnostics.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Classifies and normalizes point-cloud structure to estimate ground-surface consistency.</li><li>Builds rasterized QA metrics (confidence, uncertainty, flags) from neighborhood evidence.</li><li>Applies mode-specific acceptance thresholds to summarize pass-risk patterns.</li><li>Optionally runs checkpoint vertical validation and auto-mode recommendations in summary outputs.</li><li>Indicative formula: confidence ~= 1 - normalized(local_residual + return_structure_penalty).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Converts QA from a binary pass/fail decision into spatial confidence and uncertainty diagnostics.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Data acceptance teams need objective QA evidence before approving vendor LiDAR for production use.</p>
+<h3>Typical Presets</h3>
+<ul><li>strict for conservative acceptance checks.</li><li>balanced for normal production QA.</li><li>permissive for exploratory preprocessing.</li><li>auto for recommendation-guided QA mode selection.</li><li>fast_mode=true for rapid exploratory runs when full diagnostics are not required.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input (LAS/LAZ)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input LiDAR point cloud used to derive QA, terrain, structure, or encroachment products.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_mode and QA threshold controls</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>QA strictness mode and threshold controls for LiDAR acceptance diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>fast_mode</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional acceleration mode that skips hotspot extraction, stratified metrics, and checkpoint validation for faster exploratory runs.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>classified_lidar</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional LAS/LAZ</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional classified LiDAR point cloud output from QA/terrain workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dtm</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital terrain model raster generated from workflow processing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence layer quantifying reliability of modeled outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>uncertainty</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Uncertainty diagnostics layer highlighting low-certainty areas.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_flags</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>QA flag raster identifying cells that failed quality checks.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.lidar_qa_and_confidence(
+    input=&quot;data/points.laz&quot;,
+    qa_mode=&quot;balanced&quot;,
+    fast_mode=False,
+    output_prefix=&quot;output/lidar_qa&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,7 @@
+<p>This tool copies LiDAR tiles overlapping with a polygon into an output directory. In actuality, the tool performs point-in-polygon operations, using the four corner points, the center point, and the four mid-edge points of each LiDAR tile bounding box and the polygons. This representation of overlapping geometry aids with performance. This approach generally works well when the polygon size is large relative to the LiDAR tiles. If, however, the input polygon is small relative to the tile size, this approach may miss some copying some tiles. It is advisable to buffer the polygon if this occurs.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#lidar_tile_footprint">lidar_tile_footprint</a></p> <h2>Function Signature</h2> <p><code>def select_tiles_by_polygon(self, input_directory: str, output_directory: str, polygons: Vector) -&gt; None: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

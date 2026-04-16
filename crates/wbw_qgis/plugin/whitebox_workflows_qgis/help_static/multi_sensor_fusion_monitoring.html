@@ -1,0 +1,74 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Multi-Sensor Fusion Monitoring</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where do optical and SAR signals jointly support actionable change alerts, and where is confidence high enough to triage immediately?</p>
+<h3>Who It Is For</h3>
+<ul><li>Multi-source monitoring teams combining optical and SAR evidence.</li></ul>
+<h3>Primary User</h3>
+<p>National/regional EO monitoring programs, environmental observatories, and risk intelligence teams.</p>
+<h3>What It Does</h3>
+<ul><li>Fuses optical change, SAR stability cues, and terrain context into one disturbance-monitoring product.</li><li>Produces sensor-agreement and fused-probability outputs for confidence-first screening.</li><li>Emits high-confidence change zones suitable for direct review and reporting.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Runs `remote_sensing_change_detection` and `sar_analysis_readiness` as upstream stages.</li><li>Computes a per-pixel agreement score from optical confidence plus SAR consistency/coherence cues.</li><li>Combines normalized change strength and agreement into fused change probability.</li><li>Indicative formula: $P_{fused} = w_c \cdot |\Delta_{optical}|_{norm} + w_a \cdot A_{sensor}$.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Prevents one-sensor overconfidence by explicitly encoding cross-sensor agreement into final change probability.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Operations teams need lower-false-alarm change monitoring in cloudy/seasonally variable regions where single-sensor methods are unstable.</p>
+<h3>Typical Presets</h3>
+<ul><li>aggressive: lower high-confidence threshold for broader candidate capture.</li><li>balanced: default setting for operational triage.</li><li>conservative: stricter thresholding for high-specificity alerting.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_bundle, baseline_red_band_index, baseline_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline multispectral bundle and red/NIR band selectors used to compute baseline vegetation response.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_bundle, change_red_band_index, change_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Change-date multispectral bundle and red/NIR band selectors used for signed change estimation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_sar, input_dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>SAR scene and terrain model used for radiometric terrain correction and readiness metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional pair_sar</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional second SAR scene used when pair/coherence diagnostics are enabled.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: aggressive | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>high_confidence_threshold, max_zone_features</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Threshold and feature-cap controls for extracting high-confidence change zones.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>fused_change_probability</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Cross-sensor fused probability of meaningful environmental change.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>sensor_agreement</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Agreement surface indicating where sensors support the same change interpretation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>terrain_context</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Derived terrain context layer used by fused change interpretation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>high_confidence_change_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector zones representing high-confidence change hotspots.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+fused, agreement, terrain, zones, summary = wbe.multi_sensor_fusion_monitoring(
+    baseline_bundle=&quot;data/baseline_bundle.tif&quot;,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    change_bundle=&quot;data/change_bundle.tif&quot;,
+    change_red_band_index=0,
+    change_nir_band_index=1,
+    input_sar=&quot;data/sar_a.tif&quot;,
+    input_dem=&quot;data/dem.tif&quot;,
+    pair_sar=&quot;data/sar_b.tif&quot;,
+    profile=&quot;balanced&quot;,
+    high_confidence_threshold=0.8,
+    max_zone_features=25000,
+    output_prefix=&quot;output/ms_fusion&quot;,
+)
+
+print(fused)
+print(agreement)
+print(terrain)
+print(zones)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,7 @@
+<p>This tool calculates the average slope gradient (i.e. slope steepness in degrees) of the flowpaths that pass through each grid cell in an input digital elevation model (DEM). The user must specify the name of a DEM raster (<code>dem</code>). It is important that this DEM is pre-processed to remove all topographic depressions and flat areas using a tool such as <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#breach_depressions_least_cost">breach_depressions_least_cost</a>. Several intermediate rasters are created and stored in memory during the operation of this tool, which may limit the size of DEM that can be processed, depending on available system resources.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#average_upslope_flowpath_length">average_upslope_flowpath_length</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#breach_depressions_least_cost">breach_depressions_least_cost</a></p> <h2>Function Signature</h2> <p><code>def average_flowpath_slope(self, dem: Raster) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

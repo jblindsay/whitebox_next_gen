@@ -69,6 +69,17 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         return Err(GeoError::NotShapefile(format!("file code {file_code} ≠ 9994")));
     }
 
+    // Extract shape type from .shp header (offset 32, little-endian)
+    // and set layer.geom_type accordingly
+    let file_shape_type = i32_le(&shp, 32);
+    layer.geom_type = match file_shape_type {
+        SHP_POINT | SHP_POINT_M | SHP_POINT_Z => Some(GeometryType::Point),
+        SHP_POLYLINE | SHP_POLYLINE_M | SHP_POLYLINE_Z => Some(GeometryType::LineString),
+        SHP_POLYGON | SHP_POLYGON_M | SHP_POLYGON_Z => Some(GeometryType::Polygon),
+        SHP_MULTIPOINT | SHP_MULTIPOINT_M | SHP_MULTIPOINT_Z => Some(GeometryType::Point),
+        _ => None,
+    };
+
     // ── parse .dbf ────────────────────────────────────────────────────────────
     let (schema, dbf_rows) = read_dbf(&dbf)?;
     for fd in schema.fields() { layer.add_field(fd.clone()); }

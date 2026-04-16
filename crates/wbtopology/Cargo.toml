@@ -18,7 +18,7 @@ name = "wbtopology"
 path = "src/lib.rs"
 
 [dependencies]
-wbvector = { path = "../wbvector", version = "0.1.0" }
+wbvector = { path = "../wbvector", version = "0.1.1" }
 rayon = { version = "1.10", optional = true }
 
 [features]

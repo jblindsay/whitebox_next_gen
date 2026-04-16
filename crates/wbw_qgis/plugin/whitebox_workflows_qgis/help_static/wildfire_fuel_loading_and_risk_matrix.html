@@ -1,0 +1,70 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Wildfire Fuel Risk Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where are the highest-priority fuel and spread-risk areas, and what dominant fuel conditions drive those zones?</p>
+<h3>Who It Is For</h3>
+<ul><li>Wildfire planning teams, utility risk programs, and fuels management analysts.</li></ul>
+<h3>Primary User</h3>
+<p>Utility wildfire mitigation teams, land-management agencies, and hazard/risk operations groups.</p>
+<h3>What It Does</h3>
+<ul><li>Classifies sparse, surface, ladder, and canopy fuel classes from optical and optional structure inputs.</li><li>Computes moisture index and ladder-fuel continuity diagnostics.</li><li>Builds a terrain-amplified wildfire risk matrix with zone-level risk tiers.</li><li>Emits risk-zone vector outputs and summary contracts for operations planning.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Extracts required optical bands and computes NDMI (if SWIR available) or NDWI proxy fallback.</li><li>Uses NDVI, moisture thresholds, and optional biomass proxy to assign fuel class per cell.</li><li>Computes ladder continuity and combines fuel risk with optional slope/aspect spread amplifiers.</li><li>Produces a clipped risk score in [0,1] and polygonized risk zones with dominant fuel and risk tier.</li><li>Indicative formula: risk ~= (base_fuel_risk + dryness_boost) * slope_amp * aspect_amp.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Packages moisture, structure, terrain amplification, and zone-level risk outputs in a single reproducible workflow.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Seasonal mitigation planning and risk-tier prioritization require consistent spatial evidence outputs.</p>
+<h3>Typical Presets</h3>
+<ul><li>conservative for lower sensitivity and tighter risk escalation.</li><li>balanced for default planning workflows.</li><li>aggressive for early-warning and preventative treatment prioritization.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optical_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Multispectral raster containing red/NIR and optionally SWIR bands.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>red_band_index, nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Red and NIR band indices. Defaults: 0, 1.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>swir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional SWIR index; enables NDMI moisture estimation when available.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>biomass_proxy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional LiDAR biomass/height proxy used to refine fuel class and ladder continuity signals.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope, aspect</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional terrain slope/aspect rasters used for spread amplification terms.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: conservative | balanced | aggressive</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Sensitivity profile controlling class/risk thresholds.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_block_cells</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pixel block size used for risk-zone polygon aggregation. Defaults to `20`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name output artifacts.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moisture_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>NDMI/NDWI moisture response raster (`*_moisture_index.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>fuel_load_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Fuel class code raster (sparse/surface/ladder/canopy) (`*_fuel_load_class.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ladder_fuel_continuity</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Ladder continuity index surface (`*_ladder_fuel_continuity.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>risk_matrix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Terrain-amplified wildfire risk score raster (`*_risk_matrix.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>risk_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Aggregated risk polygons with tier and dominant fuel attributes (`*_risk_zones.gpkg`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary contract (`*_summary.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from the summary contract for review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.wildfire_fuel_loading_and_risk_matrix(
+    optical_bundle=&quot;data/optical_multiband.tif&quot;,
+    red_band_index=0,
+    nir_band_index=1,
+    swir_band_index=2,
+    biomass_proxy=&quot;data/biomass_proxy.tif&quot;,
+    slope=&quot;data/slope.tif&quot;,
+    aspect=&quot;data/aspect.tif&quot;,
+    profile=&quot;balanced&quot;,
+    zone_block_cells=20,
+    output_prefix=&quot;output/wildfire_risk&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

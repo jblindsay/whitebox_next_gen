@@ -1,0 +1,59 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Classify wetlands into hydrogeomorphic classes using DEM context and wetland masks.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Wetland Hydrogeomorphic Classification</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which mapped wetland regions belong to key HGM classes, and where is class confidence high enough for permitting decisions?</p>
+<h3>Who It Is For</h3>
+<ul><li>Wetland scientists, permitting consultants, and mitigation planners.</li></ul>
+<h3>Primary User</h3>
+<p>Environmental consulting firms, permitting agencies, and mitigation banking organizations.</p>
+<h3>What It Does</h3>
+<ul><li>Classifies wetland mask cells into HGM classes using terrain context.</li><li>Builds confidence surfaces for wetland classification reliability.</li><li>Polygonizes connected wetland regions with region-level attributes.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes local terrain signatures in wetland-mask cells from DEM gradients and relief context.</li><li>Assigns HGM class codes using rule-based thresholds over those signatures.</li><li>Aggregates connected components into polygons and summarizes dominant class and mean confidence.</li><li>Indicative formula: class = rule(slope, relief, wetness_proxy), confidence from distance-to-threshold stability.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Produces connected-region polygons with explicit confidence and class attributes, not just cell-level labels.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Permitting or mitigation workflows require polygon deliverables with defensible classification metadata.</p>
+<h3>Typical Presets</h3>
+<ul><li>default for full region polygon extraction.</li><li>lower max_polygon_features for very large AOIs.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem, wetland_mask</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>DEM and wetland mask defining candidate wetland extent and hydrogeomorphic context.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_polygon_features</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum number of polygon features to emit for mapped wetland units.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>hgm_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Categorical hydrogeomorphic wetland class raster.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence layer quantifying reliability of modeled outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>wetland_polygons</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vectorized wetland class polygons for mapping and reporting.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+hgm, conf, polys, summary = wbe.wetland_hydrogeomorphic_classification(
+    dem=&quot;data/dem.tif&quot;,
+    wetland_mask=&quot;data/wetlands.tif&quot;,
+    max_polygon_features=10000,
+    output_prefix=&quot;output/wetland_hgm&quot;,
+)
+
+print(hgm)
+print(conf)
+print(polys)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

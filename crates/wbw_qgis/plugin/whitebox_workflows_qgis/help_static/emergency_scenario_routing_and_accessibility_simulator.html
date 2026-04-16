@@ -1,0 +1,60 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Emergency Accessibility Scenario Planning</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Emergency management teams planning resilience under flood/fire/closure scenarios.</li><li>Public safety routing analysts evaluating critical-facility reachability under disruptions.</li></ul>
+<h3>Primary User</h3>
+<p>Emergency management, public safety operations, and municipal resilience planning teams.</p>
+<h3>What It Does</h3>
+<ul><li>Simulates emergency network accessibility under multiple disruption scenarios.</li><li>Compares scenario accessibility against baseline service-area coverage.</li><li>Supports scenario-specific blocked-edge simulation using network attribute mapping.</li><li>Outputs baseline and worst-case service areas, scenario KPI table, and simulation report JSON.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Runs baseline merged multi-ring service areas from critical facilities using network_service_area.</li><li>Reads scenario CSV (`scenario_id,max_cost_multiplier[,blocked_value]`).</li><li>For each scenario:</li><li>Scales max travel cost by `max_cost_multiplier`.</li><li>Optionally maps `blocked_value` to scenario-blocked edges using `scenario_block_source_field`.</li><li>**Scope boundary:** Emergency Accessibility Scenario Planning simulates disrupted-network conditions for critical facility coverage — it is the service-area tool for emergency resilience and response planning. Service Area Planning and Coverage Optimization (6.2) addresses public infrastructure coverage under normal operating conditions. Market Access and Site Planning (6.7) evaluates commercial expansion by drive-time access and competitive positioning. Choose this tool for resilience analysis, 6.2 for infrastructure coverage gaps, and 6.7 for commercial site decisions.</li><li>Computes scenario service area polygons and demand-point coverage percent.</li><li>Computes `delta_from_baseline_pct` per scenario and identifies best/worst scenario outcomes.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`network`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>LineVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Network layer for routing</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`critical_facilities`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Origin facilities (hospitals/fire/EMS/etc.)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`demand_points`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Demand points for scenario coverage KPIs</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`ring_costs`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>array[float]</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Service area ring costs (e.g., [5,10,15])</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`scenario_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV: scenario_id,max_cost_multiplier[,blocked_value]</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`scenario_template`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Scenario authoring template: `custom` | `flood` | `wildfire` | `earthquake`; applies template guardrails</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`scenario_block_source_field`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Network attribute used to match scenario blocked_value</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`baseline_service_areas`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output baseline service areas</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`worst_case_service_areas`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output worst-scenario service areas</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`scenario_summary_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output scenario KPI summary CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`simulation_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output simulation summary JSON</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`baseline_service_areas`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline merged service area polygons</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`worst_case_service_areas`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Worst-performing scenario service area polygons</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`scenario_summary_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>scenario_id, blocked_value, covered_pct, delta_from_baseline_pct and related KPIs</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`simulation_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline stats, scenario comparisons, best/worst scenario summary</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;emergency_scenario_routing_and_accessibility_simulator&quot;,
+    network=&quot;city_network.gpkg&quot;,
+    critical_facilities=&quot;critical_facilities.gpkg&quot;,
+    demand_points=&quot;demand_points.gpkg&quot;,
+    ring_costs=[5, 10, 15],
+    scenario_csv=&quot;scenarios.csv&quot;,
+    scenario_block_source_field=&quot;STATUS&quot;,
+    baseline_service_areas=&quot;output/baseline_service_areas.gpkg&quot;,
+    worst_case_service_areas=&quot;output/worst_service_areas.gpkg&quot;,
+    scenario_summary_csv=&quot;output/scenario_summary.csv&quot;,
+    simulation_report=&quot;output/simulation_report.json&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -214,6 +214,12 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
             }
         }
 
+        if layer.geom_type.is_none() {
+            if let Some(g) = &geom {
+                layer.geom_type = Some(g.geom_type());
+            }
+        }
+
         layer.add_feature(geom, &[])?;
         if let Some(f) = layer.features.get_mut(idx) {
             f.fid = idx as u64;

@@ -1,0 +1,23 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Join attributes from one vector layer to another based on spatial relationship. Uses spatial indexing for efficient processing.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">vector</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">join</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">spatial</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>target</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Target layer receiving joined attributes.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>target.shp</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>join</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Join layer providing attributes.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>join.shp</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>predicate</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Spatial predicate: intersects, within, contains, touches, crosses, overlaps, within_distance.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>intersects</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>distance</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Distance threshold for within_distance predicate.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>strategy</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Join strategy: first, last, count, sum, mean, min, max.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>first</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>prefix</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix for joined field names (default JOIN_).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>JOIN_</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output vector path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Transfers join-layer attributes where geometries intersect.</em></p>
+<pre><code>wbe.spatial_join(join='join.shp', output='spatial_join.shp', predicate='intersects', prefix='JOIN_', strategy='first', target='target.shp')</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

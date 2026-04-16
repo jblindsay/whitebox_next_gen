@@ -1,0 +1,170 @@
+{
+  "elev_above_pit": {
+    "description": "Calculate elevation above the nearest depression (pit). Useful for drainage analysis and identifying topographic prominence.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM (digital elevation model)."
+      },
+      "output": {
+        "label": "Output raster path (required in QGIS)."
+      }
+    }
+  },
+  "flow_accumulation_d8": {
+    "description": "Calculate flow accumulation using D8 (8-neighbor) flow direction. Standard method for identifying flow paths and stream networks.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM. Should be hydrologically conditioned (depressions filled)."
+      },
+      "weight": {
+        "label": "Weight raster [optional]",
+        "tooltip": "If provided, flow accumulation weighted by cell values (e.g., rainfall, infiltration). Omit for uniform weighting."
+      },
+      "output": {
+        "label": "Output flow accumulation raster (required in QGIS)."
+      }
+    }
+  },
+  "flow_direction_d8": {
+    "description": "Compute D8 flow direction (8 possible directions). Foundation for hydrological modeling and stream extraction.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM. Should be depressions-filled for realistic flow paths."
+      },
+      "output": {
+        "label": "Output flow direction raster with direction codes 1-8 (required in QGIS)."
+      }
+    }
+  },
+  "aspect": {
+    "description": "Calculate slope aspect (downslope direction) from DEM. Output in degrees (0–360) or compass classes (N, NE, E, etc.).",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM."
+      },
+      "output_type": {
+        "label": "Output format {degrees, compass_8_direction, compass_16_direction} (default degrees). Choose based on application.",
+        "tooltip": "degrees: 0–360 (0°=North, 90°=East, 180°=South, 270°=West); compass_8_direction: N,NE,E,SE,S,SW,W,NW; compass_16_direction: finer resolution"
+      },
+      "output": {
+        "label": "Output aspect raster (required in QGIS)."
+      }
+    }
+  },
+  "slope": {
+    "description": "Calculate slope gradient from DEM. Output in degrees, radians, or percent rise.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM."
+      },
+      "units": {
+        "label": "Output units {degrees, radians, percent} (default degrees). Choose based on analysis needs.",
+        "tooltip": "degrees: 0–90 (most intuitive); radians: 0–π/2 (for calculations); percent: rise/run × 100 (common in geomorphology)"
+      },
+      "output": {
+        "label": "Output slope raster (required in QGIS)."
+      }
+    }
+  },
+  "curvature": {
+    "description": "Calculate surface curvature (profile or plan). Identifies ridges, valleys, and inflection areas. Useful for terrain classification.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM."
+      },
+      "type": {
+        "label": "Curvature type {profile, plan, mean_curvature, gaussian_curvature} (default profile). Profile highlights valleys/ridges; plan highlights convergence/divergence.",
+        "tooltip": "profile: curvature in downslope direction (1D); plan: curvature perpendicular to slope (1D); mean_curvature: average (2D); gaussian: product (2D)"
+      },
+      "output": {
+        "label": "Output curvature raster (required in QGIS)."
+      }
+    }
+  },
+  "terrain_roughness_index": {
+    "description": "Compute terrain roughness by measuring local elevation variability. Quantifies microtopography and surface complexity.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM."
+      },
+      "filter_size": {
+        "label": "Window size in cells (default 3, must be odd). Larger windows integrate roughness over broader areas.",
+        "tooltip": "3: fine-scale roughness; 5–7: medium roughness; 9+: broad topographic complexity. Typical range: 3–15 cells."
+      },
+      "output": {
+        "label": "Output roughness raster (required in QGIS)."
+      }
+    }
+  },
+  "terrain_position_index": {
+    "description": "Calculate Terrain Position Index (TPI). Classifies positions relative to neighborhood elevations (ridges, valleys, plains).",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM."
+      },
+      "inner_radius": {
+        "label": "Inner radius in cells (default 3). Defines local neighborhood around each cell.",
+        "tooltip": "Typical: 3–10 cells. Smaller values identify fine-scale features; larger values smooth to broader patterns."
+      },
+      "outer_radius": {
+        "label": "Outer radius in cells (default 21 or larger). Defines context for comparison.",
+        "tooltip": "Should be larger than inner_radius. Ratio of outer/inner defines scale. Typical: 10–50 cells."
+      },
+      "output": {
+        "label": "Output TPI raster (required in QGIS)."
+      }
+    }
+  },
+  "fill_depressions": {
+    "description": "Fill depressions in DEM to enforce hydrological connectivity and remove spurious sinks.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM with depressions to fill."
+      },
+      "fix_flats": {
+        "label": "Fix flat areas [optional]",
+        "tooltip": "When enabled, also resolves flat areas by introducing gentle gradients. Ensures drainage across plateaus. Recommended for DEMs with large flat regions."
+      },
+      "output": {
+        "label": "Output filled DEM (required in QGIS)."
+      }
+    }
+  },
+  "viewshed": {
+    "description": "Calculate viewshed (visible area) from observer location(s) on terrain. Useful for siting analysis, visibility studies.",
+    "parameters": {
+      "dem": {
+        "label": "Input DEM. Should be in same coordinate system as observer points."
+      },
+      "observer_points": {
+        "label": "Observer location(s) as point vector layer. Each point is treated as viewpoint; elevation taken from DEM."
+      },
+      "observer_height": {
+        "label": "Observer height in DEM units (default 1.6 meters). Height above ground for observer (e.g., eye level for person).",
+        "tooltip": "Typical: 1.6–2.0 m for person; adjustable for cameras, sensors, or analysis needs."
+      },
+      "max_distance": {
+        "label": "Maximum visible distance [optional]",
+        "tooltip": "Limits viewshed computation for performance. Leave empty for unlimited visibility."
+      },
+      "output": {
+        "label": "Output viewshed raster (1=visible, 0=hidden) (required in QGIS)."
+      }
+    }
+  },
+  "watershed": {
+    "description": "Delineate watersheds from flow direction raster. Identifies flow-connected regions and basin boundaries.",
+    "parameters": {
+      "flow_direction": {
+        "label": "Flow direction raster (D8 format). Maps flow paths for watershed delineation."
+      },
+      "pour_points": {
+        "label": "Pour point locations (outlet vectors) [optional]",
+        "tooltip": "If provided, delineates watershed for each point. If omitted, computes all watersheds."
+      },
+      "output": {
+        "label": "Output watershed raster where each value = unique basin ID (required in QGIS)."
+      }
+    }
+  }
+}

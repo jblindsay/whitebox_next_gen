@@ -238,6 +238,9 @@ fn layer_from_value(val: Jv, name: &str) -> Result<Layer> {
         "Feature" => {
             let mut layer = Layer::new(name);
             if let Some(f) = build_feature(&val, &layer.schema, 0)? {
+                if let Some(geom) = &f.geometry {
+                    layer.geom_type = Some(geom.geom_type());
+                }
                 layer.push(f);
             }
             Ok(layer)
@@ -246,6 +249,7 @@ fn layer_from_value(val: Jv, name: &str) -> Result<Layer> {
             // Bare geometry
             let geom = parse_geometry(&val)?;
             let mut layer = Layer::new(name);
+            layer.geom_type = Some(geom.geom_type());
             layer.push(Feature { fid: 0, geometry: Some(geom), attributes: vec![] });
             Ok(layer)
         }
@@ -281,6 +285,12 @@ fn parse_feature_collection(val: Jv, name: &str) -> Result<Layer> {
 
     for (idx, feat_val) in features_arr.iter().enumerate() {
         if let Some(f) = build_feature(feat_val, &layer.schema, idx as u64)? {
+            // Infer layer geometry type from first feature with geometry
+            if layer.geom_type.is_none() {
+                if let Some(geom) = &f.geometry {
+                    layer.geom_type = Some(geom.geom_type());
+                }
+            }
             layer.push(f);
         }
     }

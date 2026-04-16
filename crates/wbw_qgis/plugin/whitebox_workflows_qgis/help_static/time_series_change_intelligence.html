@@ -1,0 +1,58 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Time-Series Change Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where and when are structural shifts emerging in the time series, and how confident are those signals?</p>
+<h3>Who It Is For</h3>
+<ul><li>Time-series monitoring teams and geospatial data science groups.</li></ul>
+<h3>Primary User</h3>
+<p>Regional planning programs, policy/compliance analytics groups, and EO product teams.</p>
+<h3>What It Does</h3>
+<ul><li>Performs multi-date trend and breakpoint analysis from temporal stacks.</li><li>Supports mode-dependent decomposition/segmentation behavior.</li><li>Emits confidence-scored temporal change surfaces.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Traverses each pixel time series and estimates trend response over the observation window.</li><li>Uses algorithm_mode-specific breakpoint logic to detect structural shifts.</li><li>Converts fit strength, breakpoint support, and observation sufficiency into confidence output.</li><li>Indicative formula: confidence ~= f(|trend|, breakpoint_support, n_observations), bounded to [0, 1].</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Provides mode flexibility (fast/iterative/bfast) so users can balance throughput and analytical depth.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A monitoring program moves from two-date snapshots to sustained time-series surveillance.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast: throughput-oriented screening.</li><li>iterative: stronger breakpoint refinement.</li><li>bfast: decomposition-oriented analysis.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_stack (required)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Primary temporal raster stack used for trend and breakpoint analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional qa_stack</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional temporal QA stack used to weight or suppress low-quality observations.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>algorithm_mode and thresholding controls</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Time-series change algorithm mode and threshold controls.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>trend_change</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Primary change-intelligence raster showing direction and magnitude of detected change.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>breakpoint_count</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-pixel count of detected temporal breakpoints.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>breakpoint_date</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Estimated timing raster for dominant detected breakpoint events.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence surface for the time-series change detection result.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.time_series_change_intelligence(
+    input_stack=&quot;data/time_stack.tif&quot;,
+    qa_stack=&quot;data/time_stack_qa.tif&quot;,
+    algorithm_mode=&quot;bfast&quot;,
+    output_prefix=&quot;output/ts_change&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

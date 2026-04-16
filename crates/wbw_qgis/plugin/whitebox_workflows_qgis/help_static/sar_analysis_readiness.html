@@ -1,0 +1,66 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Evaluate SAR scene readiness for downstream analysis, including optional terrain and pairwise coherence-proxy checks.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>SAR Readiness QA</strong></p>
+<h3>Problem It Solves</h3>
+<p>Are SAR scenes normalized enough for robust multi-scene comparison and downstream analytics?</p>
+<h3>Who It Is For</h3>
+<ul><li>SAR specialists and all-weather monitoring teams.</li></ul>
+<h3>Primary User</h3>
+<p>Disaster/hazard monitoring units, remote sensing service firms, and infrastructure monitoring groups.</p>
+<h3>What It Does</h3>
+<ul><li>Produces analysis-ready SAR derivatives from SAR + DEM.</li><li>Applies calibration, speckle filtering, and RTC-support factor generation.</li><li>Accepts either direct SAR rasters or supported SAR bundles and records bundle metadata provenance.</li><li>Optionally emits a pair-based coherence proxy and can auto-coregister the pair first when explicit opt-in alignment is requested.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Converts input SAR intensity to calibrated backscatter-compatible values.</li><li>Applies configurable speckle-window filtering for noise suppression.</li><li>Computes terrain correction factors from DEM geometry, resolves bundle metadata when present, and optionally evaluates a pair coherence proxy.</li><li>Indicative formula: gamma0 ~= sigma0 / cos(local_incidence), then local-window filtering and optional pair coherence estimation.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Couples SAR preprocessing with terrain support, bundle-native provenance, and explicit geometry guardrails, while still allowing an audited auto-coregistration handoff when pair alignment is not pre-established.</li><li>Boundary note:</li><li>`sar_analysis_readiness` is not the dedicated interferogram+coherence production workflow.</li><li>Dedicated companion tool (single combined workflow): `sar_interferogram_coherence`.</li><li>Design spec and scope details: `docs/sar_interferogram_coherence_spec.md`.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>An organization needs dependable all-weather monitoring where optical imagery is frequently unavailable.</p>
+<h3>Typical Presets</h3>
+<ul><li>default with single scene for preprocessing.</li><li>pair mode with either direct raster pairs or bundle-resolved pair inputs for coherence-proxy output.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_sar or input_sar_bundle, input_dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Primary SAR source plus terrain model used for radiometric terrain correction and readiness metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_measurement_key</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional bundle measurement selector when the input SAR bundle contains multiple assets.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional pair_sar or pair_sar_bundle and look-angle controls</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional secondary SAR source and geometry controls used for pair-based coherence-proxy diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>pair_measurement_key</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional bundle measurement selector when the pair SAR bundle contains multiple assets.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>auto_coregister_pair, coreg_max_offset_px, coreg_decimation, coreg_min_overlap_fraction</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional opt-in handoff to translation-mode pair alignment before coherence-proxy estimation when CRS/grid do not already match.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>speckle_window, z_factor</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Noise-filter window and vertical scaling controls used in SAR preprocessing.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>sar_backscatter_calibrated</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Calibrated SAR backscatter raster suitable for quantitative comparison.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>speckle_filtered</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Speckle-reduced SAR raster for improved interpretability and downstream analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>rtc_factor</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Radiometric terrain correction factor raster used to normalize SAR signal.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>coherence_proxy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional pair-based amplitude-domain coherence proxy raster when a compatible SAR pair is provided.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.sar_analysis_readiness(
+    input_sar_bundle=&quot;data/S1_reference.SAFE&quot;,
+    input_measurement_key=&quot;vv&quot;,
+    input_dem=&quot;data/dem.tif&quot;,
+    pair_sar_bundle=&quot;data/S1_pair.SAFE&quot;,
+    pair_measurement_key=&quot;vv&quot;,
+    auto_coregister_pair=True,
+    coreg_max_offset_px=24,
+    speckle_window=5,
+    output_prefix=&quot;output/sar_ready&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

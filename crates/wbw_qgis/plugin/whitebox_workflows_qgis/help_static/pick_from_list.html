@@ -1,0 +1,7 @@
+<p>This tool outputs the cell value from a raster stack specified (<code>inputs</code>) by a position raster (<code>pos_input</code>). The user must specify the name of the position raster, the names of the raster files contained in the stack (i.e. group of rasters), and an output raster file name (<code>output</code>). The tool, working on a cell-by-cell basis, will assign the value to the output grid cell contained in the corresponding cell in the stack image in the position specified by the cell value in the position raster. Importantly, the positions raster should be in zero-based order. That is, the first image in the stack should be assigned the value zero, the second raster is assigned 1, and so on.</p> <p>At least two input rasters are required to run this tool. Each of the input rasters must share the same number of rows and columns and spatial extent. An error will be issued if this is not the case.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#count_if">count_if</a></p> <h2>Function Signature</h2> <p><code>def pick_from_list(self, input_rasters: List[Raster], pos_input: Raster) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

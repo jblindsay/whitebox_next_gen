@@ -235,11 +235,24 @@ impl Db {
         self.scan_btree(root, if root == 1 { 100 } else { 0 })
     }
 
+    pub fn select_all_with_rowid(&self, table: &str) -> Result<Vec<(i64, Row)>> {
+        let root = self.tables.get(table)
+            .map(|m| m.root_page)
+            .ok_or_else(|| GeoError::GpkgSchema(format!("table '{table}' not found")))?;
+        self.scan_btree_with_rowid(root, if root == 1 { 100 } else { 0 })
+    }
+
     // ── B-tree scan ───────────────────────────────────────────────────────────
 
     fn scan_btree(&self, page_no: usize, header_offset: usize) -> Result<Vec<Row>> {
         let mut rows = Vec::new();
         self.walk_page(page_no, header_offset, &mut rows)?;
+        Ok(rows)
+    }
+
+    fn scan_btree_with_rowid(&self, page_no: usize, header_offset: usize) -> Result<Vec<(i64, Row)>> {
+        let mut rows = Vec::new();
+        self.walk_page_with_rowid(page_no, header_offset, &mut rows)?;
         Ok(rows)
     }
 
@@ -283,12 +296,54 @@ impl Db {
         Ok(())
     }
 
+    fn walk_page_with_rowid(&self, page_no: usize, ho: usize, rows: &mut Vec<(i64, Row)>) -> Result<()> {
+        if page_no == 0 || page_no > self.pages.len() { return Ok(()); }
+        let page = &self.pages[page_no - 1];
+        if page.len() < ho + 8 { return Ok(()); }
+
+        let page_type = page[ho];
+        let n_cells   = u16::from_be_bytes([page[ho+3], page[ho+4]]) as usize;
+
+        match page_type {
+            0x0D => {
+                let cell_arr_start = ho + 8;
+                for i in 0..n_cells {
+                    let ptr_off = cell_arr_start + i * 2;
+                    if ptr_off + 2 > page.len() { break; }
+                    let cell_off = u16::from_be_bytes([page[ptr_off], page[ptr_off+1]]) as usize;
+                    if let Some(row) = self.parse_leaf_cell_with_rowid(page, cell_off) {
+                        rows.push(row);
+                    }
+                }
+            }
+            0x05 => {
+                let cell_arr_start = ho + 12;
+                let right_child = u32::from_be_bytes([page[ho+8], page[ho+9], page[ho+10], page[ho+11]]) as usize;
+                for i in 0..n_cells {
+                    let ptr_off = cell_arr_start + i * 2;
+                    if ptr_off + 2 > page.len() { break; }
+                    let cell_off = u16::from_be_bytes([page[ptr_off], page[ptr_off+1]]) as usize;
+                    if cell_off + 4 > page.len() { continue; }
+                    let child = u32::from_be_bytes([page[cell_off], page[cell_off+1], page[cell_off+2], page[cell_off+3]]) as usize;
+                    self.walk_page_with_rowid(child, 0, rows)?;
+                }
+                self.walk_page_with_rowid(right_child, 0, rows)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn parse_leaf_cell(&self, page: &[u8], off: usize) -> Option<Row> {
+        self.parse_leaf_cell_with_rowid(page, off).map(|(_, row)| row)
+    }
+
+    fn parse_leaf_cell_with_rowid(&self, page: &[u8], off: usize) -> Option<(i64, Row)> {
         if off >= page.len() { return None; }
 
         // [payload_size varint][rowid varint][payload]
         let (payload_size, n1) = read_varint(page, off);
-        let (_rowid, n2) = read_varint(page, off + n1);
+        let (rowid, n2) = read_varint(page, off + n1);
         let payload_size = usize::try_from(payload_size).ok()?;
         let payload_start = off + n1 + n2;
 
@@ -319,7 +374,7 @@ impl Db {
             return None;
         }
 
-        parse_record(&payload)
+        parse_record(&payload).map(|row| (rowid as i64, row))
     }
 
     // ── INSERT ────────────────────────────────────────────────────────────────
@@ -879,7 +934,7 @@ pub(crate) fn extract_column_names(sql: &str) -> Vec<String> {
             let t = col.trim();
             if t.is_empty() { return None; }
             let first = t.split_whitespace().next()?;
-            let name  = first.trim_matches('"');
+            let name  = first.trim_matches(|c| matches!(c, '"' | '[' | ']' | '`'));
             // Skip table-level constraints
             let low = name.to_ascii_lowercase();
             if ["constraint","primary","unique","check","foreign"].contains(&low.as_str()) {
@@ -1065,5 +1120,11 @@ mod tests {
     fn extract_cols() {
         let cols = extract_column_names("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, val REAL)");
         assert_eq!(cols, vec!["id", "name", "val"]);
+    }
+
+    #[test]
+    fn extract_cols_strips_bracket_quotes() {
+        let cols = extract_column_names("CREATE TABLE [Parcel] ([FID] INTEGER PRIMARY KEY, [SHAPE] MULTIPOLYGON, [GIS_AREA] DOUBLE)");
+        assert_eq!(cols, vec!["FID", "SHAPE", "GIS_AREA"]);
     }
 }

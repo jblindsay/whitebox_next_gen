@@ -1,11 +1,11 @@
-# Whitebox Workflows Tool Inventory Summary (2026-03-24)
+# Whitebox Workflows Tool Inventory Summary (Historical Snapshot + Living Notes, updated 2026-04-14)
 
 ## Executive Summary
-- **Total Legacy Tools (Scope)**: 619 tools across 9 categories (excluding 2 intentional exceptions)
-- **Total Ported Tools**: 618 tools (all legacy except intentional exceptions)
-- **Total Registered in New Codebase**: 537 unique tools (527 OSS + 26 Pro)
-- **Parity Status**: ✅ 100% achieved across all 8 tool categories
-- **Deployment Readiness**: Ready for 1.0 release
+- **Status of this document**: Historical category inventory with ongoing qualitative notes.
+- **Quantitative totals in this file**: Snapshot values from 2026-03-24, not authoritative for current release decisions.
+- **Current-state source of truth**: Runtime registry outputs and active release/validation checks.
+- **Parity framing**: Legacy parity milestone was achieved; exact counts should be verified from live registry state.
+- **Use case**: Category mapping and implementation notes, not definitive portfolio totals.
 
 ---
 
@@ -454,7 +454,7 @@
 - *Geomorphometry/Remote Sensing: Additional modernized implementations beyond legacy baseline
 - †LiDAR: 63 active + 1 dormant (lidar_dem_full_workflow) not ported
 - ‡Math: 99 legacy including 1 intentional exception (hdbscan_clustering)
-- §537 unique registered tools = 527 in wbtools_oss + 26 in wbtools_pro (accounting for overlaps)
+- §The 537/527/26 values are preserved as historical snapshot values from 2026-03-24.
 
 ---
 
@@ -463,12 +463,12 @@
 ### Parity Achievement
 - ✅ **100% Legacy Parity** across all 8 active tool categories
 - Exception handling: 2 intentional legacy exclusions (lidar_dem_full_workflow, hdbscan_clustering)
-- **619 legacy → 537 unique registered** in new architecture (accounting for shared references and platform distribution)
+- **619 legacy → 537 unique registered** reflects the 2026-03-24 snapshot and should be treated as historical.
 
 ### Platform Distribution
-- **wbtools_oss (OSS)**: ~527 tools
-- **wbtools_pro (Pro)**: ~26 tools
-- Mix of category-specific and cross-platform tools
+- **wbtools_oss (OSS)** and **wbtools_pro (Pro)** distribution has evolved beyond the snapshot values shown above.
+- Use runtime registry/listing outputs for current counts.
+- Mix of category-specific and cross-platform tools remains the correct structural model.
 
 ### Special Implementation Notes by Category
 1. **Agriculture**: Pro-tier only; full callback support

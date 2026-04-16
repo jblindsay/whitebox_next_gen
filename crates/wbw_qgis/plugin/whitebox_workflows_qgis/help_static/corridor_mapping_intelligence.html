@@ -1,0 +1,66 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Corridor Mapping and Route Planning</strong></p>
+<h3>Problem It Solves</h3>
+<p>What is the terrain-optimal route for this linear infrastructure, and what alternative corridor band exists within an acceptable cost margin?</p>
+<h3>Who It Is For</h3>
+<ul><li>Infrastructure planners, environmental consultants, and natural resource agencies assessing route options for roads, pipelines, or utility lines.</li></ul>
+<h3>Primary User</h3>
+<p>Forestry companies, energy utilities, and environmental regulatory consultancies evaluating new linear infrastructure corridors.</p>
+<h3>What It Does</h3>
+<ul><li>Builds a terrain impedance cost surface from DEM-derived slope and roughness.</li><li>Finds the least-cost path between two user-specified endpoints using Dijkstra accumulation.</li><li>Delineates a corridor suitability band of near-optimal alternative routes.</li><li>Supports polygon exclusion zones (steep terrain, protected areas, existing infrastructure).</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes per-cell cost from slope (and optionally local roughness) normalised to [0, 1].</li><li>Runs Dijkstra from both start and end to accumulate cost surfaces.</li><li>Least-cost path traced back from end → start through predecessor pointers.</li><li>Corridor band: cells where `acc_from_start + acc_from_end ≤ optimal_cost × (1 + tolerance)`.</li><li>Indicative formula: cost ~= w_slope × slope_norm + w_rough × roughness_norm (profile-controlled weights).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Compared with OSS least-cost building blocks (`cost_distance` + `cost_pathway` + `cost_allocation`), this tool is an end-to-end siting workflow: it derives the terrain cost surface from the DEM, computes the optimal route, delineates near-optimal corridor alternatives, and packages decision-ready outputs in one run.</li><li>Why it wins vs OSS least-cost tools:</li><li>Requires fewer analyst preparation steps (no separate friction-raster engineering pipeline required).</li><li>Returns vector route geometry with engineering-friendly attributes, not just a path raster.</li><li>Produces a corridor suitability band for option-space review, not only a single least-cost trace.</li><li>Supports polygon exclusion constraints directly in the routing workflow.</li><li>Emits a machine-readable summary contract for reproducible QA/reporting integration.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A feasibility study needs a first-pass route alignment and suitability band for stakeholder review before field surveys.  Cost profiles: - `slope_only` — slope-only impedance; fastest, suitable for quick screening. - `slope_roughness` — balanced slope + roughness blend (default); recommended for road and pipeline siting. - `conservative` — equal slope/roughness weighting; preferred for sensitive terrain or pipelines.</p>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input DEM raster path.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>start_features</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Start feature vector path (point or polygon).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>end_features</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>End feature vector path (point or polygon).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>constraints</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional exclusion zone vector path (polygons to avoid).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>cost_profile</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Cost weighting profile: `slope_only` | `slope_roughness` | `conservative`. Default: `slope_roughness`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>terminal_anchor_strategy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Polygon terminal anchor mode: `mixed` | `centroid_only` | `boundary_only`. Default: `mixed`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>corridor_tolerance</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Fraction above optimal cost included in corridor suitability band. Default: `0.15`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output prefix for generated artifacts.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>cost_surface</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Normalized terrain impedance surface [0-1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>accumulated_cost</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Dijkstra accumulated cost from selected start anchor.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optimal_route</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Least-cost route LineString with route metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>corridor_suitability</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Binary suitability band (`1` = within tolerance).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Summary contract with metrics, selected anchors, and harmonization metadata.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+cost, acc_cost, route, suitability, summary = wbe.corridor_mapping_intelligence(
+    dem=&quot;data/dem.tif&quot;,
+    start_features=&quot;data/start_access_points.gpkg&quot;,
+    end_features=&quot;data/forest_block_targets.gpkg&quot;,
+    cost_profile=&quot;slope_roughness&quot;,
+    terminal_anchor_strategy=&quot;mixed&quot;,
+    corridor_tolerance=0.15,
+    output_prefix=&quot;output/access_road&quot;,
+)
+
+print(route)       # path to optimal_route.gpkg
+print(suitability) # path to corridor suitability raster
+print(summary)     # path to summary JSON</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -45,3 +45,7 @@ harness = false
 [[bench]]
 name = "individual_tree_segmentation_bench"
 harness = false
+
+[[bench]]
+name = "network_phase1_bench"
+harness = false

@@ -42,6 +42,17 @@ test_that("wbw_session exposes idiomatic helpers", {
   expect_true(wbw_has_tool("add", session = session))
   expect_false(wbw_has_tool("definitely_not_a_real_tool_id", session = session))
   expect_true(is.function(session$run_tool_with_progress))
+
+  for (fn_name in c(
+    "lidar_change_and_disturbance_analysis",
+    "sidewalk_vegetation_accessibility_monitoring",
+    "terrain_constraint_and_conflict_analysis",
+    "terrain_constructability_and_cost_analysis",
+    "in_season_crop_stress_intervention_planning",
+    "field_trafficability_and_operation_planning"
+  )) {
+    expect_true(is.function(session[[fn_name]]), info = paste("missing wrapper", fn_name))
+  }
 })
 
 test_that("progress-aware helper returns structured progress payload", {

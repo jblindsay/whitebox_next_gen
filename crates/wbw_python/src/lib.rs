@@ -1,7 +1,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 #[cfg(feature = "pro")]
 use std::env;
 use std::path::PathBuf;
@@ -90,6 +90,79 @@ fn validate_include_pro(include_pro: bool) -> Result<(), ToolError> {
         ));
     }
     Ok(())
+}
+
+fn manifest_has_tag(manifest: &ToolManifest, tags: &[&str]) -> bool {
+    manifest
+        .tags
+        .iter()
+        .any(|tag| tags.iter().any(|candidate| tag.eq_ignore_ascii_case(candidate)))
+}
+
+fn manifest_display_default_rank(manifest: &ToolManifest) -> Option<i64> {
+    for tag in &manifest.tags {
+        let trimmed = tag.trim();
+        let mut rank_text: Option<&str> = None;
+        if let Some(v) = trimmed.strip_prefix("display_rank:") {
+            rank_text = Some(v);
+        } else if let Some(v) = trimmed.strip_prefix("ui_display_rank:") {
+            rank_text = Some(v);
+        } else if let Some(v) = trimmed.strip_prefix("ui:display_rank=") {
+            rank_text = Some(v);
+        }
+
+        if let Some(text) = rank_text {
+            if let Ok(parsed) = text.trim().parse::<i64>() {
+                return Some(parsed);
+            }
+        }
+    }
+    None
+}
+
+fn manifest_display_defaults(manifest: &ToolManifest) -> (bool, bool, Option<i64>) {
+    let default_hidden = manifest_has_tag(
+        manifest,
+        &["default_hidden", "ui_default_hidden", "ui:hidden_by_default"],
+    );
+    let default_favorite = manifest_has_tag(
+        manifest,
+        &["default_favorite", "ui_default_favorite", "ui:favorite_by_default"],
+    );
+    let display_rank = manifest_display_default_rank(manifest);
+    (!default_hidden, default_favorite, display_rank)
+}
+
+fn manifest_render_hints(manifest: &ToolManifest) -> Value {
+    let mut hints = Map::new();
+    for tag in &manifest.tags {
+        let trimmed = tag.trim();
+        let Some(payload) = trimmed.strip_prefix("render_hint:") else {
+            continue;
+        };
+        let payload = payload.trim();
+        if payload.is_empty() {
+            continue;
+        }
+
+        if payload.eq_ignore_ascii_case("categorical")
+            || payload.eq_ignore_ascii_case("categorical_raster")
+        {
+            hints.insert("raster".to_string(), json!("categorical"));
+            continue;
+        }
+
+        if let Some((target, hint)) = payload.split_once('=') {
+            let target = target.trim();
+            let hint = hint.trim();
+            if target.is_empty() || hint.is_empty() {
+                continue;
+            }
+            hints.insert(target.to_string(), json!(hint));
+        }
+    }
+
+    Value::Object(hints)
 }
 
 
@@ -362,6 +435,95 @@ impl PythonToolRuntime {
     pub fn list_tools_json(&self) -> Value {
         let tools: Vec<Value> = self.visible_manifests().into_iter().map(|m| json!(m)).collect();
         Value::Array(tools)
+    }
+
+    fn catalog_entry_json(&self, manifest: &ToolManifest) -> Value {
+        let mut entry = json!(manifest);
+        let effective = self.effective_tier();
+        let (display_default_visible, display_default_favorite, display_default_rank) =
+            manifest_display_defaults(manifest);
+        let (availability_state, locked_reason, available) = if !self.include_pro
+            && matches!(manifest.license_tier, LicenseTier::Pro | LicenseTier::Enterprise)
+        {
+            ("locked", Some("pro_not_included"), false)
+        } else if manifest.license_tier > effective {
+            ("locked", Some("tier_insufficient"), false)
+        } else {
+            ("available", None, true)
+        };
+
+        if let Value::Object(obj) = &mut entry {
+            obj.insert(
+                "license_tier_name".to_string(),
+                json!(license_tier_to_str(manifest.license_tier)),
+            );
+            obj.insert("availability_state".to_string(), json!(availability_state));
+            obj.insert("available".to_string(), json!(available));
+            obj.insert("locked".to_string(), json!(!available));
+            obj.insert("locked_reason".to_string(), json!(locked_reason));
+            obj.insert(
+                "display_default_visible".to_string(),
+                json!(display_default_visible),
+            );
+            obj.insert(
+                "display_default_favorite".to_string(),
+                json!(display_default_favorite),
+            );
+            obj.insert(
+                "display_default_rank".to_string(),
+                json!(display_default_rank),
+            );
+            obj.insert("render_hints".to_string(), manifest_render_hints(manifest));
+        }
+
+        entry
+    }
+
+    pub fn list_tool_catalog_json(&self) -> Value {
+        let tools: Vec<Value> = self
+            .build_catalog_manifests()
+            .into_iter()
+            .map(|m| self.catalog_entry_json(&m))
+            .collect();
+        Value::Array(tools)
+    }
+
+    pub fn get_tool_metadata_json(&self, tool_id: &str) -> Result<Value, ToolError> {
+        let manifest = self
+            .build_catalog_manifests()
+            .into_iter()
+            .find(|m| m.id == tool_id)
+            .ok_or_else(|| ToolError::NotFound(tool_id.to_string()))?;
+        Ok(self.catalog_entry_json(&manifest))
+    }
+
+    pub fn get_runtime_capabilities_json(&self) -> Value {
+        let mut out = json!({
+            "compiled_with_pro_support": cfg!(feature = "pro"),
+            "include_pro": self.include_pro,
+            "requested_tier": license_tier_to_str(self.requested_tier),
+            "effective_tier": license_tier_to_str(self.effective_tier()),
+            "runtime_mode": match &self.runtime {
+                RuntimeMode::Tier(_) => "tier",
+                RuntimeMode::Entitled(_) => "entitled",
+            },
+            "catalog_tool_count": self.build_catalog_manifests().len(),
+            "visible_tool_count": self.visible_manifests().len(),
+        });
+
+        if let Value::Object(obj) = &mut out {
+            if let RuntimeMode::Entitled(runtime) = &self.runtime {
+                let caps = &runtime.runtime().capabilities;
+                obj.insert("entitlement_expires_at_unix".to_string(), json!(caps.expires_at_unix));
+                obj.insert("entitlement_now_unix".to_string(), json!(caps.now_unix));
+                obj.insert(
+                    "entitlement_seconds_remaining".to_string(),
+                    json!(caps.expires_at_unix.saturating_sub(caps.now_unix)),
+                );
+            }
+        }
+
+        out
     }
 
     pub fn run_tool_json(&self, tool_id: &str, args_json: &str) -> Result<Value, ToolError> {
@@ -994,6 +1156,25 @@ impl RuntimeSession {
             .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
     }
 
+    fn list_tool_catalog_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.runtime.list_tool_catalog_json())
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
+    fn get_tool_metadata_json(&self, tool_id: &str) -> PyResult<String> {
+        let out = self
+            .runtime
+            .get_tool_metadata_json(tool_id)
+            .map_err(map_tool_error)?;
+        serde_json::to_string(&out)
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
+    fn get_runtime_capabilities_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.runtime.get_runtime_capabilities_json())
+            .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+    }
+
     fn list_tools(&self) -> PyResult<Vec<String>> {
         extract_tool_ids(&self.runtime.list_tools_json())
     }
@@ -1073,6 +1254,28 @@ fn list_tools_json() -> PyResult<String> {
 }
 
 #[pyfunction]
+fn list_tool_catalog_json() -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    serde_json::to_string(&rt.list_tool_catalog_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_tool_metadata_json(tool_id: &str) -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_runtime_capabilities_json() -> PyResult<String> {
+    let rt = PythonToolRuntime::new();
+    serde_json::to_string(&rt.get_runtime_capabilities_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
 fn list_tools() -> PyResult<Vec<String>> {
     let rt = PythonToolRuntime::new();
     extract_tool_ids(&rt.list_tools_json())
@@ -1085,6 +1288,34 @@ fn list_tools_json_with_options(include_pro: bool, tier: &str) -> PyResult<Strin
     let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
         .map_err(map_tool_error)?;
     serde_json::to_string(&rt.list_tools_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn list_tool_catalog_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    serde_json::to_string(&rt.list_tool_catalog_json())
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_tool_metadata_json_with_options(tool_id: &str, include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    let out = rt.get_tool_metadata_json(tool_id).map_err(map_tool_error)?;
+    serde_json::to_string(&out)
+        .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
+}
+
+#[pyfunction]
+fn get_runtime_capabilities_json_with_options(include_pro: bool, tier: &str) -> PyResult<String> {
+    let parsed_tier = parse_tier(tier).map_err(map_tool_error)?;
+    let rt = PythonToolRuntime::new_with_options(include_pro, parsed_tier)
+        .map_err(map_tool_error)?;
+    serde_json::to_string(&rt.get_runtime_capabilities_json())
         .map_err(|e| PyRuntimeError::new_err(format!("serialization error: {e}")))
 }
 
@@ -1552,8 +1783,14 @@ fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_class::<WbCategoryToolCallable>()?;
     m.add_class::<WbDomainNamespace>()?;
     m.add_function(wrap_pyfunction!(list_tools_json, m)?)?;
+    m.add_function(wrap_pyfunction!(list_tool_catalog_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_metadata_json, m)?)?;
+    m.add_function(wrap_pyfunction!(get_runtime_capabilities_json, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(list_tool_catalog_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tool_metadata_json_with_options, m)?)?;
+    m.add_function(wrap_pyfunction!(get_runtime_capabilities_json_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_with_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_entitlement_options, m)?)?;
     m.add_function(wrap_pyfunction!(list_tools_json_with_entitlement_file_options, m)?)?;
@@ -1820,6 +2057,84 @@ mod tests {
             .iter()
             .any(|v| v.get("id").and_then(Value::as_str) == Some("raster_power"));
         assert!(!has_pro);
+    }
+
+    #[test]
+    fn runtime_capabilities_json_reports_runtime_state() {
+        let rt = PythonToolRuntime::new();
+        let capabilities = rt.get_runtime_capabilities_json();
+
+        assert_eq!(capabilities.get("include_pro"), Some(&json!(false)));
+        assert_eq!(capabilities.get("requested_tier"), Some(&json!("open")));
+        assert_eq!(capabilities.get("effective_tier"), Some(&json!("open")));
+        assert_eq!(capabilities.get("runtime_mode"), Some(&json!("tier")));
+    }
+
+    #[test]
+    fn tool_metadata_json_returns_known_manifest() {
+        let rt = PythonToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("abs")
+            .expect("tool metadata should exist");
+
+        assert_eq!(manifest.get("id"), Some(&json!("abs")));
+        assert_eq!(manifest.get("availability_state"), Some(&json!("available")));
+        assert_eq!(manifest.get("locked"), Some(&json!(false)));
+    }
+
+    #[test]
+    fn tool_catalog_entries_include_display_default_fields() {
+        let rt = PythonToolRuntime::new();
+        let manifest = rt
+            .get_tool_metadata_json("abs")
+            .expect("tool metadata should exist");
+
+        assert_eq!(manifest.get("display_default_visible"), Some(&json!(true)));
+        assert_eq!(manifest.get("display_default_favorite"), Some(&json!(false)));
+        assert_eq!(manifest.get("display_default_rank"), Some(&Value::Null));
+        assert_eq!(manifest.get("render_hints"), Some(&json!({})));
+    }
+
+    #[test]
+    fn manifest_render_hints_parses_tag_conventions() {
+        let manifest = ToolManifest {
+            id: "demo_hint".to_string(),
+            display_name: "Demo Hint".to_string(),
+            summary: "Hint parsing".to_string(),
+            category: wbcore::ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: Vec::new(),
+            defaults: ToolArgs::new(),
+            examples: Vec::new(),
+            tags: vec![
+                "render_hint:categorical_raster".to_string(),
+                "render_hint:output=categorical".to_string(),
+                "render_hint:probability=continuous".to_string(),
+            ],
+            stability: wbcore::ToolStability::Stable,
+        };
+
+        let hints = manifest_render_hints(&manifest);
+        assert_eq!(hints.get("raster"), Some(&json!("categorical")));
+        assert_eq!(hints.get("output"), Some(&json!("categorical")));
+        assert_eq!(hints.get("probability"), Some(&json!("continuous")));
+    }
+
+    #[test]
+    #[cfg(feature = "pro")]
+    fn tool_catalog_json_marks_locked_pro_tools_for_open_tier() {
+        let rt = PythonToolRuntime::new_with_options(true, LicenseTier::Open)
+            .expect("runtime construction should succeed");
+        let catalog = rt.list_tool_catalog_json();
+        let arr = catalog.as_array().expect("catalog should be an array");
+        let raster_power = arr
+            .iter()
+            .find(|item| item.get("id").and_then(Value::as_str) == Some("raster_power"))
+            .expect("pro tool should be present in the build catalog");
+
+        assert_eq!(raster_power.get("available"), Some(&json!(false)));
+        assert_eq!(raster_power.get("locked"), Some(&json!(true)));
+        assert_eq!(raster_power.get("locked_reason"), Some(&json!("tier_insufficient")));
     }
 
     #[test]

@@ -1,0 +1,138 @@
+{
+  "network_od_cost_matrix": {
+    "description": "Compute origin-destination cost matrix between point pairs. Calculates travel distance or cost along network paths.",
+    "parameters": {
+      "network": {
+        "label": "Network line layer (roads, pathways, etc.). Represents connected paths for routing."
+      },
+      "origins": {
+        "label": "Origin point layer. Starting locations for routes."
+      },
+      "destinations": {
+        "label": "Destination point layer. End locations for routes (can be same as origins)."
+      },
+      "cost_attribute": {
+        "label": "Cost attribute field [optional]",
+        "tooltip": "Attribute field on network lines for custom costs (e.g., travel time, resistance). If omitted, uses line length as cost."
+      },
+      "output": {
+        "label": "Output cost matrix table/file (required in QGIS). One row per origin-destination pair."
+      }
+    }
+  },
+  "network_dijkstra_shortest_path": {
+    "description": "Find shortest path between pairs of nodes using Dijkstra's algorithm. Used for route planning and connectivity analysis.",
+    "parameters": {
+      "network": {
+        "label": "Network line layer."
+      },
+      "start_point": {
+        "label": "Starting point location."
+      },
+      "end_point": {
+        "label": "Ending point location."
+      },
+      "cost_attribute": {
+        "label": "Cost attribute [optional]",
+        "tooltip": "Network line attribute for path costs (e.g., travel time, distance). Omit to use line length."
+      },
+      "output": {
+        "label": "Output shortest path line (required in QGIS)."
+      }
+    }
+  },
+  "network_shortest_path_between_points": {
+    "description": "Batch compute shortest paths for multiple point pairs. Efficient for finding multiple routes through a network.",
+    "parameters": {
+      "network": {
+        "label": "Network line layer."
+      },
+      "origins": {
+        "label": "Origin points. One path computed per origin-destination pair."
+      },
+      "destinations": {
+        "label": "Destination points."
+      },
+      "cost_attribute": {
+        "label": "Cost attribute [optional]",
+        "tooltip": "Allows custom routing costs instead of line length."
+      },
+      "output": {
+        "label": "Output paths as lines (required in QGIS). One line per origin-destination pair."
+      }
+    }
+  },
+  "linear_reference_from_points": {
+    "description": "Calculate linear position (measure) for points along linear features (routes, centerlines). Enables feature referencing along network.",
+    "parameters": {
+      "routes": {
+        "label": "Linear reference features (routes, centerlines, etc.). Points will be referenced to nearest location on these lines."
+      },
+      "points": {
+        "label": "Point layer to reference. Each point gets assigned measure value along nearest route."
+      },
+      "measure_field": {
+        "label": "Route measure field [optional]",
+        "tooltip": "If provided, uses this field for measure values instead of distance from start. Enables custom referencing (e.g., mile-post numbers)."
+      },
+      "output": {
+        "label": "Output with linear reference measures added (required in QGIS)."
+      }
+    }
+  },
+  "locate_along_route_by_measure": {
+    "description": "Place features at specific measure positions along linear reference routes. Inverse of linear_reference_from_points.",
+    "parameters": {
+      "routes": {
+        "label": "Linear reference features (routes). Features will be placed along these lines."
+      },
+      "feature_data": {
+        "label": "Table with measure values and feature information. Must include measure column and feature ID."
+      },
+      "measure_column": {
+        "label": "Column name containing measure values (distance or custom reference).",
+        "tooltip": "Values should match route measure coordinate system."
+      },
+      "offset": {
+        "label": "Offset distance perpendicular to route [optional]",
+        "tooltip": "Positive offset places features to route's right; negative to left. Useful for displaying parallel features."
+      },
+      "output": {
+        "label": "Output positioned features (required in QGIS)."
+      }
+    }
+  },
+  "network_connectivity": {
+    "description": "Analyze network connectivity, identify isolated components, find articulation points (bridges).",
+    "parameters": {
+      "network": {
+        "label": "Network line layer."
+      },
+      "output_nodes": {
+        "label": "Output network nodes (intersections and endpoints).",
+        "tooltip": "Each unique connection point becomes a node feature. Node ID can be used for connectivity analysis."
+      },
+      "output_edges": {
+        "label": "Output network edges with connectivity information."
+      }
+    }
+  },
+  "network_distance_analysis": {
+    "description": "Compute distance/cost statistics from network nodes (e.g., average distance to nearest facility, service coverage).",
+    "parameters": {
+      "network": {
+        "label": "Network line layer."
+      },
+      "sources": {
+        "label": "Source points (facilities, stations, etc.). Distance computed from these to all reachable locations."
+      },
+      "max_distance": {
+        "label": "Maximum search distance [optional]",
+        "tooltip": "Limits analysis to this distance from sources. Leave empty for network-wide analysis."
+      },
+      "output": {
+        "label": "Output distance raster or table (required in QGIS)."
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+<p>This tool estimates the average upslope depression storage depth using the FD8 flow algorithm. The input DEM (<code>dem</code>) need not be hydrologically corrected; the tool will internally map depression storage and resolve flowpaths using depression filling. This input elevation model should be of a fine resolution (&lt; 2 m), and is ideally derived using LiDAR. The tool calculates the total upslope depth of depression storage, which is divided by the number of upslope cells in the final step of the process, yielding the average upslope depression depth. Roughened surfaces tend to have higher values compared with smoothed surfaces. Values, particularly on hillslopes, may be very small (&lt; 0.01 m).</p> <h2>See Also</h2> <p><code>FD8FlowAccumulation</code>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#fill_depressions">fill_depressions</a>, <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#depth_in_sink">depth_in_sink</a></p> <h2>Function Signature</h2> <p><code>def upslope_depression_storage(self, dem: Raster) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

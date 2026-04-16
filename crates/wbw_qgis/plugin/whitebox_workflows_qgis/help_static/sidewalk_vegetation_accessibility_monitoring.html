@@ -1,0 +1,55 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Sidewalk Vegetation Accessibility Monitoring</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which sidewalk segments are most obstructed by vegetation, and where is LiDAR coverage missing?</p>
+<h3>Who It Is For</h3>
+<ul><li>Municipal accessibility teams, urban forestry programs, and public-works corridor management.</li></ul>
+<h3>Primary User</h3>
+<p>Municipal accessibility offices and operations teams responsible for pedestrian corridor clearance.</p>
+<h3>What It Does</h3>
+<ul><li>Scores vegetation encroachment along sidewalks using tile-native LiDAR processing.</li><li>Aggregates all tile evidence into one city-level output layer.</li><li>Supports centerline segmentation for line inputs and feature-level fallback for polygon inputs.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Reads LiDAR tiles from an array or directory and processes them one tile at a time.</li><li>Builds per-tile DSM/DTM and computes height-above-ground obstruction surfaces.</li><li>Reprojects sidewalks to tile CRS when needed, samples obstruction neighborhoods, and aggregates results.</li><li>For line/multiline sidewalks, optionally segments centerlines into fixed-length analysis units.</li><li>QA acceptance guidance:</li><li>`status=pass` indicates coverage and obstruction diagnostics met baseline QA thresholds.</li><li>`diagnostics.acceptance_thresholds.minimum_coverage_fraction` defaults to 0.75; values below this trigger review.</li><li>`summary.no_lidar_coverage_features` are unresolved units and should be targeted for additional capture or fallback policy.</li><li>Prioritize operational responses using `STATUS`, `MAX_OBSTR`, and tile-level diagnostics together.</li><li>MVP hardening assets:</li><li>Municipal ingestion guide: `docs/internal/development/LIDAR_CHANGE_SIDEWALK_MUNICIPAL_SCHEMA_INGESTION_GUIDE_2026_04_14.md`</li><li>Benchmark fixture scaffold: `tests/fixtures/sidewalk_accessibility_city_benchmark/`</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>lidar_tiles</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>LiDAR tiles as array or directory path (LAS/LAZ/ZLidar).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>sidewalks</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Sidewalk layer (line, multiline, polygon, or multipolygon).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>sidewalks_epsg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>EPSG override when sidewalk CRS metadata is missing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>resolution</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Intermediate tile raster resolution in map units.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>segment_length_m</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Segment length for line inputs; ignored for polygon inputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>clearance_height_m</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Height threshold used to label obstruction status.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>buffer_distance_m</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Neighborhood sampling radius around sidewalk geometry.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>sidewalk_accessibility</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>City-level aggregated sidewalk/segment accessibility layer.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing coverage, obstruction counts, and QA diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+access, summary = wbe.sidewalk_vegetation_accessibility_monitoring(
+    lidar_tiles=&quot;data/lidar_1km_tiles/&quot;,
+    sidewalks=&quot;data/sidewalk_centerlines.gpkg&quot;,
+    segment_length_m=10.0,
+    clearance_height_m=2.5,
+    output_prefix=&quot;output/sidewalk_access&quot;,
+)
+
+print(access)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

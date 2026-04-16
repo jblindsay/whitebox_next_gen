@@ -1,0 +1,7 @@
+<p>This image processing tool removes small irregularities (i.e. spurs) on the boundaries of objects in a Boolean input raster image (<code>input</code>). This operation is sometimes called <em>pruning</em>. Remove Spurs is a useful tool for cleaning an image before performing a line thinning operation. In fact, the input image need not be truly Boolean (i.e. contain only 1's and 0's). All non-zero, positive values are considered to be foreground pixels while all zero valued cells are considered background pixels.</p> <p>Note: Unlike other filter-based operations in <em>WhiteboxTools</em>, this algorithm can't easily be parallelized because the output raster must be read and written to during the same loop.</p> <h2>See Also</h2> <p><a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/tool_help.html#line_thinning">line_thinning</a></p> <h2>Function Signature</h2> <p><code>def remove_spurs(self, raster: Raster, max_iterations: int = 10) -&gt; Raster: ... </code></p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/wbw-purchase/">Support WbW</a>
+</div>        

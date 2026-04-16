@@ -1,0 +1,65 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Surface Reflectance Consistency Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Are directional and terrain illumination effects sufficiently normalized for reliable scene-to-scene reflectance comparison?</p>
+<h3>Who It Is For</h3>
+<ul><li>Optical remote sensing teams preparing cross-scene reflectance products for trend/change workflows.</li></ul>
+<h3>Primary User</h3>
+<p>EO product teams, environmental mapping agencies, and analytics groups with multi-date reflectance pipelines.</p>
+<h3>What It Does</h3>
+<ul><li>Normalizes directional/illumination effects for improved reflectance comparability.</li><li>Quantifies normalization magnitude and confidence for QA-aware downstream analysis.</li><li>Packages reflectance consistency as a reproducible workflow-stage product.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Runs `terrain_corrected_optical_analytics` to generate terrain-aware corrected reflectance bands.</li><li>Derives normalization delta from pre/post correction residual magnitude.</li><li>Computes consistency confidence using exponential damping of large correction residuals.</li><li>Indicative formula: $C = \exp(-\Delta / s) \cdot Q$, where $\Delta$ is normalization delta and $Q$ is quality confidence.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Couples normalization output with explicit delta and confidence diagnostics, enabling QA-aware downstream acceptance rules.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams observe inconsistent reflectance behavior across acquisition geometries and need a reproducible consistency gate.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast: quicker normalization for large-area throughput.</li><li>balanced: default quality/speed tradeoff.</li><li>conservative: stronger correction confidence thresholding.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_red, input_nir, input_dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Core optical + terrain inputs used for topographic/reflectance normalization workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>solar_zenith_deg, solar_azimuth_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Solar geometry parameters used to model illumination and terrain incidence effects.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional input_green</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional green band used by workflows that include green-channel diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>brdf_normalized_reflectance</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>BRDF-normalized reflectance raster with improved angular consistency.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>normalization_delta</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Difference layer showing magnitude of BRDF normalization adjustments.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>consistency_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence surface indicating reflectance consistency after normalization.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+normalized, delta, confidence, summary = wbe.brdf_surface_reflectance_consistency(
+    input_red=&quot;data/red.tif&quot;,
+    input_nir=&quot;data/nir.tif&quot;,
+    input_dem=&quot;data/dem.tif&quot;,
+    input_green=&quot;data/green.tif&quot;,
+    solar_zenith_deg=40.0,
+    solar_azimuth_deg=165.0,
+    profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/brdf_consistency&quot;,
+)
+
+print(normalized)
+print(delta)
+print(confidence)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

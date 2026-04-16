@@ -1,0 +1,57 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Network Readiness and Diagnostics</strong></p>
+<h3>Problem It Solves</h3>
+<p>Is this network structurally and cost-wise ready for reliable routing and service optimization workflows?</p>
+<h3>Who It Is For</h3>
+<ul><li>Routing analysts, municipal transportation planning teams, and utility network operations.</li></ul>
+<h3>Primary User</h3>
+<p>Municipal/public works GIS teams, utilities, and logistics operations requiring reproducible network QA gates.</p>
+<h3>What It Does</h3>
+<ul><li>Audits line-based transportation/utility networks for operational routing readiness.</li><li>Detects dead-end concentration and cost-consistency anomalies before routing runs.</li><li>Emits a machine-readable readiness score with pass/fail quality gate and diagnostics outputs.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Loads a line network and validates geometry is line-based (`LineString`/`MultiLineString`).</li><li>Builds node degree counts from line endpoints to quantify dead-end prevalence.</li><li>Computes per-segment length costs and assesses variance using z-score outlier detection.</li><li>Computes weighted readiness score from connectivity and cost-consistency components.</li><li>Indicative formula: `overall = 0.6 * connectivity_score + 0.4 * cost_consistency_score`.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Replaces manual topology spot-checks with a reproducible score + diagnostics package that is machine-checkable and reportable.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams encounter unstable routing outcomes and need an auditable pre-routing network quality gate.</p>
+<h3>Typical Presets</h3>
+<ul><li>default: balanced scoring for day-to-day network readiness checks.</li><li>pre-routing gate: run before route optimization or service-area generation.</li><li>data onboarding QA: run when ingesting new road/utility centerline deliveries.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>network</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input line network layer (street, transit, or utility network).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output CSV path for detailed QA findings and issue counts.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>diagnostics_layer</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output GeoJSON/GeoPackage path containing diagnostic geometries.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>readiness_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output JSON path with readiness score, component scores, and pass/fail gate.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Tabular QA findings including severity, check type, count, and descriptive diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>diagnostics_layer</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoJSON/GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Spatial diagnostics layer for issue visualization and spatial triage.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>readiness_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable readiness contract with overall score, component scores, penalties, and pass/fail gate.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.network_readiness_and_diagnostics_intelligence(
+    network=&quot;data/street_network.shp&quot;,
+    qa_report=&quot;output/network_readiness_qa.csv&quot;,
+    diagnostics_layer=&quot;output/network_readiness_diagnostics.geojson&quot;,
+    readiness_score=&quot;output/network_readiness_score.json&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

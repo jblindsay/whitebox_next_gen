@@ -1,0 +1,163 @@
+{
+  "frost_filter": {
+    "description": "Speckle reduction for SAR intensity imagery using Frost adaptive filtering.",
+    "parameters": {
+      "input": {
+        "label": "Input SAR raster path (or typed raster object)."
+      },
+      "radius": {
+        "label": "Local window radius in pixels (default 2). Larger windows smooth more aggressively but may blur fine edges."
+      },
+      "damping_factor": {
+        "label": "Frost damping factor (default 2.0). Higher values suppress speckle more strongly with stronger decay weighting."
+      },
+      "output": {
+        "label": "Output filtered raster path [optional]. If omitted, output remains in memory."
+      }
+    }
+  },
+  "gamma_map_filter": {
+    "description": "Gamma-MAP speckle filter for SAR imagery with ENL-aware noise modeling.",
+    "parameters": {
+      "input": {
+        "label": "Input SAR raster path (or typed raster object)."
+      },
+      "radius": {
+        "label": "Local window radius in pixels (default 2)."
+      },
+      "enl": {
+        "label": "Equivalent number of looks (ENL) (default 1.0). Increase if input is multilooked to avoid over-smoothing."
+      },
+      "output": {
+        "label": "Output filtered raster path [optional]."
+      }
+    }
+  },
+  "kuan_filter": {
+    "description": "Kuan adaptive speckle filter for SAR intensity data.",
+    "parameters": {
+      "input": {
+        "label": "Input SAR raster path (or typed raster object)."
+      },
+      "radius": {
+        "label": "Local window radius in pixels (default 2)."
+      },
+      "enl": {
+        "label": "Equivalent number of looks (ENL) (default 1.0)."
+      },
+      "output": {
+        "label": "Output filtered raster path [optional]."
+      }
+    }
+  },
+  "sar_coregistration": {
+    "description": "Coregister moving SAR imagery to a reference grid (translation/affine/local-offset-grid modes).",
+    "parameters": {
+      "reference_sar": {
+        "label": "Reference SAR raster path (direct mode). Required unless reference_sar_bundle is provided."
+      },
+      "reference_sar_bundle": {
+        "label": "Reference SAR bundle root/archive [optional]. Use for sensor-package workflows."
+      },
+      "moving_sar": {
+        "label": "Moving SAR raster to align (direct mode). Required unless moving_sar_bundle is provided."
+      },
+      "moving_sar_bundle": {
+        "label": "Moving SAR bundle root/archive [optional]."
+      },
+      "coreg_mode": {
+        "label": "Coregistration model {translation, affine, local_offset_grid} (default translation). Use translation first for robustness."
+      },
+      "max_offset_px": {
+        "label": "Maximum searched shift in pixels (x/y). Increase for poorly aligned pairs; larger values increase runtime."
+      }
+    }
+  },
+  "sar_interferogram_coherence": {
+    "description": "Estimate interferometric coherence between SAR acquisitions (direct, complex, or bundle modes).",
+    "parameters": {
+      "reference_sar": {
+        "label": "Reference SAR intensity raster (direct mode)."
+      },
+      "moving_sar": {
+        "label": "Moving SAR intensity raster (direct mode)."
+      },
+      "reference_sar_real": {
+        "label": "Reference SAR real component (complex mode)."
+      },
+      "reference_sar_imag": {
+        "label": "Reference SAR imaginary component (complex mode)."
+      },
+      "moving_sar_real": {
+        "label": "Moving SAR real component (complex mode)."
+      },
+      "moving_sar_imag": {
+        "label": "Moving SAR imaginary component (complex mode)."
+      },
+      "reference_sar_bundle": {
+        "label": "Reference SAR bundle root/archive (bundle mode)."
+      },
+      "moving_sar_bundle": {
+        "label": "Moving SAR bundle root/archive (bundle mode)."
+      }
+    }
+  },
+  "sar_analysis_readiness": {
+    "description": "Evaluate SAR scene readiness for downstream analysis, including optional terrain and pairwise coherence-proxy checks.",
+    "parameters": {
+      "input_sar": {
+        "label": "Input SAR intensity raster (direct mode). Required unless input_sar_bundle is provided."
+      },
+      "input_sar_bundle": {
+        "label": "Input SAR bundle root/archive [optional]."
+      },
+      "input_measurement_key": {
+        "label": "Measurement key for input bundle [optional]. Needed when bundle contains multiple assets."
+      },
+      "input_dem": {
+        "label": "DEM raster for terrain normalization support [optional but recommended in rugged terrain]."
+      },
+      "pair_sar": {
+        "label": "Second SAR raster for coherence-proxy estimate [optional]."
+      },
+      "pair_sar_bundle": {
+        "label": "Second SAR bundle path for coherence-proxy estimate [optional]."
+      },
+      "pair_measurement_key": {
+        "label": "Measurement key for second SAR bundle [optional]."
+      },
+      "input_look_angle_deg": {
+        "label": "Input look/incidence angle in degrees [optional]. Improves readiness interpretation for geometry-sensitive analyses."
+      }
+    }
+  },
+  "remote_sensing_change_detection": {
+    "description": "Detect spectral change between baseline and change-date multispectral bundles with profile-based sensitivity.",
+    "parameters": {
+      "baseline_bundle": {
+        "label": "Baseline multiband raster bundle."
+      },
+      "baseline_red_band_index": {
+        "label": "Baseline red band index (0-based)."
+      },
+      "baseline_nir_band_index": {
+        "label": "Baseline NIR band index (0-based)."
+      },
+      "change_bundle": {
+        "label": "Change-date multiband raster bundle."
+      },
+      "change_red_band_index": {
+        "label": "Change-date red band index (0-based)."
+      },
+      "change_nir_band_index": {
+        "label": "Change-date NIR band index (0-based)."
+      },
+      "intermediate_ndvi": {
+        "label": "Intermediate-date NDVI raster [optional]. Improves temporal validation of gradual changes."
+      },
+      "profile": {
+        "label": "Detection profile {aggressive, balanced, conservative} (default balanced). Aggressive finds subtle change with more false positives."
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Parcel Fabric Topology Compliance</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Local government cadastral teams and parcel QA workflows.</li><li>Land administration vendors with regulatory topology compliance requirements.</li></ul>
+<h3>Primary User</h3>
+<p>Municipal cadastral programs and land administration platforms.</p>
+<h3>What It Does</h3>
+<ul><li>Audits parcel fabrics for topology compliance using rule-based checks.</li><li>Flags parcel slivers below a configurable minimum area threshold.</li><li>Produces violations vector, issues CSV, and a compliance summary JSON.</li><li>Optionally runs topology auto-fix and outputs corrected parcel geometry.</li><li>Supports jurisdiction templates (`generic`, `ontario_mpac`) for calibrated defaults.</li><li>Optionally emits a remediation queue CSV with prioritized corrective actions.</li><li>Emits sliver-threshold calibration diagnostics so parcel fabrics can be profiled before tightening production thresholds.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Runs `topology_validation_report` to produce per-feature topology issue CSV.</li><li>Runs `topology_rule_validate` with parcel-focused rules (`polygon_must_not_overlap`, `polygon_must_not_have_gaps`).</li><li>Performs additional sliver detection on polygon area (`area < min_sliver_area`).</li><li>Builds a `sliver_calibration_profile` over multiple threshold levels to show how many parcels would be flagged as slivers at each candidate cutoff when parcel area measurements are available.</li><li>**Ontario MPAC sliver threshold calibration evidence (Mississauga, 166,758 parcels, EPSG:3857):**</li><li>| Threshold | Parcel count below | % of total | Interpretation |</li><li>|---|---|---|---|</li><li>| < 0.25 m² | 54 | 0.032% | Digitising artifacts — flag unconditionally |</li><li>| < 0.50 m² | 112 | 0.067% | Safe conservative threshold |</li><li>| < 1.0 m² | 243 | 0.146% | Conservative production threshold |</li><li>| < 2.0 m² | 508 | 0.305% | **Standard `ontario_mpac` default** — targeted alert rate |</li><li>| < 5.0 m² | 1,870 | 1.12% | Liberal; may include very small utility parcels |</li><li>| < 10 m² | 4,427 | 2.65% | Over-inclusive for most cadastral QA workflows |</li><li>The 2.0 m² default for `ontario_mpac` is confirmed appropriate for dense urban parcel fabrics. Average parcel area in the Mississauga fixture is ~1,764 m²; maximum is ~4.1 km².</li><li>Optionally runs `topology_rule_autofix` with fixable topology rules and emits corrected output.</li><li>Optionally writes `remediation_queue_csv` with issue priority and recommended actions.</li><li>Aggregates outputs into a compliance report with violation counts, sliver counts, sliver calibration profile, template metadata, and pass/fail gate.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`parcels`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PolygonVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input parcel polygon layer</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`min_sliver_area`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>float</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Area threshold for sliver detection (default 1.0)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`auto_fix`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>bool</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Run topology auto-fix and emit corrected output (default false)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`jurisdiction_template`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Rule-template preset (`generic` | `ontario_mpac`) used for calibrated defaults</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`topology_violations`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output topology violations layer</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`issues_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output topology validation CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`compliance_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output compliance summary JSON</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corrected_parcels`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional corrected parcel output path when auto_fix=true</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`remediation_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional prioritized remediation action queue CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`html_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional output HTML path for the compliance dashboard report</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`topology_violations`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Rule violations generated by topology rule validation</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`issues_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-feature topology issue report from topology validation</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`compliance_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Summary counts by rule, sliver diagnostics, sliver calibration profile, autofix summary, pass/fail</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corrected_parcels`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Auto-fix output when enabled and path provided</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`remediation_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Priority-ranked remediation actions by issue type/rule</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`html_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional compliance dashboard report with visual summary</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;parcel_and_land_fabric_topology_compliance_workflow&quot;,
+    parcels=&quot;parcel_fabric.gpkg&quot;,
+    min_sliver_area=1.0,
+    jurisdiction_template=&quot;ontario_mpac&quot;,
+    auto_fix=True,
+    topology_violations=&quot;output/parcel_violations.gpkg&quot;,
+    issues_csv=&quot;output/parcel_issues.csv&quot;,
+    compliance_report=&quot;output/parcel_compliance.json&quot;,
+    corrected_parcels=&quot;output/parcel_corrected.gpkg&quot;,
+    remediation_queue_csv=&quot;output/parcel_remediation_queue.csv&quot;,
+    html_report=&quot;output/parcel_compliance_report.html&quot;,
+)
+
+print(result)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

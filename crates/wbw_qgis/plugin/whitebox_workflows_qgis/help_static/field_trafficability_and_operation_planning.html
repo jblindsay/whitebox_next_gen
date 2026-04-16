@@ -1,0 +1,52 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Field Trafficability and Operation Planning</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where can equipment operate safely now, and which areas should be delayed or rerouted?</p>
+<h3>Who It Is For</h3>
+<ul><li>Machinery planning teams, farm managers, and field operations coordinators.</li></ul>
+<h3>Primary User</h3>
+<p>Farm operations teams and precision agriculture service providers.</p>
+<h3>What It Does</h3>
+<ul><li>Scores field trafficability and operation timing risk from terrain and saturation context.</li><li>Produces operation classes for go/hold/reroute-style field execution decisions.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Derives slope from DEM and harmonizes moisture/rainfall context to the same grid.</li><li>Blends terrain, soil saturation, and rainfall-risk penalties into trafficability scores.</li><li>Converts continuous scores into operation classes for practical planning use.</li><li>QA acceptance guidance:</li><li>`status=pass` indicates low-trafficability burden stayed within baseline tolerance.</li><li>`diagnostics.acceptance_thresholds.low_trafficability_fraction_review` defines review escalation threshold.</li><li>High `summary.low_trafficability_fraction` should trigger cautious equipment scheduling and field confirmation.</li><li>MVP hardening assets:</li><li>Benchmark scaffold: `tests/fixtures/precision_ag_ops_benchmark/`</li><li>Promotion guide: `docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md`</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>DEM raster for terrain slope context.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>soil_moisture</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Soil saturation/moisture raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>rainfall_forecast</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional rainfall-risk raster normalized to [0,1].</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>trafficability_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Continuous trafficability score [0,1] (higher is better).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>operation_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Discrete operation class raster (1 favorable to 4 poor).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+traffic, op_class, summary = wbe.field_trafficability_and_operation_planning(
+    dem=&quot;data/dem.tif&quot;,
+    soil_moisture=&quot;data/soil_saturation.tif&quot;,
+    rainfall_forecast=&quot;data/rain_risk.tif&quot;,
+    output_prefix=&quot;output/field_trafficability&quot;,
+)
+
+print(traffic)
+print(op_class)
+print(summary)</code></pre>
+<h2>License Notice</h2>
+<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). Please visit <a href="https://www.whiteboxgeo.com/">www.whiteboxgeo.com</a> to purchase a license.</p>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

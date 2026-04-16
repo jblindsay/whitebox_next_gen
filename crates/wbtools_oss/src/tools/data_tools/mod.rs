@@ -16,8 +16,10 @@ use wbgeotiff::{ifd::{IfdValue, TiffReader}, tags::tag, GeoTiff};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, Ring, VectorFormat};
 use wbtopology::{
-    from_wkb as topology_from_wkb, to_wkb as topology_to_wkb, Geometry as TopologyGeometry,
-    Polygon as TopologyPolygon,
+    from_wkb as topology_from_wkb, overlaps as topology_overlaps, to_wkb as topology_to_wkb,
+    Geometry as TopologyGeometry, Polygon as TopologyPolygon, is_simple_linestring, is_valid_polygon,
+    geometry_distance, coord_dist, Envelope as TopologyEnvelope, SpatialIndex,
+    Coord as TopoCoord,
 };
 
 use crate::memory_store;
@@ -29,6 +31,9 @@ pub struct CsvPointsToVectorTool;
 pub struct ExportTableToCsvTool;
 pub struct FixDanglingArcsTool;
 pub struct JoinTablesTool;
+pub struct TopologyValidationReportTool;
+pub struct TopologyRuleValidateTool;
+pub struct TopologyRuleAutoFixTool;
 pub struct LinesToPolygonsTool;
 pub struct ModifyNodataValueTool;
 pub struct MergeTableWithCsvTool;
@@ -789,6 +794,211 @@ fn dedupe_consecutive_coords(coords: &[Coord], tol: f64) -> Vec<Coord> {
     out
 }
 
+#[derive(Clone)]
+struct TopologyIssue {
+    issue_type: String,
+    detail: String,
+}
+
+fn coords_have_duplicate_vertices(coords: &[Coord], closed_ring: bool) -> bool {
+    if coords.len() < 2 {
+        return false;
+    }
+    let limit = if closed_ring && coords.len() > 1 { coords.len() - 1 } else { coords.len() };
+    let mut seen = HashMap::<(u64, u64), usize>::new();
+    for coord in coords.iter().take(limit) {
+        let key = (coord.x.to_bits(), coord.y.to_bits());
+        if seen.insert(key, 1).is_some() {
+            return true;
+        }
+    }
+    false
+}
+
+fn ring_closed(coords: &[Coord]) -> bool {
+    coords
+        .first()
+        .zip(coords.last())
+        .map(|(a, b)| a == b)
+        .unwrap_or(false)
+}
+
+fn polygon_topology_issues(exterior: &Ring, interiors: &[Ring]) -> Vec<TopologyIssue> {
+    let mut issues = Vec::<TopologyIssue>::new();
+
+    if exterior.0.len() < 4 {
+        issues.push(TopologyIssue {
+            issue_type: "polygon_exterior_too_short".to_string(),
+            detail: format!("exterior ring has {} coordinates; expected at least 4 including closure", exterior.0.len()),
+        });
+    }
+    if !ring_closed(&exterior.0) {
+        issues.push(TopologyIssue {
+            issue_type: "polygon_exterior_unclosed".to_string(),
+            detail: "exterior ring is not closed".to_string(),
+        });
+    }
+    if coords_have_duplicate_vertices(&exterior.0, true) {
+        issues.push(TopologyIssue {
+            issue_type: "polygon_duplicate_vertices".to_string(),
+            detail: "exterior ring contains duplicate vertices".to_string(),
+        });
+    }
+
+    for (idx, hole) in interiors.iter().enumerate() {
+        if hole.0.len() < 4 {
+            issues.push(TopologyIssue {
+                issue_type: "polygon_hole_too_short".to_string(),
+                detail: format!("hole {} has {} coordinates; expected at least 4 including closure", idx + 1, hole.0.len()),
+            });
+        }
+        if !ring_closed(&hole.0) {
+            issues.push(TopologyIssue {
+                issue_type: "polygon_hole_unclosed".to_string(),
+                detail: format!("hole {} is not closed", idx + 1),
+            });
+        }
+        if coords_have_duplicate_vertices(&hole.0, true) {
+            issues.push(TopologyIssue {
+                issue_type: "polygon_duplicate_vertices".to_string(),
+                detail: format!("hole {} contains duplicate vertices", idx + 1),
+            });
+        }
+    }
+
+    let geom = Geometry::polygon(
+        exterior.0.clone(),
+        interiors.iter().map(|ring| ring.0.clone()).collect(),
+    );
+    if let Ok(topo_geom) = topology_from_wkb(&geom.to_wkb()) {
+        if let TopologyGeometry::Polygon(poly) = topo_geom {
+            if !is_valid_polygon(&poly) {
+                issues.push(TopologyIssue {
+                    issue_type: "polygon_topology_invalid".to_string(),
+                    detail: "polygon fails topology validity checks".to_string(),
+                });
+            }
+        }
+    } else {
+        issues.push(TopologyIssue {
+            issue_type: "polygon_conversion_failed".to_string(),
+            detail: "polygon could not be converted for topology validation".to_string(),
+        });
+    }
+
+    issues
+}
+
+fn linestring_topology_issues(coords: &[Coord]) -> Vec<TopologyIssue> {
+    let mut issues = Vec::<TopologyIssue>::new();
+    if coords.len() < 2 {
+        issues.push(TopologyIssue {
+            issue_type: "linestring_too_short".to_string(),
+            detail: format!("line has {} coordinates; expected at least 2", coords.len()),
+        });
+        return issues;
+    }
+    if coords_have_duplicate_vertices(coords, false) {
+        issues.push(TopologyIssue {
+            issue_type: "linestring_duplicate_vertices".to_string(),
+            detail: "line contains duplicate vertices".to_string(),
+        });
+    }
+    let geom = Geometry::line_string(coords.to_vec());
+    if let Ok(topo_geom) = topology_from_wkb(&geom.to_wkb()) {
+        if let TopologyGeometry::LineString(ls) = topo_geom {
+            if !is_simple_linestring(&ls) {
+                issues.push(TopologyIssue {
+                    issue_type: "linestring_self_intersection".to_string(),
+                    detail: "line is not simple; self-intersection or self-overlap detected".to_string(),
+                });
+            }
+        }
+    } else {
+        issues.push(TopologyIssue {
+            issue_type: "linestring_conversion_failed".to_string(),
+            detail: "line could not be converted for topology validation".to_string(),
+        });
+    }
+    issues
+}
+
+fn collect_topology_issues(geometry: &Geometry) -> Vec<TopologyIssue> {
+    match geometry {
+        Geometry::Point(_) => Vec::new(),
+        Geometry::MultiPoint(points) => {
+            if points.is_empty() {
+                vec![TopologyIssue {
+                    issue_type: "multipoint_empty".to_string(),
+                    detail: "multipoint geometry is empty".to_string(),
+                }]
+            } else {
+                Vec::new()
+            }
+        }
+        Geometry::LineString(coords) => linestring_topology_issues(coords),
+        Geometry::MultiLineString(lines) => {
+            if lines.is_empty() {
+                return vec![TopologyIssue {
+                    issue_type: "multilinestring_empty".to_string(),
+                    detail: "multilinestring geometry is empty".to_string(),
+                }];
+            }
+            let mut issues = Vec::<TopologyIssue>::new();
+            for (idx, line) in lines.iter().enumerate() {
+                for issue in linestring_topology_issues(line) {
+                    issues.push(TopologyIssue {
+                        issue_type: issue.issue_type,
+                        detail: format!("part {}: {}", idx + 1, issue.detail),
+                    });
+                }
+            }
+            issues
+        }
+        Geometry::Polygon { exterior, interiors } => polygon_topology_issues(exterior, interiors),
+        Geometry::MultiPolygon(polys) => {
+            if polys.is_empty() {
+                return vec![TopologyIssue {
+                    issue_type: "multipolygon_empty".to_string(),
+                    detail: "multipolygon geometry is empty".to_string(),
+                }];
+            }
+            let mut issues = Vec::<TopologyIssue>::new();
+            for (idx, (exterior, interiors)) in polys.iter().enumerate() {
+                for issue in polygon_topology_issues(exterior, interiors) {
+                    issues.push(TopologyIssue {
+                        issue_type: issue.issue_type,
+                        detail: format!("part {}: {}", idx + 1, issue.detail),
+                    });
+                }
+            }
+            issues
+        }
+        Geometry::GeometryCollection(parts) => {
+            if parts.is_empty() {
+                return vec![TopologyIssue {
+                    issue_type: "geometry_collection_empty".to_string(),
+                    detail: "geometry collection is empty".to_string(),
+                }];
+            }
+            let mut issues = Vec::<TopologyIssue>::new();
+            for (idx, part) in parts.iter().enumerate() {
+                for issue in collect_topology_issues(part) {
+                    issues.push(TopologyIssue {
+                        issue_type: issue.issue_type,
+                        detail: format!("part {}: {}", idx + 1, issue.detail),
+                    });
+                }
+            }
+            issues
+        }
+    }
+}
+
+fn csv_escape(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
 fn collect_line_parts(layer: &Layer) -> (Vec<Vec<Coord>>, Vec<Vec<usize>>) {
     let mut parts: Vec<Vec<Coord>> = Vec::new();
     let mut feature_part_ids: Vec<Vec<usize>> = vec![Vec::new(); layer.features.len()];
@@ -1464,6 +1674,1223 @@ impl Tool for FixDanglingArcsTool {
 
         write_vector_output(&output, &output_path)
     }
+}
+
+impl Tool for TopologyValidationReportTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "topology_validation_report",
+            display_name: "TopologyValidationReport",
+            summary: "Audits a vector layer for topology issues and writes a per-feature CSV report.",
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector path.", required: true },
+                ToolParamSpec { name: "output", description: "Output CSV path.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("output".to_string(), json!("topology_report.csv"));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("parcels.gpkg"));
+        example_args.insert("output".to_string(), json!("parcels_topology_report.csv"));
+
+        ToolManifest {
+            id: "topology_validation_report".to_string(),
+            display_name: "TopologyValidationReport".to_string(),
+            summary: "Audits a vector layer for topology issues and writes a per-feature CSV report.".to_string(),
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output CSV path. If omitted, a CSV path is derived beside the input.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "basic_run".to_string(),
+                description: "Generate a CSV report of topology issues for a vector layer.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "qa".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = parse_vector_path_arg(args, "input")?;
+        let output = parse_optional_output_path(args, "output")?;
+        if let Some(path) = output {
+            if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("csv")) != Some(true) {
+                return Err(ToolError::Validation("output must be a .csv path".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_vector_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?
+            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_report").with_extension("csv"));
+
+        ctx.progress.info("running topology_validation_report");
+        let input = read_vector_layer(&input_path, "input")?;
+        ensure_parent_dir(&output_path)?;
+
+        let mut csv = String::from("feature_fid,geometry_type,issue_type,detail\n");
+        let total = input.features.len().max(1) as f64;
+        let coalescer = PercentCoalescer::new(1, 99);
+
+        for (feature_idx, feature) in input.features.iter().enumerate() {
+            let geom_type = feature
+                .geometry
+                .as_ref()
+                .map(|geom| format!("{:?}", geom.geom_type()))
+                .unwrap_or_else(|| "Null".to_string());
+
+            let issues = match feature.geometry.as_ref() {
+                Some(geometry) if geometry.is_empty() => vec![TopologyIssue {
+                    issue_type: "empty_geometry".to_string(),
+                    detail: "geometry is empty".to_string(),
+                }],
+                Some(geometry) => collect_topology_issues(geometry),
+                None => vec![TopologyIssue {
+                    issue_type: "null_geometry".to_string(),
+                    detail: "feature has no geometry".to_string(),
+                }],
+            };
+
+            for issue in issues {
+                csv.push_str(&format!(
+                    "{},{},{},{}\n",
+                    feature.fid,
+                    csv_escape(&geom_type),
+                    csv_escape(&issue.issue_type),
+                    csv_escape(&issue.detail)
+                ));
+            }
+
+            coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
+        }
+
+        std::fs::write(&output_path, csv)
+            .map_err(|e| ToolError::Execution(format!("failed writing topology report: {e}")))?;
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_path.to_string_lossy().to_string()));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum TopologyRuleType {
+    LineMustNotSelfIntersect,
+    PolygonMustNotOverlap,
+    PolygonMustNotHaveGaps,
+    LineMustNotHaveDangles,
+    PointMustBeCoveredByLine,
+    LineEndpointsMustSnapWithinTolerance,
+}
+
+impl TopologyRuleType {
+    fn id(self) -> &'static str {
+        match self {
+            Self::LineMustNotSelfIntersect => "line_must_not_self_intersect",
+            Self::PolygonMustNotOverlap => "polygon_must_not_overlap",
+            Self::PolygonMustNotHaveGaps => "polygon_must_not_have_gaps",
+            Self::LineMustNotHaveDangles => "line_must_not_have_dangles",
+            Self::PointMustBeCoveredByLine => "point_must_be_covered_by_line",
+            Self::LineEndpointsMustSnapWithinTolerance => "line_endpoints_must_snap_within_tolerance",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "line_must_not_self_intersect" => Some(Self::LineMustNotSelfIntersect),
+            "polygon_must_not_overlap" => Some(Self::PolygonMustNotOverlap),
+            "polygon_must_not_have_gaps" => Some(Self::PolygonMustNotHaveGaps),
+            "line_must_not_have_dangles" => Some(Self::LineMustNotHaveDangles),
+            "point_must_be_covered_by_line" => Some(Self::PointMustBeCoveredByLine),
+            "line_endpoints_must_snap_within_tolerance" => Some(Self::LineEndpointsMustSnapWithinTolerance),
+            _ => None,
+        }
+    }
+}
+
+struct TopologyRuleViolation {
+    rule_type: TopologyRuleType,
+    feature_fid: i64,
+    related_fid: Option<i64>,
+    detail: String,
+    anchor: Coord,
+}
+
+struct IndexedPolygonFeature {
+    fid: u64,
+    anchor: Coord,
+    topo: TopologyGeometry,
+}
+
+struct IndexedLineFeature {
+    topo: TopologyGeometry,
+}
+
+struct LineEndpointRecord {
+    fid: u64,
+    coord: Coord,
+}
+
+fn build_indexed_polygon_features(input: &Layer) -> Result<Vec<IndexedPolygonFeature>, ToolError> {
+    let mut polygon_features = Vec::<IndexedPolygonFeature>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
+            continue;
+        }
+        let Some(anchor) = geometry_anchor_coord(geometry) else {
+            continue;
+        };
+        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed converting feature {} polygon geometry for topology checks: {e}",
+                feature.fid
+            ))
+        })?;
+        polygon_features.push(IndexedPolygonFeature {
+            fid: feature.fid,
+            anchor,
+            topo,
+        });
+    }
+    Ok(polygon_features)
+}
+
+fn build_indexed_line_features(input: &Layer) -> Result<Vec<IndexedLineFeature>, ToolError> {
+    let mut line_features = Vec::<IndexedLineFeature>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        if !matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
+            continue;
+        }
+        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed converting feature {} line geometry for topology checks: {e}",
+                feature.fid
+            ))
+        })?;
+        line_features.push(IndexedLineFeature { topo });
+    }
+    Ok(line_features)
+}
+
+fn collect_line_endpoint_records(input: &Layer) -> Vec<LineEndpointRecord> {
+    let mut line_endpoints = Vec::<LineEndpointRecord>::new();
+    for feature in &input.features {
+        let Some(geometry) = feature.geometry.as_ref() else {
+            continue;
+        };
+        match geometry {
+            Geometry::LineString(coords) => {
+                if coords.len() >= 2 {
+                    line_endpoints.push(LineEndpointRecord {
+                        fid: feature.fid,
+                        coord: coords[0].clone(),
+                    });
+                    line_endpoints.push(LineEndpointRecord {
+                        fid: feature.fid,
+                        coord: coords[coords.len() - 1].clone(),
+                    });
+                }
+            }
+            Geometry::MultiLineString(parts) => {
+                for part in parts {
+                    if part.len() >= 2 {
+                        line_endpoints.push(LineEndpointRecord {
+                            fid: feature.fid,
+                            coord: part[0].clone(),
+                        });
+                        line_endpoints.push(LineEndpointRecord {
+                            fid: feature.fid,
+                            coord: part[part.len() - 1].clone(),
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    line_endpoints
+}
+
+fn expand_topology_envelope(env: TopologyEnvelope, distance: f64) -> TopologyEnvelope {
+    TopologyEnvelope::new(
+        env.min_x - distance,
+        env.min_y - distance,
+        env.max_x + distance,
+        env.max_y + distance,
+    )
+}
+
+fn geometry_anchor_coord(geometry: &Geometry) -> Option<Coord> {
+    match geometry {
+        Geometry::Point(coord) => Some(coord.clone()),
+        Geometry::MultiPoint(coords) | Geometry::LineString(coords) => coords.first().cloned(),
+        Geometry::MultiLineString(parts) => parts.first().and_then(|coords| coords.first()).cloned(),
+        Geometry::Polygon { exterior, .. } => exterior.0.first().cloned(),
+        Geometry::MultiPolygon(polys) => polys
+            .first()
+            .and_then(|(exterior, _)| exterior.0.first())
+            .cloned(),
+        Geometry::GeometryCollection(parts) => parts.iter().find_map(geometry_anchor_coord),
+    }
+}
+
+fn parse_topology_rule_set(args: &ToolArgs) -> Result<Vec<TopologyRuleType>, ToolError> {
+    fn parse_rule_array(values: &[serde_json::Value]) -> Result<Vec<TopologyRuleType>, ToolError> {
+        let mut out = Vec::<TopologyRuleType>::new();
+        for value in values {
+            match value {
+                serde_json::Value::String(rule_name) => {
+                    let rule = TopologyRuleType::parse(rule_name).ok_or_else(|| {
+                        ToolError::Validation(format!("unsupported rule_type '{}'", rule_name))
+                    })?;
+                    if !out.contains(&rule) {
+                        out.push(rule);
+                    }
+                }
+                serde_json::Value::Object(obj) => {
+                    let enabled = obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+                    if !enabled {
+                        continue;
+                    }
+                    let rule_name = obj
+                        .get("rule_type")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            ToolError::Validation("rule entries must include string rule_type".to_string())
+                        })?;
+                    let rule = TopologyRuleType::parse(rule_name).ok_or_else(|| {
+                        ToolError::Validation(format!("unsupported rule_type '{}'", rule_name))
+                    })?;
+                    if !out.contains(&rule) {
+                        out.push(rule);
+                    }
+                }
+                _ => {
+                    return Err(ToolError::Validation(
+                        "rule_set array entries must be strings or objects".to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    let fallback = vec![
+        TopologyRuleType::LineMustNotSelfIntersect,
+        TopologyRuleType::PolygonMustNotOverlap,
+        TopologyRuleType::PolygonMustNotHaveGaps,
+        TopologyRuleType::LineMustNotHaveDangles,
+        TopologyRuleType::PointMustBeCoveredByLine,
+        TopologyRuleType::LineEndpointsMustSnapWithinTolerance,
+    ];
+
+    let Some(raw) = args.get("rule_set") else {
+        return Ok(fallback);
+    };
+
+    match raw {
+        serde_json::Value::Array(values) => {
+            let rules = parse_rule_array(values)?;
+            if rules.is_empty() {
+                return Err(ToolError::Validation("rule_set resolved to zero enabled rules".to_string()));
+            }
+            Ok(rules)
+        }
+        serde_json::Value::Object(obj) => {
+            let Some(values) = obj.get("rules").and_then(|v| v.as_array()) else {
+                return Err(ToolError::Validation(
+                    "rule_set object must contain a rules array".to_string(),
+                ));
+            };
+            let rules = parse_rule_array(values)?;
+            if rules.is_empty() {
+                return Err(ToolError::Validation("rule_set resolved to zero enabled rules".to_string()));
+            }
+            Ok(rules)
+        }
+        serde_json::Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return Ok(fallback);
+            }
+
+            let source_text = if Path::new(trimmed).exists() {
+                std::fs::read_to_string(trimmed).map_err(|e| {
+                    ToolError::Validation(format!("failed reading rule_set file '{}': {e}", trimmed))
+                })?
+            } else {
+                trimmed.to_string()
+            };
+
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&source_text) {
+                return match parsed {
+                    serde_json::Value::Array(values) => {
+                        let rules = parse_rule_array(&values)?;
+                        if rules.is_empty() {
+                            Err(ToolError::Validation("rule_set resolved to zero enabled rules".to_string()))
+                        } else {
+                            Ok(rules)
+                        }
+                    }
+                    serde_json::Value::Object(obj) => {
+                        let Some(values) = obj.get("rules").and_then(|v| v.as_array()) else {
+                            return Err(ToolError::Validation(
+                                "rule_set object must contain a rules array".to_string(),
+                            ));
+                        };
+                        let rules = parse_rule_array(values)?;
+                        if rules.is_empty() {
+                            Err(ToolError::Validation("rule_set resolved to zero enabled rules".to_string()))
+                        } else {
+                            Ok(rules)
+                        }
+                    }
+                    _ => Err(ToolError::Validation(
+                        "rule_set JSON must be an array or object".to_string(),
+                    )),
+                };
+            }
+
+            let mut rules = Vec::<TopologyRuleType>::new();
+            for token in source_text.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+                let rule = TopologyRuleType::parse(token)
+                    .ok_or_else(|| ToolError::Validation(format!("unsupported rule_type '{}'", token)))?;
+                if !rules.contains(&rule) {
+                    rules.push(rule);
+                }
+            }
+            if rules.is_empty() {
+                Err(ToolError::Validation("rule_set resolved to zero enabled rules".to_string()))
+            } else {
+                Ok(rules)
+            }
+        }
+        _ => Err(ToolError::Validation(
+            "rule_set must be an array, object, or string".to_string(),
+        )),
+    }
+}
+
+impl Tool for TopologyRuleValidateTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "topology_rule_validate",
+            display_name: "Topology Rule Validate",
+            summary: "Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.",
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector path.", required: true },
+                ToolParamSpec { name: "rule_set", description: "Rule configuration as JSON array/object, CSV string, or file path. Defaults to all 6 MVP rules. Supported: line_must_not_self_intersect, polygon_must_not_overlap, polygon_must_not_have_gaps, line_must_not_have_dangles, point_must_be_covered_by_line, line_endpoints_must_snap_within_tolerance.", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Tolerance for line_endpoints_must_snap_within_tolerance rule in coordinate units. Defaults to 1.0.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path for violations.", required: false },
+                ToolParamSpec { name: "report", description: "Optional JSON summary report path.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("rule_set".to_string(), json!([
+            "line_must_not_self_intersect",
+            "polygon_must_not_overlap",
+            "polygon_must_not_have_gaps",
+            "line_must_not_have_dangles",
+            "point_must_be_covered_by_line",
+            "line_endpoints_must_snap_within_tolerance"
+        ]));
+        defaults.insert("snap_tolerance".to_string(), json!(1.0));
+        defaults.insert("output".to_string(), json!("topology_rule_violations.gpkg"));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("network.gpkg"));
+        example_args.insert("rule_set".to_string(), json!([
+            "line_must_not_self_intersect",
+            "line_endpoints_must_snap_within_tolerance"
+        ]));
+        example_args.insert("snap_tolerance".to_string(), json!(0.5));
+        example_args.insert("output".to_string(), json!("network_topology_violations.gpkg"));
+        example_args.insert("report".to_string(), json!("network_topology_violations.json"));
+
+        ToolManifest {
+            id: "topology_rule_validate".to_string(),
+            display_name: "Topology Rule Validate".to_string(),
+            summary: "Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.".to_string(),
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "rule_set".to_string(), description: "Rule configuration as JSON array/object, CSV string, or file path. Defaults to all 6 MVP rules. Supported: line_must_not_self_intersect, polygon_must_not_overlap, polygon_must_not_have_gaps, line_must_not_have_dangles, point_must_be_covered_by_line, line_endpoints_must_snap_within_tolerance.".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Tolerance for line_endpoints_must_snap_within_tolerance rule in coordinate units. Defaults to 1.0.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path for violations. If omitted, derived beside input.".to_string(), required: false },
+                ToolParamDescriptor { name: "report".to_string(), description: "Optional JSON summary report path.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "comprehensive_topology_check".to_string(),
+                description: "Validate network topology including self-intersections, dangles, and endpoint snapping.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "rules".to_string(), "qa".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input_path = parse_vector_path_arg(args, "input")?;
+        if std::fs::metadata(&input_path).is_err() {
+            return Err(ToolError::Validation(format!("input '{}' does not exist", input_path)));
+        }
+
+        let _ = parse_topology_rule_set(args)?;
+
+        if let Some(output) = parse_optional_output_path(args, "output")? {
+            let _ = VectorFormat::detect(&output)
+                .map_err(|e| ToolError::Validation(format!("unsupported output vector path: {e}")))?;
+        }
+
+        if let Some(report) = parse_optional_output_path(args, "report")? {
+            if report.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("json")) != Some(true) {
+                return Err(ToolError::Validation("report must be a .json path".to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_vector_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?
+            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_rule_violations").with_extension("gpkg"));
+        let report_path = parse_optional_output_path(args, "report")?;
+        let rules = parse_topology_rule_set(args)?;
+
+        ctx.progress.info("running topology_rule_validate");
+        let input = read_vector_layer(&input_path, "input")?;
+        let mut violations = Vec::<TopologyRuleViolation>::new();
+        let polygon_features = if rules.contains(&TopologyRuleType::PolygonMustNotOverlap)
+            || rules.contains(&TopologyRuleType::PolygonMustNotHaveGaps)
+        {
+            Some(build_indexed_polygon_features(&input)?)
+        } else {
+            None
+        };
+        let line_features = if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
+            Some(build_indexed_line_features(&input)?)
+        } else {
+            None
+        };
+        let line_endpoints = if rules.contains(&TopologyRuleType::LineMustNotHaveDangles)
+            || rules.contains(&TopologyRuleType::LineEndpointsMustSnapWithinTolerance)
+        {
+            Some(collect_line_endpoint_records(&input))
+        } else {
+            None
+        };
+
+        if rules.contains(&TopologyRuleType::LineMustNotSelfIntersect) {
+            for feature in &input.features {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    continue;
+                };
+                let Some(anchor) = geometry_anchor_coord(geometry) else {
+                    continue;
+                };
+                let issues = collect_topology_issues(geometry);
+                for issue in issues {
+                    if issue.issue_type == "linestring_self_intersection" {
+                        violations.push(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::LineMustNotSelfIntersect,
+                            feature_fid: feature.fid as i64,
+                            related_fid: None,
+                            detail: issue.detail,
+                            anchor: anchor.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::PolygonMustNotOverlap) {
+            let polygon_features = polygon_features.as_ref().expect("polygon features prepared");
+            let polygon_geometries = polygon_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let polygon_index = SpatialIndex::build_str(&polygon_geometries, 16);
+
+            for (i, polygon_feature) in polygon_features.iter().enumerate() {
+                let fid_a = polygon_feature.fid;
+                let anchor_a = &polygon_feature.anchor;
+                let topo_a = &polygon_feature.topo;
+                for j in polygon_index.query_geometry(topo_a) {
+                    if j <= i {
+                        continue;
+                    }
+                    let other = &polygon_features[j];
+                    let fid_b = other.fid;
+                    let anchor_b = &other.anchor;
+                    let topo_b = &other.topo;
+                    if topology_overlaps(topo_a, topo_b) {
+                        violations.push(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::PolygonMustNotOverlap,
+                            feature_fid: fid_a as i64,
+                            related_fid: Some(fid_b as i64),
+                            detail: format!("overlaps with feature {}", fid_b),
+                            anchor: anchor_a.clone(),
+                        });
+                        violations.push(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::PolygonMustNotOverlap,
+                            feature_fid: fid_b as i64,
+                            related_fid: Some(fid_a as i64),
+                            detail: format!("overlaps with feature {}", fid_a),
+                            anchor: anchor_b.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
+            let line_features = line_features.as_ref().expect("line features prepared");
+            let line_geometries = line_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let line_index = SpatialIndex::build_str(&line_geometries, 16);
+
+            for feature in &input.features {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    continue;
+                };
+                if !matches!(geometry, Geometry::Point(_)) {
+                    continue;
+                }
+                let Some(anchor) = geometry_anchor_coord(geometry) else {
+                    continue;
+                };
+
+                let mut covered = false;
+                let point_topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed converting feature {} point geometry for coverage checks: {e}",
+                        feature.fid
+                    ))
+                })?;
+
+                for line_idx in line_index.query_geometry(&point_topo) {
+                    let line_topo = &line_features[line_idx].topo;
+                    let dist = geometry_distance(&point_topo, line_topo);
+                    if dist < 1e-9 {
+                        covered = true;
+                        break;
+                    }
+                }
+
+                if !covered {
+                    violations.push(TopologyRuleViolation {
+                        rule_type: TopologyRuleType::PointMustBeCoveredByLine,
+                        feature_fid: feature.fid as i64,
+                        related_fid: None,
+                        detail: "point not on any line".to_string(),
+                        anchor: anchor.clone(),
+                    });
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::LineMustNotHaveDangles) {
+            const DANGLE_EPSILON: f64 = 1e-9;
+
+            let line_endpoints = line_endpoints.as_ref().expect("line endpoints prepared");
+            let endpoint_geometries = line_endpoints
+                .iter()
+                .map(|endpoint| TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y)))
+                .collect::<Vec<_>>();
+            let endpoint_index = SpatialIndex::build_str(&endpoint_geometries, 16);
+
+            for endpoint in line_endpoints {
+                let mut connected = false;
+                let env = TopologyEnvelope::new(
+                    endpoint.coord.x - DANGLE_EPSILON,
+                    endpoint.coord.y - DANGLE_EPSILON,
+                    endpoint.coord.x + DANGLE_EPSILON,
+                    endpoint.coord.y + DANGLE_EPSILON,
+                );
+                for candidate_idx in endpoint_index.query_envelope(env) {
+                    let candidate = &line_endpoints[candidate_idx];
+                    if candidate.fid == endpoint.fid {
+                        continue;
+                    }
+                    if coord_dist(
+                        TopoCoord::xy(endpoint.coord.x, endpoint.coord.y),
+                        TopoCoord::xy(candidate.coord.x, candidate.coord.y),
+                    ) < DANGLE_EPSILON
+                    {
+                        connected = true;
+                        break;
+                    }
+                }
+                if !connected {
+                    violations.push(TopologyRuleViolation {
+                        rule_type: TopologyRuleType::LineMustNotHaveDangles,
+                        feature_fid: endpoint.fid as i64,
+                        related_fid: None,
+                        detail: format!("endpoint at ({}, {}) does not connect to other lines", endpoint.coord.x, endpoint.coord.y),
+                        anchor: endpoint.coord.clone(),
+                    });
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::LineEndpointsMustSnapWithinTolerance) {
+            let snap_tolerance = args
+                .get("snap_tolerance")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(1.0);
+
+            let line_endpoints = line_endpoints.as_ref().expect("line endpoints prepared");
+            let endpoint_geometries = line_endpoints
+                .iter()
+                .map(|endpoint| TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y)))
+                .collect::<Vec<_>>();
+            let endpoint_index = SpatialIndex::build_str(&endpoint_geometries, 16);
+
+            for (i, endpoint) in line_endpoints.iter().enumerate() {
+                let point_geom = TopologyGeometry::Point(TopoCoord::xy(endpoint.coord.x, endpoint.coord.y));
+                let nearest_dist = endpoint_index
+                    .nearest_k(&point_geom, 3)
+                    .into_iter()
+                    .filter(|(candidate_idx, _)| *candidate_idx != i)
+                    .map(|(_, distance)| distance)
+                    .find(|distance| *distance > 1e-9)
+                    .unwrap_or(f64::INFINITY);
+                if nearest_dist > snap_tolerance {
+                    violations.push(TopologyRuleViolation {
+                        rule_type: TopologyRuleType::LineEndpointsMustSnapWithinTolerance,
+                        feature_fid: endpoint.fid as i64,
+                        related_fid: None,
+                        detail: format!("endpoint at ({}, {}) does not snap within tolerance {}", endpoint.coord.x, endpoint.coord.y, snap_tolerance),
+                        anchor: endpoint.coord.clone(),
+                    });
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::PolygonMustNotHaveGaps) {
+            const GAP_DISTANCE_TOLERANCE: f64 = 0.001;
+
+            let polygon_features = polygon_features.as_ref().expect("polygon features prepared");
+            let polygon_geometries = polygon_features
+                .iter()
+                .map(|feature| feature.topo.clone())
+                .collect::<Vec<_>>();
+            let polygon_index = SpatialIndex::build_str(&polygon_geometries, 16);
+
+            for (i, polygon_feature) in polygon_features.iter().enumerate() {
+                let fid_a = polygon_feature.fid;
+                let anchor_a = &polygon_feature.anchor;
+                let topo_a = &polygon_feature.topo;
+                let Some(envelope) = topo_a.envelope() else {
+                    continue;
+                };
+                for j in polygon_index.query_envelope(expand_topology_envelope(envelope, GAP_DISTANCE_TOLERANCE)) {
+                    if j <= i {
+                        continue;
+                    }
+                    let other = &polygon_features[j];
+                    let fid_b = other.fid;
+                    let anchor_b = &other.anchor;
+                    let topo_b = &other.topo;
+                    let dist = geometry_distance(topo_a, topo_b);
+                    if dist > 1e-9 && dist < GAP_DISTANCE_TOLERANCE {
+                        violations.push(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::PolygonMustNotHaveGaps,
+                            feature_fid: fid_a as i64,
+                            related_fid: Some(fid_b as i64),
+                            detail: format!("gap of approximately {:.6} units to feature {}", dist, fid_b),
+                            anchor: anchor_a.clone(),
+                        });
+                        violations.push(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::PolygonMustNotHaveGaps,
+                            feature_fid: fid_b as i64,
+                            related_fid: Some(fid_a as i64),
+                            detail: format!("gap of approximately {:.6} units to feature {}", dist, fid_a),
+                            anchor: anchor_b.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        let mut output = Layer::new(format!("{}_topology_rule_violations", input.name))
+            .with_geom_type(GeometryType::Point);
+        apply_input_crs_to_layer(&input, &mut output);
+        output.schema.add_field(FieldDef::new("RULE_ID", FieldType::Text));
+        output.schema.add_field(FieldDef::new("RULE_TYPE", FieldType::Text));
+        output.schema.add_field(FieldDef::new("SEVERITY", FieldType::Text));
+        output.schema.add_field(FieldDef::new("CONFIDENCE", FieldType::Float));
+        output.schema.add_field(FieldDef::new("FEATURE_FID", FieldType::Integer));
+        output.schema.add_field(FieldDef::new("RELATED_FID", FieldType::Integer));
+        output.schema.add_field(FieldDef::new("DETAIL", FieldType::Text));
+
+        for violation in &violations {
+            let mut attrs = vec![
+                ("RULE_ID", FieldValue::Text(violation.rule_type.id().to_string())),
+                ("RULE_TYPE", FieldValue::Text(violation.rule_type.id().to_string())),
+                ("SEVERITY", FieldValue::Text("error".to_string())),
+                ("CONFIDENCE", FieldValue::Float(1.0)),
+                ("FEATURE_FID", FieldValue::Integer(violation.feature_fid)),
+            ];
+            if let Some(related_fid) = violation.related_fid {
+                attrs.push(("RELATED_FID", FieldValue::Integer(related_fid)));
+            } else {
+                attrs.push(("RELATED_FID", FieldValue::Null));
+            }
+            attrs.push(("DETAIL", FieldValue::Text(violation.detail.clone())));
+
+            output
+                .add_feature(Some(Geometry::Point(violation.anchor.clone())), &attrs)
+                .map_err(|e| ToolError::Execution(format!("failed adding violation feature: {e}")))?;
+        }
+
+        if let Some(report) = report_path {
+            let mut by_rule = BTreeMap::<String, usize>::new();
+            for violation in &violations {
+                *by_rule.entry(violation.rule_type.id().to_string()).or_insert(0) += 1;
+            }
+            let report_json = json!({
+                "total_violations": violations.len(),
+                "rules_evaluated": rules.iter().map(|r| r.id()).collect::<Vec<_>>(),
+                "violations_by_rule": by_rule,
+                "violations_by_severity": {
+                    "error": violations.len()
+                }
+            });
+            ensure_parent_dir(&report)?;
+            let report_text = serde_json::to_string_pretty(&report_json)
+                .map_err(|e| ToolError::Execution(format!("failed serializing report JSON: {e}")))?;
+            std::fs::write(&report, report_text)
+                .map_err(|e| ToolError::Execution(format!("failed writing report '{}': {e}", report.to_string_lossy())))?;
+        }
+
+        write_vector_output(&output, &output_path)
+    }
+}
+
+struct AppliedFix {
+    change_id: String,
+    rule_id: String,
+    action_type: String,
+    target_fid: i64,
+    pre_state_hash: String,
+    post_state_hash: String,
+    detail: String,
+}
+
+fn geom_to_hash_string(geom: Option<&Geometry>) -> String {
+    match geom {
+        Some(g) => format!("{:?}", g),
+        None => "null".to_string(),
+    }
+}
+
+fn hash_string(s: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+impl Tool for TopologyRuleAutoFixTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "topology_rule_autofix",
+            display_name: "Topology Rule AutoFix",
+            summary: "Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.",
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input vector path.", required: true },
+                ToolParamSpec { name: "rule_set", description: "Rule configuration as JSON array/object, CSV string, or file path. Applies fixes for supported rules only.", required: false },
+                ToolParamSpec { name: "snap_tolerance", description: "Tolerance for snapping operations in coordinate units. Defaults to 0.01.", required: false },
+                ToolParamSpec { name: "dry_run", description: "If true (default), emits change report without modifying input. If false, applies changes and overwrites output.", required: false },
+                ToolParamSpec { name: "output", description: "Output vector path for fixed features. If omitted, derived beside input.", required: false },
+                ToolParamSpec { name: "change_report", description: "Optional JSON change audit-trail report path.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.gpkg"));
+        defaults.insert("rule_set".to_string(), json!([
+            "line_endpoints_must_snap_within_tolerance",
+            "point_must_be_covered_by_line",
+            "polygon_must_not_have_gaps",
+            "line_must_not_have_dangles"
+        ]));
+        defaults.insert("snap_tolerance".to_string(), json!(0.01));
+        defaults.insert("dry_run".to_string(), json!(true));
+        defaults.insert("output".to_string(), json!("topology_fixed.gpkg"));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("network_violations.gpkg"));
+        example_args.insert("rule_set".to_string(), json!(["line_endpoints_must_snap_within_tolerance"]));
+        example_args.insert("snap_tolerance".to_string(), json!(0.01));
+        example_args.insert("dry_run".to_string(), json!(false));
+        example_args.insert("output".to_string(), json!("network_fixed.gpkg"));
+        example_args.insert("change_report".to_string(), json!("network_changes.json"));
+
+        ToolManifest {
+            id: "topology_rule_autofix".to_string(),
+            display_name: "Topology Rule AutoFix".to_string(),
+            summary: "Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.".to_string(),
+            category: ToolCategory::Conversion,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input vector path.".to_string(), required: true },
+                ToolParamDescriptor { name: "rule_set".to_string(), description: "Rule configuration as JSON array/object, CSV string, or file path. Applies fixes for supported rules only: line_endpoints_must_snap_within_tolerance, point_must_be_covered_by_line, polygon_must_not_have_gaps, line_must_not_have_dangles.".to_string(), required: false },
+                ToolParamDescriptor { name: "snap_tolerance".to_string(), description: "Tolerance for snapping operations in coordinate units. Defaults to 0.01.".to_string(), required: false },
+                ToolParamDescriptor { name: "dry_run".to_string(), description: "If true (default), emits change report without modifying input. If false, applies changes.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Output vector path for fixed features. If omitted, derived beside input.".to_string(), required: false },
+                ToolParamDescriptor { name: "change_report".to_string(), description: "Optional JSON change audit-trail report path.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "dry_run_endpoint_snap".to_string(),
+                description: "Preview endpoint snapping fixes in dry-run mode with change audit trail.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["data-tools".to_string(), "vector".to_string(), "topology".to_string(), "fix".to_string(), "quality".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let input_path = parse_vector_path_arg(args, "input")?;
+        if std::fs::metadata(&input_path).is_err() {
+            return Err(ToolError::Validation(format!("input '{}' does not exist", input_path)));
+        }
+
+        let _ = parse_topology_rule_set(args)?;
+
+        if let Some(output) = parse_optional_output_path(args, "output")? {
+            let _ = VectorFormat::detect(&output)
+                .map_err(|e| ToolError::Validation(format!("unsupported output vector path: {e}")))?;
+        }
+
+        if let Some(report) = parse_optional_output_path(args, "change_report")? {
+            if report.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("json")) != Some(true) {
+                return Err(ToolError::Validation("change_report must be a .json path".to_string()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_vector_path_arg(args, "input")?;
+        let output_path = parse_optional_output_path(args, "output")?
+            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_fixed").with_extension("gpkg"));
+        let change_report_path = parse_optional_output_path(args, "change_report")?;
+        let rules = parse_topology_rule_set(args)?;
+        let snap_tolerance = args
+            .get("snap_tolerance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.01);
+        let dry_run = args
+            .get("dry_run")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        ctx.progress.info(&format!(
+            "running topology_rule_autofix (dry_run={})",
+            dry_run
+        ));
+        let mut input = read_vector_layer(&input_path, "input")?;
+        let mut changes = Vec::<AppliedFix>::new();
+        let mut change_counter = 0u32;
+
+        if rules.contains(&TopologyRuleType::LineEndpointsMustSnapWithinTolerance) {
+            for feature in &mut input.features {
+                let Some(geometry) = feature.geometry.as_mut() else {
+                    continue;
+                };
+                match geometry {
+                    Geometry::LineString(coords) => {
+                        if coords.len() >= 2 {
+                            let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(coords.clone()))));
+                            let updated = snap_line_endpoints(coords, snap_tolerance);
+                            if updated != *coords {
+                                let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(updated.clone()))));
+                                *coords = updated;
+                                changes.push(AppliedFix {
+                                    change_id: format!("fix_{}", change_counter),
+                                    rule_id: "line_endpoints_must_snap_within_tolerance".to_string(),
+                                    action_type: "snap_endpoints".to_string(),
+                                    target_fid: feature.fid as i64,
+                                    pre_state_hash: pre_hash,
+                                    post_state_hash: post_hash,
+                                    detail: "snapped linestring endpoints".to_string(),
+                                });
+                                change_counter += 1;
+                            }
+                        }
+                    }
+                    Geometry::MultiLineString(parts) => {
+                        for part in parts {
+                            if part.len() >= 2 {
+                                let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(part.clone()))));
+                                let updated = snap_line_endpoints(part, snap_tolerance);
+                                if updated != *part {
+                                    let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(updated.clone()))));
+                                    *part = updated;
+                                    changes.push(AppliedFix {
+                                        change_id: format!("fix_{}", change_counter),
+                                        rule_id: "line_endpoints_must_snap_within_tolerance".to_string(),
+                                        action_type: "snap_endpoints".to_string(),
+                                        target_fid: feature.fid as i64,
+                                        pre_state_hash: pre_hash,
+                                        post_state_hash: post_hash,
+                                        detail: "snapped multilinestring part endpoints".to_string(),
+                                    });
+                                    change_counter += 1;
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
+            let mut lines = Vec::<(u64, Geometry)>::new();
+            for feature in &input.features {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    continue;
+                };
+                if matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
+                    lines.push((feature.fid, geometry.clone()));
+                }
+            }
+
+            for feature in &mut input.features {
+                let Some(geometry) = feature.geometry.as_mut() else {
+                    continue;
+                };
+                if !matches!(geometry, Geometry::Point(_)) {
+                    continue;
+                }
+                if lines.is_empty() {
+                    continue;
+                }
+
+                let pre_hash = hash_string(&geom_to_hash_string(Some(geometry)));
+                if let Geometry::Point(coord) = geometry {
+                    if let Some(snap_coord) = find_nearest_point_on_lines(coord, &lines, snap_tolerance) {
+                        if coord_dist(
+                            TopoCoord::xy(coord.x, coord.y),
+                            TopoCoord::xy(snap_coord.x, snap_coord.y)
+                        ) > 1e-9
+                        {
+                            let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::Point(snap_coord.clone()))));
+                            *geometry = Geometry::Point(snap_coord);
+                            changes.push(AppliedFix {
+                                change_id: format!("fix_{}", change_counter),
+                                rule_id: "point_must_be_covered_by_line".to_string(),
+                                action_type: "project_to_line".to_string(),
+                                target_fid: feature.fid as i64,
+                                pre_state_hash: pre_hash,
+                                post_state_hash: post_hash,
+                                detail: "projected point onto nearest line".to_string(),
+                            });
+                            change_counter += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(report_path) = change_report_path {
+            let mut change_log = Vec::<serde_json::Value>::new();
+            for fix in &changes {
+                change_log.push(json!({
+                    "change_id": fix.change_id,
+                    "rule_id": fix.rule_id,
+                    "action_type": fix.action_type,
+                    "target_fid": fix.target_fid,
+                    "pre_state_hash": fix.pre_state_hash,
+                    "post_state_hash": fix.post_state_hash,
+                    "detail": fix.detail,
+                }));
+            }
+            let report_json = json!({
+                "dry_run": dry_run,
+                "total_changes": changes.len(),
+                "changes_by_rule": {
+                    "line_endpoints_must_snap_within_tolerance": changes.iter().filter(|f| f.rule_id == "line_endpoints_must_snap_within_tolerance").count(),
+                    "point_must_be_covered_by_line": changes.iter().filter(|f| f.rule_id == "point_must_be_covered_by_line").count(),
+                    "polygon_must_not_have_gaps": changes.iter().filter(|f| f.rule_id == "polygon_must_not_have_gaps").count(),
+                    "line_must_not_have_dangles": changes.iter().filter(|f| f.rule_id == "line_must_not_have_dangles").count(),
+                },
+                "change_log": change_log,
+            });
+            ensure_parent_dir(&report_path)?;
+            let report_text = serde_json::to_string_pretty(&report_json)
+                .map_err(|e| ToolError::Execution(format!("failed serializing change report JSON: {e}")))?;
+            std::fs::write(&report_path, report_text).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing change report '{}': {e}",
+                    report_path.to_string_lossy()
+                ))
+            })?;
+        }
+
+        if !dry_run {
+            write_vector_output(&input, &output_path)
+        } else {
+            let mut result = BTreeMap::new();
+            result.insert("path".to_string(), json!(output_path.to_string_lossy().to_string()));
+            result.insert("dry_run_mode".to_string(), json!(true));
+            result.insert("total_changes".to_string(), json!(changes.len()));
+            Ok(ToolRunResult { outputs: result })
+        }
+    }
+}
+
+fn snap_line_endpoints(coords: &[Coord], tolerance: f64) -> Vec<Coord> {
+    if coords.len() < 2 {
+        return coords.to_vec();
+    }
+
+    let mut result = coords.to_vec();
+    let first = result[0].clone();
+    let last_idx = result.len() - 1;
+    let last = result[last_idx].clone();
+
+    // Check if endpoints should snap to each other
+    let endpoint_dist = coord_dist(
+        TopoCoord::xy(first.x, first.y),
+        TopoCoord::xy(last.x, last.y)
+    );
+    if endpoint_dist > 1e-9 && endpoint_dist <= tolerance {
+        // Snap both endpoints to midpoint
+        let mid_x = (first.x + last.x) / 2.0;
+        let mid_y = (first.y + last.y) / 2.0;
+        result[0] = Coord::xy(mid_x, mid_y);
+        result[last_idx] = Coord::xy(mid_x, mid_y);
+    }
+
+    result
+}
+
+fn find_nearest_point_on_lines(point: &Coord, lines: &[(u64, Geometry)], tolerance: f64) -> Option<Coord> {
+    let mut nearest: Option<Coord> = None;
+    let mut nearest_dist = f64::INFINITY;
+
+    for (_line_fid, line_geom) in lines {
+        match line_geom {
+            Geometry::LineString(coords) => {
+                if let Some((closest, dist)) = closest_point_on_linestring(point, coords) {
+                    if dist < nearest_dist && dist <= tolerance {
+                        nearest = Some(closest);
+                        nearest_dist = dist;
+                    }
+                }
+            }
+            Geometry::MultiLineString(parts) => {
+                for part in parts {
+                    if let Some((closest, dist)) = closest_point_on_linestring(point, part) {
+                        if dist < nearest_dist && dist <= tolerance {
+                            nearest = Some(closest);
+                            nearest_dist = dist;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    nearest
+}
+
+fn closest_point_on_linestring(point: &Coord, coords: &[Coord]) -> Option<(Coord, f64)> {
+    if coords.is_empty() {
+        return None;
+    }
+    if coords.len() == 1 {
+        let dist = coord_dist(
+            TopoCoord::xy(point.x, point.y),
+            TopoCoord::xy(coords[0].x, coords[0].y)
+        );
+        return Some((coords[0].clone(), dist));
+    }
+
+    let mut closest: Option<(Coord, f64)> = None;
+    for i in 0..(coords.len() - 1) {
+        let seg_start = &coords[i];
+        let seg_end = &coords[i + 1];
+        if let Some((proj, dist)) = project_point_on_segment(point, seg_start, seg_end) {
+            match closest {
+                None => closest = Some((proj, dist)),
+                Some((_, best_dist)) if dist < best_dist => closest = Some((proj, dist)),
+                _ => {}
+            }
+        }
+    }
+
+    closest
+}
+
+fn project_point_on_segment(point: &Coord, seg_start: &Coord, seg_end: &Coord) -> Option<(Coord, f64)> {
+    let dx = seg_end.x - seg_start.x;
+    let dy = seg_end.y - seg_start.y;
+    let seg_len_sq = dx * dx + dy * dy;
+
+    if seg_len_sq < 1e-12 {
+        let dist = coord_dist(
+            TopoCoord::xy(point.x, point.y),
+            TopoCoord::xy(seg_start.x, seg_start.y)
+        );
+        return Some((seg_start.clone(), dist));
+    }
+
+    let px = point.x - seg_start.x;
+    let py = point.y - seg_start.y;
+    let t = ((px * dx + py * dy) / seg_len_sq).max(0.0).min(1.0);
+
+    let proj_x = seg_start.x + t * dx;
+    let proj_y = seg_start.y + t * dy;
+    let dist = coord_dist(
+        TopoCoord::xy(point.x, point.y),
+        TopoCoord::xy(proj_x, proj_y)
+    );
+
+    Some((Coord::xy(proj_x, proj_y), dist))
 }
 
 impl Tool for ConvertNodataToZeroTool {

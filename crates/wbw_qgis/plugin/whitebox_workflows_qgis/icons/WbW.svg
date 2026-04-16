@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="18mm"
+   height="20mm"
+   viewBox="0 0 18 20"
+   version="1.1"
+   id="svg2226"
+   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   sodipodi:docname="WbW.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview2228"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="7.0114583"
+     inkscape:cx="13.977121"
+     inkscape:cy="37.795276"
+     inkscape:window-width="1376"
+     inkscape:window-height="782"
+     inkscape:window-x="0"
+     inkscape:window-y="38"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs2223" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       sodipodi:type="star"
+       style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:10.3078;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0"
+       id="path39645"
+       sodipodi:sides="6"
+       sodipodi:cx="130.15173"
+       sodipodi:cy="947.29675"
+       sodipodi:r1="56.790958"
+       sodipodi:r2="49.182411"
+       sodipodi:arg1="0.52327832"
+       sodipodi:arg2="1.0468771"
+       inkscape:flatsided="true"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       inkscape:export-filename="/Users/johnlindsay/Documents/programming/Whitebox/trunk/WhiteboxGIS/resources/Images/WhiteboxLogo6.png"
+       inkscape:export-xdpi="120"
+       inkscape:export-ydpi="120"
+       transform="matrix(0.14552084,0,0,0.14552084,-9.9616548,-127.87507)"
+       d="m 179.34324,975.67647 -49.17331,28.41123 -49.191507,-28.37971 -0.0182,-56.79095 49.173306,-28.41124 49.19151,28.37971 z" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="m 11.924528,8.3773584 -2.9433961,1.4716982 2e-7,3.2075464"
+       id="path7755"
+       sodipodi:nodetypes="ccc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="M 8.9056603,9.8113207 5.962264,8.264151"
+       id="path7757"
+       sodipodi:nodetypes="cc" />
+  </g>
+</svg>

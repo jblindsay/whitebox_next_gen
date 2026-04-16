@@ -1,0 +1,143 @@
+{
+  "spatial_join": {
+    "description": "Join attributes from one vector layer to another based on spatial relationship. Uses spatial indexing for efficient processing.",
+    "parameters": {
+      "input_vector": {
+        "label": "Target vector layer. Features from this layer will receive joined attributes."
+      },
+      "join_vector": {
+        "label": "Source vector layer. Attributes from this layer will be joined to the target features."
+      },
+      "strategy": {
+        "label": "Aggregation strategy {first, last, count, sum, mean, min, max} (default first). Controls how multiple matches are combined: 'first' takes first match, 'count' tallies matches, 'sum' accumulates values, 'mean' averages them.",
+        "tooltip": "Use 'count' to count overlapping features, 'mean' to average attributes, 'sum' for totals. Strategy only matters when multiple source features match one target feature."
+      },
+      "predicate": {
+        "label": "Spatial relationship {intersects, contains, within, touches} (default intersects). Choose based on your workflow needs.",
+        "tooltip": "intersects: any overlap; contains: target fully contains source; within: target fully inside source; touches: share boundary only"
+      }
+    }
+  },
+  "near": {
+    "description": "Find nearest neighbor features and optionally compute distance. Efficient for proximity analysis and distance calculations.",
+    "parameters": {
+      "input_vector": {
+        "label": "Input vector layer. Nearest neighbors will be found for each feature in this layer."
+      },
+      "search_vector": {
+        "label": "Search layer. Nearest features in this layer will be identified (can be same as input)."
+      },
+      "find_all": {
+        "label": "Find all equidistant neighbors [optional]",
+        "tooltip": "When enabled, returns all features at the same minimum distance (default: only first match). Useful when multiple features are equally close."
+      },
+      "max_distance": {
+        "label": "Maximum search distance in layer units [optional]",
+        "tooltip": "Limits search radius to improve performance on large datasets. Leave empty for unlimited search."
+      }
+    }
+  },
+  "buffer": {
+    "description": "Expand or contract features by a specified distance, creating buffer zones. Rounded for polygons; variable offset possible with attribute field.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer to buffer."
+      },
+      "distance": {
+        "label": "Buffer distance in layer units (can be negative to shrink). Positive values expand features outward; negative values contract them inward.",
+        "tooltip": "For polygons: expand outward (positive) or inward (negative). For lines: creates band around line. Distance should match layer units (meters, feet, degrees, etc.)."
+      },
+      "cap_style": {
+        "label": "End cap style {flat, round, square} (default round). Applies only to line buffers.",
+        "tooltip": "round: smooth caps (most common); square: square caps; flat: no cap extension"
+      }
+    }
+  },
+  "convex_hull": {
+    "description": "Compute convex hull (minimum bounding geometry) for features. Useful for outlining feature groups or simplifying geometries.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer. Convex hull will be computed for all features combined or per-group if grouping is enabled."
+      },
+      "group": {
+        "label": "Group by attribute [optional]",
+        "tooltip": "If specified, computes separate convex hull for each unique attribute value. Useful for computing bounds per category."
+      }
+    }
+  },
+  "dissolve": {
+    "description": "Merge adjacent or overlapping features with same attribute value. Combines geometries and can aggregate numeric attributes.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer to dissolve."
+      },
+      "group_field": {
+        "label": "Group by attribute. Features with same value in this field are merged into one feature.",
+        "tooltip": "Leave empty to merge all features into a single feature. Choose attribute with distinct categories (e.g., 'region', 'zone')."
+      },
+      "aggregate_mode": {
+        "label": "Aggregation for numeric fields {first, sum, mean, min, max, count} (default first). Controls how non-group attributes are combined.",
+        "tooltip": "first: keep first value; sum: total; mean: average; count: tally of merged features"
+      }
+    }
+  },
+  "simplify_features": {
+    "description": "Simplify geometries by removing detail while preserving shape. Reduces complexity for visualization or processing speed.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer to simplify."
+      },
+      "tolerance": {
+        "label": "Simplification tolerance in layer units (default 1.0). Higher values remove more detail.",
+        "tooltip": "Controls how much simplification occurs. Typical range: 0.1–10.0 depending on coordinate scale. Test values to find balance between speed and detail preservation."
+      },
+      "preserve_topology": {
+        "label": "Preserve topology [optional]",
+        "tooltip": "When enabled, prevents self-intersections during simplification. Recommended for polygons to avoid invalid geometries."
+      }
+    }
+  },
+  "densify_features": {
+    "description": "Add intermediate vertices to geometries at regular intervals. Improves accuracy for curved features or when reprojecting.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer to densify."
+      },
+      "interval": {
+        "label": "Vertex spacing in layer units (default 1.0). New vertices inserted at this interval along each segment.",
+        "tooltip": "Smaller intervals add more vertices (more detail, larger file). Typical range: 0.1–10.0 depending on feature complexity and coordinate scale."
+      }
+    }
+  },
+  "points_along_line": {
+    "description": "Generate points at regular intervals along lines. Useful for sampling, measurement, or creating regular point grids along features.",
+    "parameters": {
+      "input_vector": {
+        "label": "Line layer. Points will be generated along each line."
+      },
+      "interval": {
+        "label": "Point spacing in layer units (default 1.0). Points placed at this distance along lines.",
+        "tooltip": "Smaller intervals create denser point coverage. Actual positions may vary slightly from interval if line length is not exact multiple of interval."
+      },
+      "endpoint": {
+        "label": "Include endpoint [optional]",
+        "tooltip": "When enabled, ensures final point placed at line endpoint even if interval doesn't align exactly."
+      }
+    }
+  },
+  "clip_vector": {
+    "description": "Clip vector features to a boundary. Only features or parts within the clip boundary are retained.",
+    "parameters": {
+      "input_vector": {
+        "label": "Vector layer to clip."
+      },
+      "clip_vector": {
+        "label": "Clip boundary layer. Features will be cut to this boundary."
+      },
+      "keep_interior": {
+        "label": "Keep interior holes [optional]",
+        "tooltip": "For polygon clips with holes: when enabled, preserves holes from clip boundary; when disabled, fills them. Rarely needed."
+      }
+    }
+  }
+}

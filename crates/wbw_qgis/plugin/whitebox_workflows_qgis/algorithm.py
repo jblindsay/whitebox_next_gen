@@ -9,6 +9,7 @@ from typing import Any
 from .bootstrap import create_runtime_session, run_projection_wrapper
 from .help import get_help_url
 from .help_provider import get_help_provider
+from .descriptions_provider import get_descriptions_provider
 
 try:
     from qgis.PyQt.QtCore import QSettings
@@ -931,10 +932,126 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     optional=not required,
                 )
 
-            # Enriched parameter help from legacy documentation
+            # Apply enriched parameter help and labels
+            # Priority: curated descriptions > legacy help > defaults
+            descriptions_provider = get_descriptions_provider()
             help_provider = get_help_provider()
             tool_id = self._manifest.get("id", "")
-            if help_provider.has_help(tool_id):
+            
+            # Try curated label first
+            curated_label = descriptions_provider.get_parameter_label(tool_id, name)
+            if curated_label:
+                # Replace the parameter with updated description
+                # First, update the existing parameter's description
+                # Note: We need to recreate the parameter with new description
+                # because QGIS doesn't allow changing description after creation
+                old_desc = description
+                description = curated_label
+                
+                # Recreate parameter with updated description
+                if kind == "raster_in":
+                    qgs_param = QgsProcessingParameterRasterLayer(
+                        name,
+                        description,
+                        defaultValue=None,
+                        optional=not required,
+                    )
+                elif kind == "vector_in":
+                    qgs_param = QgsProcessingParameterVectorLayer(
+                        name,
+                        description,
+                        [QgsProcessing.TypeVectorAnyGeometry],
+                        defaultValue=None,
+                        optional=not required,
+                    )
+                elif kind == "bool":
+                    qgs_param = QgsProcessingParameterBoolean(
+                        name,
+                        description,
+                        defaultValue=_coerce_bool_default(default_value, False),
+                        optional=not required,
+                    )
+                elif kind == "int":
+                    qgs_param = QgsProcessingParameterNumber(
+                        name,
+                        description,
+                        QgsProcessingParameterNumber.Integer,
+                        defaultValue=_coerce_int_default(default_value, 0),
+                        optional=not required,
+                    )
+                elif kind == "double":
+                    qgs_param = QgsProcessingParameterNumber(
+                        name,
+                        description,
+                        QgsProcessingParameterNumber.Double,
+                        defaultValue=_coerce_float_default(default_value, 0.0),
+                        optional=not required,
+                    )
+                elif kind == "file_out":
+                    qgs_param = QgsProcessingParameterFileDestination(
+                        name,
+                        description,
+                        defaultValue=None,
+                        optional=False,
+                    )
+                elif kind == "raster_out":
+                    qgs_param = QgsProcessingParameterRasterDestination(
+                        name,
+                        description,
+                        defaultValue=None,
+                        optional=False,
+                    )
+                elif kind == "vector_out":
+                    qgs_param = QgsProcessingParameterVectorDestination(
+                        name,
+                        description,
+                        defaultValue=None,
+                        optional=False,
+                    )
+                elif kind == "lidar_out":
+                    qgs_param = QgsProcessingParameterFileDestination(
+                        name,
+                        description,
+                        fileFilter="LiDAR files (*.las *.laz *.zlidar *.copc *.e57 *.ply)",
+                        defaultValue=None,
+                        optional=False,
+                    )
+                elif kind == "file_in":
+                    qgs_param = QgsProcessingParameterFile(
+                        name,
+                        description,
+                        behavior=QgsProcessingParameterFile.File,
+                        defaultValue=None,
+                        optional=not required,
+                    )
+                elif kind == "enum":
+                    default_index = 0
+                    if default_value is not None:
+                        default_text = str(default_value).strip().lower()
+                        for idx, opt in enumerate(enum_options):
+                            if opt.lower() == default_text:
+                                default_index = idx
+                                break
+                    qgs_param = QgsProcessingParameterEnum(
+                        name,
+                        description,
+                        options=enum_options,
+                        defaultValue=default_index,
+                        optional=not required,
+                    )
+                else:
+                    qgs_param = QgsProcessingParameterString(
+                        name,
+                        description,
+                        defaultValue=_coerce_string_default(default_value, ""),
+                        optional=not required,
+                    )
+            
+            # Apply tooltip if available (from either source)
+            curated_tooltip = descriptions_provider.get_parameter_tooltip(tool_id, name)
+            if curated_tooltip:
+                qgs_param.setHelp(curated_tooltip)
+            elif help_provider.has_help(tool_id):
                 param_help = help_provider.get_parameter_help(tool_id, name)
                 if param_help:
                     qgs_param.setHelp(param_help)

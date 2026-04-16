@@ -442,6 +442,19 @@ def _pro_detail_sections(tool_id: str, pro_marketing: dict[str, dict]) -> str:
     return out
 
 
+def _workflow_pro_license_notice(tool_id: str, pro_marketing: dict[str, dict], is_pro: bool) -> str:
+    # Only show this licensing notice for the workflow-style Pro tools sourced
+    # from wbtools_pro/README, and place it near the bottom (not at the top).
+    if not is_pro or tool_id not in pro_marketing:
+        return ""
+    return (
+        "<h2>License Notice</h2>\n"
+        "<p>Use of this function requires a license for Whitebox Workflows Professional (WbW-Pro). "
+        "Please visit <a href=\"https://www.whiteboxgeo.com/\">www.whiteboxgeo.com</a> "
+        "to purchase a license.</p>\n"
+    )
+
+
 def generate_html(manifest: dict, curated: dict | None, pro_marketing: dict[str, dict]) -> str:
     tool_id = manifest.get("id", "")
     summary = manifest.get("summary", "No description available.")
@@ -462,6 +475,7 @@ def generate_html(manifest: dict, curated: dict | None, pro_marketing: dict[str,
     effective_summary = curated_summary or summary
     pro_narrative = _pro_narrative_section(tool_id, pro_marketing) if is_pro else ""
     pro_details = _pro_detail_sections(tool_id, pro_marketing) if is_pro else ""
+    pro_license_notice = _workflow_pro_license_notice(tool_id, pro_marketing, is_pro)
 
     return (
         f"{_badges(is_pro, stability)}"
@@ -471,6 +485,7 @@ def generate_html(manifest: dict, curated: dict | None, pro_marketing: dict[str,
         f"{pro_details}"
         f"{_param_table(params, defaults, curated_params)}"
         f"{_examples_section(tool_id, examples)}"
+        f"{pro_license_notice}"
         "<h2>Project Links</h2>\n"
         '<div align="left">\n'
         '    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>\n'

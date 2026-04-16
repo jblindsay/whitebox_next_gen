@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 
 from .diagnostics import diagnostics_text, gather_runtime_diagnostics
@@ -17,15 +18,23 @@ from .host_api import (
 )
 from .panel import WhiteboxDockPanel, summarize_catalog
 from .provider import WhiteboxProcessingProvider
+from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 
 try:
-    from qgis.PyQt.QtGui import QAction
+    from qgis.PyQt.QtGui import QAction, QIcon
     from qgis.PyQt.QtCore import QSettings
     from qgis.PyQt.QtWidgets import QApplication, QMenu, QMessageBox
 except Exception:  # pragma: no cover
     class QAction:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.triggered = _Signal()
+
+        def setIcon(self, *_args, **_kwargs):
+            return None
+
+    class QIcon:  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            pass
 
     class QMessageBox:  # type: ignore[override]
         @staticmethod
@@ -97,12 +106,46 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
         self._panel_visible = True
-        self._panel_width = 340
+        self._panel_width = 320
         self._panel_show_available = True
         self._panel_show_locked = True
         self._panel_search_text = ""
         self._panel_focus_area = "search"
         self._last_tool_id = ""
+        self._last_runtime_warning_signature = ""
+
+    def _plugin_icon(self):
+        base_dir = os.path.dirname(__file__)
+        candidates = (
+            os.path.join(base_dir, "icons", "WbW.png"),
+            os.path.join(base_dir, "icons", "WbW.svg"),
+        )
+        for path in candidates:
+            if os.path.exists(path):
+                return QIcon(path)
+        return QIcon()
+
+    def _plugin_icon_named(self, icon_name: str):
+        base_dir = os.path.dirname(__file__)
+        candidates = (
+            os.path.join(base_dir, "icons", f"{icon_name}.png"),
+            os.path.join(base_dir, "icons", f"{icon_name}.svg"),
+            os.path.join(base_dir, "icons", "WbW.png"),
+            os.path.join(base_dir, "icons", "WbW.svg"),
+        )
+        for path in candidates:
+            if os.path.exists(path):
+                return QIcon(path)
+        return QIcon()
+
+    def _panel_action_icon(self):
+        return self._plugin_icon_named("WbW_panel")
+
+    def _refresh_action_icon(self):
+        return self._plugin_icon_named("WbW_refresh")
+
+    def _diagnostics_action_icon(self):
+        return self._plugin_icon_named("WbW_diagnostics")
 
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
@@ -135,23 +178,36 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def _install_actions(self):
-        diagnostics_action = QAction("Runtime Diagnostics", self.iface.mainWindow())
-        diagnostics_action.triggered.connect(self._show_diagnostics)
-        if register_plugin_action(self.iface, diagnostics_action, self._menu_label):
-            self._diagnostics_action = diagnostics_action
-
-        refresh_action = QAction("Refresh Catalog + Help", self.iface.mainWindow())
-        refresh_action.triggered.connect(self._refresh_catalog)
-        if register_plugin_action(self.iface, refresh_action, self._menu_label):
-            self._refresh_action = refresh_action
-
         panel_action = QAction("Show Whitebox Panel", self.iface.mainWindow())
+        if hasattr(panel_action, "setIcon"):
+            panel_action.setIcon(self._panel_action_icon())
         panel_action.triggered.connect(self._toggle_panel)
         if register_plugin_action(self.iface, panel_action, self._menu_label):
             self._panel_action = panel_action
 
+        refresh_action = QAction("Refresh Catalog + Help", self.iface.mainWindow())
+        if hasattr(refresh_action, "setIcon"):
+            refresh_action.setIcon(self._refresh_action_icon())
+        refresh_action.triggered.connect(self._refresh_catalog)
+        if register_plugin_action(self.iface, refresh_action, self._menu_label):
+            self._refresh_action = refresh_action
+
+        diagnostics_action = QAction("Runtime Diagnostics", self.iface.mainWindow())
+        if hasattr(diagnostics_action, "setIcon"):
+            diagnostics_action.setIcon(self._diagnostics_action_icon())
+        diagnostics_action.triggered.connect(self._show_diagnostics)
+        if register_plugin_action(self.iface, diagnostics_action, self._menu_label):
+            self._diagnostics_action = diagnostics_action
+
+        settings_action = QAction("Plugin Settings", self.iface.mainWindow())
+        settings_action.triggered.connect(self._show_settings)
+        if register_plugin_action(self.iface, settings_action, self._menu_label):
+            self._settings_action = settings_action
+
     def _install_panel(self):
         panel = WhiteboxDockPanel(self.iface.mainWindow())
+        if hasattr(panel, "setWindowIcon"):
+            panel.setWindowIcon(self._plugin_icon())
         panel.on_refresh(self._refresh_catalog)
         panel.on_diagnostics(self._show_diagnostics)
         panel.on_open_tool(self._open_tool_from_panel)
@@ -185,7 +241,8 @@ class WhiteboxWorkflowsPlugin:
                 resize(int(self._panel_width), h)
             set_visible = getattr(panel, "setVisible", None)
             if callable(set_visible):
-                set_visible(bool(self._panel_visible))
+                set_visible(True)
+                self._panel_visible = True
 
     def _open_tool_from_panel(self, tool_id: str):
         provider_id = self.provider.id()
@@ -433,8 +490,8 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_panel_visible, True),
                 True,
             )
-            width_raw = settings.value(self._settings_key_panel_width, 340)
-            self._panel_width = max(260, int(width_raw))
+            width_raw = settings.value(self._settings_key_panel_width, 320)
+            self._panel_width = min(520, max(220, int(width_raw)))
             self._panel_show_available = self._coerce_bool(
                 settings.value(self._settings_key_show_available, True),
                 True,
@@ -447,7 +504,7 @@ class WhiteboxWorkflowsPlugin:
             self._panel_focus_area = str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
         except Exception:
             self._panel_visible = True
-            self._panel_width = 340
+            self._panel_width = 320
             self._panel_show_available = True
             self._panel_show_locked = True
             self._panel_search_text = ""
@@ -510,7 +567,7 @@ class WhiteboxWorkflowsPlugin:
                     self._panel_visible = bool(is_visible())
                 width = getattr(panel, "width", None)
                 if callable(width):
-                    self._panel_width = max(260, int(width()))
+                    self._panel_width = min(520, max(220, int(width())))
                 self._panel_show_available = panel.show_available_enabled()
                 self._panel_show_locked = panel.show_locked_enabled()
                 self._panel_search_text = panel.search_text()
@@ -534,6 +591,52 @@ class WhiteboxWorkflowsPlugin:
         if callable(is_visible) and callable(set_visible):
             set_visible(not bool(is_visible()))
             self._save_panel_ui_state()
+
+    def _show_settings(self, *_args):
+        current = WhiteboxPluginSettings(
+            include_pro=self.provider.include_pro,
+            tier=self.provider.tier,
+            quick_open_top_match=self._quick_open_top_match,
+            panel_show_available=self._panel_show_available,
+            panel_show_locked=self._panel_show_locked,
+            panel_width=self._panel_width,
+        )
+        try:
+            dlg = WhiteboxSettingsDialog(current, parent=self.iface.mainWindow())
+        except Exception:
+            return
+        exec_fn = getattr(dlg, "exec", None) or getattr(dlg, "exec_", None)
+        if callable(exec_fn):
+            exec_fn()
+        if not dlg.was_accepted():
+            return
+        updated = dlg.read_settings()
+        # Apply panel-side preferences immediately.
+        self._quick_open_top_match = updated.quick_open_top_match
+        self._panel_show_available = updated.panel_show_available
+        self._panel_show_locked = updated.panel_show_locked
+        self._panel_width = updated.panel_width
+        if self._dock_panel is not None:
+            self._dock_panel.set_quick_open_enabled(updated.quick_open_top_match)
+            self._dock_panel.set_show_available_enabled(updated.panel_show_available)
+            self._dock_panel.set_show_locked_enabled(updated.panel_show_locked)
+            resize = getattr(self._dock_panel, "resize", None)
+            if callable(resize):
+                height_fn = getattr(self._dock_panel, "height", None)
+                h = int(height_fn()) if callable(height_fn) else 600
+                resize(updated.panel_width, h)
+        # Save panel state.
+        self._save_quick_open_preference()
+        self._save_panel_ui_state()
+        # Apply runtime discovery preferences; refresh catalog if they changed.
+        runtime_changed = (
+            updated.include_pro != self.provider.include_pro
+            or updated.tier != self.provider.tier
+        )
+        if runtime_changed:
+            self.provider.include_pro = updated.include_pro
+            self.provider.tier = updated.tier
+            self._refresh_catalog()
 
     def _show_diagnostics(self, *_args):
         payload = gather_runtime_diagnostics(
@@ -561,6 +664,9 @@ class WhiteboxWorkflowsPlugin:
             pass
 
     def _refresh_catalog(self, *_args, silent: bool = False):
+        # Pull recents from persisted settings so tools run from the Processing
+        # toolbox also appear in panel recents.
+        self._load_recent_tools()
         try:
             catalog = self.provider.refresh_catalog(regenerate_help=True)
             refresh_algorithms = getattr(self.provider, "refreshAlgorithms", None)
@@ -582,6 +688,9 @@ class WhiteboxWorkflowsPlugin:
         if isinstance(caps, dict):
             effective_tier = str(caps.get("effective_tier", "unknown"))
 
+        downgrade_warning = self._build_pro_downgrade_warning(caps)
+        expiry_notice, expiry_urgent = self._build_license_expiry_notice(caps, effective_tier)
+
         if self._dock_panel is not None:
             self._dock_panel.set_catalog(catalog)
             self._dock_panel.set_favorites(self._favorite_tool_ids)
@@ -594,12 +703,22 @@ class WhiteboxWorkflowsPlugin:
             status_detail = " ".join(raw_detail.split())
             if len(status_detail) > 240:
                 status_detail = f"{status_detail[:237]}..."
+
+            detail_parts = []
+            if status_detail:
+                detail_parts.append(status_detail)
+            if downgrade_warning:
+                detail_parts.append(downgrade_warning)
+            if expiry_notice:
+                detail_parts.append(expiry_notice)
+            banner_detail = " | ".join(detail_parts)
+
             self._dock_panel.update_session_banner(
                 status=str(payload.get("status", "unknown")),
                 effective_tier=effective_tier,
                 visible_count=available + locked,
                 refreshed_at=refreshed_at,
-                detail=status_detail,
+                detail=banner_detail,
             )
             self._dock_panel.update_state(
                 status=str(payload.get("status", "unknown")),
@@ -609,6 +728,19 @@ class WhiteboxWorkflowsPlugin:
                 locked_count=locked,
                 qgis_version=qgis_version_string(),
             )
+
+        warning_parts = []
+        if downgrade_warning:
+            warning_parts.append(downgrade_warning)
+        if expiry_urgent and expiry_notice:
+            warning_parts.append(expiry_notice)
+
+        warning_signature = " || ".join(warning_parts)
+        if warning_signature and warning_signature != self._last_runtime_warning_signature:
+            self._notify_warning(warning_signature)
+            self._last_runtime_warning_signature = warning_signature
+        elif not warning_signature:
+            self._last_runtime_warning_signature = ""
 
         if not silent:
             self._notify_info(
@@ -635,6 +767,80 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             pass
 
+    def _get_capability_value(self, capabilities, *keys):
+        if not isinstance(capabilities, dict):
+            return None
+        for key in keys:
+            if key in capabilities:
+                return capabilities.get(key)
+
+        entitlement = capabilities.get("entitlement")
+        if isinstance(entitlement, dict):
+            for key in keys:
+                if key in entitlement:
+                    return entitlement.get(key)
+        return None
+
+    def _build_pro_downgrade_warning(self, capabilities) -> str:
+        if not isinstance(capabilities, dict):
+            return ""
+
+        if not bool(self.provider.include_pro):
+            return ""
+
+        compiled_with_pro = self._get_capability_value(capabilities, "compiled_with_pro_support")
+        runtime_include_pro = self._get_capability_value(capabilities, "include_pro")
+
+        if compiled_with_pro is False:
+            return (
+                "Pro catalog unavailable: active whitebox_workflows build does not include Pro support. "
+                "Reinstall wbw_python with --pro and refresh catalog."
+            )
+        if runtime_include_pro is False:
+            return (
+                "Pro catalog unavailable: runtime downgraded to open mode (include_pro=false). "
+                "Check Pro build/entitlement configuration and refresh catalog."
+            )
+        return ""
+
+    def _build_license_expiry_notice(self, capabilities, effective_tier: str) -> tuple[str, bool]:
+        if not isinstance(capabilities, dict):
+            return "", False
+
+        tier = str(effective_tier or "").strip().lower()
+        if tier not in {"pro", "enterprise"}:
+            return "", False
+
+        expiry_raw = self._get_capability_value(
+            capabilities,
+            "entitlement_expires_at_unix",
+            "license_expires_at_unix",
+            "expires_at_unix",
+            "expiry_unix",
+        )
+        if expiry_raw is None:
+            return "", False
+
+        try:
+            expiry_unix = int(float(expiry_raw))
+        except Exception:
+            return "", False
+
+        now_unix = int(datetime.now().timestamp())
+        remaining = expiry_unix - now_unix
+        warn_window_seconds = 45 * 24 * 60 * 60
+
+        if remaining <= 0:
+            when = datetime.fromtimestamp(expiry_unix).strftime("%Y-%m-%d")
+            return f"License expired on {when}. Pro tools may be unavailable until renewed.", True
+
+        if remaining <= warn_window_seconds:
+            days = int((remaining + 86399) // 86400)
+            when = datetime.fromtimestamp(expiry_unix).strftime("%Y-%m-%d")
+            return f"License expires in {days} day(s) on {when}.", True
+
+        return "", False
+
     def unload(self):
         self._save_recent_tools()
         self._save_favorite_tools()
@@ -652,6 +858,9 @@ class WhiteboxWorkflowsPlugin:
         if self._diagnostics_action is not None:
             unregister_plugin_action(self.iface, self._diagnostics_action, self._menu_label)
             self._diagnostics_action = None
+        if self._settings_action is not None:
+            unregister_plugin_action(self.iface, self._settings_action, self._menu_label)
+            self._settings_action = None
         if not self._provider_registered:
             return
         if unregister_provider(self.iface, self.provider):

@@ -14,6 +14,7 @@ try:
         QListWidget,
         QListWidgetItem,
         QPushButton,
+        QScrollArea,
         QVBoxLayout,
         QWidget,
     )
@@ -171,6 +172,13 @@ except Exception:  # pragma: no cover
         def setLayout(self, *_args, **_kwargs):
             return None
 
+    class QScrollArea(_DummyWidget):  # type: ignore[override]
+        def setWidgetResizable(self, *_args, **_kwargs):
+            return None
+
+        def setWidget(self, *_args, **_kwargs):
+            return None
+
     class QDockWidget(_DummyWidget):  # type: ignore[override]
         def setObjectName(self, *_args, **_kwargs):
             return None
@@ -179,12 +187,50 @@ except Exception:  # pragma: no cover
             return None
 
 
+from .settings import AVAILABLE_LABEL_STYLE, LOCKED_LABEL_STYLE, status_style, tier_style
+
+
+def _resolve_qevent_type(name: str, default: int):
+    direct = getattr(QEvent, name, None)
+    if direct is not None:
+        return direct
+    event_type_enum = getattr(QEvent, "Type", None)
+    nested = getattr(event_type_enum, name, None) if event_type_enum is not None else None
+    if nested is not None:
+        return nested
+    return default
+
+
+def _resolve_qt_constant(name: str, enum_name: str, default: int):
+    direct = getattr(Qt, name, None)
+    if direct is not None:
+        return direct
+    nested_enum = getattr(Qt, enum_name, None)
+    nested = getattr(nested_enum, name, None) if nested_enum is not None else None
+    if nested is not None:
+        return nested
+    return default
+
+
+EVENT_TYPE_FOCUS_IN = _resolve_qevent_type("FocusIn", 8)
+EVENT_TYPE_MOUSE_BUTTON_RELEASE = _resolve_qevent_type("MouseButtonRelease", 3)
+EVENT_TYPE_KEY_PRESS = _resolve_qevent_type("KeyPress", 6)
+CONTEXT_MENU_POLICY_CUSTOM = _resolve_qt_constant("CustomContextMenu", "ContextMenuPolicy", 0)
+KEY_RETURN = _resolve_qt_constant("Key_Return", "Key", 0)
+KEY_ENTER = _resolve_qt_constant("Key_Enter", "Key", 0)
+KEY_SPACE = _resolve_qt_constant("Key_Space", "Key", 0)
+
+
 class WhiteboxDockPanel(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Whitebox Workflows", parent)
         self.setObjectName("WhiteboxWorkflowsDock")
 
-        container = QWidget(self)
+        scroll_area = QScrollArea(self)
+        if hasattr(scroll_area, "setWidgetResizable"):
+            scroll_area.setWidgetResizable(True)
+
+        container = QWidget(scroll_area)
         layout = QVBoxLayout(container)
 
         self._status_label = QLabel("Status: unknown")
@@ -209,6 +255,8 @@ class WhiteboxDockPanel(QDockWidget):
 
         if hasattr(self._session_banner_label, "setCursor") and hasattr(Qt, "PointingHandCursor"):
             self._session_banner_label.setCursor(Qt.PointingHandCursor)
+        if hasattr(self._session_banner_label, "setWordWrap"):
+            self._session_banner_label.setWordWrap(True)
         if hasattr(self._session_banner_label, "setFocusPolicy") and hasattr(Qt, "StrongFocus"):
             self._session_banner_label.setFocusPolicy(Qt.StrongFocus)
         self._tier_label = QLabel("Tier: unknown")
@@ -228,10 +276,10 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._favorites_label = QLabel("Favorite Tools")
         self._favorites_list = QListWidget()
-        self._favorite_add_button = QPushButton("Add Selected to Favorites")
-        self._favorite_remove_button = QPushButton("Remove Selected Favorite")
-        self._favorite_up_button = QPushButton("Move Favorite Up")
-        self._favorite_down_button = QPushButton("Move Favorite Down")
+        self._favorite_add_button = QPushButton("Add Favorite")
+        self._favorite_remove_button = QPushButton("Remove Favorite")
+        self._favorite_up_button = QPushButton("Move Up")
+        self._favorite_down_button = QPushButton("Move Down")
         self._favorite_clear_button = QPushButton("Clear Favorites")
 
         self._recent_label = QLabel("Recent Tools")
@@ -240,9 +288,20 @@ class WhiteboxDockPanel(QDockWidget):
         self._shortcut_hint_label = QLabel(
             "Shortcuts: /=focus search, Esc=clear search, Up/Down=jump to results, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite, Ctrl/Cmd+Shift+D=diagnostics"
         )
+        if hasattr(self._shortcut_hint_label, "setWordWrap"):
+            self._shortcut_hint_label.setWordWrap(True)
 
-        self._refresh_button = QPushButton("Refresh Catalog + Help")
+        self._refresh_button = QPushButton("Refresh Catalog")
         self._diagnostics_button = QPushButton("Runtime Diagnostics")
+
+        if hasattr(self._favorite_add_button, "setToolTip"):
+            self._favorite_add_button.setToolTip("Add selected result to favorites")
+        if hasattr(self._favorite_remove_button, "setToolTip"):
+            self._favorite_remove_button.setToolTip("Remove selected favorite")
+        if hasattr(self._favorite_up_button, "setToolTip"):
+            self._favorite_up_button.setToolTip("Move selected favorite up")
+        if hasattr(self._favorite_down_button, "setToolTip"):
+            self._favorite_down_button.setToolTip("Move selected favorite down")
 
         layout.addWidget(self._status_label)
         layout.addWidget(self._session_banner_row)
@@ -271,7 +330,13 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._diagnostics_button)
 
         container.setLayout(layout)
-        self.setWidget(container)
+        if hasattr(scroll_area, "setWidget"):
+            scroll_area.setWidget(container)
+        self.setWidget(scroll_area)
+
+        # Keep the dock compact-friendly; users can still grow it as needed.
+        if hasattr(self, "setMinimumSize"):
+            self.setMinimumSize(220, 200)
 
         self._catalog: list[dict[str, Any]] = []
         self._filtered_tool_ids: list[str] = []
@@ -289,9 +354,9 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_list.installEventFilter(self)
         self._session_banner_label.installEventFilter(self)
 
-        self._results_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._results_list.setContextMenuPolicy(CONTEXT_MENU_POLICY_CUSTOM)
         self._results_list.customContextMenuRequested.connect(self._on_results_context_menu)
-        self._favorites_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._favorites_list.setContextMenuPolicy(CONTEXT_MENU_POLICY_CUSTOM)
         self._favorites_list.customContextMenuRequested.connect(self._on_favorites_context_menu)
 
         self._open_tool_callback = None
@@ -435,12 +500,23 @@ class WhiteboxDockPanel(QDockWidget):
         qgis_version: str,
     ) -> None:
         self._status_label.setText(f"Status: {status}")
+        if hasattr(self._status_label, "setStyleSheet"):
+            self._status_label.setStyleSheet(status_style(status))
         self._tier_label.setText(
             f"Tier: requested={requested_tier}, effective={effective_tier}"
         )
-        self._catalog_label.setText(
-            f"Catalog: available={available_count}, locked={locked_count}"
-        )
+        if hasattr(self._tier_label, "setStyleSheet"):
+            self._tier_label.setStyleSheet(tier_style(effective_tier))
+        avail_txt = f"Available: {available_count}"
+        locked_txt = f"  Locked: {locked_count}"
+        self._catalog_label.setText(f"Catalog: {avail_txt}{locked_txt}")
+        if hasattr(self._catalog_label, "setStyleSheet"):
+            if locked_count > 0 and available_count == 0:
+                self._catalog_label.setStyleSheet(LOCKED_LABEL_STYLE)
+            elif available_count > 0:
+                self._catalog_label.setStyleSheet(AVAILABLE_LABEL_STYLE)
+            else:
+                self._catalog_label.setStyleSheet("")
         self._version_label.setText(f"QGIS: {qgis_version or 'unknown'}")
 
     def update_session_banner(
@@ -538,19 +614,19 @@ class WhiteboxDockPanel(QDockWidget):
         self._focus_search_box()
 
     def eventFilter(self, obj, event):  # type: ignore[override]
-        if event is not None and event.type() == QEvent.MouseButtonRelease:
+        if event is not None and event.type() == EVENT_TYPE_MOUSE_BUTTON_RELEASE:
             if obj is self._session_banner_label and self._session_banner_click_callback is not None:
                 self._session_banner_click_callback()
                 return True
 
-        if event is not None and event.type() == QEvent.KeyPress:
+        if event is not None and event.type() == EVENT_TYPE_KEY_PRESS:
             if obj is self._session_banner_label and self._session_banner_click_callback is not None:
                 key = event.key() if hasattr(event, "key") else None
-                if key in (getattr(Qt, "Key_Return", None), getattr(Qt, "Key_Enter", None), getattr(Qt, "Key_Space", None)):
+                if key in (KEY_RETURN, KEY_ENTER, KEY_SPACE):
                     self._session_banner_click_callback()
                     return True
 
-        if event is not None and event.type() == QEvent.FocusIn:
+        if event is not None and event.type() == EVENT_TYPE_FOCUS_IN:
             area = self._focus_area_name_for_obj(obj)
             if area:
                 self._focus_area = area
@@ -714,6 +790,7 @@ class WhiteboxDockPanel(QDockWidget):
 
     def _refresh_results(self, text: str) -> None:
         query = text.strip().lower()
+        show_discovery = bool(query)
 
         show_available = bool(self._show_available_checkbox.isChecked())
         show_locked = bool(self._show_locked_checkbox.isChecked())
@@ -730,6 +807,12 @@ class WhiteboxDockPanel(QDockWidget):
                 continue
 
             tool_id = str(item.get("id", ""))
+
+            # Keep default blank search focused: only show favorites and recents
+            # until the user types a query.
+            if not show_discovery and tool_id not in self._favorite_tool_ids and tool_id not in self._recent_tool_ids:
+                continue
+
             default_visible = bool(item.get("display_default_visible", True))
             if not default_visible and not query and tool_id not in self._favorite_tool_ids:
                 continue
@@ -751,7 +834,15 @@ class WhiteboxDockPanel(QDockWidget):
             star = "[FAV] " if tool_id in self._favorite_tool_ids else ""
             label = f"{star}{badge}{display_name} ({tool_id}) — {category}"
 
-            self._results_list.addItem(QListWidgetItem(label))
+            list_item = QListWidgetItem(label)
+            # Semantic colour: locked tools use amber, available tools use default.
+            if is_locked:
+                try:
+                    from qgis.PyQt.QtGui import QColor
+                    list_item.setForeground(QColor("#F57F17"))
+                except Exception:
+                    pass
+            self._results_list.addItem(list_item)
             self._filtered_tool_ids.append(tool_id)
             matches += 1
 
@@ -776,7 +867,7 @@ class WhiteboxDockPanel(QDockWidget):
             return "No matches. Enable 'Show available' and/or 'Show locked'."
         if query:
             return "No matches. Try a broader search or adjust filters."
-        return "No tools to display for the current filters."
+        return "No recent or favorite tools yet. Type in search to browse all tools."
 
 
 def summarize_catalog(catalog: list[dict[str, Any]]) -> tuple[int, int]:

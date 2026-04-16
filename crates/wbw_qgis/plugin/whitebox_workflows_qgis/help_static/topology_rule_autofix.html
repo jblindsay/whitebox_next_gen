@@ -1,0 +1,22 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">data-tools</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">vector</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">topology</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">fix</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">quality</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input vector path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input.gpkg</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>rule_set</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Rule configuration as JSON array/object, CSV string, or file path. Applies fixes for supported rules only: line_endpoints_must_snap_within_tolerance, point_must_be_covered_by_line, polygon_must_not_have_gaps, line_must_not_have_dangles.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>['line_endpoints_must_snap_within_tolerance', 'point_must_be_covered_by_line', 'polygon_must_not_have_gaps', 'line_must_not_have_dangles']</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>snap_tolerance</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Tolerance for snapping operations in coordinate units. Defaults to 0.01.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>0.01</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>dry_run</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>If true (default), emits change report without modifying input. If false, applies changes.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>True</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output vector path for fixed features. If omitted, derived beside input.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>topology_fixed.gpkg</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>change_report</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional JSON change audit-trail report path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Preview endpoint snapping fixes in dry-run mode with change audit trail.</em></p>
+<pre><code>wbe.topology_rule_autofix(change_report='network_changes.json', dry_run=False, input='network_violations.gpkg', output='network_fixed.gpkg', rule_set=['line_endpoints_must_snap_within_tolerance'], snap_tolerance=0.01)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

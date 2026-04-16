@@ -1,0 +1,23 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">vector</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">gis</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">buffer</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">distance</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input vector layer.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>features.shp</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>distance</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Buffer distance in map units.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>10.0</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>quadrant_segments</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Arc resolution in segments per quadrant; defaults to 8.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>8</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>cap_style</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Line end-cap style: round, flat, or square.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>round</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>join_style</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Corner join style: round, bevel, or mitre.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>round</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>mitre_limit</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Mitre join limit used when join_style=mitre; defaults to 5.0.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>5.0</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output vector path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Buffers vector features and writes polygon output to disk.</em></p>
+<pre><code>wbe.buffer_vector(cap_style='round', distance=10.0, input='features.shp', join_style='round', mitre_limit=5.0, output='buffer_vector.shp', quadrant_segments=8)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

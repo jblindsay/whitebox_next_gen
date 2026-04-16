@@ -798,7 +798,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
     def helpUrl(self):
         path = self._provider.help_path_for_tool(self.name()) if self._provider else ""
         if path:
-            return path
+            from pathlib import Path
+            return Path(path).as_uri()
         return get_help_url(self.name())
 
     def initAlgorithm(self, _config=None):

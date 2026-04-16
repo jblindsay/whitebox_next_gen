@@ -1,0 +1,22 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#e67e22;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Experimental</span></p>
+<p>Calculates multiscale elevation-deviation signatures for input point sites and writes an HTML report.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">geomorphometry</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">terrain</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">signature</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">multiscale</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">legacy-port</span></p>
+<h2>Parameters</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Name</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Default</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>input</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input DEM raster path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>dem.tif</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>points</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input vector point or multipoint file path.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><span style="color:#c0392b">Required</span></td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>sites.geojson</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>min_scale</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Minimum half-window radius in cells (default 1).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>1</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>max_scale</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum half-window radius in cells (default 100).</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>100</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>step_size</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Scale increment in cells (default 10). Alias: step.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>10</code></td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'><code>output</code></td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional output path for the HTML signature report.</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>—</td></tr>
+</tbody></table>
+<h2>Examples</h2>
+<p><em>Generate DEV signatures for a set of sample locations.</em></p>
+<pre><code>wbe.max_elev_dev_signature(input='dem.tif', max_scale=150, min_scale=1, output='max_elev_dev_signature.html', points='sites.geojson', step_size=5)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

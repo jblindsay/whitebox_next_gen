@@ -224,38 +224,111 @@ def _help_html_for_docstring(
 def _help_html_from_manifest(
     manifest: dict,
     is_pro: bool,
+    curated_descriptions: dict | None = None,
 ) -> str:
-    """Build a minimal help page from manifest data (used when no docstring exists)."""
+    """Build a rich help page from manifest data (used when no docstring exists).
+
+    *curated_descriptions* is the dict for this specific tool from the
+    descriptions JSON files (keys: ``params``, ``description``, etc.).
+    """
     tool_id: str = manifest.get("id", "")
     display_name: str = manifest.get("display_name", tool_id)
     summary: str = manifest.get("summary", "No description available.")
     params: list[dict] = manifest.get("params", [])
+    defaults: dict = manifest.get("defaults", {})
+    examples: list[dict] = manifest.get("examples", [])
+    tags: list[str] = manifest.get("tags", [])
+    stability: str = manifest.get("stability", "")
+    category: str = manifest.get("category", "")
 
-    pro_badge = (
-        '<p><strong>PRO</strong> — This tool requires a Whitebox Workflows Pro license.</p>\n'
-        if is_pro
-        else ""
-    )
+    # Curated descriptions lookup helpers
+    curated_params: dict = {}
+    curated_summary: str = ""
+    if curated_descriptions:
+        curated_params = curated_descriptions.get("params", {})
+        curated_summary = curated_descriptions.get("description", "")
 
+    effective_summary = curated_summary or summary
+
+    # --- badges ---
+    badges = ""
+    if is_pro:
+        badges += (
+            '<span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span>'
+        )
+    if stability:
+        colour = "#e67e22" if stability.lower() == "experimental" else "#27ae60"
+        badges += (
+            f'<span style="background:{colour};color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">{stability}</span>'
+        )
+    badge_line = f"<p>{badges}</p>\n" if badges else ""
+
+    # --- parameters table ---
     param_rows = ""
     for p in params:
         name = p.get("name", "")
-        desc = p.get("description", "")
-        req = "Required" if p.get("required", False) else "Optional"
-        param_rows += f"<tr><td><code>{name}</code></td><td>{desc}</td><td>{req}</td></tr>\n"
+        manifest_desc = p.get("description", "")
+        curated_entry = curated_params.get(name, {})
+        label = curated_entry.get("label", "") or manifest_desc
+        tooltip = curated_entry.get("tooltip", "")
+        cell_desc = label
+        if tooltip and tooltip != label:
+            cell_desc = f"{label}<br><small style='color:#555'>{tooltip}</small>"
+        req = (
+            '<span style="color:#c0392b">Required</span>'
+            if p.get("required", False)
+            else "Optional"
+        )
+        default_val = defaults.get(name, "")
+        default_cell = f"<code>{default_val}</code>" if default_val != "" else "—"
+        param_rows += (
+            f"<tr><td><code>{name}</code></td><td>{cell_desc}</td>"
+            f"<td>{req}</td><td>{default_cell}</td></tr>\n"
+        )
 
     param_table = ""
     if param_rows:
         param_table = (
             "<h2>Parameters</h2>\n"
-            "<table><thead><tr><th>Name</th><th>Description</th><th>Required</th></tr></thead>\n"
+            "<table style='border-collapse:collapse;width:100%'>"
+            "<thead><tr>"
+            "<th style='text-align:left;padding:4px 8px;border-bottom:1px solid #ccc'>Name</th>"
+            "<th style='text-align:left;padding:4px 8px;border-bottom:1px solid #ccc'>Description</th>"
+            "<th style='text-align:left;padding:4px 8px;border-bottom:1px solid #ccc'>Required</th>"
+            "<th style='text-align:left;padding:4px 8px;border-bottom:1px solid #ccc'>Default</th>"
+            "</tr></thead>\n"
             f"<tbody>{param_rows}</tbody></table>\n"
         )
 
+    # --- examples section ---
+    examples_html = ""
+    if examples:
+        examples_html = "<h2>Examples</h2>\n"
+        for ex in examples:
+            ex_name = ex.get("name", "")
+            ex_desc = ex.get("description", "")
+            ex_args = ex.get("args", {})
+            if ex_desc:
+                examples_html += f"<p><em>{ex_desc}</em></p>\n"
+            if ex_args:
+                args_str = ", ".join(f"{k}={repr(v)}" for k, v in ex_args.items())
+                examples_html += f"<pre><code>wbe.{tool_id}({args_str})</code></pre>\n"
+
+    # --- tags ---
+    tags_html = ""
+    if tags:
+        tag_spans = " ".join(
+            f'<span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">{t}</span>'
+            for t in tags
+        )
+        tags_html = f"<p>{tag_spans}</p>\n"
+
     return f"""\
-{pro_badge}\
-<p>{summary}</p>
+{badge_line}\
+<p>{effective_summary}</p>
+{tags_html}\
 {param_table}\
+{examples_html}\
 <h2>Project Links</h2>
 <div align="left">
     <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>

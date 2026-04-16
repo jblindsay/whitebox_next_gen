@@ -170,6 +170,38 @@ impl TerrainCore {
         Some(z)
     }
 
+    /// Get a 5x5 neighbourhood for Florinsky-based gradient calculations (projected coords).
+    fn neighbourhood_5x5(
+        input: &Raster,
+        band: isize,
+        row: isize,
+        col: isize,
+        z_factor: f64,
+    ) -> Option<[f64; 25]> {
+        let zcenter = input.get(band, row, col);
+        if input.is_nodata(zcenter) {
+            return None;
+        }
+        let zcenter_scaled = zcenter * z_factor;
+        let offsets = [
+            (-2, -2), (-1, -2), (0, -2), (1, -2), (2, -2),
+            (-2, -1), (-1, -1), (0, -1), (1, -1), (2, -1),
+            (-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0),
+            (-2, 1), (-1, 1), (0, 1), (1, 1), (2, 1),
+            (-2, 2), (-1, 2), (0, 2), (1, 2), (2, 2),
+        ];
+        let mut z = [0.0f64; 25];
+        for (i, (ox, oy)) in offsets.iter().enumerate() {
+            let v = input.get(band, row + *oy, col + *ox);
+            z[i] = if input.is_nodata(v) {
+                zcenter_scaled
+            } else {
+                v * z_factor
+            };
+        }
+        Some(z)
+    }
+
     fn pq_projected(
         input: &Raster,
         band: isize,
@@ -179,9 +211,27 @@ impl TerrainCore {
         dx: f64,
         dy: f64,
     ) -> Option<(f64, f64)> {
-        let z = Self::neighbourhood(input, band, row, col, z_factor)?;
-        let p = (z[5] - z[3]) / (2.0 * dx);
-        let q = (z[1] - z[7]) / (2.0 * dy);
+        // Use 5x5 Florinsky method for projected coordinates to match legacy behavior.
+        // From Florinsky (2016) Principles and Methods of Digital Terrain Modelling, Chapter 4, pg. 117.
+        let z = Self::neighbourhood_5x5(input, band, row, col, z_factor)?;
+        let res = (dx + dy) / 2.0;
+        
+        let p = 1.0 / (420.0 * res)
+            * (44.0 * (z[3] + z[23] - z[1] - z[21])
+                + 31.0
+                    * (z[0] + z[20] - z[4] - z[24]
+                        + 2.0 * (z[8] + z[18] - z[6] - z[16]))
+                + 17.0 * (z[14] - z[10] + 4.0 * (z[13] - z[11]))
+                + 5.0 * (z[9] + z[19] - z[5] - z[15]));
+
+        let q = 1.0 / (420.0 * res)
+            * (44.0 * (z[5] + z[9] - z[15] - z[19])
+                + 31.0
+                    * (z[20] + z[24] - z[0] - z[4]
+                        + 2.0 * (z[6] + z[8] - z[16] - z[18]))
+                + 17.0 * (z[2] - z[22] + 4.0 * (z[7] - z[17]))
+                + 5.0 * (z[1] + z[3] - z[21] - z[23]));
+
         Some((p, q))
     }
 
@@ -620,7 +670,7 @@ impl TerrainCore {
             params: vec![],
             defaults: ToolArgs::new(),
             examples: vec![],
-            tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string()],
+            tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string(), "render_hint:raster=grayscale_brightness".to_string()],
             stability: ToolStability::Experimental,
         }
     }
@@ -650,7 +700,7 @@ impl TerrainCore {
             params: vec![],
             defaults: ToolArgs::new(),
             examples: vec![],
-            tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string()],
+            tags: vec!["geomorphometry".to_string(), "terrain".to_string(), "hillshade".to_string(), "render_hint:raster=grayscale_brightness".to_string()],
             stability: ToolStability::Experimental,
         }
     }

@@ -262,9 +262,12 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
     tags = [str(t).strip().lower() for t in manifest.get("tags", []) if str(t).strip()]
     tag_set = set(tags)
 
-    # Preserve explicit non-broad categories.
+    # Preserve explicit non-broad categories UNLESS they have specific subcategory tags.
     if base not in {"Raster", "Vector", "Lidar", "Other"}:
-        return base
+        # Still check tags for terrain/hydrology/remote-sensing subcategories even
+        # if the base category is already "Terrain", "Hydrology", etc.
+        if base.lower() not in ("terrain", "hydrology", "raster", "vector", "lidar"):
+            return base
 
     terrain_tags = {
         "terrain", "geomorphometry", "curvature", "roughness", "local-relief", "dem"

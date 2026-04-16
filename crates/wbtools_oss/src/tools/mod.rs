@@ -194,6 +194,7 @@ pub use geomorphometry::MultiscaleRoughnessSignatureTool;
 pub use geomorphometry::MultiscaleStdDevNormalsTool;
 pub use geomorphometry::MultiscaleStdDevNormalsSignatureTool;
 pub use geomorphometry::FeaturePreservingSmoothingTool;
+pub use geomorphometry::FeaturePreservingSmoothingMultiscaleTool;
 pub use geomorphometry::FillMissingDataTool;
 pub use geomorphometry::RemoveOffTerrainObjectsTool;
 pub use geomorphometry::MapOffTerrainObjectsTool;

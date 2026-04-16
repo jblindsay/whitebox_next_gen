@@ -147,6 +147,9 @@ class WhiteboxWorkflowsPlugin:
     def _diagnostics_action_icon(self):
         return self._plugin_icon_named("WbW_diagnostics")
 
+    def _settings_action_icon(self):
+        return self._plugin_icon_named("WbW_settings")
+
     def initGui(self):
         # QGIS 4 is the primary target; avoid hard-fail in unknown hosts.
         major = qgis_major_version()
@@ -200,6 +203,8 @@ class WhiteboxWorkflowsPlugin:
             self._diagnostics_action = diagnostics_action
 
         settings_action = QAction("Plugin Settings", self.iface.mainWindow())
+        if hasattr(settings_action, "setIcon"):
+            settings_action.setIcon(self._settings_action_icon())
         settings_action.triggered.connect(self._show_settings)
         if register_plugin_action(self.iface, settings_action, self._menu_label):
             self._settings_action = settings_action

@@ -179,7 +179,7 @@ class PluginPanelWiringTests(unittest.TestCase):
             instance._load_panel_ui_state()
 
         self.assertFalse(instance._panel_visible)
-        self.assertEqual(instance._panel_width, 260)
+        self.assertEqual(instance._panel_width, 250)
         self.assertFalse(instance._panel_show_available)
         self.assertTrue(instance._panel_show_locked)
         self.assertEqual(instance._panel_search_text, "flow accumulation")
@@ -197,7 +197,7 @@ class PluginPanelWiringTests(unittest.TestCase):
             instance._load_panel_ui_state()
 
         self.assertTrue(instance._panel_visible)
-        self.assertEqual(instance._panel_width, 340)
+        self.assertEqual(instance._panel_width, 320)
         self.assertTrue(instance._panel_show_available)
         self.assertTrue(instance._panel_show_locked)
         self.assertEqual(instance._panel_search_text, "")
@@ -240,7 +240,7 @@ class PluginPanelWiringTests(unittest.TestCase):
             instance._save_panel_ui_state()
 
         self.assertEqual(settings.values[instance._settings_key_panel_visible], False)
-        self.assertEqual(settings.values[instance._settings_key_panel_width], 260)
+        self.assertEqual(settings.values[instance._settings_key_panel_width], 220)
         self.assertEqual(settings.values[instance._settings_key_show_available], False)
         self.assertEqual(settings.values[instance._settings_key_show_locked], True)
         self.assertEqual(settings.values[instance._settings_key_search_text], "channel heads")
@@ -337,9 +337,9 @@ class PluginPanelWiringTests(unittest.TestCase):
         self.assertEqual(
             [item[0].text for item in registered],
             [
-                "Runtime Diagnostics",
-                "Refresh Catalog + Help",
                 "Show Whitebox Panel",
+                "Refresh Catalog + Help",
+                "Runtime Diagnostics",
             ],
         )
         self.assertTrue(all(item[1] == instance._menu_label for item in registered))

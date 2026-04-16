@@ -498,7 +498,7 @@ impl PythonToolRuntime {
     }
 
     pub fn get_runtime_capabilities_json(&self) -> Value {
-        json!({
+        let mut out = json!({
             "compiled_with_pro_support": cfg!(feature = "pro"),
             "include_pro": self.include_pro,
             "requested_tier": license_tier_to_str(self.requested_tier),
@@ -509,7 +509,21 @@ impl PythonToolRuntime {
             },
             "catalog_tool_count": self.build_catalog_manifests().len(),
             "visible_tool_count": self.visible_manifests().len(),
-        })
+        });
+
+        if let Value::Object(obj) = &mut out {
+            if let RuntimeMode::Entitled(runtime) = &self.runtime {
+                let caps = &runtime.runtime().capabilities;
+                obj.insert("entitlement_expires_at_unix".to_string(), json!(caps.expires_at_unix));
+                obj.insert("entitlement_now_unix".to_string(), json!(caps.now_unix));
+                obj.insert(
+                    "entitlement_seconds_remaining".to_string(),
+                    json!(caps.expires_at_unix.saturating_sub(caps.now_unix)),
+                );
+            }
+        }
+
+        out
     }
 
     pub fn run_tool_json(&self, tool_id: &str, args_json: &str) -> Result<Value, ToolError> {

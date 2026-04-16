@@ -50,6 +50,123 @@ use wbvector::{FieldDef, FieldType, FieldValue, Layer as WbLayer, VectorFormat};
 
 use crate::{map_tool_error, parse_tier, PyCallbackSink, PythonToolRuntime};
 
+#[cfg(feature = "r-interop")]
+use wbw_r;
+
+#[cfg(not(feature = "r-interop"))]
+mod wbw_r {
+    fn disabled() -> String {
+        "R-backed interoperability is unavailable in this build (enable feature 'r-interop')"
+            .to_string()
+    }
+
+    pub fn lidar_write_with_options_json(_src: &str, _dst: &str, _options_json: &str) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn lidar_copy_to_path(_src: &str, _dst: &str) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn projection_to_ogc_wkt(_epsg: u32) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn projection_identify_epsg(_crs_text: &str) -> Result<Option<u32>, String> {
+        Err(disabled())
+    }
+
+    pub fn projection_reproject_points_json(
+        _points_json: &str,
+        _src_epsg: u32,
+        _dst_epsg: u32,
+    ) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn projection_reproject_point_json(
+        _x: f64,
+        _y: f64,
+        _src_epsg: u32,
+        _dst_epsg: u32,
+    ) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_intersects_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_contains_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_within_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_touches_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_disjoint_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_crosses_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_overlaps_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_covers_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_covered_by_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_relate_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_distance_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<f64, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_vector_feature_relation_json(
+        _a_path: &str,
+        _a_feature_index: usize,
+        _b_path: &str,
+        _b_feature_index: usize,
+    ) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_buffer_wkt(_wkt: &str, _distance: f64) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_is_valid_polygon_wkt(_wkt: &str) -> Result<bool, String> {
+        Err(disabled())
+    }
+
+    pub fn topology_make_valid_polygon_wkt(_wkt: &str, _epsilon: f64) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn vector_copy_with_options_json(
+        _src: &str,
+        _dst: &str,
+        _options_json: &str,
+    ) -> Result<String, String> {
+        Err(disabled())
+    }
+}
+
 #[pyclass]
 pub struct RasterConfigs {
     pub rows: usize,

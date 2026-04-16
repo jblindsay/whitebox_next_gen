@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import os
+
 from .algorithm import build_algorithms
 from .bootstrap import load_whitebox_workflows
 from .discovery import discover_tool_catalog
 
 try:
     from qgis.core import QgsProcessingProvider
+    from qgis.PyQt.QtGui import QIcon
 except ImportError:  # pragma: no cover
     class QgsProcessingProvider:  # type: ignore[override]
         pass
+
+    class QIcon:  # type: ignore[override]
+        def __init__(self, *_args, **_kwargs):
+            pass
 
 
 class WhiteboxProcessingProvider(QgsProcessingProvider):
@@ -27,6 +34,17 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
 
     def longName(self):
         return "Whitebox Workflows"
+
+    def icon(self):
+        base_dir = os.path.dirname(__file__)
+        candidates = (
+            os.path.join(base_dir, "icons", "WbW.png"),
+            os.path.join(base_dir, "icons", "WbW.svg"),
+        )
+        for path in candidates:
+            if os.path.exists(path):
+                return QIcon(path)
+        return QIcon()
 
     def load(self):
         self.refresh_catalog()

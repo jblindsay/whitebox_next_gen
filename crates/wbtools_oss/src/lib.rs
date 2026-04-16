@@ -576,6 +576,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::MultiscaleStdDevNormalsTool));
     registry.register(Box::new(tools::MultiscaleStdDevNormalsSignatureTool));
     registry.register(Box::new(tools::FeaturePreservingSmoothingTool));
+    registry.register(Box::new(tools::FeaturePreservingSmoothingMultiscaleTool));
     registry.register(Box::new(tools::FillMissingDataTool));
     registry.register(Box::new(tools::RemoveOffTerrainObjectsTool));
     registry.register(Box::new(tools::MapOffTerrainObjectsTool));

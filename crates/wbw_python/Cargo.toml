@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 pro = ["dep:wbtools_pro"]
+r-interop = ["dep:wbw_r"]
 
 [dependencies]
 wbcore = { path = "../wbcore" }
@@ -21,7 +22,7 @@ wbraster = { path = "../wbraster" }
 wbprojection = { path = "../wbprojection" }
 wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }
 wblidar = { path = "../wblidar" }
-wbw_r = { path = "../wbw_r" }
+wbw_r = { path = "../wbw_r", optional = true }
 serde_json.workspace = true
 pyo3 = { version = "0.28.2", features = ["macros"] }
 ureq = { version = "2.12.1", features = ["json"] }

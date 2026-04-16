@@ -94,6 +94,7 @@ pub use terrain_window_tools::MultiscaleRoughnessSignatureTool;
 pub use terrain_window_tools::MultiscaleStdDevNormalsTool;
 pub use terrain_window_tools::MultiscaleStdDevNormalsSignatureTool;
 pub use terrain_window_tools::FeaturePreservingSmoothingTool;
+pub use terrain_window_tools::FeaturePreservingSmoothingMultiscaleTool;
 pub use terrain_window_tools::FillMissingDataTool;
 pub use terrain_window_tools::RemoveOffTerrainObjectsTool;
 pub use terrain_window_tools::MapOffTerrainObjectsTool;

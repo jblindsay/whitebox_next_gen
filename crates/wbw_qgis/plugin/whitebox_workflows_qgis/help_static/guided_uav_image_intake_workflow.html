@@ -8,7 +8,7 @@
 <p>Is this image set good enough to proceed into expensive downstream processing, and what should be fixed first if not?</p>
 <h3>Who It Is For</h3>
 <ul><li>UAV mission operators, photogrammetry technicians, and geospatial production teams.</li></ul>
-<h3>Primary Buyer</h3>
+<h3>Primary User</h3>
 <p>Drone services teams, geomatics operations managers, and data-engineering teams responsible for production intake quality.</p>
 <h3>What It Does</h3>
 <ul><li>Scans UAV imagery and builds a metadata/coverage inventory.</li><li>Computes intake QA metrics (GPS/EXIF completeness, overlap estimate, image-count sufficiency).</li><li>Extracts per-image blur scores and flags blurry images with warnings.</li><li>Parses RTK fix status and gimbal/flight orientation priors from DJI XMP metadata where available.</li><li>Returns workflow status (`pass`, `review`, `fail`) with warnings suitable for operator triage.</li></ul>

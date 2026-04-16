@@ -337,6 +337,7 @@ def load_wbtools_pro_marketing() -> dict[str, dict[str, Any]]:
         "What it does:",
         "How it works (calculation method):",
         "Who it is for:",
+        "Primary user:",
         "Primary buyer:",
         "Business question it answers:",
         "Why it wins vs alternatives:",
@@ -356,7 +357,10 @@ def load_wbtools_pro_marketing() -> dict[str, dict[str, Any]]:
             "what_it_does": _extract_bullets(_extract_field_block(section_text, "What it does:", labels)),
             "how_it_works": _extract_bullets(_extract_field_block(section_text, "How it works (calculation method):", labels)),
             "who_for": _extract_bullets(_extract_field_block(section_text, "Who it is for:", labels)),
-            "primary_buyer": _clean_scalar(_extract_field_block(section_text, "Primary buyer:", labels)),
+            "primary_user": (
+                _clean_scalar(_extract_field_block(section_text, "Primary user:", labels))
+                or _clean_scalar(_extract_field_block(section_text, "Primary buyer:", labels))
+            ),
             "business_question": _clean_scalar(_extract_field_block(section_text, "Business question it answers:", labels)),
             "why_wins": _extract_bullets(_extract_field_block(section_text, "Why it wins vs alternatives:", labels)),
             "buying_trigger": _clean_scalar(_extract_field_block(section_text, "Typical buying trigger:", labels)),
@@ -394,9 +398,9 @@ def _pro_narrative_section(tool_id: str, pro_marketing: dict[str, dict]) -> str:
         blocks.append("<h3>Who It Is For</h3>")
         blocks.append(_bullet_html(info["who_for"]))
 
-    if info.get("primary_buyer"):
-        blocks.append("<h3>Primary Buyer</h3>")
-        blocks.append(f"<p>{info['primary_buyer']}</p>")
+    if info.get("primary_user"):
+        blocks.append("<h3>Primary User</h3>")
+        blocks.append(f"<p>{info['primary_user']}</p>")
 
     if info.get("what_it_does"):
         blocks.append("<h3>What It Does</h3>")

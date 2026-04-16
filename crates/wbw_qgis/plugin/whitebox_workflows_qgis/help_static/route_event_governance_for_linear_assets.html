@@ -6,7 +6,7 @@
 <p><strong>Route Event Governance</strong></p>
 <h3>Who It Is For</h3>
 <ul><li>Departments of Transportation managing pavement/paving event datasets.</li><li>Pipeline operators maintaining linear segment datasets (coating, pressure class, material type).</li><li>Rail and powerline operators tracking inspection or maintenance event inventories.</li><li>GIS production teams responsible for LRS data quality before system integration.</li></ul>
-<h3>Primary Buyer</h3>
+<h3>Primary User</h3>
 <p>DOTs, pipeline operators, rail/powerline operators, and telecom managers.</p>
 <h3>What It Does</h3>
 <ul><li>Validates route event datasets (line segments with from/to measures) against production governance rules.</li><li>Detects overlapping events (events sharing measure ranges on the same route).</li><li>Detects measure gaps (discontinuities between sequential events).</li><li>Detects descending intervals (to_measure < from_measure).</li><li>Optionally validates business/domain rules from a JSON rule set, including enum, regex, and numeric min/max checks.</li><li>Optionally auto-corrects detectable violations: flips descending intervals, trims overlapping events to the prior event boundary.</li><li>Produces QA-passed governed events, a per-violation issue log, optional remediation queue CSV, corrected event layer (when auto_fix=true), and a machine-readable governance report.</li></ul>

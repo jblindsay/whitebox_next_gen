@@ -94,6 +94,35 @@ def _looks_like_output(name: str, description: str) -> bool:
     return any(m in d for m in persist_markers)
 
 
+def _looks_like_filepath_default(value: Any) -> bool:
+    if value is None or isinstance(value, (list, dict, tuple, set)):
+        return False
+    text = str(value).strip()
+    if not text:
+        return False
+
+    lower = text.lower()
+    if lower in {"none", "null", "auto", "default"}:
+        return False
+
+    # Absolute/relative path indicators.
+    if re.match(r"^[a-zA-Z]:[\\/]", text):
+        return True
+    if text.startswith(("/", "./", "../", "~", "\\")):
+        return True
+    if "/" in text or "\\" in text:
+        return True
+
+    # Common geospatial and table/document file extensions used by tools.
+    if re.search(
+        r"\.(shp|gpkg|geojson|json|csv|txt|tif|tiff|img|bil|flt|sdat|rdc|las|laz|zlidar|copc|e57|ply|html|htm|xml|sqlite|dbf|shx|prj|vrt)$",
+        lower,
+    ):
+        return True
+
+    return False
+
+
 def _extract_enum_options(name: str, description: str, default_value: Any) -> list[str]:
     n = str(name or "").lower()
     d = str(description or "")
@@ -337,6 +366,40 @@ def _infer_kind(name: str, description: str) -> str:
     n = name.lower()
     d = description.lower()
 
+    vector_input_name_tokens = (
+        "input",
+        "vector",
+        "source",
+        "path",
+        "target",
+        "join",
+        "origin",
+        "origins",
+        "destination",
+        "destinations",
+        "barrier",
+        "barriers",
+        "network",
+        "route",
+        "routes",
+        "line",
+        "lines",
+        "point",
+        "points",
+        "polygon",
+        "polygons",
+    )
+
+    vector_input_desc_tokens = (
+        "layer",
+        "vector",
+        "features",
+        "network",
+        "point layer",
+        "line layer",
+        "polygon layer",
+    )
+
     # Strong bool cue: descriptions that start with "if true" or "if false"
     # take priority even if the parameter name looks like an output path.
     if d.startswith(("if true", "if false", "if set", "if enabled", "if disabled",
@@ -398,8 +461,28 @@ def _infer_kind(name: str, description: str) -> str:
         return "raster_in"
 
     if (
-        any(tok in n for tok in ("input", "vector", "source", "path"))
-        and any(tok in n or tok in d for tok in ("vector", "shp", "geojson", "geopackage", "features"))
+        any(tok in n for tok in vector_input_name_tokens)
+        and (
+            any(tok in n or tok in d for tok in ("shp", "geojson", "geopackage"))
+            or any(
+                tok in d
+                for tok in (
+                    "vector",
+                    "features",
+                    "layer",
+                    "network layer",
+                    "point layer",
+                    "line layer",
+                    "polygon layer",
+                )
+            )
+        )
+    ):
+        return "vector_in"
+
+    if (
+        any(tok in n for tok in vector_input_name_tokens)
+        and any(tok in d for tok in vector_input_desc_tokens)
     ):
         return "vector_in"
 
@@ -825,6 +908,13 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
             if kind == "string" and len(enum_options) >= 2:
                 kind = "enum"
+
+            # Safety net: when a non-output parameter default looks like a file
+            # path, prefer an empty file selector instead of a prefilled string.
+            if kind == "string" and not _looks_like_output(name, description):
+                if _looks_like_filepath_default(default_value):
+                    kind = "file_in"
+                    default_value = None
 
             # A parameter whose name pattern looks like an output but whose
             # description resolves to a clear option list is an enum, not a

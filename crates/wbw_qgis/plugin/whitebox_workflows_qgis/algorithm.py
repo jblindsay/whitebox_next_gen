@@ -769,7 +769,6 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         tool_id = self.name()
         help_provider = get_help_provider()
         help_excerpt = help_provider.get_tool_help_excerpt(tool_id)
-        detailed_help_url = get_help_url(tool_id)
         hint_text = _render_hint_summary(self._render_hints)
         if bool(self._manifest.get("locked", False)):
             reason = self._manifest.get("locked_reason", "license_tier_insufficient")
@@ -782,8 +781,6 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             )
             if hint_text:
                 parts.append(hint_text)
-            if detailed_help_url:
-                parts.append(f"Detailed help: {detailed_help_url}")
             return "\n\n".join(p for p in parts if p)
 
         parts = [summary] if summary else []
@@ -791,8 +788,6 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             parts.append(help_excerpt)
         if hint_text:
             parts.append(hint_text)
-        if detailed_help_url:
-            parts.append(f"Detailed help: {detailed_help_url}")
         return "\n\n".join(p for p in parts if p)
 
     def helpUrl(self):
@@ -800,6 +795,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
         if path:
             from pathlib import Path
             return Path(path).as_uri()
+        # Fallback: get_help_url already returns a file:// URI
         return get_help_url(self.name())
 
     def initAlgorithm(self, _config=None):

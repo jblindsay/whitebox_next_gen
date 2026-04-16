@@ -461,17 +461,18 @@ def get_help_html(tool_id: str, catalog: list[dict] | None = None) -> str:
 
 
 def get_help_url(tool_id: str) -> str:
-    """Return a file path to the best available help HTML, or empty string.
+    """Return a file:// URI to the best available help HTML, or empty string.
 
     Checks bundled static files first, then the user cache.
     """
+    from pathlib import Path
     bundled = get_bundled_help_path(tool_id)
     if bundled is not None:
-        return bundled.replace("\\", "/")
+        return Path(bundled).as_uri()
     cache_dir = get_help_cache_dir()
     cached_path = os.path.join(cache_dir, f"{tool_id}.html")
     if os.path.exists(cached_path):
-        return cached_path.replace("\\", "/")
+        return Path(cached_path).as_uri()
     return ""
 
 

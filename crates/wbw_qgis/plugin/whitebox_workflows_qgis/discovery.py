@@ -398,6 +398,42 @@ def _hydrate_missing_params(catalog: list[dict]) -> list[dict]:
     return out
 
 
+def _dedupe_catalog_params(catalog: list[dict]) -> list[dict]:
+    """Remove duplicate parameter names within each catalog item.
+
+    Some runtime catalogs occasionally emit both ``output`` and
+    ``*_output_path`` aliases that normalize to the same name, causing QGIS to
+    reject duplicate parameter registrations. Keep the first occurrence of each
+    name to preserve existing parameter ordering.
+    """
+    out: list[dict] = []
+    for item in catalog:
+        fixed = dict(item)
+        params = fixed.get("params")
+        if not isinstance(params, list):
+            out.append(fixed)
+            continue
+
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for raw in params:
+            if not isinstance(raw, dict):
+                continue
+            p = dict(raw)
+            name = str(p.get("name", "")).strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(p)
+
+        fixed["params"] = deduped
+        out.append(fixed)
+    return out
+
+
 def _normalize_lock_state(catalog: list[dict]) -> list[dict]:
     out: list[dict] = []
     for item in catalog:
@@ -768,6 +804,7 @@ def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[
     catalog = _reclassify_broad_categories(catalog)
     catalog = _inject_projection_wrapper_tools(catalog)
     catalog = _hydrate_missing_params(catalog)
+    catalog = _dedupe_catalog_params(catalog)
 
     def _rank_value(item: dict) -> int:
         raw = item.get("display_default_rank")

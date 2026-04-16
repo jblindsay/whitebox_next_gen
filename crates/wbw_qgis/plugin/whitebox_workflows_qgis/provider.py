@@ -96,6 +96,15 @@ class WhiteboxProcessingProvider(QgsProcessingProvider):
     def include_pro(self) -> bool:
         return bool(self._include_pro)
 
+    @include_pro.setter
+    def include_pro(self, value: bool) -> None:
+        self._include_pro = bool(value)
+
     @property
     def tier(self) -> str:
         return str(self._tier)
+
+    @tier.setter
+    def tier(self, value: str) -> None:
+        normalized = str(value).strip().lower()
+        self._tier = normalized or "open"

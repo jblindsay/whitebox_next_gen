@@ -1,0 +1,58 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Solar Site Suitability Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where are top solar candidates based on terrain suitability, and which shortlisted sites are strong enough for deeper engineering review?</p>
+<h3>Who It Is For</h3>
+<ul><li>Solar development teams and regional screening analysts.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Solar developers, renewable consultants, and utility planning units.</p>
+<h3>What It Does</h3>
+<ul><li>Computes solar siting suitability and visual-impact proxies from terrain.</li><li>Selects and ranks candidate point sites.</li><li>Emits attributed candidate vectors for downstream review.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes terrain suitability response from slope/aspect and neighborhood context.</li><li>Estimates visual-impact proxy from terrain prominence and local exposure contrasts.</li><li>Applies thresholding and ranking to emit top candidate points with attributes.</li><li>Indicative formula: suitability ~= f(slope, aspect, relief); candidates = arg top-k(suitability) above threshold.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Emits ranked candidate vectors with visual-impact attributes, enabling immediate GIS review and filtering.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Early project screening demands a short list of high-probability solar candidates across a large area.</p>
+<h3>Typical Presets</h3>
+<ul><li>higher candidate_threshold for only top candidates.</li><li>lower threshold plus larger max_candidate_sites for exploratory workflows.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital elevation model used as the terrain reference surface.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>candidate_threshold</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Minimum suitability threshold required for candidate-site extraction.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_candidate_sites</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Upper limit on the number of candidate sites emitted in vector output.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>suitability_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Core suitability score raster produced by the model.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>visual_impact</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Visual-impact raster used to screen candidate sites and stakeholder constraints.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>candidate_sites</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector candidate-site features passing selection thresholds.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+suit, vis, sites, summary = wbe.solar_site_suitability_analysis(
+    dem=&quot;data/dem.tif&quot;,
+    candidate_threshold=0.7,
+    max_candidate_sites=200,
+    output_prefix=&quot;output/solar_siting&quot;,
+)
+
+print(suit)
+print(vis)
+print(sites)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

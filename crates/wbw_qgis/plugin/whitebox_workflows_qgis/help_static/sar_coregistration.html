@@ -1,0 +1,65 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Coregister moving SAR imagery to a reference grid (translation/affine/local-offset-grid modes).</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>SAR Coregistration</strong></p>
+<h3>Problem It Solves</h3>
+<p>Can we put a moving SAR scene on the reference scene grid with enough geometric confidence for pairwise analytics?</p>
+<h3>Who It Is For</h3>
+<ul><li>SAR analysts, infrastructure monitoring teams, and registration-first EO pipelines.</li></ul>
+<h3>Primary Buyer</h3>
+<p>InSAR/infrastructure monitoring teams, geospatial intelligence groups, and SAR QA operations.</p>
+<h3>What It Does</h3>
+<ul><li>Aligns a moving SAR raster or resolved SAR-bundle measurement onto a reference SAR grid.</li><li>Supports `translation`, `affine`, and `local_offset_grid` modes (`affine` and `local_offset_grid` remain experimental).</li><li>Emits aligned output plus transform/summary diagnostics, including compatibility and acceptance gates for machine-checkable downstream use.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Harmonizes the moving SAR raster to the reference CRS/grid when needed and evaluates strict scene compatibility where metadata allows.</li><li>Applies amplitude-domain matching with bounded search and subpixel refinement, then executes the selected transform model.</li><li>Emits per-run QA including burst diagnostics (Sentinel-1), continuity checks, and Phase-A acceptance gates.</li><li>Indicative formula: $\rho(\Delta x, \Delta y) = \mathrm{corr}(\log(1 + I_{ref}), \log(1 + I_{mov}(x-\Delta x, y-\Delta y)))$.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Accepts both direct rasters and supported SAR bundles while turning pair alignment into a reproducible audited workflow artifact instead of an opaque manual preprocessing step.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A team needs a defensible alignment stage before coherence, pair differencing, or cross-sensor fusion.</p>
+<h3>Typical Presets</h3>
+<ul><li>translation: default global shift path.</li><li>affine: global affine refinement (experimental).</li><li>local_offset_grid: local residual warp model (experimental).</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reference_sar or reference_sar_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Reference SAR source provided either as a raster path or a supported SAR bundle.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moving_sar or moving_sar_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Moving SAR source provided either as a raster path or a supported SAR bundle.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reference_measurement_key, moving_measurement_key</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional bundle measurement selectors when either SAR bundle contains multiple measurement assets.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>coreg_mode</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Coregistration mode: `translation`, `affine`, or `local_offset_grid` (experimental for affine/local).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_offset_px, decimation, min_overlap_fraction</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Search-radius and sampled-overlap controls for correlation-based shift estimation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_dem, dem_z_factor</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional DEM-assisted initialization controls used for geometry-informed matching support.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>phase_a_* thresholds</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional acceptance/continuity threshold overrides for deterministic quality gating.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>resample_method, output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output resampling mode and artifact prefix.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moving_aligned</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Moving SAR raster resampled onto the reference SAR grid.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>offset_x</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Constant x-offset surface in map units for the estimated translation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>offset_y</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Constant y-offset surface in map units for the estimated translation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>transform</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable transform and QA summary for the estimated alignment.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable workflow report containing parameters, QA diagnostics, and artifact paths.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from the summary contract for review and traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.sar_coregistration(
+    reference_sar_bundle=&quot;data/S1_reference.SAFE&quot;,
+    reference_measurement_key=&quot;vv&quot;,
+    moving_sar_bundle=&quot;data/S1_pair.SAFE&quot;,
+    moving_measurement_key=&quot;vv&quot;,
+    max_offset_px=24,
+    decimation=4,
+    resample_method=&quot;bilinear&quot;,
+    output_prefix=&quot;output/sar_coreg&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

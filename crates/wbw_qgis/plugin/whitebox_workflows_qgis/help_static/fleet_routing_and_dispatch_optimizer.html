@@ -1,0 +1,56 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Fleet Routing and Dispatch Optimization</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Logistics dispatch teams planning daily vehicle assignments.</li><li>Municipal waste and field-maintenance operations with constrained fleet capacity/time.</li><li>Courier and distribution operations requiring transparent route exceptions.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Logistics operations leaders, municipal service planners, and fleet-dispatch platform teams.</p>
+<h3>What It Does</h3>
+<ul><li>Optimizes vehicle dispatch plans across depots and stops for logistics and field operations.</li><li>Builds feasible routes under capacity and shift-time constraints.</li><li>Produces assignment, KPI, and exception outputs for operations review.</li><li>Supports objective mode selection (`minimize_distance`, `minimize_time`, `minimize_cost`, `balanced`).</li></ul>
+<h3>How It Works</h3>
+<ul><li>Parses depot and stop layers plus fleet specifications from `vehicles_csv`.</li><li>Harmonizes depot/stop CRS to the network CRS when EPSG metadata is available and validates projected CRS for distance/time calculations.</li><li>Filters infeasible stops where demand exceeds max vehicle capacity.</li><li>Applies objective-aware greedy nearest-feasible stop construction for initial route assignment (`distance`, `time`, `cost`, `balanced`).</li><li>Applies optional edge restrictions from CSV (`from_x,from_y,to_x,to_y,closed,penalty_factor`) as closures or impedance penalties.</li><li>Runs local 2-opt sequence refinement for incremental route improvement.</li><li>Computes per-route and fleet KPIs and emits exceptions with reason codes.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`network`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>LineVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Street/network layer used by routing workflow</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`depots`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Depot or start/end locations for vehicles</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`stops`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Stops/tasks to assign to routes</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`vehicles_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Fleet specs (vehicle_id, capacity, available_time_minutes, cost_per_minute, cost_per_km, depot_id)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`objective`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Objective mode: `minimize_distance`, `minimize_time`, `minimize_cost`, `balanced`</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`restrictions`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional restrictions CSV (`from_x,from_y,to_x,to_y[,closed][,penalty_factor]`) used for edge closures or impedance penalties</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`routes_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output route vector path</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`assignment_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output stop-to-route assignment CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`route_kpis_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output per-route/fleet KPI CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`exceptions_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output infeasible stop diagnostics CSV</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`routes_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Route geometries and route-level summaries by vehicle</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`assignment_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>stop_id, route_id, vehicle_id, sequence_order, arrival/departure times</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`route_kpis_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-route metrics and fleet roll-up summary</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`exceptions_csv_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>stop_id with reason code (`demand_exceeds_max_vehicle_capacity`, `no_feasible_route`)</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;fleet_routing_and_dispatch_optimizer&quot;,
+    network=&quot;city_network.gpkg&quot;,
+    depots=&quot;depots.gpkg&quot;,
+    stops=&quot;daily_stops.gpkg&quot;,
+    vehicles_csv=&quot;fleet_specs.csv&quot;,
+    objective=&quot;minimize_cost&quot;,
+    routes_output=&quot;output/routes.gpkg&quot;,
+    assignment_csv_output=&quot;output/assignments.csv&quot;,
+    route_kpis_csv_output=&quot;output/route_kpis.csv&quot;,
+    exceptions_csv_output=&quot;output/exceptions.csv&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

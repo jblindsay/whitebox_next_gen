@@ -1,0 +1,50 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>In-Season Crop Stress Intervention Planning</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where should interventions be prioritized this week to limit stress-driven yield loss?</p>
+<h3>Who It Is For</h3>
+<ul><li>Agronomy advisors and farm operations teams managing in-season response.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Precision agronomy service providers and large production farms.</p>
+<h3>What It Does</h3>
+<ul><li>Prioritizes intervention zones from in-season crop stress indicators.</li><li>Combines vigor decline with optional thermal and moisture stress context.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Uses NDVI/vigor deficit as the primary stress signal.</li><li>Harmonizes optional canopy-temperature and soil-moisture rasters to the NDVI grid.</li><li>Produces intervention-priority and intervention-class surfaces.</li><li>QA acceptance guidance:</li><li>`status=pass` indicates intervention burden is below review threshold.</li><li>`diagnostics.acceptance_thresholds.high_priority_fraction_review` defines escalation threshold for broad intervention risk.</li><li>High `summary.high_priority_fraction` should trigger stress-source verification before large-scale treatment rollout.</li><li>MVP hardening assets:</li><li>Benchmark scaffold: `tests/fixtures/precision_ag_ops_benchmark/`</li><li>Promotion guide: `docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md`</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>NDVI/vigor raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>canopy_temperature</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional thermal-stress raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>soil_moisture</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional moisture-deficit raster normalized to [0,1].</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>intervention_priority</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Continuous intervention-priority score [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>intervention_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Discrete intervention class raster (1 low to 4 urgent).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+priority, classes, summary = wbe.in_season_crop_stress_intervention_planning(
+    ndvi=&quot;data/ndvi_current.tif&quot;,
+    canopy_temperature=&quot;data/canopy_temp_stress.tif&quot;,
+    soil_moisture=&quot;data/moisture_deficit.tif&quot;,
+    output_prefix=&quot;output/in_season_stress&quot;,
+)
+
+print(priority)
+print(classes)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

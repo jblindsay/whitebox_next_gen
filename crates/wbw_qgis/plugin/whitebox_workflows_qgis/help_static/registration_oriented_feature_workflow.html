@@ -1,0 +1,68 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Image Registration Diagnostics</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which pairs are registration-ready, and do we have enough correspondence quality to proceed confidently?</p>
+<h3>Who It Is For</h3>
+<ul><li>Geospatial registration specialists, EO preprocessing teams, and image-fusion analysts.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Teams building repeatable image registration pipelines (RGB-RGB, thermal-RGB, and cross-date alignment).</p>
+<h3>What It Does</h3>
+<ul><li>Runs image-pair or image-set registration diagnostics using a RootSIFT feature engine.</li><li>Produces tie-point outputs and pair-level quality metrics with full fallback attempt traces.</li><li>Handles cross-modal pairs (e.g., thermal LWIR to RGB visible) via automatic histogram equalization preprocessing.</li><li>Optionally emits annotated side-by-side pair visualizations with tie-point overlays.</li><li>Emits workflow-level readiness status for registration-first pipelines.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Builds pair candidates (single pair mode or ranked set mode).</li><li>Extracts RootSIFT descriptors from a Gaussian scale-space pyramid; descriptor distances are computed with wide-SIMD acceleration.</li><li>Applies cross-verified nearest-neighbor matching with ratio test filtering.</li><li>On match shortfall, escalates through a six-strategy fallback chain: `baseline` → `high_feature_baseline` → `relaxed_ratio` → `high_feature_relaxed` → `preprocess_eq_right` → `preprocess_eq_both`; the final two strategies apply histogram equalization to recover keypoints from low-contrast inputs such as LWIR thermal imagery.</li><li>Records the full strategy attempt trace per pair in diagnostics for auditable QA.</li><li>Reports per-pair keypoint counts, match counts, confidence summary, inlier-style proxy metrics, strategy used, and fallback policy.</li><li>Indicative rule: accept match if d1 / d2 <= ratio_test, where d1 and d2 are first/second nearest descriptor distances.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Combines pair planning, RootSIFT matching with automatic cross-modal fallback, auditable attempt tracing, and tie-point artifacts in one reproducible workflow contract.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Manual registration workflows are inconsistent and teams need auditable pair diagnostics before downstream warping/fusion steps.</p>
+<h3>Typical Presets</h3>
+<ul><li>pair mode: targeted diagnostics for one known pair.</li><li>set mode: ranked pair diagnostics for an image collection.</li><li>balanced defaults (`max_features_per_image=500`, `ratio_test=0.80`) for operational throughput.</li><li>cross-modal pairs (e.g., thermal LWIR to RGB): preprocessing fallback strategies activate automatically on match shortfall; no additional configuration required.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>mode: set | pair</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Execution mode for set-wide pair planning or explicit pair diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>images_dir</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no (set mode)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input image directory used when mode is set.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>left_image, right_image</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no (pair mode)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Explicit pair inputs used when mode is pair.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_pairs</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum number of candidate pairs evaluated in set mode.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_features_per_image</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Upper bound on extracted keypoints per image.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ratio_test</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Descriptor ratio-test threshold controlling match strictness.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>min_matches</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>[pro] Minimum accepted match count per pair; drives the QA gate, fallback routing, and pass/review/fail classification.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name workflow outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>emit_pair_match_viz</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>If true, writes annotated side-by-side pair images with tie-point lines. Defaults to `false`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_pair_visualizations</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum number of pair visualizations to write when emit_pair_match_viz is true. Defaults to `8`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_lines_per_pair</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum number of tie-point lines drawn per visualization. Defaults to `150`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>viz_scale</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Downscale factor applied to visualization images, in [0.05, 1.0]. Defaults to `0.5`.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>pair_diagnostics</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pair-level diagnostics including candidate score, keypoint counts, match quality, confidence proxies, strategy used, fallback flag, and full strategy attempt trace (`*_pair_diagnostics.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>match_summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Workflow summary contract with aggregate match metrics, status, and fallback policy record (`*_match_summary.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the workflow summary contract for stakeholder review and QA traceability.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>tie_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Tie-point table (`pair_id,left_x,left_y,right_x,right_y,confidence`) for downstream registration workflows (`*_tie_points.csv`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>pair_match_viz</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>directory</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Annotated side-by-side JPEG images per pair with tie-point lines overlaid, written when emit_pair_match_viz is true.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.registration_oriented_feature_workflow(
+    mode=&quot;set&quot;,
+    images_dir=&quot;data/uav_mission/images&quot;,
+    max_pairs=24,
+    max_features_per_image=500,
+    ratio_test=0.80,
+    min_matches=24,
+    output_prefix=&quot;output/registration_workflow&quot;,
+    emit_pair_match_viz=True,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,55 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Utility Corridor Access Planning</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Utility corridor maintenance planners and linear-infrastructure field operations teams.</li><li>Vegetation/encroachment risk analysts coordinating access logistics.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Transmission/distribution utilities and corridor maintenance operations.</p>
+<h3>What It Does</h3>
+<ul><li>Identifies encroachment hotspots that fall within a configurable corridor influence distance.</li><li>Scores hotspot risk based on proximity to corridor centerlines.</li><li>Assigns nearest access points for field-response feasibility.</li><li>Produces ranked hotspot CSV plus planning summary JSON for operations teams.</li><li>Adds dispatch-ready priority bands, SLA guidance, and optional response queue export.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Loads corridor line geometry, encroachment observations, and access points.</li><li>Converts corridor geometry to line segments and computes minimum point-to-segment distance for each encroachment.</li><li>Keeps in-range encroachments as hotspots using `corridor_influence_distance` threshold.</li><li>Computes risk score as inverse-distance to corridor (closer = higher risk).</li><li>Computes access score from nearest access-point distance and combines with risk into priority score.</li><li>Classifies each hotspot into `critical`, `high`, `medium`, or `low` response bands and assigns response SLA hours.</li><li>Emits hotspot vector with attributes: ENC_FID, DIST_CORR, RISK_SCORE, ACCESS_FID, ACCESS_DIST, PRIORITY, PRIOR_BAND, SLA_HOURS, ACCESS_DIFF.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corridors`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>LineVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Corridor centerline layer</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`encroachments`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Encroachment observations (point/line/polygon; representative point sampled)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`access_points`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Field access points</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corridor_influence_distance`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>float</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Max distance from corridor to retain as hotspot (default 30.0)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`high_risk_distance`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>float</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Distance considered highest-risk zone (default 10.0)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`hotspots`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output hotspot vector</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`priority_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output ranked hotspot CSV</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`planning_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output planning summary JSON</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`response_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional dispatch-ready response queue with SLA guidance</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`hotspots`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Hotspot points with risk/access/priority attributes plus corridor lineage fields (`CORR_FID`, `SEG_IDX`, `LINEAGE_ID`)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`priority_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Ranked hotspots: rank, enc_fid, corridor_fid, segment_idx, dist_to_corridor, risk_score, nearest_access_fid, access_dist, priority_score, priority_band, response_sla_hours, access_difficulty, lineage_id</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`planning_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Counts, averages, thresholds, counts by priority band, and top hotspot summary</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`response_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Response queue with priority band, SLA target, access difficulty, recommended action, and lineage_id</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;utility_corridor_encroachment_and_access_planning&quot;,
+    corridors=&quot;corridor_centerlines.gpkg&quot;,
+    encroachments=&quot;encroachment_points.gpkg&quot;,
+    access_points=&quot;field_access_points.gpkg&quot;,
+    corridor_influence_distance=30.0,
+    high_risk_distance=10.0,
+    hotspots=&quot;output/corridor_hotspots.gpkg&quot;,
+    priority_csv=&quot;output/corridor_priority.csv&quot;,
+    planning_report=&quot;output/corridor_planning_report.json&quot;,
+    response_queue_csv=&quot;output/corridor_response_queue.csv&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

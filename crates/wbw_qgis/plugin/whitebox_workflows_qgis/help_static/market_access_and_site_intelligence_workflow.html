@@ -1,0 +1,60 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Market Access and Site Planning</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Retail chains evaluating expansion locations based on demand accessibility and competitive saturation.</li><li>Healthcare networks rating candidate clinic/hospital sites for market coverage and competitive positioning.</li><li>Franchise developers assessing new territory opportunities via catchment analysis.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Commercial real estate, retail operations, healthcare network planning, franchise development.</p>
+<h3>What It Does</h3>
+<ul><li>Evaluates candidate site locations for commercial expansion (retail, healthcare, franchise).</li><li>Computes drive-time catchment areas for each candidate.</li><li>Measures demand coverage and competitive overlap positioning.</li><li>Ranks candidates by composite score: 50% demand coverage + 25% accessibility + 25% low competitive overlap.</li><li>Outputs ranked candidates, competitive analysis, and executive summary with decision metrics.</li><li>Adds opportunity bands and optional market action queue output for expansion triage.</li></ul>
+<h3>How It Works</h3>
+<ul><li>For each candidate site:</li><li>Compute demand coverage (% of demand points within max ring cost).</li><li>Compute average distance to demand points (accessibility proxy).</li><li>Compute competitive overlap vs existing/competitor sites (% within catchment radius).</li><li>Existing-site baseline coverage is computed from the existing site layer, not from candidate seed sites.</li><li>Accessibility score is normalized across the evaluated candidate set.</li><li>Composite rank score = 0.50 × coverage + 0.25 × accessibility + 0.25 × (100 - overlap).</li><li>**Scope boundary:** Market Access and Site Planning evaluates candidate commercial sites for expansion using drive-time access, demand coverage, and competitive positioning — it is the service-area tool for commercial decisions. Service Area Planning and Coverage Optimization (6.2) addresses public infrastructure coverage diagnostics. Emergency Accessibility Scenario Planning (6.6) simulates disrupted-network scenarios for resilience analysis. Choose this tool for commercial expansion, 6.2 for infrastructure planning, and 6.6 for emergency response planning.</li><li>Rank candidates by composite score; classify each site as `expand_now`, `pilot`, `monitor`, or `saturated`; emit top candidates + decision gate (coverage > 70% AND overlap < 50%).</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`network`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>LineVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Street/transit network for routing</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`sites_existing`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Existing own or benchmark competitive sites</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`sites_candidates`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Candidate expansion site locations</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`demand_surface`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Demand locations (customers, population centroids)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`competition_sites`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>PointVector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Competitor locations (separate from own/benchmark)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`ring_costs`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>array[float]</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Drive-time costs for catchments (e.g., [5, 10, 15])</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`catchments_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output drive-time catchment polygons</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`overlap_analysis_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output competitive overlap analysis layer</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`candidate_rank_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output CSV: ranked candidates with KPIs</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`executive_summary_json`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output JSON: market metrics and decision gate</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`market_action_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional prioritized expansion action queue CSV</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`catchments_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Drive-time catchment polygons per candidate</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`overlap_analysis_output`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector/GeoJSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Candidate-level overlap visualization with coverage gain and opportunity band</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`candidate_rank_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>rank, site_id, x, y, demand_coverage_pct, coverage_gain_pct, avg_distance_to_demand, competitive_overlap_pct, accessibility_score, composite_rank_score, opportunity_band</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`executive_summary_json`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>total_candidates, market_metrics, top_candidates, recommendation, decision_gate, decision_rationale</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`market_action_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prioritized expansion actions by candidate/opportunity band</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;market_access_and_site_intelligence_workflow&quot;,
+    network=&quot;city_network.gpkg&quot;,
+    sites_existing=&quot;existing_retail.gpkg&quot;,
+    sites_candidates=&quot;candidate_expansion_sites.gpkg&quot;,
+    demand_surface=&quot;customer_demand_points.gpkg&quot;,
+    competition_sites=&quot;competitor_locations.gpkg&quot;,
+    ring_costs=[5, 10, 15],
+    catchments_output=&quot;output/candidate_catchments.gpkg&quot;,
+    overlap_analysis_output=&quot;output/competitive_overlap.gpkg&quot;,
+    candidate_rank_csv=&quot;output/candidate_ranking.csv&quot;,
+    executive_summary_json=&quot;output/market_summary.json&quot;,
+    market_action_queue_csv=&quot;output/market_action_queue.csv&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

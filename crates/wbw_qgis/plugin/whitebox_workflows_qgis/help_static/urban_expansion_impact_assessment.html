@@ -1,0 +1,58 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Urban Expansion Impact Assessment</strong></p>
+<h3>Problem It Solves</h3>
+<p>What ecological and stream-network impacts should we expect under this growth scenario, and where are priorities for mitigation?</p>
+<h3>Who It Is For</h3>
+<ul><li>Urban planners, environmental assessors, and watershed impact analysts.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Municipal planning departments, environmental consultancies, and stormwater authorities.</p>
+<h3>What It Does</h3>
+<ul><li>Quantifies expansion-driven impact severity from baseline/scenario urban surfaces.</li><li>Derives habitat-loss raster products from change footprint logic.</li><li>Scores stream features against impact raster exposure.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Builds urban change footprint by differencing scenario and baseline urban rasters.</li><li>Translates new/expanded footprint intensity into impact and habitat-loss scores.</li><li>Samples stream geometries against impact surfaces to compute attributed reach-level metrics.</li><li>Indicative formula: change = max(0, urban_scenario - urban_baseline); impact ~= change * habitat_weight.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Links scenario change, habitat loss, and attributed stream impact in one report-ready package.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Planning approvals require quantified environmental impact evidence under multiple development scenarios.</p>
+<h3>Typical Presets</h3>
+<ul><li>baseline/scenario-only impact analysis.</li><li>add habitat_sensitivity for weighted ecological impact scoring.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_urban, scenario_urban, streams</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline and scenario urban rasters plus stream network used for impact assessment.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional habitat_sensitivity</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional habitat sensitivity layer used to weight ecological impact severity.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>impact_severity</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Impact severity raster for baseline-versus-scenario urban change.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>habitat_loss</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Raster estimate of habitat loss intensity under scenario comparison.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>affected_streams</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector stream segments flagged as impacted under scenario conditions.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+impact, habitat, streams, summary = wbe.urban_expansion_impact_assessment(
+    baseline_urban=&quot;data/urban_2020.tif&quot;,
+    scenario_urban=&quot;data/urban_2035.tif&quot;,
+    streams=&quot;data/streams.gpkg&quot;,
+    habitat_sensitivity=&quot;data/habitat_sensitivity.tif&quot;,
+    output_prefix=&quot;output/urban_impact&quot;,
+)
+
+print(impact)
+print(habitat)
+print(streams)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

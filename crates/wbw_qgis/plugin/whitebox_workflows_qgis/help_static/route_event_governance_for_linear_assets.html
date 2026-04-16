@@ -1,0 +1,67 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Route Event Governance</strong></p>
+<h3>Who It Is For</h3>
+<ul><li>Departments of Transportation managing pavement/paving event datasets.</li><li>Pipeline operators maintaining linear segment datasets (coating, pressure class, material type).</li><li>Rail and powerline operators tracking inspection or maintenance event inventories.</li><li>GIS production teams responsible for LRS data quality before system integration.</li></ul>
+<h3>Primary Buyer</h3>
+<p>DOTs, pipeline operators, rail/powerline operators, and telecom managers.</p>
+<h3>What It Does</h3>
+<ul><li>Validates route event datasets (line segments with from/to measures) against production governance rules.</li><li>Detects overlapping events (events sharing measure ranges on the same route).</li><li>Detects measure gaps (discontinuities between sequential events).</li><li>Detects descending intervals (to_measure < from_measure).</li><li>Optionally validates business/domain rules from a JSON rule set, including enum, regex, and numeric min/max checks.</li><li>Optionally auto-corrects detectable violations: flips descending intervals, trims overlapping events to the prior event boundary.</li><li>Produces QA-passed governed events, a per-violation issue log, optional remediation queue CSV, corrected event layer (when auto_fix=true), and a machine-readable governance report.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Loads the event layer and groups events by route identifier field.</li><li>**Detection pass** — for each route: flags descending intervals (violation: `monotonic_measures`), sorts events by from_measure and scans for overlaps (violation: `no_overlaps`, severity error) and gaps (violation: `no_gaps`, severity info).</li><li>**Domain validation pass** (when `domain_rules_json` is provided) — evaluates configured per-field `allowed_values`, `regex`, `min`, and `max` rules and emits `domain_validation` errors for out-of-policy attributes.</li><li>**Auto-fix pass** (when `auto_fix=true`) — applies descending swap then overlap trimming in sorted order; marks fully consumed events (zero-length after trim) as uncorrectable deletions.</li><li>Outputs `governed_events`: all features that either had no errors or were successfully auto-corrected, with added `GOVERNANCE_STATUS` and `CORRECTIONS` attributes.</li><li>Issues CSV captures `event_id, route_id, rule_violated, severity, description, measure_start, measure_end` per violation.</li><li>Remediation queue CSV prioritizes corrective action by issue class for data steward follow-up.</li><li>Governance report JSON captures `total_events, passed_events, failed_events, pass_rate_percent, rules_violated, severity_distribution, correctable_count, domain_rules_applied`.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Required</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`events`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Event layer (GeoPackage, GeoJSON, Shapefile) with route ID and from/to measure fields</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`route_id_field`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Field name containing route identifiers</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`from_measure_field`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Field name for interval start measure</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`to_measure_field`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>string</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Field name for interval end measure</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`gap_tolerance`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>float</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Gaps smaller than this value are not flagged (default 0.0)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`overlap_tolerance`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>float</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Overlaps smaller than this value are not flagged (default 0.0)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`auto_fix`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>bool</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Enable auto-correction of descending intervals and trimming of overlaps (default false)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`domain_rules_json`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON file defining per-field validation rules with `allowed_values`, `regex`, `min`, and `max` checks</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`governed_events`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output path for QA-passed events with GOVERNANCE_STATUS and CORRECTIONS attributes</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`issues_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output CSV path for per-event issue log</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corrected_events`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>vector path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output path for auto-corrected events (only written when auto_fix=true)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`governance_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Required</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output JSON path for governance summary report</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`remediation_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>path</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional prioritized remediation queue with recommended corrective action</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Output</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Contents</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`governed_events`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>QA-passed events; attributes include GOVERNANCE_STATUS (&quot;PASSED&quot;/&quot;CORRECTED&quot;) and CORRECTIONS (correction type or &quot;none&quot;)</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`issues_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-violation log: event_id, route_id, rule_violated, severity, description, measure_start, measure_end</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`corrected_events`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Only written when auto_fix=true; lists corrected events with CORR_TYPE, ORIG_FROM, ORIG_TO, CORR_FROM, CORR_TO columns</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`governance_report`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Summary: total_events, passed_events, failed_events, pass_rate_percent, rules_violated, severity_distribution, correctable_count, domain_rules_applied</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>`remediation_queue_csv`</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prioritized queue with rule category, severity, and recommended corrective action</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>env = WbEnvironment(license_tier=&quot;pro&quot;)
+
+result = env.run_tool(&quot;route_event_governance_for_linear_assets&quot;,
+    events=&quot;pavement_events.gpkg&quot;,
+    route_id_field=&quot;ROUTE_ID&quot;,
+    from_measure_field=&quot;FROM_MEAS&quot;,
+    to_measure_field=&quot;TO_MEAS&quot;,
+    gap_tolerance=0.5,
+    overlap_tolerance=0.1,
+    auto_fix=True,
+    domain_rules_json=&quot;output/route_event_rules.json&quot;,
+    governed_events=&quot;output/governed_events.gpkg&quot;,
+    issues_csv=&quot;output/issues.csv&quot;,
+    corrected_events=&quot;output/corrected_events.gpkg&quot;,
+    governance_report=&quot;output/governance_report.json&quot;,
+    remediation_queue_csv=&quot;output/remediation_queue.csv&quot;,
+)
+
+import json
+report = json.loads(open(result[&quot;governance_report&quot;]).read())
+print(f&quot;Pass rate: {report[&#x27;pass_rate_percent&#x27;]:.1f}%  &quot;
+      f&quot;({report[&#x27;passed_events&#x27;]}/{report[&#x27;total_events&#x27;]} events)&quot;)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

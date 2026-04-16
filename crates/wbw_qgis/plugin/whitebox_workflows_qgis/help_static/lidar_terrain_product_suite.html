@@ -1,0 +1,58 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Generate terrain-focused raster products from LiDAR with consistent QA and surface controls.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>LiDAR Terrain Product Suite</strong></p>
+<h3>Problem It Solves</h3>
+<p>How can we convert raw LiDAR into a consistent, production-ready terrain package quickly and reproducibly?</p>
+<h3>Who It Is For</h3>
+<ul><li>Terrain product operations teams and applied engineering GIS units.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Mapping programs, engineering/environmental consultancies, and topographic data providers.</p>
+<h3>What It Does</h3>
+<ul><li>Produces a full terrain derivative package from raw LiDAR in one run.</li><li>Includes core terrain products and propagated QA metrics.</li><li>Emits metadata contract for reproducibility and downstream automation.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Performs LiDAR preprocessing/classification and interpolates terrain surfaces.</li><li>Derives DTM/DSM/slope/hillshade products from the processed ground and surface model.</li><li>Propagates QA diagnostics into confidence/uncertainty and records run metadata contract.</li><li>Indicative formula: slope = atan(sqrt((dz/dx)^2 + (dz/dy)^2)); hillshade from slope/aspect and illumination azimuth/zenith.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Unifies classification, terrain derivatives, and QA metadata into one operational pipeline.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Production teams must deliver standardized terrain products at scale with minimal manual orchestration.</p>
+<h3>Typical Presets</h3>
+<ul><li>balanced for default production.</li><li>strict for high-stakes engineering QA contexts.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input (LAS/LAZ)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input LiDAR point cloud used to derive QA, terrain, structure, or encroachment products.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile, block size, slope/elevation thresholds</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Terrain-suite processing profile and block/threshold controls for derivative generation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>hillshade and QA controls</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Hillshade illumination and QA export controls for terrain package outputs.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dtm</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital terrain model raster generated from workflow processing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dsm</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital surface model raster generated from workflow processing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Slope derivative raster generated from terrain processing.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>hillshade</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Hillshade visualization raster generated from terrain derivatives.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence layer quantifying reliability of modeled outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>uncertainty</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Uncertainty diagnostics layer highlighting low-certainty areas.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>metadata</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Metadata contract describing generated products and provenance.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the metadata/summary contract for stakeholder review and QA traceability.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>classified_lidar</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional LAS/LAZ</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional classified LiDAR point cloud output from QA/terrain workflows.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.lidar_terrain_product_suite(
+    input=&quot;data/points.laz&quot;,
+    profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/terrain_suite&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

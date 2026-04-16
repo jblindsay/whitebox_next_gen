@@ -1,0 +1,61 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Detect spectral change between baseline and change-date multispectral bundles with profile-based sensitivity.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Remote Sensing Change Detection</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where is meaningful vegetation change occurring, and which detections are reliable enough for reporting?</p>
+<h3>Who It Is For</h3>
+<ul><li>Environmental monitoring analysts and EO operations teams.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Environmental consultancies, forestry/conservation agencies, and compliance programs.</p>
+<h3>What It Does</h3>
+<ul><li>Detects vegetation loss/gain between two dates using NDVI-style change logic.</li><li>Uses bundle-native multiband inputs with explicit red/NIR band indices.</li><li>Produces a signed change raster and a confidence raster for analyst triage.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes NDVI-like indices per date from selected red and NIR bands.</li><li>Calculates signed per-pixel delta between change-date and baseline NDVI-like response.</li><li>Applies profile-dependent thresholds and local consistency checks to derive confidence.</li><li>Indicative formula: NDVI = (NIR - Red) / (NIR + Red), then change = NDVI_change - NDVI_baseline.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Bundle-native inputs reduce parameter mismatch errors and make cross-date processing more reproducible.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A client or regulator requires repeatable, confidence-scored vegetation change evidence for periodic reporting.</p>
+<h3>Typical Presets</h3>
+<ul><li>aggressive: lower change threshold, more sensitive detection.</li><li>balanced: default tradeoff for general monitoring.</li><li>conservative: stricter thresholds, fewer false positives.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_bundle, baseline_red_band_index, baseline_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline multispectral bundle and red/NIR band selectors used to compute baseline vegetation response.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_bundle, change_red_band_index, change_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Change-date multispectral bundle and red/NIR band selectors used for signed change estimation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional intermediate_ndvi</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Intermediate-date NDVI raster used to strengthen temporal plausibility scoring.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: aggressive | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_map</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Primary change-intelligence raster showing direction and magnitude of detected change.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence layer quantifying reliability of modeled outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+change_map, confidence, summary = wbe.remote_sensing_change_detection(
+    baseline_bundle=&quot;data/baseline_bundle.tif&quot;,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    change_bundle=&quot;data/change_bundle.tif&quot;,
+    change_red_band_index=0,
+    change_nir_band_index=1,
+    profile=&quot;balanced&quot;,
+    output=&quot;output/rs_change&quot;,
+)
+
+print(change_map)
+print(confidence)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,51 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Terrain Constructability and Cost Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which areas are practically constructible at lower relative cost before detailed design?</p>
+<h3>Who It Is For</h3>
+<ul><li>Engineering predesign teams and capital planning groups.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Infrastructure developers, engineering firms, and utility planning teams.</p>
+<h3>What It Does</h3>
+<ul><li>Converts terrain and optional risk/cost context into constructability and cost-class surfaces.</li><li>Supports quick predesign ranking of lower-cost, lower-risk development zones.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes slope from DEM and harmonizes optional conflict, wetness, and access-cost rasters.</li><li>Blends penalties into a constructability score and relative cost class output.</li><li>QA acceptance guidance:</li><li>`status=pass` indicates high-cost fraction is within baseline tolerance.</li><li>`diagnostics.acceptance_thresholds.high_cost_fraction_review` defines review escalation threshold.</li><li>Use `summary.high_cost_fraction` with local access constraints before capital-stage budgeting decisions.</li><li>MVP hardening assets:</li><li>Benchmark scaffold: `tests/fixtures/terrain_siting_benchmark/`</li><li>Promotion guide: `docs/internal/development/TERRAIN_PRECISION_AG_BENCHMARK_PROMOTION_GUIDE_2026_04_14.md`</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Reference DEM raster for constructability scoring.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>existing_conflict</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional prior terrain conflict raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>wetness</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional wetness raster normalized to [0,1].</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>access_cost</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional access-friction raster normalized to [0,1].</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>constructability_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Constructability score raster [0,1] (higher is better).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>cost_class</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Relative cost class raster (1 low cost to 5 high cost).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+constructability, cost_class, summary = wbe.terrain_constructability_and_cost_analysis(
+    dem=&quot;data/dem.tif&quot;,
+    existing_conflict=&quot;output/terrain_conflict_conflict_score.tif&quot;,
+    access_cost=&quot;data/access_friction.tif&quot;,
+    output_prefix=&quot;output/terrain_constructability&quot;,
+)
+
+print(constructability)
+print(cost_class)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

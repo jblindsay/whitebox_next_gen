@@ -1,0 +1,60 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Soil Landscape Classification</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which terrain-defined landform units dominate the area, and how can they guide management zoning or sampling strategy?</p>
+<h3>Who It Is For</h3>
+<ul><li>Geomorphometry analysts, soil-landscape researchers, and precision-ag planning teams.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Agronomy/land capability groups, environmental consulting teams, and land resource agencies.</p>
+<h3>What It Does</h3>
+<ul><li>Classifies landform units using multiscale curvature and slope signatures.</li><li>Produces raster class maps and optional polygon outputs.</li><li>Emits summary distributions for each landform class.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Computes slope, profile curvature, and plan curvature at fine and coarse scales.</li><li>Applies rule-based landform assignment thresholds to each pixel.</li><li>Optionally polygonizes class regions and aggregates class-area summary statistics.</li><li>Indicative formula: landform_class = rule(slope, k_profile, k_plan, multiscale_signature).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Couples interpretable geomorphometric classes with optional polygon outputs for direct planning integration.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A land management or agronomy program needs terrain-driven zones for sampling design or variable-rate planning.</p>
+<h3>Typical Presets</h3>
+<ul><li>default thresholds for general terrain partitioning.</li><li>tune fine/coarse scales for local vs regional landform emphasis.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input DEM</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input DEM used for terrain-derivative and landform classification workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>flat/profile/plan thresholds</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Curvature and surface-form thresholds used to separate landform classes.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>fine_scale, coarse_scale</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Multiscale analysis windows used to capture local and broad terrain structure.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional landform_polygons_output</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional switch/path to emit vectorized landform polygons.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>landform_units</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Categorical landform unit raster from terrain analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>multiscale_signature</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Multiscale terrain-signature raster for landscape interpretation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>landform_polygons</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional vectorized landform polygons for cartographic/reporting use.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+landform, signature, polygons, summary = wbe.soil_landscape_classification(
+    input=&quot;data/dem.tif&quot;,
+    fine_scale=2.0,
+    coarse_scale=8.0,
+    output_prefix=&quot;output/soil_landscape&quot;,
+    landform_polygons_output=&quot;output/landforms.gpkg&quot;,
+)
+
+print(landform)
+print(signature)
+print(polygons)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

@@ -1,0 +1,62 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Precision Irrigation Optimization</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where should irrigation depth be increased or reduced to achieve target moisture with less water waste?</p>
+<h3>Who It Is For</h3>
+<ul><li>Precision agriculture teams, irrigation planners, and agronomy analytics groups.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Large growers, precision ag service providers, and irrigation technology partners.</p>
+<h3>What It Does</h3>
+<ul><li>Generates variable-rate irrigation prescription depth from terrain and moisture context.</li><li>Estimates moisture stress risk to prioritize intervention zones.</li><li>Emits summary diagnostics suitable for irrigation planning dashboards.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Estimates local moisture deficit from target_moisture and measured or terrain-inferred moisture.</li><li>Adjusts prescription depth by slope-derived terrain factor and max_irrigation_mm limits.</li><li>Converts prescribed depth to VRI zones and computes moisture-stress risk index.</li><li>Indicative formula: prescribed_mm = max(0, target - moisture) * max_irrigation_mm * terrain_factor.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Produces direct raster-ready prescription depths and risk diagnostics from reproducible inputs.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A grower or consultant needs to shift from uniform irrigation to variable-rate execution.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast for quick field-scale recommendations.</li><li>balanced for default VRI planning.</li><li>conservative for stronger terrain-risk penalties.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Digital elevation model used as the terrain reference surface.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional soil_moisture</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional soil moisture raster used to refine irrigation need and stress scoring.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>target_moisture</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Target moisture level used to compute irrigation prescription amounts.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>max_irrigation_mm</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum irrigation depth allowed in generated irrigation recommendations.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>irrigation_prescription</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Irrigation prescription raster indicating recommended application depth.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>moisture_stress_risk</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Moisture stress risk raster supporting irrigation prioritization.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>vri_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Variable-rate irrigation zone raster.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+prescription, stress, zones, summary = wbe.precision_irrigation_optimization(
+    dem=&quot;data/dem.tif&quot;,
+    soil_moisture=&quot;data/soil_moisture.tif&quot;,
+    profile=&quot;balanced&quot;,
+    target_moisture=0.6,
+    max_irrigation_mm=18.0,
+    output_prefix=&quot;output/irrigation&quot;,
+)
+
+print(prescription)
+print(stress)
+print(zones)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

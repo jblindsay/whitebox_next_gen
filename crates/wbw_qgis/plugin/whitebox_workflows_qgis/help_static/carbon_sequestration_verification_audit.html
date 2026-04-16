@@ -1,0 +1,70 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Carbon Verification Audit</strong></p>
+<h3>Problem It Solves</h3>
+<p>Where did vegetation-linked carbon proxy increase or decrease, and where is confidence high enough for audit triage?</p>
+<h3>Who It Is For</h3>
+<ul><li>Carbon program analysts, forest monitoring teams, and environmental verification workflows.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Carbon project developers, ESG/MRV teams, and land-management compliance programs.</p>
+<h3>What It Does</h3>
+<ul><li>Quantifies baseline-to-current vegetation change using NDVI deltas.</li><li>Derives a carbon-proxy change surface with confidence scoring.</li><li>Optionally blends LiDAR biomass proxy inputs to strengthen stand-level interpretation.</li><li>Produces verification zone polygons and an audit-ready contract output for MRV workflows.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Extracts baseline and current red/NIR bands from multiband bundles.</li><li>Computes per-date NDVI and signed delta: NDVI_current - NDVI_baseline.</li><li>Converts NDVI delta to a carbon-proxy index and computes confidence from vegetation signal and change magnitude.</li><li>Optionally blends in biomass proxy values to improve relative stand-level carbon interpretation.</li><li>Aggregates pixels into verification blocks and assigns zone-level change class labels (`gain`, `loss`, `unchanged`).</li><li>Indicative formula: NDVI = (NIR - Red) / (NIR + Red), carbon_proxy ~= 10 * (NDVI_current - NDVI_baseline).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Combines change mapping, confidence scoring, zone-level vector outputs, and an audit contract in one reproducible run.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams need standardized remote-sensing evidence packages ahead of formal carbon verification reporting.</p>
+<h3>Typical Presets</h3>
+<ul><li>conservative for stricter gain/loss interpretation thresholds.</li><li>balanced for default operational monitoring.</li><li>aggressive for early-signal monitoring workflows.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_bundle, current_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline and current multiband rasters used for NDVI change analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_red_band_index, baseline_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline red/NIR band indices. Defaults: 0, 1.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>current_red_band_index, current_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Current red/NIR band indices. Defaults: 0, 1.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>biomass_proxy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional LiDAR-derived biomass proxy raster for blended carbon-proxy interpretation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: conservative | balanced | aggressive</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Sensitivity profile controlling gain/loss thresholds and confidence blending behavior.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_block_cells</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pixel block size used for verification zone polygon aggregation. Defaults to `16`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>methodology_reference</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional methodology lineage note for audit metadata (for example Verra references).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name output artifacts.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi_baseline</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline NDVI surface (`*_ndvi_baseline.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi_current</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Current NDVI surface (`*_ndvi_current.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi_delta</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Signed NDVI change surface (`*_ndvi_delta.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>carbon_proxy</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Carbon-proxy change index (`*_carbon_proxy.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>change_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence raster for change interpretation (`*_change_confidence.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>verification_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Block-aggregated verification polygons with change class and summary attributes (`*_verification_zones.gpkg`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>audit_contract</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable audit summary contract (`*_audit_contract.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from the contract for stakeholder review.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.carbon_sequestration_verification_audit(
+    baseline_bundle=&quot;data/baseline_multiband.tif&quot;,
+    current_bundle=&quot;data/current_multiband.tif&quot;,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    current_red_band_index=0,
+    current_nir_band_index=1,
+    biomass_proxy=&quot;data/biomass_proxy.tif&quot;,
+    profile=&quot;balanced&quot;,
+    zone_block_cells=16,
+    methodology_reference=&quot;Verra VM0010 v1.3&quot;,
+    output_prefix=&quot;output/carbon_audit&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

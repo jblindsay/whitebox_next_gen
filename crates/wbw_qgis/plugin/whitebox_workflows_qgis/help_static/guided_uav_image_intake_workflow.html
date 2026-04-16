@@ -1,0 +1,59 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>UAV Image Intake QA</strong></p>
+<h3>Problem It Solves</h3>
+<p>Is this image set good enough to proceed into expensive downstream processing, and what should be fixed first if not?</p>
+<h3>Who It Is For</h3>
+<ul><li>UAV mission operators, photogrammetry technicians, and geospatial production teams.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Drone services teams, geomatics operations managers, and data-engineering teams responsible for production intake quality.</p>
+<h3>What It Does</h3>
+<ul><li>Scans UAV imagery and builds a metadata/coverage inventory.</li><li>Computes intake QA metrics (GPS/EXIF completeness, overlap estimate, image-count sufficiency).</li><li>Extracts per-image blur scores and flags blurry images with warnings.</li><li>Parses RTK fix status and gimbal/flight orientation priors from DJI XMP metadata where available.</li><li>Returns workflow status (`pass`, `review`, `fail`) with warnings suitable for operator triage.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Recursively discovers supported image files (`jpg`, `jpeg`, `tif`, `tiff`, `png`).</li><li>Parses EXIF fields for timestamp and GPS coordinates; parses DJI XMP sidecar fields for RTK fix status and gimbal yaw/pitch/roll and flight yaw.</li><li>Estimates overlap from GPS nearest-neighbor spacing against a nominal footprint heuristic.</li><li>Computes a per-image blur score from a Laplacian variance kernel (configurable as `off`, `fast`, or `full` mode) with wide-SIMD acceleration.</li><li>Metadata extraction and blur scoring run in parallel across all images using Rayon thread pools.</li><li>Applies profile thresholds to classify readiness and emit actionable warnings.</li><li>Indicative heuristic: overlap_proxy ~= 1 - (nn_spacing_m / nominal_footprint_m), clipped to [0, 1].</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Converts ad hoc manual preflight checks into a single reproducible QA workflow with machine-readable outputs, including blur quality, RTK status, and orientation priors alongside the standard GPS and overlap diagnostics.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Frequent failed/rework-heavy photogrammetry or registration runs caused by avoidable intake quality issues.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast: permissive intake thresholds with fast-mode blur scoring for rapid field feedback.</li><li>balanced: default operations profile with fast-mode blur scoring.</li><li>strict: tighter quality gate with full-mode blur scoring before production processing.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>images_dir</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input directory containing UAV images to screen.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | strict</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>[pro] QA profile controlling overlap, metadata readiness, and blur thresholds; drives pass/review/fail classification. Defaults to `balanced`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>recursive</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>If true, scans subdirectories under images_dir. Defaults to `true`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name all output artifacts.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>blur_mode: off | fast | full</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Blur scoring mode. `off` skips blur scoring; `fast` downsamples before scoring; `full` scores at original resolution. Defaults to `fast`.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>image_inventory</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-image inventory with metadata flags, GPS coordinates, capture fields, blur score, and gimbal/RTK orientation columns (`*_image_inventory.csv`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>qa_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Structured QA checks and warning details for intake triage, including blur and orientation hint sections (`*_intake_qa_report.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Workflow summary contract with status and aggregate metrics including blur coverage and RTK coverage fractions (`*_intake_summary.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>image_centers</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoJSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Image center points from EXIF GPS with per-feature blur score and orientation properties (`*_image_centers.geojson`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>flight_path_lines</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoJSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Flight path line geometry built from ordered image centers with GPS (`*_flight_path_lines.geojson`).</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.guided_uav_image_intake_workflow(
+    images_dir=&quot;data/uav_mission/images&quot;,
+    profile=&quot;balanced&quot;,
+    recursive=True,
+    output_prefix=&quot;output/uav_intake&quot;,
+    blur_mode=&quot;fast&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

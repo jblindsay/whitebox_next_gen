@@ -1,0 +1,71 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Mine Reclamation Compliance Tracker</strong></p>
+<h3>Problem It Solves</h3>
+<p>Are reclamation milestones being achieved spatially, and where are intervention priorities for compliance closure?</p>
+<h3>Who It Is For</h3>
+<ul><li>Mine closure teams, compliance analysts, and environmental reporting operations.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Mine operators, reclamation contractors, and regulatory compliance monitoring groups.</p>
+<h3>What It Does</h3>
+<ul><li>Tracks vegetation recovery between baseline and current imagery.</li><li>Computes per-cell reclamation progress against target NDVI milestone.</li><li>Optionally evaluates slope stability milestone compliance.</li><li>Produces compliance-zone outputs and a contract-ready compliance summary.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Extracts baseline/current red and NIR bands and computes per-date NDVI.</li><li>Computes recovery delta and normalized progress toward target NDVI threshold.</li><li>Optionally evaluates slope raster against maximum acceptable slope angle.</li><li>Assigns milestone statuses and an overall compliance grade summary.</li><li>Aggregates per-cell progress into compliance zones with pass/conditional/fail class attributes.</li><li>Indicative formula: progress ~= (NDVI_current - NDVI_baseline) / (NDVI_target - NDVI_baseline), clipped to [0,1].</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Integrates vegetation recovery, optional slope milestone evaluation, zone outputs, and compliance-grade contract reporting in one run.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Regulatory milestone reporting cycles require reproducible evidence and zone-level compliance diagnostics.</p>
+<h3>Typical Presets</h3>
+<ul><li>spectral-only for vegetation recovery milestone tracking.</li><li>full compliance mode with slope stability for stricter regulatory submissions.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_bundle, current_bundle</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline and current multiband rasters used for NDVI recovery analysis.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>baseline_red_band_index, baseline_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline red/NIR band indices. Defaults: 0, 1.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>current_red_band_index, current_nir_band_index</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Current red/NIR band indices. Defaults: 0, 1.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional slope raster (degrees) for stability milestone evaluation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reclamation_target_ndvi</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Target NDVI threshold used for vegetation milestone scoring. Defaults to `0.35`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>slope_stability_max_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum acceptable slope for stability compliance. Defaults to `30.0`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>site_name</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional site name or permit identifier in contract outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_block_cells</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Pixel block size used for compliance-zone aggregation. Defaults to `20`.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>output_prefix</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Prefix used to name output artifacts.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi_baseline</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline NDVI raster (`*_ndvi_baseline.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ndvi_current</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Current NDVI raster (`*_ndvi_current.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>vegetation_recovery</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>NDVI recovery delta raster (`*_vegetation_recovery.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>reclamation_progress</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Normalized progress-to-target raster (`*_reclamation_progress.tif`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>compliance_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Zone-level compliance polygons with progress/recovery attributes (`*_compliance_zones.gpkg`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>compliance_contract</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable compliance summary contract (`*_compliance_contract.json`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable report generated from compliance contract outputs.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.mine_site_reclamation_compliance_tracker(
+    baseline_bundle=&quot;data/mine_baseline.tif&quot;,
+    current_bundle=&quot;data/mine_current.tif&quot;,
+    baseline_red_band_index=0,
+    baseline_nir_band_index=1,
+    current_red_band_index=0,
+    current_nir_band_index=1,
+    slope=&quot;data/slope.tif&quot;,
+    reclamation_target_ndvi=0.35,
+    slope_stability_max_deg=30.0,
+    site_name=&quot;Mine Site Alpha&quot;,
+    zone_block_cells=20,
+    output_prefix=&quot;output/reclamation&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

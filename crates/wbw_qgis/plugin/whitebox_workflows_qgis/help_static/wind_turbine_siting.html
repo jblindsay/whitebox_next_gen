@@ -1,0 +1,57 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Wind Turbine Siting Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which candidate areas are most promising for wind siting at early-stage screening, and how confident are those rankings?</p>
+<h3>Who It Is For</h3>
+<ul><li>Renewable energy siting teams and feasibility analysts.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Wind developers, utility planning groups, and engineering consultancies.</p>
+<h3>What It Does</h3>
+<ul><li>Creates suitability and confidence surfaces for wind siting screening.</li><li>Combines slope constraints, terrain exposure, and settlement-visibility signals.</li><li>Supports profile-based scoring behavior for speed vs quality tradeoffs.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Derives slope and terrain-exposure factors from the DEM.</li><li>Applies distance/visibility penalties around settlement inputs.</li><li>Combines normalized factors with profile-dependent weights into siting score and confidence.</li><li>Indicative formula: score ~= w_s*terrain_suitability + w_e*exposure - w_v*visibility_penalty.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Combines terrain and visibility constraints with confidence scoring to support transparent shortlist decisions.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A development team needs to narrow a broad search region before expensive met mast or field campaigns.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast for broad regional pre-screening.</li><li>balanced for standard feasibility support.</li><li>quality for higher-confidence candidate ranking.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>dem, settlements</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Terrain model and settlement features used for slope/visibility siting constraints.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>visibility_radius_meters</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Maximum visibility analysis radius used during visual-impact screening.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>min_slope_degrees, max_slope_degrees</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Slope suitability bounds used to constrain turbine placement candidates.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | quality</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Siting profile controlling screening speed versus quality/strictness of constraints.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>siting_score</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Core siting suitability score raster produced by the model.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence layer quantifying reliability of modeled outputs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+score, conf, summary = wbe.wind_turbine_siting(
+    dem=&quot;data/dem.tif&quot;,
+    settlements=&quot;data/settlements.gpkg&quot;,
+    profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/wind_siting&quot;,
+)
+
+print(score)
+print(conf)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

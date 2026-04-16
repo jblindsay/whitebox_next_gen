@@ -1,0 +1,63 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Precision Ag Yield Zone Analysis</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which management zones should receive differentiated input strategy based on stable productivity patterns?</p>
+<h3>Who It Is For</h3>
+<ul><li>Precision agronomy teams and farm analytics providers.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Enterprise farms, agronomy consultancies, and digital ag platforms.</p>
+<h3>What It Does</h3>
+<ul><li>Builds yield-stability surfaces from yield productivity context.</li><li>Integrates optional terrain context to improve zone differentiation.</li><li>Produces management-zone rasters for variable-rate strategy design.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Normalizes yield response and computes local stability/variability signatures.</li><li>Optionally blends terrain_context influence with profile-dependent weighting.</li><li>Partitions pixels into zone_count management classes and emits zone confidence and polygons.</li><li>Indicative formula: zone_score ~= w_y*yield_stability + w_t*terrain_term; zone = discretize(zone_score, zone_count).</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Converts yield and terrain context into explicit, contract-backed management zone outputs.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>A farm program is formalizing zone-based management for seed, fertility, and water decisions.</p>
+<h3>Typical Presets</h3>
+<ul><li>fast for high-throughput zone generation.</li><li>balanced for default zone planning.</li><li>conservative for stronger terrain-context influence.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>yield_surface</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Yield raster used to estimate productivity stability and zone segmentation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional terrain_context</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional terrain context raster used to strengthen management-zone differentiation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: fast | balanced | conservative</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling sensitivity, quality strictness, and runtime tradeoffs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_count (2..8)</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Requested number of management zones to generate.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>yield_stability</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Yield stability raster used to delineate management zones.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>management_zones</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Management-zone classification raster.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>management_zones_vector</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoPackage</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Vectorized management zones for operations and reporting.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>zone_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence surface associated with generated management zones.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+stability, zones, zone_polys, confidence, summary = wbe.precision_ag_yield_zone_intelligence(
+    yield_surface=&quot;data/yield_surface.tif&quot;,
+    terrain_context=&quot;data/terrain_context.tif&quot;,
+    profile=&quot;balanced&quot;,
+    zone_count=4,
+    max_zone_features=5000,
+    output_prefix=&quot;output/yield_zone&quot;,
+)
+
+print(stability)
+print(zones)
+print(zone_polys)
+print(confidence)
+print(summary)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

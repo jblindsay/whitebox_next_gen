@@ -1,0 +1,65 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Service Area Planning and Coverage Optimization</strong></p>
+<h3>Problem It Solves</h3>
+<p>Which facilities and scenarios provide the strongest service coverage, and where do unmet demand gaps remain?</p>
+<h3>Who It Is For</h3>
+<ul><li>Accessibility planners, emergency coverage teams, and utility service design analysts.</li></ul>
+<h3>Primary Buyer</h3>
+<p>Municipal/public safety GIS teams, utilities, and logistics planners managing service-area targets.</p>
+<h3>What It Does</h3>
+<ul><li>Builds network-based multi-ring service-area polygons from facility points over a line network.</li><li>Flags uncovered demand points outside baseline service coverage.</li><li>Produces scenario summary and candidate ranking CSV outputs for open/close planning workflows.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Validates network/facility geometry types and parses ring costs.</li><li>Runs network service-area generation using the OSS network engine with polygon outputs.</li><li>Computes demand coverage and uncovered demand diagnostics against generated polygons.</li><li>Optionally evaluates scenario CSV variants (`scenario_id,facility_id,is_open[,capacity]`) and exports comparative KPI rows.</li><li>Indicative KPI formula: `coverage_pct = 100 * covered_demand / total_demand`.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Replaces disconnected manual GIS steps with a reproducible network-derived coverage workflow and explicit planning artifacts.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams need auditable facility coverage plans with scenario comparison outputs for governance or budget review.</p>
+<h3>Typical Presets</h3>
+<ul><li>baseline-only: generate default service areas + uncovered demand.</li><li>scenario-planning: include open/close scenario CSV for option analysis.</li><li>candidate-screening: rank facilities by demand coverage proxy for expansion planning.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>network</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input line network layer (roads, trails, utility lines).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>facilities</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Input facility point layer used as service origins.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>demand_points</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional demand point layer used for covered/uncovered diagnostics and KPI generation.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ring_costs</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Numeric array of travel-cost ring thresholds (e.g., `[5, 10, 15]`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>scenarios</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional CSV with `scenario_id,facility_id,is_open[,capacity]` for open/close scenario runs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>service_areas</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output vector path for service-area polygons.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>uncovered_demand</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output vector path for uncovered demand points.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>scenario_summary_csv</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output CSV path for scenario KPIs.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ranked_candidates_csv</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Output CSV path for candidate ranking metrics.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>service_areas</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoJSON/GeoPackage/Shapefile</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Baseline network-derived multi-ring service-area polygons.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>uncovered_demand</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoJSON/GeoPackage/Shapefile</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Demand points outside baseline service-area coverage.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>scenario_summary_csv</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Scenario-level KPI table (`scenario_id,total_demand_covered_pct,avg_accessibility,outlier_count`).</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>ranked_candidates_csv</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>CSV</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Candidate ranking table (`candidate_id,coverage_gain_pct,avg_distance_improvement,rank`).</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.service_area_planning_and_coverage_optimization(
+    network=&quot;data/street_network.shp&quot;,
+    facilities=&quot;data/facilities.shp&quot;,
+    demand_points=&quot;data/demand_points.shp&quot;,
+    ring_costs=[5.0, 10.0, 15.0],
+    scenarios=&quot;data/service_scenarios.csv&quot;,
+    service_areas=&quot;output/service_areas.geojson&quot;,
+    uncovered_demand=&quot;output/uncovered_demand.geojson&quot;,
+    scenario_summary_csv=&quot;output/scenario_summary.csv&quot;,
+    ranked_candidates_csv=&quot;output/ranked_candidates.csv&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

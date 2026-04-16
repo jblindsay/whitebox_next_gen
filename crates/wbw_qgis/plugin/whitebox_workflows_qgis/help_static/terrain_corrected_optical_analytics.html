@@ -1,0 +1,60 @@
+<!-- wbw-qgis:generated -->
+<p><span style="background:#c0392b;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">PRO</span><span style="background:#27ae60;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.85em;margin-right:6px;">Production</span></p>
+<p>Workflow-grade Pro analysis with audit-ready outputs.</p>
+<p><span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">workflow</span> <span style="background:#eef;padding:1px 7px;border-radius:10px;font-size:0.82em;margin-right:4px">pro</span></p>
+<h2>Workflow Narrative</h2>
+<p><strong>Terrain-Corrected Optical Prep</strong></p>
+<h3>Problem It Solves</h3>
+<p>Can we reduce terrain illumination bias so downstream indices and change products are defensible?</p>
+<h3>Who It Is For</h3>
+<ul><li>Remote sensing practitioners working in high-relief terrain.</li></ul>
+<h3>Primary Buyer</h3>
+<p>EO analytics teams, natural resource agencies, and monitoring service providers.</p>
+<h3>What It Does</h3>
+<ul><li>Applies terrain-aware optical correction (C-correction style) using DEM-derived geometry.</li><li>Builds cloud/shadow masks and quality confidence diagnostics alongside corrected bands.</li><li>Produces analysis-ready corrected optical outputs for downstream monitoring/classification.</li></ul>
+<h3>How It Works</h3>
+<ul><li>Derives slope/aspect illumination terms from the DEM and solar geometry parameters.</li><li>Applies per-band topographic normalization (C-correction style) to reduce relief-driven bias.</li><li>Generates cloud-shadow and quality layers from correction residual behavior and masking rules.</li><li>Indicative formula: L_corr ~= L_obs * (cos(theta_s) + C) / (cos(i) + C), where i is incidence angle from DEM slope/aspect.</li></ul>
+<h3>Why It Wins</h3>
+<ul><li>Integrates correction and QA/mask outputs in one workflow rather than forcing separate ad hoc preprocessing scripts.</li></ul>
+<h3>Typical Buying Trigger</h3>
+<p>Teams see unstable index/change outputs across steep terrain and need a standardized correction stage.</p>
+<h3>Typical Presets</h3>
+<ul><li>conservative: stricter correction and masking behavior.</li><li>balanced: default profile.</li><li>fast: quicker execution on large scenes.</li></ul>
+<h2>Inputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Optional</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>input_red, input_nir, input_dem</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Core optical + terrain inputs used for topographic/reflectance normalization workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>optional input_green</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>yes</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Optional green band used by workflows that include green-channel diagnostics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>solar_zenith_deg, solar_azimuth_deg</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Solar geometry parameters used to model illumination and terrain incidence effects.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>profile: conservative | balanced | fast</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>no</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Processing profile controlling quality-vs-throughput behavior for correction workflow execution.</td></tr>
+</tbody></table>
+<h2>Outputs</h2>
+<table style='border-collapse:collapse;width:100%'><thead><tr style='background:#f5f5f5'><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Parameter</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Type</th><th style='text-align:left;padding:4px 8px;border-bottom:2px solid #ccc'>Description</th></tr></thead>
+<tbody><tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>corrected optical bands</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Terrain-corrected optical bands for downstream index and classification workflows.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>cloud_shadow_mask</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Cloud and shadow mask used to suppress unreliable optical pixels.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>topographic_correction_factor</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Per-pixel topographic correction factor used in radiometric normalization.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>quality_confidence</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>GeoTIFF</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Confidence surface indicating reliability of corrected optical values.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>summary</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>JSON</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Machine-readable summary report containing run metadata, QA diagnostics, and key metrics.</td></tr>
+<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>html_report</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>HTML</td><td style='padding:4px 8px;border-bottom:1px solid #eee'>Human-readable customer-facing report generated from the summary contract for stakeholder review and QA traceability.</td></tr>
+</tbody></table>
+<h2>Python Example</h2>
+<pre><code>import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment(include_pro=True, tier=&quot;pro&quot;)
+
+result = wbe.terrain_corrected_optical_analytics(
+    input_red=&quot;data/red.tif&quot;,
+    input_nir=&quot;data/nir.tif&quot;,
+    input_dem=&quot;data/dem.tif&quot;,
+    solar_zenith_deg=40.0,
+    solar_azimuth_deg=165.0,
+    profile=&quot;balanced&quot;,
+    output_prefix=&quot;output/tco&quot;,
+)
+
+print(result)</code></pre>
+<h2>Project Links</h2>
+<div align="left">
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows-for-python/">WbW Homepage</a>
+    <a href="https://www.whiteboxgeo.com/manual/wbw-user-manual/book/preface.html">User Manual</a>
+    <a href="https://www.whiteboxgeo.com/whitebox-workflows/">Learn More</a>
+</div>

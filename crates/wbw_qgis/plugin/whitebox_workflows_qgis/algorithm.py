@@ -8,6 +8,7 @@ from typing import Any
 
 from .bootstrap import create_runtime_session, run_projection_wrapper
 from .help import get_help_url
+from .help_provider import get_help_provider
 
 try:
     from qgis.PyQt.QtCore import QSettings
@@ -929,6 +930,14 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     defaultValue=_coerce_string_default(default_value, ""),
                     optional=not required,
                 )
+
+            # Enriched parameter help from legacy documentation
+            help_provider = get_help_provider()
+            tool_id = self._manifest.get("id", "")
+            if help_provider.has_help(tool_id):
+                param_help = help_provider.get_parameter_help(tool_id, name)
+                if param_help:
+                    qgs_param.setHelp(param_help)
 
             self.addParameter(qgs_param)
             self._param_specs.append(

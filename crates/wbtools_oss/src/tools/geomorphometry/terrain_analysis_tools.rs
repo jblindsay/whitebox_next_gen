@@ -317,39 +317,6 @@ impl TerrainAnalysisCore {
         residuals
     }
 
-    fn build_geomorphon_lookup() -> [u16; 6561] {
-        let mut gtc = [u16::MAX; 6561];
-
-        for val in 0..6561usize {
-            let mut pattern = [0usize; 8];
-            let mut rev_pattern = [0usize; 8];
-            let mut value = val;
-            for i in 0..8 {
-                let digit = value % 3;
-                pattern[i] = digit;
-                rev_pattern[7 - i] = digit;
-                value /= 3;
-            }
-
-            let mut best = usize::MAX;
-            for shift in 0..8usize {
-                let mut code = 0usize;
-                let mut rev_code = 0usize;
-                let mut power = 1usize;
-                for i in 0..8usize {
-                    let idx = (i + 8usize - shift) % 8usize;
-                    code += pattern[idx] * power;
-                    rev_code += rev_pattern[idx] * power;
-                    power *= 3;
-                }
-                best = best.min(code).min(rev_code);
-            }
-            gtc[val] = best as u16;
-        }
-
-        gtc
-    }
-
     fn parse_filter_sizes(args: &ToolArgs) -> (usize, usize) {
         let mut filter_size_x = args
             .get("filter_size_x")
@@ -3825,16 +3792,16 @@ impl TerrainAnalysisCore {
         ToolMetadata {
             id: "geomorphons",
             display_name: "Geomorphons",
-            summary: "Classifies landforms using 8-direction line-of-sight ternary patterns based on zenith-nadir angle differences, or 10 common geomorphon forms. Authored by Dan Newman and John Lindsay.",
+            summary: "Classifies landforms using 8-direction line-of-sight ternary patterns derived from zenith and nadir angle comparisons, or 10 common geomorphon forms.",
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
                 ToolParamSpec { name: "search_distance", description: "Maximum look-up distance in cells per direction (default 50); the endpoint cell is included.", required: false },
-                ToolParamSpec { name: "flatness_threshold", description: "Flatness threshold in degrees (default 0.0), applied to the absolute zenith-nadir angle difference.", required: false },
+                ToolParamSpec { name: "flatness_threshold", description: "Flatness threshold in degrees (default 1.0), applied to the zenith-nadir angle difference.", required: false },
                 ToolParamSpec { name: "flatness_distance", description: "Distance in cells after which the flatness threshold tapers with horizon distance (default 0).", required: false },
                 ToolParamSpec { name: "skip_distance", description: "Distance in cells to skip before evaluating line-of-sight (default 0).", required: false },
-                ToolParamSpec { name: "output_forms", description: "If true, outputs 10 common landform classes; otherwise outputs canonical geomorphon ternary codes.", required: false },
+                ToolParamSpec { name: "output_forms", description: "If true, outputs 10 common landform classes; otherwise outputs the raw ternary geomorphon code ordered counter-clockwise from east.", required: false },
                 ToolParamSpec { name: "analyze_residuals", description: "If true, detrends the DEM using a fitted linear plane before classification.", required: false },
                 ToolParamSpec { name: "output", description: "Optional output path.", required: false },
             ],
@@ -3845,7 +3812,7 @@ impl TerrainAnalysisCore {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
         defaults.insert("search_distance".to_string(), json!(50));
-        defaults.insert("flatness_threshold".to_string(), json!(0.0));
+        defaults.insert("flatness_threshold".to_string(), json!(1.0));
         defaults.insert("flatness_distance".to_string(), json!(0));
         defaults.insert("skip_distance".to_string(), json!(0));
         defaults.insert("output_forms".to_string(), json!(true));
@@ -3853,7 +3820,7 @@ impl TerrainAnalysisCore {
         ToolManifest {
             id: "geomorphons".to_string(),
             display_name: "Geomorphons".to_string(),
-            summary: "Classifies landforms using 8-direction line-of-sight ternary patterns based on zenith-nadir angle differences, or 10 common geomorphon forms. Authored by Dan Newman and John Lindsay.".to_string(),
+            summary: "Classifies landforms using 8-direction line-of-sight ternary patterns derived from zenith and nadir angle comparisons, or 10 common geomorphon forms.".to_string(),
             category: ToolCategory::Raster,
             license_tier: LicenseTier::Open,
             params: vec![],
@@ -3878,7 +3845,7 @@ impl TerrainAnalysisCore {
             .get("flatness_threshold")
             .or_else(|| args.get("threshold"))
             .and_then(|v| v.as_f64())
-            .unwrap_or(0.0)
+            .unwrap_or(1.0)
             .max(0.0)
             .to_radians();
         let mut flatness_distance = args
@@ -3946,9 +3913,6 @@ impl TerrainAnalysisCore {
         let flatness_distance_f64 = flatness_distance as f64;
         let flatness_threshold_tan = flatness_threshold.tan();
         let skip = (skip_distance + 1) as isize;
-        let half_pi = std::f64::consts::FRAC_PI_2;
-        let gtc = std::sync::Arc::new(Self::build_geomorphon_lookup());
-
         const CLASS_MAP: [[u8; 9]; 9] = [
             [1, 1, 1, 8, 8, 9, 9, 9, 10],
             [1, 1, 8, 8, 8, 9, 9, 9, 0],
@@ -3960,8 +3924,9 @@ impl TerrainAnalysisCore {
             [3, 3, 0, 0, 0, 0, 0, 0, 0],
             [2, 0, 0, 0, 0, 0, 0, 0, 0],
         ];
-        const DX: [isize; 8] = [0, 1, 1, 1, 0, -1, -1, -1];
-        const DY: [isize; 8] = [-1, -1, 0, 1, 1, 1, 0, -1];
+        // Rays are ordered counter-clockwise starting from east.
+        const DX: [isize; 8] = [1, 1, 0, -1, -1, -1, 0, 1];
+        const DY: [isize; 8] = [0, -1, -1, -1, 0, 1, 1, 1];
 
         let mut step_lengths = [0.0_f64; 8];
         let mut flat_threshold_heights = [0.0_f64; 8];
@@ -4011,8 +3976,8 @@ impl TerrainAnalysisCore {
                     let mut pattern = [1usize; 8];
 
                     'directions: for dir in 0..8usize {
-                        let mut zenith_slope = f64::NEG_INFINITY;
-                        let mut nadir_slope = f64::INFINITY;
+                        let mut zenith_slope = 0.0_f64;
+                        let mut nadir_slope = 0.0_f64;
                         let mut zenith_step = 0usize;
                         let mut nadir_step = 0usize;
                         let mut d = skip;
@@ -4026,11 +3991,11 @@ impl TerrainAnalysisCore {
                             let z2 = analysis_input.get(band, r, c);
                             if !analysis_input.is_nodata(z2) {
                                 let slope = (z2 - z) * inv_distances[d as usize][dir];
-                                if slope > zenith_slope {
+                                if slope > 0.0 && slope > zenith_slope {
                                     zenith_slope = slope;
                                     zenith_step = d as usize;
                                 }
-                                if slope < nadir_slope {
+                                if slope < 0.0 && slope < nadir_slope {
                                     nadir_slope = slope;
                                     nadir_step = d as usize;
                                 }
@@ -4066,19 +4031,19 @@ impl TerrainAnalysisCore {
                         let zenith_angle = if zenith_step > 0 {
                             zenith_slope.atan()
                         } else {
-                            -half_pi
+                            0.0
                         };
                         let nadir_angle = if nadir_step > 0 {
-                            nadir_slope.atan()
+                            (-nadir_slope).atan()
                         } else {
-                            half_pi
+                            0.0
                         };
                         let relief_threshold = zenith_threshold.max(nadir_threshold);
-                        let signed_relief = zenith_angle + nadir_angle;
-                        if signed_relief > relief_threshold {
+                        let relief_difference = zenith_angle - nadir_angle;
+                        if relief_difference > relief_threshold {
                             pattern[dir] = 2;
                             count_pos += 1;
-                        } else if signed_relief < -relief_threshold {
+                        } else if relief_difference < -relief_threshold {
                             pattern[dir] = 0;
                             count_neg += 1;
                         }
@@ -4093,7 +4058,7 @@ impl TerrainAnalysisCore {
                             code += digit * power;
                             power *= 3;
                         }
-                        gtc[code] as f64
+                        code as f64
                     };
                 }
 
@@ -8568,7 +8533,7 @@ mod tests {
         let out_id = memory_store::raster_path_to_id(result.outputs.get("path").unwrap().as_str().unwrap()).unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         let center_code = out.get(0, 4, 4);
-        assert!((center_code - 3280.0).abs() > 1e-10, "expected non-flat code, got {center_code}");
+        assert!((center_code - 3281.0).abs() < 1e-10, "expected east-directed zenith dominance code, got {center_code}");
     }
 
     #[test]
@@ -8587,7 +8552,70 @@ mod tests {
         let out_id = memory_store::raster_path_to_id(result.outputs.get("path").unwrap().as_str().unwrap()).unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         let center_code = out.get(0, 5, 5);
-        assert!((center_code - 3280.0).abs() > 1e-10, "expected endpoint sample to influence classification, got {center_code}");
+        assert!((center_code - 3281.0).abs() < 1e-10, "expected endpoint sample to influence east-directed classification, got {center_code}");
+    }
+
+    #[test]
+    fn geomorphons_raw_code_preserves_east_origin_and_orientation() {
+        let mut east_input = make_constant_raster(9, 9, -9999.0);
+        east_input.set(0, 4, 4, 0.0).unwrap();
+        east_input.set(0, 4, 5, 10.0).unwrap();
+
+        let mut west_input = make_constant_raster(9, 9, -9999.0);
+        west_input.set(0, 4, 4, 0.0).unwrap();
+        west_input.set(0, 4, 3, 10.0).unwrap();
+
+        let east_id = memory_store::put_raster(east_input);
+        let west_id = memory_store::put_raster(west_input);
+
+        let mut east_args = ToolArgs::new();
+        east_args.insert("input".to_string(), json!(memory_store::make_raster_memory_path(&east_id)));
+        east_args.insert("search_distance".to_string(), json!(1));
+        east_args.insert("flatness_threshold".to_string(), json!(0.0));
+        east_args.insert("output_forms".to_string(), json!(false));
+
+        let mut west_args = ToolArgs::new();
+        west_args.insert("input".to_string(), json!(memory_store::make_raster_memory_path(&west_id)));
+        west_args.insert("search_distance".to_string(), json!(1));
+        west_args.insert("flatness_threshold".to_string(), json!(0.0));
+        west_args.insert("output_forms".to_string(), json!(false));
+
+        let east_result = GeomorphonsTool.run(&east_args, &make_ctx()).unwrap();
+        let east_out_id = memory_store::raster_path_to_id(east_result.outputs.get("path").unwrap().as_str().unwrap()).unwrap();
+        let east_out = memory_store::get_raster_by_id(east_out_id).unwrap();
+
+        let west_result = GeomorphonsTool.run(&west_args, &make_ctx()).unwrap();
+        let west_out_id = memory_store::raster_path_to_id(west_result.outputs.get("path").unwrap().as_str().unwrap()).unwrap();
+        let west_out = memory_store::get_raster_by_id(west_out_id).unwrap();
+
+        let east_code = east_out.get(0, 4, 4);
+        let west_code = west_out.get(0, 4, 4);
+
+        assert!((east_code - 3281.0).abs() < 1e-10, "unexpected east code: {east_code}");
+        assert!((west_code - 3361.0).abs() < 1e-10, "unexpected west code: {west_code}");
+        assert!((east_code - west_code).abs() > 1e-10, "raw codes should preserve orientation");
+    }
+
+    #[test]
+    fn geomorphons_positive_only_profile_treats_nadir_as_zero() {
+        let mut input = make_constant_raster(11, 11, -9999.0);
+        input.set(0, 5, 5, 0.0).unwrap();
+        input.set(0, 5, 6, 10.0).unwrap();
+        input.set(0, 5, 7, 12.0).unwrap();
+        let id = memory_store::put_raster(input);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(memory_store::make_raster_memory_path(&id)));
+        args.insert("search_distance".to_string(), json!(2));
+        args.insert("flatness_threshold".to_string(), json!(10.0));
+        args.insert("output_forms".to_string(), json!(false));
+
+        let result = GeomorphonsTool.run(&args, &make_ctx()).unwrap();
+        let out_id = memory_store::raster_path_to_id(result.outputs.get("path").unwrap().as_str().unwrap()).unwrap();
+        let out = memory_store::get_raster_by_id(out_id).unwrap();
+        let center_code = out.get(0, 5, 5);
+
+        assert!((center_code - 3281.0).abs() < 1e-10, "expected positive-only profile to remain zenith-dominant, got {center_code}");
     }
 
     #[test]

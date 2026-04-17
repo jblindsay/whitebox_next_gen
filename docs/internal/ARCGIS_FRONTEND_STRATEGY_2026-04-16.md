@@ -3,6 +3,12 @@
 Date: 2026-04-16  
 Scope: Whitebox Next Gen ArcGIS frontend feasibility, rollout plan, and resourcing model.
 
+Current baseline (confirmed):
+1. QGIS plugin is live.
+2. Python API is live.
+3. R API is live.
+4. ArcGIS Pro would be the fourth interface surface.
+
 ## Executive Recommendation
 
 Build an ArcGIS Pro frontend, but do it in staged increments and gate each stage by usage and support signals.
@@ -16,6 +22,7 @@ Rationale:
 - Technical feasibility is high for ArcGIS Pro.
 - Market upside is meaningful in Esri-heavy enterprise/government segments.
 - Engineering/support cost is materially higher than QGIS, so phased de-risking is important.
+- Existing QGIS discovery/help/entitlement patterns can be reused, reducing implementation risk versus a greenfield desktop frontend.
 
 ## Platform Targeting
 
@@ -39,7 +46,7 @@ What is harder than QGIS:
 - Packaging and deployment constraints in managed enterprise environments.
 - Broader compatibility testing matrix across ArcGIS Pro versions.
 
-Conclusion: A QGIS-like experience is feasible, but fast parity is not the right first milestone.
+Conclusion: A QGIS-like experience is feasible, but fast parity is not the right first milestone; first prove demand with a focused ArcGIS Pro MVP that reuses the existing three-surface workflow contract standard.
 
 ## Architecture Options
 

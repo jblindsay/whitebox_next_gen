@@ -1,0 +1,627 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Spatial Hydrology - Whitebox Workflows for Python User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html" class="active"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="spatial-hydrology"><a class="header" href="#spatial-hydrology">Spatial Hydrology</a></h1>
+<p>Spatial hydrology covers the analysis of water movement and accumulation across
+the land surface using DEMs. It is one of Whitebox's deepest specializations
+and spans DEM conditioning, flow routing, watershed delineation, stream network
+extraction, and advanced connectivity and storage modelling.</p>
+<p>This chapter progresses from fundamental concepts through a full watershed
+analysis pipeline, including advanced topics such as probabilistic depression
+analysis and hydrologic connectivity.</p>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<h3 id="the-hydrologic-dem-problem"><a class="header" href="#the-hydrologic-dem-problem">The Hydrologic DEM Problem</a></h3>
+<p>Most raw DEMs contain surface depressions — cells or groups of cells enclosed
+by higher neighbours — that are real topographic basins, artefacts of
+acquisition noise, or pits introduced by interpolation. Standard single-flow-
+direction routing (D8) cannot route water out of these depressions. Before
+flow routing, the DEM must be <strong>conditioned</strong> to remove spurious depressions
+while preserving genuine ones (such as lakes and wetlands).</p>
+<p>The two principal conditioning strategies are:</p>
+<p><strong>Filling</strong>: raises cells within each depression up to the spill elevation.
+This guarantees flat, drained surfaces but can significantly alter elevations
+and produce large flat areas that require secondary gradient enforcement.</p>
+<p><strong>Breaching</strong>: cuts a narrow channel of minimum cost through the barrier
+surrounding each depression, routing water to the nearest outside outlet.
+This preserves more of the original elevation field and is usually preferred
+when breachable barriers exist (roads, levees, embankments).</p>
+<p>In practice, a hybrid approach — breach where possible, fill remaining
+depressions — is often optimal.</p>
+<h3 id="flow-direction-algorithms"><a class="header" href="#flow-direction-algorithms">Flow Direction Algorithms</a></h3>
+<p>After DEM conditioning, a flow direction raster encodes which direction water
+flows from each cell. Whitebox supports multiple algorithms, each with
+different properties:</p>
+<div class="table-wrapper"><table><thead><tr><th>Algorithm</th><th>Flow type</th><th>Best use</th></tr></thead><tbody>
+<tr><td>D8</td><td>Single (deterministic)</td><td>Channel delineation, simple watersheds</td></tr>
+<tr><td>Rho8</td><td>Single (stochastic)</td><td>Reduces D8 directional bias</td></tr>
+<tr><td>D-infinity (DInf)</td><td>Multiple (proportional split)</td><td>Hillslope flux, dispersive flow</td></tr>
+<tr><td>FD8</td><td>Multiple (proportional)</td><td>Shallow overland flow modelling</td></tr>
+<tr><td>MD-infinity</td><td>Multiple</td><td>Subsurface/soil moisture modelling</td></tr>
+<tr><td>Quinn et al. (FD8 variant)</td><td>Multiple</td><td>Wetness index, slope-area workflows</td></tr>
+<tr><td>Minimal Dispersion Flow Algorithm</td><td>Adaptive</td><td>Balance between D8 and DInf</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="dem-conditioning"><a class="header" href="#dem-conditioning">DEM Conditioning</a></h2>
+<h3 id="breach-depressions"><a class="header" href="#breach-depressions">Breach Depressions</a></h3>
+<p><code>breach_depressions_least_cost</code> is the recommended first-pass conditioning
+tool. It minimises the total vertical cost of breaching while constraining
+each breach path to a maximum length and depth.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem = wbe.read_raster('dem_raw.tif')
+
+dem_breached = wbe.breach_depressions_least_cost(
+    dem,
+    dist=50,           # maximum breach channel length in cells
+    max_cost=None,     # no cost ceiling (breach wherever needed)
+    min_dist=True,     # prefer shorter breach paths
+    flat_increment=None,
+    fill_deps=True     # fill any remaining unbreachable depressions
+)
+wbe.write_raster(dem_breached, 'dem_conditioned.tif')
+</code></pre>
+<p>If your study area contains roads or embankments that act as real barriers to
+flow, consider mapping them as embankments first and then burning them into
+the DEM:</p>
+<pre><code class="language-python">dem_burned = wbe.topological_breach_burn(dem, streams='streams_mapped.shp')
+dem_conditioned = wbe.breach_depressions_least_cost(dem_burned, dist=50, fill_deps=True)
+</code></pre>
+<h3 id="fill-depressions"><a class="header" href="#fill-depressions">Fill Depressions</a></h3>
+<p>When you need guaranteed flat-free surfaces or are processing coarse-resolution
+DEMs where breaching introduces artefacts, full filling is appropriate:</p>
+<pre><code class="language-python">dem_filled = wbe.fill_depressions(dem, flat_increment=0.001)
+wbe.write_raster(dem_filled, 'dem_filled.tif')
+</code></pre>
+<p>The <code>flat_increment</code> adds a tiny gradient across flat areas to enable
+downstream flow routing.</p>
+<h3 id="single-cell-pit-removal"><a class="header" href="#single-cell-pit-removal">Single-Cell Pit Removal</a></h3>
+<p>For DEMs that are mostly clean but contain isolated single-cell pits (from
+radiometric noise in LiDAR interpolation), a lightweight pre-pass avoids
+unnecessary full conditioning:</p>
+<pre><code class="language-python">dem_pitless = wbe.fill_pits(dem)
+dem_conditioned = wbe.breach_depressions_least_cost(dem_pitless, dist=50, fill_deps=True)
+</code></pre>
+<hr />
+<h2 id="flow-direction"><a class="header" href="#flow-direction">Flow Direction</a></h2>
+<h3 id="d8-flow-pointer"><a class="header" href="#d8-flow-pointer">D8 Flow Pointer</a></h3>
+<p>D8 assigns each cell a direction code to its steepest neighbour. The result
+is an integer pointer raster used by many downstream tools.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem_conditioned.tif')
+
+d8_pntr = wbe.d8_pointer(dem)
+wbe.write_raster(d8_pntr, 'd8_pointer.tif')
+</code></pre>
+<h3 id="d-infinity-flow-pointer"><a class="header" href="#d-infinity-flow-pointer">D-Infinity Flow Pointer</a></h3>
+<p>DInf partitions flow between two downslope neighbours according to the
+slope angle, producing a continuous flow direction that reduces the
+directional bias of D8:</p>
+<pre><code class="language-python">dinf_pntr = wbe.dinf_pointer(dem)
+wbe.write_raster(dinf_pntr, 'dinf_pointer.tif')
+</code></pre>
+<hr />
+<h2 id="flow-accumulation"><a class="header" href="#flow-accumulation">Flow Accumulation</a></h2>
+<p>Flow accumulation counts (or accumulates weighted values of) the upstream
+contributing area draining to each cell. It is the primary tool for
+identifying stream channels, delineating watersheds, and computing
+topographic wetness indices.</p>
+<h3 id="basic-d8-flow-accumulation"><a class="header" href="#basic-d8-flow-accumulation">Basic D8 Flow Accumulation</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem_conditioned.tif')
+
+d8_pntr = wbe.d8_pointer(dem)
+
+# Cell-count accumulation
+flow_accum = wbe.d8_flow_accum(d8_pntr, out_type='cells')
+wbe.write_raster(flow_accum, 'flow_accum_d8.tif')
+
+# Log-transform for visualisation (high dynamic range)
+import math
+flow_accum_log = flow_accum.log2()   # WbW raster operator
+wbe.write_raster(flow_accum_log, 'flow_accum_d8_log.tif')
+</code></pre>
+<h3 id="specific-contributing-area-d-infinity"><a class="header" href="#specific-contributing-area-d-infinity">Specific Contributing Area (D-Infinity)</a></h3>
+<p>Specific contributing area normalises by cell width and is used in wetness
+index and erosion models:</p>
+<pre><code class="language-python">dinf_pntr = wbe.dinf_pointer(dem)
+sca = wbe.dinf_flow_accum(dinf_pntr, input_is_pointer=True, out_type='sca')
+wbe.write_raster(sca, 'specific_contributing_area.tif')
+</code></pre>
+<h3 id="topographic-wetness-index-twi"><a class="header" href="#topographic-wetness-index-twi">Topographic Wetness Index (TWI)</a></h3>
+<p>TWI = ln(SCA / tan(slope)) is a widely used proxy for soil moisture and
+saturated area:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+import math
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem_conditioned.tif')
+
+dinf_pntr = wbe.dinf_pointer(dem)
+sca       = wbe.dinf_flow_accum(dinf_pntr, out_type='sca')
+slope_rad = wbe.slope(dem, units='radians')
+
+# Avoid log(0) by clamping minimum SCA
+sca_clamped = sca.max(0.001)
+slope_clamped = slope_rad.max(0.001)
+
+twi = (sca_clamped / slope_clamped.tan()).log()
+wbe.write_raster(twi, 'twi.tif')
+</code></pre>
+<hr />
+<h2 id="stream-network-extraction"><a class="header" href="#stream-network-extraction">Stream Network Extraction</a></h2>
+<p>Stream channels appear in the flow accumulation raster as cells with very
+large contributing areas. Thresholding the accumulation surface reveals the
+channel network.</p>
+<h3 id="simple-threshold-extraction"><a class="header" href="#simple-threshold-extraction">Simple Threshold Extraction</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+d8_pntr   = wbe.read_raster('d8_pointer.tif')
+flow_accum = wbe.read_raster('flow_accum_d8.tif')
+
+# Extract stream cells above threshold (contributing area in cells)
+streams = wbe.extract_streams(flow_accum, threshold=1000.0)
+wbe.write_raster(streams, 'streams_raster.tif')
+
+# Convert to vector lines
+stream_vec = wbe.raster_streams_to_vector(streams, d8_pntr)
+wbe.write_vector(stream_vec, 'streams.gpkg')
+</code></pre>
+<h3 id="stream-link-tools"><a class="header" href="#stream-link-tools">Stream Link Tools</a></h3>
+<p>Stream links divide the network into segments between junctions, enabling
+per-segment statistics and Strahler order computation:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+streams   = wbe.read_raster('streams_raster.tif')
+d8_pntr   = wbe.read_raster('d8_pointer.tif')
+
+# Assign Strahler order to each channel cell
+strahler = wbe.strahler_stream_order(d8_pntr, streams)
+wbe.write_raster(strahler, 'strahler_order.tif')
+
+# Hack stream order (less sensitive to stubs)
+hack = wbe.hack_stream_order(d8_pntr, streams)
+wbe.write_raster(hack, 'hack_order.tif')
+
+# Horton's drainage composition ratios
+horton_ratios = wbe.horton_ratios(d8_pntr, streams)
+print(horton_ratios)   # returns bifurcation ratio, length ratio, area ratio
+</code></pre>
+<h3 id="shreve-and-topological-orders"><a class="header" href="#shreve-and-topological-orders">Shreve and Topological Orders</a></h3>
+<p>For large network analysis requiring consistent junction-based numbering:</p>
+<pre><code class="language-python">shreve = wbe.shreve_stream_magnitude(d8_pntr, streams)
+wbe.write_raster(shreve, 'shreve_magnitude.tif')
+
+topo_order = wbe.topological_stream_order(d8_pntr, streams)
+wbe.write_raster(topo_order, 'topological_order.tif')
+</code></pre>
+<hr />
+<h2 id="watershed-delineation"><a class="header" href="#watershed-delineation">Watershed Delineation</a></h2>
+<h3 id="single-outlet-watershed"><a class="header" href="#single-outlet-watershed">Single-Outlet Watershed</a></h3>
+<p>Delineate the complete contributing area upstream of a single outlet point:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+d8_pntr   = wbe.read_raster('d8_pointer.tif')
+outlet_pts = wbe.read_vector('outlet.shp')
+
+watershed = wbe.watershed(d8_pntr, outlet_pts)
+wbe.write_raster(watershed, 'watershed.tif')
+</code></pre>
+<h3 id="multiple-outlet-points--nested-basins"><a class="header" href="#multiple-outlet-points--nested-basins">Multiple Outlet Points / Nested Basins</a></h3>
+<p><code>unnest_basins</code> handles overlapping contributing areas when working with
+multiple outlets in a nested configuration:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+d8_pntr   = wbe.read_raster('d8_pointer.tif')
+outlets   = wbe.read_vector('outlets_multiple.shp')
+
+# Each outlet gets a unique basin ID; nested basins properly accounted for
+nested = wbe.unnest_basins(d8_pntr, outlets)
+wbe.write_raster(nested, 'nested_watersheds.tif')
+</code></pre>
+<h3 id="subbasin-delineation"><a class="header" href="#subbasin-delineation">Subbasin Delineation</a></h3>
+<p>Delineate subbasins for all channel junctions simultaneously:</p>
+<pre><code class="language-python">subbasins = wbe.subbasins(d8_pntr, streams)
+wbe.write_raster(subbasins, 'subbasins.tif')
+</code></pre>
+<hr />
+<h2 id="terrain-hydrologic-indices"><a class="header" href="#terrain-hydrologic-indices">Terrain Hydrologic Indices</a></h2>
+<h3 id="elevation-above-stream"><a class="header" href="#elevation-above-stream">Elevation Above Stream</a></h3>
+<p>Measures the vertical distance of each cell above the nearest channel, useful
+for floodplain mapping and valley-bottom delineation:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem     = wbe.read_raster('dem_conditioned.tif')
+streams = wbe.read_raster('streams_raster.tif')
+d8_pntr = wbe.read_raster('d8_pointer.tif')
+
+height_above_stream = wbe.elevation_above_stream(dem, streams)
+wbe.write_raster(height_above_stream, 'height_above_stream.tif')
+</code></pre>
+<p>Cells with values below 1.0 or 2.0 metres are candidate floodplain cells
+under typical storm recurrence intervals.</p>
+<h3 id="downslope-distance-to-stream"><a class="header" href="#downslope-distance-to-stream">Downslope Distance to Stream</a></h3>
+<p>How far (path-following the flow network) is each cell from the nearest channel?</p>
+<pre><code class="language-python">dist_to_stream = wbe.downslope_distance_to_stream(
+    d8_pntr, streams, dist_type='path'
+)
+wbe.write_raster(dist_to_stream, 'distance_to_stream.tif')
+</code></pre>
+<hr />
+<h2 id="advanced-stochastic-depression-analysis"><a class="header" href="#advanced-stochastic-depression-analysis">Advanced: Stochastic Depression Analysis</a></h2>
+<p>Real DEMs have vertical uncertainty. A depression that appears in one DEM
+may not appear once that uncertainty is accounted for. <code>stochastic_depression_ analysis</code> runs a Monte Carlo simulation across an ensemble of stochastically
+perturbed DEMs to estimate the probability that each cell is part of a real
+depression rather than a noise artefact.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+# rmse: vertical uncertainty of the DEM (e.g. 0.15 m for good LiDAR)
+# range: spatial autocorrelation range of the error field in map units
+# iterations: number of Monte Carlo realisations
+depression_prob = wbe.stochastic_depression_analysis(
+    dem,
+    rmse=0.15,
+    range=5.0,
+    iterations=100
+)
+wbe.write_raster(depression_prob, 'depression_probability.tif')
+</code></pre>
+<p>Cells with probability &gt; 0.5 are more likely to be real basins than artefacts.
+This output can drive a probability-weighted conditioned DEM or inform
+uncertainty quantification in flood inundation modelling.</p>
+<hr />
+<h2 id="advanced-hydrologic-connectivity"><a class="header" href="#advanced-hydrologic-connectivity">Advanced: Hydrologic Connectivity</a></h2>
+<p><code>hydrologic_connectivity</code> computes the probability (or frequency) that each
+cell contributes runoff to the watershed outlet, accounting for temporary
+storage and variable source areas:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem     = wbe.read_raster('dem_conditioned.tif')
+streams = wbe.read_raster('streams_raster.tif')
+
+connectivity = wbe.hydrologic_connectivity(dem, streams)
+wbe.write_raster(connectivity, 'hydrologic_connectivity.tif')
+</code></pre>
+<p>Highly connected areas (near streams, with steep contributing slopes) respond
+quickly to rainfall; low-connectivity areas (flats, depressions, wetlands)
+buffer the hydrological response.</p>
+<hr />
+<h2 id="advanced-impoundment-analysis"><a class="header" href="#advanced-impoundment-analysis">Advanced: Impoundment Analysis</a></h2>
+<p>Impoundment modelling simulates the water surface extent and volume that would
+result from a dam or weir at a specified location on a stream:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem     = wbe.read_raster('dem_conditioned.tif')
+streams = wbe.read_raster('streams_raster.tif')
+
+# impoundment height above stream bed in metres
+impoundment_area = wbe.impoundment_size_index(
+    dem, streams, damlength=1000.0
+)
+wbe.write_raster(impoundment_area, 'impoundment_size_index.tif')
+</code></pre>
+<hr />
+<h2 id="full-watershed-analysis-script"><a class="header" href="#full-watershed-analysis-script">Full Watershed Analysis Script</a></h2>
+<p>This end-to-end script conditions a DEM, routes flow, extracts a stream
+network, delineates a watershed, and produces a suite of hydrologic
+derivatives in a single automated workflow.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.verbose = True
+
+# --- Inputs ---
+dem_path    = 'dem_raw.tif'
+outlet_path = 'outlet_point.shp'
+streams_threshold = 2000   # cells (adjust to DEM resolution)
+
+# --- 1. Read DEM ---
+dem = wbe.read_raster(dem_path)
+
+# --- 2. Fill missing data ---
+dem = wbe.fill_missing_data(dem, filter_size=11)
+
+# --- 3. Smooth ---
+dem = wbe.feature_preserving_smoothing(dem, filter_size=11, num_iter=2)
+wbe.write_raster(dem, 'dem_smooth.tif')
+
+# --- 4. Condition DEM ---
+dem_cond = wbe.breach_depressions_least_cost(dem, dist=50, fill_deps=True)
+wbe.write_raster(dem_cond, 'dem_conditioned.tif')
+
+# --- 5. Flow direction ---
+d8_pntr  = wbe.d8_pointer(dem_cond)
+dinf_pntr = wbe.dinf_pointer(dem_cond)
+wbe.write_raster(d8_pntr, 'd8_pointer.tif')
+
+# --- 6. Flow accumulation ---
+flow_accum = wbe.d8_flow_accum(d8_pntr, out_type='cells')
+wbe.write_raster(flow_accum, 'flow_accum.tif')
+
+# --- 7. Streams ---
+streams = wbe.extract_streams(flow_accum, threshold=streams_threshold)
+wbe.write_raster(streams, 'streams.tif')
+stream_vec = wbe.raster_streams_to_vector(streams, d8_pntr)
+wbe.write_vector(stream_vec, 'streams.gpkg')
+
+# --- 8. Stream order ---
+strahler = wbe.strahler_stream_order(d8_pntr, streams)
+wbe.write_raster(strahler, 'strahler_order.tif')
+
+# --- 9. Watershed ---
+outlet_pts = wbe.read_vector(outlet_path)
+watershed  = wbe.watershed(d8_pntr, outlet_pts)
+wbe.write_raster(watershed, 'watershed.tif')
+
+# --- 10. TWI ---
+sca         = wbe.dinf_flow_accum(dinf_pntr, out_type='sca')
+slope_rad   = wbe.slope(dem_cond, units='radians')
+sca_c       = sca.max(0.001)
+slope_c     = slope_rad.max(0.001)
+twi         = (sca_c / slope_c.tan()).log()
+wbe.write_raster(twi, 'twi.tif')
+
+# --- 11. Height above stream ---
+height_above = wbe.elevation_above_stream(dem_cond, streams)
+wbe.write_raster(height_above, 'height_above_stream.tif')
+
+print("Watershed analysis pipeline complete.")
+</code></pre>
+<hr />
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>Hydrological analysis in WbW-Py follows a clear preparation → routing →
+network → delineation progression:</p>
+<ol>
+<li><strong>Condition</strong> the DEM (breach + fill) to ensure topologically correct flow.</li>
+<li><strong>Route flow</strong> using the algorithm appropriate to your application
+(D8 for channels, DInf for hillslope flux).</li>
+<li><strong>Accumulate</strong> flow and extract the stream network by thresholding.</li>
+<li><strong>Delineate</strong> watersheds and subbasins from outlets or channel junctions.</li>
+<li><strong>Compute</strong> terrain hydrologic indices (TWI, height above stream, connectivity).</li>
+<li><strong>Advance</strong> to probabilistic or connectivity analysis for uncertainty
+quantification and dynamic source area modelling.</li>
+</ol>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-processing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-processing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

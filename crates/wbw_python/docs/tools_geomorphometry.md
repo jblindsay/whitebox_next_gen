@@ -690,19 +690,19 @@ Creates an animated multiscale topographic position visualization, returning the
 #### `wbe.geomorphons`
 
 ```
-wbe.geomorphons(input, search_distance=50, flatness_threshold=0.0, flatness_distance=0, skip_distance=0, output_forms=True, analyze_residuals=False, output_path=None, callback=None) -> Raster
+wbe.geomorphons(input, search_distance=50, flatness_threshold=1.0, flatness_distance=0, skip_distance=0, output_forms=True, analyze_residuals=False, output_path=None, callback=None) -> Raster
 ```
 
-Classifies landforms using the geomorphons line-of-sight method. For each direction, the tool compares the zenith and nadir horizon angles using a ternary rule: positive (`2`) when the zenith-nadir difference exceeds the flatness threshold, negative (`0`) when it is below the negative threshold, and flat (`1`) otherwise. When `output_forms=True`, outputs the 10 common landform classes; otherwise outputs canonical geomorphon ternary codes.
+Classifies landforms using the geomorphons line-of-sight method. For each direction, the tool compares zenith and nadir angle magnitudes using a ternary rule: positive (`2`) when the zenith-nadir difference exceeds the flatness threshold, negative (`0`) when it is below the negative threshold, and flat (`1`) otherwise. When `output_forms=True`, outputs the 10 common landform classes; otherwise outputs raw ternary geomorphon codes ordered counter-clockwise from east.
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `input` | `Raster` | required | Input DEM raster |
 | `search_distance` | `int` | `50` | Maximum look-up distance in cells per direction (endpoint cell is included) |
-| `flatness_threshold` | `float` | `0.0` | Flatness threshold angle in degrees, applied to the absolute zenith-nadir angle difference |
+| `flatness_threshold` | `float` | `1.0` | Flatness threshold angle in degrees, applied to the zenith-nadir angle difference |
 | `flatness_distance` | `int` | `0` | Distance in cells after which the flatness threshold tapers with horizon distance |
 | `skip_distance` | `int` | `0` | Distance in cells skipped before beginning line-of-sight evaluation |
-| `output_forms` | `bool` | `True` | Output 10 common landform classes instead of raw canonical geomorphon codes |
+| `output_forms` | `bool` | `True` | Output 10 common landform classes instead of raw ternary geomorphon codes |
 | `analyze_residuals` | `bool` | `False` | Detrend the DEM with a fitted linear plane before classification |
 | `output_path` | `str \| None` | `None` | Output file path; omit to keep in memory |
 | `callback` | `callable \| None` | `None` | Progress/message event handler |

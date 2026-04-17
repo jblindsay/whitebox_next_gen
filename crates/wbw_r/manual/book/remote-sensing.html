@@ -1,0 +1,710 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Remote Sensing Analysis - Whitebox Workflows for R User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html" class="active"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for R User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="remote-sensing-analysis"><a class="header" href="#remote-sensing-analysis">Remote Sensing Analysis</a></h1>
+<p>Remote sensing workflows in WbW-R cover multispectral and hyperspectral image analysis: spectral index computation, image enhancement, principal component analysis, image segmentation, unsupervised and supervised classification, accuracy assessment, and change detection. All computation runs in the Whitebox backend.</p>
+<blockquote>
+<p><strong>Sensor Bundle First</strong>: When working with Sentinel-2, Landsat, PlanetScope, or SAR product folders, open the scene as a <strong>sensor bundle</strong> using <code>wbw_sensor_bundle_from_path()</code>. Bundles provide automatic metadata discovery, key-based band access, and one-call true/false-colour composites without hardcoding file names.</p>
+</blockquote>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Remote sensing image analysis requires familiarity with these core ideas:</p>
+<ul>
+<li><strong>Spectral bands</strong>: Distinct wavelength ranges (e.g. blue 450–510 nm, red 620–750 nm, NIR 750–900 nm). Different materials reflect different bands, enabling material discrimination.</li>
+<li><strong>Spectral indices</strong>: Normalized ratios of bands that isolate phenomena. NDVI (Normalized Difference Vegetation Index) uses NIR and red to measure greenness; NDWI uses NIR and SWIR for water content.</li>
+<li><strong>Spatial resolution</strong>: Pixel size in meters (Sentinel-2: 10 m for visible/NIR, 20 m for SWIR; Landsat: 30 m; SAR: 5–30 m depending on mode).</li>
+<li><strong>Temporal resolution</strong>: Revisit interval (Sentinel-2: 5 days; Landsat: 16 days; PlanetScope: daily or higher).</li>
+<li><strong>Atmospheric effects</strong>: Raw radiance is affected by aerosols, water vapour, and ozone. Surface reflectance products are atmospherically corrected; still require relative normalization for multi-date analysis.</li>
+<li><strong>Cloud masking</strong>: Cloud and cloud shadow pixels must be identified and excluded before classification or change detection using quality/QA bands.</li>
+<li><strong>Supervised classification</strong>: Training polygons with known labels teach a model to assign classes to unlabelled pixels. Training quality directly controls classification accuracy.</li>
+<li><strong>Unsupervised classification</strong>: Clustering algorithms (K-means, ISODATA) discover spectral clusters without training labels; useful for exploratory analysis.</li>
+<li><strong>Change detection</strong>: Comparing indices or classifications across dates to identify land-use changes, disturbance, or phenological shifts.</li>
+</ul>
+<hr />
+<h2 id="session-setup"><a class="header" href="#session-setup">Session Setup</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/remote_sensing')
+</code></pre>
+<hr />
+<h2 id="sensor-bundles--cross-family-scene-ingestion"><a class="header" href="#sensor-bundles--cross-family-scene-ingestion">Sensor Bundles — Cross-Family Scene Ingestion</a></h2>
+<p><code>wbw_sensor_bundle_from_path()</code> wraps a product folder and returns a bundle object with a consistent interface across sensor families.</p>
+<h3 id="opening-a-bundle"><a class="header" href="#opening-a-bundle">Opening a Bundle</a></h3>
+<pre><code class="language-r"># Works with Sentinel-2, Landsat 8/9, PlanetScope, SPOT, SAR, etc.
+bundle &lt;- wbw_sensor_bundle_from_path(
+  '/data/S2B_MSIL2A_20240601T105619_N0510_R094_T32TPT.SAFE',
+  session = s
+)
+
+# Or from a zip archive — WbW extracts it automatically
+bundle &lt;- wbw_sensor_bundle_from_path('/data/LC09_L2SP_017030_20240610.tar', session = s)
+</code></pre>
+<h3 id="discovering-available-layers"><a class="header" href="#discovering-available-layers">Discovering Available Layers</a></h3>
+<pre><code class="language-r">meta &lt;- bundle$metadata()
+cat('Family:   ', meta$family, '\n')
+cat('Mission:  ', meta$mission, '\n')
+cat('Tile:     ', meta$tile_id, '\n')
+cat('Level:    ', meta$processing_level, '\n')
+cat('Cloud %:  ', meta$cloud_cover_percent, '\n')
+cat('Datetime: ', meta$acquisition_datetime_utc, '\n')
+
+print(bundle$list_band_keys())        # e.g. c('B02', 'B03', 'B04', 'B08', ...)
+print(bundle$list_measurement_keys()) # e.g. c('ndvi', 'ndwi')
+print(bundle$list_qa_keys())          # e.g. c('SCL', 'QA_PIXEL')
+print(bundle$list_aux_keys())         # e.g. c('AOT', 'WVP')
+print(bundle$list_asset_keys())
+</code></pre>
+<h3 id="reading-bands-by-key"><a class="header" href="#reading-bands-by-key">Reading Bands by Key</a></h3>
+<pre><code class="language-r"># Keys follow sensor-native naming — no need to memorise file paths
+blue  &lt;- bundle$read_band('B02')   # Sentinel-2 blue
+green &lt;- bundle$read_band('B03')
+red   &lt;- bundle$read_band('B04')
+nir   &lt;- bundle$read_band('B08')
+swir1 &lt;- bundle$read_band('B11')
+swir2 &lt;- bundle$read_band('B12')
+
+# Landsat 9 uses different key names
+# blue  &lt;- bundle$read_band('SR_B2')
+# nir   &lt;- bundle$read_band('SR_B5')
+
+# QA / cloud mask
+scl &lt;- bundle$read_qa_layer('SCL')   # Sentinel-2 scene classification
+</code></pre>
+<h3 id="quick-look-composites"><a class="header" href="#quick-look-composites">Quick-Look Composites</a></h3>
+<pre><code class="language-r"># True-colour GeoTIFF (auto-enhanced by default)
+bundle$write_true_colour(output_path = 'true_colour.tif')
+
+# False-colour (NIR-Red-Green) composite
+bundle$write_false_colour(output_path = 'false_colour.tif')
+</code></pre>
+<h3 id="cross-family-ndvi-pattern"><a class="header" href="#cross-family-ndvi-pattern">Cross-Family NDVI Pattern</a></h3>
+<pre><code class="language-r">compute_ndvi_from_bundle &lt;- function(bundle_path, output_path, session = NULL) {
+  b &lt;- wbw_sensor_bundle_from_path(bundle_path, session = session)
+  meta &lt;- b$metadata()
+
+  if ('ndvi' %in% b$list_measurement_keys()) {
+    ndvi_r &lt;- b$read_measurement('ndvi')
+    wbw_write_raster(ndvi_r, output_path)
+  } else {
+    # Fall back to band-based NDVI
+    if (meta$family == 'sentinel2') {
+      red_r &lt;- b$read_band('B04')
+      nir_r &lt;- b$read_band('B08')
+    } else {
+      red_r &lt;- b$read_band('SR_B4')
+      nir_r &lt;- b$read_band('SR_B5')
+    }
+    wbw_run_tool('normalized_difference_index', args = list(
+      input1 = nir_r$file_path(), input2 = red_r$file_path(),
+      output = output_path
+    ), session = session)
+  }
+}
+
+compute_ndvi_from_bundle('/data/S2B_MSIL2A_20240601.SAFE', 'ndvi_s2.tif', s)
+compute_ndvi_from_bundle('/data/LC09_L2SP_017030.tar',     'ndvi_l9.tif', s)
+</code></pre>
+<hr />
+<h2 id="cloud-and-no-data-masking"><a class="header" href="#cloud-and-no-data-masking">Cloud and No-Data Masking</a></h2>
+<pre><code class="language-r"># Sentinel-2 SCL: 3=cloud shadow, 8=med cloud, 9=high cloud, 10=thin cirrus
+scl &lt;- bundle$read_qa_layer('SCL')
+wbw_run_tool('raster_calculator', args = list(
+  output    = 'red_cloud_free.tif',
+  statement = paste0("if('", scl$file_path(), "' == 3 or '", scl$file_path(), "' == 8 ",
+                     "or '", scl$file_path(), "' == 9 or '", scl$file_path(), "' == 10, ",
+                     "nodata, '", red$file_path(), "')")
+), session = s)
+
+# Landsat Collection 2 QA_PIXEL — use bitwise expressions via raster_calculator
+# qa &lt;- bundle$read_qa_layer('QA_PIXEL')
+</code></pre>
+<hr />
+<h2 id="reading-multi-band-imagery-individual-files"><a class="header" href="#reading-multi-band-imagery-individual-files">Reading Multi-Band Imagery (Individual Files)</a></h2>
+<p>When bundles are not available (e.g., reprojected mosaics, custom composites, legacy archives), load individual band files in the conventional way:</p>
+<pre><code class="language-r">b2 &lt;- wbw_read_raster('LC08_B2_blue.tif')
+b3 &lt;- wbw_read_raster('LC08_B3_green.tif')
+b4 &lt;- wbw_read_raster('LC08_B4_red.tif')
+b5 &lt;- wbw_read_raster('LC08_B5_nir.tif')
+b6 &lt;- wbw_read_raster('LC08_B6_swir1.tif')
+b7 &lt;- wbw_read_raster('LC08_B7_swir2.tif')
+
+# Resample if bands have different resolutions
+wbw_run_tool('resample', args = list(
+  inputs   = b6$file_path(),
+  output   = 'b6_10m.tif',
+  cell_size = 0.0,
+  base     = b4$file_path(),
+  method   = 'bilinear'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="spectral-indices"><a class="header" href="#spectral-indices">Spectral Indices</a></h2>
+<h3 id="normalised-difference-vegetation-index-ndvi"><a class="header" href="#normalised-difference-vegetation-index-ndvi">Normalised Difference Vegetation Index (NDVI)</a></h3>
+<p>$$NDVI = \frac{NIR - Red}{NIR + Red}$$</p>
+<pre><code class="language-r"># Using bands read from a bundle
+wbw_run_tool('normalized_difference_index', args = list(
+  input1 = nir$file_path(),    # NIR
+  input2 = red$file_path(),    # Red
+  output = 'ndvi.tif'
+), session = s)
+</code></pre>
+<h3 id="common-water-snow-and-urban-indices"><a class="header" href="#common-water-snow-and-urban-indices">Common Water, Snow, and Urban Indices</a></h3>
+<pre><code class="language-r"># Define index triplets: (output name, numerator band, denominator band)
+indices &lt;- list(
+  list(name = 'ndwi',  b1 = green, b2 = nir),   # open water;  Green/NIR
+  list(name = 'mndwi', b1 = green, b2 = swir1),  # urban water; Green/SWIR1
+  list(name = 'nbr',   b1 = nir,   b2 = swir2),  # fire severity; NIR/SWIR2
+  list(name = 'ndsi',  b1 = green, b2 = swir1),  # snow/ice;    Green/SWIR1
+  list(name = 'ndbi',  b1 = swir1, b2 = nir)     # built-up;    SWIR1/NIR
+)
+
+for (idx in indices) {
+  wbw_run_tool('normalized_difference_index', args = list(
+    input1 = idx$b1$file_path(),
+    input2 = idx$b2$file_path(),
+    output = paste0(idx$name, '.tif')
+  ), session = s)
+}
+</code></pre>
+<h3 id="evi-enhanced-vegetation-index"><a class="header" href="#evi-enhanced-vegetation-index">EVI (Enhanced Vegetation Index)</a></h3>
+<p>$$EVI = 2.5 \cdot \frac{NIR - Red}{NIR + 6 \cdot Red - 7.5 \cdot Blue + 1}$$</p>
+<pre><code class="language-r">wbw_run_tool('raster_calculator', args = list(
+  output    = 'evi.tif',
+  statement = paste0("2.5 * ('", nir$file_path(), "' - '", red$file_path(), "') / (",
+                     "'", nir$file_path(), "' + 6.0 * '", red$file_path(), "' - 7.5 * '",
+                     blue$file_path(), "' + 1.0)")
+), session = s)
+</code></pre>
+<hr />
+<h2 id="image-enhancement"><a class="header" href="#image-enhancement">Image Enhancement</a></h2>
+<h3 id="percentage-linear-stretch"><a class="header" href="#percentage-linear-stretch">Percentage Linear Stretch</a></h3>
+<pre><code class="language-r">wbw_run_tool('percentage_contrast_stretch', args = list(
+  i      = b4$file_path(),
+  output = 'b4_stretched.tif',
+  clip   = 1.0,
+  tail   = 'both',
+  num_tones = 256
+), session = s)
+</code></pre>
+<h3 id="standard-deviation-stretch"><a class="header" href="#standard-deviation-stretch">Standard Deviation Stretch</a></h3>
+<pre><code class="language-r">wbw_run_tool('standard_deviation_contrast_stretch', args = list(
+  i         = b4$file_path(),
+  output    = 'b4_sd_stretch.tif',
+  stdev     = 2.0,
+  num_tones = 256
+), session = s)
+</code></pre>
+<h3 id="gamma-correction"><a class="header" href="#gamma-correction">Gamma Correction</a></h3>
+<pre><code class="language-r">wbw_run_tool('gamma_correction', args = list(
+  i      = b4$file_path(),
+  output = 'b4_gamma.tif',
+  gamma  = 0.55
+), session = s)
+</code></pre>
+<h3 id="histogram-matching"><a class="header" href="#histogram-matching">Histogram Matching</a></h3>
+<pre><code class="language-r">wbw_run_tool('histogram_matching', args = list(
+  i          = 'image_target.tif',
+  histo_file = 'reference_histogram.html',
+  output     = 'image_matched.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="ihs-colour-space-and-pan-sharpening"><a class="header" href="#ihs-colour-space-and-pan-sharpening">IHS Colour Space and Pan-Sharpening</a></h2>
+<pre><code class="language-r">wbw_run_tool('rgb_to_ihs', args = list(
+  intensity = b4$file_path(),
+  hue       = b3$file_path(),
+  saturation = b2$file_path(),
+  output    = 'ihs.tif'
+), session = s)
+
+# Pan-sharpen
+wbw_run_tool('ihs_to_rgb', args = list(
+  intensity  = 'pan_band.tif',
+  hue        = 'ihs_hue.tif',
+  saturation = 'ihs_sat.tif',
+  output     = 'pansharpened.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="spatial-filtering"><a class="header" href="#spatial-filtering">Spatial Filtering</a></h2>
+<pre><code class="language-r"># Gaussian smoothing
+wbw_run_tool('gaussian_filter', args = list(
+  i = b5$file_path(), output = 'b5_gauss.tif', sigma = 2.0), session = s)
+
+# Edge detection — Canny
+wbw_run_tool('canny_edge_detection', args = list(
+  i = b4$file_path(), output = 'edges.tif', sigma = 0.5,
+  low_threshold = 0.05, high_threshold = 0.15, add_back = FALSE), session = s)
+</code></pre>
+<hr />
+<h2 id="principal-component-analysis"><a class="header" href="#principal-component-analysis">Principal Component Analysis</a></h2>
+<pre><code class="language-r"># Supply a comma-separated list of band files
+all_bands &lt;- paste(c(b2$file_path(), b3$file_path(), b4$file_path(),
+                     b5$file_path(), b6$file_path(), b7$file_path()),
+                   collapse = ';')
+
+wbw_run_tool('principal_component_analysis', args = list(
+  inputs        = all_bands,
+  output        = 'pca_loadings.html',
+  num_comp      = 6,
+  standardised  = FALSE
+), session = s)
+
+# PC scores are written as pc1.tif, pc2.tif, ... in the working directory
+</code></pre>
+<hr />
+<h2 id="image-segmentation"><a class="header" href="#image-segmentation">Image Segmentation</a></h2>
+<pre><code class="language-r">wbw_run_tool('image_segmentation', args = list(
+  inputs       = all_bands,
+  output       = 'segments.tif',
+  threshold    = 30.0,
+  steps        = 10,
+  min_area     = 10
+), session = s)
+</code></pre>
+<hr />
+<h2 id="unsupervised-classification"><a class="header" href="#unsupervised-classification">Unsupervised Classification</a></h2>
+<h3 id="kmeans"><a class="header" href="#kmeans">KMeans</a></h3>
+<pre><code class="language-r">wbw_run_tool('modified_k_means_clustering', args = list(
+  inputs        = all_bands,
+  output        = 'kmeans.tif',
+  out_html      = 'kmeans_report.html',
+  start_clusters = 5,
+  end_clusters   = 10,
+  max_iterations = 25,
+  class_change   = 2.0
+), session = s)
+</code></pre>
+<h3 id="dbscan"><a class="header" href="#dbscan">DBSCAN</a></h3>
+<pre><code class="language-r">wbw_run_tool('dbscan', args = list(
+  inputs   = all_bands,
+  output   = 'dbscan.tif',
+  search_dist = 2.5,
+  min_points   = 10
+), session = s)
+</code></pre>
+<hr />
+<h2 id="supervised-classification"><a class="header" href="#supervised-classification">Supervised Classification</a></h2>
+<h3 id="random-forest"><a class="header" href="#random-forest">Random Forest</a></h3>
+<pre><code class="language-r"># 1. Fit the model
+wbw_run_tool('random_forest_classification_fit', args = list(
+  inputs  = all_bands,
+  training = 'training_polygons.shp',
+  field    = 'CLASS_ID',
+  output   = 'rf_model.bin',
+  n_trees  = 100,
+  min_leaf_size = 1,
+  max_features  = 0.0
+), session = s)
+
+# 2. Apply the model
+wbw_run_tool('random_forest_classification_predict', args = list(
+  inputs  = all_bands,
+  model   = 'rf_model.bin',
+  output  = 'rf_classification.tif'
+), session = s)
+</code></pre>
+<h3 id="support-vector-machine"><a class="header" href="#support-vector-machine">Support Vector Machine</a></h3>
+<pre><code class="language-r">wbw_run_tool('svm_classification', args = list(
+  inputs  = all_bands,
+  training = 'training_polygons.shp',
+  field    = 'CLASS_ID',
+  output   = 'svm_classification.tif',
+  c        = 200.0,
+  gamma    = 50.0,
+  cost     = 10.0,
+  tolerance = 0.1,
+  test_proportion = 0.2
+), session = s)
+</code></pre>
+<h3 id="k-nearest-neighbours"><a class="header" href="#k-nearest-neighbours">K-Nearest Neighbours</a></h3>
+<pre><code class="language-r">wbw_run_tool('knn_classification', args = list(
+  inputs  = all_bands,
+  training = 'training_polygons.shp',
+  field    = 'CLASS_ID',
+  output   = 'knn_classification.tif',
+  k        = 5,
+  scaling  = TRUE,
+  test_proportion = 0.2
+), session = s)
+</code></pre>
+<hr />
+<h2 id="accuracy-assessment"><a class="header" href="#accuracy-assessment">Accuracy Assessment</a></h2>
+<pre><code class="language-r">wbw_run_tool('kappa_index', args = list(
+  i1     = 'rf_classification.tif',
+  i2     = 'reference_classification.tif',
+  output = 'accuracy_report.html'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="change-detection"><a class="header" href="#change-detection">Change Detection</a></h2>
+<h3 id="image-differencing"><a class="header" href="#image-differencing">Image Differencing</a></h3>
+<pre><code class="language-r">wbw_run_tool('change_vector_analysis', args = list(
+  date1     = paste(c('t1_b2.tif','t1_b3.tif','t1_b4.tif','t1_b5.tif'), collapse=';'),
+  date2     = paste(c('t2_b2.tif','t2_b3.tif','t2_b4.tif','t2_b5.tif'), collapse=';'),
+  magnitude = 'cva_magnitude.tif',
+  direction = 'cva_direction.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="wbw-pro-spotlight-in-season-crop-stress-intervention-planning"><a class="header" href="#wbw-pro-spotlight-in-season-crop-stress-intervention-planning">WbW-Pro Spotlight: In-Season Crop Stress Intervention Planning</a></h2>
+<ul>
+<li><strong>Problem:</strong> Turn in-season crop stress signals into actionable intervention
+priorities.</li>
+<li><strong>Tool:</strong> <code>in_season_crop_stress_intervention_planning</code></li>
+<li><strong>Typical inputs:</strong> NDVI raster, canopy-temperature raster, soil-moisture
+raster.</li>
+<li><strong>Typical outputs:</strong> Intervention-priority and intervention-class products
+with summary reporting.</li>
+</ul>
+<pre><code class="language-r">result &lt;- s$in_season_crop_stress_intervention_planning(
+  ndvi               = 'ndvi_latest.tif',
+  canopy_temperature = 'lst_latest.tif',
+  soil_moisture      = 'soil_moisture_latest.tif',
+  output_prefix      = 'field_07_stress'
+)
+
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a session initialized with a valid Pro
+licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-remote-sensing-workflow"><a class="header" href="#complete-remote-sensing-workflow">Complete Remote Sensing Workflow</a></h2>
+<p>The following end-to-end example uses a sensor bundle for ingestion and random forest for land-cover mapping:</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+s &lt;- wbw_session()
+
+# 1. Open scene as a bundle — works with S2, Landsat 9, PlanetScope, etc.
+bundle &lt;- wbw_sensor_bundle_from_path(
+  '/data/S2B_MSIL2A_20240601T105619_N0510_R094_T32TPT.SAFE',
+  session = s
+)
+meta &lt;- bundle$metadata()
+cat(sprintf('Family: %s, tile: %s, clouds: %.1f%%\n',
+            meta$family, meta$tile_id, meta$cloud_cover_percent))
+
+if (meta$cloud_cover_percent &gt; 20) {
+  stop('Too cloudy for classification')
+}
+
+# 2. Read bands by key (family-agnostic)
+blue  &lt;- bundle$read_band('B02')
+green &lt;- bundle$read_band('B03')
+red   &lt;- bundle$read_band('B04')
+nir   &lt;- bundle$read_band('B08')
+
+wbw_run_tool('resample', args = list(
+  inputs = bundle$read_band('B11')$file_path(), output = 'swir1_10m.tif',
+  cell_size = 0.0, base = red$file_path(), method = 'bilinear'), session = s)
+wbw_run_tool('resample', args = list(
+  inputs = bundle$read_band('B12')$file_path(), output = 'swir2_10m.tif',
+  cell_size = 0.0, base = red$file_path(), method = 'bilinear'), session = s)
+swir1 &lt;- wbw_read_raster('swir1_10m.tif')
+swir2 &lt;- wbw_read_raster('swir2_10m.tif')
+
+bands &lt;- list(blue, green, red, nir, swir1, swir2)
+band_paths &lt;- paste(sapply(bands, function(b) b$file_path()), collapse = ';')
+
+# 3. Mask clouds using SCL
+scl &lt;- bundle$read_qa_layer('SCL')
+
+# 4. Spectral indices
+wbw_run_tool('normalized_difference_index', args = list(
+  input1 = nir$file_path(), input2 = red$file_path(),
+  output = 'ndvi.tif'), session = s)
+wbw_run_tool('normalized_difference_index', args = list(
+  input1 = green$file_path(), input2 = swir1$file_path(),
+  output = 'mndwi.tif'), session = s)
+wbw_run_tool('normalized_difference_index', args = list(
+  input1 = nir$file_path(), input2 = swir2$file_path(),
+  output = 'nbr.tif'), session = s)
+
+ndvi  &lt;- wbw_read_raster('ndvi.tif')
+mndwi &lt;- wbw_read_raster('mndwi.tif')
+nbr   &lt;- wbw_read_raster('nbr.tif')
+
+# 5. PCA decorrelation
+wbw_run_tool('principal_component_analysis', args = list(
+  inputs       = band_paths,
+  output       = 'pca_loadings.html',
+  num_comp     = 4,
+  standardised = TRUE
+), session = s)
+pc_paths &lt;- paste(paste0('pc', 1:4, '.tif'), collapse = ';')
+
+# 6. Feature stack = bands + indices + PCA scores
+feature_paths &lt;- paste(c(band_paths, 'ndvi.tif', 'mndwi.tif', 'nbr.tif', pc_paths),
+                       collapse = ';')
+
+# 7. Train random forest
+wbw_run_tool('random_forest_classification_fit', args = list(
+  inputs   = feature_paths,
+  training = 'training_polygons.shp',
+  field    = 'CLASS',
+  output   = 'rf_model.bin',
+  n_trees  = 500,
+  test_proportion = 0.25
+), session = s)
+
+# 8. Predict
+wbw_run_tool('random_forest_classification_predict', args = list(
+  inputs = feature_paths,
+  model  = 'rf_model.bin',
+  output = 'lulc.tif'
+), session = s)
+
+# 9. Generalise
+wbw_run_tool('generalize_classified_raster', args = list(
+  i = 'lulc.tif', output = 'lulc_clean.tif', min_size = 9), session = s)
+
+# 10. Accuracy assessment
+wbw_run_tool('kappa_index', args = list(
+  i1 = 'lulc_clean.tif', i2 = 'validation_reference.tif',
+  output = 'accuracy.html'), session = s)
+
+# 11. Quick-look composite for QC
+bundle$write_true_colour(output_path = 'quicklook_truecolour.tif')
+
+cat('Remote sensing workflow complete.\n')
+</code></pre>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Use bundles for scene-level ingestion</strong>: <code>wbw_sensor_bundle_from_path()</code> eliminates hardcoded band filenames and works identically across Sentinel-2, Landsat, PlanetScope, and other supported families.</li>
+<li><strong>Screen cloud cover before processing</strong>: Check bundle metadata <code>cloud_cover_percent</code> before loading all bands to skip unusable scenes early in a batch workflow.</li>
+<li><strong>Atmospheric correction is iterative</strong>: Raw digital numbers and even surface reflectance products may still carry illumination and atmospheric artefacts. Histogram matching across scenes is a simple relative normalisation that works well when no reference spectrum is available.</li>
+<li><strong>Align band resolution before stacking</strong>: Sentinel-2 delivers 10 m (Blue, Green, Red, NIR) and 20 m (Red Edge, SWIR) bands. Upscale the 20 m bands to 10 m using bilinear resampling before combining them in a feature stack.</li>
+<li><strong>Always mask clouds and cloud shadows</strong>: Use quality bands (Sentinel-2 SCL or Landsat QA_PIXEL) and apply bitwise tests via raster calculator to isolate valid pixels.</li>
+<li><strong>Balance training data</strong>: Training datasets often over-represent dominant classes (e.g., forest) relative to rare classes (e.g., wetland). Sample training polygons proportional to expected class area, or oversample rare classes to improve model accuracy.</li>
+<li><strong>Check spectral separability</strong>: If accuracy assessment reports Jeffries-Matusita distance &lt; 1.5 between any two classes, consider merging classes or collecting more spectrally diverse training polygons.</li>
+<li><strong>Use time-series techniques for change detection</strong>: Multi-date classifications can show spurious change due to atmospheric variation. Spectral indices are more robust; consider computing NDVI or NDWI time series and detecting change directly in index space.</li>
+<li><strong>Memory is your bottleneck</strong>: Large multispectral stacks fill RAM quickly. Use band-by-band processing or out-of-memory methods for scenes &gt; 1 GB.</li>
+</ul>
+<pre><code></code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lidar-processing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="raster-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lidar-processing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="raster-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

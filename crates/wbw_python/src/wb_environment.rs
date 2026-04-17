@@ -18540,7 +18540,7 @@ impl WbEnvironment {
         ))
     }
 
-    #[pyo3(signature = (input, search_distance=50, flatness_threshold=0.0, flatness_distance=0, skip_distance=0, output_forms=true, analyze_residuals=false, output_path=None, callback=None))]
+    #[pyo3(signature = (input, search_distance=50, flatness_threshold=1.0, flatness_distance=0, skip_distance=0, output_forms=true, analyze_residuals=false, output_path=None, callback=None))]
     fn geomorphons(
         &self,
         input: &Raster,

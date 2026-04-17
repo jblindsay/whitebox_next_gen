@@ -1,0 +1,526 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>LiDAR Processing - Whitebox Workflows for R User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html" class="active"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for R User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="lidar-processing"><a class="header" href="#lidar-processing">LiDAR Processing</a></h1>
+<p>LiDAR point cloud processing in WbW-R covers the full pipeline from raw flight-line data through to classified point clouds and derived raster products. All processing tools run in the Whitebox backend; R handles session management, file discovery, and result validation.</p>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Before processing LiDAR data, understand these foundational terms:</p>
+<ul>
+<li><strong>Return number</strong>: Which reflection from a single laser pulse. Pulse 1 is the first (often canopy top); pulse 2–5 capture midstory and ground returns.</li>
+<li><strong>Point classification</strong>: ASPRS standard categories — ground (2), low veg (3), medium veg (4), high veg (5), buildings (6), noise (7), overlap (12), and others.</li>
+<li><strong>Intensity</strong>: Reflectance value (0–65535) proportional to target brightness. Useful for vegetation density estimation and water detection.</li>
+<li><strong>Ground filtering</strong>: Separating terrain points (classification 2) from vegetation and buildings; critical for accurate digital terrain models (DTMs).</li>
+<li><strong>Digital terrain model (DTM)</strong>: Raster surface of bare earth, computed from ground returns only. Used for hydrology, geomorphometry, and flood modelling.</li>
+<li><strong>Digital surface model (DSM)</strong>: Raster surface of highest returns (canopy top). Used for building detection and volume calculations.</li>
+<li><strong>Canopy height model (CHM)</strong>: DSM minus DTM; represents vegetation height above ground. Standard input for tree detection and segmentation.</li>
+<li><strong>Point density</strong>: Points per square unit (typically points/m²). Higher density enables finer segmentation; lower density requires smoothing.</li>
+<li><strong>Normalization</strong>: Converting raw Z-values to height-above-ground by subtracting DTM, creating a normalized point cloud for structural analysis.</li>
+</ul>
+<hr />
+<h2 id="session-setup-and-file-discovery"><a class="header" href="#session-setup-and-file-discovery">Session Setup and File Discovery</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/lidar')
+
+# List all LAS/LAZ files in the project folder
+las_files &lt;- list.files('.', pattern = '\\.(las|laz)$', full.names = TRUE,
+                         recursive = TRUE)
+cat('Found', length(las_files), 'point cloud files.\n')
+</code></pre>
+<hr />
+<h2 id="reading-and-inspecting-lidar-files"><a class="header" href="#reading-and-inspecting-lidar-files">Reading and Inspecting LiDAR Files</a></h2>
+<pre><code class="language-r">las &lt;- wbw_read_lidar('survey.las')
+meta &lt;- las$metadata()
+
+cat('Point count:', meta$number_of_points, '\n')
+cat('X range:', meta$min_x, 'to', meta$max_x, '\n')
+cat('Y range:', meta$min_y, 'to', meta$max_y, '\n')
+cat('Z range:', meta$min_z, 'to', meta$max_z, '\n')
+cat('Point density per m²:', meta$point_density, '\n')
+</code></pre>
+<hr />
+<h2 id="point-cloud-filtering-and-outlier-removal"><a class="header" href="#point-cloud-filtering-and-outlier-removal">Point Cloud Filtering and Outlier Removal</a></h2>
+<pre><code class="language-r"># Remove isolated low and high points
+wbw_run_tool('lidar_elevation_slice', args = list(
+  i       = 'survey.las',
+  output  = 'survey_sliced.las',
+  minz    = 0.0,
+  maxz    = 200.0,
+  cls     = FALSE
+), session = s)
+
+# Statistical outlier removal
+wbw_run_tool('lidar_remove_outliers', args = list(
+  i       = 'survey.las',
+  output  = 'survey_clean.las',
+  radius  = 2.0,
+  elev_diff = 25.0,
+  use_median = FALSE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="ground-point-classification"><a class="header" href="#ground-point-classification">Ground Point Classification</a></h2>
+<h3 id="progressive-morphological-filter"><a class="header" href="#progressive-morphological-filter">Progressive Morphological Filter</a></h3>
+<pre><code class="language-r">wbw_run_tool('lidar_ground_point_filter', args = list(
+  i        = 'survey_clean.las',
+  output   = 'survey_classified.las',
+  radius   = 2.0,
+  min_elev_diff = 0.15,
+  max_elev_diff = 1.3,
+  num_iter = 5,
+  threshold = 0.15,
+  slope_threshold = 0.15,
+  height_threshold = 1.0,
+  classify  = TRUE,
+  slope       = FALSE,
+  height_diff = TRUE,
+  filter_return_all = FALSE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="digital-elevation-model-interpolation"><a class="header" href="#digital-elevation-model-interpolation">Digital Elevation Model Interpolation</a></h2>
+<h3 id="tin-gridding-tin-interpolation"><a class="header" href="#tin-gridding-tin-interpolation">Tin Gridding (TIN Interpolation)</a></h3>
+<pre><code class="language-r">wbw_run_tool('tin_gridding', args = list(
+  i          = 'survey_classified.las',
+  output     = 'dtm.tif',
+  returns    = 'last',
+  resolution = 1.0,
+  exclude_cls = '1,3,4,5,6,7',
+  minz       = -50.0,
+  maxz       = 250.0
+), session = s)
+</code></pre>
+<h3 id="lidar-idw-interpolation"><a class="header" href="#lidar-idw-interpolation">LiDAR IDW Interpolation</a></h3>
+<pre><code class="language-r">wbw_run_tool('lidar_idw_interpolation', args = list(
+  i          = 'survey_classified.las',
+  output     = 'dtm_idw.tif',
+  parameter  = 'elevation',
+  returns    = 'last',
+  resolution = 1.0,
+  weight     = 1.0,
+  radius     = 2.5,
+  exclude_cls = '1,3,4,5,6,7'
+), session = s)
+</code></pre>
+<h3 id="normalised-height-above-ground"><a class="header" href="#normalised-height-above-ground">Normalised Height Above Ground</a></h3>
+<pre><code class="language-r">wbw_run_tool('normalize_lidar', args = list(
+  i          = 'survey_classified.las',
+  ground     = 'survey_classified.las',
+  output     = 'survey_normalised.las',
+  ignore_ground_distance = FALSE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="canopy-height-model-chm-and-dsm"><a class="header" href="#canopy-height-model-chm-and-dsm">Canopy Height Model (CHM) and DSM</a></h2>
+<pre><code class="language-r"># First return DSM
+wbw_run_tool('lidar_idw_interpolation', args = list(
+  i          = 'survey_classified.las',
+  output     = 'dsm.tif',
+  parameter  = 'elevation',
+  returns    = 'first',
+  resolution = 1.0,
+  weight     = 1.0,
+  radius     = 2.5,
+  exclude_cls = '7'
+), session = s)
+
+# Canopy Height Model = DSM - DTM
+wbw_run_tool('subtract', args = list(
+  input1 = 'dsm.tif',
+  input2 = 'dtm.tif',
+  output = 'chm.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="point-density-and-distribution-analysis"><a class="header" href="#point-density-and-distribution-analysis">Point Density and Distribution Analysis</a></h2>
+<pre><code class="language-r">wbw_run_tool('lidar_point_stats', args = list(
+  i          = 'survey.las',
+  resolution = 1.0,
+  num_points = TRUE,
+  num_pulses = FALSE
+), session = s)
+
+wbw_run_tool('lidar_density', args = list(
+  i          = 'survey.las',
+  output     = 'density.tif',
+  resolution = 1.0,
+  returns    = 'all',
+  exclude_cls = '7'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="scan-angle-and-return-analysis"><a class="header" href="#scan-angle-and-return-analysis">Scan-Angle and Return Analysis</a></h2>
+<pre><code class="language-r"># Filter by scan angle
+wbw_run_tool('filter_lidar_scan_angles', args = list(
+  i         = 'survey.las',
+  output    = 'survey_nadir.las',
+  threshold = 15.0
+), session = s)
+
+# Intensity image
+wbw_run_tool('lidar_idw_interpolation', args = list(
+  i          = 'survey_nadir.las',
+  output     = 'intensity.tif',
+  parameter  = 'intensity',
+  returns    = 'all',
+  resolution = 1.0,
+  weight     = 1.0,
+  radius     = 2.5
+), session = s)
+</code></pre>
+<hr />
+<h2 id="tile-management"><a class="header" href="#tile-management">Tile Management</a></h2>
+<p>Working with large surveys requires tiling:</p>
+<pre><code class="language-r"># Tile large dataset
+wbw_run_tool('lidar_tile', args = list(
+  i        = 'full_survey.las',
+  width    = 500.0,
+  height   = 500.0,
+  origin_x = 0.0,
+  origin_y = 0.0
+), session = s)
+
+# Add a buffer overlap to each tile
+wbw_run_tool('lidar_tile_footprint', args = list(
+  i      = 'tile_000_000.las',
+  output = 'tile_000_000_footprint.shp',
+  hull   = FALSE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="segmentation-and-vegetation-analysis"><a class="header" href="#segmentation-and-vegetation-analysis">Segmentation and Vegetation Analysis</a></h2>
+<pre><code class="language-r"># Individual tree segmentation from normalised LiDAR
+wbw_run_tool('individual_tree_detection', args = list(
+  i          = 'survey_normalised.las',
+  output     = 'tree_tops.shp',
+  min_search_radius = 1.0,
+  min_height  = 2.0,
+  max_search_radius = 5.0,
+  max_height  = 40.0
+), session = s)
+
+# Canopy cover (fraction first return above height threshold)
+wbw_run_tool('lidar_segmentation_based_filter', args = list(
+  i            = 'survey_classified.las',
+  output       = 'survey_seg_filtered.las',
+  slope_threshold = 15.0,
+  max_edge_length = 0.5,
+  classify     = TRUE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="wbw-pro-spotlight-lidar-change-and-disturbance-analysis"><a class="header" href="#wbw-pro-spotlight-lidar-change-and-disturbance-analysis">WbW-Pro Spotlight: LiDAR Change and Disturbance Analysis</a></h2>
+<ul>
+<li><strong>Problem:</strong> Compare repeat LiDAR epochs to detect disturbance in a
+repeatable way.</li>
+<li><strong>Tool:</strong> <code>lidar_change_and_disturbance_analysis</code></li>
+<li><strong>Typical inputs:</strong> Baseline tile set, monitoring tile set, output
+resolution, minimum change threshold.</li>
+<li><strong>Typical outputs:</strong> Change rasters plus summary metrics for affected area,
+hotspot intensity, and QA review.</li>
+</ul>
+<pre><code class="language-r">result &lt;- s$lidar_change_and_disturbance_analysis(
+  baseline_tiles = '/data/lidar_epoch_2022/',
+  monitor_tiles  = '/data/lidar_epoch_2025/',
+  resolution     = 1.0,
+  min_change_m   = 0.5,
+  output_prefix  = 'disturbance_2025_vs_2022'
+)
+
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a session initialized with a valid Pro
+licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-lidar-processing-workflow"><a class="header" href="#complete-lidar-processing-workflow">Complete LiDAR Processing Workflow</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/lidar_project')
+
+las_file &lt;- 'raw_survey.las'
+
+# 1. Remove outliers
+wbw_run_tool('lidar_remove_outliers', args = list(
+  i = las_file, output = 'clean.las', radius = 2.0, elev_diff = 25.0), session = s)
+
+# 2. Ground classification
+wbw_run_tool('lidar_ground_point_filter', args = list(
+  i = 'clean.las', output = 'classified.las', radius = 2.0,
+  min_elev_diff = 0.15, max_elev_diff = 1.3, num_iter = 5,
+  threshold = 0.15, slope_threshold = 0.15, height_threshold = 1.0,
+  classify = TRUE, slope = FALSE, height_diff = TRUE,
+  filter_return_all = FALSE), session = s)
+
+# 3. DTM
+wbw_run_tool('tin_gridding', args = list(
+  i = 'classified.las', output = 'dtm.tif', returns = 'last',
+  resolution = 1.0, exclude_cls = '1,3,4,5,6,7'), session = s)
+
+# 4. DSM and CHM
+wbw_run_tool('lidar_idw_interpolation', args = list(
+  i = 'classified.las', output = 'dsm.tif', parameter = 'elevation',
+  returns = 'first', resolution = 1.0, weight = 1.0, radius = 2.5,
+  exclude_cls = '7'), session = s)
+wbw_run_tool('subtract', args = list(
+  input1 = 'dsm.tif', input2 = 'dtm.tif', output = 'chm.tif'), session = s)
+
+# 5. Normalise for vegetation analysis
+wbw_run_tool('normalize_lidar', args = list(
+  i = 'classified.las', ground = 'classified.las',
+  output = 'normalised.las', ignore_ground_distance = FALSE), session = s)
+
+# 6. Tree detection
+wbw_run_tool('individual_tree_detection', args = list(
+  i = 'normalised.las', output = 'tree_tops.shp',
+  min_search_radius = 1.0, min_height = 2.0,
+  max_search_radius = 5.0, max_height = 40.0), session = s)
+
+# 7. Point density
+wbw_run_tool('lidar_density', args = list(
+  i = 'classified.las', output = 'density.tif',
+  resolution = 1.0, returns = 'all', exclude_cls = '7'), session = s)
+
+cat('LiDAR processing complete.\n')
+</code></pre>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Choose your format wisely</strong>: LAS is universal and compact; LAZ adds compression and is ideal for archival or transmission. COPC is cloud-optimized and best for remote HTTP range-request access. Use LAZ or LAS for terrestrial/airborne surveys; COPC for cloud-native workflows.</li>
+<li><strong>Always validate classifications</strong>: Use <code>lidar_histogram()</code> and <code>lidar_info()</code> to inspect point distributions by return and classification. Misclassified ground points silently corrupt DTMs and downstream hydrology.</li>
+<li><strong>DTM vs. DSM vs. CHM</strong>: Generate all three at the same resolution so derivatives align. A common pitfall is mixing DTM and DSM resolution.</li>
+<li><strong>Ground filtering is critical</strong>: Outliers and noise (classification 7) should be excluded before gridding. Use <code>lidar_filter_for_ground()</code> to remove spikes and erratic points.</li>
+<li><strong>Normalization enables vegetation analysis</strong>: Always normalize point clouds (subtract DTM) before individual tree detection or canopy structural metrics.</li>
+<li><strong>Monitor memory for large surveys</strong>: Point clouds are memory-intensive. For datasets &gt; 1 GB, use streaming APIs (<code>lidar_read_chunked()</code>) rather than loading the entire tile at once.</li>
+<li><strong>Coordinate reference systems matter</strong>: LAS headers carry CRS as WKT. Verify WKT matches your project CRS before gridding or merging tiles.</li>
+<li><strong>Density and grid resolution</strong>: If point density is &lt; 0.5 pts/m², consider upsampling or smoothing the output grid to avoid isolated pits or peaks.</li>
+</ul>
+<pre><code></code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="spatial-hydrology.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="remote-sensing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="spatial-hydrology.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="remote-sensing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

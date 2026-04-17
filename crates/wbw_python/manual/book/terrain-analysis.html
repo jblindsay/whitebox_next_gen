@@ -1,0 +1,752 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Terrain Analysis and Geomorphometry - Whitebox Workflows for Python User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html" class="active"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="terrain-analysis-and-geomorphometry"><a class="header" href="#terrain-analysis-and-geomorphometry">Terrain Analysis and Geomorphometry</a></h1>
+<p>Terrain analysis — or geomorphometry — is the quantitative characterization of
+land-surface form from digital elevation models (DEMs). It is one of the
+original strengths of the Whitebox platform and covers a broad spectrum:
+from simple first-order derivatives like slope and aspect, through
+classification of terrain form, to advanced multiscale and visibility analyses.</p>
+<p>This chapter moves from foundational concepts through intermediate and advanced
+workflows, with example scripts throughout.</p>
+<hr />
+<h2 id="what-is-a-dem"><a class="header" href="#what-is-a-dem">What is a DEM?</a></h2>
+<p>A digital elevation model (DEM) is a raster where each cell stores the
+elevation of the land surface at that location. DEMs underpin nearly every
+terrain analysis: slope gradients, drainage patterns, landform classification,
+solar radiation modelling, and viewshed analysis all begin with a DEM.</p>
+<p>Common DEM sources include:</p>
+<ul>
+<li>LiDAR-derived bare-earth surfaces (highest resolution and accuracy)</li>
+<li>Photogrammetric DEMs from drone or aerial surveys</li>
+<li>SRTM (global 30 m coverage)</li>
+<li>ASTER GDEM and Copernicus DEM (global 30 m or 90 m)</li>
+</ul>
+<p>DEM quality — vertical accuracy, spatial resolution, systematic artefacts from
+interpolation or acquisition — directly limits the quality of derivative
+products, so always inspect your DEM before computing derivatives.</p>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Terrain analysis relies on these fundamental concepts:</p>
+<ul>
+<li><strong>Slope</strong>: The gradient of the land surface, typically expressed in degrees (0–90) or percent. High values indicate steep terrain; low values indicate flat terrain. Critical for erosion, landslide, and hydrology models.</li>
+<li><strong>Aspect</strong>: Compass direction a slope faces (0–360°, measured clockwise from north). Flat cells are typically -1 or nodata. Controls solar radiation, drainage direction, and habitat quality.</li>
+<li><strong>Curvature</strong>: Rate of change of slope (usually planform and profile separately). Positive profile curvature indicates acceleration zones (ridges); negative indicates deceleration zones (valleys).</li>
+<li><strong>Flow direction</strong>: The steepest downslope direction from each cell. Forms the basis for flow accumulation, drainage network delineation, and watershed boundaries.</li>
+<li><strong>Flow accumulation</strong>: Number of upslope cells draining to each cell, proportional to contributing area. High values indicate stream channels and valley bottoms.</li>
+<li><strong>Topographic Wetness Index (TWI)</strong>: Ln(upslope area / tan(slope)), predicts persistent moisture. High TWI indicates probable saturated zones; used in soil moisture and flood risk mapping.</li>
+<li><strong>Landform classification</strong>: Categorizing terrain into types (e.g. summits, ridges, valleys, footslopes) via multivariate analysis. Provides interpretable terrain structure without tuning thresholds.</li>
+<li><strong>Multiscale analysis</strong>: Deriving terrain metrics at multiple scales. Single-scale derivatives can miss important structure; multiscale approaches reveal process-relevant scales.</li>
+<li><strong>Viewshed</strong>: Set of cells visible from a vantage point. Used in landscape perception, military analysis, and wind farm siting.</li>
+</ul>
+<hr />
+<h2 id="first-order-terrain-derivatives"><a class="header" href="#first-order-terrain-derivatives">First-Order Terrain Derivatives</a></h2>
+<p>First-order derivatives measure the rate of change of elevation over space.</p>
+<h3 id="slope"><a class="header" href="#slope">Slope</a></h3>
+<p>Slope is the magnitude of the first derivative of elevation: the maximum rate
+of elevation change per unit horizontal distance. It is typically expressed in
+degrees (0–90) or as a percentage (rise over run × 100).</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem = wbe.read_raster('dem.tif')
+
+# Degrees is the default units
+slope_deg = wbe.slope(dem, units='degrees')
+wbe.write_raster(slope_deg, 'slope_degrees.tif')
+
+# Percentage slope useful for agricultural and road applications
+slope_pct = wbe.slope(dem, units='percent')
+wbe.write_raster(slope_pct, 'slope_percent.tif')
+</code></pre>
+<p>High values indicate steep terrain; low values indicate flat terrain. Slope
+is widely used in landslide hazard mapping, erosion modelling, habitat
+suitability analysis, and infrastructure routing.</p>
+<h3 id="aspect"><a class="header" href="#aspect">Aspect</a></h3>
+<p>Aspect is the compass direction that a slope faces, measured clockwise from
+north (0°–360°). Flat cells conventionally receive a value of -1 or nodata.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem = wbe.read_raster('dem.tif')
+aspect = wbe.aspect(dem)
+wbe.write_raster(aspect, 'aspect.tif')
+</code></pre>
+<p>Aspect controls solar insolation, snow persistence, soil moisture, and
+vegetation structure. South-facing slopes in the northern hemisphere receive
+more direct solar radiation and tend to be warmer and drier than north-facing
+slopes.</p>
+<h3 id="hillshade"><a class="header" href="#hillshade">Hillshade</a></h3>
+<p>Hillshading simulates how the terrain would appear under a directional light
+source and is primarily a visualization aid rather than an analytical
+derivative.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem = wbe.read_raster('dem.tif')
+
+# Single directional hillshade — azimuth and altitude in degrees
+hs = wbe.hillshade(dem, azimuth=315.0, altitude=45.0)
+wbe.write_raster(hs, 'hillshade.tif')
+
+# Multidirectional hillshade (more even illumination, no shadow artefacts)
+mdhs = wbe.multidirectional_hillshade(dem)
+wbe.write_raster(mdhs, 'hillshade_multidirectional.tif')
+
+# Hypsometrically tinted hillshade blends elevation colour and shading
+hyp = wbe.hypsometrically_tinted_hillshade(dem)
+wbe.write_raster(hyp, 'hillshade_hypsometric.tif')
+</code></pre>
+<hr />
+<h2 id="curvature"><a class="header" href="#curvature">Curvature</a></h2>
+<p>Curvature characterizes how the terrain surface bends in space. While slope
+measures the inclination of a surface, curvature measures how that inclination
+is changing — the "shape" of the surface rather than its steepness alone.</p>
+<p>Whitebox provides a range of curvature types, each capturing a different
+geometric property.</p>
+<h3 id="profile-curvature"><a class="header" href="#profile-curvature">Profile Curvature</a></h3>
+<p>Profile curvature is the curvature in the direction of steepest descent.
+Positive values correspond to convex terrain (accelerating flow); negative
+values to concave terrain (decelerating flow, area of convergence).</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+profile_curv = wbe.profile_curvature(dem)
+wbe.write_raster(profile_curv, 'profile_curvature.tif')
+</code></pre>
+<h3 id="plan-curvature"><a class="header" href="#plan-curvature">Plan Curvature</a></h3>
+<p>Plan curvature is measured in the horizontal plane, perpendicular to the
+direction of slope. It indicates flow convergence (negative values) or flow
+divergence (positive values) and is a useful predictor of soil moisture, run-on
+areas, and erosion.</p>
+<pre><code class="language-python">plan_curv = wbe.plan_curvature(dem)
+wbe.write_raster(plan_curv, 'plan_curvature.tif')
+</code></pre>
+<h3 id="full-curvature-suite"><a class="header" href="#full-curvature-suite">Full Curvature Suite</a></h3>
+<p>For detailed geomorphometric characterisation compute the full family. Each
+captures a slightly different geometric facet of the surface:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+curv_types = {
+    'mean_curvature':       wbe.mean_curvature(dem),
+    'gaussian_curvature':   wbe.gaussian_curvature(dem),
+    'minimal_curvature':    wbe.minimal_curvature(dem),
+    'maximal_curvature':    wbe.maximal_curvature(dem),
+    'casorati_curvature':   wbe.casorati_curvature(dem),
+    'accumulation_curvature': wbe.accumulation_curvature(dem),
+    'difference_curvature': wbe.difference_curvature(dem),
+    'generating_function':  wbe.generating_function(dem),
+    'curvedness':           wbe.curvedness(dem),
+}
+
+for name, raster in curv_types.items():
+    wbe.write_raster(raster, f'{name}.tif')
+</code></pre>
+<p><strong>When to use each:</strong></p>
+<ul>
+<li><em>Mean curvature</em>: general shape descriptor; used in hydrological and
+geomorphological studies.</li>
+<li><em>Gaussian curvature</em>: distinguishes synclinal, anteclinal, and saddle-point
+forms; positive on entirely convex surfaces, negative on saddle shapes.</li>
+<li><em>Minimal/maximal curvature</em>: principal curvatures; describe the extremes of
+bending in orthogonal directions.</li>
+<li><em>Casorati curvature</em>: root-mean-square of principal curvatures; a rotationally
+invariant roughness descriptor.</li>
+<li><em>Accumulation curvature</em>: amplifies high-curvature terrain features; useful
+for ridge–valley extraction.</li>
+</ul>
+<hr />
+<h2 id="terrain-position-and-landform-classification"><a class="header" href="#terrain-position-and-landform-classification">Terrain Position and Landform Classification</a></h2>
+<p>Terrain position describes where a location sits relative to its surrounding
+landscape — ridge crest, upper slope, flat, valley floor, and so on. It forms
+the backbone of many landform classification workflows.</p>
+<h3 id="topographic-position-index-tpi"><a class="header" href="#topographic-position-index-tpi">Topographic Position Index (TPI)</a></h3>
+<p>TPI compares the elevation of a cell to the mean elevation of its neighbourhood.
+Positive values indicate elevated positions (ridges, hilltops); negative values
+indicate depressed positions (valleys, channels); values near zero indicate
+planar slopes or mid-slope positions.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+# Inner and outer radii in cells
+tpi = wbe.relative_topographic_position(dem, filterx=11, filtery=11)
+wbe.write_raster(tpi, 'tpi.tif')
+</code></pre>
+<h3 id="deviation-from-mean-elevation"><a class="header" href="#deviation-from-mean-elevation">Deviation from Mean Elevation</a></h3>
+<p>Similar to TPI but expressed as a Z-score: how many standard deviations the
+local elevation is from the neighbourhood mean.</p>
+<pre><code class="language-python">dev = wbe.deviation_from_mean_elevation(dem, filterx=11, filtery=11)
+wbe.write_raster(dev, 'deviation_from_mean_elev.tif')
+</code></pre>
+<h3 id="geomorphons"><a class="header" href="#geomorphons">Geomorphons</a></h3>
+<p>Geomorphons classify the local terrain into ten fundamental landform elements
+by analysing the directional horizon profile in eight compass directions:
+flat, peak, ridge, shoulder, spur, slope, hollow, footslope, valley, and pit.
+The approach is descriptive and does not require thresholds for individual
+derivatives.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+geons = wbe.geomorphons(dem, search=50, threshold=1.0, flat=1.0, forms=True)
+wbe.write_raster(geons, 'geomorphons.tif')
+</code></pre>
+<p>The <code>search</code> parameter sets the look-ahead distance in cells. Increasing it
+produces a more generalised classification that emphasises regional landform
+context; smaller values capture finer-scale topographic features.</p>
+<hr />
+<h2 id="multiscale-terrain-analysis"><a class="header" href="#multiscale-terrain-analysis">Multiscale Terrain Analysis</a></h2>
+<p>Many geomorphic properties are scale-dependent: a feature that appears as a
+ridge at one scale is part of a larger plateau at another. Multiscale analysis
+explores how terrain derivatives vary with the scale (neighbourhood size) of
+computation.</p>
+<h3 id="multiscale-roughness"><a class="header" href="#multiscale-roughness">Multiscale Roughness</a></h3>
+<p>Roughness quantifies the local complexity of the terrain surface. The
+multiscale variant computes roughness at a range of neighbourhood sizes and
+returns both the maximum roughness and the scale at which it occurs.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+roughness, roughness_scale = wbe.multiscale_roughness(
+    dem,
+    min_scale=1,
+    max_scale=100,
+    step=1
+)
+
+wbe.write_raster(roughness, 'multiscale_roughness.tif')
+wbe.write_raster(roughness_scale, 'roughness_scale_of_max.tif')
+</code></pre>
+<p>The scale-of-maximum raster describes the spatial grain of the terrain texture:
+alluvial fans and smooth glacial valleys show large dominant scales; deeply
+dissected badlands and karst terrain show small scales.</p>
+<h3 id="multiscale-elevation-percentile"><a class="header" href="#multiscale-elevation-percentile">Multiscale Elevation Percentile</a></h3>
+<p>Measures how often a cell's elevation is higher than nearby cells across a
+range of scales, identifying persistent topographic prominence regardless of
+local noise.</p>
+<pre><code class="language-python">mep = wbe.multiscale_elevation_percentile(
+    dem,
+    min_scale=1,
+    max_scale=100,
+    step=2,
+    sig_digits=3
+)
+wbe.write_raster(mep, 'multiscale_elevation_percentile.tif')
+</code></pre>
+<h3 id="multiscale-curvatures"><a class="header" href="#multiscale-curvatures">Multiscale Curvatures</a></h3>
+<p>Computes a suite of curvature metrics at multiple scales and returns the value
+at the scale of maximum local curvature for each cell.</p>
+<pre><code class="language-python">multiscale_mean_curv = wbe.multiscale_curvatures(
+    dem,
+    min_scale=1,
+    max_scale=30,
+    step=1
+)
+wbe.write_raster(multiscale_mean_curv, 'multiscale_curvatures.tif')
+</code></pre>
+<h3 id="multiscale-topographic-position-image"><a class="header" href="#multiscale-topographic-position-image">Multiscale Topographic Position Image</a></h3>
+<p>Produces an RGB composite where colour encodes topographic position at three
+nested scales, providing an intuitive visual summary of multi-level terrain
+structure.</p>
+<pre><code class="language-python">mtp = wbe.multiscale_topographic_position_image(
+    dem,
+    local=1,
+    meso=11,
+    broad=101
+)
+wbe.write_raster(mtp, 'multiscale_topo_position.tif')
+</code></pre>
+<hr />
+<h2 id="visibility-analysis"><a class="header" href="#visibility-analysis">Visibility Analysis</a></h2>
+<p>Visibility analysis determines which parts of the landscape can be seen from a
+given viewpoint or set of viewpoints.</p>
+<h3 id="viewshed"><a class="header" href="#viewshed">Viewshed</a></h3>
+<p>A viewshed identifies the set of cells visible from an observer location.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+dem = wbe.read_raster('dem.tif')
+observer_points = wbe.read_vector('observer_locations.shp')
+
+viewshed = wbe.viewshed(dem, observer_points, height=1.8)
+wbe.write_raster(viewshed, 'viewshed.tif')
+</code></pre>
+<h3 id="horizon-angle-and-openness"><a class="header" href="#horizon-angle-and-openness">Horizon Angle and Openness</a></h3>
+<p>Horizon angle measures the elevation angle to the skyline in a given direction,
+useful for solar modelling and local climate studies. Terrain openness (positive
+and negative) quantifies how open or enclosed a location is relative to
+its surroundings.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+# Positive openness: how "exposed" each cell is
+openness_pos = wbe.openness(dem, dist=50, pos_openness=True)
+wbe.write_raster(openness_pos, 'openness_positive.tif')
+
+# Negative openness: how "enclosed" each cell is
+openness_neg = wbe.openness(dem, dist=50, pos_openness=False)
+wbe.write_raster(openness_neg, 'openness_negative.tif')
+</code></pre>
+<h3 id="sky-view-factor"><a class="header" href="#sky-view-factor">Sky View Factor</a></h3>
+<p>Sky view factor measures the fraction of the sky hemisphere that is visible
+from a point on the surface, accounting for topographic obstruction. Values
+range from 0 (fully enclosed depression) to 1 (completely open flat surface).
+It is used in urban heat island modelling, long-wave radiation estimation, and
+snowmelt modelling.</p>
+<pre><code class="language-python">svf = wbe.sky_view_factor(dem, num_directions=16, max_dist=200.0)
+wbe.write_raster(svf, 'sky_view_factor.tif')
+</code></pre>
+<hr />
+<h2 id="terrain-smoothing"><a class="header" href="#terrain-smoothing">Terrain Smoothing</a></h2>
+<p>Raw DEMs often contain artefacts from acquisition and interpolation:
+striping, pitting, noisy micro-relief. Smoothing prior to derivative
+computation reduces these effects while ideally preserving genuine terrain
+features.</p>
+<h3 id="feature-preserving-smoothing-multiscale"><a class="header" href="#feature-preserving-smoothing-multiscale">Feature-Preserving Smoothing (Multiscale)</a></h3>
+<p>Whitebox Next Gen now includes a newer multiscale feature-preserving smoother
+that is better suited to terrain-analysis workflows than the earlier
+single-scale smoother when you need to suppress short-wavelength DEM noise
+without flattening broader terrain form. The multiscale method works through a
+coarse-to-fine pyramid, smoothing at larger scales first and then refining the
+surface back toward the source DEM with explicit fidelity and edge-preservation
+controls.</p>
+<p>At the moment this tool is most directly accessed through the generic
+tool-execution surface in WbW-Py.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('raw_dem.tif')
+
+# Coarse-to-fine multiscale smoothing with explicit controls.
+dem_smooth = wbe.run_tool(
+  'feature_preserving_smoothing_multiscale',
+  {
+    'input': dem,
+    'smoothing_amount': 0.65,
+    'edge_preservation': 0.80,
+    'scale_levels': 4,
+    'fidelity': 0.45,
+    'z_factor': 1.0,
+  }
+)
+wbe.write_raster(dem_smooth, 'dem_smooth_multiscale.tif')
+</code></pre>
+<p>Use this before curvature, terrain-position, and landform-classification
+workflows, especially where acquisition artefacts or interpolation roughness
+would otherwise dominate second-derivative products.</p>
+<hr />
+<h2 id="wbw-pro-spotlight-terrain-constraint-and-conflict-analysis"><a class="header" href="#wbw-pro-spotlight-terrain-constraint-and-conflict-analysis">WbW-Pro Spotlight: Terrain Constraint and Conflict Analysis</a></h2>
+<ul>
+<li><strong>Problem:</strong> Screen terrain constraints early for siting and corridor
+decisions.</li>
+<li><strong>Tool:</strong> <code>terrain_constraint_and_conflict_analysis</code></li>
+<li><strong>Typical inputs:</strong> DEM, optional wetness, optional flood-risk surface,
+optional land-cover penalty, slope threshold.</li>
+<li><strong>Typical outputs:</strong> Terrain-conflict score raster, conflict classes, and
+summary outputs.</li>
+</ul>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+result = wbe.run_tool(
+  'terrain_constraint_and_conflict_analysis',
+  {
+    'dem': 'dem.tif',
+    'wetness': 'wetness_index_norm.tif',
+    'flood_risk': 'flood_risk_norm.tif',
+    'landcover_penalty': 'landcover_penalty_norm.tif',
+    'slope_limit_deg': 15.0,
+    'output_prefix': 'terrain_conflict_corridor_a'
+  }
+)
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a <code>WbEnvironment</code> initialized with a valid
+Pro licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-terrain-analysis-pipeline"><a class="header" href="#complete-terrain-analysis-pipeline">Complete Terrain Analysis Pipeline</a></h2>
+<p>The following script assembles a typical geomorphometric analysis workflow
+moving from raw DEM conditioning through a suite of first- and second-order
+derivatives and terrain classification outputs.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.verbose = True
+
+# --- 1. Read and inspect input ---
+dem = wbe.read_raster('dem_raw.tif')
+print(dem.metadata())
+
+# --- 2. Fill missing data (voids from nodata gaps) ---
+dem_filled = wbe.fill_missing_data(dem, filter_size=11)
+
+# --- 3. Multiscale feature-preserving smoothing ---
+dem_smooth = wbe.run_tool(
+  'feature_preserving_smoothing_multiscale',
+  {
+    'input': dem_filled,
+    'smoothing_amount': 0.65,
+    'edge_preservation': 0.80,
+    'scale_levels': 4,
+    'fidelity': 0.45,
+  }
+)
+wbe.write_raster(dem_smooth, 'dem_smooth_multiscale.tif')
+
+# --- 4. First-order derivatives ---
+slope   = wbe.slope(dem_smooth, units='degrees')
+aspect  = wbe.aspect(dem_smooth)
+hillshade = wbe.multidirectional_hillshade(dem_smooth)
+
+wbe.write_raster(slope,     'slope.tif')
+wbe.write_raster(aspect,    'aspect.tif')
+wbe.write_raster(hillshade, 'hillshade.tif')
+
+# --- 5. Curvatures ---
+prof_curv = wbe.profile_curvature(dem_smooth)
+plan_curv = wbe.plan_curvature(dem_smooth)
+mean_curv = wbe.mean_curvature(dem_smooth)
+
+wbe.write_raster(prof_curv, 'curvature_profile.tif')
+wbe.write_raster(plan_curv, 'curvature_plan.tif')
+wbe.write_raster(mean_curv, 'curvature_mean.tif')
+
+# --- 6. Terrain position ---
+dev = wbe.deviation_from_mean_elevation(dem_smooth, filterx=11, filtery=11)
+wbe.write_raster(dev, 'deviation_from_mean_elev.tif')
+
+# --- 7. Landform classification ---
+geomorphons = wbe.geomorphons(dem_smooth, search=50, threshold=1.0, flat=1.0)
+wbe.write_raster(geomorphons, 'geomorphons.tif')
+
+# --- 8. Multiscale roughness ---
+roughness, roughness_scale = wbe.multiscale_roughness(
+    dem_smooth, min_scale=1, max_scale=50, step=1
+)
+wbe.write_raster(roughness, 'multiscale_roughness.tif')
+
+# --- 9. Visibility ---
+svf = wbe.sky_view_factor(dem_smooth, num_directions=16, max_dist=200.0)
+wbe.write_raster(svf, 'sky_view_factor.tif')
+
+print("Terrain analysis complete.")
+</code></pre>
+<hr />
+<h2 id="ridges-and-valleys"><a class="header" href="#ridges-and-valleys">Ridges and Valleys</a></h2>
+<p>Topographic ridges and channels are fundamental landform elements. Whitebox
+provides tools to extract them directly as vector features.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem_smooth.tif')
+
+# Extract ridges
+ridges = wbe.find_ridges(dem, line_thin=True)
+wbe.write_raster(ridges, 'ridges.tif')
+
+# Extract ridge and valley lines as vectors
+ridge_lines = wbe.ridge_and_valley_vectors(dem)
+wbe.write_vector(ridge_lines, 'ridge_valley_lines.gpkg')
+</code></pre>
+<p>For hydrographic applications, channel extraction is usually better served
+through the hydrology toolset (flow accumulation-based extraction), but
+ridge-line extraction complements watershed delineation by explicitly mapping
+the divide network.</p>
+<hr />
+<h2 id="embankment-and-road-mapping"><a class="header" href="#embankment-and-road-mapping">Embankment and Road Mapping</a></h2>
+<p>In agricultural, infrastructure, and floodplain contexts, anthropogenic
+embankments (dykes, levees, road fills) appear as linear elevated features
+on DEMs. Whitebox provides dedicated tools for their detection:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+dem = wbe.read_raster('dem_lidar.tif')
+
+# Map elevated linear features such as road embankments and dykes
+embankments = wbe.embankment_mapping(
+    dem,
+    road_vec='roads.shp',
+    search_dist=2.5,
+    min_road_width=6.0,
+    typical_width=30.0,
+    max_height=2.5,
+    spillout_slope=4.0,
+    max_remove_fs_slope=0.1,
+    min_bench_width=6.0,
+    clean_up=True,
+    output_type='filtered DEM'
+)
+wbe.write_raster(embankments, 'dem_embankments_filtered.tif')
+</code></pre>
+<hr />
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<p>Terrain analysis in WbW-Py follows a layered depth model:</p>
+<ul>
+<li><strong>First-order work</strong>: slope, aspect, hillshade are fast and interpretable.</li>
+<li><strong>Curvature analysis</strong>: adds information about surface bending and is
+critical for hydrological modelling, mass movement susceptibility, and
+landform process inference.</li>
+<li><strong>Classification</strong>: geomorphons and multiscale position methods provide
+stable, interpretable landform maps without manually tuned thresholds.</li>
+<li><strong>Multiscale methods</strong>: reveal scale-dependent structure that single-scale
+derivatives miss.</li>
+<li><strong>Visibility and openness</strong>: support solar, ecological, and landscape
+planning applications.</li>
+</ul>
+<p>For most projects the right progression is: smooth → first-order derivatives →
+curvatures → classification → application-specific outputs.</p>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Pre-process your DEM</strong>: Remove spikes, pits, and fill sinks before computing derivatives. Use <code>breach_depressions_least_cost()</code> (preserves real depressions) or <code>fill_depressions()</code> (infills) depending on your application.</li>
+<li><strong>Resolution matters</strong>: Coarse DEMs (e.g. 30 m) are smoothed and may miss local process features. Fine DEMs (e.g. 1 m LiDAR) can be noisy. Choose resolution to match your process scale.</li>
+<li><strong>Flow direction algorithms</strong>: D8 (8-directional) is faster but can cause artificial flow alignments. D-infinity and Dinf-Rho distribute flow more naturally and are preferred for continuous analyses.</li>
+<li><strong>Curvature is scale-dependent</strong>: Always compute curvature at the scale matching your DEM resolution. A 10 m window on a 1 m DEM can overinterpret noise; a 1 m window on a 30 m DEM misses important structure.</li>
+<li><strong>Multiscale position classification</strong>: Run classification at 3–5 scales (e.g. local, neighbourhood, regional) and examine layer coherence. Inconsistent multi-scale patterns suggest model overfitting.</li>
+<li><strong>Viewshed validation</strong>: Viewshed results are sensitive to DEM quality and observer height assumptions. Always validate against ground observation or high-res ortho imagery.</li>
+<li><strong>Hydrological thresholds are empirical</strong>: Contributing area thresholds for stream initiation vary by geology and climate (typically 0.5–5 km²). Calibrate against observed stream networks.</li>
+<li><strong>Openness and exposure</strong>: Sky-view factor (SVF) and terrain openness support better hillshading and visibility assessment than raw slope or aspect. Use for visual interpretation and photogrammetry.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="api-reference-strategy.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="spatial-hydrology.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="api-reference-strategy.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="spatial-hydrology.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

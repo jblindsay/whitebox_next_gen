@@ -1,0 +1,668 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Network Analysis - Whitebox Workflows for Python User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html" class="active"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="network-analysis"><a class="header" href="#network-analysis">Network Analysis</a></h1>
+<p>Whitebox Next Gen has deep capabilities across the full network-analysis
+spectrum: topology auditing, point-to-point routing, service areas, closest
+facility, OD cost matrices, location-allocation, accessibility metrics,
+sensitivity analysis, multimodal transit modelling, map matching, and fleet
+dispatch optimization. This chapter walks through those capabilities in the
+order you would encounter them in a real project.</p>
+<hr />
+<h2 id="core-concepts-you-should-know-first"><a class="header" href="#core-concepts-you-should-know-first">Core Concepts You Should Know First</a></h2>
+<p>Before running tools, it helps to align on a few core terms used throughout
+this chapter.</p>
+<ul>
+<li><strong>Network</strong>: A graph made of edges (road or transit segments) and nodes
+(intersections, stops, junctions).</li>
+<li><strong>Cost / impedance</strong>: The value minimized during routing. This can be
+distance, travel time, generalized cost, or another friction metric.</li>
+<li><strong>Origin / destination (OD)</strong>: Origins are trip start points; destinations
+are trip end points.</li>
+<li><strong>OD matrix</strong>: A table of costs from many origins to many destinations. This
+is the standard structure for accessibility, market access, and assignment
+analyses.</li>
+<li><strong>Shortest path</strong>: The minimum-cost path between one origin and one
+destination.</li>
+<li><strong>K-shortest paths</strong>: The best <em>k</em> distinct alternatives between the same OD
+pair, useful for resilience and choice modelling.</li>
+<li><strong>Service area (isochrone)</strong>: The portion of the network reachable from an
+origin within a cost threshold (for example 10 minutes).</li>
+<li><strong>Closest facility</strong>: For each incident or demand point, the least-cost
+route to the nearest candidate facility on the network.</li>
+<li><strong>Location-allocation</strong>: Selecting facility sites that optimize a demand
+objective, such as minimizing total travel cost or maximizing coverage.</li>
+<li><strong>Connectivity</strong>: Whether all required origins and destinations are in the
+same connected component. Disconnected components cause failed routes.</li>
+<li><strong>Node degree</strong>: The number of edges touching a node. Degree supports basic
+network centrality interpretation and QA for odd junction structure.</li>
+<li><strong>Multimodal routing</strong>: Pathfinding across multiple transport modes
+(walk/bus/rail) with transfer penalties and mode constraints.</li>
+<li><strong>Map matching</strong>: Snapping GPS trajectories to the most plausible sequence of
+network edges.</li>
+</ul>
+<p>If you keep these definitions in mind, each workflow step below becomes easier
+to interpret and validate.</p>
+<hr />
+<h2 id="step-1--prepare-and-audit-the-network"><a class="header" href="#step-1--prepare-and-audit-the-network">Step 1 — Prepare and Audit the Network</a></h2>
+<p>Every routing workflow should begin with a topology check. A single dangling
+endpoint or disconnected island can silently invalidate a shortest-path result.</p>
+<h3 id="topology-audit"><a class="header" href="#topology-audit">Topology Audit</a></h3>
+<p><code>network_topology_audit()</code> scans a line network for common errors — dead ends,
+pseudo-nodes, overshoots, and isolated islands — and writes each flagged
+location as a point feature. It also produces an optional text report.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.working_directory = '/data/network'
+wbe.verbose = True
+
+roads = wbe.read_vector('roads.shp')
+
+errors, report_path = wbe.network_topology_audit(
+    roads,
+    snap_tolerance=0.5,
+    one_way_field='ONEWAY',
+    report='topology_report.txt'
+)
+wbe.write_vector(errors, 'topology_errors.shp')
+</code></pre>
+<p>Review <code>topology_report.txt</code> before continuing. Understanding the error count
+and class distribution will guide how much cleaning the network needs.</p>
+<h3 id="connected-components"><a class="header" href="#connected-components">Connected Components</a></h3>
+<p>An isolated cluster of road segments that cannot reach the main network will
+cause any OD or closest-facility query to fail for origins or destinations on
+that cluster. <code>network_connected_components()</code> labels every edge with its
+component identifier.</p>
+<pre><code class="language-python">roads_comps = wbe.network_connected_components(roads, snap_tolerance=0.5)
+wbe.write_vector(roads_comps, 'roads_components.shp')
+# Edges not in the dominant component are candidates for removal or bridging.
+</code></pre>
+<h3 id="node-degree"><a class="header" href="#node-degree">Node Degree</a></h3>
+<p><code>network_node_degree()</code> writes the degree (number of connected edges) of every
+node as a point layer. Degree-1 nodes are dead ends; unusually high-degree
+nodes may indicate duplicate arcs.</p>
+<pre><code class="language-python">nodes = wbe.network_node_degree(roads, snap_tolerance=0.5)
+wbe.write_vector(nodes, 'node_degree.shp')
+</code></pre>
+<hr />
+<h2 id="step-2--shortest-path-and-alternatives"><a class="header" href="#step-2--shortest-path-and-alternatives">Step 2 — Shortest Path and Alternatives</a></h2>
+<h3 id="single-shortest-path"><a class="header" href="#single-shortest-path">Single Shortest Path</a></h3>
+<p><code>shortest_path_network()</code> finds the minimum-cost path between two coordinates
+using Dijkstra's algorithm. Supply an <code>edge_cost_field</code> to use travel-time or
+impedance; omit it to route by Euclidean arc length.</p>
+<pre><code class="language-python">path = wbe.shortest_path_network(
+    roads,
+    start_x=454230.0, start_y=4823150.0,
+    end_x=458900.0,   end_y=4819700.0,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+wbe.write_vector(path, 'route_shortest.shp')
+</code></pre>
+<p>Turn penalties model the real-world cost of left, right, and U-turns — these
+can substantially alter optimal routes in dense urban networks.</p>
+<pre><code class="language-python">path_turns = wbe.shortest_path_network(
+    roads,
+    start_x=454230.0, start_y=4823150.0,
+    end_x=458900.0,   end_y=4819700.0,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY',
+    turn_penalty=0.5,
+    u_turn_penalty=3.0,
+    forbid_u_turns=True
+)
+wbe.write_vector(path_turns, 'route_with_turns.shp')
+</code></pre>
+<h3 id="k-shortest-alternative-paths"><a class="header" href="#k-shortest-alternative-paths">K-Shortest Alternative Paths</a></h3>
+<p><code>k_shortest_paths_network()</code> returns the <em>k</em> least-cost distinct paths between
+the same endpoints. Use this for resilience analysis, route-choice modelling,
+or presenting alternatives to planners.</p>
+<pre><code class="language-python">alt_paths = wbe.k_shortest_paths_network(
+    roads,
+    start_x=454230.0, start_y=4823150.0,
+    end_x=458900.0,   end_y=4819700.0,
+    k=3,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+wbe.write_vector(alt_paths, 'routes_k3.shp')
+# Each feature carries a PATH_RANK attribute (1 = shortest).
+</code></pre>
+<hr />
+<h2 id="step-3--service-areas"><a class="header" href="#step-3--service-areas">Step 3 — Service Areas</a></h2>
+<p><code>network_service_area()</code> delineates every part of the network reachable within
+a cost threshold from one or more origins. Typical uses include drive-time
+catchments for emergency services, walking isochrones for transit stops, and
+delivery zones.</p>
+<pre><code class="language-python">fire_stations = wbe.read_vector('fire_stations.shp')
+
+catchment = wbe.network_service_area(
+    roads,
+    origins=fire_stations,
+    max_cost=5.0,               # 5 minutes
+    snap_tolerance=20.0,
+    output_mode='polygon',      # 'nodes', 'edges', or 'polygon'
+    polygon_merge_origins=True, # dissolve overlapping catchments
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+wbe.write_vector(catchment, 'fire_catchment_5min.shp')
+</code></pre>
+<p>Use <code>output_mode='edges'</code> to retain the actual road arcs inside the catchment
+rather than fill a polygon — more appropriate when the network is sparse or
+when the arc-level result is needed for reporting.</p>
+<hr />
+<h2 id="step-4--closest-facility"><a class="header" href="#step-4--closest-facility">Step 4 — Closest Facility</a></h2>
+<p><code>closest_facility_network()</code> routes each incident point to its nearest
+facility, measuring cost along the network rather than in straight-line
+distance. This is the core tool for emergency-response siting, healthcare
+access studies, and school-catchment delineation.</p>
+<pre><code class="language-python">accidents   = wbe.read_vector('accidents.shp')
+hospitals   = wbe.read_vector('hospitals.shp')
+
+routes_to_hosp = wbe.closest_facility_network(
+    roads,
+    incidents=accidents,
+    facilities=hospitals,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+wbe.write_vector(routes_to_hosp, 'routes_to_hospital.shp')
+# Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
+</code></pre>
+<hr />
+<h2 id="step-5--od-cost-matrix-and-batch-route-export"><a class="header" href="#step-5--od-cost-matrix-and-batch-route-export">Step 5 — OD Cost Matrix and Batch Route Export</a></h2>
+<p>When you need costs between many origins and many destinations simultaneously,
+an OD matrix is far more efficient than looping over <code>shortest_path_network()</code>.</p>
+<h3 id="od-cost-matrix"><a class="header" href="#od-cost-matrix">OD Cost Matrix</a></h3>
+<p><code>network_od_cost_matrix()</code> solves all pairwise paths and writes the results to
+a CSV. Each row contains an origin identifier, a destination identifier, and
+the network cost between them.</p>
+<pre><code class="language-python">schools   = wbe.read_vector('schools.shp')
+libraries = wbe.read_vector('libraries.shp')
+
+cost_csv = wbe.network_od_cost_matrix(
+    roads,
+    origins=schools,
+    destinations=libraries,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+print('OD matrix written to:', cost_csv)
+</code></pre>
+<p>The CSV is directly usable in pandas or any tabular analysis tool.</p>
+<pre><code class="language-python">import pandas as pd
+df = pd.read_csv(cost_csv)
+print(df.groupby('ORIGIN_FID')['COST'].min().describe())
+</code></pre>
+<h3 id="materializing-od-routes-as-geometry"><a class="header" href="#materializing-od-routes-as-geometry">Materializing OD Routes as Geometry</a></h3>
+<p>To visualize or spatially analyse the actual path lines between OD pairs, use
+<code>network_routes_from_od()</code>.</p>
+<pre><code class="language-python">od_routes = wbe.network_routes_from_od(
+    roads,
+    origins=schools,
+    destinations=libraries,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES',
+    one_way_field='ONEWAY'
+)
+wbe.write_vector(od_routes, 'od_routes_schools_to_libraries.shp')
+</code></pre>
+<hr />
+<h2 id="step-6--location-allocation"><a class="header" href="#step-6--location-allocation">Step 6 — Location-Allocation</a></h2>
+<p><code>location_allocation_network()</code> solves the classic p-median problem: given
+candidate facility locations and weighted demand points, which <em>p</em> facilities
+minimise total travel cost? Use this for clinic siting, school consolidation,
+warehouse network design, and similar strategic planning problems.</p>
+<pre><code class="language-python">demand     = wbe.read_vector('demand_points.shp')  # population-weighted
+candidates = wbe.read_vector('candidate_sites.shp')
+
+sited = wbe.location_allocation_network(
+    roads,
+    demand_points=demand,
+    facilities=candidates,
+    facility_count=4,
+    solver_mode='minimize_impedance',
+    demand_weight_field='POP',
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES'
+)
+wbe.write_vector(sited, 'selected_facilities.shp')
+# SELECTED == 1 on the four chosen candidate sites.
+# Demand points carry ASSIGNED_FID linking each to its nearest selected site.
+</code></pre>
+<p>Solver modes include <code>minimize_impedance</code> (p-median), <code>maximize_coverage</code>, and
+<code>maximize_attendance</code>. Required and forbidden facility flags let you fix certain
+sites open or closed before the solver runs.</p>
+<hr />
+<h2 id="step-7--network-accessibility-metrics"><a class="header" href="#step-7--network-accessibility-metrics">Step 7 — Network Accessibility Metrics</a></h2>
+<p><code>compute_network_accessibility()</code> measures how accessible a set of destinations
+is from each origin, applying a decay function that down-weights distant
+facilities. The result is a gravity-model or cumulative-opportunity
+accessibility score per origin — a standard indicator in transport equity
+analysis.</p>
+<pre><code class="language-python">residents    = wbe.read_vector('resident_centroids.shp')
+supermarkets = wbe.read_vector('supermarkets.shp')
+
+accessibility = wbe.compute_network_accessibility(
+    roads,
+    origins=residents,
+    destinations=supermarkets,
+    edge_cost_field='MINUTES',
+    impedance_cutoff=30.0,
+    decay_function='negative_exponential',
+    decay_parameter=0.1
+)
+wbe.write_vector(accessibility, 'food_accessibility.shp')
+# Each origin point carries an ACCESS_SCORE field.
+</code></pre>
+<hr />
+<h2 id="step-8--od-sensitivity-analysis"><a class="header" href="#step-8--od-sensitivity-analysis">Step 8 — OD Sensitivity Analysis</a></h2>
+<p><code>analyze_od_cost_sensitivity()</code> quantifies how stable OD costs are under
+stochastic perturbation of edge weights. Use it to stress-test a routing model
+against uncertainty in travel-time estimates, or to assess the impact of
+hypothetical congestion or road-closure scenarios.</p>
+<pre><code class="language-python">sensitivity = wbe.analyze_od_cost_sensitivity(
+    roads,
+    origins=schools,
+    destinations=libraries,
+    edge_cost_field='MINUTES',
+    impedance_disturbance_range=0.2,  # ±20 % perturbation
+    monte_carlo_samples=500
+)
+wbe.write_vector(sensitivity, 'od_sensitivity.shp')
+</code></pre>
+<hr />
+<h2 id="step-9--multimodal-analysis"><a class="header" href="#step-9--multimodal-analysis">Step 9 — Multimodal Analysis</a></h2>
+<p>Whitebox Next Gen supports networks that carry a <code>MODE</code> field on each edge
+(e.g. <code>walk</code>, <code>cycle</code>, <code>bus</code>, <code>rail</code>). The multimodal tools honour
+mode-specific speeds, transfer penalties, and time-of-day profiles.</p>
+<h3 id="multimodal-od-scenarios"><a class="header" href="#multimodal-od-scenarios">Multimodal OD Scenarios</a></h3>
+<p><code>analyze_multimodal_od_scenarios()</code> runs a batch of named scenarios defined by
+a CSV, each specifying different mode allowances, speed overrides, or departure
+times. The output is a combined cost table across all scenarios for rapid
+before/after or modal-mix comparisons.</p>
+<pre><code class="language-python">transit_net    = wbe.read_vector('transit_network.shp')
+bus_stops      = wbe.read_vector('bus_stops.shp')
+destinations   = wbe.read_vector('key_destinations.shp')
+
+result = wbe.analyze_multimodal_od_scenarios(
+    input=transit_net,
+    origins=bus_stops,
+    destinations=destinations,
+    output='multimodal_od_scenarios.shp',
+    mode_field='MODE',
+    allowed_modes='walk,bus,rail',
+    transfer_penalty=3.0,
+    edge_cost_field='MINUTES',
+    scenario_bundle_csv='scenarios.csv',
+    departure_time='08:00',
+    temporal_mode='scheduled'
+)
+</code></pre>
+<h3 id="exporting-multimodal-route-geometry"><a class="header" href="#exporting-multimodal-route-geometry">Exporting Multimodal Route Geometry</a></h3>
+<p><code>export_multimodal_routes_for_od_pairs()</code> materializes the optimal multimodal
+route for each OD pair as a line feature with per-segment mode attributes.</p>
+<pre><code class="language-python">mm_routes = wbe.export_multimodal_routes_for_od_pairs(
+    input=transit_net,
+    origins=bus_stops,
+    destinations=destinations,
+    output='multimodal_routes.shp',
+    mode_field='MODE',
+    allowed_modes='walk,bus,rail',
+    transfer_penalty=3.0,
+    edge_cost_field='MINUTES'
+)
+</code></pre>
+<hr />
+<h2 id="step-10--map-matching"><a class="header" href="#step-10--map-matching">Step 10 — Map Matching</a></h2>
+<p><code>map_matching_v1()</code> snaps a raw GPS trajectory to the most plausible sequence
+of network edges using a hidden Markov model with candidate expansion. It is
+the first step in any floating-vehicle data or probe-data workflow.</p>
+<pre><code class="language-python">gps_points = wbe.read_vector('gps_probe_points.shp')
+
+matched_path, match_report = wbe.map_matching_v1(
+    roads,
+    trajectory_points=gps_points,
+    timestamp_field='TIMESTAMP',
+    search_radius=30.0,
+    candidate_k=5,
+    snap_tolerance=10.0,
+    edge_cost_field='MINUTES',
+    matched_points_output='matched_points.shp',
+    match_report='match_report.txt'
+)
+wbe.write_vector(matched_path, 'matched_route.shp')
+</code></pre>
+<p>The match report summarises per-point confidence scores and the percentage of
+trajectory points that were successfully snapped to the network.</p>
+<hr />
+<h2 id="step-11--fleet-and-vehicle-routing-pro"><a class="header" href="#step-11--fleet-and-vehicle-routing-pro">Step 11 — Fleet and Vehicle Routing <em>(Pro)</em></a></h2>
+<p><code>fleet_routing_and_dispatch_optimizer</code> solves Capacitated Vehicle Routing
+Problems (CVRP) and Vehicle Routing with Time Windows (VRPTW): given a fleet
+of vehicles at one or more depots and a set of service or delivery stops, it
+assigns stops to vehicles and sequences each route to minimise total travel
+cost subject to capacity and time-window constraints.</p>
+<pre><code class="language-python">result = wbe.run_tool(
+    'fleet_routing_and_dispatch_optimizer',
+    {
+        'network':               'roads.shp',
+        'depots':                'depots.shp',
+        'stops':                 'delivery_stops.shp',
+        'vehicles_csv':          'fleet.csv',
+        'route_output':          'fleet_routes.shp',
+        'route_kpis_csv_output': 'fleet_kpis.csv',
+        'edge_cost_field':       'MINUTES',
+        'one_way_field':         'ONEWAY',
+        'vrp_mode':              'VRPTW'
+    }
+)
+print(result)
+</code></pre>
+<p>The KPI CSV reports per-route capacity utilization, total distance, time, and
+stop count — ready for import into logistics dashboards.</p>
+<blockquote>
+<p><strong>Note:</strong> This tool requires a <code>WbEnvironment</code> initialised with a valid Pro
+licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-workflow-emergency-response-planning"><a class="header" href="#complete-workflow-emergency-response-planning">Complete Workflow: Emergency Response Planning</a></h2>
+<p>The following example chains topology audit → service-area catchment →
+closest-facility → location-allocation into a single emergency-planning
+analysis.</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.working_directory = '/data/emergency_planning'
+
+roads      = wbe.read_vector('roads.shp')
+stations   = wbe.read_vector('fire_stations.shp')
+candidates = wbe.read_vector('candidate_stations.shp')
+incidents  = wbe.read_vector('historical_incidents.shp')
+
+# 1. Audit topology before running any queries.
+errors, _ = wbe.network_topology_audit(
+    roads, snap_tolerance=0.5, report='topology_report.txt'
+)
+wbe.write_vector(errors, 'topology_errors.shp')
+
+# 2. Map 5-minute drive catchments from existing stations.
+catchment = wbe.network_service_area(
+    roads,
+    origins=stations,
+    max_cost=5.0,
+    output_mode='polygon',
+    polygon_merge_origins=True,
+    edge_cost_field='MINUTES',
+    snap_tolerance=20.0
+)
+wbe.write_vector(catchment, 'existing_catchment_5min.shp')
+
+# 3. Route each historical incident to its nearest station.
+routes = wbe.closest_facility_network(
+    roads,
+    incidents=incidents,
+    facilities=stations,
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES'
+)
+wbe.write_vector(routes, 'incident_routes.shp')
+
+# 4. Find two additional station locations that maximise coverage.
+sited = wbe.location_allocation_network(
+    roads,
+    demand_points=incidents,
+    facilities=candidates,
+    facility_count=2,
+    solver_mode='maximize_coverage',
+    snap_tolerance=20.0,
+    edge_cost_field='MINUTES'
+)
+wbe.write_vector(sited, 'new_station_sites.shp')
+</code></pre>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li>Always run <code>network_topology_audit()</code> first — even one disconnected segment
+can cause a path query to return no result without an explicit error.</li>
+<li>Use <code>network_connected_components()</code> to confirm that all origins and
+destinations belong to the same component before running OD queries.</li>
+<li>Supply <code>edge_cost_field</code> pointing to a pre-computed travel-time field for
+realistic routing; omit it only for pure geometric distance problems.</li>
+<li>For time-sensitive routing, use <code>temporal_cost_profile</code> and
+<code>departure_time</code> to load scheduled speeds at the time of travel.</li>
+<li>For multimodal networks, store the mode identifier in a field called <code>MODE</code>
+and use <code>allowed_modes</code> to control which modes are permitted per query.</li>
+<li>The <code>fleet_routing_and_dispatch_optimizer</code> Pro tool requires a
+<code>WbEnvironment</code> initialised with a valid Pro licence.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="vector-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="linear-referencing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="vector-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="linear-referencing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

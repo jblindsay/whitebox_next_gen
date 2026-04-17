@@ -1,0 +1,861 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Remote Sensing Analysis - Whitebox Workflows for Python User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="environment-and-discovery.html"><strong aria-hidden="true">5.</strong> Environment and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html" class="active"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for Python User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="remote-sensing-analysis"><a class="header" href="#remote-sensing-analysis">Remote Sensing Analysis</a></h1>
+<p>Remote sensing uses satellite imagery, aerial photography, and drone captures to characterise the Earth's surface. Whitebox Workflows for Python (WbW-Py) provides a comprehensive toolkit for image processing, spectral analysis, dimensionality reduction, supervised and unsupervised classification, change detection, and sensor-specific workflows. Because all tools operate directly on in-memory raster objects, complex multi-step image analysis pipelines can be written as concise Python scripts.</p>
+<blockquote>
+<p><strong>Sensor Bundle First</strong>: When working with industry-standard satellite products (Sentinel-2, Landsat, PlanetScope, SAR, and others), open the scene as a <strong>sensor bundle</strong> rather than loading individual band files by hand. Bundles provide automatic metadata discovery, key-based band access, and one-call true/false-colour composites that work across sensor families without hardcoding file names.</p>
+</blockquote>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Remote sensing image analysis requires familiarity with these core ideas:</p>
+<ul>
+<li><strong>Spectral bands</strong>: Distinct wavelength ranges (e.g. blue 450–510 nm, red 620–750 nm, NIR 750–900 nm). Different materials reflect different bands, enabling material discrimination.</li>
+<li><strong>Spectral indices</strong>: Normalized ratios of bands that isolate phenomena. NDVI (Normalized Difference Vegetation Index) uses NIR and red to measure greenness; NDWI uses NIR and SWIR for water content.</li>
+<li><strong>Spatial resolution</strong>: Pixel size in meters (Sentinel-2: 10 m for visible/NIR, 20 m for SWIR; Landsat: 30 m; SAR: 5–30 m depending on mode).</li>
+<li><strong>Temporal resolution</strong>: Revisit interval (Sentinel-2: 5 days; Landsat: 16 days; PlanetScope: daily or higher).</li>
+<li><strong>Atmospheric effects</strong>: Raw radiance is affected by aerosols, water vapour, and ozone. Surface reflectance products are atmospherically corrected; still require relative normalization for multi-date analysis.</li>
+<li><strong>Cloud masking</strong>: Cloud and cloud shadow pixels must be identified and excluded before classification or change detection using quality/QA bands.</li>
+<li><strong>Supervised classification</strong>: Training polygons with known labels teach a model to assign classes to unlabelled pixels. Training quality directly controls classification accuracy.</li>
+<li><strong>Unsupervised classification</strong>: Clustering algorithms (K-means, ISODATA) discover spectral clusters without training labels; useful for exploratory analysis.</li>
+<li><strong>Change detection</strong>: Comparing indices or classifications across dates to identify land-use changes, disturbance, or phenological shifts.</li>
+</ul>
+<hr />
+<h2 id="sensor-bundles--cross-family-scene-ingestion"><a class="header" href="#sensor-bundles--cross-family-scene-ingestion">Sensor Bundles — Cross-Family Scene Ingestion</a></h2>
+<p>WbW-Py's <code>Bundle</code> class wraps a product folder (zip archive or extracted directory) and exposes a consistent API regardless of sensor family. This is the preferred starting point for any scene-level workflow.</p>
+<h3 id="opening-a-bundle"><a class="header" href="#opening-a-bundle">Opening a Bundle</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+# Works with Sentinel-2, Landsat 8/9, PlanetScope, SPOT, SAR, etc.
+bundle = wbe.read_bundle('/data/S2B_MSIL2A_20240601T105619_N0510_R094_T32TPT_20240601T142845.SAFE')
+
+# Or from a zip archive — WbW extracts it automatically
+bundle = wbe.read_bundle('/data/LC09_L2SP_017030_20240610_20240612_02_T1.tar')
+</code></pre>
+<h3 id="discovering-available-layers"><a class="header" href="#discovering-available-layers">Discovering Available Layers</a></h3>
+<p><code>Bundle</code> surfaces keys for bands, derived measurements, QA/cloud masks, auxiliary layers, and additional assets:</p>
+<pre><code class="language-python">print(bundle.family)               # e.g. 'sentinel2', 'landsat_c2', 'planetscope'
+print(bundle.mission)              # e.g. 'Sentinel-2B'
+print(bundle.tile_id())            # e.g. '32TPT'
+print(bundle.processing_level())   # e.g. 'L2A', 'L2SP'
+print(bundle.cloud_cover_percent())
+print(bundle.acquisition_datetime_utc())
+
+print(bundle.list_band_keys())        # spectral bands, e.g. ['B02', 'B03', 'B04', 'B08', ...]
+print(bundle.list_measurement_keys()) # derived measurements, e.g. ['ndvi', 'ndwi']
+print(bundle.list_qa_keys())          # quality/cloud layers, e.g. ['SCL', 'QA_PIXEL']
+print(bundle.list_aux_keys())         # auxiliary rasters, e.g. ['AOT', 'WVP']
+print(bundle.list_asset_keys())       # additional assets (angles, browse images, etc.)
+</code></pre>
+<h3 id="reading-bands-by-key"><a class="header" href="#reading-bands-by-key">Reading Bands by Key</a></h3>
+<pre><code class="language-python"># Keys follow sensor-native naming — no need to memorise file paths
+blue  = bundle.read_band('B02')   # Sentinel-2 blue
+green = bundle.read_band('B03')
+red   = bundle.read_band('B04')
+nir   = bundle.read_band('B08')
+swir1 = bundle.read_band('B11')
+swir2 = bundle.read_band('B12')
+
+# Landsat 9 uses different key names
+# blue  = bundle.read_band('SR_B2')
+# green = bundle.read_band('SR_B3')
+# red   = bundle.read_band('SR_B4')
+# nir   = bundle.read_band('SR_B5')
+
+# QA / cloud mask
+cloud_mask = bundle.read_qa_layer('SCL')      # Sentinel-2 scene classification
+# cloud_mask = bundle.read_qa_layer('QA_PIXEL')  # Landsat Collection 2
+</code></pre>
+<h3 id="quick-look-composites"><a class="header" href="#quick-look-composites">Quick-Look Composites</a></h3>
+<p>Bundles know which keys correspond to red/green/blue/NIR bands for their sensor family, so composites require no band-order bookkeeping:</p>
+<pre><code class="language-python"># Write a true-colour GeoTIFF (auto-enhanced by default)
+bundle.true_colour_composite(wbe, output_path='true_colour.tif')
+
+# False-colour (NIR-Red-Green) composite
+bundle.false_colour_composite(wbe, output_path='false_colour.tif')
+</code></pre>
+<h3 id="multi-sensor-workflow-without-hardcoded-paths"><a class="header" href="#multi-sensor-workflow-without-hardcoded-paths">Multi-Sensor Workflow Without Hardcoded Paths</a></h3>
+<p>The bundle API is deliberately family-agnostic. The same code body works on Sentinel-2 and Landsat scenes because both expose their bands by semantic key:</p>
+<pre><code class="language-python">def compute_ndvi_from_bundle(wbe, bundle_path, output_path):
+    b = wbe.read_bundle(bundle_path)
+    if 'ndvi' in b.list_measurement_keys():
+        ndvi = b.read_measurement('ndvi')
+    else:
+        # Fall back to band-based NDVI — works for any optical sensor
+        red_band = b.read_band('B04') if b.family == 'sentinel2' else b.read_band('SR_B4')
+        nir_band = b.read_band('B08') if b.family == 'sentinel2' else b.read_band('SR_B5')
+        ndvi = wbe.normalized_difference_index(nir_band, red_band)
+    wbe.write_raster(ndvi, output_path, compress=True)
+
+compute_ndvi_from_bundle(wbe, '/data/S2B_MSIL2A_20240601.SAFE', 'ndvi_s2.tif')
+compute_ndvi_from_bundle(wbe, '/data/LC09_L2SP_017030.tar',     'ndvi_l9.tif')
+</code></pre>
+<hr />
+<h2 id="working-with-individual-band-files"><a class="header" href="#working-with-individual-band-files">Working with Individual Band Files</a></h2>
+<p>When bundles are not available (e.g., reprojected mosaics, custom composites, legacy archives), load individual band files in the conventional way. All raster objects returned by <code>read_band()</code> and <code>read_raster()</code> are interchangeable.</p>
+<pre><code class="language-python">wbe.working_directory = '/data/sentinel2'
+
+blue   = wbe.read_raster('B02_10m.tif')
+green  = wbe.read_raster('B03_10m.tif')
+red    = wbe.read_raster('B04_10m.tif')
+nir    = wbe.read_raster('B08_10m.tif')
+
+# Sentinel-2 bands 11/12 are 20 m; resample to match 10 m bands before analysis
+swir1 = wbe.resample(wbe.read_raster('B11_20m.tif'), base_raster=red, method='bilinear')
+swir2 = wbe.resample(wbe.read_raster('B12_20m.tif'), base_raster=red, method='bilinear')
+</code></pre>
+<hr />
+<h2 id="cloud-and-no-data-masking"><a class="header" href="#cloud-and-no-data-masking">Cloud and No-Data Masking</a></h2>
+<p>Before any analysis, mask clouds, cloud shadows, and saturated pixels.</p>
+<pre><code class="language-python"># Sentinel-2 SCL classes: 3=cloud shadow, 8=medium cloud, 9=high cloud, 10=thin cirrus
+scl = bundle.read_qa_layer('SCL')
+cloud_free_red = wbe.raster_calculator(
+    "if('scl' == 3 or 'scl' == 8 or 'scl' == 9 or 'scl' == 10, nodata, 'red')",
+    [scl, red]
+)
+
+# Landsat Collection 2 QA_PIXEL — dilated cloud = bit 1, cloud = bit 3, shadow = bit 4
+# qa = bundle.read_qa_layer('QA_PIXEL')
+# Use raster_calculator with bitwise masking expressions to isolate cloud/shadow pixels
+</code></pre>
+<hr />
+<h2 id="spectral-indices"><a class="header" href="#spectral-indices">Spectral Indices</a></h2>
+<p>Spectral indices are band-ratio transformations that suppress illumination variation and amplify specific surface properties. WbW-Py's <code>normalized_difference_index()</code> is a general-purpose tool for any normalised ratio, while <code>raster_calculator()</code> accommodates arbitrary expressions.</p>
+<h3 id="normalised-difference-vegetation-index-ndvi"><a class="header" href="#normalised-difference-vegetation-index-ndvi">Normalised Difference Vegetation Index (NDVI)</a></h3>
+<p>NDVI measures photosynthetically active green biomass:</p>
+<p>$$NDVI = \frac{NIR - Red}{NIR + Red}$$</p>
+<p>Values range from −1 to +1; healthy vegetation typically exceeds 0.3.</p>
+<pre><code class="language-python">ndvi = wbe.normalized_difference_index(nir, red)
+wbe.write_raster(ndvi, 'ndvi.tif', compress=True)
+</code></pre>
+<h3 id="common-water-snow-and-urban-indices"><a class="header" href="#common-water-snow-and-urban-indices">Common Water, Snow, and Urban Indices</a></h3>
+<pre><code class="language-python"># NDWI (McFeeters 1996) — open water; Green/NIR
+ndwi  = wbe.normalized_difference_index(green, nir)
+
+# MNDWI — better for urban areas; Green/SWIR1
+mndwi = wbe.normalized_difference_index(green, swir1)
+
+# NBR — fire severity and post-fire recovery; NIR/SWIR2
+nbr   = wbe.normalized_difference_index(nir, swir2)
+
+# NDSI — snow and ice; Green/SWIR1
+ndsi  = wbe.normalized_difference_index(green, swir1)
+
+# NDBI — normalised built-up index; SWIR1/NIR
+ndbi  = wbe.normalized_difference_index(swir1, nir)
+</code></pre>
+<h3 id="enhanced-vegetation-index-evi"><a class="header" href="#enhanced-vegetation-index-evi">Enhanced Vegetation Index (EVI)</a></h3>
+<p>EVI reduces soil background noise and atmospheric effects that affect NDVI in dense canopies:</p>
+<p>$$EVI = 2.5 \cdot \frac{NIR - Red}{NIR + 6 \cdot Red - 7.5 \cdot Blue + 1}$$</p>
+<pre><code class="language-python">evi = wbe.raster_calculator(
+    expression="2.5 * ('nir' - 'red') / ('nir' + 6.0 * 'red' - 7.5 * 'blue' + 1.0)",
+    input_rasters=[nir, red, blue]
+)
+wbe.write_raster(evi, 'evi.tif', compress=True)
+</code></pre>
+<h3 id="soil-adjusted-vegetation-index-savi"><a class="header" href="#soil-adjusted-vegetation-index-savi">Soil Adjusted Vegetation Index (SAVI)</a></h3>
+<p>SAVI introduces a soil brightness correction factor <em>L</em> (commonly 0.5):</p>
+<p>$$SAVI = \frac{(NIR - Red) \cdot (1 + L)}{NIR + Red + L}$$</p>
+<pre><code class="language-python">L = 0.5
+savi = wbe.raster_calculator(
+    expression="('nir' - 'red') * (1.0 + 0.5) / ('nir' + 'red' + 0.5)",
+    input_rasters=[nir, red]
+)
+</code></pre>
+<hr />
+<h2 id="image-enhancement-and-contrast-stretching"><a class="header" href="#image-enhancement-and-contrast-stretching">Image Enhancement and Contrast Stretching</a></h2>
+<p>Raw digital numbers often have narrow histogram ranges that make visualisation difficult. WbW-Py provides several enhancement methods:</p>
+<pre><code class="language-python"># Percentage contrast stretch — clips top and bottom 2% of values
+enhanced = wbe.percentage_contrast_stretch(red, clip_tail=2.0)
+
+# Standard deviation stretch — maps ±2σ to display range
+sd_stretched = wbe.standard_deviation_contrast_stretch(red, num_std_dev=2.0)
+
+# Gaussian contrast stretch
+gauss = wbe.gaussian_contrast_stretch(red, num_std_dev=2.0)
+
+# Sigmoidal stretch — soft S-curve useful for optical imagery
+sig = wbe.sigmoidal_contrast_stretch(red, cutoff=0.4, gain=4.0)
+
+# Min-max linear stretch
+linear = wbe.min_max_contrast_stretch(red, min_val=0.0, max_val=255.0)
+
+# Gamma correction — lighten (gamma&lt;1) or darken (gamma&gt;1) an image
+gamma = wbe.gamma_correction(red, gamma=0.6)
+</code></pre>
+<p>Histogram matching normalises a source image to match the distribution of a reference image — invaluable when mosaicking scenes acquired on different dates or under different atmospheric conditions:</p>
+<pre><code class="language-python"># Match the histogram of a target scene to a reference scene
+matched = wbe.histogram_matching(source_scene, reference_scene)
+
+# You can also match between two images from the same sensor
+matched2 = wbe.histogram_matching_two_images(img1, img2)
+</code></pre>
+<h3 id="ihs-colour-space-transformations"><a class="header" href="#ihs-colour-space-transformations">IHS Colour Space Transformations</a></h3>
+<p>Intensity-Hue-Saturation (IHS) space separates brightness from colour, enabling selective sharpening or enhancement without hue distortion:</p>
+<pre><code class="language-python"># Convert RGB composite to IHS
+(intensity, hue, saturation) = wbe.rgb_to_ihs(red, green, blue)
+
+# Enhance the intensity channel
+enhanced_i = wbe.standard_deviation_contrast_stretch(intensity, num_std_dev=2.0)
+
+# Convert back to RGB
+(r2, g2, b2) = wbe.ihs_to_rgb(enhanced_i, hue, saturation)
+</code></pre>
+<h3 id="panchromatic-sharpening-pan-sharpening"><a class="header" href="#panchromatic-sharpening-pan-sharpening">Panchromatic Sharpening (Pan-Sharpening)</a></h3>
+<p>When a high-resolution panchromatic band accompanies lower-resolution multispectral data, IHS pan-sharpening fuses the two:</p>
+<pre><code class="language-python">panchromatic = bundle.read_band('B8A')   # Sentinel-2 red-edge as panchromatic proxy
+# Landsat: panchromatic = bundle.read_band('PAN')   # 15 m Landsat panchromatic
+
+(sharp_r, sharp_g, sharp_b) = wbe.panchromatic_sharpening(
+    pan=panchromatic,
+    red=red,
+    green=green,
+    blue=blue
+)
+wbe.write_raster(sharp_r, 'pan_sharp_r.tif')
+wbe.write_raster(sharp_g, 'pan_sharp_g.tif')
+wbe.write_raster(sharp_b, 'pan_sharp_b.tif')
+</code></pre>
+<hr />
+<h2 id="image-filtering"><a class="header" href="#image-filtering">Image Filtering</a></h2>
+<p>Spatial filters are used to suppress noise, enhance edges, or smooth imagery before classification.</p>
+<pre><code class="language-python"># Gaussian smoothing — reduces sensor noise
+smoothed = wbe.gaussian_filter(red, sigma=1.0)
+
+# Bilateral filter — edge-preserving smoothing
+bilateral = wbe.bilateral_filter(red, sigma_dist=2.0, sigma_int=25.0)
+
+# High-pass filter — enhances fine texture
+texture = wbe.high_pass_filter(red, filter_size_x=5, filter_size_y=5)
+
+# Unsharp masking — sharpens blurred imagery
+sharp = wbe.unsharp_masking(red, sigma=3.0, amount=1.0, threshold=0)
+
+# Edge detection — Sobel gradient magnitude
+edges_h = wbe.sobel_filter(red, variant='3x3')
+
+# Canny edge detector — more precise edge localisation
+canny_edges = wbe.canny_edge_detection(red, sigma=0.5,
+                                        low_threshold=5.0, high_threshold=15.0)
+</code></pre>
+<hr />
+<h2 id="principal-component-analysis-pca"><a class="header" href="#principal-component-analysis-pca">Principal Component Analysis (PCA)</a></h2>
+<p>PCA is an essential step in multispectral and hyperspectral analysis. It rotates correlated bands into decorrelated principal components (PCs) ordered by descending variance. The first few PCs typically capture most scene variance and are used to reduce data dimensionality before classification.</p>
+<pre><code class="language-python"># Run PCA on all six bands
+bands = [blue, green, red, nir, swir1]
+pca_result = wbe.principal_component_analysis(
+    input_rasters=bands,
+    output_html_file='pca_report.html',
+    num_comp=4,
+    standardize=True   # unit-variance standardisation recommended when bands
+                       # have very different value ranges
+)
+# pca_result is a list of component rasters ordered PC1, PC2, ...
+pc1, pc2, pc3, pc4 = pca_result[0], pca_result[1], pca_result[2], pca_result[3]
+wbe.write_raster(pc1, 'pc1.tif')
+wbe.write_raster(pc2, 'pc2.tif')
+</code></pre>
+<p>The HTML report includes the eigenvalue table, percentage of variance explained per component, and the component loadings matrix. PC1 often correlates strongly with overall brightness. PC2 frequently captures vegetation/non-vegetation contrast. Higher PCs capture moisture, soil, and urban differences.</p>
+<h3 id="inverse-pca"><a class="header" href="#inverse-pca">Inverse PCA</a></h3>
+<p>Apply classification or enhancements to individual PCs and then reconstruct back to original band space:</p>
+<pre><code class="language-python"># Modify pc1, then reconstruct
+pc1_modified = wbe.standard_deviation_contrast_stretch(pc1, num_std_dev=2.0)
+modified_components = [pc1_modified, pc2, pc3, pc4]
+
+reconstructed_bands = wbe.inverse_pca(
+    modified_components,
+    original_rasters=bands
+)
+</code></pre>
+<hr />
+<h2 id="image-segmentation-and-object-based-analysis"><a class="header" href="#image-segmentation-and-object-based-analysis">Image Segmentation and Object-Based Analysis</a></h2>
+<p>Object-based image analysis (OBIA) groups pixels into meaningful spatial units (segments) before classifying them. This is superior to pixel-based classification for high-resolution imagery where individual objects span many pixels.</p>
+<pre><code class="language-python"># Segment the image into homogeneous regions
+# threshold controls merge aggressiveness (lower = more segments)
+segments = wbe.image_segmentation(
+    input_rasters=[red, green, nir],
+    threshold=15.0,
+    min_size=20
+)
+wbe.write_raster(segments, 'segments.tif')
+</code></pre>
+<p>After segmentation, extract per-object statistics using <code>zonal_statistics()</code> and then classify based on the object-mean spectral signature.</p>
+<hr />
+<h2 id="unsupervised-classification"><a class="header" href="#unsupervised-classification">Unsupervised Classification</a></h2>
+<p>Unsupervised classification groups pixels by spectral similarity without training data, making it useful for exploratory analysis.</p>
+<h3 id="k-means-clustering"><a class="header" href="#k-means-clustering">K-Means Clustering</a></h3>
+<pre><code class="language-python">bands = [blue, green, red, nir, swir1]
+
+kmeans_result = wbe.k_means_clustering(
+    input_rasters=bands,
+    num_classes=10,
+    max_iterations=25,
+    class_change_threshold=2.0,
+    initialize='random'
+)
+wbe.write_raster(kmeans_result, 'kmeans_10class.tif')
+</code></pre>
+<p>K-means with 10–15 classes followed by manual merging of semantically similar classes is a common workflow. Visualise the clusters against known reference areas to assign land-cover labels.</p>
+<h3 id="modified-k-means"><a class="header" href="#modified-k-means">Modified K-Means</a></h3>
+<p>Modified k-means iteratively merges clusters that are too small or spectrally indistinct, and splits clusters that are too dispersed:</p>
+<pre><code class="language-python">mod_kmeans = wbe.modified_k_means_clustering(
+    input_rasters=bands,
+    start_num_classes=20,
+    merge_distance=2.0,
+    max_iterations=25
+)
+wbe.write_raster(mod_kmeans, 'modified_kmeans.tif')
+</code></pre>
+<h3 id="dbscan-clustering"><a class="header" href="#dbscan-clustering">DBSCAN Clustering</a></h3>
+<p>DBSCAN is a density-based algorithm that does not require specifying the number of clusters and handles irregularly shaped spectral clusters well:</p>
+<pre><code class="language-python">dbscan_result = wbe.dbscan(
+    input_rasters=bands,
+    scaling_method='min_max',
+    search_distance=0.5,
+    min_points=5
+)
+wbe.write_raster(dbscan_result, 'dbscan_clusters.tif')
+</code></pre>
+<hr />
+<h2 id="supervised-classification"><a class="header" href="#supervised-classification">Supervised Classification</a></h2>
+<p>Supervised classification uses labelled training areas to build a model that is then applied across the full image. WbW-Py supports several classifiers.</p>
+<h3 id="evaluating-training-sites"><a class="header" href="#evaluating-training-sites">Evaluating Training Sites</a></h3>
+<p>Before training, check that each class is spectrally separable. Poor separability leads to confused outputs regardless of classifier choice:</p>
+<pre><code class="language-python">training_polys = wbe.read_vector('training_polygons.shp')
+wbe.evaluate_training_sites(
+    input_rasters=bands,
+    training_polygons=training_polys,
+    class_field_name='CLASS',
+    output_html_file='separability_report.html'
+)
+</code></pre>
+<p>The HTML report shows histograms and box-plots per band per class. Classes whose histograms overlap substantially should be merged or split by adding more nuanced training polygons.</p>
+<h3 id="minimum-distance-classification"><a class="header" href="#minimum-distance-classification">Minimum Distance Classification</a></h3>
+<p>The simplest linear classifier assigns each pixel to the nearest class mean in feature space:</p>
+<pre><code class="language-python">classified_md = wbe.min_dist_classification(
+    input_rasters=bands,
+    polys=training_polys,
+    class_field=True,
+    class_field_name='CLASS',
+    threshold=5.0  # optional: do not classify if z-score distance &gt; 5
+)
+wbe.write_raster(classified_md, 'classified_min_dist.tif')
+</code></pre>
+<h3 id="parallelepiped-classification"><a class="header" href="#parallelepiped-classification">Parallelepiped Classification</a></h3>
+<p>The parallelepiped classifier assigns pixels that fall within all class-mean ± n×σ boxes. It is fast but can leave pixels unclassified when they fall outside all boxes:</p>
+<pre><code class="language-python">classified_pp = wbe.parallelepiped_classification(
+    input_rasters=bands,
+    polys=training_polys,
+    class_field_name='CLASS'
+)
+wbe.write_raster(classified_pp, 'classified_parallelepiped.tif')
+</code></pre>
+<h3 id="k-nearest-neighbour-classification"><a class="header" href="#k-nearest-neighbour-classification">K-Nearest Neighbour Classification</a></h3>
+<p>KNN classification is a non-parametric method well-suited to non-linear class boundaries. The <code>k</code> parameter is the number of neighbours to consider:</p>
+<pre><code class="language-python">training_pts = wbe.read_vector('training_points.shp')
+
+knn_model = wbe.knn_classification(
+    input_rasters=bands,
+    training_data=training_pts,
+    field_name='CLASS',
+    scaling_method='z_score',
+    k=7,
+    distance_weighting=True,
+    test_proportion=0.2,
+    create_output=True
+)
+wbe.write_raster(knn_model, 'classified_knn.tif')
+</code></pre>
+<h3 id="random-forest-classification"><a class="header" href="#random-forest-classification">Random Forest Classification</a></h3>
+<p>Random forest is an ensemble tree classifier that is robust to noise, handles multi-class problems, and produces out-of-bag accuracy estimates. All formerly Pro-tier classifier tools are now open-source:</p>
+<pre><code class="language-python"># Step 1: fit the model and save it
+rf_model = wbe.random_forest_classification_fit(
+    input_rasters=bands,
+    training_data=training_polys,
+    class_field_name='CLASS',
+    n_trees=500,
+    min_samples_leaf=1,
+    test_proportion=0.2
+)
+# rf_model is a path to the saved model file
+
+# Step 2: predict on the full image (can be a different image/date)
+classified_rf = wbe.random_forest_classification_predict(
+    input_rasters=bands,
+    model=rf_model
+)
+wbe.write_raster(classified_rf, 'classified_rf.tif')
+</code></pre>
+<p>The fit step prints an accuracy report including the confusion matrix, Kappa coefficient, and overall accuracy.</p>
+<h3 id="support-vector-machine-svm-classification"><a class="header" href="#support-vector-machine-svm-classification">Support Vector Machine (SVM) Classification</a></h3>
+<p>SVMs find the maximum-margin hyperplane separating classes and are particularly effective with high-dimensional data and small training sets:</p>
+<pre><code class="language-python">classified_svm = wbe.svm_classification(
+    input_rasters=bands,
+    training=training_polys,
+    field='CLASS',
+    scaling_method='z_score',
+    test_proportion=0.2,
+    create_output=True
+)
+wbe.write_raster(classified_svm, 'classified_svm.tif')
+</code></pre>
+<h3 id="logistic-regression-classification"><a class="header" href="#logistic-regression-classification">Logistic Regression Classification</a></h3>
+<p>Logistic regression is a fast and interpretable baseline classifier, useful as a benchmark before applying more complex models:</p>
+<pre><code class="language-python">classified_lr = wbe.logistic_regression(
+    input_rasters=bands,
+    training_data=training_polys,
+    class_field_name='CLASS',
+    scaling_method='z_score',
+    test_proportion=0.2,
+    create_output=True
+)
+</code></pre>
+<h3 id="accuracy-assessment"><a class="header" href="#accuracy-assessment">Accuracy Assessment</a></h3>
+<p>Compare a classified raster against a validation point dataset:</p>
+<pre><code class="language-python"># Kappa index of agreement between classified image and reference data
+accuracy = wbe.kappa_index(
+    classified=classified_rf,
+    reference=wbe.read_raster('reference_classification.tif'),
+    output_html_file='accuracy_report.html'
+)
+</code></pre>
+<hr />
+<h2 id="generalising-classification-outputs"><a class="header" href="#generalising-classification-outputs">Generalising Classification Outputs</a></h2>
+<p>Classified rasters often contain salt-and-pepper noise — isolated pixels assigned to a class inconsistent with their neighbours. Two tools remove this:</p>
+<pre><code class="language-python"># Remove small patches by merging them into surrounding majority class
+generalised = wbe.generalize_classified_raster(
+    classified=classified_rf,
+    min_class_size=5  # minimum patch size in cells
+)
+
+# Alternative: merge small patches into most spectrally similar neighbour
+generalised2 = wbe.generalize_with_similarity(
+    input_rasters=bands,
+    classified=classified_rf,
+    min_class_size=5
+)
+
+# Remove holes (background pixels encircled by foreground)
+no_holes = wbe.remove_raster_polygon_holes(
+    input_raster=classified_rf,
+    threshold=25          # cells
+)
+wbe.write_raster(generalised, 'classified_rf_clean.tif')
+</code></pre>
+<hr />
+<h2 id="change-detection"><a class="header" href="#change-detection">Change Detection</a></h2>
+<p>Multi-temporal analysis detects land-cover change between two acquisitions.</p>
+<h3 id="image-differencing"><a class="header" href="#image-differencing">Image Differencing</a></h3>
+<p>The simplest approach differences co-registered images. NDVI differencing, for example, highlights vegetation gain and loss:</p>
+<pre><code class="language-python">ndvi_t1 = wbe.normalized_difference_index(nir_t1, red_t1)
+ndvi_t2 = wbe.normalized_difference_index(nir_t2, red_t2)
+ndvi_change = wbe.raster_calculator("'t2' - 't1'", [ndvi_t2, ndvi_t1])
+wbe.write_raster(ndvi_change, 'ndvi_change.tif', compress=True)
+</code></pre>
+<h3 id="change-vector-analysis-cva"><a class="header" href="#change-vector-analysis-cva">Change Vector Analysis (CVA)</a></h3>
+<p>CVA computes the magnitude and direction of change in multidimensional feature space between two dates. The output direction angle indicates the type of change (e.g., vegetation gain vs. urban growth) while magnitude reflects its intensity:</p>
+<pre><code class="language-python">magnitude, direction = wbe.change_vector_analysis(
+    input_rasters_t1=[red_t1, nir_t1, swir1_t1],
+    input_rasters_t2=[red_t2, nir_t2, swir1_t2]
+)
+wbe.write_raster(magnitude, 'cva_magnitude.tif')
+wbe.write_raster(direction, 'cva_direction.tif')
+</code></pre>
+<h3 id="post-classification-comparison"><a class="header" href="#post-classification-comparison">Post-Classification Comparison</a></h3>
+<p>Classify both dates independently and difference the class maps. This preserves the semantics of each date's land-cover map:</p>
+<pre><code class="language-python"># Train on t1 and apply to t2 using the same saved RF model
+classified_t1 = wbe.random_forest_classification_predict(bands_t1, rf_model)
+classified_t2 = wbe.random_forest_classification_predict(bands_t2, rf_model)
+
+# Produce a change raster (unique code for each from-to class transition)
+change_map = wbe.raster_calculator(
+    "'t1' * 100 + 't2'",
+    [classified_t1, classified_t2]
+)
+wbe.write_raster(change_map, 'change_map.tif')
+</code></pre>
+<hr />
+<h2 id="water-extraction-and-river-mapping"><a class="header" href="#water-extraction-and-river-mapping">Water Extraction and River Mapping</a></h2>
+<p>Combining NDWI thresholding with morphological post-processing extracts water bodies:</p>
+<pre><code class="language-python"># Threshold MNDWI — water pixels where mndwi &gt; 0
+water = wbe.raster_calculator("if('mndwi' &gt; 0.0, 1.0, nodata)", [mndwi])
+
+# Remove small spurious water patches
+water_clean = wbe.sieve(water, threshold=50)
+
+# Remove islands in water polygons
+water_filled = wbe.remove_raster_polygon_holes(water_clean, threshold=100)
+
+# Extract river centrelines from the water raster
+river_lines = wbe.river_centerlines(water_filled, min_length=5, search_radius=9)
+wbe.write_vector(river_lines, 'river_centerlines.shp')
+</code></pre>
+<hr />
+<h2 id="image-correlation-and-regression"><a class="header" href="#image-correlation-and-regression">Image Correlation and Regression</a></h2>
+<p>WbW-Py supports several image correlation and regression tools useful for sensor cross-calibration, quality control, and change analysis:</p>
+<pre><code class="language-python"># Pearson correlation matrix between all bands
+wbe.image_correlation(bands, output_html_file='correlation_matrix.html')
+
+# Spatial autocorrelation (Moran's I) per band
+wbe.image_autocorrelation(bands, contiguity='Rooks', output_html_file='autocorr.html')
+
+# Neighbourhood correlation analysis between two images
+wbe.image_correlation_neighbourhood_analysis(
+    img1=ndvi_t1, img2=ndvi_t2,
+    filter_size=11,
+    output_html_file='neighbourhood_corr.html'
+)
+
+# Simple linear regression of one image on another
+slope, intercept, r2 = wbe.image_regression(img1=ndvi_t1, img2=ndvi_t2,
+                                              output_html_file='regression.html')
+</code></pre>
+<hr />
+<h2 id="wbw-pro-spotlight-in-season-crop-stress-intervention-planning"><a class="header" href="#wbw-pro-spotlight-in-season-crop-stress-intervention-planning">WbW-Pro Spotlight: In-Season Crop Stress Intervention Planning</a></h2>
+<ul>
+<li><strong>Problem:</strong> Turn in-season crop stress signals into actionable intervention
+priorities.</li>
+<li><strong>Tool:</strong> <code>in_season_crop_stress_intervention_planning</code></li>
+<li><strong>Typical inputs:</strong> NDVI raster, canopy-temperature raster, soil-moisture
+raster.</li>
+<li><strong>Typical outputs:</strong> Intervention-priority and intervention-class products
+with summary reporting.</li>
+</ul>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+
+result = wbe.run_tool(
+    'in_season_crop_stress_intervention_planning',
+    {
+        'ndvi': 'ndvi_latest.tif',
+        'canopy_temperature': 'lst_latest.tif',
+        'soil_moisture': 'soil_moisture_latest.tif',
+        'output_prefix': 'field_07_stress'
+    }
+)
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a <code>WbEnvironment</code> initialized with a valid
+Pro licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-land-cover-classification-workflow"><a class="header" href="#complete-land-cover-classification-workflow">Complete Land-Cover Classification Workflow</a></h2>
+<p>The following end-to-end example uses a sensor bundle for ingestion and a random-forest classifier for land-cover mapping:</p>
+<pre><code class="language-python">import whitebox_workflows as wbw
+
+wbe = wbw.WbEnvironment()
+wbe.verbose = True
+
+# 1. Open scene as a bundle — works with S2, Landsat 9, PlanetScope, etc.
+bundle = wbe.read_bundle('/data/S2B_MSIL2A_20240601T105619_N0510_R094_T32TPT.SAFE')
+print(f"Family: {bundle.family}, tile: {bundle.tile_id()}, "
+      f"clouds: {bundle.cloud_cover_percent():.1f}%")
+
+# Skip scenes with excessive cloud cover
+if bundle.cloud_cover_percent() &gt; 20.0:
+    raise RuntimeError("Too cloudy for classification")
+
+# 2. Read bands by key (family-agnostic)
+blue  = bundle.read_band('B02')
+green = bundle.read_band('B03')
+red   = bundle.read_band('B04')
+nir   = bundle.read_band('B08')
+swir1 = wbe.resample(bundle.read_band('B11'), base_raster=red, method='bilinear')
+swir2 = wbe.resample(bundle.read_band('B12'), base_raster=red, method='bilinear')
+bands = [blue, green, red, nir, swir1, swir2]
+
+# 3. Mask clouds using SCL
+scl = bundle.read_qa_layer('SCL')
+cloud_mask = wbe.raster_calculator(
+    "if('scl' == 3 or 'scl' == 8 or 'scl' == 9 or 'scl' == 10, 1.0, 0.0)", [scl]
+)
+
+# 4. Compute indices
+ndvi  = wbe.normalized_difference_index(nir, red)
+mndwi = wbe.normalized_difference_index(green, swir1)
+nbr   = wbe.normalized_difference_index(nir, swir2)
+
+# 5. Build PCA decorrelation on 6 spectral bands
+pc_rasters = wbe.principal_component_analysis(
+    input_rasters=bands,
+    output_html_file='pca.html',
+    num_comp=4,
+    standardize=True
+)
+
+# 6. Combine spectral bands + indices + PCs into feature stack
+feature_stack = bands + [ndvi, mndwi, nbr] + pc_rasters
+
+# 7. Evaluate training separability
+training = wbe.read_vector('training_polygons.shp')
+wbe.evaluate_training_sites(feature_stack, training, 'CLASS', 'separability.html')
+
+# 8. Train random forest
+rf_model_path = wbe.random_forest_classification_fit(
+    input_rasters=feature_stack,
+    training_data=training,
+    class_field_name='CLASS',
+    n_trees=500,
+    test_proportion=0.25
+)
+
+# 9. Predict
+classified = wbe.random_forest_classification_predict(feature_stack, rf_model_path)
+
+# 10. Generalise
+classified_clean = wbe.generalize_classified_raster(classified, min_class_size=9)
+classified_clean = wbe.remove_raster_polygon_holes(classified_clean, threshold=25)
+
+# 11. Save and assess accuracy
+wbe.write_raster(classified_clean, 'classified_final.tif', compress=True)
+wbe.kappa_index(classified_clean,
+                wbe.read_raster('validation_reference.tif'),
+                'accuracy_report.html')
+
+# 12. Save a quick-look composite for QC
+bundle.true_colour_composite(wbe, output_path='quicklook_truecolour.tif')
+
+print('Land-cover classification complete.')
+</code></pre>
+<hr />
+<h2 id="tips-for-effective-remote-sensing-workflows"><a class="header" href="#tips-for-effective-remote-sensing-workflows">Tips for Effective Remote Sensing Workflows</a></h2>
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Use bundles for scene-level ingestion</strong>: <code>wbe.read_bundle()</code> eliminates hardcoded band filenames and works identically across Sentinel-2, Landsat, PlanetScope, and other supported families.</li>
+<li><strong>Screen cloud cover before processing</strong>: Check <code>bundle.cloud_cover_percent()</code> before loading all bands to skip unusable scenes early in a batch workflow.</li>
+<li><strong>Atmospheric correction is iterative</strong>: Raw digital numbers and even surface reflectance products may still carry illumination and atmospheric artefacts. Histogram matching across scenes is a simple relative normalisation that works well when no reference spectrum is available.</li>
+<li><strong>Align band resolution before stacking</strong>: Sentinel-2 delivers 10 m (Blue, Green, Red, NIR) and 20 m (Red Edge, SWIR) bands. Upscale the 20 m bands to 10 m using bilinear resampling before combining them in a feature stack.</li>
+<li><strong>Always mask clouds and cloud shadows</strong>: Use quality bands (Sentinel-2 SCL or Landsat QA_PIXEL) and apply bitwise tests via <code>raster_calculator()</code> — e.g. <code>"('qa' &amp; 0b1000) != 0"</code> — to isolate valid pixels.</li>
+<li><strong>Balance training data</strong>: Training datasets often over-represent dominant classes (e.g., forest) relative to rare classes (e.g., wetland). Sample training polygons proportional to expected class area, or oversample rare classes to improve model accuracy.</li>
+<li><strong>Check spectral separability</strong>: If the evaluate_training_sites report shows Jeffries-Matusita distance &lt; 1.5 between any two classes, consider merging classes or collecting more spectrally diverse training polygons.</li>
+<li><strong>Use time-series techniques for change detection</strong>: Multi-date classifications can show spurious change due to atmospheric variation. Spectral indices are more robust; consider computing NDVI or NDWI time series and detecting change directly in index space.</li>
+<li><strong>Memory is your bottleneck</strong>: Large multispectral stacks fill RAM quickly. Use <code>read_raster_band_by_band()</code> or out-of-memory processing for scenes &gt; 1 GB.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="lidar-processing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="raster-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="lidar-processing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="raster-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

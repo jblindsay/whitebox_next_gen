@@ -1,0 +1,566 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Vector Analysis - Whitebox Workflows for R User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html" class="active"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for R User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="vector-analysis"><a class="header" href="#vector-analysis">Vector Analysis</a></h1>
+<p>Vector GIS analysis in WbW-R covers attribute management, geometric measurement, shape analysis, spatial overlay, proximity tools, spatial joins, and vector-to-raster conversion. All computation runs in the Whitebox backend through <code>wbw_run_tool()</code>; R handles session management, sequencing, and result processing.</p>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Vector analysis depends on understanding these core concepts:</p>
+<ul>
+<li><strong>Feature geometry</strong>: Points (single coordinate pairs), lines (ordered sequences of coordinate pairs), and polygons (rings of coordinates forming closed boundaries). Each feature type supports different analyses.</li>
+<li><strong>Topology</strong>: The spatial relationships between features (adjacency, containment, intersection). Topological errors (overshoots, undershoots, self-intersections) corrupt overlay operations and topology queries.</li>
+<li><strong>Attribute table</strong>: The database associated with each feature layer, carrying descriptive fields and values. Attribute queries filter features; joins link external tables.</li>
+<li><strong>Spatial index</strong>: Internal index structure (R-tree or quadtree) enabling fast spatial queries. Used by intersection, containment, and proximity operations. Always build spatial indices on frequently queried layers.</li>
+<li><strong>Envelope (bounding box)</strong>: The minimum rectangular boundary of a feature or layer; used for quick spatial culling before geometry tests.</li>
+<li><strong>Buffer</strong>: A polygon created at a fixed distance around a feature. Buffers model proximity zones and are fundamental to distance-based analysis.</li>
+<li><strong>Overlay (intersection, union, difference)</strong>: Combining two polygon layers to create a new layer. Union merges boundaries; intersection keeps overlapping area only; difference removes one layer from another.</li>
+<li><strong>Dissolve (aggregation)</strong>: Merging adjacent features with identical attribute values, creating larger aggregate features. Reduces feature count and simplifies geometry.</li>
+<li><strong>Spatial join</strong>: Associating features from one layer with features from another based on spatial relationship (overlap, containment, proximity). Assigns attributes across layers.</li>
+<li><strong>Proximity analysis</strong>: Finding nearest features, distances, or connectivity. Foundation for network analysis, market analysis, and accessibility studies.</li>
+</ul>
+<hr />
+<h2 id="session-setup"><a class="header" href="#session-setup">Session Setup</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/vector')
+</code></pre>
+<hr />
+<h2 id="reading-and-writing-vectors"><a class="header" href="#reading-and-writing-vectors">Reading and Writing Vectors</a></h2>
+<pre><code class="language-r">polys  &lt;- wbw_read_vector('parcels.shp')
+lines  &lt;- wbw_read_vector('roads.shp')
+points &lt;- wbw_read_vector('samples.shp')
+
+meta &lt;- polys$metadata()
+cat('Feature count:', meta$num_features, '\n')
+cat('Geometry type:', meta$geom_type, '\n')
+cat('CRS:', meta$wkt, '\n')
+</code></pre>
+<hr />
+<h2 id="attribute-management"><a class="header" href="#attribute-management">Attribute Management</a></h2>
+<pre><code class="language-r"># Add a new field
+wbw_run_tool('add_field', args = list(
+  i         = polys$file_path(),
+  output    = 'parcels_v2.shp',
+  field_name = 'AREA_HA',
+  field_type = 'Float'
+), session = s)
+
+# Delete an unwanted field
+wbw_run_tool('delete_field', args = list(
+  i          = 'parcels_v2.shp',
+  output     = 'parcels_v3.shp',
+  field_name = 'OLD_FIELD'
+), session = s)
+
+# Rename a field
+wbw_run_tool('rename_field', args = list(
+  i             = 'parcels_v3.shp',
+  output        = 'parcels_v4.shp',
+  input_field   = 'AREA_HA',
+  output_field  = 'HECTARES'
+), session = s)
+
+# Extract features by attribute value
+wbw_run_tool('extract_by_attribute', args = list(
+  i            = polys$file_path(),
+  output       = 'large_parcels.shp',
+  field        = 'AREA_M2',
+  filter_value = 10000.0,
+  filter_type  = 'Greater Than'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="geometric-measurements"><a class="header" href="#geometric-measurements">Geometric Measurements</a></h2>
+<pre><code class="language-r"># Add area, perimeter, and basic shape metrics to polygon attribute table
+wbw_run_tool('add_polygon_coordinates_to_table', args = list(
+  i      = polys$file_path(),
+  output = 'parcels_geom.shp'
+), session = s)
+
+# Polygon shape index — compactness
+wbw_run_tool('compactness_ratio', args = list(
+  i = polys$file_path(), output = 'parcels_compact.shp'), session = s)
+
+wbw_run_tool('elongation_ratio', args = list(
+  i = polys$file_path(), output = 'parcels_elong.shp'), session = s)
+
+wbw_run_tool('related_circumscribing_circle', args = list(
+  i = polys$file_path(), output = 'parcels_rcc.shp'), session = s)
+
+wbw_run_tool('patch_orientation', args = list(
+  i = polys$file_path(), output = 'parcels_orient.shp'), session = s)
+
+wbw_run_tool('radius_of_gyration', args = list(
+  i = polys$file_path(), output = 'parcels_rog.shp'), session = s)
+</code></pre>
+<hr />
+<h2 id="geometric-operations"><a class="header" href="#geometric-operations">Geometric Operations</a></h2>
+<pre><code class="language-r"># Centroids
+wbw_run_tool('centroid_vector', args = list(
+  i = polys$file_path(), output = 'centroids.shp'), session = s)
+
+# Convex hull
+wbw_run_tool('convex_hull', args = list(
+  i = polys$file_path(), output = 'convex_hulls.shp'), session = s)
+
+# Minimum bounding envelopes
+wbw_run_tool('minimum_bounding_envelope', args = list(
+  i = polys$file_path(), output = 'mbe.shp'), session = s)
+
+# Smooth vector polygons
+wbw_run_tool('smooth_vectors', args = list(
+  i = polys$file_path(), output = 'parcels_smooth.shp', filter = 5), session = s)
+
+# Simplify features (Douglas-Peucker)
+wbw_run_tool('simplify_line_or_polygon', args = list(
+  i = polys$file_path(), output = 'parcels_simplified.shp',
+  dist = 5.0, remove_spurs = TRUE, errors_only = FALSE), session = s)
+
+# Dissolve polygons on field value
+wbw_run_tool('dissolve', args = list(
+  i = polys$file_path(), output = 'parcels_dissolved.shp',
+  field = 'LAND_USE', snap_tol = 0.001), session = s)
+</code></pre>
+<hr />
+<h2 id="spatial-overlay"><a class="header" href="#spatial-overlay">Spatial Overlay</a></h2>
+<pre><code class="language-r"># Clip
+wbw_run_tool('clip', args = list(
+  i        = polys$file_path(),
+  clip     = 'study_area.shp',
+  output   = 'clipped.shp',
+  snap_tol = 0.001
+), session = s)
+
+# Intersect
+wbw_run_tool('intersect', args = list(
+  i        = polys$file_path(),
+  overlay  = 'zones.shp',
+  output   = 'intersection.shp',
+  snap_tol = 0.001
+), session = s)
+
+# Erase
+wbw_run_tool('erase', args = list(
+  i        = polys$file_path(),
+  erase    = 'exclusion_areas.shp',
+  output   = 'erased.shp',
+  snap_tol = 0.001
+), session = s)
+
+# Union
+wbw_run_tool('union', args = list(
+  i        = polys$file_path(),
+  overlay  = 'other_layer.shp',
+  output   = 'union.shp',
+  snap_tol = 0.001
+), session = s)
+
+# Symmetrical difference
+wbw_run_tool('symmetrical_difference', args = list(
+  i        = polys$file_path(),
+  overlay  = 'other_layer.shp',
+  output   = 'symdiff.shp',
+  snap_tol = 0.001
+), session = s)
+</code></pre>
+<hr />
+<h2 id="proximity-analysis"><a class="header" href="#proximity-analysis">Proximity Analysis</a></h2>
+<pre><code class="language-r"># Euclidean distance from vector features
+wbw_run_tool('vector_points_to_raster', args = list(
+  i = points$file_path(), output = 'points.tif', field = 'FID',
+  assign = 'last', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
+wbw_run_tool('euclidean_distance', args = list(
+  i = 'points.tif', output = 'euclidean_dist.tif'), session = s)
+
+# Voronoi diagram
+wbw_run_tool('voronoi_diagram', args = list(
+  i = points$file_path(), output = 'voronoi.shp'), session = s)
+</code></pre>
+<hr />
+<h2 id="select-by-location"><a class="header" href="#select-by-location">Select by Location</a></h2>
+<pre><code class="language-r">wbw_run_tool('select_by_location', args = list(
+  input   = polys$file_path(),
+  select  = 'stream_buffer.shp',
+  output  = 'parcels_near_streams.shp',
+  condition = 'within'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="spatial-join"><a class="header" href="#spatial-join">Spatial Join</a></h2>
+<pre><code class="language-r">wbw_run_tool('spatial_join', args = list(
+  target  = points$file_path(),
+  join    = polys$file_path(),
+  output  = 'points_joined.shp',
+  condition = 'within',
+  attr    = 'first'
+), session = s)
+</code></pre>
+<h3 id="aggregation-strategies"><a class="header" href="#aggregation-strategies">Aggregation Strategies</a></h3>
+<pre><code class="language-r"># Join and aggregate field values from nearest polygon
+for (stat in c('count', 'sum', 'mean', 'min', 'max')) {
+  wbw_run_tool('spatial_join', args = list(
+    target    = 'zones.shp',
+    join      = 'observations.shp',
+    output    = paste0('zones_', stat, '.shp'),
+    condition = 'contains',
+    attr      = stat
+  ), session = s)
+}
+</code></pre>
+<hr />
+<h2 id="vector-to-raster-conversion"><a class="header" href="#vector-to-raster-conversion">Vector-to-Raster Conversion</a></h2>
+<pre><code class="language-r"># Rasterize polygon layer
+wbw_run_tool('vector_polygons_to_raster', args = list(
+  i = polys$file_path(), output = 'parcels_raster.tif',
+  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
+
+# Rasterize line layer
+wbw_run_tool('vector_lines_to_raster', args = list(
+  i = lines$file_path(), output = 'roads_raster.tif',
+  field = 'FID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
+
+# Rasterize points
+wbw_run_tool('vector_points_to_raster', args = list(
+  i = points$file_path(), output = 'points_raster.tif',
+  field = 'VALUE', assign = 'max', nodata = TRUE, cell_size = 5.0), session = s)
+</code></pre>
+<hr />
+<h2 id="field-calculator"><a class="header" href="#field-calculator">Field Calculator</a></h2>
+<pre><code class="language-r"># Compute area in hectares and write to existing field
+wbw_run_tool('field_calculator', args = list(
+  i         = polys$file_path(),
+  output    = 'parcels_calc.shp',
+  field_name = 'AREA_HA',
+  py_statement = '@Area / 10000.0',
+  analyse   = FALSE
+), session = s)
+</code></pre>
+<hr />
+<h2 id="point-cluster-analysis"><a class="header" href="#point-cluster-analysis">Point Cluster Analysis</a></h2>
+<pre><code class="language-r"># Kernel density estimation (heat map)
+wbw_run_tool('kernel_density_estimation', args = list(
+  i         = points$file_path(),
+  output    = 'heatmap.tif',
+  bandwidth = 200.0,
+  kernel_type = 'quartic',
+  cell_size = 5.0,
+  base      = 'dem.tif'
+), session = s)
+
+# Hexagonal binning
+wbw_run_tool('create_hexagonal_vector_grid', args = list(
+  i = 'study_area.shp', output = 'hex_grid.shp', width = 500.0, orientation = 'horizontal'), session = s)
+wbw_run_tool('spatial_join', args = list(
+  target = 'hex_grid.shp', join = points$file_path(),
+  output = 'hex_counts.shp', condition = 'contains', attr = 'count'), session = s)
+</code></pre>
+<hr />
+<h2 id="wbw-pro-spotlight-market-access-and-site-intelligence"><a class="header" href="#wbw-pro-spotlight-market-access-and-site-intelligence">WbW-Pro Spotlight: Market Access and Site Intelligence</a></h2>
+<ul>
+<li><strong>Problem:</strong> Rank candidate sites using repeatable network-access and demand
+logic.</li>
+<li><strong>Tool:</strong> <code>market_access_and_site_intelligence_workflow</code></li>
+<li><strong>Typical inputs:</strong> Network, existing sites, candidate sites, demand
+surface, drive-time rings.</li>
+<li><strong>Typical outputs:</strong> Catchment polygons, competitive-overlap layer,
+candidate-ranking CSV, executive summary JSON.</li>
+</ul>
+<pre><code class="language-r">result &lt;- s$run_tool(
+  'market_access_and_site_intelligence_workflow',
+  list(
+    network                 = 'street_network.shp',
+    sites_existing          = 'existing_sites.shp',
+    sites_candidates        = 'candidate_sites.shp',
+    demand_surface          = 'demand_points.shp',
+    ring_costs              = c(5.0, 10.0, 15.0),
+    catchments_output       = 'candidate_catchments.shp',
+    overlap_analysis_output = 'competitive_overlap.shp',
+    candidate_rank_csv      = 'candidate_rankings.csv',
+    executive_summary_json  = 'market_summary.json'
+  )
+)
+
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a session initialized with a valid Pro
+licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-vector-analysis-workflow"><a class="header" href="#complete-vector-analysis-workflow">Complete Vector Analysis Workflow</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/vector_workflow')
+
+parcels &lt;- wbw_read_vector('parcels.shp')
+study   &lt;- wbw_read_vector('study_area.shp')
+streams &lt;- wbw_read_vector('streams.shp')
+
+# 1. Clip to study area
+wbw_run_tool('clip', args = list(
+  i = parcels$file_path(), clip = study$file_path(),
+  output = 'parcels_clipped.shp', snap_tol = 0.001), session = s)
+
+# 2. Add shape metrics
+wbw_run_tool('compactness_ratio',
+  args = list(i = 'parcels_clipped.shp', output = 'parcels_shape.shp'), session = s)
+
+# 3. Buffer streams and intersect with parcels
+wbw_run_tool('buffer_raster', args = list(
+  i = streams$file_path(), output = 'stream_buf.shp',
+  size = 30.0, gridcells = FALSE), session = s)
+wbw_run_tool('intersect', args = list(
+  i = 'parcels_shape.shp', overlay = 'stream_buf.shp',
+  output = 'riparian_parcels.shp', snap_tol = 0.001), session = s)
+
+# 4. Dissolve by land-use class
+wbw_run_tool('dissolve', args = list(
+  i = 'riparian_parcels.shp', output = 'riparian_dissolved.shp',
+  field = 'LAND_USE', snap_tol = 0.001), session = s)
+
+# 5. Rasterize result
+wbw_run_tool('vector_polygons_to_raster', args = list(
+  i = 'riparian_dissolved.shp', output = 'riparian.tif',
+  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0), session = s)
+
+cat('Vector analysis complete.\n')
+</code></pre>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Always validate topology before analysis</strong>: Run <code>check_vector_topology()</code> to detect overshoots, undershoots, self-intersections, and sliver polygons. Topological errors propagate through overlay and spatial join operations.</li>
+<li><strong>Build spatial indices on large layers</strong>: Large datasets (&gt; 10,000 features) benefit from spatial indexing. Use <code>build_spatial_index()</code> explicitly before repeated spatial queries; operations like containment or proximity are fast with indices.</li>
+<li><strong>Choose your overlay operation carefully</strong>: Union retains all boundaries and combines attributes (can create many small slivers). Intersection keeps only overlapping regions. Difference retains Polygon A minus Polygon B. Test on small subsets first.</li>
+<li><strong>Dissolve reduces feature count and file size</strong>: After overlay, dissolve by ownership or category to collapse unnecessary edges. Dissolved layers render faster and are cleaner for publication.</li>
+<li><strong>Spatial joins are sensitive to alignment</strong>: Ensure both input layers use the same CRS and are free of topology errors. Reproject to equal-area projection before computing buffer distances or areas for analysis.</li>
+<li><strong>Buffer distance and units matter</strong>: Buffer distances are in map units (meters, feet, degrees). Use an equal-area projection if precise areas or distances are critical. Negative buffers can collapse small polygons (inset); test with small buffer values first.</li>
+<li><strong>Attribute table size is a memory constraint</strong>: Attribute tables with millions of rows and dozens of fields consume RAM. Export to CSV or database for large tables; work with summaries or samples when memory is limited.</li>
+<li><strong>Point-in-polygon operations scale with complexity</strong>: Containment tests are O(n) per point; on large datasets (&gt; 1 million points), consider spatial index binning or vector-to-raster conversion for speed.</li>
+</ul>
+<pre><code></code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="raster-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="network-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="raster-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="network-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

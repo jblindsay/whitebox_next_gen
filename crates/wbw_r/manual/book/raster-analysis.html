@@ -1,0 +1,585 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Raster Analysis - Whitebox Workflows for R User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="session-and-discovery.html"><strong aria-hidden="true">5.</strong> Session and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-and-progress.html"><strong aria-hidden="true">6.</strong> Tool Execution and Progress</a></li><li class="chapter-item expanded "><a href="working-with-rasters.html"><strong aria-hidden="true">7.</strong> Working with Rasters</a></li><li class="chapter-item expanded "><a href="working-with-vectors.html"><strong aria-hidden="true">8.</strong> Working with Vectors</a></li><li class="chapter-item expanded "><a href="working-with-lidar.html"><strong aria-hidden="true">9.</strong> Working with Lidar</a></li><li class="chapter-item expanded "><a href="working-with-sensor-bundles.html"><strong aria-hidden="true">10.</strong> Working with Sensor Bundles</a></li><li class="chapter-item expanded "><a href="output-controls.html"><strong aria-hidden="true">11.</strong> Output Controls</a></li><li class="chapter-item expanded "><a href="reprojection-and-crs.html"><strong aria-hidden="true">12.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="topology-utilities.html"><strong aria-hidden="true">13.</strong> Topology Utilities</a></li><li class="chapter-item expanded "><a href="supported-data-formats.html"><strong aria-hidden="true">14.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="interoperability.html"><strong aria-hidden="true">15.</strong> Interoperability</a></li><li class="chapter-item expanded "><a href="licensing.html"><strong aria-hidden="true">16.</strong> Licensing</a></li><li class="chapter-item expanded "><a href="api-reference-strategy.html"><strong aria-hidden="true">17.</strong> API Reference Strategy</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">18.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">19.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">20.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">21.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html" class="active"><strong aria-hidden="true">22.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">23.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">24.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">25.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">26.</strong> Script Index</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for R User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="raster-analysis"><a class="header" href="#raster-analysis">Raster Analysis</a></h1>
+<p>Raster analysis in WbW-R covers the end-to-end workflow of reading, transforming, and writing gridded data — from simple cell-value arithmetic through multi-layer overlays, proximity operations, interpolation, and statistical testing. All heavy computation runs in the Whitebox backend.</p>
+<hr />
+<h2 id="core-concepts"><a class="header" href="#core-concepts">Core Concepts</a></h2>
+<p>Raster analysis requires understanding these fundamental terms:</p>
+<ul>
+<li><strong>Cell (pixel)</strong>: The smallest unit of a raster. Each cell stores a single value (integer or floating-point) and has a uniform spatial extent (e.g. 10 m × 10 m).</li>
+<li><strong>Data type</strong>: Integer (Int8, Int16, Int32) for categorical data; Float32 or Float64 for continuous measurements. Data type affects precision, file size, and computation speed.</li>
+<li><strong>NoData value</strong>: Sentinel value representing missing or invalid data (e.g. -9999 or NaN). Critical for masking water, clouds, or invalid measurements in focal operations.</li>
+<li><strong>Spatial reference (CRS)</strong>: Coordinate system and projection. Mismatched CRS between rasters causes silent misalignment; always verify before overlay operations.</li>
+<li><strong>Extent</strong>: The bounding box (xmin, ymin, xmax, ymax) of the raster in real-world coordinates.</li>
+<li><strong>Cell size (resolution)</strong>: Cell width and height in map units. Coarser resolution is faster but loses detail; finer resolution requires more memory and computation.</li>
+<li><strong>Focal operation</strong>: Uses neighbourhood values (e.g. 3×3 kernel) to compute output. Examples: moving average, Sobel edge detection, local extrema.</li>
+<li><strong>Zonal operation</strong>: Aggregates grid values by zone (polygon or categorical layer). Examples: mean by land-cover class, sum by administrative boundary.</li>
+<li><strong>Reclassification</strong>: Reassigning cell values according to lookup rules. Common for categorizing continuous data (e.g. slope classes) or remapping land-cover codes.</li>
+<li><strong>Resampling</strong>: Changing cell size or alignment. Methods: nearest-neighbour (preserves categories), bilinear (smooth), cubic (smoother).</li>
+</ul>
+<hr />
+<h2 id="session-setup"><a class="header" href="#session-setup">Session Setup</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/raster')
+</code></pre>
+<hr />
+<h2 id="reading-and-inspecting-rasters"><a class="header" href="#reading-and-inspecting-rasters">Reading and Inspecting Rasters</a></h2>
+<pre><code class="language-r">r &lt;- wbw_read_raster('input.tif')
+meta &lt;- r$metadata()
+
+cat('Rows:', meta$rows, '  Cols:', meta$columns, '\n')
+cat('Cell size:', meta$resolution_x, 'x', meta$resolution_y, '\n')
+cat('EPSG:', meta$epsg, '\n')
+cat('NoData:', meta$nodata, '\n')
+cat('Data type:', meta$data_type, '\n')
+</code></pre>
+<hr />
+<h2 id="raster-calculator"><a class="header" href="#raster-calculator">Raster Calculator</a></h2>
+<p><code>raster_calculator</code> evaluates an algebraic expression that combines one or more raster inputs:</p>
+<pre><code class="language-r"># Single-raster expression — multiply by constant
+wbw_run_tool('raster_calculator', args = list(
+  statement = "'elevation.tif' * 3.28084",
+  output    = 'elevation_ft.tif'
+), session = s)
+
+# Multi-raster NDVI expression
+wbw_run_tool('raster_calculator', args = list(
+  statement = "('nir.tif' - 'red.tif') / ('nir.tif' + 'red.tif')",
+  output    = 'ndvi.tif'
+), session = s)
+
+# Conditional expression using isnull() and nodata()
+wbw_run_tool('raster_calculator', args = list(
+  statement = "if(isnull('input.tif'), nodata(), 'input.tif' + 100.0)",
+  output    = 'result.tif'
+), session = s)
+</code></pre>
+<p>Special tokens available in statements: <code>nodata()</code>, <code>isnull()</code>, <code>if()</code>, <code>abs()</code>, <code>sqrt()</code>, <code>log()</code>, <code>log2()</code>, <code>exp()</code>, <code>min()</code>, <code>max()</code>, <code>pi</code>, integer constants, and floating-point constants.</p>
+<hr />
+<h2 id="reclassification"><a class="header" href="#reclassification">Reclassification</a></h2>
+<pre><code class="language-r"># Reclassify using from-to-becomes triplets
+# Format: "from;to;new;from;to;new;..."
+wbw_run_tool('reclass', args = list(
+  i         = 'slope.tif',
+  output    = 'slope_class.tif',
+  reclass_vals = '0;5;1;5;15;2;15;30;3;30;45;4;45;90;5',
+  assign_mode = FALSE
+), session = s)
+
+# Equal-interval reclassification
+wbw_run_tool('reclass_equal_interval', args = list(
+  i         = 'ndvi.tif',
+  output    = 'ndvi_class.tif',
+  interval  = 0.1,
+  start_val = -1.0,
+  end_val   = 1.0
+), session = s)
+
+# Reclassify from a CSV lookup table
+wbw_run_tool('reclass_from_file', args = list(
+  i          = 'landcover.tif',
+  reclass_file = 'reclass_table.txt',
+  output     = 'landcover_reclassed.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="focal-statistics-moving-windows"><a class="header" href="#focal-statistics-moving-windows">Focal Statistics (Moving Windows)</a></h2>
+<pre><code class="language-r"># Gaussian filter
+wbw_run_tool('gaussian_filter', args = list(
+  i = 'dem.tif', output = 'dem_gauss.tif', sigma = 1.5), session = s)
+
+# Median filter (feature-preserving)
+wbw_run_tool('median_filter', args = list(
+  i = 'dem.tif', output = 'dem_median.tif', filterx = 5, filtery = 5,
+  sig_digits = 2), session = s)
+
+# Feature-preserving smoothing (Zhang et al.)
+wbw_run_tool('feature_preserving_smoothing', args = list(
+  dem = 'dem.tif', output = 'dem_fps.tif', filter = 11,
+  norm_diff = 8.0, num_iter = 3, max_diff = 0.5, zfactor = 1.0), session = s)
+
+# Standard deviation in a window
+wbw_run_tool('standard_dev_filter', args = list(
+  i = 'dem.tif', output = 'dem_sd.tif', filterx = 11, filtery = 11), session = s)
+
+# Percentile filter
+wbw_run_tool('percentile_filter', args = list(
+  i = 'dem.tif', output = 'dem_pct75.tif', filterx = 11, filtery = 11,
+  sig_digits = 2), session = s)
+</code></pre>
+<hr />
+<h2 id="morphological-operations"><a class="header" href="#morphological-operations">Morphological Operations</a></h2>
+<pre><code class="language-r"># Morphological closing (fills gaps in foreground)
+wbw_run_tool('closing', args = list(
+  i = 'binary.tif', output = 'binary_close.tif', filterx = 3, filtery = 3), session = s)
+
+# Morphological opening (removes small foreground blobs)
+wbw_run_tool('opening', args = list(
+  i = 'binary.tif', output = 'binary_open.tif', filterx = 3, filtery = 3), session = s)
+
+# Top-hat transform (white)
+wbw_run_tool('tophat_transform', args = list(
+  i = 'raster.tif', output = 'tophat.tif', filterx = 11, filtery = 11,
+  variant = 'white'), session = s)
+</code></pre>
+<hr />
+<h2 id="global-and-zonal-statistics"><a class="header" href="#global-and-zonal-statistics">Global and Zonal Statistics</a></h2>
+<pre><code class="language-r"># Global statistics (summary of entire raster)
+wbw_run_tool('raster_histogram', args = list(
+  i = 'dem.tif', output = 'dem_histogram.html'), session = s)
+
+# Zonal statistics — mean elevation per watershed zone
+wbw_run_tool('zonal_statistics', args = list(
+  i         = 'dem.tif',
+  features  = 'watersheds.tif',
+  output    = 'watershed_stats.html',
+  stat      = 'mean',
+  out_raster = 'watershed_mean_elev.tif'
+), session = s)
+</code></pre>
+<hr />
+<h2 id="raster-overlay-operations"><a class="header" href="#raster-overlay-operations">Raster Overlay Operations</a></h2>
+<pre><code class="language-r"># Weighted sum (multi-criteria suitability)
+wbw_run_tool('weighted_sum', args = list(
+  inputs  = 'soil.tif;slope.tif;distance.tif',
+  weights = '0.3;0.5;0.2',
+  output  = 'suitability.tif'
+), session = s)
+
+# Weighted overlay (MCE) with constraint
+wbw_run_tool('weighted_overlay', args = list(
+  inputs      = 'factor1.tif;factor2.tif;factor3.tif',
+  weights     = '0.4;0.4;0.2',
+  output      = 'suitability_mce.tif',
+  scale_max   = 5.0,
+  scale_min   = 0.0,
+  scale_factor  = 1.0
+), session = s)
+</code></pre>
+<hr />
+<h2 id="resampling-and-aggregation"><a class="header" href="#resampling-and-aggregation">Resampling and Aggregation</a></h2>
+<pre><code class="language-r">wbw_run_tool('resample', args = list(
+  inputs      = 'dem.tif',
+  output      = 'dem_10m.tif',
+  cell_size   = 10.0,
+  method      = 'bilinear'
+), session = s)
+
+wbw_run_tool('aggregate_raster', args = list(
+  i = 'dem.tif', output = 'dem_agg.tif', agg_factor = 5,
+  type = 'mean'), session = s)
+</code></pre>
+<hr />
+<h2 id="proximity-analysis"><a class="header" href="#proximity-analysis">Proximity Analysis</a></h2>
+<pre><code class="language-r"># Euclidean distance
+wbw_run_tool('euclidean_distance', args = list(
+  i = 'sources.tif', output = 'euclidean_dist.tif'), session = s)
+
+# Cost-distance accumulation
+wbw_run_tool('cost_distance', args = list(
+  source = 'sources.tif',
+  cost   = 'friction.tif',
+  out_accum = 'cost_accum.tif',
+  out_backlink = 'cost_backlink.tif'
+), session = s)
+
+# Least-cost path
+wbw_run_tool('cost_pathway', args = list(
+  destination = 'destinations.tif',
+  backlink    = 'cost_backlink.tif',
+  output      = 'least_cost_path.tif',
+  zero_background = FALSE
+), session = s)
+
+# Raster buffer
+wbw_run_tool('buffer_raster', args = list(
+  i = 'features.tif', output = 'buffered.tif',
+  size = 250.0, gridcells = FALSE), session = s)
+</code></pre>
+<hr />
+<h2 id="raster-object-analysis"><a class="header" href="#raster-object-analysis">Raster Object Analysis</a></h2>
+<pre><code class="language-r"># Label connected patches (foreground = non-zero)
+wbw_run_tool('clump', args = list(
+  i = 'binary.tif', output = 'patches.tif',
+  diag = TRUE, zero_back = TRUE), session = s)
+
+# Remove small patches below area threshold (10 000 m²)
+wbw_run_tool('remove_spurs', args = list(
+  i = 'patches.tif', output = 'patches_clean.tif',
+  iterations = 10), session = s)
+
+# Raster area of each patch value
+wbw_run_tool('raster_area', args = list(
+  i = 'patches.tif', output = 'patch_area.tif',
+  out_text = FALSE, units = 'map units', zero_back = TRUE), session = s)
+</code></pre>
+<hr />
+<h2 id="interpolation-from-points"><a class="header" href="#interpolation-from-points">Interpolation from Points</a></h2>
+<pre><code class="language-r">pts &lt;- wbw_read_vector('sample_points.shp')
+
+# IDW
+wbw_run_tool('idw_interpolation', args = list(
+  i         = pts$file_path(),
+  field     = 'ELEV',
+  output    = 'idw_surf.tif',
+  use_z     = FALSE,
+  weight    = 2.0,
+  radius    = 2.5,
+  min_points = 2,
+  cell_size  = 5.0
+), session = s)
+
+# Natural Neighbour
+wbw_run_tool('natural_neighbour_interpolation', args = list(
+  i        = pts$file_path(),
+  field    = 'ELEV',
+  output   = 'nn_surf.tif',
+  use_z    = FALSE,
+  cell_size = 5.0
+), session = s)
+
+# Radial Basis Function
+wbw_run_tool('radial_basis_function_interpolation', args = list(
+  i         = pts$file_path(),
+  field     = 'ELEV',
+  output    = 'rbf_surf.tif',
+  num_points = 8,
+  cell_size  = 5.0,
+  func_type  = 'ThinPlateSpline',
+  poly_order = 1,
+  weight     = 0.1
+), session = s)
+</code></pre>
+<hr />
+<h2 id="statistical-tests"><a class="header" href="#statistical-tests">Statistical Tests</a></h2>
+<pre><code class="language-r"># Kolmogorov-Smirnov normality test
+wbw_run_tool('ks_test_for_normality', args = list(
+  i = 'dem.tif', output = 'ks_normality.html'), session = s)
+
+# Two-raster paired samples t-test
+wbw_run_tool('paired_sample_t_test', args = list(
+  input1 = 'dem_2010.tif', input2 = 'dem_2020.tif',
+  output = 'ttest.html', num_samples = 1000), session = s)
+</code></pre>
+<hr />
+<h2 id="contour-generation"><a class="header" href="#contour-generation">Contour Generation</a></h2>
+<pre><code class="language-r">wbw_run_tool('contours_from_raster', args = list(
+  i          = 'dem.tif',
+  output     = 'contours.shp',
+  interval   = 10.0,
+  base       = 0.0,
+  smooth     = 5,
+  tolerance  = 10.0
+), session = s)
+</code></pre>
+<hr />
+<h2 id="wbw-pro-spotlight-field-trafficability-and-operation-planning"><a class="header" href="#wbw-pro-spotlight-field-trafficability-and-operation-planning">WbW-Pro Spotlight: Field Trafficability and Operation Planning</a></h2>
+<ul>
+<li><strong>Problem:</strong> Plan equipment timing and field access under variable moisture
+and weather conditions.</li>
+<li><strong>Tool:</strong> <code>field_trafficability_and_operation_planning</code></li>
+<li><strong>Typical inputs:</strong> DEM, normalized soil-moisture raster, optional
+rainfall-risk raster.</li>
+<li><strong>Typical outputs:</strong> Trafficability score raster, operation-class raster,
+and summary outputs.</li>
+</ul>
+<pre><code class="language-r">result &lt;- s$field_trafficability_and_operation_planning(
+  dem               = 'field_dem.tif',
+  soil_moisture     = 'soil_moisture_norm.tif',
+  rainfall_forecast = 'rainfall_risk_norm.tif',
+  output_prefix     = 'field_12_trafficability'
+)
+
+print(result)
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> This workflow requires a session initialized with a valid Pro
+licence.</p>
+</blockquote>
+<hr />
+<h2 id="complete-raster-analysis-workflow"><a class="header" href="#complete-raster-analysis-workflow">Complete Raster Analysis Workflow</a></h2>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+setwd('/data/raster_workflow')
+
+dem &lt;- wbw_read_raster('dem.tif')
+
+# 1. Smooth DEM
+wbw_run_tool('feature_preserving_smoothing', args = list(
+  dem = dem$file_path(), output = 'dem_smooth.tif', filter = 11,
+  norm_diff = 8.0, num_iter = 3, max_diff = 0.5), session = s)
+
+# 2. Slope
+wbw_run_tool('slope', args = list(
+  dem = 'dem_smooth.tif', output = 'slope.tif', units = 'degrees'), session = s)
+
+# 3. Reclassify slope into erosion risk classes
+wbw_run_tool('reclass', args = list(
+  i = 'slope.tif', output = 'slope_risk.tif',
+  reclass_vals = '0;5;1;5;15;2;15;30;3;30;90;4'), session = s)
+
+# 4. Euclidean distance to water
+wbw_run_tool('euclidean_distance', args = list(
+  i = 'water_bodies.tif', output = 'dist_water.tif'), session = s)
+
+# 5. Multi-criteria suitability overlay
+wbw_run_tool('weighted_sum', args = list(
+  inputs  = paste('slope_risk.tif', 'dist_water.tif', 'soil_type.tif', sep=';'),
+  weights = '0.5;0.3;0.2',
+  output  = 'suitability.tif'
+), session = s)
+
+# 6. Reclassify to binary mask (suitability &gt; threshold)
+wbw_run_tool('raster_calculator', args = list(
+  statement = "if('suitability.tif' &gt;= 3.0, 1.0, 0.0)",
+  output    = 'suitable_areas.tif'
+), session = s)
+
+# 7. Generate contours
+wbw_run_tool('contours_from_raster', args = list(
+  i = dem$file_path(), output = 'contours_10m.shp',
+  interval = 10.0, base = 0.0, smooth = 3), session = s)
+
+cat('Raster analysis complete.\n')
+</code></pre>
+<hr />
+<h2 id="tips"><a class="header" href="#tips">Tips</a></h2>
+<ul>
+<li><strong>Choose your data type</strong>: Use integers for categorical data (land cover, classifications) to minimize file size and computation time. Use floating-point (Float32 or Float64) only for continuous measurements (elevation, temperature, probability).</li>
+<li><strong>Set NoData explicitly</strong>: Ensure your source rasters carry a valid NoData value. Missing NoData declarations can corrupt statistics and focal operations by including invalid pixels as zeros or false elevations.</li>
+<li><strong>Compress carefully</strong>: LZW and DEFLATE compression work well for most data; avoid if you need rapid random access to interior tiles. Use COMPRESS=JPEG for photographic data only (lossy, unsuitable for analysis).</li>
+<li><strong>Focal operations require buffering</strong>: Cells at raster edges cannot compute full neighbourhoods. Use <code>expand()</code> or accept edge effects; never assume borders are valid in derivative rasters.</li>
+<li><strong>Zonal statistics are only as good as your zones</strong>: Ensure zone boundaries are topologically clean (no overlaps, no gaps). Overlapping zones cause double-counting; gaps cause NoData regions in output.</li>
+<li><strong>Reclassification is fast but risky</strong>: Always validate output distributions (histogram) after reclassification. Off-by-one errors in class boundaries can silently produce wrong land-cover or suitability classes.</li>
+<li><strong>Memory is the constraint for large rasters</strong>: Tiles &gt; 2 GB require out-of-core or streaming processing. Use <code>read_by_block()</code> for large files; avoid loading entire rasters into memory if they exceed available RAM.</li>
+<li><strong>Upsampling introduces artifacts</strong>: Never upsample (finer resolution) without a valid interpolation method. Nearest-neighbour upsampling creates blocky artefacts; bilinear is smoother but may violate data range (e.g. probability values &gt; 1.0).</li>
+</ul>
+<pre><code></code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="remote-sensing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="vector-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="remote-sensing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="vector-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

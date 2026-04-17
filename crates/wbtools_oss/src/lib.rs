@@ -153,6 +153,15 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SvmRegressionTool));
     registry.register(Box::new(tools::LogisticRegressionTool));
     registry.register(Box::new(tools::NndClassificationTool));
+    registry.register(Box::new(tools::SegmentSlicSuperpixelsTool));
+    registry.register(Box::new(tools::SegmentGraphFelzenszwalbTool));
+    registry.register(Box::new(tools::SegmentsMergeSmallRegionsTool));
+    registry.register(Box::new(tools::ObjectFeaturesSpectralBasicTool));
+    registry.register(Box::new(tools::ObjectFeaturesShapeBasicTool));
+    registry.register(Box::new(tools::ObjectFeaturesTextureGlcmBasicTool));
+    registry.register(Box::new(tools::ClassifyObjectsRandomForestTool));
+    registry.register(Box::new(tools::EvaluateObjectClassificationAccuracyTool));
+    registry.register(Box::new(tools::ObiaPipelineBasicTool));
     registry.register(Box::new(tools::TophatTransformTool));
     registry.register(Box::new(tools::ConvertNodataToZeroTool));
     registry.register(Box::new(tools::AddPointCoordinatesToTableTool));

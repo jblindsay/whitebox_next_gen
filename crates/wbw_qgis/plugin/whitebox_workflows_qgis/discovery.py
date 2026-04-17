@@ -601,6 +601,23 @@ def _derive_remote_sensing_category(item: dict) -> str:
         "polarimet",
     }
 
+    obia_tokens = {
+        "obia",
+        "object",
+        "objects",
+        "segment",
+        "segments",
+        "superpixel",
+        "glcm",
+        "classify_objects",
+        "object_features",
+    }
+
+    # Keep OBIA as a coherent toolbox group rather than splitting across
+    # spectral/classification/filter buckets.
+    if _has_any(obia_tokens):
+        return "Remote Sensing - OBIA"
+
     if _has_any(sar_tokens):
         return "Remote Sensing - SAR"
     if _has_any(classification_tokens):

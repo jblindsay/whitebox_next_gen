@@ -360,17 +360,69 @@ reconstructed_bands = wbe.inverse_pca(
 Object-based image analysis (OBIA) groups pixels into meaningful spatial units (segments) before classifying them. This is superior to pixel-based classification for high-resolution imagery where individual objects span many pixels.
 
 ```python
-# Segment the image into homogeneous regions
-# threshold controls merge aggressiveness (lower = more segments)
-segments = wbe.image_segmentation(
-    input_rasters=[red, green, nir],
-    threshold=15.0,
-    min_size=20
+# Inspect the dedicated OBIA grouping under remote sensing.
+print(wbe.remote_sensing.obia.list_tools())
+
+# 1) Create baseline segments (SLIC-like open-core baseline).
+segments = wbe.remote_sensing.obia.segment_slic_superpixels(
+    inputs=[red, green, nir],
+    region_size=18,
+    compactness=12.0,
+    output='segments_slic.tif'
 )
-wbe.write_raster(segments, 'segments.tif')
+
+# 2) Merge small regions for cleaner object topology.
+segments_clean = wbe.remote_sensing.obia.segments_merge_small_regions(
+    segments=segments,
+    min_size=12,
+    method='longest',
+    output='segments_clean.tif'
+)
+
+# 3) Extract object-level features.
+spectral_csv = wbe.remote_sensing.obia.object_features_spectral_basic(
+    segments=segments_clean,
+    inputs=[red, green, nir],
+    output='object_features_spectral.csv'
+)
+
+shape_csv = wbe.remote_sensing.obia.object_features_shape_basic(
+    segments=segments_clean,
+    output='object_features_shape.csv'
+)
+
+texture_csv = wbe.remote_sensing.obia.object_features_texture_glcm_basic(
+    segments=segments_clean,
+    input=nir,
+    levels=16,
+    output='object_features_texture.csv'
+)
+
+# 4) Train/apply object RF model using segment-level training labels.
+pred_csv = wbe.remote_sensing.obia.classify_objects_random_forest(
+    features='object_features_all.csv',
+    training='training_segments.csv',
+    class_field='class',
+    output='object_predictions.csv'
+)
+
+# 5) Evaluate object-level accuracy.
+report = wbe.remote_sensing.obia.evaluate_object_classification_accuracy(
+    predictions=pred_csv,
+    reference='validation_segments.csv',
+    output='object_accuracy.json'
+)
+
+# Optional one-call baseline pipeline.
+outputs = wbe.remote_sensing.obia.obia_pipeline_basic(
+    inputs=[red, green, nir],
+    training='training_segments.csv',
+    output_prefix='obia_field01',
+    segment_method='slic',
+)
 ```
 
-After segmentation, extract per-object statistics using `zonal_statistics()` and then classify based on the object-mean spectral signature.
+This baseline stack is designed to be reproducible and script-friendly. For many projects, the one-call `obia_pipeline_basic` run is the fastest path to a validated Phase 1 workflow.
 
 ---
 

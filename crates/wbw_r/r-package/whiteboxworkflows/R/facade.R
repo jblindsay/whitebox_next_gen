@@ -3188,6 +3188,69 @@ wbw_tools_in_category <- function(category, session = NULL) {
   )
 }
 
+wbw_is_remote_sensing_obia_tool <- function(tool) {
+  if (is.null(tool) || !is.list(tool)) {
+    return(FALSE)
+  }
+
+  id <- tolower(as.character(tool$id %||% ""))
+  tags_raw <- tool$tags %||% character(0)
+  tags <- tolower(as.character(tags_raw))
+  summary <- tolower(as.character(tool$summary %||% ""))
+  display_name <- tolower(as.character(tool$display_name %||% ""))
+
+  if ("obia" %in% tags) {
+    return(TRUE)
+  }
+
+  if (startsWith(id, "segment_") || startsWith(id, "segments_")) {
+    return(TRUE)
+  }
+  if (startsWith(id, "object_features_") || startsWith(id, "classify_objects_")) {
+    return(TRUE)
+  }
+  if (startsWith(id, "evaluate_object_") || startsWith(id, "obia_")) {
+    return(TRUE)
+  }
+
+  grepl("\\bobia\\b|\\bobject[-_ ]based\\b", paste(display_name, summary), perl = TRUE)
+}
+
+#' Get tools in the Remote Sensing OBIA grouping.
+#'
+#' Returns a data frame of object-based image analysis tools using shared
+#' OBIA naming/tag conventions (tool ID prefixes and OBIA tags).
+#'
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A data frame with columns: id, display_name, summary, license_tier, stability.
+#'
+#' @export
+wbw_tools_in_remote_sensing_obia <- function(session = NULL) {
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+  tools <- session$list_tools()
+  obia_tools <- Filter(wbw_is_remote_sensing_obia_tool, tools)
+
+  if (length(obia_tools) == 0L) {
+    stop(
+      "No OBIA tools found in this runtime. Confirm an up-to-date backend build is installed.",
+      call. = FALSE
+    )
+  }
+
+  data.frame(
+    id = sapply(obia_tools, function(x) x$id),
+    display_name = sapply(obia_tools, function(x) x$display_name %||% ""),
+    summary = sapply(obia_tools, function(x) x$summary %||% ""),
+    license_tier = sapply(obia_tools, function(x) x$license_tier %||% "Open"),
+    stability = sapply(obia_tools, function(x) x$stability %||% ""),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
 #' Show tool category summary.
 #'
 #' Displays counts and statistics for each tool category.

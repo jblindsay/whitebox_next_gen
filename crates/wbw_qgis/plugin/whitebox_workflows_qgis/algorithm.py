@@ -309,6 +309,9 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
     remote_tags = {
         "remote_sensing", "image", "classification", "filter", "convolution", "multiscale"
     }
+    obia_tags = {
+        "obia", "object", "objects", "segmentation", "segment", "segments", "superpixel", "glcm"
+    }
 
     def _has(*names: str) -> bool:
         return any(n in tag_set for n in names)
@@ -328,6 +331,8 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
         return "Hydrology"
 
     if tag_set.intersection(remote_tags):
+        if tag_set.intersection(obia_tags) or _has("obia"):
+            return "Remote Sensing - OBIA"
         if _has("classification", "knn"):
             return "Remote Sensing - Classification"
         if _has("filter", "convolution", "smoothing"):

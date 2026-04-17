@@ -1439,6 +1439,7 @@ fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static s
             "change_detection",
             "radiometric_correction",
             "classification",
+            "obia",
         ],
         "terrain" => &[
             "derivatives",
@@ -1550,6 +1551,15 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id.contains("clustering")
                 || id.contains("segmentation")
                 || has_tag("classification")
+        }
+        ("remote_sensing", "obia") => {
+            id.starts_with("segment_")
+                || id.starts_with("segments_")
+                || id.starts_with("object_features_")
+                || id.starts_with("classify_objects_")
+                || id.starts_with("evaluate_object_")
+                || id.starts_with("obia_")
+                || has_tag("obia")
         }
         ("terrain", "derivatives") => {
             id.contains("slope")

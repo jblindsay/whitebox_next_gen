@@ -337,6 +337,75 @@ wbw_run_tool('image_segmentation', args = list(
 ), session = s)
 ```
 
+## Object-Based Image Analysis (OBIA) Baseline
+
+Phase 1 open-core OBIA tools are available through standard `wbw_run_tool(...)`
+calls and can be discovered as a grouped set:
+
+```r
+obia_tools <- wbw_tools_in_remote_sensing_obia(session = s)
+print(obia_tools$id)
+```
+
+```r
+# 1) Segment imagery into compact object candidates
+wbw_run_tool('segment_slic_superpixels', args = list(
+  inputs      = all_bands,
+  region_size = 18,
+  compactness = 12.0,
+  output      = 'segments_slic.tif'
+), session = s)
+
+# 2) Merge undersized regions
+wbw_run_tool('segments_merge_small_regions', args = list(
+  segments = 'segments_slic.tif',
+  min_size = 12,
+  method   = 'longest',
+  output   = 'segments_clean.tif'
+), session = s)
+
+# 3) Extract spectral/shape/texture object features
+wbw_run_tool('object_features_spectral_basic', args = list(
+  segments = 'segments_clean.tif',
+  inputs   = all_bands,
+  output   = 'object_features_spectral.csv'
+), session = s)
+
+wbw_run_tool('object_features_shape_basic', args = list(
+  segments = 'segments_clean.tif',
+  output   = 'object_features_shape.csv'
+), session = s)
+
+wbw_run_tool('object_features_texture_glcm_basic', args = list(
+  segments = 'segments_clean.tif',
+  input    = b5$file_path(),
+  levels   = 16,
+  output   = 'object_features_texture.csv'
+), session = s)
+
+# 4) Train/apply object-level RF model
+wbw_run_tool('classify_objects_random_forest', args = list(
+  features = 'object_features_all.csv',
+  training = 'training_segments.csv',
+  output   = 'object_predictions.csv'
+), session = s)
+
+# 5) Evaluate object-level accuracy
+wbw_run_tool('evaluate_object_classification_accuracy', args = list(
+  predictions = 'object_predictions.csv',
+  reference   = 'validation_segments.csv',
+  output      = 'object_accuracy.json'
+), session = s)
+
+# Optional one-call baseline pipeline
+wbw_run_tool('obia_pipeline_basic', args = list(
+  inputs        = all_bands,
+  training      = 'training_segments.csv',
+  output_prefix = 'obia_field01',
+  segment_method = 'slic'
+), session = s)
+```
+
 ---
 
 ## Unsupervised Classification

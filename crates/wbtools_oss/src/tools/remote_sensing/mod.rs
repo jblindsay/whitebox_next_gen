@@ -1,4 +1,5 @@
 mod color_support;
+mod obia_tools;
 mod advanced_filters;
 mod bilateral_filter;
 mod convolution_filters;
@@ -111,3 +112,12 @@ pub use non_filter_tools::SvmClassificationTool;
 pub use non_filter_tools::SvmRegressionTool;
 pub use non_filter_tools::LogisticRegressionTool;
 pub use non_filter_tools::NndClassificationTool;
+pub use obia_tools::SegmentSlicSuperpixelsTool;
+pub use obia_tools::SegmentGraphFelzenszwalbTool;
+pub use obia_tools::SegmentsMergeSmallRegionsTool;
+pub use obia_tools::ObjectFeaturesSpectralBasicTool;
+pub use obia_tools::ObjectFeaturesShapeBasicTool;
+pub use obia_tools::ObjectFeaturesTextureGlcmBasicTool;
+pub use obia_tools::ClassifyObjectsRandomForestTool;
+pub use obia_tools::EvaluateObjectClassificationAccuracyTool;
+pub use obia_tools::ObiaPipelineBasicTool;

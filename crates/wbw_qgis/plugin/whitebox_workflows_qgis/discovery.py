@@ -601,21 +601,23 @@ def _derive_remote_sensing_category(item: dict) -> str:
         "polarimet",
     }
 
-    obia_tokens = {
-        "obia",
-        "object",
-        "objects",
-        "segment",
-        "segments",
-        "superpixel",
-        "glcm",
-        "classify_objects",
-        "object_features",
-    }
+    obia_id_prefixes = (
+        "segment_slic_",
+        "segment_graph_",
+        "segments_merge_",
+        "object_features_",
+        "classify_objects_",
+        "evaluate_object_",
+        "obia_",
+    )
 
-    # Keep OBIA as a coherent toolbox group rather than splitting across
-    # spectral/classification/filter buckets.
-    if _has_any(obia_tokens):
+    # Keep OBIA as a coherent toolbox group, but avoid broad token matching
+    # (e.g., "line segments") that can incorrectly classify non-OBIA tools.
+    if (
+        tool_id == "image_segmentation"
+        or tool_id.startswith(obia_id_prefixes)
+        or "obia" in tags
+    ):
         return "Remote Sensing - OBIA"
 
     if _has_any(sar_tokens):

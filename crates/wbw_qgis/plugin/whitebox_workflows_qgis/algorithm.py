@@ -290,6 +290,7 @@ def _coerce_string_default(value: Any, fallback: str = "") -> str:
 
 def _derive_group_name(manifest: dict[str, Any]) -> str:
     base = str(manifest.get("category", "General") or "General")
+    tool_id = str(manifest.get("id", "") or "").strip().lower()
     tags = [str(t).strip().lower() for t in manifest.get("tags", []) if str(t).strip()]
     tag_set = set(tags)
 
@@ -309,9 +310,15 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
     remote_tags = {
         "remote_sensing", "image", "classification", "filter", "convolution", "multiscale"
     }
-    obia_tags = {
-        "obia", "object", "objects", "segmentation", "segment", "segments", "superpixel", "glcm"
-    }
+    obia_id_prefixes = (
+        "segment_slic_",
+        "segment_graph_",
+        "segments_merge_",
+        "object_features_",
+        "classify_objects_",
+        "evaluate_object_",
+        "obia_",
+    )
 
     def _has(*names: str) -> bool:
         return any(n in tag_set for n in names)
@@ -331,7 +338,7 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
         return "Hydrology"
 
     if tag_set.intersection(remote_tags):
-        if tag_set.intersection(obia_tags) or _has("obia"):
+        if tool_id == "image_segmentation" or tool_id.startswith(obia_id_prefixes) or _has("obia"):
             return "Remote Sensing - OBIA"
         if _has("classification", "knn"):
             return "Remote Sensing - Classification"

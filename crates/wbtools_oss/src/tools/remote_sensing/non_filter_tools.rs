@@ -8367,13 +8367,44 @@ fn raster_index(cols: usize, row: isize, col: isize) -> usize {
 }
 
 fn sqr_dist(a: &[f64], b: &[f64]) -> f64 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| {
-            let d = x - y;
-            d * d
-        })
-        .sum()
+    let n = a.len().min(b.len());
+    let mut i = 0usize;
+    let mut sum = 0.0;
+    while i + 3 < n {
+        let d0 = a[i] - b[i];
+        let d1 = a[i + 1] - b[i + 1];
+        let d2 = a[i + 2] - b[i + 2];
+        let d3 = a[i + 3] - b[i + 3];
+        sum += d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
+        i += 4;
+    }
+    while i < n {
+        let d = a[i] - b[i];
+        sum += d * d;
+        i += 1;
+    }
+    sum
+}
+
+#[inline(always)]
+fn sqr_dist_zscores_at(zscores: &[Vec<f64>], idx_a: usize, idx_b: usize) -> f64 {
+    let dims = zscores.len();
+    let mut d = 0usize;
+    let mut sum = 0.0;
+    while d + 3 < dims {
+        let dv0 = zscores[d][idx_a] - zscores[d][idx_b];
+        let dv1 = zscores[d + 1][idx_a] - zscores[d + 1][idx_b];
+        let dv2 = zscores[d + 2][idx_a] - zscores[d + 2][idx_b];
+        let dv3 = zscores[d + 3][idx_a] - zscores[d + 3][idx_b];
+        sum += dv0 * dv0 + dv1 * dv1 + dv2 * dv2 + dv3 * dv3;
+        d += 4;
+    }
+    while d < dims {
+        let dv = zscores[d][idx_a] - zscores[d][idx_b];
+        sum += dv * dv;
+        d += 1;
+    }
+    sum
 }
 
 fn raster_mean_stdev_valid(raster: &Raster) -> (f64, f64) {
@@ -8927,38 +8958,39 @@ impl Tool for ImageSegmentationTool {
         let mut zscores: Vec<Vec<f64>> = Vec::with_capacity(dims);
         for r in &rasters {
             let (mean, stdev) = raster_mean_stdev_valid(r);
-            let mut arr = vec![f64::NAN; n];
-            for row in 0..rows {
-                for col in 0..cols {
-                    let idx = raster_index(r.cols, row, col);
+            let arr: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let row = (idx / r.cols) as isize;
+                    let col = (idx % r.cols) as isize;
                     let z = r.get(0, row, col);
-                    if !r.is_nodata(z) {
-                        arr[idx] = (z - mean) / stdev;
+                    if r.is_nodata(z) {
+                        f64::NAN
+                    } else {
+                        (z - mean) / stdev
                     }
-                }
-            }
+                })
+                .collect();
             zscores.push(arr);
         }
         coalescer.emit_unit_fraction(ctx.progress, 0.20);
 
         let n8 = [(-1isize, -1isize), (-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1)];
         let threshold2 = if threshold <= 0.0 { f64::INFINITY } else { threshold * threshold };
-        let mut seed_bins = vec![Vec::<usize>::new(); steps];
-        let mut valid = vec![false; n];
-        for row in 0..rows {
-            for col in 0..cols {
-                let idx = raster_index(rasters[0].cols, row, col);
-                let mut ok = true;
-                for d in 0..dims {
-                    if !zscores[d][idx].is_finite() {
-                        ok = false;
-                        break;
-                    }
+        let valid: Vec<bool> = (0..n)
+            .into_par_iter()
+            .map(|idx| zscores.iter().all(|band| band[idx].is_finite()))
+            .collect();
+
+        let cols_u = rasters[0].cols;
+        let seed_bin_for_idx: Vec<Option<usize>> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                if !valid[idx] {
+                    return None;
                 }
-                if !ok {
-                    continue;
-                }
-                valid[idx] = true;
+                let row = (idx / cols_u) as isize;
+                let col = (idx % cols_u) as isize;
                 let mut local = 0.0;
                 let mut k = 0usize;
                 for (dr, dc) in n8 {
@@ -8967,24 +8999,29 @@ impl Tool for ImageSegmentationTool {
                     if nr < 0 || nc < 0 || nr >= rows || nc >= cols {
                         continue;
                     }
-                    let ni = raster_index(rasters[0].cols, nr, nc);
+                    let ni = raster_index(cols_u, nr, nc);
                     if !valid[ni] {
                         continue;
                     }
-                    let mut d2 = 0.0;
-                    for d in 0..dims {
-                        let dv = zscores[d][idx] - zscores[d][ni];
-                        d2 += dv * dv;
-                    }
-                    local += d2;
+                    local += sqr_dist_zscores_at(&zscores, idx, ni);
                     k += 1;
                 }
                 let avg = if k > 0 { local / k as f64 } else { f64::INFINITY };
-                let mut bin = if threshold2.is_finite() { (avg / threshold2).floor() as isize } else { 0 };
+                let mut bin = if threshold2.is_finite() {
+                    (avg / threshold2).floor() as isize
+                } else {
+                    0
+                };
                 if bin < 0 {
                     bin = 0;
                 }
-                let b = (bin as usize).min(steps - 1);
+                Some((bin as usize).min(steps - 1))
+            })
+            .collect();
+
+        let mut seed_bins = vec![Vec::<usize>::new(); steps];
+        for (idx, maybe_bin) in seed_bin_for_idx.into_iter().enumerate() {
+            if let Some(b) = maybe_bin {
                 seed_bins[b].push(idx);
             }
         }
@@ -8999,10 +9036,6 @@ impl Tool for ImageSegmentationTool {
                     continue;
                 }
                 let sid = seg_cells.len() as isize;
-                let mut seed_vec = vec![0.0; dims];
-                for d in 0..dims {
-                    seed_vec[d] = zscores[d][seed];
-                }
                 let mut stack = vec![seed];
                 seg[seed] = sid;
                 let mut cells = Vec::<usize>::new();
@@ -9021,11 +9054,7 @@ impl Tool for ImageSegmentationTool {
                         if !valid[ni] || seg[ni] >= 0 {
                             continue;
                         }
-                        let mut d2 = 0.0;
-                        for d in 0..dims {
-                            let dv = zscores[d][ni] - seed_vec[d];
-                            d2 += dv * dv;
-                        }
+                        let d2 = sqr_dist_zscores_at(&zscores, ni, seed);
                         if d2 <= threshold2 {
                             seg[ni] = sid;
                             stack.push(ni);

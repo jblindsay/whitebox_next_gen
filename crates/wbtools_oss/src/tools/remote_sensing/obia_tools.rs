@@ -2,6 +2,7 @@ use super::non_filter_tools::{
     GeneralizeClassifiedRasterTool, ImageSegmentationTool,
 };
 use super::super::data_tools::{RasterToVectorPolygonsTool, VectorPolygonsToRasterTool};
+use rayon::prelude::*;
 use smartcore::ensemble::random_forest_classifier::{
     RandomForestClassifier, RandomForestClassifierParameters,
 };
@@ -1734,23 +1735,38 @@ fn build_segment_hierarchy_csv(
         ));
     }
 
-    let rows = fine.rows as isize;
+    let rows = fine.rows;
     let cols = fine.cols as isize;
-    let mut overlap: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
-
-    for row in 0..rows {
-        for col in 0..cols {
-            let f = fine.get(0, row, col);
-            let c = coarse.get(0, row, col);
-            if fine.is_nodata(f) || coarse.is_nodata(c) || f <= 0.0 || c <= 0.0 {
-                continue;
+    let overlap: HashMap<i64, HashMap<i64, usize>> = (0..rows)
+        .into_par_iter()
+        .map(|row_u| {
+            let row = row_u as isize;
+            let mut local: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
+            for col in 0..cols {
+                let f = fine.get(0, row, col);
+                let c = coarse.get(0, row, col);
+                if fine.is_nodata(f) || coarse.is_nodata(c) || f <= 0.0 || c <= 0.0 {
+                    continue;
+                }
+                let fine_id = f.round() as i64;
+                let coarse_id = c.round() as i64;
+                let m = local.entry(fine_id).or_default();
+                *m.entry(coarse_id).or_insert(0) += 1;
             }
-            let fine_id = f.round() as i64;
-            let coarse_id = c.round() as i64;
-            let m = overlap.entry(fine_id).or_default();
-            *m.entry(coarse_id).or_insert(0) += 1;
-        }
-    }
+            local
+        })
+        .reduce(
+            HashMap::new,
+            |mut acc, local| {
+                for (fid, coarse_counts) in local {
+                    let dst = acc.entry(fid).or_default();
+                    for (cid, n) in coarse_counts {
+                        *dst.entry(cid).or_insert(0) += n;
+                    }
+                }
+                acc
+            },
+        );
 
     let header = vec![
         "fine_segment_id".to_string(),
@@ -1794,37 +1810,53 @@ fn count_unique_positive_segments(path: &str) -> Result<usize, ToolError> {
 fn adjacency_from_segments(segments_path: &str) -> Result<HashMap<i64, HashMap<i64, usize>>, ToolError> {
     let segments = Raster::read(segments_path)
         .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
-    let rows = segments.rows as isize;
+    let rows = segments.rows;
     let cols = segments.cols as isize;
     let offsets = [(0isize, 1isize), (1, 0), (0, -1), (-1, 0)];
 
-    let mut adj: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
-    for row in 0..rows {
-        for col in 0..cols {
-            let v = segments.get(0, row, col);
-            if segments.is_nodata(v) || v <= 0.0 {
-                continue;
+    let adj: HashMap<i64, HashMap<i64, usize>> = (0..rows)
+        .into_par_iter()
+        .map(|row_u| {
+            let row = row_u as isize;
+            let mut local: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
+            for col in 0..cols {
+                let v = segments.get(0, row, col);
+                if segments.is_nodata(v) || v <= 0.0 {
+                    continue;
+                }
+                let sid = v.round() as i64;
+                for (dr, dc) in offsets {
+                    let nr = row + dr;
+                    let nc = col + dc;
+                    if nr < 0 || nc < 0 || nr >= rows as isize || nc >= cols {
+                        continue;
+                    }
+                    let nv = segments.get(0, nr, nc);
+                    if segments.is_nodata(nv) || nv <= 0.0 {
+                        continue;
+                    }
+                    let nid = nv.round() as i64;
+                    if nid == sid {
+                        continue;
+                    }
+                    let entry = local.entry(sid).or_default();
+                    *entry.entry(nid).or_insert(0) += 1;
+                }
             }
-            let sid = v.round() as i64;
-            for (dr, dc) in offsets {
-                let nr = row + dr;
-                let nc = col + dc;
-                if nr < 0 || nc < 0 || nr >= rows || nc >= cols {
-                    continue;
+            local
+        })
+        .reduce(
+            HashMap::new,
+            |mut acc, local| {
+                for (sid, neigh) in local {
+                    let dst = acc.entry(sid).or_default();
+                    for (nid, n) in neigh {
+                        *dst.entry(nid).or_insert(0) += n;
+                    }
                 }
-                let nv = segments.get(0, nr, nc);
-                if segments.is_nodata(nv) || nv <= 0.0 {
-                    continue;
-                }
-                let nid = nv.round() as i64;
-                if nid == sid {
-                    continue;
-                }
-                let entry = adj.entry(sid).or_default();
-                *entry.entry(nid).or_insert(0) += 1;
-            }
-        }
-    }
+                acc
+            },
+        );
     Ok(adj)
 }
 
@@ -3106,19 +3138,32 @@ impl Tool for EvaluateSegmentationQualityProTool {
         );
         let seg = Raster::read(&segments_path)
             .map_err(|e| ToolError::Execution(format!("failed reading segments raster: {e}")))?;
-        let rows = seg.rows as isize;
+        let rows = seg.rows;
         let cols = seg.cols as isize;
 
-        let mut area: HashMap<i64, usize> = HashMap::new();
-        for row in 0..rows {
-            for col in 0..cols {
-                let z = seg.get(0, row, col);
-                if seg.is_nodata(z) || z <= 0.0 {
-                    continue;
+        let area: HashMap<i64, usize> = (0..rows)
+            .into_par_iter()
+            .map(|row_u| {
+                let row = row_u as isize;
+                let mut local: HashMap<i64, usize> = HashMap::new();
+                for col in 0..cols {
+                    let z = seg.get(0, row, col);
+                    if seg.is_nodata(z) || z <= 0.0 {
+                        continue;
+                    }
+                    *local.entry(z.round() as i64).or_insert(0) += 1;
                 }
-                *area.entry(z.round() as i64).or_insert(0) += 1;
-            }
-        }
+                local
+            })
+            .reduce(
+                HashMap::new,
+                |mut acc, local| {
+                    for (sid, n) in local {
+                        *acc.entry(sid).or_insert(0) += n;
+                    }
+                    acc
+                },
+            );
         let n_segments = area.len().max(1);
         let mean_area = area.values().sum::<usize>() as f64 / n_segments as f64;
 
@@ -3127,20 +3172,36 @@ impl Tool for EvaluateSegmentationQualityProTool {
             let ref_r = Raster::read(reference_path)
                 .map_err(|e| ToolError::Execution(format!("failed reading reference raster: {e}")))?;
             if ref_r.rows == seg.rows && ref_r.cols == seg.cols {
-                let mut overlap: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
-                for row in 0..rows {
-                    for col in 0..cols {
-                        let s = seg.get(0, row, col);
-                        let r = ref_r.get(0, row, col);
-                        if seg.is_nodata(s) || ref_r.is_nodata(r) || s <= 0.0 {
-                            continue;
+                let overlap: HashMap<i64, HashMap<i64, usize>> = (0..rows)
+                    .into_par_iter()
+                    .map(|row_u| {
+                        let row = row_u as isize;
+                        let mut local: HashMap<i64, HashMap<i64, usize>> = HashMap::new();
+                        for col in 0..cols {
+                            let s = seg.get(0, row, col);
+                            let r = ref_r.get(0, row, col);
+                            if seg.is_nodata(s) || ref_r.is_nodata(r) || s <= 0.0 {
+                                continue;
+                            }
+                            let sid = s.round() as i64;
+                            let rid = r.round() as i64;
+                            let m = local.entry(sid).or_default();
+                            *m.entry(rid).or_insert(0) += 1;
                         }
-                        let sid = s.round() as i64;
-                        let rid = r.round() as i64;
-                        let m = overlap.entry(sid).or_default();
-                        *m.entry(rid).or_insert(0) += 1;
-                    }
-                }
+                        local
+                    })
+                    .reduce(
+                        HashMap::new,
+                        |mut acc, local| {
+                            for (sid, ref_counts) in local {
+                                let dst = acc.entry(sid).or_default();
+                                for (rid, n) in ref_counts {
+                                    *dst.entry(rid).or_insert(0) += n;
+                                }
+                            }
+                            acc
+                        },
+                    );
                 let mut ratios = Vec::new();
                 for (sid, m) in &overlap {
                     let total = *area.get(sid).unwrap_or(&0);

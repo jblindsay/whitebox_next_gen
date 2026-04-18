@@ -62,9 +62,42 @@ sections rather than metadata assignment.
 
 ## Raster Reprojection Pattern
 
-Use `wbw_run_tool(...)` for reprojection pipelines and then reopen typed objects.
+The core raster API provides six reprojection method patterns (documented here
+so behavior is explicit across language bindings):
 
-This pattern keeps reprojection explicit and testable as a standalone step.
+1. Full-options reprojection (`reproject`)
+2. Nearest convenience (`reproject_nearest`)
+3. Bilinear convenience (`reproject_bilinear`)
+4. Reproject to match another raster grid (`reproject_to_match_grid`)
+5. Reproject to match another raster resolution (`reproject_to_match_resolution`)
+6. Reproject to target EPSG while matching a reference resolution
+   (`reproject_to_match_resolution_in_epsg`)
+
+In WbW-R, practical workflows typically call reprojection tools through
+`wbw_run_tool(...)` and then reopen outputs as typed objects.
+
+### Available resampling methods (wbraster)
+
+Use these method strings in reprojection workflows:
+
+- `nearest`
+- `bilinear`
+- `cubic`
+- `lanczos`
+- `average`
+- `min`
+- `max`
+- `mode`
+- `median`
+- `stddev`
+
+Method guidance:
+
+- Categorical/class rasters: `nearest` (or `mode` where majority behavior is desired).
+- Continuous rasters: `bilinear`, `cubic`, or `lanczos`.
+- Statistical downscaling/generalization: `average`, `min`, `max`, `median`, `stddev`.
+
+### Example: explicit raster reprojection
 
 ```r
 library(whiteboxworkflows)
@@ -72,12 +105,72 @@ library(whiteboxworkflows)
 s <- wbw_session()
 wbw_run_tool(
   'reproject_raster',
-  args = list(input = 'dem.tif', output = 'dem_utm.tif', epsg = 32618, method = 'bilinear'),
+  args = list(
+    input = 'dem.tif',
+    output = 'dem_utm.tif',
+    epsg = 32618,
+    method = 'bilinear'
+  ),
   session = s
 )
 
 dem_utm <- wbw_read_raster('dem_utm.tif')
 print(dem_utm$crs_epsg())
+```
+
+### Example: match-grid categorical reprojection
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_run_tool(
+  'reproject_raster',
+  args = list(
+    input = 'landcover_4326.tif',
+    output = 'landcover_utm_aligned.tif',
+    epsg = 32618,
+    method = 'nearest'
+  ),
+  session = s
+)
+```
+
+### Automatic reprojection in raster-stack tools
+
+Stack-based tools now support automatic alignment controls:
+
+- `auto_reproject` (default `true`)
+- `auto_reproject_method` (optional override)
+
+Behavior for raster stacks:
+
+1. `inputs[0]`/`input_rasters[0]` is the reference raster.
+2. CRS-mismatched stack members are auto-reprojected to the reference grid when
+   `auto_reproject=true`.
+3. If `auto_reproject_method` is not set:
+   - categorical rasters infer `nearest`
+   - continuous rasters infer `bilinear`
+4. Non-overlapping extents are treated as hard validation errors.
+
+This matters most for tools that combine raster stacks (overlay, weighted sum,
+PCA, inverse PCA, raster calculator, segmentation).
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_run_tool(
+  'weighted_sum',
+  args = list(
+    input_rasters = c('slope_utm.tif', 'landcover_4326.tif', 'distance_utm.tif'),
+    weights = c(0.4, 0.35, 0.25),
+    auto_reproject = TRUE,
+    auto_reproject_method = '',
+    output = 'weighted_sum.tif'
+  ),
+  session = s
+)
 ```
 
 ## Vector Reprojection Pattern

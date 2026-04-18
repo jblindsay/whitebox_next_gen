@@ -1,7 +1,7 @@
 // Raster stack validation utilities for multi-raster tooling.
 // Provides CRS consistency checking, spatial overlap validation, and optional auto-reprojection.
 
-use wbraster::{Raster, CrsInfo};
+use wbraster::{CrsInfo, Raster, ResampleMethod};
 
 /// Configuration options for raster stack validation and reprojection.
 #[derive(Debug, Clone)]
@@ -114,8 +114,8 @@ pub fn validate_raster_stack(
             }
         }
         
-        // Check spatial extent overlap
-        if !config.allow_no_overlap {
+        // Check spatial extent overlap only when rasters are in the same CRS.
+        if !config.allow_no_overlap && crs_compatible(first_crs, &raster.crs) {
             let extent = raster.extent();
             if !extents_overlap(&first_extent, &extent) {
                 result.extent_mismatch = true;
@@ -190,6 +190,124 @@ pub fn validate_raster_stack_fast(
     }
     
     result
+}
+
+/// Parse a user-facing resampling method string into a wbraster resampling enum.
+pub fn parse_resample_method(method: &str) -> Option<ResampleMethod> {
+    match method.trim().to_ascii_lowercase().as_str() {
+        "nearest" | "nearest_neighbor" | "nearest-neighbour" | "nearest-neighbor" => {
+            Some(ResampleMethod::Nearest)
+        }
+        "bilinear" => Some(ResampleMethod::Bilinear),
+        "cubic" | "bicubic" => Some(ResampleMethod::Cubic),
+        "lanczos" => Some(ResampleMethod::Lanczos),
+        "average" | "mean" => Some(ResampleMethod::Average),
+        "min" | "minimum" => Some(ResampleMethod::Min),
+        "max" | "maximum" => Some(ResampleMethod::Max),
+        "mode" | "modal" => Some(ResampleMethod::Mode),
+        "median" => Some(ResampleMethod::Median),
+        "stddev" | "standard_deviation" | "standard-deviation" => {
+            Some(ResampleMethod::StdDev)
+        }
+        _ => None,
+    }
+}
+
+/// Align and validate a raster stack against the first raster.
+///
+/// Behavior:
+/// * hard-fails on non-overlapping extents (unless allow_no_overlap is true)
+/// * auto-reprojects CRS-mismatched rasters when auto_reproject is true
+/// * for auto-reprojection, uses configured resampling method if provided,
+///   otherwise nearest for categorical rasters and bilinear for continuous
+pub fn align_and_validate_raster_stack(
+    rasters: &mut [Raster],
+    config: &RasterStackConfig,
+) -> Result<Vec<String>, String> {
+    if rasters.is_empty() {
+        return Err("Raster stack is empty".to_string());
+    }
+
+    let reference = rasters[0].clone();
+    let mut warnings = Vec::<String>::new();
+
+    for (idx, raster) in rasters.iter_mut().enumerate().skip(1) {
+        if !crs_compatible(&reference.crs, &raster.crs) {
+            if !config.auto_reproject {
+                return Err(format!(
+                    "Raster {} CRS mismatch: {} (expected {})",
+                    idx,
+                    format_crs(&raster.crs),
+                    format_crs(&reference.crs)
+                ));
+            }
+
+            if reference.crs.epsg.is_none() {
+                return Err(
+                    "Auto-reprojection requires EPSG on the reference raster (inputs[0])"
+                        .to_string(),
+                );
+            }
+
+            let method_name = config
+                .resampling_method
+                .as_deref()
+                .map(str::trim)
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| infer_resampling_method(raster));
+            let method = parse_resample_method(method_name).ok_or_else(|| {
+                format!(
+                    "Unsupported auto_reproject_method '{}'. Supported: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev",
+                    method_name
+                )
+            })?;
+
+            *raster = raster
+                .reproject_to_match_grid(&reference, method)
+                .map_err(|e| {
+                    format!(
+                        "Failed to auto-reproject raster {} from {} to {}: {}",
+                        idx,
+                        format_crs(&raster.crs),
+                        format_crs(&reference.crs),
+                        e
+                    )
+                })?;
+
+            warnings.push(format!(
+                "Auto-reprojected raster {} to {} using {}",
+                idx,
+                format_crs(&reference.crs),
+                method_name
+            ));
+        }
+
+        if raster.rows != reference.rows || raster.cols != reference.cols || raster.bands != reference.bands {
+            return Err(format!(
+                "Raster {} dimension mismatch: {}x{}x{} (expected {}x{}x{})",
+                idx,
+                raster.rows,
+                raster.cols,
+                raster.bands,
+                reference.rows,
+                reference.cols,
+                reference.bands
+            ));
+        }
+
+        if !config.allow_no_overlap {
+            let extent = raster.extent();
+            let reference_extent = reference.extent();
+            if !extents_overlap(&reference_extent, &extent) {
+                return Err(format!(
+                    "Raster {} has non-overlapping spatial extent",
+                    idx
+                ));
+            }
+        }
+    }
+
+    Ok(warnings)
 }
 
 /// Checks if two CRS objects are compatible (same EPSG or equal definitions).

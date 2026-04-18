@@ -30,6 +30,10 @@ use wbraster::{rgb_to_hsi_norm, hsi_to_rgb_norm, value2i, DataType, Raster, Rast
 use wbvector::Geometry as VectorGeometry;
 
 use crate::memory_store;
+use crate::tools::raster_stack_validator::{
+    align_and_validate_raster_stack, parse_resample_method as parse_stack_resample_method,
+    RasterStackConfig,
+};
 use super::color_support;
 
 pub struct BalanceContrastEnhancementTool;
@@ -8880,6 +8884,16 @@ impl Tool for ImageSegmentationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters (one per band).", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "threshold", description: "Distance threshold for region growing in standardized feature space (default 0.5).", required: false },
                 ToolParamSpec { name: "steps", description: "Number of seed-priority bands (default 10).", required: false },
                 ToolParamSpec { name: "min_area", description: "Optional minimum region area for post-merge cleanup (default 4).", required: false },
@@ -8892,12 +8906,16 @@ impl Tool for ImageSegmentationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("threshold".to_string(), json!(0.5));
         defaults.insert("steps".to_string(), json!(10));
         defaults.insert("min_area".to_string(), json!(4));
 
         let mut example = ToolArgs::new();
         example.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        example.insert("auto_reproject".to_string(), json!(true));
+        example.insert("auto_reproject_method".to_string(), json!(""));
         example.insert("threshold".to_string(), json!(0.45));
         example.insert("steps".to_string(), json!(12));
         example.insert("min_area".to_string(), json!(6));
@@ -8930,6 +8948,14 @@ impl Tool for ImageSegmentationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_stack_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -8940,11 +8966,31 @@ impl Tool for ImageSegmentationTool {
         let coalescer = PercentCoalescer::new(1, 99);
         let min_area = args.get("min_area").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(4).max(1);
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
-        let rasters: Vec<Raster> = input_paths
+        let mut rasters: Vec<Raster> = input_paths
             .iter()
             .map(|p| FlipImageTool::load_raster(p))
             .collect::<Result<_, _>>()?;
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override,
+            allow_no_overlap: false,
+        };
+        let reproj_msgs = align_and_validate_raster_stack(&mut rasters, &stack_config)
+            .map_err(ToolError::Validation)?;
+        for msg in reproj_msgs {
+            ctx.progress.info(&msg);
+        }
         let rows = rasters[0].rows as isize;
         let cols = rasters[0].cols as isize;
         let n = rasters[0].rows * rasters[0].cols;

@@ -47,6 +47,10 @@ use wbtopology::{
 };
 
 use crate::memory_store;
+use crate::tools::raster_stack_validator::{
+    align_and_validate_raster_stack, infer_resampling_method, parse_resample_method,
+    RasterStackConfig,
+};
 
 pub struct AggregateRasterTool;
 pub struct AverageOverlayTool;
@@ -743,6 +747,16 @@ impl GisOverlayCore {
             description: "Input raster stack as an array of paths or a semicolon/comma-delimited string.",
             required: true,
         }];
+        params.push(ToolParamSpec {
+            name: "auto_reproject",
+            description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+            required: false,
+        });
+        params.push(ToolParamSpec {
+            name: "auto_reproject_method",
+            description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+            required: false,
+        });
         if op.needs_comparison_value() {
             params.push(ToolParamSpec {
                 name: "comparison_value",
@@ -779,6 +793,8 @@ impl GisOverlayCore {
             "input_rasters".to_string(),
             json!(["input1.tif", "input2.tif"]),
         );
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         if op.needs_comparison_value() {
             defaults.insert("comparison_value".to_string(), json!(1.0));
         }
@@ -791,6 +807,8 @@ impl GisOverlayCore {
             "input_rasters".to_string(),
             json!(["input1.tif", "input2.tif", "input3.tif"]),
         );
+        example_args.insert("auto_reproject".to_string(), json!(true));
+        example_args.insert("auto_reproject_method".to_string(), json!(""));
         if op.needs_comparison_value() {
             example_args.insert("comparison_value".to_string(), json!(1.0));
         }
@@ -804,6 +822,16 @@ impl GisOverlayCore {
             description: "Input raster stack as an array of paths or a semicolon/comma-delimited string.".to_string(),
             required: true,
         }];
+        params.push(ToolParamDescriptor {
+            name: "auto_reproject".to_string(),
+            description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(),
+            required: false,
+        });
+        params.push(ToolParamDescriptor {
+            name: "auto_reproject_method".to_string(),
+            description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(),
+            required: false,
+        });
         if op.needs_comparison_value() {
             params.push(ToolParamDescriptor {
                 name: "comparison_value".to_string(),
@@ -844,6 +872,14 @@ impl GisOverlayCore {
 
     fn validate(op: GisOverlayOp, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = Self::parse_raster_list_arg(args, "input_rasters")?;
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         if op.needs_comparison_value() {
             let _ = Self::parse_comparison_value(args)?;
         }
@@ -863,7 +899,7 @@ impl GisOverlayCore {
         } else {
             None
         };
-        let comparison_raster = if op.needs_comparison_raster() {
+        let mut comparison_raster = if op.needs_comparison_raster() {
             Some(Self::load_optional_comparison_raster(args)?.ok_or_else(|| {
                 ToolError::Validation("parameter 'comparison' is required".to_string())
             })?)
@@ -871,11 +907,21 @@ impl GisOverlayCore {
             None
         };
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
         ctx.progress.info(op.run_message());
         ctx.progress.info("reading input rasters");
 
-        let rasters = input_paths
+        let mut rasters = input_paths
             .iter()
             .enumerate()
             .map(|(index, path)| Self::load_raster(path, &format!("input_rasters[{index}]")))
@@ -885,13 +931,44 @@ impl GisOverlayCore {
             return Err(ToolError::Validation("at least one input raster is required".to_string()));
         }
 
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override.clone(),
+            allow_no_overlap: false,
+        };
+        let reproj_msgs = align_and_validate_raster_stack(&mut rasters, &stack_config)
+            .map_err(ToolError::Validation)?;
+        for msg in reproj_msgs {
+            ctx.progress.info(&msg);
+        }
+
         Self::ensure_same_grid(&rasters)?;
-        if let Some(comparison) = comparison_raster.as_ref() {
+        if let Some(comparison) = comparison_raster.as_mut() {
             if !Self::rasters_share_grid(&rasters[0], comparison) {
-                return Err(ToolError::Validation(
-                    "comparison raster must have identical rows, columns, bands, cell sizes, and spatial extent"
-                        .to_string(),
-                ));
+                if !auto_reproject {
+                    return Err(ToolError::Validation(
+                        "comparison raster must have identical rows, columns, bands, cell sizes, and spatial extent"
+                            .to_string(),
+                    ));
+                }
+                let method_name = resample_override
+                    .as_deref()
+                    .unwrap_or_else(|| infer_resampling_method(comparison));
+                let method = parse_resample_method(method_name).ok_or_else(|| {
+                    ToolError::Validation(
+                        "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev"
+                            .to_string(),
+                    )
+                })?;
+                *comparison = comparison
+                    .reproject_to_match_grid(&rasters[0], method)
+                    .map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed auto-reprojecting comparison raster to match inputs[0]: {}",
+                            e
+                        ))
+                    })?;
+                ctx.progress.info("Auto-reprojected comparison raster to match input grid");
             }
         }
 
@@ -3310,6 +3387,16 @@ impl Tool for PickFromListTool {
                     required: true,
                 },
                 ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "pos_input",
                     description: "Zero-based raster of stack positions.",
                     required: true,
@@ -3326,6 +3413,8 @@ impl Tool for PickFromListTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input_rasters".to_string(), json!(["input1.tif", "input2.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("pos_input".to_string(), json!("positions.tif"));
 
         let mut example_args = defaults.clone();
@@ -3342,6 +3431,16 @@ impl Tool for PickFromListTool {
                     name: "input_rasters".to_string(),
                     description: "Input raster stack as an array of paths or a semicolon/comma-delimited string.".to_string(),
                     required: true,
+                },
+                ToolParamDescriptor {
+                    name: "auto_reproject".to_string(),
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "auto_reproject_method".to_string(),
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(),
+                    required: false,
                 },
                 ToolParamDescriptor {
                     name: "pos_input".to_string(),
@@ -3367,6 +3466,14 @@ impl Tool for PickFromListTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let _ = GisOverlayCore::parse_raster_list_arg(args, "input_rasters")?;
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         let _ = load_required_raster_arg(args, "pos_input")?;
         let _ = parse_optional_output_path(args, "output")?;
         Ok(())
@@ -3374,13 +3481,23 @@ impl Tool for PickFromListTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_paths = GisOverlayCore::parse_raster_list_arg(args, "input_rasters")?;
-        let position = load_required_raster_arg(args, "pos_input")?;
+        let mut position = load_required_raster_arg(args, "pos_input")?;
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
         ctx.progress.info("running pick from list");
         ctx.progress.info("reading input rasters");
 
-        let rasters = input_paths
+        let mut rasters = input_paths
             .iter()
             .enumerate()
             .map(|(index, path)| GisOverlayCore::load_raster(path, &format!("input_rasters[{index}]")))
@@ -3388,11 +3505,41 @@ impl Tool for PickFromListTool {
         if rasters.is_empty() {
             return Err(ToolError::Validation("at least one input raster is required".to_string()));
         }
+
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override.clone(),
+            allow_no_overlap: false,
+        };
+        let reproj_msgs = align_and_validate_raster_stack(&mut rasters, &stack_config)
+            .map_err(ToolError::Validation)?;
+        for msg in reproj_msgs {
+            ctx.progress.info(&msg);
+        }
+
         GisOverlayCore::ensure_same_grid(&rasters)?;
         if !GisOverlayCore::rasters_share_grid(&rasters[0], &position) {
-            return Err(ToolError::Validation(
-                "position raster must have identical rows, columns, bands, cell sizes, and spatial extent".to_string(),
-            ));
+            if !auto_reproject {
+                return Err(ToolError::Validation(
+                    "position raster must have identical rows, columns, bands, cell sizes, and spatial extent".to_string(),
+                ));
+            }
+            let method_name = resample_override
+                .as_deref()
+                .unwrap_or_else(|| infer_resampling_method(&position));
+            let method = parse_resample_method(method_name).ok_or_else(|| {
+                ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev"
+                        .to_string(),
+                )
+            })?;
+            position = position
+                .reproject_to_match_grid(&rasters[0], method)
+                .map_err(|e| ToolError::Execution(format!(
+                    "failed auto-reprojecting pos_input to match inputs[0]: {}",
+                    e
+                )))?;
+            ctx.progress.info("Auto-reprojected pos_input to match input grid");
         }
 
         let mut output = build_output_like_raster(&rasters[0], DataType::F64);
@@ -3445,6 +3592,16 @@ impl Tool for WeightedSumTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "input_rasters", description: "Input raster stack.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "weights", description: "Numeric weights corresponding to each input raster.", required: true },
                 ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
             ],
@@ -3454,6 +3611,8 @@ impl Tool for WeightedSumTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input_rasters".to_string(), json!(["factor1.tif", "factor2.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("weights".to_string(), json!([1.0, 1.0]));
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("weighted_sum.tif"));
@@ -3465,6 +3624,8 @@ impl Tool for WeightedSumTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "input_rasters".to_string(), description: "Input raster stack.".to_string(), required: true },
+                ToolParamDescriptor { name: "auto_reproject".to_string(), description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(), required: false },
+                ToolParamDescriptor { name: "auto_reproject_method".to_string(), description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(), required: false },
                 ToolParamDescriptor { name: "weights".to_string(), description: "Numeric weights corresponding to each input raster.".to_string(), required: true },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional output raster path.".to_string(), required: false },
             ],
@@ -3477,6 +3638,14 @@ impl Tool for WeightedSumTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         let rasters = GisOverlayCore::parse_raster_list_arg(args, "input_rasters")?;
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         let weights = parse_f64_list_arg(args, "weights")?;
         if rasters.len() != weights.len() {
             return Err(ToolError::Validation("weights length must equal input_rasters length".to_string()));
@@ -3489,16 +3658,36 @@ impl Tool for WeightedSumTool {
         let input_paths = GisOverlayCore::parse_raster_list_arg(args, "input_rasters")?;
         let weights = normalize_weights(&parse_f64_list_arg(args, "weights")?)?;
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         if input_paths.len() != weights.len() {
             return Err(ToolError::Validation("weights length must equal input_rasters length".to_string()));
         }
         ctx.progress.info("running weighted sum");
         ctx.progress.info("reading input rasters");
-        let rasters = input_paths
+        let mut rasters = input_paths
             .iter()
             .enumerate()
             .map(|(index, path)| GisOverlayCore::load_raster(path, &format!("input_rasters[{index}]")))
             .collect::<Result<Vec<_>, _>>()?;
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override,
+            allow_no_overlap: false,
+        };
+        let reproj_msgs = align_and_validate_raster_stack(&mut rasters, &stack_config)
+            .map_err(ToolError::Validation)?;
+        for msg in reproj_msgs {
+            ctx.progress.info(&msg);
+        }
         GisOverlayCore::ensure_same_grid(&rasters)?;
 
         let mut output = build_output_like_raster(&rasters[0], DataType::F64);

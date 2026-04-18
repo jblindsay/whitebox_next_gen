@@ -16,6 +16,9 @@ use wbcore::{
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 
 use crate::memory_store;
+use crate::tools::raster_stack_validator::{
+    align_and_validate_raster_stack, parse_resample_method, RasterStackConfig,
+};
 
 const PCA_SIMD_CHUNK: usize = 2048;
 
@@ -6124,6 +6127,8 @@ impl Tool for RasterCalculatorTool {
                     required: true,
                 },
                 ToolParamSpec { name: "inputs", description: "Ordered list of input raster paths matching quoted names in the expression.", required: true },
+                ToolParamSpec { name: "auto_reproject", description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.", required: false },
+                ToolParamSpec { name: "auto_reproject_method", description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.", required: false },
                 ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
             ],
         }
@@ -6143,6 +6148,8 @@ impl Tool for RasterCalculatorTool {
             params: vec![
                 ToolParamDescriptor { name: "expression".to_string(), description: "Math expression with quoted raster variable names.".to_string(), required: true },
                 ToolParamDescriptor { name: "inputs".to_string(), description: "Ordered input raster paths.".to_string(), required: true },
+                ToolParamDescriptor { name: "auto_reproject".to_string(), description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(), required: false },
+                ToolParamDescriptor { name: "auto_reproject_method".to_string(), description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional output raster path.".to_string(), required: false },
             ],
             defaults: ToolArgs::new(),
@@ -6158,6 +6165,14 @@ impl Tool for RasterCalculatorTool {
         if expression.trim().is_empty() {
             return Err(ToolError::Validation("'expression' must be non-empty".to_string()));
         }
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         let _ = parse_optional_output_path(args, "output")?;
         Ok(())
     }
@@ -6167,6 +6182,16 @@ impl Tool for RasterCalculatorTool {
             .ok_or_else(|| ToolError::Validation("parameter 'expression' is required".to_string()))?.to_string();
         let input_paths = parse_raster_list_arg(args, "inputs")?;
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
         let delimiter = if expression.contains('"') { '"' } else { '\'' };
         let parts: Vec<&str> = expression.split(delimiter).collect();
@@ -6197,9 +6222,16 @@ impl Tool for RasterCalculatorTool {
             stmt = stmt.replace(&quoted, &format!("value{}", i));
         }
 
-        let inputs: Vec<Raster> = input_paths.iter().enumerate()
+        let mut inputs: Vec<Raster> = input_paths.iter().enumerate()
             .map(|(i, p)| load_raster(p, &format!("inputs[{}]", i)))
             .collect::<Result<_, _>>()?;
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override,
+            allow_no_overlap: false,
+        };
+        align_and_validate_raster_stack(&mut inputs, &stack_config)
+            .map_err(ToolError::Validation)?;
         let rows = inputs[0].rows;
         let cols = inputs[0].cols;
         for (i, r) in inputs.iter().enumerate() {
@@ -6308,6 +6340,8 @@ impl Tool for PrincipalComponentAnalysisTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Input raster paths (≥3).", required: true },
+                ToolParamSpec { name: "auto_reproject", description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.", required: false },
+                ToolParamSpec { name: "auto_reproject_method", description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.", required: false },
                 ToolParamSpec { name: "num_components", description: "Number of components to output. Default: all.", required: false },
                 ToolParamSpec { name: "standardized", description: "Use correlation matrix (standardized PCA). Default: false.", required: false },
                 ToolParamSpec { name: "output", description: "Optional base output path; component files named '{stem}_comp1.{ext}' etc.", required: false },
@@ -6330,6 +6364,8 @@ impl Tool for PrincipalComponentAnalysisTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "inputs".to_string(), description: "Input raster paths (≥3).".to_string(), required: true },
+                ToolParamDescriptor { name: "auto_reproject".to_string(), description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(), required: false },
+                ToolParamDescriptor { name: "auto_reproject_method".to_string(), description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(), required: false },
                 ToolParamDescriptor { name: "num_components".to_string(), description: "Number of components. Default: all.".to_string(), required: false },
                 ToolParamDescriptor { name: "standardized".to_string(), description: "Use correlation matrix. Default: false.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional base output path.".to_string(), required: false },
@@ -6346,6 +6382,14 @@ impl Tool for PrincipalComponentAnalysisTool {
         if paths.len() < 3 {
             return Err(ToolError::Validation("'inputs' must contain at least 3 rasters for PCA".to_string()));
         }
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         let _ = parse_optional_output_path(args, "output")?;
         Ok(())
     }
@@ -6354,10 +6398,27 @@ impl Tool for PrincipalComponentAnalysisTool {
         let input_paths = parse_raster_list_arg(args, "inputs")?;
         let standardized = args.get("standardized").and_then(|v| v.as_bool()).unwrap_or(false);
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
-        let inputs: Vec<Raster> = input_paths.iter().enumerate()
+        let mut inputs: Vec<Raster> = input_paths.iter().enumerate()
             .map(|(i, p)| load_raster(p, &format!("inputs[{}]", i)))
             .collect::<Result<_, _>>()?;
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override,
+            allow_no_overlap: false,
+        };
+        align_and_validate_raster_stack(&mut inputs, &stack_config)
+            .map_err(ToolError::Validation)?;
         let num_images = inputs.len();
         if num_images < 3 {
             return Err(ToolError::Validation("at least 3 input rasters required for PCA".to_string()));
@@ -6545,6 +6606,8 @@ impl Tool for InversePcaTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Component raster paths (from PCA output, ordered).", required: true },
+                ToolParamSpec { name: "auto_reproject", description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.", required: false },
+                ToolParamSpec { name: "auto_reproject_method", description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.", required: false },
                 ToolParamSpec { name: "pca_report", description: "JSON report string from the principal_component_analysis tool.", required: true },
                 ToolParamSpec { name: "output", description: "Optional base output path; images named '{stem}_img1.{ext}' etc.", required: false },
             ],
@@ -6564,6 +6627,8 @@ impl Tool for InversePcaTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamDescriptor { name: "inputs".to_string(), description: "Component raster paths.".to_string(), required: true },
+                ToolParamDescriptor { name: "auto_reproject".to_string(), description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.".to_string(), required: false },
+                ToolParamDescriptor { name: "auto_reproject_method".to_string(), description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.".to_string(), required: false },
                 ToolParamDescriptor { name: "pca_report".to_string(), description: "JSON report string from PCA.".to_string(), required: true },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional base output path.".to_string(), required: false },
             ],
@@ -6579,6 +6644,14 @@ impl Tool for InversePcaTool {
         if paths.len() < 2 {
             return Err(ToolError::Validation("'inputs' must contain at least 2 component rasters".to_string()));
         }
+        if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+            let method = method.trim();
+            if !method.is_empty() && parse_resample_method(method).is_none() {
+                return Err(ToolError::Validation(
+                    "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev".to_string(),
+                ));
+            }
+        }
         let _ = args.get("pca_report").and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'pca_report' is required".to_string()))?;
         let _ = parse_optional_output_path(args, "output")?;
@@ -6590,6 +6663,16 @@ impl Tool for InversePcaTool {
         let pca_report_str = args.get("pca_report").and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'pca_report' is required".to_string()))?;
         let output_path = parse_optional_output_path(args, "output")?;
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let resample_override = args
+            .get("auto_reproject_method")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
 
         let report_val: serde_json::Value = serde_json::from_str(pca_report_str)
             .map_err(|e| ToolError::Validation(format!("invalid PCA report JSON: {e}")))?;
@@ -6606,9 +6689,16 @@ impl Tool for InversePcaTool {
             return Err(ToolError::Validation("eigenvector length is 0".to_string()));
         }
 
-        let inputs: Vec<Raster> = input_paths.iter().enumerate()
+        let mut inputs: Vec<Raster> = input_paths.iter().enumerate()
             .map(|(i, p)| load_raster(p, &format!("inputs[{}]", i)))
             .collect::<Result<_, _>>()?;
+        let stack_config = RasterStackConfig {
+            auto_reproject,
+            resampling_method: resample_override,
+            allow_no_overlap: false,
+        };
+        align_and_validate_raster_stack(&mut inputs, &stack_config)
+            .map_err(ToolError::Validation)?;
         let num_comp = inputs.len();
         let rows = inputs[0].rows;
         let cols = inputs[0].cols;

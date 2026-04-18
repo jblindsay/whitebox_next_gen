@@ -22,7 +22,6 @@ try:
         QgsProcessingParameterEnum,
         QgsProcessingParameterFile,
         QgsProcessingParameterFileDestination,
-        QgsProcessingParameterMultipleRasterLayers,
         QgsProcessingParameterNumber,
         QgsProcessingParameterRasterLayer,
         QgsProcessingParameterRasterDestination,
@@ -31,6 +30,16 @@ try:
         QgsProcessingParameterVectorDestination,
         QgsRasterLayer,
     )
+    # QGIS API compatibility: some versions expose a dedicated multiple-raster
+    # parameter class, others use the generic multiple-layers parameter.
+    try:
+        from qgis.core import QgsProcessingParameterMultipleRasterLayers
+    except ImportError:
+        try:
+            from qgis.core import QgsProcessingParameterMultipleLayers
+            QgsProcessingParameterMultipleRasterLayers = QgsProcessingParameterMultipleLayers
+        except ImportError:
+            QgsProcessingParameterMultipleRasterLayers = None
 except ImportError:  # pragma: no cover
     class QSettings:  # type: ignore[override]
         def value(self, *_args, **_kwargs):
@@ -975,12 +984,35 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     optional=not required,
                 )
             elif kind == "raster_layers_in":
-                qgs_param = QgsProcessingParameterMultipleRasterLayers(
-                    name,
-                    description,
-                    defaultValue=None,
-                    optional=not required,
-                )
+                if QgsProcessingParameterMultipleRasterLayers is None:
+                    # Last-resort fallback for API variants without a dedicated
+                    # multi-raster parameter type.
+                    qgs_param = QgsProcessingParameterString(
+                        name,
+                        description,
+                        defaultValue="",
+                        optional=not required,
+                    )
+                elif getattr(
+                    QgsProcessingParameterMultipleRasterLayers,
+                    "__name__",
+                    "",
+                ) == "QgsProcessingParameterMultipleLayers":
+                    layer_type = getattr(QgsProcessing, "TypeRaster", -1)
+                    qgs_param = QgsProcessingParameterMultipleRasterLayers(
+                        name,
+                        description,
+                        layer_type,
+                        defaultValue=None,
+                        optional=not required,
+                    )
+                else:
+                    qgs_param = QgsProcessingParameterMultipleRasterLayers(
+                        name,
+                        description,
+                        defaultValue=None,
+                        optional=not required,
+                    )
             elif kind == "vector_in":
                 qgs_param = QgsProcessingParameterVectorLayer(
                     name,
@@ -1096,6 +1128,34 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         defaultValue=None,
                         optional=not required,
                     )
+                elif kind == "raster_layers_in":
+                    if QgsProcessingParameterMultipleRasterLayers is None:
+                        qgs_param = QgsProcessingParameterString(
+                            name,
+                            description,
+                            defaultValue="",
+                            optional=not required,
+                        )
+                    elif getattr(
+                        QgsProcessingParameterMultipleRasterLayers,
+                        "__name__",
+                        "",
+                    ) == "QgsProcessingParameterMultipleLayers":
+                        layer_type = getattr(QgsProcessing, "TypeRaster", -1)
+                        qgs_param = QgsProcessingParameterMultipleRasterLayers(
+                            name,
+                            description,
+                            layer_type,
+                            defaultValue=None,
+                            optional=not required,
+                        )
+                    else:
+                        qgs_param = QgsProcessingParameterMultipleRasterLayers(
+                            name,
+                            description,
+                            defaultValue=None,
+                            optional=not required,
+                        )
                 elif kind == "vector_in":
                     qgs_param = QgsProcessingParameterVectorLayer(
                         name,

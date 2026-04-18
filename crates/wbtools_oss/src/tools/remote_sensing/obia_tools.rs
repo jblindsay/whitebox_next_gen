@@ -244,6 +244,16 @@ impl Tool for SegmentSlicSuperpixelsTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "region_size", description: "Target superpixel size in pixels (default 20).", required: false },
                 ToolParamSpec { name: "compactness", description: "Compactness control (default 10.0).", required: false },
                 ToolParamSpec { name: "min_area", description: "Minimum area for cleanup merge (default derived from region_size).", required: false },
@@ -256,6 +266,8 @@ impl Tool for SegmentSlicSuperpixelsTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), serde_json::json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), serde_json::json!(true));
+        defaults.insert("auto_reproject_method".to_string(), serde_json::json!(""));
         defaults.insert("region_size".to_string(), serde_json::json!(20));
         defaults.insert("compactness".to_string(), serde_json::json!(10.0));
 
@@ -312,6 +324,19 @@ impl Tool for SegmentSlicSuperpixelsTool {
         // first open-core OBIA segmentation baseline.
         let mut delegated = ToolArgs::new();
         delegated.insert("inputs".to_string(), serde_json::json!(inputs));
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
+        delegated.insert("auto_reproject".to_string(), serde_json::json!(auto_reproject));
+        if let Some(method) = args
+            .get("auto_reproject_method")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            delegated.insert("auto_reproject_method".to_string(), serde_json::json!(method));
+        }
         let threshold = (0.20 + compactness / 50.0).clamp(0.2, 2.0);
         delegated.insert("threshold".to_string(), serde_json::json!(threshold));
         delegated.insert("steps".to_string(), serde_json::json!(10));
@@ -336,6 +361,16 @@ impl Tool for SegmentGraphFelzenszwalbTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "k", description: "Segmentation scale parameter (default 500.0).", required: false },
                 ToolParamSpec { name: "sigma", description: "Optional smoothing hint (default 0.8).", required: false },
                 ToolParamSpec { name: "min_area", description: "Minimum area for post-merge cleanup (default 20).", required: false },
@@ -364,6 +399,8 @@ impl Tool for SegmentGraphFelzenszwalbTool {
             defaults: {
                 let mut d = ToolArgs::new();
                 d.insert("inputs".to_string(), serde_json::json!(["band1.tif", "band2.tif", "band3.tif"]));
+                d.insert("auto_reproject".to_string(), serde_json::json!(true));
+                d.insert("auto_reproject_method".to_string(), serde_json::json!(""));
                 d.insert("k".to_string(), serde_json::json!(500.0));
                 d.insert("sigma".to_string(), serde_json::json!(0.8));
                 d.insert("min_area".to_string(), serde_json::json!(20));
@@ -404,6 +441,19 @@ impl Tool for SegmentGraphFelzenszwalbTool {
 
         let mut delegated = ToolArgs::new();
         delegated.insert("inputs".to_string(), serde_json::json!(inputs));
+        let auto_reproject = args
+            .get("auto_reproject")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(true);
+        delegated.insert("auto_reproject".to_string(), serde_json::json!(auto_reproject));
+        if let Some(method) = args
+            .get("auto_reproject_method")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            delegated.insert("auto_reproject_method".to_string(), serde_json::json!(method));
+        }
 
         // Approximate graph-scale behavior via threshold shaping over existing
         // seeded-region-growing segmentation.

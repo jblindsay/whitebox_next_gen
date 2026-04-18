@@ -3392,6 +3392,16 @@ impl Tool for MosaicTool {
                     required: true,
                 },
                 ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
+                ToolParamSpec {
                     name: "method",
                     description: "Resampling method: 'nn' (default), 'bilinear', or 'cc'.",
                     required: false,
@@ -3811,6 +3821,8 @@ impl Tool for KMeansClusteringTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("classes".to_string(), json!(8));
         defaults.insert("max_iterations".to_string(), json!(10));
         defaults.insert("class_change".to_string(), json!(2.0));
@@ -3865,6 +3877,7 @@ impl Tool for KMeansClusteringTool {
                 "parameter 'inputs' must contain at least two rasters".to_string(),
             ));
         }
+        validate_auto_reproject_args(args)?;
         let classes = args
             .get("classes")
             .and_then(|v| v.as_u64())
@@ -3896,10 +3909,7 @@ impl Tool for KMeansClusteringTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_paths = parse_raster_list_arg(args, "inputs")?;
-        let mut inputs = Vec::with_capacity(input_paths.len());
-        for p in &input_paths {
-            inputs.push(FlipImageTool::load_raster(p)?);
-        }
+        let inputs = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
 
         let classes = args
             .get("classes")
@@ -7629,6 +7639,16 @@ impl Tool for MinDistClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters (one per spectral band), as paths or a delimited string.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Path to a polygon vector file containing training areas.", required: true },
                 ToolParamSpec { name: "class_field", description: "Name of the attribute field in the training data that holds the class identifier.", required: true },
                 ToolParamSpec { name: "dist_threshold", description: "Optional z-score threshold; pixels farther than this from the nearest class mean are left unclassified. Default: no threshold (classify all).", required: false },
@@ -7641,6 +7661,8 @@ impl Tool for MinDistClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
 
@@ -7678,6 +7700,7 @@ impl Tool for MinDistClassificationTool {
         if paths.is_empty() {
             return Err(ToolError::Validation("'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         parse_vector_path_arg(args, "training_data")?;
         args.get("class_field").ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         Ok(())
@@ -7685,7 +7708,6 @@ impl Tool for MinDistClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let band_paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -7698,17 +7720,10 @@ impl Tool for MinDistClassificationTool {
             .unwrap_or(f64::INFINITY);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let bands: Vec<Raster> = band_paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
+        let bands = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let num_bands = bands.len();
         let rows = bands[0].rows as isize;
         let cols_count = bands[0].cols as isize;
-
-        // Verify all bands share dimensions.
-        for b in &bands {
-            if b.rows as isize != rows || b.cols as isize != cols_count {
-                return Err(ToolError::Validation("All input bands must share the same dimensions.".to_string()));
-            }
-        }
 
         let layer = wbvector::read(&training_path).map_err(|e| {
             ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
@@ -7861,6 +7876,16 @@ impl Tool for ParallelepipedClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters (one per spectral band), as paths or a delimited string.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Path to a polygon vector file containing training areas.", required: true },
                 ToolParamSpec { name: "class_field", description: "Name of the attribute field in the training data that holds the class identifier.", required: true },
                 ToolParamSpec { name: "output", description: "Optional output raster path. If omitted, the result is kept in memory.", required: false },
@@ -7872,6 +7897,8 @@ impl Tool for ParallelepipedClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
 
@@ -7908,6 +7935,7 @@ impl Tool for ParallelepipedClassificationTool {
         if paths.is_empty() {
             return Err(ToolError::Validation("'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         parse_vector_path_arg(args, "training_data")?;
         args.get("class_field").ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         Ok(())
@@ -7915,7 +7943,6 @@ impl Tool for ParallelepipedClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let band_paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -7924,16 +7951,10 @@ impl Tool for ParallelepipedClassificationTool {
             .to_string();
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let bands: Vec<Raster> = band_paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
+        let bands = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let num_bands = bands.len();
         let rows = bands[0].rows as isize;
         let cols_count = bands[0].cols as isize;
-
-        for b in &bands {
-            if b.rows as isize != rows || b.cols as isize != cols_count {
-                return Err(ToolError::Validation("All input bands must share the same dimensions.".to_string()));
-            }
-        }
 
         let layer = wbvector::read(&training_path).map_err(|e| {
             ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
@@ -9288,6 +9309,63 @@ fn parse_scaling_mode(args: &ToolArgs) -> ScalingMode {
     }
 }
 
+fn validate_auto_reproject_args(args: &ToolArgs) -> Result<(), ToolError> {
+    if let Some(method) = args.get("auto_reproject_method").and_then(|v| v.as_str()) {
+        let method = method.trim();
+        if !method.is_empty() && parse_stack_resample_method(method).is_none() {
+            return Err(ToolError::Validation(
+                "parameter 'auto_reproject_method' must be one of: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn load_aligned_raster_stack_arg(
+    args: &ToolArgs,
+    key: &str,
+    ctx: Option<&ToolContext>,
+) -> Result<Vec<Raster>, ToolError> {
+    let paths = parse_raster_list_arg(args, key)?;
+    if paths.is_empty() {
+        return Err(ToolError::Validation(format!(
+            "parameter '{}' must contain at least one raster",
+            key
+        )));
+    }
+
+    let auto_reproject = args
+        .get("auto_reproject")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let resample_override = args
+        .get("auto_reproject_method")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    let mut rasters: Vec<Raster> = paths
+        .iter()
+        .map(|p| FlipImageTool::load_raster(p))
+        .collect::<Result<_, _>>()?;
+
+    let stack_config = RasterStackConfig {
+        auto_reproject,
+        resampling_method: resample_override,
+        allow_no_overlap: false,
+    };
+    let reproj_msgs = align_and_validate_raster_stack(&mut rasters, &stack_config)
+        .map_err(ToolError::Validation)?;
+    if let Some(ctx) = ctx {
+        for msg in reproj_msgs {
+            ctx.progress.info(&msg);
+        }
+    }
+    Ok(rasters)
+}
+
 fn parse_scaling_mode_str(raw: &str) -> ScalingMode {
     let s = raw.to_ascii_lowercase();
     if s.contains("norm") {
@@ -9585,6 +9663,16 @@ impl Tool for KnnClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -9599,6 +9687,8 @@ impl Tool for KnnClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -9641,6 +9731,7 @@ impl Tool for KnnClassificationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         Ok(())
@@ -9648,7 +9739,6 @@ impl Tool for KnnClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         let mode = parse_scaling_mode(args);
@@ -9656,12 +9746,7 @@ impl Tool for KnnClassificationTool {
         let clip = args.get("clip").and_then(|v| v.as_bool()).unwrap_or(false);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
         let (_class_names, mut x_train, mut y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
@@ -9792,6 +9877,16 @@ impl Tool for KnnRegressionTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point vector training data path.", required: true },
                 ToolParamSpec { name: "field", description: "Numeric target field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -9806,6 +9901,8 @@ impl Tool for KnnRegressionTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training_points.shp"));
         defaults.insert("field".to_string(), json!("value"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -9848,6 +9945,7 @@ impl Tool for KnnRegressionTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args.get("field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
         Ok(())
@@ -9855,7 +9953,6 @@ impl Tool for KnnRegressionTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args.get("field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
         let mode = parse_scaling_mode(args);
@@ -9863,12 +9960,7 @@ impl Tool for KnnRegressionTool {
         let distance_weighted = args.get("distance_weighted").and_then(|v| v.as_bool()).unwrap_or(false);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
         let (x_train, y_train) = extract_training_regression_samples(&rasters, mode, &scalers, &layer, field)?;
@@ -9973,6 +10065,16 @@ impl Tool for FuzzyKnnClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -9988,6 +10090,8 @@ impl Tool for FuzzyKnnClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -10030,6 +10134,7 @@ impl Tool for FuzzyKnnClassificationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         Ok(())
@@ -10037,7 +10142,6 @@ impl Tool for FuzzyKnnClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         let mode = parse_scaling_mode(args);
@@ -10046,12 +10150,7 @@ impl Tool for FuzzyKnnClassificationTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let prob_output_path = parse_optional_output_path(args, "probability_output")?;
 
-        let rasters: Vec<Raster> = paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
         let (class_names, x_train, y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
@@ -10173,6 +10272,16 @@ impl Tool for RandomForestClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -10188,6 +10297,8 @@ impl Tool for RandomForestClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -10230,6 +10341,7 @@ impl Tool for RandomForestClassificationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("class_field")
@@ -10240,7 +10352,6 @@ impl Tool for RandomForestClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -10252,18 +10363,7 @@ impl Tool for RandomForestClassificationTool {
         let min_samples_split = args.get("min_samples_split").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(2).max(2);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!(
-                    "input raster dimensions mismatch at index {}",
-                    i
-                )));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| {
@@ -10346,6 +10446,16 @@ impl Tool for RandomForestRegressionTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point vector training data path.", required: true },
                 ToolParamSpec { name: "field", description: "Numeric target field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -10361,6 +10471,8 @@ impl Tool for RandomForestRegressionTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training_points.shp"));
         defaults.insert("field".to_string(), json!("value"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -10403,6 +10515,7 @@ impl Tool for RandomForestRegressionTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("field")
@@ -10413,7 +10526,6 @@ impl Tool for RandomForestRegressionTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args
             .get("field")
@@ -10425,18 +10537,7 @@ impl Tool for RandomForestRegressionTool {
         let min_samples_split = args.get("min_samples_split").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(2).max(2);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!(
-                    "input raster dimensions mismatch at index {}",
-                    i
-                )));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| {
@@ -10533,6 +10634,7 @@ impl Tool for RandomForestClassificationFitTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("class_field")
@@ -10542,7 +10644,6 @@ impl Tool for RandomForestClassificationFitTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -10553,15 +10654,7 @@ impl Tool for RandomForestClassificationFitTool {
         let min_samples_leaf = args.get("min_samples_leaf").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(1).max(1);
         let min_samples_split = args.get("min_samples_split").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(2).max(2);
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| {
@@ -10614,6 +10707,7 @@ impl Tool for RandomForestClassificationPredictTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = args
             .get("model_bytes")
             .and_then(|v| v.as_array())
@@ -10623,7 +10717,6 @@ impl Tool for RandomForestClassificationPredictTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let output_path = parse_optional_output_path(args, "output")?;
 
         let model_bytes_arr = args
@@ -10692,15 +10785,7 @@ impl Tool for RandomForestClassificationPredictTool {
         let model = RandomForestClassifier::fit(&x_train_matrix, &y_train, params)
             .map_err(|e| ToolError::Execution(format!("random forest classification model reconstruction failed: {e}")))?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
 
         let rows = rasters[0].rows as isize;
@@ -10778,6 +10863,7 @@ impl Tool for RandomForestRegressionFitTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("field")
@@ -10787,7 +10873,6 @@ impl Tool for RandomForestRegressionFitTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args
             .get("field")
@@ -10798,15 +10883,7 @@ impl Tool for RandomForestRegressionFitTool {
         let min_samples_leaf = args.get("min_samples_leaf").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(1).max(1);
         let min_samples_split = args.get("min_samples_split").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(2).max(2);
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| {
@@ -10856,6 +10933,7 @@ impl Tool for RandomForestRegressionPredictTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = args
             .get("model_bytes")
             .and_then(|v| v.as_array())
@@ -10865,7 +10943,6 @@ impl Tool for RandomForestRegressionPredictTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let output_path = parse_optional_output_path(args, "output")?;
 
         let model_bytes_arr = args
@@ -10934,15 +11011,7 @@ impl Tool for RandomForestRegressionPredictTool {
         let model = RandomForestRegressor::fit(&x_train_matrix, &y_train, params)
             .map_err(|e| ToolError::Execution(format!("random forest regression model reconstruction failed: {e}")))?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
 
         let rows = rasters[0].rows as isize;
@@ -11004,6 +11073,16 @@ impl Tool for LogisticRegressionTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -11017,6 +11096,8 @@ impl Tool for LogisticRegressionTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -11057,6 +11138,7 @@ impl Tool for LogisticRegressionTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("class_field")
@@ -11066,7 +11148,6 @@ impl Tool for LogisticRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -11076,15 +11157,7 @@ impl Tool for LogisticRegressionTool {
         let alpha = args.get("alpha").and_then(|v| v.as_f64()).unwrap_or(0.0).max(0.0);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path)
@@ -11148,6 +11221,16 @@ impl Tool for SvmClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -11164,6 +11247,8 @@ impl Tool for SvmClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -11209,6 +11294,7 @@ impl Tool for SvmClassificationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("class_field")
@@ -11218,7 +11304,6 @@ impl Tool for SvmClassificationTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args
             .get("class_field")
@@ -11230,15 +11315,7 @@ impl Tool for SvmClassificationTool {
         let epoch = args.get("epoch").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(2).max(1);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path)
@@ -11355,6 +11432,16 @@ impl Tool for SvmRegressionTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point vector training data path.", required: true },
                 ToolParamSpec { name: "field", description: "Numeric target field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -11372,6 +11459,8 @@ impl Tool for SvmRegressionTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training_points.shp"));
         defaults.insert("field".to_string(), json!("value"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -11419,6 +11508,7 @@ impl Tool for SvmRegressionTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args
             .get("field")
@@ -11428,7 +11518,6 @@ impl Tool for SvmRegressionTool {
     }
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let field = args
             .get("field")
@@ -11441,15 +11530,7 @@ impl Tool for SvmRegressionTool {
         let tol = args.get("tol").and_then(|v| v.as_f64()).unwrap_or(1e-3).max(1e-12);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths
-            .iter()
-            .map(|p| FlipImageTool::load_raster(p))
-            .collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path)
@@ -11524,6 +11605,16 @@ impl Tool for NndClassificationTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "inputs", description: "Array of single-band input rasters.", required: true },
+                ToolParamSpec {
+                    name: "auto_reproject",
+                    description: "If true (default), automatically reproject stack rasters to match inputs[0] when CRS differs.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "auto_reproject_method",
+                    description: "Optional reprojection resampling method override: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev.",
+                    required: false,
+                },
                 ToolParamSpec { name: "training_data", description: "Point/polygon vector training data path.", required: true },
                 ToolParamSpec { name: "class_field", description: "Class field in training_data attributes.", required: true },
                 ToolParamSpec { name: "scaling", description: "Feature scaling mode: none (default), normalize, standardize.", required: false },
@@ -11539,6 +11630,8 @@ impl Tool for NndClassificationTool {
         let meta = self.metadata();
         let mut defaults = ToolArgs::new();
         defaults.insert("inputs".to_string(), json!(["band1.tif", "band2.tif", "band3.tif"]));
+        defaults.insert("auto_reproject".to_string(), json!(true));
+        defaults.insert("auto_reproject_method".to_string(), json!(""));
         defaults.insert("training_data".to_string(), json!("training.shp"));
         defaults.insert("class_field".to_string(), json!("class"));
         defaults.insert("scaling".to_string(), json!("none"));
@@ -11582,6 +11675,7 @@ impl Tool for NndClassificationTool {
         if inputs.is_empty() {
             return Err(ToolError::Validation("parameter 'inputs' must contain at least one raster".to_string()));
         }
+        validate_auto_reproject_args(args)?;
         let _ = parse_vector_path_arg(args, "training_data")?;
         let _ = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         Ok(())
@@ -11589,7 +11683,6 @@ impl Tool for NndClassificationTool {
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
     let coalescer = PercentCoalescer::new(1, 99);
-        let paths = parse_raster_list_arg(args, "inputs")?;
         let training_path = parse_vector_path_arg(args, "training_data")?;
         let class_field = args.get("class_field").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'class_field' is required".to_string()))?;
         let mode = parse_scaling_mode(args);
@@ -11598,12 +11691,7 @@ impl Tool for NndClassificationTool {
         let k = args.get("k").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(25).max(1);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let rasters: Vec<Raster> = paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
-        for (i, r) in rasters.iter().enumerate() {
-            if r.rows != rasters[0].rows || r.cols != rasters[0].cols {
-                return Err(ToolError::Validation(format!("input raster dimensions mismatch at index {}", i)));
-            }
-        }
+        let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
         let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
         let (class_names, x_train, y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;

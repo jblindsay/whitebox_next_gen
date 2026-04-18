@@ -796,15 +796,15 @@ class WhiteboxWorkflowsPlugin:
         compiled_with_pro = self._get_capability_value(capabilities, "compiled_with_pro_support")
         runtime_include_pro = self._get_capability_value(capabilities, "include_pro")
 
+        if runtime_include_pro is False:
+            return (
+                "Pro catalog unavailable: runtime downgraded to open mode (include_pro=false). "
+                "Open tools remain available; refresh the catalog after any runtime change."
+            )
         if compiled_with_pro is False:
             return (
                 "Pro catalog unavailable: active whitebox_workflows build does not include Pro support. "
                 "Reinstall wbw_python with --pro and refresh catalog."
-            )
-        if runtime_include_pro is False:
-            return (
-                "Pro catalog unavailable: runtime downgraded to open mode (include_pro=false). "
-                "Check Pro build/entitlement configuration and refresh catalog."
             )
         return ""
 

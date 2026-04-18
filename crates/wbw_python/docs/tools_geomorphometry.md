@@ -74,6 +74,7 @@ Terrain analysis and land-surface form tools available on `WbEnvironment`.
 - `wbe.multiscale_roughness_signature`
 - `wbe.multiscale_std_dev_normals`
 - `wbe.multiscale_std_dev_normals_signature`
+- `wbe.multiscale_topographic_position_class`
 - `wbe.multiscale_topographic_position_image`
 - `wbe.num_downslope_neighbours`
 - `wbe.num_upslope_neighbours`
@@ -1122,6 +1123,32 @@ Creates a packed RGB multiscale topographic-position image from local, meso, and
 | `output_path` | `str \| None` | `None` | Output file path |
 | `callback` | `callable \| None` | `None` | Progress/message event handler |
 
+#### `wbe.multiscale_topographic_position_class`
+
+```
+wbe.multiscale_topographic_position_class(input, local_min_scale=5, local_max_scale=80, local_step_size=1, broad_min_scale=500, broad_max_scale=2000, broad_step_size=20, local_threshold=0.5, broad_threshold=0.5, min_patch_size=0, output_path=None, output_confidence_path=None, callback=None) -> Raster
+```
+
+Builds local- and broad-scale DEVmax responses internally from a DEM and combines them into a nine-class categorical landform raster. Broad-scale classes are lowland, intermediate, and upland; local classes are hollow, mid-position, and knoll. Class values are fixed as 0 = Lowland hollow, 1 = Lowland mid-position, 2 = Lowland knoll, 3 = Intermediate hollow, 4 = Intermediate mid-position, 5 = Intermediate knoll, 6 = Upland hollow, 7 = Upland mid-position, 8 = Upland knoll.
+
+If `output_confidence_path` is supplied, the tool also writes a separate confidence raster with values in the range [0, 1]. The returned object is always the categorical class raster; the confidence raster is written only to the requested output path.
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `input` | `Raster` | required | Input DEM raster |
+| `local_min_scale` | `int` | `5` | Minimum half-window radius in cells for the local DEVmax scale range |
+| `local_max_scale` | `int` | `80` | Maximum half-window radius in cells for the local DEVmax scale range |
+| `local_step_size` | `int` | `1` | Scale increment for the local DEVmax range |
+| `broad_min_scale` | `int` | `500` | Minimum half-window radius in cells for the broad DEVmax scale range |
+| `broad_max_scale` | `int` | `2000` | Maximum half-window radius in cells for the broad DEVmax scale range |
+| `broad_step_size` | `int` | `20` | Scale increment for the broad DEVmax range |
+| `local_threshold` | `float` | `0.5` | Ternary threshold for local hollow / mid-position / knoll classification |
+| `broad_threshold` | `float` | `0.5` | Ternary threshold for broad lowland / intermediate / upland classification |
+| `min_patch_size` | `int` | `0` | Optional minimum mapped patch size in cells; 0 disables patch filtering |
+| `output_path` | `str \| None` | `None` | Optional path for the categorical class raster |
+| `output_confidence_path` | `str \| None` | `None` | Optional path for the confidence raster in [0, 1] |
+| `callback` | `callable \| None` | `None` | Progress/message event handler |
+
 #### `wbe.multiscale_elevation_percentile`
 
 ```
@@ -1547,6 +1574,7 @@ wbe.<tool>(input, z_factor=1.0, log_transform=False, output_path=None, callback=
 | `wbe.multiscale_roughness_signature(...)` | `multiscale_roughness_signature` | OSS |
 | `wbe.multiscale_std_dev_normals(...)` | `multiscale_std_dev_normals` | OSS |
 | `wbe.multiscale_std_dev_normals_signature(...)` | `multiscale_std_dev_normals_signature` | OSS |
+| `wbe.multiscale_topographic_position_class(...)` | `multiscale_topographic_position_class` | OSS |
 | `wbe.multiscale_topographic_position_image(...)` | `multiscale_topographic_position_image` | OSS |
 | `wbe.horizon_angle(...)` | `horizon_angle` | OSS |
 | `wbe.sky_view_factor(...)` | `sky_view_factor` | OSS |
@@ -1758,6 +1786,30 @@ Interpretation guide:
 - blue-dominant areas: strongest topographic prominence at local scales
 - green-dominant areas: strongest topographic prominence at meso scales
 - red-dominant areas: strongest topographic prominence at broad scales
+
+```python
+# Classify topographic position directly from the DEM using separate local and
+# broad DEVmax scale ranges, and persist an optional confidence raster.
+mstp = wbe.multiscale_topographic_position_class(
+    dem,
+    local_min_scale=5,
+    local_max_scale=80,
+    local_step_size=1,
+    broad_min_scale=500,
+    broad_max_scale=2000,
+    broad_step_size=20,
+    local_threshold=0.5,
+    broad_threshold=0.5,
+    output_path="mstp_class_map.tif",
+    output_confidence_path="mstp_class_confidence.tif",
+)
+```
+
+Interpretation guide:
+- 0-2: lowland settings, from hollow to knoll
+- 3-5: intermediate settings, from hollow to knoll
+- 6-8: upland settings, from hollow to knoll
+- `mstp_class_confidence.tif`: optional confidence raster in the range [0, 1]
 
 ### `multiscale_elevation_percentile` tuple workflow
 

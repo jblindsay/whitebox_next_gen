@@ -13,6 +13,7 @@ from .descriptions_provider import get_descriptions_provider
 
 try:
     from qgis.PyQt.QtCore import QSettings
+    from qgis.PyQt.QtGui import QColor
     from qgis.core import (
         QgsPalettedRasterRenderer,
         QgsProcessing,
@@ -28,6 +29,8 @@ try:
         QgsProcessingParameterString,
         QgsProcessingParameterVectorLayer,
         QgsProcessingParameterVectorDestination,
+        QgsProcessingLayerPostProcessorInterface,
+        QgsProject,
         QgsRasterLayer,
     )
     # QGIS API compatibility: some versions expose a dedicated multiple-raster
@@ -73,8 +76,58 @@ except ImportError:  # pragma: no cover
     QgsProcessingParameterString = _Dummy
     QgsProcessingParameterVectorLayer = _Dummy
     QgsProcessingParameterVectorDestination = _Dummy
+    QgsProcessingLayerPostProcessorInterface = _Dummy
+    QgsProject = _Dummy
     QgsRasterLayer = _Dummy
     QgsPalettedRasterRenderer = _Dummy
+    QColor = _Dummy
+
+
+_MULTISCALE_TOPOGRAPHIC_POSITION_CLASSES: list[tuple[int, str, str]] = [
+    (0, "Lowland hollow", "#355f8d"),
+    (1, "Lowland mid-position", "#4f81aa"),
+    (2, "Lowland knoll", "#75aadb"),
+    (3, "Intermediate hollow", "#8f6c53"),
+    (4, "Intermediate mid-position", "#b6997b"),
+    (5, "Intermediate knoll", "#d9c2a7"),
+    (6, "Upland hollow", "#4f7f4f"),
+    (7, "Upland mid-position", "#78a96f"),
+    (8, "Upland knoll", "#b9d88f"),
+]
+
+
+class _MstpStylePostProcessor(QgsProcessingLayerPostProcessorInterface):
+    """Applies the fixed MSTP categorical renderer after layer load."""
+
+    _instance = None
+
+    @classmethod
+    def create(cls):
+        cls._instance = cls()
+        return cls._instance
+
+    def postProcessLayer(self, layer, context, feedback):  # noqa: N802 - QGIS API name
+        if layer is None:
+            return
+        provider_getter = getattr(layer, "dataProvider", None)
+        provider = provider_getter() if callable(provider_getter) else None
+        if provider is None:
+            return
+
+        classes = _multiscale_topographic_position_palette_classes()
+        if not classes:
+            return
+
+        try:
+            renderer = QgsPalettedRasterRenderer(provider, 1, classes)
+            set_renderer = getattr(layer, "setRenderer", None)
+            if callable(set_renderer):
+                set_renderer(renderer)
+            trigger_repaint = getattr(layer, "triggerRepaint", None)
+            if callable(trigger_repaint):
+                trigger_repaint()
+        except Exception:
+            return
 
 
 def _normalize_group_id(text: str) -> str:
@@ -715,13 +768,36 @@ def _resolve_render_hint_for_output(
 ) -> str:
     key = str(output_key).strip()
     value = output_value if isinstance(output_value, str) else ""
-    hint = hints.get(key) or hints.get("raster")
+    hint = hints.get(key)
+    if hint is None and key.endswith("_path"):
+        # Common aliasing between runtime keys and plugin-facing output keys.
+        base_key = key[:-5]
+        hint = hints.get(base_key)
+    if hint is None and key in {"path", "output"}:
+        # Treat generic output aliases as interchangeable for render hints.
+        hint = hints.get("output") or hints.get("path")
+    if hint is None:
+        hint = hints.get("raster")
     if hint is None and _is_raster_path(value):
         hint = hints.get("default_raster")
     return str(hint or "").strip().lower()
 
 
-def _apply_categorical_raster_render_hint(path: str, feedback) -> None:
+def _multiscale_topographic_position_palette_classes():
+    class_type = getattr(QgsPalettedRasterRenderer, "Class", None)
+    if class_type is None:
+        return None
+
+    classes = []
+    for value, label, color_hex in _MULTISCALE_TOPOGRAPHIC_POSITION_CLASSES:
+        try:
+            classes.append(class_type(value, QColor(color_hex), label))
+        except Exception:
+            return None
+    return classes
+
+
+def _apply_categorical_raster_render_hint(path: str, feedback, tool_id: str = "", output_key: str = "") -> None:
     # Best effort only: QGIS APIs differ by host version and build.
     if not path or not _is_raster_path(path):
         return
@@ -744,18 +820,22 @@ def _apply_categorical_raster_render_hint(path: str, feedback) -> None:
     if provider is None:
         return
 
-    class_data_fn = getattr(QgsPalettedRasterRenderer, "classDataFromRaster", None)
-    if not callable(class_data_fn):
-        return
-
     classes = None
-    for args in ((provider, 1, 256), (provider, 1), (layer, 1, 256), (layer, 1)):
-        try:
-            classes = class_data_fn(*args)
-            if classes:
-                break
-        except Exception:
-            continue
+    if str(tool_id or "").strip().lower() == "multiscale_topographic_position_class" and str(output_key or "").strip().lower() in {"path", "output", ""}:
+        classes = _multiscale_topographic_position_palette_classes()
+
+    if not classes:
+        class_data_fn = getattr(QgsPalettedRasterRenderer, "classDataFromRaster", None)
+        if not callable(class_data_fn):
+            return
+
+        for args in ((provider, 1, 256), (provider, 1), (layer, 1, 256), (layer, 1)):
+            try:
+                classes = class_data_fn(*args)
+                if classes:
+                    break
+            except Exception:
+                continue
 
     if not classes:
         return
@@ -765,6 +845,41 @@ def _apply_categorical_raster_render_hint(path: str, feedback) -> None:
         set_renderer = getattr(layer, "setRenderer", None)
         if callable(set_renderer):
             set_renderer(renderer)
+        # Also apply the renderer to already-loaded project layers that match
+        # this output path, which is what users actually see in the Layers panel.
+        try:
+            norm_target = os.path.normcase(os.path.normpath(str(path)))
+            project_instance = getattr(QgsProject, "instance", None)
+            project = project_instance() if callable(project_instance) else None
+            map_layers = getattr(project, "mapLayers", None)
+            layers_dict = map_layers() if callable(map_layers) else {}
+            if isinstance(layers_dict, dict):
+                for lyr in layers_dict.values():
+                    try:
+                        source_getter = getattr(lyr, "source", None)
+                        lyr_source = source_getter() if callable(source_getter) else ""
+                        # Strip provider query params (e.g. "|layername=...")
+                        lyr_path = str(lyr_source).split("|", 1)[0]
+                        if not lyr_path:
+                            continue
+                        norm_lyr = os.path.normcase(os.path.normpath(lyr_path))
+                        if norm_lyr != norm_target:
+                            continue
+                        lyr_provider_getter = getattr(lyr, "dataProvider", None)
+                        lyr_provider = lyr_provider_getter() if callable(lyr_provider_getter) else None
+                        if lyr_provider is None:
+                            continue
+                        lyr_renderer = QgsPalettedRasterRenderer(lyr_provider, 1, classes)
+                        lyr_set_renderer = getattr(lyr, "setRenderer", None)
+                        if callable(lyr_set_renderer):
+                            lyr_set_renderer(lyr_renderer)
+                        trigger_repaint = getattr(lyr, "triggerRepaint", None)
+                        if callable(trigger_repaint):
+                            trigger_repaint()
+                    except Exception:
+                        continue
+        except Exception:
+            pass
         save_named_style = getattr(layer, "saveNamedStyle", None)
         if callable(save_named_style):
             qml_path = f"{path}.qml"
@@ -971,7 +1086,8 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             output_description = str(description)
             if kind in ("file_out", "raster_out", "vector_out"):
                 lower_desc = output_description.lower()
-                if "optional" in lower_desc:
+                is_mstp = self.name() == "multiscale_topographic_position_class"
+                if "optional" in lower_desc and not is_mstp:
                     output_description = "Output destination path (required in QGIS plugin)."
                 elif "required in qgis plugin" not in lower_desc:
                     output_description = f"{output_description} (required in QGIS plugin)."
@@ -1494,10 +1610,31 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if not isinstance(value, str) or not value:
                 continue
             hint = _resolve_render_hint_for_output(self._render_hints, key, value)
+            if (
+                not hint
+                and self.name() == "multiscale_topographic_position_class"
+                and key in {"path", "output", "output_path"}
+            ):
+                hint = "categorical_raster"
             if hint:
                 feedback.pushInfo(f"Render hint for {key}: {hint}")
                 if hint in ("categorical", "categorical_raster"):
-                    _apply_categorical_raster_render_hint(value, feedback)
+                    _apply_categorical_raster_render_hint(value, feedback, self.name(), key)
+
+        # QGIS may load the output layer after processAlgorithm returns and ignore
+        # temporary-layer styling. Attach a post-load hook for MSTP class output.
+        if self.name() == "multiscale_topographic_position_class":
+            try:
+                output_path = result.get("output")
+                if isinstance(output_path, str) and output_path.strip() and _is_raster_path(output_path):
+                    details_getter = getattr(context, "layerToLoadOnCompletionDetails", None)
+                    if callable(details_getter):
+                        details = details_getter(output_path)
+                        set_post = getattr(details, "setPostProcessor", None)
+                        if callable(set_post):
+                            set_post(_MstpStylePostProcessor.create())
+            except Exception:
+                pass
 
         return result
 

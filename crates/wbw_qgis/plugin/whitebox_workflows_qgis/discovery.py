@@ -826,6 +826,37 @@ def _ensure_feature_preserving_smoothing(catalog: list[dict]) -> list[dict]:
     return out
 
 
+def _inject_multiscale_topographic_position_class_render_hints(catalog: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    for item in catalog:
+        fixed = dict(item)
+        if str(fixed.get("id", "")).strip() == "multiscale_topographic_position_class":
+            hints = dict(fixed.get("render_hints", {}) or {})
+            hints.setdefault("path", "categorical_raster")
+            hints.setdefault("output", "categorical_raster")
+            hints.setdefault("output_path", "categorical_raster")
+            fixed["render_hints"] = hints
+
+            # Ensure the UI clearly distinguishes the two output paths.
+            params = fixed.get("params", [])
+            if isinstance(params, list):
+                normalized_params = []
+                for p in params:
+                    if not isinstance(p, dict):
+                        normalized_params.append(p)
+                        continue
+                    updated = dict(p)
+                    name = str(updated.get("name", "")).strip().lower()
+                    if name in {"output", "path", "output_path"}:
+                        updated["description"] = "Output class raster destination path (categorical map)."
+                    elif name in {"output_confidence", "output_confidence_path"}:
+                        updated["description"] = "Output confidence raster destination path (values in [0,1])."
+                    normalized_params.append(updated)
+                fixed["params"] = normalized_params
+        out.append(fixed)
+    return out
+
+
 def discover_runtime(include_pro: bool = True, tier: str = "open") -> dict:
     return get_runtime_capabilities(include_pro=include_pro, tier=tier)
 
@@ -833,6 +864,7 @@ def discover_runtime(include_pro: bool = True, tier: str = "open") -> dict:
 def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[dict]:
     catalog = get_tool_catalog(include_pro=include_pro, tier=tier)
     catalog = _ensure_feature_preserving_smoothing(catalog)
+    catalog = _inject_multiscale_topographic_position_class_render_hints(catalog)
     catalog = _normalize_lock_state(catalog)
     catalog = _reclassify_broad_categories(catalog)
     catalog = _inject_projection_wrapper_tools(catalog)

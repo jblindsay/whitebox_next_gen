@@ -291,6 +291,7 @@ def _discover_external_python() -> str | None:
             return str(p)
 
     default_candidates = [
+        Path.home() / "Documents" / "programming" / "Rust" / "whitebox_next_gen" / ".venv-wbw" / "bin" / "python",
         Path.home() / "Documents" / "programming" / "python" / ".venv" / "bin" / "python",
         Path.home() / ".venv" / "bin" / "python",
     ]
@@ -349,15 +350,17 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
             return session
         except Exception as exc:
             if include_pro and _is_pro_unavailable_error(str(exc)):
-                # Prefer an external runtime that may include Pro manifests before
-                # downgrading to OSS-only behavior.
                 try:
-                    return _external_session(prefer_pro=True, allow_downgrade=True)
-                except Exception:
                     downgraded = wbw.RuntimeSession(include_pro=False, tier=tier)
                     raw_caps = downgraded.get_runtime_capabilities_json()
                     _parse_next_gen_capabilities(raw_caps, "current Python runtime")
                     return downgraded
+                except Exception:
+                    # Only fall back to a different external interpreter if the
+                    # current Python runtime cannot even provide a valid OSS-only
+                    # Next Gen session. This avoids silently switching to a stale
+                    # external environment with a different tool catalog.
+                    return _external_session(prefer_pro=True, allow_downgrade=True)
             if _is_legacy_runtime_error(str(exc)):
                 try:
                     return _external_session(prefer_pro=include_pro, allow_downgrade=True)

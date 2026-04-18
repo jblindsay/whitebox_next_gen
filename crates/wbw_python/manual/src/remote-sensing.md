@@ -424,6 +424,120 @@ outputs = wbe.remote_sensing.obia.obia_pipeline_basic(
 
 This baseline stack is designed to be reproducible and script-friendly. For many projects, the one-call `obia_pipeline_basic` run is the fastest path to a validated Phase 1 workflow.
 
+### Advanced OBIA Capabilities (Open Tier)
+
+The OBIA stack now includes advanced capabilities in open tier. These tools are available under `wbe.remote_sensing.obia.*` and are grouped here by workflow purpose.
+
+Segmentation and scale control:
+- `segment_watershed_markers`
+- `segment_multiresolution_hierarchical`
+- `segment_scale_parameter_optimizer`
+- `segments_split_low_cohesion`
+
+Object conversion and interoperability:
+- `segments_to_polygons`
+- `polygons_to_segments`
+
+Advanced feature engineering:
+- `object_features_context_neighbors`
+- `object_features_topology_relations`
+
+Advanced object classification:
+- `classify_objects_svm`
+- `classify_objects_ensemble_pro`
+- `classify_objects_rules_basic`
+- `classify_objects_rules_hierarchical`
+- `object_class_probability_maps`
+- `object_uncertainty_diagnostics_pro`
+
+Hierarchy management and propagation:
+- `build_object_hierarchy_multiscale`
+- `propagate_labels_across_hierarchy`
+
+Post-processing and quality:
+- `objects_enforce_min_mapping_unit`
+- `objects_boundary_refinement_pro`
+- `evaluate_segmentation_quality_pro`
+
+Workflow orchestration and reporting:
+- `obia_batch_orchestrator_pro`
+- `obia_audit_report_pro`
+
+```python
+# Build multi-scale objects and hierarchy links
+hier = wbe.remote_sensing.obia.segment_multiresolution_hierarchical(
+    inputs=[red, green, nir],
+    coarse_k=900.0,
+    fine_k=280.0,
+    output_prefix='site01_hier'
+)
+
+# Add neighborhood + topology context features for difficult classes
+context_csv = wbe.remote_sensing.obia.object_features_context_neighbors(
+    segments=hier['segments_fine'],
+    output='site01_context.csv'
+)
+topology_csv = wbe.remote_sensing.obia.object_features_topology_relations(
+    segments=hier['segments_fine'],
+    output='site01_topology.csv'
+)
+
+# Ensemble and rule-hierarchy options
+ensemble_pred = wbe.remote_sensing.obia.classify_objects_ensemble_pro(
+    features='site01_features_all.csv',
+    training='site01_training_segments.csv',
+    output='site01_pred_ensemble.csv'
+)
+rule_pred = wbe.remote_sensing.obia.classify_objects_rules_hierarchical(
+    features='site01_features_all.csv',
+    rules='site01_rules.csv',
+    output='site01_pred_rules.csv'
+)
+
+# Probability and uncertainty diagnostics
+prob_csv = wbe.remote_sensing.obia.object_class_probability_maps(
+    predictions=ensemble_pred,
+    output='site01_probabilities.csv'
+)
+unc_json = wbe.remote_sensing.obia.object_uncertainty_diagnostics_pro(
+    probabilities=prob_csv,
+    low_conf_threshold=0.7,
+    output='site01_uncertainty.json'
+)
+```
+
+```python
+# Batch orchestration + audit report for multi-scene production runs
+batch = wbe.remote_sensing.obia.obia_batch_orchestrator_pro(
+    jobs=[
+        {
+            'inputs': ['s1_red.tif', 's1_green.tif', 's1_nir.tif'],
+            'training': 's1_training.csv',
+            'output_prefix': 'prod/s1',
+            'segment_method': 'graph',
+        },
+        {
+            'inputs': ['s2_red.tif', 's2_green.tif', 's2_nir.tif'],
+            'training': 's2_training.csv',
+            'output_prefix': 'prod/s2',
+            'segment_method': 'slic',
+        },
+    ],
+    output='prod/obia_batch_report.json'
+)
+
+audit = wbe.remote_sensing.obia.obia_audit_report_pro(
+    artifacts=[
+        'prod/s1_object_predictions.csv',
+        'prod/s2_object_predictions.csv',
+        'prod/obia_batch_report.json',
+    ],
+    output='prod/obia_audit.json'
+)
+```
+
+The `segments_to_polygons` and `polygons_to_segments` conversion tools are also valuable in edit-and-return workflows where analysts refine object boundaries in vector space and then rasterize updated objects back to segment grids.
+
 ---
 
 ## Unsupervised Classification

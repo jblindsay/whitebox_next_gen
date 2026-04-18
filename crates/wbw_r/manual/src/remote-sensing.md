@@ -406,6 +406,126 @@ wbw_run_tool('obia_pipeline_basic', args = list(
 ), session = s)
 ```
 
+## Advanced OBIA Capabilities (Open Tier)
+
+The OBIA surface now includes advanced open-tier tools. You can list them from
+the grouped discovery helper and run each directly with `wbw_run_tool(...)`.
+
+Segmentation and scale control:
+- `segment_watershed_markers`
+- `segment_multiresolution_hierarchical`
+- `segment_scale_parameter_optimizer`
+- `segments_split_low_cohesion`
+
+Object conversion and interoperability:
+- `segments_to_polygons`
+- `polygons_to_segments`
+
+Advanced features:
+- `object_features_context_neighbors`
+- `object_features_topology_relations`
+
+Advanced classification:
+- `classify_objects_svm`
+- `classify_objects_ensemble_pro`
+- `classify_objects_rules_basic`
+- `classify_objects_rules_hierarchical`
+- `object_class_probability_maps`
+- `object_uncertainty_diagnostics_pro`
+
+Hierarchy and propagation:
+- `build_object_hierarchy_multiscale`
+- `propagate_labels_across_hierarchy`
+
+Post-processing and quality:
+- `objects_enforce_min_mapping_unit`
+- `objects_boundary_refinement_pro`
+- `evaluate_segmentation_quality_pro`
+
+Workflow operations:
+- `obia_batch_orchestrator_pro`
+- `obia_audit_report_pro`
+
+```r
+# 1) Build multiscale hierarchy products
+wbw_run_tool('segment_multiresolution_hierarchical', args = list(
+  inputs        = all_bands,
+  coarse_k      = 900.0,
+  fine_k        = 280.0,
+  output_prefix = 'site01_hier'
+), session = s)
+
+# 2) Context and topology features for difficult class boundaries
+wbw_run_tool('object_features_context_neighbors', args = list(
+  segments = 'site01_hier_segments_fine.tif',
+  output   = 'site01_context.csv'
+), session = s)
+
+wbw_run_tool('object_features_topology_relations', args = list(
+  segments = 'site01_hier_segments_fine.tif',
+  output   = 'site01_topology.csv'
+), session = s)
+
+# 3) Ensemble and rule-hierarchical object classification
+wbw_run_tool('classify_objects_ensemble_pro', args = list(
+  features = 'site01_features_all.csv',
+  training = 'site01_training_segments.csv',
+  output   = 'site01_pred_ensemble.csv'
+), session = s)
+
+wbw_run_tool('classify_objects_rules_hierarchical', args = list(
+  features = 'site01_features_all.csv',
+  rules    = 'site01_rules.csv',
+  output   = 'site01_pred_rules.csv'
+), session = s)
+
+# 4) Probability maps and uncertainty diagnostics
+wbw_run_tool('object_class_probability_maps', args = list(
+  predictions = 'site01_pred_ensemble.csv',
+  output      = 'site01_probabilities.csv'
+), session = s)
+
+wbw_run_tool('object_uncertainty_diagnostics_pro', args = list(
+  probabilities      = 'site01_probabilities.csv',
+  low_conf_threshold = 0.7,
+  output             = 'site01_uncertainty.json'
+), session = s)
+```
+
+```r
+# Batch orchestration for multi-scene runs
+wbw_run_tool('obia_batch_orchestrator_pro', args = list(
+  jobs = list(
+    list(
+      inputs = list('s1_red.tif', 's1_green.tif', 's1_nir.tif'),
+      training = 's1_training.csv',
+      output_prefix = 'prod/s1',
+      segment_method = 'graph'
+    ),
+    list(
+      inputs = list('s2_red.tif', 's2_green.tif', 's2_nir.tif'),
+      training = 's2_training.csv',
+      output_prefix = 'prod/s2',
+      segment_method = 'slic'
+    )
+  ),
+  output = 'prod/obia_batch_report.json'
+), session = s)
+
+wbw_run_tool('obia_audit_report_pro', args = list(
+  artifacts = list(
+    'prod/s1_object_predictions.csv',
+    'prod/s2_object_predictions.csv',
+    'prod/obia_batch_report.json'
+  ),
+  output = 'prod/obia_audit.json'
+), session = s)
+```
+
+Use `segments_to_polygons` and `polygons_to_segments` when analysts need to
+edit object boundaries in vector format and then return those objects back into
+raster-segment workflows.
+
 ---
 
 ## Unsupervised Classification

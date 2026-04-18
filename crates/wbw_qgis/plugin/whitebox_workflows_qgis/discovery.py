@@ -616,6 +616,15 @@ def _derive_remote_sensing_category(item: dict) -> str:
         "obia_",
     )
 
+    non_obia_line_morphology_ids = {
+        "thicken_raster_line",
+        "line_thinning",
+        "remove_spurs",
+    }
+
+    if tool_id in non_obia_line_morphology_ids:
+        return "Remote Sensing"
+
     # Keep OBIA as a coherent toolbox group, but avoid broad token matching
     # (e.g., "line segments") that can incorrectly classify non-OBIA tools.
     if (

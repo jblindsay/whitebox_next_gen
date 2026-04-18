@@ -839,6 +839,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Performs Gaussian smoothing on a raster image.
     run_tool("gaussian_filter", list(...))
   }
+  session$glcm_texture <- function(...) {
+    # Computes local GLCM texture metrics as a multiband raster output.
+    run_tool("glcm_texture", list(...))
+  }
   session$generalize_classified_raster <- function(...) {
     # Generalizes small class patches by merging them into neighboring larger classes.
     run_tool("generalize_classified_raster", list(...))

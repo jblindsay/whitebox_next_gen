@@ -140,6 +140,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::EvaluateTrainingSitesTool));
     registry.register(Box::new(tools::GeneralizeWithSimilarityTool));
     registry.register(Box::new(tools::ImageSegmentationTool));
+    registry.register(Box::new(tools::GlcmTextureTool));
     registry.register(Box::new(tools::KnnClassificationTool));
     registry.register(Box::new(tools::KnnRegressionTool));
     registry.register(Box::new(tools::FuzzyKnnClassificationTool));

@@ -7,6 +7,7 @@ mod convolution_extra_filters;
 mod gaussian_filter;
 mod phase3_filters;
 mod non_filter_tools;
+mod texture_glcm_tool;
 mod rank_filters;
 mod window_stats_filters;
 
@@ -99,6 +100,7 @@ pub use non_filter_tools::CannyEdgeDetectionTool;
 pub use non_filter_tools::EvaluateTrainingSitesTool;
 pub use non_filter_tools::GeneralizeWithSimilarityTool;
 pub use non_filter_tools::ImageSegmentationTool;
+pub use texture_glcm_tool::GlcmTextureTool;
 pub use non_filter_tools::KnnClassificationTool;
 pub use non_filter_tools::KnnRegressionTool;
 pub use non_filter_tools::FuzzyKnnClassificationTool;

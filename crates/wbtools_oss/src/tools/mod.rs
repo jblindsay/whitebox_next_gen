@@ -26,6 +26,7 @@ pub use remote_sensing::FrostFilterTool;
 pub use remote_sensing::FrangiFilterTool;
 pub use remote_sensing::GaborFilterBankTool;
 pub use remote_sensing::GaussianFilterTool;
+pub use remote_sensing::GlcmTextureTool;
 pub use remote_sensing::GammaMapFilterTool;
 pub use remote_sensing::GammaCorrectionTool;
 pub use remote_sensing::DiffOfGaussiansFilterTool;

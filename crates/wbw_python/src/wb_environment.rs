@@ -20911,6 +20911,71 @@ impl WbEnvironment {
         Ok(Raster { file_path: out_path, active_band: 1 })
     }
 
+    #[pyo3(signature = (input, window_size=7, distance=1, angles="0,45,90,135", features="contrast,homogeneity,energy,entropy", direction_aggregation="mean", levels=32, symmetric=true, output_path=None, callback=None))]
+    fn glcm_texture(
+        &self,
+        input: &Raster,
+        window_size: usize,
+        distance: usize,
+        angles: &str,
+        features: &str,
+        direction_aggregation: &str,
+        levels: usize,
+        symmetric: bool,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "input".to_string(),
+            serde_json::json!(input.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("window_size".to_string(), serde_json::json!(window_size));
+        args.insert("distance".to_string(), serde_json::json!(distance));
+        args.insert("angles".to_string(), serde_json::json!(angles));
+        args.insert("features".to_string(), serde_json::json!(features));
+        args.insert(
+            "direction_aggregation".to_string(),
+            serde_json::json!(direction_aggregation),
+        );
+        args.insert("levels".to_string(), serde_json::json!(levels));
+        args.insert("symmetric".to_string(), serde_json::json!(symmetric));
+        if let Some(ref out) = resolved_output {
+            args.insert("output".to_string(), serde_json::json!(out));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("glcm_texture", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("glcm_texture", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let out_path = extract_typed_output_path("glcm_texture", &response)?;
+        if self.verbose {
+            println!("Completed glcm_texture tool");
+        }
+        Ok(Raster {
+            file_path: out_path,
+            active_band: 1,
+        })
+    }
+
     #[pyo3(signature = (input_rasters, training_data, class_field_name, scaling_method="none", k=5, use_clipping=false, output_path=None, callback=None))]
     fn knn_classification(
         &self,

@@ -7,6 +7,7 @@ mod stream_network_analysis;
 mod hydrology;
 mod flow_algorithms;
 mod lidar_processing;
+pub mod raster_stack_validator;
 
 pub use remote_sensing::BilateralFilterTool;
 pub use remote_sensing::HighPassBilateralFilterTool;

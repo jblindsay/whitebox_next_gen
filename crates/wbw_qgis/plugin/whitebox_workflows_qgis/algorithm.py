@@ -22,6 +22,7 @@ try:
         QgsProcessingParameterEnum,
         QgsProcessingParameterFile,
         QgsProcessingParameterFileDestination,
+        QgsProcessingParameterMultipleRasterLayers,
         QgsProcessingParameterNumber,
         QgsProcessingParameterRasterLayer,
         QgsProcessingParameterRasterDestination,
@@ -56,6 +57,7 @@ except ImportError:  # pragma: no cover
     QgsProcessingParameterEnum = _Dummy
     QgsProcessingParameterFile = _Dummy
     QgsProcessingParameterFileDestination = _Dummy
+    QgsProcessingParameterMultipleRasterLayers = _Dummy
     QgsProcessingParameterNumber = _Dummy
     QgsProcessingParameterRasterLayer = _Dummy
     QgsProcessingParameterRasterDestination = _Dummy
@@ -319,6 +321,11 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
         "evaluate_object_",
         "obia_",
     )
+    non_obia_line_morphology_ids = {
+        "thicken_raster_line",
+        "line_thinning",
+        "remove_spurs",
+    }
 
     def _has(*names: str) -> bool:
         return any(n in tag_set for n in names)
@@ -338,6 +345,8 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
         return "Hydrology"
 
     if tag_set.intersection(remote_tags):
+        if tool_id in non_obia_line_morphology_ids:
+            return "Remote Sensing"
         if tool_id == "image_segmentation" or tool_id.startswith(obia_id_prefixes) or _has("obia"):
             return "Remote Sensing - OBIA"
         if _has("classification", "knn"):
@@ -374,9 +383,18 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
     return base
 
 
-def _infer_kind(name: str, description: str) -> str:
+def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
     n = name.lower()
     d = description.lower()
+
+    # Detect multi-raster stack parameters (e.g., 'inputs' with list defaults)
+    if n in ("inputs", "input_rasters", "raster_list", "rasters"):
+        # Check if default value appears to be a list/array
+        if isinstance(default_value, list) or (isinstance(default_value, str) and default_value.startswith("[")):
+            return "raster_layers_in"
+        # Also check if description hints at multi-raster
+        if any(tok in d for tok in ("multiple rasters", "raster stack", "raster list", "input rasters")):
+            return "raster_layers_in"
 
     vector_input_name_tokens = (
         "input",
@@ -901,10 +919,10 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 continue
             description = p.get("description", name)
             required = bool(p.get("required", False))
-            kind = _infer_kind(name, description)
             default_value = self._manifest.get("defaults", {}).get(name)
             if default_value is None and "default" in p:
                 default_value = p.get("default")
+            kind = _infer_kind(name, description, default_value)
             enum_options = _extract_enum_options(name, description, default_value)
 
             # If an output destination is ambiguous, bias to the tool family so
@@ -951,6 +969,13 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
             if kind == "raster_in":
                 qgs_param = QgsProcessingParameterRasterLayer(
+                    name,
+                    description,
+                    defaultValue=None,
+                    optional=not required,
+                )
+            elif kind == "raster_layers_in":
+                qgs_param = QgsProcessingParameterMultipleRasterLayers(
                     name,
                     description,
                     defaultValue=None,
@@ -1214,6 +1239,26 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         args[name] = str(value)
                     elif required:
                         raise QgsProcessingException(f"Missing required raster input: {name}")
+                    else:
+                        continue
+            elif kind == "raster_layers_in":
+                # Handle multiple rasters
+                layers = self.parameterAsRasterLayerList(parameters, name, context)
+                if layers:
+                    args[name] = [lyr.source() for lyr in layers if lyr is not None]
+                else:
+                    # Fallback: try to parse as string (semicolon-separated paths)
+                    value = self.parameterAsString(parameters, name, context)
+                    if value:
+                        paths = [p.strip() for p in str(value).split(";") if p.strip()]
+                        if paths:
+                            args[name] = paths
+                        elif required:
+                            raise QgsProcessingException(f"Missing required raster inputs: {name}")
+                        else:
+                            continue
+                    elif required:
+                        raise QgsProcessingException(f"Missing required raster inputs: {name}")
                     else:
                         continue
             elif kind == "vector_in":

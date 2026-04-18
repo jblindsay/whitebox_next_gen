@@ -596,6 +596,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::StandardDeviationOfSlopeTool));
     registry.register(Box::new(tools::MaxDifferenceFromMeanTool));
     registry.register(Box::new(tools::MaxElevationDeviationTool));
+    registry.register(Box::new(tools::MultiscaleTopographicPositionClassTool));
     registry.register(Box::new(tools::TopographicPositionAnimationTool));
     registry.register(Box::new(tools::MultiscaleTopographicPositionImageTool));
     registry.register(Box::new(tools::MultiscaleElevationPercentileTool));

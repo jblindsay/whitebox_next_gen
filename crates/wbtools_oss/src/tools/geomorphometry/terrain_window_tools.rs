@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::fs::File;
 use std::io::BufWriter;
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::path::Path;
 use image::codecs::gif::{GifEncoder, Repeat};
 use image::{Delay, Frame, Rgba, RgbaImage};
@@ -23,6 +23,7 @@ pub struct DeviationFromMeanElevationTool;
 pub struct StandardDeviationOfSlopeTool;
 pub struct MaxDifferenceFromMeanTool;
 pub struct MaxElevationDeviationTool;
+pub struct MultiscaleTopographicPositionClassTool;
 pub struct TopographicPositionAnimationTool;
 pub struct MultiscaleTopographicPositionImageTool;
 pub struct MultiscaleElevationPercentileTool;
@@ -192,6 +193,21 @@ impl TerrainWindowCore {
         }
     }
 
+    fn build_result_with_optional_confidence(
+        output_locator: String,
+        confidence_locator: Option<String>,
+    ) -> ToolRunResult {
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator));
+        if let Some(locator) = confidence_locator {
+            outputs.insert("confidence_path".to_string(), json!(locator));
+        }
+        ToolRunResult {
+            outputs,
+            ..Default::default()
+        }
+    }
+
     fn build_result_with_gif(output_locator: String, gif_locator: String) -> ToolRunResult {
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("path".to_string(), json!(output_locator));
@@ -267,6 +283,218 @@ impl TerrainWindowCore {
             .unwrap_or(1)
             .max(1);
         (min_scale, max_scale, step_size)
+    }
+
+    fn parse_prefixed_scale_settings(args: &ToolArgs, prefix: &str, defaults: (usize, usize, usize)) -> (usize, usize, usize) {
+        let min_key = format!("{}_min_scale", prefix);
+        let max_key = format!("{}_max_scale", prefix);
+        let step_key = format!("{}_step_size", prefix);
+        let step_alias_key = format!("{}_step", prefix);
+
+        let min_scale = args
+            .get(min_key.as_str())
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(defaults.0)
+            .max(1);
+        let max_scale = args
+            .get(max_key.as_str())
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(defaults.1)
+            .max(min_scale);
+        let step_size = args
+            .get(step_key.as_str())
+            .or_else(|| args.get(step_alias_key.as_str()))
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(defaults.2)
+            .max(1);
+        (min_scale, max_scale, step_size)
+    }
+
+    fn collect_scales(min_scale: usize, max_scale: usize, step_size: usize) -> Vec<usize> {
+        let mut scales = Vec::new();
+        let mut scale = min_scale;
+        while scale <= max_scale {
+            scales.push(scale);
+            if let Some(next) = scale.checked_add(step_size) {
+                scale = next;
+            } else {
+                break;
+            }
+        }
+        scales
+    }
+
+    fn classify_topographic_position(value: f64, threshold: f64) -> i16 {
+        if value < -threshold {
+            0
+        } else if value > threshold {
+            2
+        } else {
+            1
+        }
+    }
+
+    fn topographic_position_confidence(value: f64, threshold: f64, class_code: i16) -> f64 {
+        let threshold = threshold.abs().max(1.0e-12);
+        let abs_value = value.abs();
+        let confidence = if class_code == 1 {
+            (threshold - abs_value) / threshold
+        } else {
+            (abs_value - threshold) / threshold
+        };
+        confidence.clamp(0.0, 1.0)
+    }
+
+    fn arg_f64(args: &ToolArgs, key: &str, default: f64) -> f64 {
+        args.get(key)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(default)
+    }
+
+    fn arg_usize(args: &ToolArgs, key: &str, default: usize) -> usize {
+        args.get(key)
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(default)
+    }
+
+    fn compute_max_dev_response(
+        input: &Raster,
+        band: isize,
+        sum: &[f64],
+        sum_sq: &[f64],
+        count: &[i64],
+        scales: &[usize],
+        ctx: &ToolContext,
+        coalescer: &PercentCoalescer,
+        completed_steps: &mut usize,
+        total_steps: usize,
+    ) -> Result<Vec<f64>, ToolError> {
+        let rows = input.rows;
+        let cols = input.cols;
+        let nodata = input.nodata;
+        let mut response = vec![nodata; rows * cols];
+
+        for midpoint in scales {
+            let midpoint = *midpoint;
+            let row_data: Vec<Vec<f64>> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let mut row_out = vec![nodata; cols];
+                    for c in 0..cols {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        let y1 = r.saturating_sub(midpoint);
+                        let x1 = c.saturating_sub(midpoint);
+                        let y2 = (r + midpoint).min(rows - 1);
+                        let x2 = (c + midpoint).min(cols - 1);
+                        let n = Self::rect_count(count, cols, y1, x1, y2, x2);
+                        if n <= 1 {
+                            row_out[c] = 0.0;
+                            continue;
+                        }
+                        let n_f = n as f64;
+                        let local_sum = Self::rect_sum(sum, cols, y1, x1, y2, x2);
+                        let local_sum_sq = Self::rect_sum(sum_sq, cols, y1, x1, y2, x2);
+                        let mean = local_sum / n_f;
+                        let variance = ((local_sum_sq - (local_sum * local_sum) / n_f) / n_f).max(0.0);
+                        let std_dev = variance.sqrt();
+                        row_out[c] = if std_dev > 0.0 { (z - mean) / std_dev } else { 0.0 };
+                    }
+                    row_out
+                })
+                .collect();
+
+            for (r, row) in row_data.iter().enumerate() {
+                for (c, value) in row.iter().enumerate() {
+                    if *value == nodata {
+                        continue;
+                    }
+                    let idx = r * cols + c;
+                    let current = response[idx];
+                    if current == nodata || value * value > current * current {
+                        response[idx] = *value;
+                    }
+                }
+            }
+
+            *completed_steps += 1;
+            coalescer.emit_unit_fraction(ctx.progress, *completed_steps as f64 / total_steps as f64);
+        }
+
+        Ok(response)
+    }
+
+    fn apply_min_patch_filter(class_data: &mut [i16], rows: usize, cols: usize, nodata: i16, min_patch_size: usize) {
+        if min_patch_size <= 1 {
+            return;
+        }
+
+        let mut visited = vec![false; class_data.len()];
+        let neighbours = [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)];
+
+        for start_idx in 0..class_data.len() {
+            if visited[start_idx] || class_data[start_idx] == nodata {
+                continue;
+            }
+
+            let class_value = class_data[start_idx];
+            let mut queue = VecDeque::new();
+            let mut patch_cells = Vec::new();
+            let mut bordering = HashMap::<i16, usize>::new();
+            visited[start_idx] = true;
+            queue.push_back(start_idx);
+
+            while let Some(idx) = queue.pop_front() {
+                patch_cells.push(idx);
+                let row = idx / cols;
+                let col = idx % cols;
+
+                for (dr, dc) in neighbours {
+                    let nr = row as isize + dr;
+                    let nc = col as isize + dc;
+                    if nr < 0 || nc < 0 || nr >= rows as isize || nc >= cols as isize {
+                        continue;
+                    }
+                    let nidx = nr as usize * cols + nc as usize;
+                    let neighbour_class = class_data[nidx];
+                    if neighbour_class == nodata {
+                        continue;
+                    }
+                    if neighbour_class == class_value {
+                        if !visited[nidx] {
+                            visited[nidx] = true;
+                            queue.push_back(nidx);
+                        }
+                    } else {
+                        *bordering.entry(neighbour_class).or_insert(0) += 1;
+                    }
+                }
+            }
+
+            if patch_cells.len() >= min_patch_size || bordering.is_empty() {
+                continue;
+            }
+
+            let replacement = bordering
+                .into_iter()
+                .max_by(|(class_a, count_a), (class_b, count_b)| {
+                    count_a
+                        .cmp(count_b)
+                        .then_with(|| class_b.cmp(class_a))
+                })
+                .map(|(class_value, _)| class_value)
+                .unwrap_or(class_value);
+
+            for idx in patch_cells {
+                class_data[idx] = replacement;
+            }
+        }
     }
 
     fn feature_preserving_smoothing_metadata() -> ToolMetadata {
@@ -3007,6 +3235,93 @@ impl TerrainWindowCore {
         }
     }
 
+    fn multiscale_topographic_position_class_metadata() -> ToolMetadata {
+        ToolMetadata {
+            id: "multiscale_topographic_position_class",
+            display_name: "Multiscale Topographic Position Class",
+            summary: "Classifies each DEM cell into a nine-class broad/local relative topographic position system using two DEVmax scale mosaics.",
+            category: ToolCategory::Terrain,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
+                ToolParamSpec { name: "local_min_scale", description: "Minimum half-window radius in cells for the local scale range (default 5).", required: false },
+                ToolParamSpec { name: "local_max_scale", description: "Maximum half-window radius in cells for the local scale range (default 80).", required: false },
+                ToolParamSpec { name: "local_step_size", description: "Scale increment in cells for the local scale range (default 1). Alias: local_step.", required: false },
+                ToolParamSpec { name: "broad_min_scale", description: "Minimum half-window radius in cells for the broad scale range (default 500).", required: false },
+                ToolParamSpec { name: "broad_max_scale", description: "Maximum half-window radius in cells for the broad scale range (default 2000).", required: false },
+                ToolParamSpec { name: "broad_step_size", description: "Scale increment in cells for the broad scale range (default 20). Alias: broad_step.", required: false },
+                ToolParamSpec { name: "local_threshold", description: "DEV threshold used to classify the local scale mosaic into hollow, mid-position, and knoll states (default 0.5).", required: false },
+                ToolParamSpec { name: "broad_threshold", description: "DEV threshold used to classify the broad scale mosaic into lowland, intermediate, and upland states (default 0.5).", required: false },
+                ToolParamSpec { name: "min_patch_size", description: "Optional minimum patch size in cells for post-classification patch filtering (default 0, disabled).", required: false },
+                ToolParamSpec { name: "output", description: "Optional output path for the nine-class categorical raster.", required: false },
+                ToolParamSpec { name: "output_confidence", description: "Optional output path for a confidence raster in the range [0, 1].", required: false },
+            ],
+        }
+    }
+
+    fn multiscale_topographic_position_class_manifest() -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("dem.tif"));
+        defaults.insert("local_min_scale".to_string(), json!(5));
+        defaults.insert("local_max_scale".to_string(), json!(80));
+        defaults.insert("local_step_size".to_string(), json!(1));
+        defaults.insert("broad_min_scale".to_string(), json!(500));
+        defaults.insert("broad_max_scale".to_string(), json!(2000));
+        defaults.insert("broad_step_size".to_string(), json!(20));
+        defaults.insert("local_threshold".to_string(), json!(0.5));
+        defaults.insert("broad_threshold".to_string(), json!(0.5));
+        defaults.insert("min_patch_size".to_string(), json!(0));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("dem.tif"));
+        example_args.insert("local_min_scale".to_string(), json!(5));
+        example_args.insert("local_max_scale".to_string(), json!(80));
+        example_args.insert("local_step_size".to_string(), json!(1));
+        example_args.insert("broad_min_scale".to_string(), json!(500));
+        example_args.insert("broad_max_scale".to_string(), json!(2000));
+        example_args.insert("broad_step_size".to_string(), json!(20));
+        example_args.insert("local_threshold".to_string(), json!(0.5));
+        example_args.insert("broad_threshold".to_string(), json!(0.5));
+        example_args.insert("output".to_string(), json!("multiscale_topographic_position_class.tif"));
+        example_args.insert("output_confidence".to_string(), json!("multiscale_topographic_position_class_confidence.tif"));
+
+        ToolManifest {
+            id: "multiscale_topographic_position_class".to_string(),
+            display_name: "Multiscale Topographic Position Class".to_string(),
+            summary: "Classifies each DEM cell into a nine-class broad/local relative topographic position system using two DEVmax scale mosaics.".to_string(),
+            category: ToolCategory::Terrain,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
+                ToolParamDescriptor { name: "local_min_scale".to_string(), description: "Minimum half-window radius in cells for the local scale range (default 5).".to_string(), required: false },
+                ToolParamDescriptor { name: "local_max_scale".to_string(), description: "Maximum half-window radius in cells for the local scale range (default 80).".to_string(), required: false },
+                ToolParamDescriptor { name: "local_step_size".to_string(), description: "Scale increment in cells for the local scale range (default 1). Alias: local_step.".to_string(), required: false },
+                ToolParamDescriptor { name: "broad_min_scale".to_string(), description: "Minimum half-window radius in cells for the broad scale range (default 500).".to_string(), required: false },
+                ToolParamDescriptor { name: "broad_max_scale".to_string(), description: "Maximum half-window radius in cells for the broad scale range (default 2000).".to_string(), required: false },
+                ToolParamDescriptor { name: "broad_step_size".to_string(), description: "Scale increment in cells for the broad scale range (default 20). Alias: broad_step.".to_string(), required: false },
+                ToolParamDescriptor { name: "local_threshold".to_string(), description: "DEV threshold used to classify the local scale mosaic into hollow, mid-position, and knoll states (default 0.5).".to_string(), required: false },
+                ToolParamDescriptor { name: "broad_threshold".to_string(), description: "DEV threshold used to classify the broad scale mosaic into lowland, intermediate, and upland states (default 0.5).".to_string(), required: false },
+                ToolParamDescriptor { name: "min_patch_size".to_string(), description: "Optional minimum patch size in cells for post-classification patch filtering (default 0, disabled).".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output path for the nine-class categorical raster.".to_string(), required: false },
+                ToolParamDescriptor { name: "output_confidence".to_string(), description: "Optional output path for a confidence raster in the range [0, 1].".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "basic_multiscale_topographic_position_class".to_string(),
+                description: "Create a nine-class multiscale topographic position map and optional confidence raster.".to_string(),
+                args: example_args,
+            }],
+            tags: vec![
+                "geomorphometry".to_string(),
+                "terrain".to_string(),
+                "multiscale".to_string(),
+                "topographic-position".to_string(),
+                "landform-classification".to_string(),
+            ],
+            stability: ToolStability::Experimental,
+        }
+    }
+
     fn max_elevation_deviation_manifest() -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
@@ -4741,6 +5056,206 @@ impl TerrainWindowCore {
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
         coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
+    }
+
+    fn run_multiscale_topographic_position_class(
+        args: &ToolArgs,
+        ctx: &ToolContext,
+    ) -> Result<ToolRunResult, ToolError> {
+        let coalescer = PercentCoalescer::new(1, 99);
+        let input_path = Self::parse_input(args)?;
+        let output_path = parse_optional_output_path(args, "output")?;
+        let confidence_path = parse_optional_output_path(args, "output_confidence")?;
+        let (local_min_scale, local_max_scale, local_step_size) =
+            Self::parse_prefixed_scale_settings(args, "local", (5, 80, 1));
+        let (broad_min_scale, broad_max_scale, broad_step_size) =
+            Self::parse_prefixed_scale_settings(args, "broad", (500, 2000, 20));
+        let local_threshold = Self::arg_f64(args, "local_threshold", 0.5).abs();
+        let broad_threshold = Self::arg_f64(args, "broad_threshold", 0.5).abs();
+        let min_patch_size = Self::arg_usize(args, "min_patch_size", 0);
+
+        let input = Self::load_raster(&input_path)?;
+        if input.bands != 1 {
+            return Err(ToolError::Validation(
+                "multiscale_topographic_position_class requires a single-band DEM".to_string(),
+            ));
+        }
+
+        let local_scales = Self::collect_scales(local_min_scale, local_max_scale, local_step_size);
+        let broad_scales = Self::collect_scales(broad_min_scale, broad_max_scale, broad_step_size);
+        let total_steps = local_scales.len() + broad_scales.len() + if min_patch_size > 1 { 2 } else { 1 };
+        let mut completed_steps = 0usize;
+
+        ctx.progress.info("running multiscale_topographic_position_class");
+        let (sum, sum_sq, count) = Self::build_integrals(&input, 0);
+        let local_dev = Self::compute_max_dev_response(
+            &input,
+            0,
+            &sum,
+            &sum_sq,
+            &count,
+            &local_scales,
+            ctx,
+            &coalescer,
+            &mut completed_steps,
+            total_steps,
+        )?;
+        let broad_dev = Self::compute_max_dev_response(
+            &input,
+            0,
+            &sum,
+            &sum_sq,
+            &count,
+            &broad_scales,
+            ctx,
+            &coalescer,
+            &mut completed_steps,
+            total_steps,
+        )?;
+
+        let rows = input.rows;
+        let cols = input.cols;
+        let class_nodata = -32768i16;
+        let want_confidence = confidence_path.is_some();
+        let classified_rows: Vec<(Vec<i16>, Option<Vec<f64>>)> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut class_row = vec![class_nodata; cols];
+                let mut confidence_row = if want_confidence {
+                    Some(vec![input.nodata; cols])
+                } else {
+                    None
+                };
+
+                for col in 0..cols {
+                    let z = input.get(0, row as isize, col as isize);
+                    if input.is_nodata(z) {
+                        continue;
+                    }
+                    let idx = row * cols + col;
+                    let local_code = Self::classify_topographic_position(local_dev[idx], local_threshold);
+                    let broad_code = Self::classify_topographic_position(broad_dev[idx], broad_threshold);
+                    class_row[col] = local_code + broad_code * 3;
+
+                    if let Some(conf_row) = confidence_row.as_mut() {
+                        let local_conf = Self::topographic_position_confidence(local_dev[idx], local_threshold, local_code);
+                        let broad_conf = Self::topographic_position_confidence(broad_dev[idx], broad_threshold, broad_code);
+                        conf_row[col] = local_conf.min(broad_conf);
+                    }
+                }
+
+                (class_row, confidence_row)
+            })
+            .collect();
+
+        let mut class_data = vec![class_nodata; rows * cols];
+        let mut confidence_data = if want_confidence {
+            Some(vec![input.nodata; rows * cols])
+        } else {
+            None
+        };
+
+        for (row, (class_row, confidence_row)) in classified_rows.into_iter().enumerate() {
+            let offset = row * cols;
+            class_data[offset..offset + cols].copy_from_slice(&class_row);
+            if let (Some(dst), Some(src)) = (confidence_data.as_mut(), confidence_row) {
+                dst[offset..offset + cols].copy_from_slice(&src);
+            }
+        }
+
+        completed_steps += 1;
+        coalescer.emit_unit_fraction(ctx.progress, completed_steps as f64 / total_steps as f64);
+
+        if min_patch_size > 1 {
+            Self::apply_min_patch_filter(&mut class_data, rows, cols, class_nodata, min_patch_size);
+            completed_steps += 1;
+            coalescer.emit_unit_fraction(ctx.progress, completed_steps as f64 / total_steps as f64);
+        }
+
+        let label_metadata = [
+            ("class_0_label", "Lowland hollow"),
+            ("class_1_label", "Lowland mid-position"),
+            ("class_2_label", "Lowland knoll"),
+            ("class_3_label", "Intermediate hollow"),
+            ("class_4_label", "Intermediate mid-position"),
+            ("class_5_label", "Intermediate knoll"),
+            ("class_6_label", "Upland hollow"),
+            ("class_7_label", "Upland mid-position"),
+            ("class_8_label", "Upland knoll"),
+            ("class_0_color", "#4E79A7"),
+            ("class_1_color", "#7EA6C9"),
+            ("class_2_color", "#B8D0E6"),
+            ("class_3_color", "#9C7A4E"),
+            ("class_4_color", "#C8B08A"),
+            ("class_5_color", "#E7D9BF"),
+            ("class_6_color", "#3E7F4F"),
+            ("class_7_color", "#72A66F"),
+            ("class_8_color", "#B7D6A8"),
+        ];
+        let mut metadata = input.metadata.clone();
+        metadata.push(("color_interpretation".to_string(), "categorical".to_string()));
+        metadata.push(("classification_scheme".to_string(), "multiscale_topographic_position_class".to_string()));
+        for (key, value) in label_metadata {
+            metadata.push((key.to_string(), value.to_string()));
+        }
+
+        let mut output = Raster::new(RasterConfig {
+            rows,
+            cols,
+            bands: 1,
+            x_min: input.x_min,
+            y_min: input.y_min,
+            cell_size: input.cell_size_x,
+            cell_size_y: Some(input.cell_size_y),
+            nodata: class_nodata as f64,
+            data_type: DataType::I16,
+            crs: input.crs.clone(),
+            metadata,
+        });
+
+        for row in 0..rows {
+            let offset = row * cols;
+            let row_vals: Vec<f64> = class_data[offset..offset + cols]
+                .iter()
+                .map(|v| *v as f64)
+                .collect();
+            output
+                .set_row_slice(0, row as isize, &row_vals)
+                .map_err(|e| ToolError::Execution(format!("failed writing class row {}: {}", row, e)))?;
+        }
+
+        let output_locator = Self::write_or_store_output(output, output_path)?;
+        let confidence_locator = if let (Some(conf_path), Some(confidence_values)) = (confidence_path, confidence_data) {
+            let mut conf_metadata = input.metadata.clone();
+            conf_metadata.push(("color_interpretation".to_string(), "continuous".to_string()));
+            conf_metadata.push(("confidence_metric".to_string(), "minimum ternary threshold margin".to_string()));
+            let mut conf_raster = Raster::new(RasterConfig {
+                rows,
+                cols,
+                bands: 1,
+                x_min: input.x_min,
+                y_min: input.y_min,
+                cell_size: input.cell_size_x,
+                cell_size_y: Some(input.cell_size_y),
+                nodata: input.nodata,
+                data_type: DataType::F32,
+                crs: input.crs.clone(),
+                metadata: conf_metadata,
+            });
+
+            for row in 0..rows {
+                let offset = row * cols;
+                conf_raster
+                    .set_row_slice(0, row as isize, &confidence_values[offset..offset + cols])
+                    .map_err(|e| ToolError::Execution(format!("failed writing confidence row {}: {}", row, e)))?;
+            }
+            Some(Self::write_or_store_output(conf_raster, Some(conf_path))?)
+        } else {
+            None
+        };
+
+        coalescer.finish(ctx.progress);
+        Ok(Self::build_result_with_optional_confidence(output_locator, confidence_locator))
     }
 
     fn validate_topographic_position_animation(args: &ToolArgs) -> Result<(), ToolError> {
@@ -7580,6 +8095,26 @@ impl Tool for MaxElevationDeviationTool {
     }
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         TerrainWindowCore::run_max_elevation_deviation(args, ctx)
+    }
+}
+
+impl Tool for MultiscaleTopographicPositionClassTool {
+    fn metadata(&self) -> ToolMetadata { TerrainWindowCore::multiscale_topographic_position_class_metadata() }
+    fn manifest(&self) -> ToolManifest { TerrainWindowCore::multiscale_topographic_position_class_manifest() }
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = TerrainWindowCore::parse_input(args)?;
+        let _ = parse_optional_output_path(args, "output")?;
+        let _ = parse_optional_output_path(args, "output_confidence")?;
+        if TerrainWindowCore::arg_f64(args, "local_threshold", 0.5) < 0.0 {
+            return Err(ToolError::Validation("local_threshold must be non-negative".to_string()));
+        }
+        if TerrainWindowCore::arg_f64(args, "broad_threshold", 0.5) < 0.0 {
+            return Err(ToolError::Validation("broad_threshold must be non-negative".to_string()));
+        }
+        Ok(())
+    }
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        TerrainWindowCore::run_multiscale_topographic_position_class(args, ctx)
     }
 }
 

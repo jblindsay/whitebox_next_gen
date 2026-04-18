@@ -1431,6 +1431,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Calculates maximum standardized elevation deviation (DEVmax) over a range of neighbourhood scales.
     run_tool("max_elevation_deviation", list(...))
   }
+  session$multiscale_topographic_position_class <- function(...) {
+    # Classifies cells into 9 topographic position classes based on local and broad-scale elevation deviation.
+    run_tool("multiscale_topographic_position_class", list(...))
+  }
   session$max_overlay <- function(...) {
     # Computes the per-cell maximum across a raster stack, propagating NoData if any input cell is NoData.
     run_tool("max_overlay", list(...))
@@ -4732,6 +4736,12 @@ max_elevation_deviation <- function(...) {
   # Calculates maximum standardized elevation deviation (DEVmax) over a range of neighbourhood scales.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_elevation_deviation(...)
+}
+
+multiscale_topographic_position_class <- function(...) {
+  # Classifies cells into 9 topographic position classes based on local and broad-scale elevation deviation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_topographic_position_class(...)
 }
 
 max_overlay <- function(...) {

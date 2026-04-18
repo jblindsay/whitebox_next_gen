@@ -60,6 +60,7 @@ pub use terrain_analysis_tools::SphericalStdDevOfNormalsTool;
 pub use terrain_analysis_tools::AverageNormalVectorAngularDeviationTool;
 pub use terrain_analysis_tools::HypsometricAnalysisTool;
 pub use terrain_analysis_tools::ProfileTool;
+pub use terrain_window_tools::MultiscaleTopographicPositionClassTool;
 pub use terrain_analysis_tools::SlopeVsAspectPlotTool;
 pub use terrain_analysis_tools::SlopeVsElevPlotTool;
 pub use terrain_analysis_tools::ElevAbovePitDistTool;

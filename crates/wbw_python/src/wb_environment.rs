@@ -19404,6 +19404,87 @@ impl WbEnvironment {
         ))
     }
 
+    #[pyo3(signature = (input, local_min_scale=5, local_max_scale=80, local_step_size=1, broad_min_scale=500, broad_max_scale=2000, broad_step_size=20, local_threshold=0.5, broad_threshold=0.5, min_patch_size=0, output_path=None, output_confidence_path=None, callback=None))]
+    fn multiscale_topographic_position_class(
+        &self,
+        input: &Raster,
+        local_min_scale: usize,
+        local_max_scale: usize,
+        local_step_size: usize,
+        broad_min_scale: usize,
+        broad_max_scale: usize,
+        broad_step_size: usize,
+        local_threshold: f64,
+        broad_threshold: f64,
+        min_patch_size: usize,
+        output_path: Option<&str>,
+        output_confidence_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<Raster> {
+        let resolved_output = self.resolve_output_path_for_wd(output_path);
+        let resolved_confidence = self.resolve_output_path_for_wd(output_confidence_path);
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "input".to_string(),
+            json!(input.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("local_min_scale".to_string(), json!(local_min_scale));
+        args.insert("local_max_scale".to_string(), json!(local_max_scale));
+        args.insert("local_step_size".to_string(), json!(local_step_size));
+        args.insert("broad_min_scale".to_string(), json!(broad_min_scale));
+        args.insert("broad_max_scale".to_string(), json!(broad_max_scale));
+        args.insert("broad_step_size".to_string(), json!(broad_step_size));
+        args.insert("local_threshold".to_string(), json!(local_threshold));
+        args.insert("broad_threshold".to_string(), json!(broad_threshold));
+        args.insert("min_patch_size".to_string(), json!(min_patch_size));
+        if let Some(ref out) = resolved_output {
+            args.insert("output".to_string(), json!(out));
+        }
+        if let Some(ref out_conf) = resolved_confidence {
+            args.insert("output_confidence".to_string(), json!(out_conf));
+        }
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid JSON arguments: {e}"
+            ))
+        })?;
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("multiscale_topographic_position_class", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("multiscale_topographic_position_class", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let outputs = response.get("outputs").unwrap_or(&response);
+        let class_path = outputs
+            .get("path")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "tool 'multiscale_topographic_position_class' did not return output 'path'",
+                )
+            })?;
+
+        if self.verbose {
+            println!("Completed multiscale_topographic_position_class tool");
+        }
+
+        Ok(Raster {
+            file_path: PathBuf::from(class_path),
+            active_band: input.active_band,
+        })
+    }
+
     #[pyo3(signature = (input, min_scale=4, max_scale=100, step_size=1, sig_digits=2, output_path=None, output_scale_path=None, callback=None))]
     fn multiscale_elevation_percentile(
         &self,

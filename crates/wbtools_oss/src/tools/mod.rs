@@ -148,6 +148,7 @@ pub use geomorphometry::TangentialCurvatureTool;
 pub use geomorphometry::TotalCurvatureTool;
 pub use geomorphometry::MeanCurvatureTool;
 pub use geomorphometry::GaussianCurvatureTool;
+pub use geomorphometry::MultiscaleTopographicPositionClassTool;
 pub use geomorphometry::MinimalCurvatureTool;
 pub use geomorphometry::MaximalCurvatureTool;
 pub use geomorphometry::ShapeIndexTool;

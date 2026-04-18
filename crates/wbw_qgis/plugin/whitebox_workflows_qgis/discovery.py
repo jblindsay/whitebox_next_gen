@@ -472,6 +472,11 @@ def _looks_like_remote_sensing_tool(item: dict) -> bool:
     remote_tokens = {
         "remote_sensing",
         "remote sensing",
+        "obia",
+        "object_based",
+        "object-based",
+        "object_features",
+        "classify_objects",
         "image",
         "imagery",
         "spectral",

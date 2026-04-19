@@ -938,14 +938,19 @@ impl GeoJp2 {
         // Files with explicit precinct sizes (COD Scod bit 0 = 1) use the full
         // standard-conformant multi-precinct, multi-code-block decoder.
         let has_explicit_precincts = self.cod.scod & 0x01 != 0;
+        eprintln!("[decode_component] component={} has_explicit_precincts={} num_layers={} scod=0x{:02X}",
+                  component, has_explicit_precincts, self.cod.num_layers, self.cod.scod);
         if has_explicit_precincts {
+            eprintln!("[decode_component] -> taking decode_component_proper path");
             return self.decode_component_proper(component);
         }
         // Multi-layer files need the proper per-code-block packet decoder.
         if self.cod.num_layers > 1 {
+            eprintln!("[decode_component] -> taking decode_component_v2 path (multi-layer)");
             return self.decode_component_v2(component);
         }
         // Diagnostic: print COD info for single-layer files to aid debugging
+        eprintln!("[decode_component] -> taking decode_component_single_layer path (single-layer, implicit precincts)");
         if std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok() {
             let cb_w = 1usize << (self.cod.xcb as usize + 2);
             let cb_h = 1usize << (self.cod.ycb as usize + 2);
@@ -1330,11 +1335,24 @@ impl GeoJp2 {
                             }
                         }
 
+                        // Diagnostic: check bit position before alignment
+                        let bit_pos_before_align = hdr.bit_pos;
+                        let byte_pos_before_align = bit_pos_before_align / 8;
+                        let bit_offset_before_align = bit_pos_before_align % 8;
+                        
                         // Byte-align and skip optional EPH.
                         hdr.align();
                         byte_pos = hdr.byte_pos();
                         if body.get(byte_pos) == Some(&0xFF) && body.get(byte_pos + 1) == Some(&0x92) {
                             byte_pos += 2;
+                        }
+
+                        // Diagnostic: show alignment impact (unconditional for first packet)
+                        if _layer == 0 && res == 0 && px == 0 && py == 0 && tile_tx == 0 && tile_ty == 0 {
+                            eprintln!("[packet_header_align] BEFORE: bit_pos={} byte_pos={} bit_offset={}", 
+                                      bit_pos_before_align, byte_pos_before_align, bit_offset_before_align);
+                            eprintln!("[packet_header_align] AFTER: byte_pos={} (segs.len={})",
+                                      byte_pos, segs.len());
                         }
 
                         // Collect coded bytes for each segment.

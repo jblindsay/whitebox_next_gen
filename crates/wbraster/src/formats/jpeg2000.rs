@@ -65,6 +65,7 @@ pub struct Jpeg2000WriteOptions {
 
 /// Read JPEG2000 / GeoJP2 from `path`.
 pub fn read(path: &str) -> Result<Raster> {
+    eprintln!("[jpeg2000::read] path={}", path);
     let jp2f = jp2::GeoJp2::open(path)
         .map_err(|e| RasterError::Other(format!("JPEG2000 read error: {e}")))?;
 
@@ -74,8 +75,12 @@ pub fn read(path: &str) -> Result<Raster> {
     // Keep external decode bridge feature-gated so core can be built without it.
     #[cfg(feature = "jpeg2000-vendored-bridge")]
     let (bands, data_type, data) = match decode_samples_with_dj2k(path, rows, cols) {
-        Ok(decoded) => decoded,
+        Ok(decoded) => {
+            eprintln!("[jpeg2000::read] Successfully decoded with vendored bridge");
+            decoded
+        },
         Err(ext_err) => {
+            eprintln!("[jpeg2000::read] Vendored bridge failed: {}, falling back to native", ext_err);
             // Avoid silently returning potentially corrupted multiband output
             // from the legacy native path if vendored decode fails.
             if jp2f.component_count() > 1 {
@@ -83,12 +88,16 @@ pub fn read(path: &str) -> Result<Raster> {
                     "JPEG2000 vendored decode failed for multiband image: {ext_err}"
                 )));
             }
+            eprintln!("[jpeg2000::read] Using native decoder");
             decode_samples_with_internal_reader(&jp2f, rows, cols)?
         }
     };
 
     #[cfg(not(feature = "jpeg2000-vendored-bridge"))]
-    let (bands, data_type, data) = decode_samples_with_internal_reader(&jp2f, rows, cols)?;
+    let (bands, data_type, data) = {
+        eprintln!("[jpeg2000::read] Using native decoder (vendor bridge disabled)");
+        decode_samples_with_internal_reader(&jp2f, rows, cols)?
+    };
 
     let mut x_min = 0.0;
     let mut y_min = 0.0;

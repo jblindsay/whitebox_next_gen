@@ -1099,16 +1099,11 @@ impl GeoJp2 {
                 let exp = if sb.qcd_idx < self.qcd.step_sizes.len() {
                     (self.qcd.step_sizes[sb.qcd_idx] >> 11) as usize
                 } else { self.bits as usize + nl };
-                let expected_exp = if sb.qcd_idx == 0 {
-                    self.bits as usize + nl
-                } else {
-                    (self.bits as usize + nl).saturating_sub(1)
-                };
                 let raw_bp = guard_bits.saturating_add(exp).saturating_sub(1);
                 let num_bp = raw_bp.saturating_sub(cb[si].missing_bitplanes).max(1);
                 if debug_enabled && si == 0 {
-                    eprintln!("[lossless] sb[0]: exp={} expected_exp={} raw_bp={} missing_bp={} num_bp={}", 
-                        exp, expected_exp, raw_bp, cb[si].missing_bitplanes, num_bp);
+                    eprintln!("[lossless] sb[0]: exp={} raw_bp={} missing_bp={} num_bp={}", 
+                        exp, raw_bp, cb[si].missing_bitplanes, num_bp);
                 }
                 let dec = decode_block(&cb[si].data, sb.sb_w, sb.sb_h, num_bp);
                 for r in 0..sb.sb_h {

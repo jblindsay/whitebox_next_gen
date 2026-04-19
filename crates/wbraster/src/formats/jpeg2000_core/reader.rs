@@ -1090,13 +1090,26 @@ impl GeoJp2 {
         if lossless {
             let mut coeff = vec![0i32; w * h];
             let guard_bits = ((self.qcd.sqcd >> 5) & 0x07) as usize;
+            let debug_enabled = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
+            if debug_enabled {
+                eprintln!("[lossless] guard_bits={} bits={} nl={}", guard_bits, self.bits, nl);
+            }
             for (si, sb) in subbands.iter().enumerate() {
                 if sb.sb_w == 0 || sb.sb_h == 0 || cb[si].data.is_empty() { continue; }
                 let exp = if sb.qcd_idx < self.qcd.step_sizes.len() {
                     (self.qcd.step_sizes[sb.qcd_idx] >> 11) as usize
                 } else { self.bits as usize + nl };
+                let expected_exp = if sb.qcd_idx == 0 {
+                    self.bits as usize + nl
+                } else {
+                    (self.bits as usize + nl).saturating_sub(1)
+                };
                 let raw_bp = guard_bits.saturating_add(exp).saturating_sub(1);
                 let num_bp = raw_bp.saturating_sub(cb[si].missing_bitplanes).max(1);
+                if debug_enabled && si == 0 {
+                    eprintln!("[lossless] sb[0]: exp={} expected_exp={} raw_bp={} missing_bp={} num_bp={}", 
+                        exp, expected_exp, raw_bp, cb[si].missing_bitplanes, num_bp);
+                }
                 let dec = decode_block(&cb[si].data, sb.sb_w, sb.sb_h, num_bp);
                 for r in 0..sb.sb_h {
                     for c in 0..sb.sb_w {
@@ -1108,6 +1121,9 @@ impl GeoJp2 {
             if !self.signed || self.bits == 16 {
                 let shift = 1i32 << (self.bits.saturating_sub(1));
                 for v in coeff.iter_mut() { *v += shift; }
+                if debug_enabled {
+                    eprintln!("[lossless] level-shift shift={} sample[0]={}", shift, coeff[0]);
+                }
             }
             Ok(coeff)
         } else {
@@ -1163,15 +1179,14 @@ impl GeoJp2 {
             }
             let mut samples = inv_dwt_97_multilevel_proper(&fcoeff, w, h, nl as u8);
             if debug_enabled {
-                eprintln!("[pre-idwt] fcoeff[0]={:.6} fcoeff[1]={:.6} fcoeff[w]={:.6} fcoeff[w+1]={:.6}", 
-                    fcoeff[0], if w > 0 { fcoeff[1] } else { 0.0 }, if fcoeff.len() > w { fcoeff[w] } else { 0.0 },
-                    if fcoeff.len() > w+1 { fcoeff[w+1] } else { 0.0 });
+                eprintln!("[pre-shift] sample[0]={} bits={} signed={} check=({}||{})", 
+                    samples[0], self.bits, self.signed, !self.signed, self.bits == 16);
             }
             if !self.signed || self.bits == 16 {
                 let shift = 1i32 << (self.bits.saturating_sub(1));
                 for v in samples.iter_mut() { *v += shift; }
                 if debug_enabled {
-                    eprintln!("[idwt+shift] shift={} sample[0]={} (before: {})", shift, samples[0], samples[0] - shift);
+                    eprintln!("[level-shift] shift={} (1<<{}), sample[0]={}", shift, self.bits-1, samples[0]);
                 }
             }
             Ok(samples)

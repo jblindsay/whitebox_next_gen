@@ -163,6 +163,7 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
     
     eprintln!("[bridge] Image dimensions: {}x{}", image.width(), image.height());
     eprintln!("[bridge] Color space: {:?}", image.color_space());
+    eprintln!("[bridge] Original bit depth: {}", image.original_bit_depth());
     
     let raw = image
         .decode_native()
@@ -172,6 +173,7 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
     eprintln!("[bridge] Raw dimensions: {}x{}", raw.width, raw.height);
     eprintln!("[bridge] Raw bytes_per_sample: {}", raw.bytes_per_sample);
     eprintln!("[bridge] Raw num_components: {}", raw.num_components);
+    eprintln!("[bridge] Raw bit_depth: {}", raw.bit_depth);
     eprintln!("[bridge] Raw data length: {}", raw.data.len());
     
     let bands = raw.num_components as usize;
@@ -226,6 +228,11 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
                      &data[0..10.min(npix)]);
             eprintln!("[bridge] 16-bit path: pixels as u16: {:?}", 
                      (0..10.min(npix)).map(|i| data[i] as u16).collect::<Vec<_>>());
+            eprintln!("[bridge] 16-bit path: expected scale check:");
+            eprintln!("[bridge]   - raw.bit_depth = {} (should be 16)", raw.bit_depth);
+            eprintln!("[bridge]   - Max expected value for u16 lossless: 65535");
+            eprintln!("[bridge]   - First pixel value: {} (should be ~3032)", data[0] as u16);
+            eprintln!("[bridge]   - Diagnostic: {} * 2 = {}", data[0] as u16, (data[0] as u16) * 2);
             Ok((bands, DataType::U16, data))
         }
         other => Err(RasterError::Other(format!(

@@ -971,24 +971,55 @@ impl GeoJp2 {
         let nc = self.components as usize;
         let lossless = self.cod.wavelet == 1;
 
-        if nc > 1 {
-            return Err(Jp2Error::NotImplemented(
-                "native jpeg2000_core multicomponent decode is disabled pending packet-level parser upgrade".into(),
-            ));
-        }
-
         // Find the SOT/SOD for the tile that contains this component
         // For a single-tile image this is straightforward
         let tile_data = self.extract_tile_data(0)?;
 
-        // Single-component codestream path.
-        let comp_data = tile_data;
-
         // Determine number of bit-planes from QCD
         let num_bitplanes = ((self.bits + nl as u8).min(31)) as usize;
 
-        // Decode the code-block entropy data
-        let decoded_ints = decode_block(&comp_data, w, h, num_bitplanes);
+        // Decode entropy data for the requested component. For single-component
+        // codestreams this is the whole tile payload. For the in-house
+        // single-layer multicomponent stream, components are concatenated in
+        // order and decoded sequentially.
+        let decoded_ints = if nc <= 1 {
+            decode_block(&tile_data, w, h, num_bitplanes)
+        } else {
+            let mut offset = 0usize;
+            let mut selected: Option<Vec<i32>> = None;
+            for c in 0..nc {
+                if offset >= tile_data.len() {
+                    return Err(Jp2Error::InvalidCodestream {
+                        offset,
+                        message: "Truncated multicomponent tile payload while decoding component streams".into(),
+                    });
+                }
+                let (coeffs, consumed) = super::entropy::decode_block_with_consumed(
+                    &tile_data[offset..],
+                    w,
+                    h,
+                    num_bitplanes,
+                );
+                if consumed == 0 {
+                    return Err(Jp2Error::InvalidCodestream {
+                        offset,
+                        message: "Could not advance while decoding multicomponent code-block stream".into(),
+                    });
+                }
+                offset = offset.saturating_add(consumed);
+                if c == component {
+                    selected = Some(coeffs);
+                    break;
+                }
+            }
+            selected.ok_or_else(|| Jp2Error::InvalidCodestream {
+                offset,
+                message: format!(
+                    "Component {} stream not found in multicomponent payload",
+                    component
+                ),
+            })?
+        };
 
         // Inverse DWT
         let samples = if lossless {
@@ -1033,6 +1064,23 @@ impl GeoJp2 {
         use std::collections::HashMap;
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
+
+        // Target component for this decode call.
+        let target_component = _component;
+        let nc = self.components.max(1) as usize;
+
+        // When nc > 1 the LRCP packet stream interleaves packets from all components.
+        // Component-aware traversal is required; return NotImplemented until the full
+        // per-component loop is ported in Phase A.
+        if nc > 1 {
+            return Err(Jp2Error::NotImplemented(
+                format!(
+                    "native decode_component_proper does not yet handle multicomponent \
+                     codestreams (requested component {target_component} of {nc}); \
+                     enable the jpeg2000-vendored-bridge feature for full support"
+                ),
+            ));
+        }
 
         // ── Image-level parameters ─────────────────────────────────────────────
         let nl         = self.cod.num_decomps as usize;
@@ -1533,6 +1581,21 @@ impl GeoJp2 {
     /// Extract the raw compressed bytes for tile `tile_idx` from the codestream.
     /// Proper per-code-block, multi-layer JPEG 2000 decoder for externally-encoded files.
     fn decode_component_v2(&self, _component: usize) -> Result<Vec<i32>> {
+        let target_component = _component;
+        let nc = self.components.max(1) as usize;
+
+        // When nc > 1 the packet stream interleaves data for all components;
+        // component-aware traversal for this path is Phase A pending work.
+        if nc > 1 {
+            return Err(Jp2Error::NotImplemented(
+                format!(
+                    "native decode_component_v2 does not yet handle multicomponent \
+                     codestreams (requested component {target_component} of {nc}); \
+                     enable the jpeg2000-vendored-bridge feature for full support"
+                ),
+            ));
+        }
+
         let w   = self.width  as usize;
         let h   = self.height as usize;
         let nl  = self.cod.num_decomps as usize;
@@ -1870,7 +1933,29 @@ impl GeoJp2 {
     /// Extract the raw compressed bytes for tile `tile_idx` from the codestream.
     fn extract_tile_data(&self, tile_idx: u16) -> Result<Vec<u8>> {
         let plan = self.build_packet_traversal_plan(tile_idx)?;
-        let out = self.collect_tile_packet_payload(&plan)?;
+        let out = self.collect_tile_packet_payload(&plan, None)?;
+
+        if !out.is_empty() {
+            return Ok(out);
+        }
+
+        Err(Jp2Error::InvalidCodestream {
+            offset: 0,
+            message: format!("Tile {} not found in codestream", tile_idx),
+        })
+    }
+
+    /// Extract raw compressed packet payload bytes for one component in `tile_idx`.
+    fn extract_tile_data_for_component(&self, tile_idx: u16, component: usize) -> Result<Vec<u8>> {
+        if component >= self.components as usize {
+            return Err(Jp2Error::ComponentOutOfRange {
+                index: component,
+                components: self.components as usize,
+            });
+        }
+
+        let plan = self.build_packet_traversal_plan(tile_idx)?;
+        let out = self.collect_tile_packet_payload(&plan, Some(component))?;
 
         if !out.is_empty() {
             return Ok(out);
@@ -1918,7 +2003,11 @@ impl GeoJp2 {
         })
     }
 
-    fn collect_tile_packet_payload(&self, plan: &PacketTraversalPlan) -> Result<Vec<u8>> {
+    fn collect_tile_packet_payload(
+        &self,
+        plan: &PacketTraversalPlan,
+        target_component: Option<usize>,
+    ) -> Result<Vec<u8>> {
         if self.has_main_header_poc || plan.has_poc {
             return Err(Jp2Error::NotImplemented(
                 "native packet walker does not yet support POC progression changes".into(),
@@ -1932,35 +2021,56 @@ impl GeoJp2 {
 
         match plan.progression {
             ProgressionOrder::Lrcp => {
-                self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Lrcp)
+                self.collect_tile_packet_payload_for_progression(
+                    plan,
+                    ProgressionOrder::Lrcp,
+                    target_component,
+                )
             }
             ProgressionOrder::Rlcp => {
-                self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Rlcp)
+                self.collect_tile_packet_payload_for_progression(
+                    plan,
+                    ProgressionOrder::Rlcp,
+                    target_component,
+                )
             }
             ProgressionOrder::Rpcl => {
-                self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Rpcl)
+                self.collect_tile_packet_payload_for_progression(
+                    plan,
+                    ProgressionOrder::Rpcl,
+                    target_component,
+                )
             }
             ProgressionOrder::Pcrl => {
-                self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Pcrl)
+                self.collect_tile_packet_payload_for_progression(
+                    plan,
+                    ProgressionOrder::Pcrl,
+                    target_component,
+                )
             }
             ProgressionOrder::Cprl => {
-                self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Cprl)
+                self.collect_tile_packet_payload_for_progression(
+                    plan,
+                    ProgressionOrder::Cprl,
+                    target_component,
+                )
             }
         }
     }
 
     fn collect_tile_packet_payload_lrcp(&self, plan: &PacketTraversalPlan) -> Result<Vec<u8>> {
-        self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Lrcp)
+        self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Lrcp, None)
     }
 
     fn collect_tile_packet_payload_rlcp(&self, plan: &PacketTraversalPlan) -> Result<Vec<u8>> {
-        self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Rlcp)
+        self.collect_tile_packet_payload_for_progression(plan, ProgressionOrder::Rlcp, None)
     }
 
     fn collect_tile_packet_payload_for_progression(
         &self,
         plan: &PacketTraversalPlan,
         progression: ProgressionOrder,
+        target_component: Option<usize>,
     ) -> Result<Vec<u8>> {
         if plan.num_layers == 0 {
             return Err(Jp2Error::InvalidCodestream {
@@ -2000,6 +2110,9 @@ impl GeoJp2 {
                 }
 
                 let (layer, resolution, component) = packet_ctx.context_key();
+                let packet_targets_component = target_component
+                    .map(|target| target == component)
+                    .unwrap_or(true);
 
                 let preflight = self
                     .probe_packet_header_lrcp_at(
@@ -2043,6 +2156,11 @@ impl GeoJp2 {
                     })?;
 
                 if preflight.preview_reached_contribution_cap {
+                    if target_component.is_some() && packet_targets_component {
+                        return Err(Jp2Error::NotImplemented(
+                            "component-selective packet extraction hit bounded preview ambiguity".into(),
+                        ));
+                    }
                     force_full_payload_fallback = true;
                     break;
                 }
@@ -2051,8 +2169,10 @@ impl GeoJp2 {
                     let body_end = preflight
                         .body_data_start
                         .saturating_add(preflight.preview_declared_body_bytes as usize);
-                    part_out.extend_from_slice(&self.codestream[preflight.body_data_start..body_end]);
-                    had_preview_slice = true;
+                    if packet_targets_component {
+                        part_out.extend_from_slice(&self.codestream[preflight.body_data_start..body_end]);
+                        had_preview_slice = true;
+                    }
                     cursor = body_end;
                 } else {
                     let context_key = (layer, resolution, component);
@@ -2064,11 +2184,21 @@ impl GeoJp2 {
                     if matches!(preflight.kind, PacketHeaderProbe::NonZeroLength)
                         && context_state.ever_included
                     {
+                        if target_component.is_some() && packet_targets_component {
+                            return Err(Jp2Error::NotImplemented(
+                                "component-selective packet extraction encountered non-resolved packet body boundaries".into(),
+                            ));
+                        }
                         force_full_payload_fallback = true;
                         break;
                     }
 
                     if matches!(preflight.kind, PacketHeaderProbe::NonZeroLength) && had_preview_slice {
+                        if target_component.is_some() && packet_targets_component {
+                            return Err(Jp2Error::NotImplemented(
+                                "component-selective packet extraction cannot append unresolved packet tail".into(),
+                            ));
+                        }
                         append_unresolved_tail_from = Some(cursor);
                         break;
                     }
@@ -2082,6 +2212,16 @@ impl GeoJp2 {
                 if !packet_ctx.advance(layers, resolutions, components) {
                     packet_ctx = PacketCursor::for_progression(progression);
                 }
+            }
+
+            if target_component.is_some() {
+                if force_full_payload_fallback {
+                    return Err(Jp2Error::NotImplemented(
+                        "component-selective packet extraction fallback is not supported for this tile-part".into(),
+                    ));
+                }
+                out.extend_from_slice(&part_out);
+                continue;
             }
 
             if force_full_payload_fallback || !had_preview_slice {
@@ -2654,11 +2794,11 @@ mod multiband_failfast_tests {
 
         let err = jp2
             .decode_component(0)
-            .expect_err("native multicomponent decode must fail-fast until parser upgrade");
+            .expect_err("empty codestream should still fail for multicomponent decode path");
 
         let msg = err.to_string();
         assert!(
-            msg.contains("Not yet implemented") || msg.contains("multicomponent"),
+            msg.contains("Invalid codestream") || msg.contains("Tile 0 not found"),
             "unexpected error message: {msg}"
         );
     }
@@ -3323,6 +3463,59 @@ mod multiband_failfast_tests {
             .extract_tile_data(0)
             .expect("multi-packet preview extraction should succeed");
         assert_eq!(data, vec![0x11, 0x22]);
+    }
+
+    #[test]
+    fn extract_tile_data_for_component_filters_lrcp_packet_bodies() {
+        let codestream = vec![
+            0xFF, 0x4F, // SOC
+            0xFF, 0x90, // SOT
+            0x00, 0x0A, // Lsot
+            0x00, 0x00, // Isot
+            0x00, 0x00, 0x00, 0x00, // Psot = 0 (until EOC)
+            0x00, 0x01, // TPsot, TNsot
+            0xFF, 0x93, // SOD
+            // Packet for component 0 (l0, r0, c0): nz=1, incl=1, passes=1, lblock_inc=0, len=1, stop incl=0
+            0xC2,
+            0x11,
+            // Packet for component 1 (l0, r0, c1): same shape
+            0xC2,
+            0x22,
+            0xFF, 0xD9, // EOC
+        ];
+
+        let jp2 = jp2_with_codestream(codestream, 2);
+        let c0 = jp2
+            .extract_tile_data_for_component(0, 0)
+            .expect("component 0 packet payload should be extracted");
+        let c1 = jp2
+            .extract_tile_data_for_component(0, 1)
+            .expect("component 1 packet payload should be extracted");
+
+        assert_eq!(c0, vec![0x11]);
+        assert_eq!(c1, vec![0x22]);
+    }
+
+    #[test]
+    fn extract_tile_data_for_component_rejects_out_of_range_component() {
+        let codestream = vec![
+            0xFF, 0x4F, // SOC
+            0xFF, 0x90, // SOT
+            0x00, 0x0A, // Lsot
+            0x00, 0x00, // Isot
+            0x00, 0x00, 0x00, 0x0E, // Psot
+            0x00, 0x01, // TPsot, TNsot
+            0xFF, 0x93, // SOD
+            0xFF, 0xD9, // EOC
+        ];
+
+        let jp2 = jp2_with_codestream(codestream, 1);
+        let err = jp2
+            .extract_tile_data_for_component(0, 1)
+            .expect_err("out-of-range component should be rejected");
+
+        let msg = err.to_string();
+        assert!(msg.contains("out of range"), "unexpected error message: {msg}");
     }
 
     #[test]

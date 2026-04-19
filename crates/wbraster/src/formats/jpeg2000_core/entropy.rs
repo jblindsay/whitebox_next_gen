@@ -307,6 +307,11 @@ impl<'a> MqDecoder<'a> {
         }
         d
     }
+
+    /// Number of source bytes consumed so far.
+    pub fn consumed_bytes(&self) -> usize {
+        self.pos.min(self.data.len())
+    }
 }
 
 // ── Simplified bit-plane encoder / decoder ────────────────────────────────────
@@ -409,6 +414,19 @@ pub fn decode_block(
     height: usize,
     num_bitplanes: usize,
 ) -> Vec<i32> {
+    decode_block_with_consumed(data, width, height, num_bitplanes).0
+}
+
+/// Decode a compressed code-block and return `(coefficients, consumed_bytes)`.
+///
+/// The consumed byte count is useful when multiple independently-encoded blocks
+/// are concatenated in a single payload and must be decoded sequentially.
+pub fn decode_block_with_consumed(
+    data: &[u8],
+    width: usize,
+    height: usize,
+    num_bitplanes: usize,
+) -> (Vec<i32>, usize) {
     let n = width * height;
     let mut mags  = vec![0u32; n];
     let mut signs = vec![0u8;  n];
@@ -459,9 +477,10 @@ pub fn decode_block(
         }
     }
 
-    mags.iter().zip(signs.iter())
+    let out = mags.iter().zip(signs.iter())
         .map(|(&m, &s)| if s == 0 { m as i32 } else { -(m as i32) })
-        .collect()
+        .collect();
+    (out, dec.consumed_bytes())
 }
 
 /// Standard-conformant JPEG 2000 T1 decoder for externally-encoded code blocks.

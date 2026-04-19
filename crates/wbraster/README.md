@@ -1082,6 +1082,12 @@ Notes:
 - Default write mode is lossy (`Jpeg2000Compression::Lossy { quality_db: JPEG2000_DEFAULT_LOSSY_QUALITY_DB }`).
 - Current integration is focused on adapter wiring and typed write options; treat
   production decode compatibility as evolving.
+- Read-path compatibility currently uses a feature-gated vendored bridge
+  (`jpeg2000-vendored-bridge`, via `wbjpeg2000`) with fallback to native
+  `jpeg2000_core` decode where applicable.
+- The vendored bridge crate tracks `dicom-toolkit-jpeg2000` lineage (MIT OR
+  Apache-2.0). Whitebox's long-term direction is to retire the bridge as
+  native `jpeg2000_core` decode coverage reaches parity.
 
 ### Preferred typed write API
 

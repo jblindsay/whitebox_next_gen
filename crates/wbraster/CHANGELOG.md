@@ -6,7 +6,29 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Added an execution-tracked JPEG2000 bridge retirement implementation plan in
+  `docs/internal/jpeg2000_bridge_retirement_plan.md`, including phased
+  milestones, owner/checklist fields, weekly deliverables, risk controls, and
+  time estimates for native decode parity and bridge decommissioning.
+
 ### Fixed
+- Native `jpeg2000_core` packet walker now supports component-selective packet
+  payload extraction for multicomponent LRCP traversal contexts via
+  `extract_tile_data_for_component`, and includes regression tests that verify
+  per-component packet-body filtering and out-of-range component guard
+  behavior.
+- Native `jpeg2000_core` single-layer decode now supports in-house
+  multicomponent codestream payloads by decoding concatenated component
+  code-block streams sequentially using consumed-byte tracking in the tier-1
+  decoder. This replaces the immediate multicomponent `NotImplemented`
+  fail-fast for that constrained class and adds a native writer/reader
+  multiband roundtrip smoke test.
+- `README.md` JPEG2000 notes now explicitly document the feature-gated vendored
+  decode bridge (`wbjpeg2000` / `jpeg2000-vendored-bridge`) and acknowledge
+  `dicom-toolkit-jpeg2000` lineage/licensing context, while clarifying
+  long-term intent to retire the bridge as native `jpeg2000_core` reaches
+  decode-parity coverage.
 - GeoTIFF read-path sample-type mapping now accepts reduced-precision integer
   bit depths (`NBITS`) by promoting to the containing native integer type
   (e.g., unsigned 15-bit -> `u16`, signed 15-bit -> `i16`). This removes

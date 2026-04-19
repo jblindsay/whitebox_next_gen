@@ -425,6 +425,31 @@ mod writer_tests {
     }
 
     #[test]
+    fn writer_multiband_decode_roundtrip_smoke() {
+        let w = 8u32;
+        let h = 8u32;
+        let nc = 3u16;
+        let data: Vec<u16> = (0..(w * h * nc as u32) as u16).collect();
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        GeoJp2Writer::new(w, h, nc)
+            .compression(CompressionMode::Lossless)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect("writer should encode multiband data");
+
+        let jp2 = GeoJp2::from_bytes(&cur.into_inner()).expect("reader should parse multiband JP2");
+        let band0 = jp2.read_band_u16(0).expect("band 0 should decode");
+        let band1 = jp2.read_band_u16(1).expect("band 1 should decode");
+        let band2 = jp2.read_band_u16(2).expect("band 2 should decode");
+
+        assert_eq!(band0.len(), (w * h) as usize);
+        assert_eq!(band1.len(), (w * h) as usize);
+        assert_eq!(band2.len(), (w * h) as usize);
+        assert_ne!(band0, band1, "decoded channels should not collapse to identical data");
+        assert_ne!(band1, band2, "decoded channels should not collapse to identical data");
+    }
+
+    #[test]
     fn writer_rejects_decomposition_levels_exceeding_image_capacity() {
         let w = 8u32;
         let h = 8u32;

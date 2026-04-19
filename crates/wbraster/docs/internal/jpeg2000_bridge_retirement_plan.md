@@ -92,7 +92,12 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
 
 5. A5 - Test fixture expansion and expected-output baselines (1-2 days)
   - [ ] Add at least 3 multicomponent fixtures: small RGB JP2, Sentinel-style multiband sample, tiled multicomponent sample.
-  - [ ] Add deterministic expected checks (sample probes + metadata checks).
+  - [x] Add deterministic expected checks (sample probes + metadata checks).
+  - Progress:
+  - [x] Small RGB fixture added: `crates/wbraster/tests/fixtures/rgb_8x8_lossless.jp2`.
+  - [x] Validation tests added for fixture metadata + per-band deterministic sample checks.
+  - [ ] Sentinel-style multiband fixture pending.
+  - [ ] Tiled multicomponent fixture pending.
   - [ ] Location: `reader.rs` tests and `wbraster` JPEG2000 validation tests.
   - Done when:
   - [ ] New fixtures run in CI and are stable across reruns.

@@ -1143,7 +1143,9 @@ def _normalize_vector_input_source(source: Any) -> str:
     return value
 
 
-def _materialize_raster_input_source(source: Any, feedback=None) -> str:
+def _materialize_raster_input_source(
+    source: Any, feedback=None, temp_paths: list[str] | None = None
+) -> str:
     """Convert JP2-like sources to temporary GeoTIFF to avoid decoder artifacts."""
     value = str(source or "").strip()
     if not value:
@@ -1197,6 +1199,9 @@ def _materialize_raster_input_source(source: Any, feedback=None) -> str:
             pass
         return value
     out_ds = None
+
+    if temp_paths is not None:
+        temp_paths.append(tmp_path)
 
     if feedback is not None:
         feedback.pushInfo(f"Materialized JP2 input to temporary GeoTIFF: {tmp_path}")
@@ -1797,6 +1802,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             )
 
         args: dict[str, Any] = {}
+        temp_raster_inputs: list[str] = []
 
         projection_wrapper_ids = {
             "reproject_raster",
@@ -1813,12 +1819,12 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind == "raster_in":
                 lyr = self.parameterAsRasterLayer(parameters, name, context)
                 if lyr is not None:
-                    args[name] = _materialize_raster_input_source(lyr.source(), feedback)
+                    args[name] = _materialize_raster_input_source(lyr.source(), feedback, temp_raster_inputs)
                 else:
                     # Some QGIS builds provide a file path but no layer object.
                     value = self.parameterAsString(parameters, name, context)
                     if value:
-                        args[name] = _materialize_raster_input_source(str(value), feedback)
+                        args[name] = _materialize_raster_input_source(str(value), feedback, temp_raster_inputs)
                     elif required:
                         raise QgsProcessingException(f"Missing required raster input: {name}")
                     else:
@@ -1827,7 +1833,7 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 paths = self._resolve_raster_layer_sources(parameters, name, context)
                 if paths:
                     args[name] = [
-                        _materialize_raster_input_source(path, feedback) for path in paths
+                        _materialize_raster_input_source(path, feedback, temp_raster_inputs) for path in paths
                     ]
                 elif required:
                     raise QgsProcessingException(f"Missing required raster inputs: {name}")
@@ -1949,22 +1955,35 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
 
         stream_adapter = _StreamFeedbackAdapter(feedback, tool_name=self.name())
 
-        if self.name() in projection_wrapper_ids:
-            response = run_projection_wrapper(
-                self.name(),
-                args,
-                include_pro=self._provider.include_pro,
-                tier=self._provider.tier,
-            )
-            response_raw = json.dumps(response)
-        else:
-            response_raw = session.run_tool_json_stream(
-                self.name(),
-                json.dumps(args),
-                stream_adapter,
-            )
+        try:
+            if self.name() in projection_wrapper_ids:
+                response = run_projection_wrapper(
+                    self.name(),
+                    args,
+                    include_pro=self._provider.include_pro,
+                    tier=self._provider.tier,
+                )
+                response_raw = json.dumps(response)
+            else:
+                response_raw = session.run_tool_json_stream(
+                    self.name(),
+                    json.dumps(args),
+                    stream_adapter,
+                )
+        except Exception:
+            for tmp_path in temp_raster_inputs:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            raise
 
         if stream_adapter.cancelled:
+            for tmp_path in temp_raster_inputs:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
             raise QgsProcessingException("Processing cancelled.")
 
         response = (
@@ -1973,11 +1992,21 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             else response_raw
         )
         if not isinstance(response, dict):
+            for tmp_path in temp_raster_inputs:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
             return {}
 
         _record_recent_tool_execution(self.name())
 
         if feedback.isCanceled():
+            for tmp_path in temp_raster_inputs:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
             raise QgsProcessingException("Processing cancelled.")
 
         outputs = response.get("outputs", response)
@@ -2047,6 +2076,12 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         set_post = getattr(details, "setPostProcessor", None)
                         if callable(set_post):
                             set_post(_MstpStylePostProcessor.create())
+            except Exception:
+                pass
+
+        for tmp_path in temp_raster_inputs:
+            try:
+                os.remove(tmp_path)
             except Exception:
                 pass
 

@@ -1069,19 +1069,6 @@ impl GeoJp2 {
         let target_component = _component;
         let nc = self.components.max(1) as usize;
 
-        // When nc > 1 the LRCP packet stream interleaves packets from all components.
-        // Component-aware traversal is required; return NotImplemented until the full
-        // per-component loop is ported in Phase A.
-        if nc > 1 {
-            return Err(Jp2Error::NotImplemented(
-                format!(
-                    "native decode_component_proper does not yet handle multicomponent \
-                     codestreams (requested component {target_component} of {nc}); \
-                     enable the jpeg2000-vendored-bridge feature for full support"
-                ),
-            ));
-        }
-
         // ── Image-level parameters ─────────────────────────────────────────────
         let nl         = self.cod.num_decomps as usize;
         let num_layers = self.cod.num_layers.max(1) as usize;
@@ -1164,15 +1151,21 @@ impl GeoJp2 {
             subbands.push(SubbandDesc { row_off: rh[d], col_off: rw[d], sb_w: hl_w,  sb_h: lh_h,   qcd_idx: 3 * r     });
         }
 
-        // ── 4. Per-code-block accumulation state ───────────────────────────────
+        // ── 4. Per-code-block accumulation state (one cb_grid per component) ─────
         struct CbState { data: Vec<u8>, lblock: u32, missing_bp: usize, ever_included: bool }
-        let mut cb_grid: Vec<Vec<Vec<CbState>>> = subbands.iter().map(|sb| {
-            let ncb_w = sb.sb_w.div_ceil(cb_w).max(1);
-            let ncb_h = sb.sb_h.div_ceil(cb_h).max(1);
-            (0..ncb_h).map(|_| (0..ncb_w).map(|_| CbState {
-                data: Vec::new(), lblock: 3, missing_bp: 0, ever_included: false,
-            }).collect()).collect()
-        }).collect();
+        let make_cb_grid = |sbs: &Vec<SubbandDesc>| -> Vec<Vec<Vec<CbState>>> {
+            sbs.iter().map(|sb| {
+                let ncb_w = sb.sb_w.div_ceil(cb_w).max(1);
+                let ncb_h = sb.sb_h.div_ceil(cb_h).max(1);
+                (0..ncb_h).map(|_| (0..ncb_w).map(|_| CbState {
+                    data: Vec::new(), lblock: 3, missing_bp: 0, ever_included: false,
+                }).collect()).collect()
+            }).collect()
+        };
+        // Allocate one cb_grid for each component; reuse the same subband layout
+        // (assumes all components have identical subsampling / tile geometry).
+        let mut all_cb_grids: Vec<Vec<Vec<Vec<CbState>>>> =
+            (0..nc).map(|_| make_cb_grid(&subbands)).collect();
 
         let mut byte_pos = 0usize;
 
@@ -1198,6 +1191,12 @@ impl GeoJp2 {
                 let ph = precinct_h[res];
 
                 let num_px = ref_w.div_ceil(pw).max(1);
+                let num_py = ref_h.div_ceil(ph).max(1);
+
+                // LRCP progression: inner loops are component → precinct.
+                for comp in 0..nc {
+                let cb_grid = &mut all_cb_grids[comp];
+                let is_target = comp == target_component;
                 let num_py = ref_h.div_ceil(ph).max(1);
 
                 // Per-precinct tag trees (one inclusion + one zero-bitplane set per subband).
@@ -1410,19 +1409,23 @@ impl GeoJp2 {
                         for (si, cbx, cby, seg_len) in segs {
                             let end = byte_pos + seg_len as usize;
                             if end > body.len() { break 'lrcp; }
-                            if debug && si == 0 && cbx < 2 && cby == 0 {
-                                eprintln!("[proper]   cb si={si} ({cbx},{cby}) seg={seg_len} bytes");
+                            if is_target {
+                                if debug && si == 0 && cbx < 2 && cby == 0 {
+                                    eprintln!("[proper]   cb si={si} ({cbx},{cby}) seg={seg_len} bytes");
+                                }
+                                cb_grid[si][cby][cbx].data.extend_from_slice(&body[byte_pos..end]);
                             }
-                            cb_grid[si][cby][cbx].data.extend_from_slice(&body[byte_pos..end]);
                             byte_pos = end;
                         }
                     }
                 }
+                } // end for comp in 0..nc
             }
         }
 
         // ── 7. Decode code blocks and assemble coefficient grid ────────────────
         let mut coeff = vec![0i32; w * h];
+        let cb_grid = &all_cb_grids[target_component];
 
         for (si, sb) in subbands.iter().enumerate() {
             if sb.sb_w == 0 || sb.sb_h == 0 { continue; }

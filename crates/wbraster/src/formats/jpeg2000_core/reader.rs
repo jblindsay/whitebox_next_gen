@@ -970,13 +970,16 @@ impl GeoJp2 {
         let nl = self.cod.num_decomps as usize;
         let nc = self.components as usize;
         let lossless = self.cod.wavelet == 1;
+        // Per-component bit-depth and signedness (fall back to image-level fields).
+        let comp_bits   = self.siz.components.get(component).map(|c| c.bits()).unwrap_or(self.bits);
+        let comp_signed = self.siz.components.get(component).map(|c| c.signed()).unwrap_or(self.signed);
 
         // Find the SOT/SOD for the tile that contains this component
         // For a single-tile image this is straightforward
         let tile_data = self.extract_tile_data(0)?;
 
         // Determine number of bit-planes from QCD
-        let num_bitplanes = ((self.bits + nl as u8).min(31)) as usize;
+        let num_bitplanes = ((comp_bits + nl as u8).min(31)) as usize;
 
         // Decode entropy data for the requested component. For single-component
         // codestreams this is the whole tile payload. For the in-house
@@ -1027,8 +1030,8 @@ impl GeoJp2 {
             inv_dwt_53_multilevel(&mut coeff, w, h, self.cod.num_decomps);
             // Bridge-compat: treat 16-bit samples as unsigned for level shift,
             // even if SIZ signed flag is set.
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << (self.bits.saturating_sub(1));
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << (comp_bits.saturating_sub(1));
                 for v in coeff.iter_mut() { *v += shift; }
             }
             coeff
@@ -1038,13 +1041,13 @@ impl GeoJp2 {
                 .map(|&s| {
                     let exp = (s >> 11) as i32;
                     let mant = (s & 0x7FF) as f64;
-                    (1.0 + mant / 2048.0) * 2.0f64.powi(exp - self.bits as i32)
+                    (1.0 + mant / 2048.0) * 2.0f64.powi(exp - comp_bits as i32)
                 })
                 .collect();
             let float_coeffs = dequantise(&decoded_ints, &step_sizes);
             let mut samples = inv_dwt_97_multilevel(&float_coeffs, w, h, self.cod.num_decomps);
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << (self.bits.saturating_sub(1));
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << (comp_bits.saturating_sub(1));
                 for v in samples.iter_mut() { *v += shift; }
             }
             samples
@@ -1068,6 +1071,9 @@ impl GeoJp2 {
         // Target component for this decode call.
         let target_component = _component;
         let nc = self.components.max(1) as usize;
+        // Per-component bit-depth and signedness.
+        let comp_bits   = self.siz.components.get(target_component).map(|c| c.bits()).unwrap_or(self.bits);
+        let comp_signed = self.siz.components.get(target_component).map(|c| c.signed()).unwrap_or(self.signed);
 
         // ── Image-level parameters ─────────────────────────────────────────────
         let nl         = self.cod.num_decomps as usize;
@@ -1511,10 +1517,10 @@ impl GeoJp2 {
             if debug && tile_tx == 0 && tile_ty == 0 {
                 eprintln!("[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: {:?}", &coeff[..4.min(coeff.len())]);
             }
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << self.bits.saturating_sub(1);
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << comp_bits.saturating_sub(1);
                 if debug && tile_tx == 0 && tile_ty == 0 {
-                    eprintln!("[proper] LOSSLESS PATH: applying level-shift of {} (bits={}, signed={})", shift, self.bits, self.signed);
+                    eprintln!("[proper] LOSSLESS PATH: applying level-shift of {} (bits={}, signed={})", shift, comp_bits, comp_signed);
                 }
                 for v in coeff.iter_mut() { *v += shift; }
             }
@@ -1561,8 +1567,8 @@ impl GeoJp2 {
                 }
             }
             let mut samples = super::wavelet::inv_dwt_97_multilevel(&fcoeff, w, h, nl as u8);
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << self.bits.saturating_sub(1);
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << comp_bits.saturating_sub(1);
                 for v in samples.iter_mut() { *v += shift; }
             }
             samples
@@ -1586,6 +1592,9 @@ impl GeoJp2 {
     fn decode_component_v2(&self, _component: usize) -> Result<Vec<i32>> {
         let target_component = _component;
         let nc = self.components.max(1) as usize;
+        // Per-component bit-depth and signedness.
+        let comp_bits   = self.siz.components.get(target_component).map(|c| c.bits()).unwrap_or(self.bits);
+        let comp_signed = self.siz.components.get(target_component).map(|c| c.signed()).unwrap_or(self.signed);
 
         let w   = self.width  as usize;
         let h   = self.height as usize;
@@ -1791,7 +1800,7 @@ impl GeoJp2 {
                 if sb.sb_w == 0 || sb.sb_h == 0 || cb[si].data.is_empty() { continue; }
                 let exp = if sb.qcd_idx < self.qcd.step_sizes.len() {
                     (self.qcd.step_sizes[sb.qcd_idx] >> 11) as usize
-                } else { self.bits as usize + nl };
+                } else { comp_bits as usize + nl };
                 let raw_bp = guard_bits.saturating_add(exp).saturating_sub(1);
                 let num_bp = raw_bp.saturating_sub(cb[si].missing_bitplanes).max(1);
                 if debug_enabled && si == 0 {
@@ -1806,8 +1815,8 @@ impl GeoJp2 {
                 }
             }
             inv_dwt_53_multilevel_proper(&mut coeff, w, h, nl as u8);
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << (self.bits.saturating_sub(1));
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << (comp_bits.saturating_sub(1));
                 for v in coeff.iter_mut() { *v += shift; }
                 if debug_enabled {
                     eprintln!("[lossless] level-shift shift={} sample[0]={}", shift, coeff[0]);
@@ -1867,14 +1876,14 @@ impl GeoJp2 {
             }
             let mut samples = inv_dwt_97_multilevel_proper(&fcoeff, w, h, nl as u8);
             if debug_enabled {
-                eprintln!("[pre-shift] sample[0]={} bits={} signed={} check=({}||{})", 
-                    samples[0], self.bits, self.signed, !self.signed, self.bits == 16);
+                eprintln!("[pre-shift] sample[0]={} bits={} signed={} check=({}||{})",
+                    samples[0], comp_bits, comp_signed, !comp_signed, comp_bits == 16);
             }
-            if !self.signed || self.bits == 16 {
-                let shift = 1i32 << (self.bits.saturating_sub(1));
+            if !comp_signed || comp_bits == 16 {
+                let shift = 1i32 << (comp_bits.saturating_sub(1));
                 for v in samples.iter_mut() { *v += shift; }
                 if debug_enabled {
-                    eprintln!("[level-shift] shift={} (1<<{}), sample[0]={}", shift, self.bits-1, samples[0]);
+                    eprintln!("[level-shift] shift={} (1<<{}), sample[0]={}", shift, comp_bits - 1, samples[0]);
                 }
             }
             Ok(samples)

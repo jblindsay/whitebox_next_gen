@@ -19,6 +19,12 @@ mod jpeg2000_byte_alignment_validation {
     const RGB_8X8_FIXTURE: &[u8] = include_bytes!(
         "../../tests/fixtures/rgb_8x8_lossless.jp2"
     );
+    const SENTINEL_STYLE_16X16_4B_FIXTURE: &[u8] = include_bytes!(
+        "../../tests/fixtures/sentinel_style_16x16_4band_lossless.jp2"
+    );
+    const TILED_RGB_64X64_BLOCK32_FIXTURE: &[u8] = include_bytes!(
+        "../../tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2"
+    );
 
     #[test]
     fn a5_external_rgb_fixture_metadata_parsed_correctly() {
@@ -69,6 +75,67 @@ mod jpeg2000_byte_alignment_validation {
                 let got = ras.get(2, row, col) as u16;
                 assert_eq!(got, expected, "A5: band 2 mismatch at ({row},{col})");
             }
+        }
+    }
+
+    #[test]
+    fn a5_sentinel_style_fixture_metadata_and_probes() {
+        let jp2 = crate::formats::jpeg2000_core::reader::GeoJp2::from_bytes(SENTINEL_STYLE_16X16_4B_FIXTURE)
+            .expect("A5: should parse sentinel-style fixture");
+        assert_eq!(jp2.width(), 16, "A5 sentinel: width");
+        assert_eq!(jp2.height(), 16, "A5 sentinel: height");
+        assert_eq!(jp2.component_count(), 4, "A5 sentinel: component count");
+        assert_eq!(jp2.bits_per_sample(), 16, "A5 sentinel: bits per sample");
+
+        let fixture_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sentinel_style_16x16_4band_lossless.jp2");
+        let ras = read(fixture_path).expect("A5 sentinel: adapter read should decode fixture");
+        assert_eq!(ras.bands, 4, "A5 sentinel: raster bands");
+        assert_eq!(ras.rows, 16, "A5 sentinel: raster rows");
+        assert_eq!(ras.cols, 16, "A5 sentinel: raster cols");
+
+        // Pattern: band b has base (b+1)*1000 plus row-major offset.
+        let probes = [
+            (0isize, 0isize, 0isize, 1000u16),
+            (0isize, 15isize, 15isize, 1255u16),
+            (3isize, 0isize, 0isize, 4000u16),
+            (3isize, 10isize, 5isize, 4165u16),
+            (3isize, 0isize, 0isize, 4000u16),
+            (3isize, 15isize, 15isize, 4255u16),
+        ];
+        for (band, row, col, expected) in probes {
+            let got = ras.get(band, row, col) as u16;
+            assert_eq!(got, expected, "A5 sentinel probe mismatch at band={band}, row={row}, col={col}");
+        }
+    }
+
+    #[test]
+    fn a5_tiled_multicomponent_fixture_metadata_and_probes() {
+        let jp2 = crate::formats::jpeg2000_core::reader::GeoJp2::from_bytes(TILED_RGB_64X64_BLOCK32_FIXTURE)
+            .expect("A5: should parse tiled fixture");
+        assert_eq!(jp2.width(), 64, "A5 tiled: width");
+        assert_eq!(jp2.height(), 64, "A5 tiled: height");
+        assert_eq!(jp2.component_count(), 3, "A5 tiled: component count");
+        assert_eq!(jp2.bits_per_sample(), 16, "A5 tiled: bits per sample");
+
+        let fixture_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2");
+        let ras = read(fixture_path).expect("A5 tiled: adapter read should decode fixture");
+        assert_eq!(ras.bands, 3, "A5 tiled: raster bands");
+        assert_eq!(ras.rows, 64, "A5 tiled: raster rows");
+        assert_eq!(ras.cols, 64, "A5 tiled: raster cols");
+
+        // Band 0 = 100 + row, Band 1 = 200 + col, Band 2 = row*64 + col.
+        let probes = [
+            (0isize, 0isize, 0isize, 100u16),
+            (0isize, 63isize, 63isize, 163u16),
+            (1isize, 0isize, 0isize, 200u16),
+            (1isize, 63isize, 63isize, 263u16),
+            (2isize, 0isize, 0isize, 0u16),
+            (2isize, 63isize, 63isize, 4095u16),
+            (2isize, 17isize, 9isize, 1097u16),
+        ];
+        for (band, row, col, expected) in probes {
+            let got = ras.get(band, row, col) as u16;
+            assert_eq!(got, expected, "A5 tiled probe mismatch at band={band}, row={row}, col={col}");
         }
     }
 

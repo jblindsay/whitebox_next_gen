@@ -91,14 +91,14 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
   - [ ] Typed output mapping remains stable for U8/U16/I16 paths.
 
 5. A5 - Test fixture expansion and expected-output baselines (1-2 days)
-  - [ ] Add at least 3 multicomponent fixtures: small RGB JP2, Sentinel-style multiband sample, tiled multicomponent sample.
+  - [x] Add at least 3 multicomponent fixtures: small RGB JP2, Sentinel-style multiband sample, tiled multicomponent sample.
   - [x] Add deterministic expected checks (sample probes + metadata checks).
   - Progress:
   - [x] Small RGB fixture added: `crates/wbraster/tests/fixtures/rgb_8x8_lossless.jp2`.
   - [x] Validation tests added for fixture metadata + per-band deterministic sample checks.
-  - [ ] Sentinel-style multiband fixture pending.
-  - [ ] Tiled multicomponent fixture pending.
-  - [ ] Location: `reader.rs` tests and `wbraster` JPEG2000 validation tests.
+  - [x] Sentinel-style fixture added: `crates/wbraster/tests/fixtures/sentinel_style_16x16_4band_lossless.jp2`.
+  - [x] Tiled multicomponent fixture added: `crates/wbraster/tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2`.
+  - [x] Location: `reader.rs` tests and `wbraster` JPEG2000 validation tests.
   - Done when:
   - [ ] New fixtures run in CI and are stable across reruns.
 

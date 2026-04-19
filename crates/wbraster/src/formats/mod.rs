@@ -17,6 +17,9 @@ pub(crate) mod geopackage_sqlite;
 pub(crate) mod zarr_v3;
 pub(crate) mod jpeg2000_core;
 
+#[cfg(test)]
+mod jpeg2000_validation_tests;
+
 use crate::error::{Result, RasterError};
 use crate::raster::Raster;
 use crate::io_utils::extension_lower;

@@ -1454,18 +1454,21 @@ impl GeoJp2 {
         // ── 8. Inverse DWT + level-shift ──────────────────────────────────────
         let tile_pixels: Vec<i32> = if lossless {
             if debug && tile_tx == 0 && tile_ty == 0 {
-                eprintln!("[proper] coeff[0..4] before idwt: {:?}", &coeff[..4.min(coeff.len())]);
+                eprintln!("[proper] LOSSLESS PATH: coeff[0..4] before idwt: {:?}", &coeff[..4.min(coeff.len())]);
             }
             super::wavelet::inv_dwt_53_multilevel_proper(&mut coeff, w, h, nl as u8);
             if debug && tile_tx == 0 && tile_ty == 0 {
-                eprintln!("[proper] coeff[0..4] after idwt, before shift: {:?}", &coeff[..4.min(coeff.len())]);
+                eprintln!("[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: {:?}", &coeff[..4.min(coeff.len())]);
             }
             if !self.signed || self.bits == 16 {
                 let shift = 1i32 << self.bits.saturating_sub(1);
+                if debug && tile_tx == 0 && tile_ty == 0 {
+                    eprintln!("[proper] LOSSLESS PATH: applying level-shift of {} (bits={}, signed={})", shift, self.bits, self.signed);
+                }
                 for v in coeff.iter_mut() { *v += shift; }
             }
             if debug && tile_tx == 0 && tile_ty == 0 {
-                eprintln!("[proper] tile_pixels[0..4] after shift: {:?}", &coeff[..4.min(coeff.len())]);
+                eprintln!("[proper] LOSSLESS PATH: tile_pixels[0..10] after shift: {:?}", &coeff[..10.min(coeff.len())]);
             }
             coeff
         } else {

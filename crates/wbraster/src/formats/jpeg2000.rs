@@ -160,10 +160,20 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
     let bytes = std::fs::read(path)?;
     let image = dj2k::Image::new(&bytes, &dj2k::DecodeSettings::default())
         .map_err(|e| RasterError::Other(format!("JPEG2000 decode init error: {e}")))?;
+    
+    eprintln!("[bridge] Image dimensions: {}x{}", image.width(), image.height());
+    eprintln!("[bridge] Color space: {:?}", image.color_space());
+    
     let raw = image
         .decode_native()
         .map_err(|e| RasterError::Other(format!("JPEG2000 native decode error: {e}")))?;
 
+    
+    eprintln!("[bridge] Raw dimensions: {}x{}", raw.width, raw.height);
+    eprintln!("[bridge] Raw bytes_per_sample: {}", raw.bytes_per_sample);
+    eprintln!("[bridge] Raw num_components: {}", raw.num_components);
+    eprintln!("[bridge] Raw data length: {}", raw.data.len());
+    
     let bands = raw.num_components as usize;
     let npix = rows * cols;
     let expected_samples = npix
@@ -192,6 +202,8 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
                     data[b * npix + p] = raw.data[p * bands + b] as f64;
                 }
             }
+            eprintln!("[bridge] 8-bit path: first 10 pixels (component 0): {:?}", 
+                     &data[0..10.min(npix)]);
             Ok((bands, DataType::U8, data))
         }
         2 => {
@@ -210,6 +222,10 @@ fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usi
                     data[b * npix + p] = sample as f64;
                 }
             }
+            eprintln!("[bridge] 16-bit path: first 10 pixels (component 0): {:?}", 
+                     &data[0..10.min(npix)]);
+            eprintln!("[bridge] 16-bit path: pixels as u16: {:?}", 
+                     (0..10.min(npix)).map(|i| data[i] as u16).collect::<Vec<_>>());
             Ok((bands, DataType::U16, data))
         }
         other => Err(RasterError::Other(format!(

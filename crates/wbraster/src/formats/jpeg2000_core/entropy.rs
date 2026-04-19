@@ -488,7 +488,6 @@ pub fn decode_block_standard_j2k(
     let mut dec      = MqDecoder::new(data);
     dec.init_standard_j2k_contexts();
     let trace = width == 64 && height == 64 && num_bitplanes >= 10;
-    let mut px0_mag_history = vec![];
 
     for bp in (0..num_bitplanes).rev() {
         let threshold = 1u32 << bp;
@@ -606,9 +605,15 @@ pub fn decode_block_standard_j2k(
         }
     }
 
-    mags.iter().zip(signs.iter())
+    let result: Vec<i32> = mags.iter().zip(signs.iter())
         .map(|(&m, &s)| if s == 0 { m as i32 } else { -(m as i32) })
-        .collect()
+        .collect();
+    
+    if width == 64 && height == 64 && trace {
+        eprintln!("[decode_stdjk_result] coeff[0..8]: {:?}", &result[0..8]);
+        eprintln!("[decode_stdjk_result] coeff[64..72]: {:?}", &result[64..72]);
+    }
+    result
 }
 
 /// Significance context using `bool` sig array (for standard decoder).

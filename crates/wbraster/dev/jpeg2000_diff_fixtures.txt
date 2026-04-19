@@ -1,0 +1,8 @@
+# JPEG2000 differential harness fixture list
+#
+# One JP2 path per line. Blank lines and lines beginning with # are ignored.
+# Paths can be absolute or relative to the workspace root.
+#
+# Example:
+# data/jpeg2000/sample_a.jp2
+# data/jpeg2000/sample_b.jp2

@@ -1,5 +1,8 @@
 //! JPEG 2000 / GeoJP2 adapter for wbraster.
 
+#[cfg(feature = "jpeg2000-vendored-bridge")]
+use wbjpeg2000 as dj2k;
+
 use super::jpeg2000_core as jp2;
 use crate::error::{RasterError, Result};
 use crate::raster::{DataType, Raster, RasterConfig};
@@ -67,26 +70,25 @@ pub fn read(path: &str) -> Result<Raster> {
 
     let cols = jp2f.width() as usize;
     let rows = jp2f.height() as usize;
-    let bands = jp2f.component_count() as usize;
 
-    let all_chunky = jp2f
-        .read_all_components()
-        .map_err(|e| RasterError::Other(format!("JPEG2000 decode error: {e}")))?;
-    let npix = rows * cols;
-    if all_chunky.len() != npix * bands {
-        return Err(RasterError::CorruptData(format!(
-            "JPEG2000 decoded sample count mismatch: expected {}, got {}",
-            npix * bands,
-            all_chunky.len()
-        )));
-    }
-
-    let mut data = vec![0.0; npix * bands];
-    for p in 0..npix {
-        for b in 0..bands {
-            data[b * npix + p] = all_chunky[p * bands + b] as f64;
+    // Keep external decode bridge feature-gated so core can be built without it.
+    #[cfg(feature = "jpeg2000-vendored-bridge")]
+    let (bands, data_type, data) = match decode_samples_with_dj2k(path, rows, cols) {
+        Ok(decoded) => decoded,
+        Err(ext_err) => {
+            // Avoid silently returning potentially corrupted multiband output
+            // from the legacy native path if vendored decode fails.
+            if jp2f.component_count() > 1 {
+                return Err(RasterError::Other(format!(
+                    "JPEG2000 vendored decode failed for multiband image: {ext_err}"
+                )));
+            }
+            decode_samples_with_internal_reader(&jp2f, rows, cols)?
         }
-    }
+    };
+
+    #[cfg(not(feature = "jpeg2000-vendored-bridge"))]
+    let (bands, data_type, data) = decode_samples_with_internal_reader(&jp2f, rows, cols)?;
 
     let mut x_min = 0.0;
     let mut y_min = 0.0;
@@ -106,7 +108,7 @@ pub fn read(path: &str) -> Result<Raster> {
     };
 
     let nodata = jp2f.no_data().unwrap_or(-9999.0);
-    let data_type = map_data_type(jp2f.pixel_type())?;
+    let data_type = data_type;
     let color_space = jp2f.color_space();
 
     let metadata = vec![
@@ -142,6 +144,99 @@ pub fn read(path: &str) -> Result<Raster> {
     };
 
     Raster::from_data(cfg, data)
+}
+
+#[cfg(feature = "jpeg2000-vendored-bridge")]
+fn decode_samples_with_dj2k(path: &str, rows: usize, cols: usize) -> Result<(usize, DataType, Vec<f64>)> {
+    let bytes = std::fs::read(path)?;
+    let image = dj2k::Image::new(&bytes, &dj2k::DecodeSettings::default())
+        .map_err(|e| RasterError::Other(format!("JPEG2000 decode init error: {e}")))?;
+    let raw = image
+        .decode_native()
+        .map_err(|e| RasterError::Other(format!("JPEG2000 native decode error: {e}")))?;
+
+    let bands = raw.num_components as usize;
+    let npix = rows * cols;
+    let expected_samples = npix
+        .checked_mul(bands)
+        .ok_or_else(|| RasterError::CorruptData("JPEG2000 sample count overflow".into()))?;
+
+    if raw.width as usize != cols || raw.height as usize != rows {
+        return Err(RasterError::CorruptData(format!(
+            "JPEG2000 dimension mismatch: metadata={}x{}, decoded={}x{}",
+            cols, rows, raw.width, raw.height
+        )));
+    }
+
+    let mut data = vec![0.0; expected_samples];
+    match raw.bytes_per_sample {
+        1 => {
+            if raw.data.len() != expected_samples {
+                return Err(RasterError::CorruptData(format!(
+                    "JPEG2000 decoded byte count mismatch: expected {}, got {}",
+                    expected_samples,
+                    raw.data.len()
+                )));
+            }
+            for p in 0..npix {
+                for b in 0..bands {
+                    data[b * npix + p] = raw.data[p * bands + b] as f64;
+                }
+            }
+            Ok((bands, DataType::U8, data))
+        }
+        2 => {
+            if raw.data.len() != expected_samples * 2 {
+                return Err(RasterError::CorruptData(format!(
+                    "JPEG2000 decoded byte count mismatch: expected {}, got {}",
+                    expected_samples * 2,
+                    raw.data.len()
+                )));
+            }
+            for p in 0..npix {
+                for b in 0..bands {
+                    let sample_idx = p * bands + b;
+                    let byte_idx = sample_idx * 2;
+                    let sample = u16::from_le_bytes([raw.data[byte_idx], raw.data[byte_idx + 1]]);
+                    data[b * npix + p] = sample as f64;
+                }
+            }
+            Ok((bands, DataType::U16, data))
+        }
+        other => Err(RasterError::Other(format!(
+            "Unsupported JPEG2000 native sample width: {} bytes",
+            other
+        ))),
+    }
+}
+
+fn decode_samples_with_internal_reader(
+    jp2f: &jp2::GeoJp2,
+    rows: usize,
+    cols: usize,
+) -> Result<(usize, DataType, Vec<f64>)> {
+    let bands = jp2f.component_count() as usize;
+    let npix = rows * cols;
+
+    let all_chunky = jp2f
+        .read_all_components()
+        .map_err(|e| RasterError::Other(format!("JPEG2000 decode error: {e}")))?;
+    if all_chunky.len() != npix * bands {
+        return Err(RasterError::CorruptData(format!(
+            "JPEG2000 decoded sample count mismatch: expected {}, got {}",
+            npix * bands,
+            all_chunky.len()
+        )));
+    }
+
+    let mut data = vec![0.0; npix * bands];
+    for p in 0..npix {
+        for b in 0..bands {
+            data[b * npix + p] = all_chunky[p * bands + b] as f64;
+        }
+    }
+    let data_type = map_data_type(jp2f.pixel_type())?;
+    Ok((bands, data_type, data))
 }
 
 /// Write JPEG2000 / GeoJP2 to `path`.
@@ -302,3 +397,304 @@ fn write_with_writer(writer: jp2::GeoJp2Writer, path: &str, raster: &Raster) -> 
         ))),
     }
 }
+
+#[cfg(all(test, feature = "jpeg2000-vendored-bridge"))]
+mod differential_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+    use std::fmt::Write as _;
+
+    #[derive(Default, Debug)]
+    struct DiffSummary {
+        ok: usize,
+        native_error: usize,
+        native_unsupported_packet_header_markers: usize,
+        native_unsupported_poc: usize,
+        bridge_error: usize,
+        metadata_mismatch: usize,
+        sample_count_mismatch: usize,
+        sample_value_mismatch: usize,
+    }
+
+    fn parse_fixture_list(var: &str) -> Vec<String> {
+        std::env::var(var)
+            .ok()
+            .map(|raw| {
+                raw.split(['\n', ';'])
+                    .flat_map(|s| s.split(','))
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }
+
+    fn parse_fixture_file(var: &str) -> Vec<String> {
+        let path = match std::env::var(var) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Skipping fixture file {}: {}", path, e);
+                return Vec::new();
+            }
+        };
+
+        content
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    fn parse_env_usize(var: &str) -> Option<usize> {
+        std::env::var(var).ok().and_then(|v| v.parse::<usize>().ok())
+    }
+
+    fn json_escape(input: &str) -> String {
+        let mut out = String::with_capacity(input.len() + 8);
+        for ch in input.chars() {
+            match ch {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if c.is_control() => {
+                    let _ = write!(&mut out, "\\u{:04x}", c as u32);
+                }
+                c => out.push(c),
+            }
+        }
+        out
+    }
+
+    fn first_mismatch_index(a: &[f64], b: &[f64], eps: f64) -> Option<usize> {
+        a.iter()
+            .zip(b.iter())
+            .position(|(x, y)| (x - y).abs() > eps)
+    }
+
+    fn is_packet_header_marker_workflow_error(msg: &str) -> bool {
+        msg.contains("PPM/PPT") || msg.contains("PLM/PLT/PPM/PPT")
+    }
+
+    #[test]
+    fn jpeg2000_native_vs_bridge_differential_corpus() {
+        let mut fixture_set: BTreeSet<String> = BTreeSet::new();
+        fixture_set.extend(parse_fixture_list("JPEG2000_DIFF_FIXTURES"));
+        fixture_set.extend(parse_fixture_file("JPEG2000_DIFF_FIXTURE_FILE"));
+        let fixtures: Vec<String> = fixture_set.into_iter().collect();
+        if fixtures.is_empty() {
+            eprintln!(
+                "Skipping differential corpus test: set JPEG2000_DIFF_FIXTURES or JPEG2000_DIFF_FIXTURE_FILE"
+            );
+            return;
+        }
+
+        let enforce = std::env::var("JPEG2000_DIFF_ENFORCE")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let eps = std::env::var("JPEG2000_DIFF_EPS")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(0.0);
+
+        let report_path = std::env::var("JPEG2000_DIFF_REPORT").ok();
+        let max_native_error = parse_env_usize("JPEG2000_DIFF_MAX_NATIVE_ERROR");
+        let max_bridge_error = parse_env_usize("JPEG2000_DIFF_MAX_BRIDGE_ERROR");
+        let max_metadata_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_METADATA_MISMATCH");
+        let max_sample_count_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_COUNT_MISMATCH");
+        let max_sample_value_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_VALUE_MISMATCH");
+        let min_ok = parse_env_usize("JPEG2000_DIFF_MIN_OK");
+        let has_thresholds = max_native_error.is_some()
+            || max_bridge_error.is_some()
+            || max_metadata_mismatch.is_some()
+            || max_sample_count_mismatch.is_some()
+            || max_sample_value_mismatch.is_some()
+            || min_ok.is_some();
+
+        let mut summary = DiffSummary::default();
+        let mut details: Vec<String> = Vec::new();
+
+        for path in fixtures {
+            let jp2f = match jp2::GeoJp2::open(&path) {
+                Ok(v) => v,
+                Err(e) => {
+                    summary.native_error += 1;
+                    details.push(format!("NATIVE_OPEN_ERROR|{}|{}", path, e));
+                    continue;
+                }
+            };
+
+            let rows = jp2f.height() as usize;
+            let cols = jp2f.width() as usize;
+
+            let native = decode_samples_with_internal_reader(&jp2f, rows, cols);
+            let bridge = decode_samples_with_dj2k(&path, rows, cols);
+
+            let (native_bands, native_dtype, native_data) = match native {
+                Ok(v) => v,
+                Err(e) => {
+                    let msg = e.to_string();
+                    summary.native_error += 1;
+                    if is_packet_header_marker_workflow_error(&msg) {
+                        summary.native_unsupported_packet_header_markers += 1;
+                    }
+                    if msg.contains("POC") {
+                        summary.native_unsupported_poc += 1;
+                    }
+                    details.push(format!("NATIVE_DECODE_ERROR|{}|{}", path, msg));
+                    continue;
+                }
+            };
+
+            let (bridge_bands, bridge_dtype, bridge_data) = match bridge {
+                Ok(v) => v,
+                Err(e) => {
+                    summary.bridge_error += 1;
+                    details.push(format!("BRIDGE_DECODE_ERROR|{}|{}", path, e));
+                    continue;
+                }
+            };
+
+            if native_bands != bridge_bands || native_dtype != bridge_dtype {
+                summary.metadata_mismatch += 1;
+                details.push(format!(
+                    "METADATA_MISMATCH|{}|native=({}, {:?}) bridge=({}, {:?})",
+                    path, native_bands, native_dtype, bridge_bands, bridge_dtype
+                ));
+                continue;
+            }
+
+            if native_data.len() != bridge_data.len() {
+                summary.sample_count_mismatch += 1;
+                details.push(format!(
+                    "SAMPLE_COUNT_MISMATCH|{}|native={} bridge={}",
+                    path,
+                    native_data.len(),
+                    bridge_data.len()
+                ));
+                continue;
+            }
+
+            if let Some(i) = first_mismatch_index(&native_data, &bridge_data, eps) {
+                summary.sample_value_mismatch += 1;
+                details.push(format!(
+                    "SAMPLE_VALUE_MISMATCH|{}|idx={} native={} bridge={} eps={}",
+                    path, i, native_data[i], bridge_data[i], eps
+                ));
+                continue;
+            }
+
+            summary.ok += 1;
+        }
+
+        eprintln!(
+            "JPEG2000 differential summary: ok={} native_error={} native_unsupported_packet_header_markers={} native_unsupported_poc={} bridge_error={} metadata_mismatch={} sample_count_mismatch={} sample_value_mismatch={}",
+            summary.ok,
+            summary.native_error,
+            summary.native_unsupported_packet_header_markers,
+            summary.native_unsupported_poc,
+            summary.bridge_error,
+            summary.metadata_mismatch,
+            summary.sample_count_mismatch,
+            summary.sample_value_mismatch
+        );
+        for line in &details {
+            eprintln!("{}", line);
+        }
+
+        if let Some(path) = report_path.as_ref() {
+            let mut report = String::new();
+            let _ = writeln!(&mut report, "{{");
+            let _ = writeln!(&mut report, "  \"fixtures\": {},", summary.ok + summary.native_error + summary.bridge_error + summary.metadata_mismatch + summary.sample_count_mismatch + summary.sample_value_mismatch);
+            let _ = writeln!(&mut report, "  \"eps\": {},", eps);
+            let _ = writeln!(&mut report, "  \"summary\": {{");
+            let _ = writeln!(&mut report, "    \"ok\": {},", summary.ok);
+            let _ = writeln!(&mut report, "    \"native_error\": {},", summary.native_error);
+            let _ = writeln!(
+                &mut report,
+                "    \"native_unsupported_packet_header_markers\": {},",
+                summary.native_unsupported_packet_header_markers
+            );
+            let _ = writeln!(
+                &mut report,
+                "    \"native_unsupported_poc\": {},",
+                summary.native_unsupported_poc
+            );
+            let _ = writeln!(&mut report, "    \"bridge_error\": {},", summary.bridge_error);
+            let _ = writeln!(&mut report, "    \"metadata_mismatch\": {},", summary.metadata_mismatch);
+            let _ = writeln!(&mut report, "    \"sample_count_mismatch\": {},", summary.sample_count_mismatch);
+            let _ = writeln!(&mut report, "    \"sample_value_mismatch\": {}", summary.sample_value_mismatch);
+            let _ = writeln!(&mut report, "  }},");
+            let _ = writeln!(&mut report, "  \"details\": [");
+            for (i, line) in details.iter().enumerate() {
+                let comma = if i + 1 == details.len() { "" } else { "," };
+                let _ = writeln!(&mut report, "    \"{}\"{}", json_escape(line), comma);
+            }
+            let _ = writeln!(&mut report, "  ]");
+            let _ = writeln!(&mut report, "}}");
+
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                if !parent.as_os_str().is_empty() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        eprintln!(
+                            "Failed to create report directory {}: {}",
+                            parent.display(),
+                            e
+                        );
+                    }
+                }
+            }
+
+            if let Err(e) = std::fs::write(path, report) {
+                eprintln!("Failed to write JPEG2000 differential report to {}: {}", path, e);
+            }
+        }
+
+        if enforce {
+            let mismatches = summary.native_error
+                + summary.bridge_error
+                + summary.metadata_mismatch
+                + summary.sample_count_mismatch
+                + summary.sample_value_mismatch;
+
+            if has_thresholds {
+                if let Some(v) = max_native_error {
+                    assert!(summary.native_error <= v, "native_error {} exceeds threshold {}", summary.native_error, v);
+                }
+                if let Some(v) = max_bridge_error {
+                    assert!(summary.bridge_error <= v, "bridge_error {} exceeds threshold {}", summary.bridge_error, v);
+                }
+                if let Some(v) = max_metadata_mismatch {
+                    assert!(summary.metadata_mismatch <= v, "metadata_mismatch {} exceeds threshold {}", summary.metadata_mismatch, v);
+                }
+                if let Some(v) = max_sample_count_mismatch {
+                    assert!(summary.sample_count_mismatch <= v, "sample_count_mismatch {} exceeds threshold {}", summary.sample_count_mismatch, v);
+                }
+                if let Some(v) = max_sample_value_mismatch {
+                    assert!(summary.sample_value_mismatch <= v, "sample_value_mismatch {} exceeds threshold {}", summary.sample_value_mismatch, v);
+                }
+                if let Some(v) = min_ok {
+                    assert!(summary.ok >= v, "ok {} is below minimum threshold {}", summary.ok, v);
+                }
+            } else {
+                assert_eq!(
+                    mismatches, 0,
+                    "Differential corpus enforcement failed with {} mismatches/errors",
+                    mismatches
+                );
+            }
+        }
+    }
+}
+
+

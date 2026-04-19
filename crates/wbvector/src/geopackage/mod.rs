@@ -346,9 +346,20 @@ fn write_layer(db: &mut Db, layer: &Layer) -> Result<()> {
 
     ensure_srs_row(db, layer, srs_id)?;
 
+    // GeoPackage reserves the primary key column name `fid` for row IDs.
+    // Skip user schema fields with this name (case-insensitive) to avoid
+    // duplicate-column DDL failures when writing layers.
+    let schema_fields: Vec<(usize, &FieldDef)> = layer
+        .schema
+        .fields()
+        .iter()
+        .enumerate()
+        .filter(|(_, fd)| !fd.name.eq_ignore_ascii_case("fid"))
+        .collect();
+
     // CREATE TABLE for this layer
     let mut col_defs = format!("  fid INTEGER PRIMARY KEY,\n  {geom_col} BLOB");
-    for fd in layer.schema.fields() {
+    for (_idx, fd) in &schema_fields {
         let sql_type = match fd.field_type {
             FieldType::Integer  => "INTEGER",
             FieldType::Float    => "REAL",
@@ -399,11 +410,16 @@ fn write_layer(db: &mut Db, layer: &Layer) -> Result<()> {
 
         let mut row: Vec<SqlVal> = vec![SqlVal::Null, geom_blob]; // fid = NULL → AUTOINCREMENT
 
-        for val in &feat.attributes {
-            row.push(field_to_sqlval(val));
+        for (idx, _fd) in &schema_fields {
+            let sql_val = feat
+                .attributes
+                .get(*idx)
+                .map(field_to_sqlval)
+                .unwrap_or(SqlVal::Null);
+            row.push(sql_val);
         }
-        // Pad if feature has fewer attributes than schema columns
-        while row.len() < 2 + layer.schema.len() {
+        // Pad if feature has fewer attributes than expected filtered columns.
+        while row.len() < 2 + schema_fields.len() {
             row.push(SqlVal::Null);
         }
 

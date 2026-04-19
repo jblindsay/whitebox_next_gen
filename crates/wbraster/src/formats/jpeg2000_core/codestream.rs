@@ -252,7 +252,7 @@ impl Cod {
     }
 
     pub fn parse(data: &[u8]) -> Result<Self> {
-        if data.len() < 12 {
+        if data.len() < 10 {
             return Err(Jp2Error::InvalidCodestream { offset: 0, message: "COD too short".into() });
         }
         let scod        = data[0];

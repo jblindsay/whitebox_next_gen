@@ -336,6 +336,16 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
                 return downgraded
             raise
 
+    # Prefer a discovered external runtime first. In environments where QGIS
+    # ships with a different embedded Python package set, this avoids silently
+    # binding to a stale in-process whitebox_workflows install.
+    try:
+        return _external_session(prefer_pro=include_pro, allow_downgrade=True)
+    except RuntimeBootstrapError:
+        # Fall back to the current Python runtime if an external runtime is not
+        # available or cannot provide a valid Next Gen session.
+        pass
+
     try:
         wbw = load_whitebox_workflows()
         if not hasattr(wbw, "RuntimeSession"):

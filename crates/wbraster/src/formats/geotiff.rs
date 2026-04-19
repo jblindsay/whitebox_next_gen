@@ -300,14 +300,16 @@ pub fn write_with_options(raster: &Raster, path: &str, opts: &GeoTiffWriteOption
 
 fn map_data_type(sample_format: gt::SampleFormat, bits: u16) -> Result<DataType> {
     match (sample_format, bits) {
-        (gt::SampleFormat::Uint, 8) => Ok(DataType::U8),
-        (gt::SampleFormat::Uint, 16) => Ok(DataType::U16),
-        (gt::SampleFormat::Uint, 32) => Ok(DataType::U32),
-        (gt::SampleFormat::Uint, 64) => Ok(DataType::U64),
-        (gt::SampleFormat::Int, 8) => Ok(DataType::I8),
-        (gt::SampleFormat::Int, 16) => Ok(DataType::I16),
-        (gt::SampleFormat::Int, 32) => Ok(DataType::I32),
-        (gt::SampleFormat::Int, 64) => Ok(DataType::I64),
+        // Some rasters store reduced-precision integer samples (e.g. NBITS=15)
+        // in a wider integer container. Promote to the containing native type.
+        (gt::SampleFormat::Uint, 1..=8) => Ok(DataType::U8),
+        (gt::SampleFormat::Uint, 9..=16) => Ok(DataType::U16),
+        (gt::SampleFormat::Uint, 17..=32) => Ok(DataType::U32),
+        (gt::SampleFormat::Uint, 33..=64) => Ok(DataType::U64),
+        (gt::SampleFormat::Int, 1..=8) => Ok(DataType::I8),
+        (gt::SampleFormat::Int, 9..=16) => Ok(DataType::I16),
+        (gt::SampleFormat::Int, 17..=32) => Ok(DataType::I32),
+        (gt::SampleFormat::Int, 33..=64) => Ok(DataType::I64),
         (gt::SampleFormat::IeeeFloat, 32) => Ok(DataType::F32),
         (gt::SampleFormat::IeeeFloat, 64) => Ok(DataType::F64),
         _ => Err(RasterError::UnsupportedDataType(format!(
@@ -856,5 +858,14 @@ mod tests {
         assert_eq!(r2.data_u64().unwrap(), match &data { RasterData::U64(values) => values.as_slice(), _ => unreachable!() });
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn map_data_type_accepts_subword_integer_bit_depths() {
+        assert_eq!(map_data_type(gt::SampleFormat::Uint, 15).unwrap(), DataType::U16);
+        assert_eq!(map_data_type(gt::SampleFormat::Uint, 31).unwrap(), DataType::U32);
+        assert_eq!(map_data_type(gt::SampleFormat::Int, 15).unwrap(), DataType::I16);
+        assert_eq!(map_data_type(gt::SampleFormat::Int, 31).unwrap(), DataType::I32);
+        assert!(map_data_type(gt::SampleFormat::IeeeFloat, 15).is_err());
     }
 }

@@ -1,0 +1,18 @@
+{
+  "fixtures": 3,
+  "eps": 0,
+  "summary": {
+    "ok": 0,
+    "native_error": 3,
+    "native_unsupported_packet_header_markers": 3,
+    "bridge_error": 0,
+    "metadata_mismatch": 0,
+    "sample_count_mismatch": 0,
+    "sample_value_mismatch": 0
+  },
+  "details": [
+    "NATIVE_DECODE_ERROR|/Users/johnlindsay/Documents/programming/Rust/wbtools_pro/tests/fixtures/sentinel2_l2a_public/S2A_MSIL2A_20161206T080312_N0204_R035_T34HFH_20161206T081929.SAFE/GRANULE/T34HFH/IMG_DATA/R10m/B03.jp2|JPEG2000 decode error: Not yet implemented: native packet walker does not yet support PLM/PLT/PPM/PPT packet-header marker workflows",
+    "NATIVE_DECODE_ERROR|/Users/johnlindsay/Documents/programming/Rust/wbtools_pro/tests/fixtures/sentinel2_l2a_public/S2A_MSIL2A_20161206T080312_N0204_R035_T34HFH_20161206T081929.SAFE/GRANULE/T34HFH/IMG_DATA/R10m/B04.jp2|JPEG2000 decode error: Not yet implemented: native packet walker does not yet support PLM/PLT/PPM/PPT packet-header marker workflows",
+    "NATIVE_DECODE_ERROR|/Users/johnlindsay/Documents/programming/Rust/wbtools_pro/tests/fixtures/sentinel2_l2a_public/S2A_MSIL2A_20161206T080312_N0204_R035_T34HFH_20161206T081929.SAFE/GRANULE/T34HFH/IMG_DATA/R10m/B08.jp2|JPEG2000 decode error: Not yet implemented: native packet walker does not yet support PLM/PLT/PPM/PPT packet-header marker workflows"
+  ]
+}

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Fixed
+- GeoPackage writer now treats `fid`/`FID` as reserved and ignores user-added schema fields with that name when creating table columns.
+- Prevents malformed GeoPackage outputs caused by duplicate `fid` columns, so tools that auto-add a `FID` attribute can write valid `.gpkg` layers without per-tool changes.
+
 ## [0.1.1] - 2026-04-14
 
 ### Fixed

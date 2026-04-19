@@ -363,6 +363,47 @@ pub fn inv_dwt_53_multilevel(data: &mut Vec<i32>, width: usize, height: usize, n
     }
 }
 
+/// Inverse 2D 5/3 DWT on a sub-region of a full-stride coefficient grid.
+///
+/// Processes a `region_w × region_h` window at the top-left of `data`, where rows
+/// are separated by `full_stride` elements (= original image width W).
+/// Assumes the standard JPEG 2000 *separated* (quadrant) layout:
+///   - LL at rows `0..ceil(rh/2)`, cols `0..ceil(rw/2)`
+///   - HL at rows `0..ceil(rh/2)`, cols `ceil(rw/2)..rw`
+///   - LH at rows `ceil(rh/2)..rh`, cols `0..ceil(rw/2)`
+///   - HH at rows `ceil(rh/2)..rh`, cols `ceil(rw/2)..rw`
+pub fn inv_dwt_53_2d_strided(data: &mut [i32], region_w: usize, region_h: usize, full_stride: usize) {
+    let mut col_buf = vec![0i32; region_h];
+    for col in 0..region_w {
+        for r in 0..region_h { col_buf[r] = data[r * full_stride + col]; }
+        interleave(&mut col_buf);
+        inv_lift_53(&mut col_buf);
+        for r in 0..region_h { data[r * full_stride + col] = col_buf[r]; }
+    }
+    let mut row_buf = vec![0i32; region_w];
+    for row in 0..region_h {
+        for c in 0..region_w { row_buf[c] = data[row * full_stride + c]; }
+        interleave(&mut row_buf);
+        inv_lift_53(&mut row_buf);
+        for c in 0..region_w { data[row * full_stride + c] = row_buf[c]; }
+    }
+}
+
+/// Multi-level inverse 5/3 DWT for the standard JPEG 2000 coefficient layout.
+///
+/// `data` is a flat W×H row-major buffer with stride = `width`.  Subbands are stored
+/// in the nested quadrant structure (LL at top-left, HH subbands outward).
+/// Reconstructs the image by expanding each level from coarsest to finest.
+pub fn inv_dwt_53_multilevel_proper(data: &mut [i32], width: usize, height: usize, num_levels: u8) {
+    let nl = num_levels as usize;
+    let mut rw = vec![0usize; nl + 1];
+    let mut rh = vec![0usize; nl + 1];
+    rw[0] = width;  rh[0] = height;
+    for i in 0..nl { rw[i+1] = (rw[i]+1)/2; rh[i+1] = (rh[i]+1)/2; }
+    for lvl in (0..nl).rev() {
+        inv_dwt_53_2d_strided(data, rw[lvl], rh[lvl], width);
+    }
+}
 /// Perform `num_levels` forward decomposition levels of 9/7 DWT.
 pub fn fwd_dwt_97_multilevel(data: &[i32], width: usize, height: usize, num_levels: u8) -> Vec<f64> {
     let mut buf: Vec<f64> = data.iter().map(|&x| x as f64).collect();
@@ -396,10 +437,40 @@ pub fn inv_dwt_97_multilevel(buf: &[f64], width: usize, height: usize, num_level
         h = (h + 1) / 2;
     }
     for level in (0..num_levels as usize).rev() {
-        let slice: Vec<i32> = data[..widths[level] * heights[level]]
-            .iter().map(|&x| x.round() as i32).collect();
         let rec = inv_dwt_97_2d(&data[..widths[level]*heights[level]], widths[level], heights[level]);
         for (i, &v) in rec.iter().enumerate() { data[i] = v as f64; }
+    }
+    data.iter().map(|&x| x.round() as i32).collect()
+}
+
+/// Inverse 2D 9/7 DWT on a sub-region of a full-stride coefficient grid (float version).
+pub fn inv_dwt_97_2d_strided(data: &mut [f64], region_w: usize, region_h: usize, full_stride: usize) {
+    let mut col = vec![0.0f64; region_h];
+    for c in 0..region_w {
+        for r in 0..region_h { col[r] = data[r * full_stride + c]; }
+        interleave_f(&mut col);
+        inv_lift_97(&mut col);
+        for r in 0..region_h { data[r * full_stride + c] = col[r]; }
+    }
+    let mut row = vec![0.0f64; region_w];
+    for r in 0..region_h {
+        for c in 0..region_w { row[c] = data[r * full_stride + c]; }
+        interleave_f(&mut row);
+        inv_lift_97(&mut row);
+        for c in 0..region_w { data[r * full_stride + c] = row[c]; }
+    }
+}
+
+/// Multi-level inverse 9/7 DWT for the standard JPEG 2000 coefficient layout.
+pub fn inv_dwt_97_multilevel_proper(buf: &[f64], width: usize, height: usize, num_levels: u8) -> Vec<i32> {
+    let mut data = buf.to_vec();
+    let nl = num_levels as usize;
+    let mut rw = vec![0usize; nl + 1];
+    let mut rh = vec![0usize; nl + 1];
+    rw[0] = width;  rh[0] = height;
+    for i in 0..nl { rw[i+1] = (rw[i]+1)/2; rh[i+1] = (rh[i]+1)/2; }
+    for lvl in (0..nl).rev() {
+        inv_dwt_97_2d_strided(&mut data, rw[lvl], rh[lvl], width);
     }
     data.iter().map(|&x| x.round() as i32).collect()
 }

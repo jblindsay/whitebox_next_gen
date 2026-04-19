@@ -68,12 +68,13 @@ pub struct GeoJp2Writer {
 impl GeoJp2Writer {
     /// Create a new writer for a `width × height × components` raster.
     pub fn new(width: u32, height: u32, components: u16) -> Self {
+        let max_decomp = max_supported_decomp_levels(width, height);
         Self {
             width, height, components,
             bits:         8,
             signed:       false,
             compression:  CompressionMode::Lossless,
-            decomp_levels: 5,
+            decomp_levels: 5u8.min(max_decomp),
             code_block_w: 4,
             code_block_h: 4,
             color_space:  if components == 3 { ColorSpace::Srgb } else if components == 1 { ColorSpace::Greyscale } else { ColorSpace::MultiBand },
@@ -89,8 +90,8 @@ impl GeoJp2Writer {
 
     /// Set the compression mode (lossless or lossy with target quality).
     pub fn compression(mut self, c: CompressionMode) -> Self { self.compression = c; self }
-    /// Number of DWT decomposition levels (1–32; default 5).
-    pub fn decomp_levels(mut self, n: u8) -> Self { self.decomp_levels = n.clamp(1, 15); self }
+    /// Number of DWT decomposition levels (0–15; default auto-capped by image size).
+    pub fn decomp_levels(mut self, n: u8) -> Self { self.decomp_levels = n.min(15); self }
     /// Manually set bit depth (default inferred from data type).
     pub fn bits_per_sample(mut self, b: u8) -> Self { self.bits = b; self }
     /// Set the JP2 colour space.
@@ -172,6 +173,46 @@ impl GeoJp2Writer {
     // ── Core writer ───────────────────────────────────────────────────────────
 
     fn validate(&self, n: usize) -> Result<()> {
+        if self.width == 0 || self.height == 0 || self.components == 0 {
+            return Err(Jp2Error::InvalidDimensions {
+                width: self.width,
+                height: self.height,
+                components: self.components,
+            });
+        }
+
+        let max_decomp = max_supported_decomp_levels(self.width, self.height);
+        if self.decomp_levels > max_decomp {
+            return Err(Jp2Error::UnsupportedCodingParam(format!(
+                "decomp_levels={} exceeds image-supported maximum {} for dimensions {}x{}",
+                self.decomp_levels, max_decomp, self.width, self.height
+            )));
+        }
+
+        match self.color_space {
+            ColorSpace::Greyscale if self.components != 1 => {
+                return Err(Jp2Error::UnsupportedCodingParam(format!(
+                    "Greyscale color space requires exactly 1 component (got {})",
+                    self.components
+                )));
+            }
+            ColorSpace::Srgb | ColorSpace::YCbCr if self.components != 3 => {
+                return Err(Jp2Error::UnsupportedCodingParam(format!(
+                    "{:?} color space requires exactly 3 components (got {})",
+                    self.color_space, self.components
+                )));
+            }
+            _ => {}
+        }
+
+        if let CompressionMode::Lossy { quality_db } = self.compression {
+            if !quality_db.is_finite() || quality_db <= 0.0 {
+                return Err(Jp2Error::UnsupportedCodingParam(format!(
+                    "lossy quality_db must be finite and > 0 (got {quality_db})"
+                )));
+            }
+        }
+
         let expected = self.width as usize * self.height as usize * self.components as usize;
         if n != expected { Err(Jp2Error::DataSizeMismatch { expected, actual: n }) } else { Ok(()) }
     }
@@ -329,5 +370,146 @@ impl GeoJp2Writer {
         cs.extend_from_slice(&marker::EOC.to_be_bytes());
 
         Ok(cs)
+    }
+}
+
+fn max_supported_decomp_levels(width: u32, height: u32) -> u8 {
+    let mut min_dim = width.min(height);
+    let mut levels = 0u8;
+    while min_dim > 1 {
+        min_dim >>= 1;
+        levels = levels.saturating_add(1);
+    }
+    levels
+}
+
+#[cfg(test)]
+mod writer_tests {
+    use super::*;
+    use super::super::reader::GeoJp2;
+
+    #[test]
+    fn writer_lossless_u16_single_band_parse_and_decode_shape_smoke() {
+        let w = 16u32;
+        let h = 16u32;
+        let data: Vec<u16> = (0..(w * h) as u16).map(|x| x * 3).collect();
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        GeoJp2Writer::new(w, h, 1)
+            .compression(CompressionMode::Lossless)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect("writer should encode lossless u16 single-band data");
+
+        let jp2 = GeoJp2::from_bytes(&cur.into_inner()).expect("reader should parse encoded JP2");
+        let read_back = jp2.read_band_u16(0).expect("reader should decode single-band data");
+        assert_eq!(read_back.len(), data.len(), "decoded band length mismatch");
+        assert!(read_back.iter().any(|&v| v != 0), "decoded band should not be fully zero");
+    }
+
+    #[test]
+    fn writer_multiband_metadata_roundtrip_preserves_component_count_and_color_space() {
+        let w = 8u32;
+        let h = 8u32;
+        let nc = 3u16;
+        let data: Vec<u16> = (0..(w * h * nc as u32) as u16).collect();
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        GeoJp2Writer::new(w, h, nc)
+            .compression(CompressionMode::Lossless)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect("writer should encode multiband data");
+
+        let jp2 = GeoJp2::from_bytes(&cur.into_inner()).expect("reader should parse multiband JP2");
+        assert_eq!(jp2.component_count(), nc);
+        assert_eq!(jp2.color_space(), ColorSpace::Srgb);
+    }
+
+    #[test]
+    fn writer_rejects_decomposition_levels_exceeding_image_capacity() {
+        let w = 8u32;
+        let h = 8u32;
+        let data: Vec<u16> = vec![0u16; (w * h) as usize];
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        let err = GeoJp2Writer::new(w, h, 1)
+            .decomp_levels(6)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect_err("writer should reject excessive decomposition levels");
+
+        let msg = err.to_string();
+        assert!(msg.contains("decomp_levels") || msg.contains("Unsupported coding"));
+    }
+
+    #[test]
+    fn writer_rejects_incompatible_color_space_and_component_count() {
+        let w = 8u32;
+        let h = 8u32;
+        let data: Vec<u16> = vec![0u16; (w * h) as usize];
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        let err = GeoJp2Writer::new(w, h, 1)
+            .color_space(ColorSpace::Srgb)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect_err("writer should reject Srgb with non-3 component image");
+
+        let msg = err.to_string();
+        assert!(msg.contains("requires exactly 3 components"));
+    }
+
+    #[test]
+    fn writer_lossy_mode_roundtrip_metadata_smoke() {
+        let w = 8u32;
+        let h = 8u32;
+        let data: Vec<f32> = (0..(w * h)).map(|i| (i as f32) * 0.25).collect();
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        GeoJp2Writer::new(w, h, 1)
+            .compression(CompressionMode::Lossy { quality_db: 35.0 })
+            .write_f32_to_writer(&mut cur, &data)
+            .expect("writer should encode lossy f32 data");
+
+        let jp2 = GeoJp2::from_bytes(&cur.into_inner()).expect("reader should parse lossy JP2");
+        assert_eq!(jp2.width(), w);
+        assert_eq!(jp2.height(), h);
+        assert_eq!(jp2.component_count(), 1);
+        assert!(!jp2.is_lossless(), "lossy writer output should not be flagged lossless");
+    }
+
+    #[test]
+    fn writer_geo_metadata_roundtrip_preserves_transform_epsg_and_nodata() {
+        let w = 8u32;
+        let h = 8u32;
+        let data: Vec<u16> = vec![42u16; (w * h) as usize];
+        let gt = GeoTransform::north_up(10.0, 2.0, 100.0, -2.0);
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        GeoJp2Writer::new(w, h, 1)
+            .compression(CompressionMode::Lossless)
+            .geo_transform(gt.clone())
+            .epsg(4326)
+            .no_data(-9999.0)
+            .write_u16_to_writer(&mut cur, &data)
+            .expect("writer should encode with geo metadata");
+
+        let jp2 = GeoJp2::from_bytes(&cur.into_inner()).expect("reader should parse georeferenced JP2");
+        assert_eq!(jp2.epsg(), Some(4326));
+        assert_eq!(jp2.no_data(), Some(-9999.0));
+        assert_eq!(jp2.geo_transform(), Some(&gt));
+    }
+
+    #[test]
+    fn writer_rejects_invalid_lossy_quality_parameter() {
+        let w = 8u32;
+        let h = 8u32;
+        let data: Vec<f32> = vec![1.0f32; (w * h) as usize];
+        let mut cur = std::io::Cursor::new(Vec::new());
+
+        let err = GeoJp2Writer::new(w, h, 1)
+            .compression(CompressionMode::Lossy { quality_db: 0.0 })
+            .write_f32_to_writer(&mut cur, &data)
+            .expect_err("writer should reject non-positive lossy quality");
+
+        let msg = err.to_string();
+        assert!(msg.contains("quality_db") || msg.contains("Unsupported coding"));
     }
 }

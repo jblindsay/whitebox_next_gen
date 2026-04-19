@@ -238,7 +238,8 @@ impl<'a> MqDecoder<'a> {
                 // Marker — stop
                 self.c += 0xFF00;
                 self.ct = 8;
-                self.pos -= 2;
+                // Rewind safely even for very short streams (0-1 byte payloads).
+                self.pos = self.pos.saturating_sub(2);
             } else {
                 self.c += (b as u32) << 9;
                 self.c += (b2 as u32) << 1;

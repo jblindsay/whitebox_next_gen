@@ -4,7 +4,14 @@ import glob
 import json
 import os
 import re
+import sqlite3
+import tempfile
 from typing import Any
+
+try:
+    from osgeo import gdal
+except Exception:  # pragma: no cover
+    gdal = None
 
 from .bootstrap import create_runtime_session, run_projection_wrapper
 from .help import get_help_url
@@ -32,6 +39,7 @@ try:
         QgsProcessingLayerPostProcessorInterface,
         QgsProject,
         QgsRasterLayer,
+        QgsVectorFileWriter,
     )
     # QGIS API compatibility: some versions expose a dedicated multiple-raster
     # parameter class, others use the generic multiple-layers parameter.
@@ -79,20 +87,22 @@ except ImportError:  # pragma: no cover
     QgsProcessingLayerPostProcessorInterface = _Dummy
     QgsProject = _Dummy
     QgsRasterLayer = _Dummy
+    QgsVectorFileWriter = _Dummy
     QgsPalettedRasterRenderer = _Dummy
     QColor = _Dummy
 
 
 _MULTISCALE_TOPOGRAPHIC_POSITION_CLASSES: list[tuple[int, str, str]] = [
-    (0, "Lowland hollow", "#355f8d"),
-    (1, "Lowland mid-position", "#4f81aa"),
-    (2, "Lowland knoll", "#75aadb"),
-    (3, "Intermediate hollow", "#8f6c53"),
-    (4, "Intermediate mid-position", "#b6997b"),
-    (5, "Intermediate knoll", "#d9c2a7"),
-    (6, "Upland hollow", "#4f7f4f"),
-    (7, "Upland mid-position", "#78a96f"),
-    (8, "Upland knoll", "#b9d88f"),
+    # Local class uses hue (hollow/mid/knoll); broad class uses tint (low/intermediate/upland).
+    (0, "Lowland hollow", "#7A3E2E"),
+    (1, "Lowland mid-position", "#8A6A2B"),
+    (2, "Lowland knoll", "#4E6A3D"),
+    (3, "Intermediate hollow", "#A35D49"),
+    (4, "Intermediate mid-position", "#B59048"),
+    (5, "Intermediate knoll", "#6F9259"),
+    (6, "Upland hollow", "#C98A73"),
+    (7, "Upland mid-position", "#D8BC79"),
+    (8, "Upland knoll", "#97BE7F"),
 ]
 
 
@@ -352,6 +362,61 @@ def _coerce_string_default(value: Any, fallback: str = "") -> str:
     return str(value)
 
 
+def _coerce_arg_from_default_type(value: Any, default_value: Any) -> Any:
+    """Coerce runtime args using manifest default types when available.
+
+    This is a defensive normalization layer for manifests that omit explicit
+    type metadata. Coercion is conservative: if a value cannot be safely parsed,
+    the original value is preserved.
+    """
+    if isinstance(default_value, bool):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in {"1", "true", "yes", "y", "on"}:
+            return True
+        if text in {"0", "false", "no", "n", "off"}:
+            return False
+        return value
+
+    if isinstance(default_value, int) and not isinstance(default_value, bool):
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return value
+            try:
+                return int(text)
+            except Exception:
+                try:
+                    return int(float(text))
+                except Exception:
+                    return value
+        return value
+
+    if isinstance(default_value, float):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return value
+            try:
+                return float(text)
+            except Exception:
+                return value
+        return value
+
+    return value
+
+
 def _derive_group_name(manifest: dict[str, Any]) -> str:
     base = str(manifest.get("category", "General") or "General")
     tool_id = str(manifest.get("id", "") or "").strip().lower()
@@ -448,6 +513,14 @@ def _derive_group_name(manifest: dict[str, Any]) -> str:
 def _infer_kind(name: str, description: str, default_value: Any = None) -> str:
     n = name.lower()
     d = description.lower()
+
+    # Runtime manifests often omit explicit parameter types. When a default is
+    # a concrete boolean, preserve that signal so we create a checkbox widget
+    # and serialize true/false values instead of string literals.
+    if isinstance(default_value, bool):
+        return "bool"
+    if isinstance(default_value, str) and default_value.strip().lower() in {"true", "false"}:
+        return "bool"
 
     # Detect multi-raster stack parameters (e.g., 'inputs' with list defaults)
     if n in ("inputs", "input_rasters", "raster_list", "rasters"):
@@ -964,6 +1037,275 @@ def _remove_existing_output_artifacts(path: str) -> None:
         pass
 
 
+def _looks_like_vector_file_path(path: str) -> bool:
+    value = str(path or "").strip().lower()
+    if not value:
+        return False
+    vector_exts = (
+        ".gpkg",
+        ".shp",
+        ".geojson",
+        ".json",
+        ".sqlite",
+        ".gml",
+        ".kml",
+        ".csv",
+        ".fgb",
+        ".dxf",
+    )
+    return value.endswith(vector_exts)
+
+
+def _check_for_malformed_gpkg(gpkg_path: str) -> dict[str, Any]:
+    """
+    Detect and diagnose malformed GeoPackage schema issues.
+    
+    Returns a dict with keys:
+      - is_gpkg: whether the file is a GeoPackage
+      - is_readable: whether the file can be opened by SQLite
+      - has_schema_error: whether a duplicate column error was detected
+      - error_details: string describing the error if one was found
+    """
+    result = {
+        "is_gpkg": False,
+        "is_readable": False,
+        "has_schema_error": False,
+        "error_details": "",
+    }
+
+    gpkg_path = str(gpkg_path or "").strip()
+    if not gpkg_path or ".gpkg" not in gpkg_path.lower():
+        return result
+
+    result["is_gpkg"] = True
+
+    try:
+        conn = sqlite3.connect(gpkg_path, timeout=2.0)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Query gpkg_contents to list all layers
+        cursor.execute("SELECT table_name FROM gpkg_contents WHERE data_type IN ('features', 'tiles')")
+        layers = [row[0] for row in cursor.fetchall()]
+        
+        result["is_readable"] = True
+        
+        # For each layer, check if schema has duplicate fid column
+        for layer_name in layers:
+            try:
+                cursor.execute(f"PRAGMA table_info({layer_name})")
+                columns = [row[1].lower() for row in cursor.fetchall()]
+                
+                # Count how many columns are named 'fid'
+                fid_count = sum(1 for c in columns if c == "fid")
+                if fid_count > 1:
+                    result["has_schema_error"] = True
+                    result["error_details"] = (
+                        f"GeoPackage '{os.path.basename(gpkg_path)}' has malformed schema in layer "
+                        f"'{layer_name}': duplicate 'fid' column detected. This likely means it was written "
+                        f"with an older version of Whitebox. You should regenerate this output using the "
+                        f"current version of the tool."
+                    )
+                    break
+            except sqlite3.OperationalError:
+                # Layer table might not exist or be readable; skip
+                pass
+        
+        conn.close()
+    except sqlite3.DatabaseError as e:
+        result["error_details"] = f"Cannot read GeoPackage schema: {str(e)}"
+    except Exception as e:
+        result["error_details"] = f"Unexpected error checking GeoPackage: {str(e)}"
+
+    return result
+
+
+def _normalize_vector_input_source(source: Any) -> str:
+    """Normalize QGIS vector layer URIs to backend-friendly paths when possible."""
+    value = str(source or "").strip()
+    if not value:
+        return ""
+
+    # File-based OGR layers often include provider options such as
+    # "|layername=..." that the backend vector reader does not accept.
+    if "|" in value:
+        candidate = value.split("|", 1)[0].strip()
+        if _looks_like_vector_file_path(candidate):
+            value = candidate
+
+    # Some providers expose OGR-style URI strings with dbname='...'.
+    dbname_match = re.search(r"dbname=['\"]([^'\"]+)['\"]", value, flags=re.IGNORECASE)
+    if dbname_match:
+        candidate = dbname_match.group(1).strip()
+        if _looks_like_vector_file_path(candidate):
+            value = candidate
+
+    return value
+
+
+def _materialize_raster_input_source(source: Any, feedback=None) -> str:
+    """Convert JP2-like sources to temporary GeoTIFF to avoid decoder artifacts."""
+    value = str(source or "").strip()
+    if not value:
+        return ""
+
+    # Remove provider suffixes where present (e.g. "path.jp2|...").
+    if "|" in value:
+        value = value.split("|", 1)[0].strip()
+
+    lower = value.lower()
+    if not lower.endswith((".jp2", ".j2k", ".j2c", ".jpc")):
+        return value
+
+    if gdal is None:
+        if feedback is not None:
+            feedback.pushWarning(
+                "GDAL Python bindings are unavailable; using JP2 directly. "
+                "Convert to GeoTIFF first if output appears corrupted."
+            )
+        return value
+
+    ds = gdal.Open(value, gdal.GA_ReadOnly)
+    if ds is None:
+        return value
+
+    output_type = None
+    try:
+        band = ds.GetRasterBand(1)
+        nbits = band.GetMetadataItem("NBITS", "IMAGE_STRUCTURE") if band is not None else None
+        if nbits is not None and str(nbits).strip() == "15":
+            output_type = gdal.GDT_UInt16
+    except Exception:
+        output_type = None
+
+    fd, tmp_path = tempfile.mkstemp(prefix="wbw_raster_", suffix=".tif")
+    os.close(fd)
+
+    kwargs: dict[str, Any] = {
+        "format": "GTiff",
+        "creationOptions": ["COMPRESS=DEFLATE", "TILED=YES"],
+    }
+    if output_type is not None:
+        kwargs["outputType"] = output_type
+
+    out_ds = gdal.Translate(tmp_path, ds, **kwargs)
+    ds = None
+    if out_ds is None:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+        return value
+    out_ds = None
+
+    if feedback is not None:
+        feedback.pushInfo(f"Materialized JP2 input to temporary GeoTIFF: {tmp_path}")
+    return tmp_path
+
+
+def _materialize_vector_input_source(layer, source: Any, feedback=None) -> str:
+    """Return a backend-friendly vector path, exporting URI-backed layers when needed."""
+    raw_source = str(source or "").strip()
+    normalized = _normalize_vector_input_source(raw_source)
+    if not normalized:
+        return ""
+
+    # Check for malformed GeoPackage files before processing.
+    diagnostic = _check_for_malformed_gpkg(normalized)
+    if diagnostic.get("has_schema_error") and feedback is not None:
+        push_warn = getattr(feedback, "pushWarning", None)
+        if callable(push_warn):
+            push_warn(diagnostic.get("error_details", ""))
+
+    # Fast path for plain filesystem sources: if normalization succeeded and
+    # the result looks like a file path, return it directly without materialization.
+    # This handles cases where QGIS provides URIs like "path.gpkg|layername=..." that
+    # normalize to plain paths.
+    if _looks_like_vector_file_path(normalized):
+        # If the file exists and is readable, use it directly.
+        if os.path.isfile(normalized):
+            return normalized
+
+    if layer is None:
+        return normalized
+
+    writer_cls = QgsVectorFileWriter
+    writer_name = getattr(writer_cls, "__name__", "")
+    if writer_name in {"", "_Dummy"}:
+        return normalized
+
+    layer_name = "input_layer"
+    name_getter = getattr(layer, "name", None)
+    if callable(name_getter):
+        try:
+            layer_name = str(name_getter() or layer_name).strip() or layer_name
+        except Exception:
+            pass
+
+    safe_layer_name = re.sub(r"[^A-Za-z0-9_]+", "_", layer_name).strip("_") or "input_layer"
+    tmp_root = os.path.join(tempfile.gettempdir(), "wbw_qgis_vector_inputs")
+    os.makedirs(tmp_root, exist_ok=True)
+    tmp_path = os.path.join(tmp_root, f"{safe_layer_name}_{os.getpid()}.gpkg")
+
+    try:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except Exception:
+        pass
+
+    # QGIS 3.20+ / 4.x pathway.
+    try:
+        save_opts = writer_cls.SaveVectorOptions()
+        save_opts.driverName = "GPKG"
+        save_opts.layerName = safe_layer_name[:63]
+        save_opts.fileEncoding = "UTF-8"
+        save_opts.onlySelectedFeatures = False
+        save_opts.actionOnExistingFile = getattr(
+            writer_cls,
+            "CreateOrOverwriteFile",
+            getattr(writer_cls, "CreateOrOverwriteLayer", 0),
+        )
+
+        project_instance = getattr(QgsProject, "instance", None)
+        project = project_instance() if callable(project_instance) else None
+        transform_context_getter = getattr(project, "transformContext", None)
+        transform_context = transform_context_getter() if callable(transform_context_getter) else None
+
+        write_v3 = getattr(writer_cls, "writeAsVectorFormatV3", None)
+        if callable(write_v3) and transform_context is not None:
+            write_res = write_v3(layer, tmp_path, transform_context, save_opts)
+            err_code = write_res[0] if isinstance(write_res, tuple) else write_res
+            no_error = getattr(writer_cls, "NoError", 0)
+            if int(err_code) == int(no_error) and os.path.isfile(tmp_path):
+                return tmp_path
+    except Exception:
+        pass
+
+    # Legacy fallback for API variants.
+    try:
+        write_legacy = getattr(writer_cls, "writeAsVectorFormat", None)
+        if callable(write_legacy):
+            crs_getter = getattr(layer, "crs", None)
+            crs = crs_getter() if callable(crs_getter) else None
+            write_res = write_legacy(layer, tmp_path, "UTF-8", crs, "GPKG")
+            err_code = write_res[0] if isinstance(write_res, tuple) else write_res
+            no_error = getattr(writer_cls, "NoError", 0)
+            if int(err_code) == int(no_error) and os.path.isfile(tmp_path):
+                return tmp_path
+    except Exception:
+        pass
+
+    if feedback is not None:
+        push_warn = getattr(feedback, "pushWarning", None)
+        if callable(push_warn):
+            push_warn(
+                "Could not materialize provider-backed vector source; "
+                "continuing with normalized path fallback."
+            )
+
+    return normalized
+
+
 class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
     def __init__(self, provider, manifest: dict[str, Any]):
         super().__init__()
@@ -1382,6 +1724,70 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 }
             )
 
+    def _resolve_raster_layer_sources(self, parameters, name: str, context) -> list[str]:
+        """Resolve multi-raster inputs across QGIS API variants."""
+
+        def _normalize_paths(values: Any) -> list[str]:
+            if values is None:
+                return []
+            if isinstance(values, str):
+                tokens = [p.strip() for p in re.split(r"[;\n]", values) if p.strip()]
+                return [t.strip("\"'") for t in tokens if t.strip("\"' ")]
+            if isinstance(values, (list, tuple)):
+                out: list[str] = []
+                for item in values:
+                    out.extend(_normalize_paths(item))
+                return out
+            return []
+
+        def _layer_sources(layers: Any) -> list[str]:
+            if not isinstance(layers, (list, tuple)):
+                return []
+            out: list[str] = []
+            for lyr in layers:
+                if lyr is None:
+                    continue
+                src_getter = getattr(lyr, "source", None)
+                src = src_getter() if callable(src_getter) else ""
+                if isinstance(src, str) and src.strip():
+                    out.append(src)
+            return out
+
+        raster_list_getter = getattr(self, "parameterAsRasterLayerList", None)
+        if callable(raster_list_getter):
+            try:
+                resolved = _layer_sources(raster_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        layer_list_getter = getattr(self, "parameterAsLayerList", None)
+        if callable(layer_list_getter):
+            try:
+                resolved = _layer_sources(layer_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        string_list_getter = getattr(self, "parameterAsStringList", None)
+        if callable(string_list_getter):
+            try:
+                resolved = _normalize_paths(string_list_getter(parameters, name, context))
+                if resolved:
+                    return resolved
+            except Exception:
+                pass
+
+        value = self.parameterAsString(parameters, name, context)
+        if value:
+            resolved = _normalize_paths(value)
+            if resolved:
+                return resolved
+
+        return _normalize_paths(parameters.get(name))
+
     def processAlgorithm(self, parameters, context, feedback):
         if bool(self._manifest.get("locked", False)):
             reason = self._manifest.get("locked_reason", "license_tier_insufficient")
@@ -1407,45 +1813,45 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind == "raster_in":
                 lyr = self.parameterAsRasterLayer(parameters, name, context)
                 if lyr is not None:
-                    args[name] = lyr.source()
+                    args[name] = _materialize_raster_input_source(lyr.source(), feedback)
                 else:
                     # Some QGIS builds provide a file path but no layer object.
                     value = self.parameterAsString(parameters, name, context)
                     if value:
-                        args[name] = str(value)
+                        args[name] = _materialize_raster_input_source(str(value), feedback)
                     elif required:
                         raise QgsProcessingException(f"Missing required raster input: {name}")
                     else:
                         continue
             elif kind == "raster_layers_in":
-                # Handle multiple rasters
-                layers = self.parameterAsRasterLayerList(parameters, name, context)
-                if layers:
-                    args[name] = [lyr.source() for lyr in layers if lyr is not None]
+                paths = self._resolve_raster_layer_sources(parameters, name, context)
+                if paths:
+                    args[name] = [
+                        _materialize_raster_input_source(path, feedback) for path in paths
+                    ]
+                elif required:
+                    raise QgsProcessingException(f"Missing required raster inputs: {name}")
                 else:
-                    # Fallback: try to parse as string (semicolon-separated paths)
-                    value = self.parameterAsString(parameters, name, context)
-                    if value:
-                        paths = [p.strip() for p in str(value).split(";") if p.strip()]
-                        if paths:
-                            args[name] = paths
-                        elif required:
-                            raise QgsProcessingException(f"Missing required raster inputs: {name}")
-                        else:
-                            continue
-                    elif required:
-                        raise QgsProcessingException(f"Missing required raster inputs: {name}")
-                    else:
-                        continue
+                    continue
             elif kind == "vector_in":
                 lyr = self.parameterAsVectorLayer(parameters, name, context)
                 if lyr is not None:
-                    args[name] = lyr.source()
+                    resolved_path = _materialize_vector_input_source(lyr, lyr.source(), feedback)
+                    args[name] = resolved_path
+                    # Also check for malformed GeoPackage on file-based inputs
+                    diagnostic = _check_for_malformed_gpkg(resolved_path)
+                    if diagnostic.get("has_schema_error"):
+                        feedback.pushWarning(diagnostic.get("error_details", ""))
                 else:
                     # Some QGIS builds provide a file path but no layer object.
                     value = self.parameterAsString(parameters, name, context)
                     if value:
-                        args[name] = str(value)
+                        normalized = _normalize_vector_input_source(value)
+                        args[name] = normalized
+                        # Check for malformed GeoPackage on file path inputs
+                        diagnostic = _check_for_malformed_gpkg(normalized)
+                        if diagnostic.get("has_schema_error"):
+                            feedback.pushWarning(diagnostic.get("error_details", ""))
                     elif required:
                         raise QgsProcessingException(f"Missing required vector input: {name}")
                     else:
@@ -1481,6 +1887,14 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         raise QgsProcessingException(f"Missing required parameter: {name}")
                     continue
                 args[name] = value
+
+        # Defensive type coercion for manifests that provide defaults but no
+        # explicit kind metadata (common in runtime catalogs).
+        defaults = self._manifest.get("defaults", {})
+        if isinstance(defaults, dict):
+            for key, default_value in defaults.items():
+                if key in args:
+                    args[key] = _coerce_arg_from_default_type(args.get(key), default_value)
 
         session = None
         if self.name() not in projection_wrapper_ids:

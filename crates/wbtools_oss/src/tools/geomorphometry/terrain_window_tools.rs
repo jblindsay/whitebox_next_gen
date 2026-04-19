@@ -5182,15 +5182,16 @@ impl TerrainWindowCore {
             ("class_6_label", "Upland hollow"),
             ("class_7_label", "Upland mid-position"),
             ("class_8_label", "Upland knoll"),
-            ("class_0_color", "#4E79A7"),
-            ("class_1_color", "#7EA6C9"),
-            ("class_2_color", "#B8D0E6"),
-            ("class_3_color", "#9C7A4E"),
-            ("class_4_color", "#C8B08A"),
-            ("class_5_color", "#E7D9BF"),
-            ("class_6_color", "#3E7F4F"),
-            ("class_7_color", "#72A66F"),
-            ("class_8_color", "#B7D6A8"),
+            // Local class is encoded by hue (hollow/mid/knoll), broad class by tint (low/intermediate/upland).
+            ("class_0_color", "#7A3E2E"),
+            ("class_1_color", "#8A6A2B"),
+            ("class_2_color", "#4E6A3D"),
+            ("class_3_color", "#A35D49"),
+            ("class_4_color", "#B59048"),
+            ("class_5_color", "#6F9259"),
+            ("class_6_color", "#C98A73"),
+            ("class_7_color", "#D8BC79"),
+            ("class_8_color", "#97BE7F"),
         ];
         let mut metadata = input.metadata.clone();
         metadata.push(("color_interpretation".to_string(), "categorical".to_string()));

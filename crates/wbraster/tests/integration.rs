@@ -801,7 +801,7 @@ fn write_jpeg2000_typed_lossless() {
     let r = make_test_raster();
     let opts = Jpeg2000WriteOptions {
         compression: Some(Jpeg2000Compression::Lossless),
-        decomp_levels: Some(5),
+        decomp_levels: None, // auto-cap to image dimensions
         color_space: None,
     };
 
@@ -816,7 +816,7 @@ fn write_jpeg2000_typed_lossy() {
     let r = make_test_raster();
     let opts = Jpeg2000WriteOptions {
         compression: Some(Jpeg2000Compression::Lossy { quality_db: 45.0 }),
-        decomp_levels: Some(5),
+        decomp_levels: None, // auto-cap to image dimensions
         color_space: None,
     };
 

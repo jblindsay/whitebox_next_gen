@@ -253,6 +253,110 @@ pub fn parse_geojp2_payload(data: &[u8]) -> Result<CrsInfo> {
     Ok(CrsInfo { epsg, model_type, raster_type, geo_transform, no_data, raw_geokeys })
 }
 
+/// Parse a GMLJP2 XML payload into `CrsInfo` when a GeoJP2 UUID box is absent.
+///
+/// This is a best-effort fallback for products (e.g. Sentinel-2 JP2 assets)
+/// that encode georeferencing in `xml ` boxes instead of GeoJP2 UUID metadata.
+pub fn parse_gmljp2_xml_payload(xml: &str) -> Option<CrsInfo> {
+    fn extract_first(text: &str, start: &str, end: &str) -> Option<String> {
+        let s = text.find(start)? + start.len();
+        let tail = &text[s..];
+        let e = tail.find(end)?;
+        Some(tail[..e].trim().to_string())
+    }
+
+    fn extract_attr_value(tag_fragment: &str, attr: &str) -> Option<String> {
+        let token = format!("{attr}=\"");
+        let s = tag_fragment.find(&token)? + token.len();
+        let tail = &tag_fragment[s..];
+        let e = tail.find('"')?;
+        Some(tail[..e].trim().to_string())
+    }
+
+    fn parse_two_f64(text: &str) -> Option<(f64, f64)> {
+        let mut it = text.split_whitespace();
+        let a = it.next()?.parse::<f64>().ok()?;
+        let b = it.next()?.parse::<f64>().ok()?;
+        Some((a, b))
+    }
+
+    fn parse_two_i64(text: &str) -> Option<(i64, i64)> {
+        let mut it = text.split_whitespace();
+        let a = it.next()?.parse::<i64>().ok()?;
+        let b = it.next()?.parse::<i64>().ok()?;
+        Some((a, b))
+    }
+
+    fn parse_epsg(s: &str) -> Option<u16> {
+        let digits_rev: String = s
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        if digits_rev.is_empty() {
+            return None;
+        }
+        let digits: String = digits_rev.chars().rev().collect();
+        digits.parse::<u16>().ok()
+    }
+
+    // Quick reject for non-GMLJP2 XML boxes.
+    if !xml.contains("RectifiedGrid") {
+        return None;
+    }
+
+    // Grid low indices (if present) are commonly 1-based in GMLJP2.
+    let (low_x, low_y) = extract_first(xml, "<gml:low>", "</gml:low>")
+        .and_then(|s| parse_two_i64(&s))
+        .unwrap_or((1, 1));
+
+    let origin_pos = extract_first(xml, "<gml:pos>", "</gml:pos>")
+        .and_then(|s| parse_two_f64(&s))?;
+
+    // Parse the first two offset vectors.
+    let mut offsets: Vec<(f64, f64)> = Vec::new();
+    let mut search_from = 0usize;
+    while offsets.len() < 2 {
+        let rel = xml[search_from..].find("<gml:offsetVector")?;
+        let abs = search_from + rel;
+        let after_tag = xml[abs..].find('>')? + abs + 1;
+        let end = xml[after_tag..].find("</gml:offsetVector>")? + after_tag;
+        let text = xml[after_tag..end].trim();
+        offsets.push(parse_two_f64(text)?);
+        search_from = end + "</gml:offsetVector>".len();
+    }
+
+    let (off1x, off1y) = offsets[0];
+    let (off2x, off2y) = offsets[1];
+
+    // Treat origin as the centre of the (low_x, low_y) grid point and convert
+    // to GDAL-style upper-left corner of pixel (0,0).
+    let low_dx = (low_x - 1) as f64;
+    let low_dy = (low_y - 1) as f64;
+    let x_origin = origin_pos.0 + low_dx * off1x + low_dy * off2x - 0.5 * (off1x + off2x);
+    let y_origin = origin_pos.1 + low_dx * off1y + low_dy * off2y - 0.5 * (off1y + off2y);
+
+    let gt = GeoTransform::new(x_origin, off1x, off2x, y_origin, off1y, off2y);
+
+    let srs_name = extract_first(xml, "srsName=\"", "\"")
+        .or_else(|| {
+            let p0 = xml.find("<gml:Point")?;
+            let p1 = xml[p0..].find('>')? + p0;
+            extract_attr_value(&xml[p0..p1], "srsName")
+        });
+
+    let epsg = srs_name.as_deref().and_then(parse_epsg);
+
+    Some(CrsInfo {
+        epsg,
+        model_type: epsg.map(|e| if (4000..5000).contains(&e) { 2 } else { 1 }),
+        raster_type: Some(1),
+        geo_transform: Some(gt),
+        no_data: None,
+        raw_geokeys: Vec::new(),
+    })
+}
+
 // ── Mini-TIFF serialiser ──────────────────────────────────────────────────────
 
 struct MiniTag {
@@ -356,4 +460,34 @@ mod tests {
         assert_eq!(crs.epsg, Some(32632));
         assert!(crs.geo_transform.is_none());
     }
+
+        #[test]
+        fn parse_gmljp2_xml_fallback_rectified_grid() {
+                let xml = r#"<?xml version='1.0'?>
+<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml">
+    <gml:featureMember>
+        <gml:RectifiedGridCoverage>
+            <gml:rectifiedGridDomain>
+                <gml:RectifiedGrid dimension="2">
+                    <gml:limits><gml:GridEnvelope><gml:low>1 1</gml:low><gml:high>1830 1830</gml:high></gml:GridEnvelope></gml:limits>
+                    <gml:origin>
+                        <gml:Point srsName="urn:ogc:def:crs:EPSG::32617"><gml:pos>500010 4899990</gml:pos></gml:Point>
+                    </gml:origin>
+                    <gml:offsetVector srsName="urn:ogc:def:crs:EPSG::32617">60 0</gml:offsetVector>
+                    <gml:offsetVector srsName="urn:ogc:def:crs:EPSG::32617">0 -60</gml:offsetVector>
+                </gml:RectifiedGrid>
+            </gml:rectifiedGridDomain>
+        </gml:RectifiedGridCoverage>
+    </gml:featureMember>
+</gml:FeatureCollection>
+"#;
+
+                let crs = parse_gmljp2_xml_payload(xml).expect("expected GMLJP2 fallback parse");
+                assert_eq!(crs.epsg, Some(32617));
+                let gt = crs.geo_transform.expect("expected geotransform");
+                assert!((gt.x_origin - 499980.0).abs() < 1e-6);
+                assert!((gt.y_origin - 4900020.0).abs() < 1e-6);
+                assert!((gt.pixel_width - 60.0).abs() < 1e-9);
+                assert!((gt.pixel_height + 60.0).abs() < 1e-9);
+        }
 }

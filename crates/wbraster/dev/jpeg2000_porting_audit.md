@@ -1,0 +1,118 @@
+# JPEG2000 Native Porting Audit
+
+Purpose: Use the in-repo `wbjpeg2000` crate as a correctness reference to improve `wbraster/src/formats/jpeg2000_core` and eventually remove the vendored bridge from the `wbraster` read path.
+
+## Current runtime strategy
+
+- Default read path: `wbjpeg2000` decode + native georeferencing extraction.
+- Native-only mode: disable `jpeg2000-vendored-bridge` feature.
+- Safety guard: if vendored decode fails for multiband images, fail loudly instead of silently falling back to potentially corrupt legacy decode.
+
+## Known native-risk areas in jpeg2000_core
+
+1. Packet/component payload handling in `reader.rs`:
+- Existing `extract_component_data` uses equal chunk splitting for multi-component tile data.
+- This is not valid for general JP2 packet layouts and can induce repeating artifacts.
+
+2. Tier-1 entropy assumptions in `entropy.rs`:
+- Implementation is intentionally simplified and may diverge from full EBCOT semantics.
+- Marker-stuffing and context pass details are likely incomplete for diverse external scenes.
+
+3. Tile-part/progression assumptions in `reader.rs`:
+- Current extraction logic largely assumes simple contiguous payload patterns.
+- External scenes may use progression/tile-part patterns requiring stricter packet parsing.
+
+## Mapping: wbjpeg2000 -> native modules
+
+- `crates/wbjpeg2000/src/j2c/codestream.rs` -> `src/formats/jpeg2000_core/codestream.rs`
+- `crates/wbjpeg2000/src/j2c/decode.rs` -> `src/formats/jpeg2000_core/reader.rs` + `entropy.rs`
+- `crates/wbjpeg2000/src/j2c/bitplane.rs` -> `src/formats/jpeg2000_core/entropy.rs`
+- `crates/wbjpeg2000/src/j2c/arithmetic_decoder.rs` -> `src/formats/jpeg2000_core/entropy.rs`
+- `crates/wbjpeg2000/src/j2c/progression.rs` -> `src/formats/jpeg2000_core/reader.rs`
+- `crates/wbjpeg2000/src/j2c/tile.rs` -> `src/formats/jpeg2000_core/reader.rs`
+- `crates/wbjpeg2000/src/j2c/idwt.rs` -> `src/formats/jpeg2000_core/wavelet.rs`
+
+## Phase 1 port targets (high impact, low API disruption)
+
+1. Replace packet parsing / component payload extraction path in native reader.
+Status: in progress.
+- Completed: native reader now parses tile-parts with `SOT`/`Psot` bounded `SOD` extraction and concatenates multiple tile-parts for the same tile index.
+- Completed: native reader now materializes ordered tile-part metadata (`isot`, `tpsot`, `tnsot`, payload bounds) and builds a packet traversal plan scaffold for per-tile decode flow.
+- Completed: native packet payload collection now uses an LRCP-only traversal stage with explicit fail-fast for non-LRCP progressions until packet-header parsing is ported.
+- Completed: native tile-part header scan now parses pre-`SOD` marker segments and fail-fast rejects unsupported `POC` and packed/explicit packet-header marker workflows (`PLM`, `PLT`, `PPM`, `PPT`).
+- Completed: native LRCP traversal now includes bounded first packet-header preflight in tile-part payloads, with explicit checks for optional `SOP`/`EPH`, empty payload after `SOD`, and invalid/truncated first-header conditions.
+- Completed: native tile-part header parsing now consumes `COD` segments and applies tile-part progression/layer overrides to packet traversal planning.
+- Completed: native LRCP first-packet preflight now includes bounded non-zero packet bit parsing with classic coding-pass codeword shape checks to catch truncated/malformed header bitstreams earlier.
+- Completed: native LRCP preflight now probes classic `Lblock` unary increments and segment-length bitfield widths, rejecting unterminated unary and excessive/truncated length-bit requests as malformed packet headers.
+- Completed: native LRCP preflight now validates first inclusion signaling bit availability and rejects non-zero packet headers that leave no packet body bytes within tile-part payload bounds.
+- Completed: native LRCP preflight now performs provisional classic segment-length value parsing and rejects packet headers whose declared segment length exceeds remaining tile-part body bytes.
+- Completed: native LRCP preflight ordering now evaluates first inclusion signaling before coding-pass/length probes, and applies empty-body/declared-span guards conditionally when first inclusion indicates contribution.
+- Completed: native LRCP preflight now performs bounded multi-contribution preview (inclusion-gated coding-pass/length probes) and enforces cumulative declared-length vs remaining body-byte consistency checks.
+- Completed: native LRCP extraction now uses preflight-derived body span metadata for previewed included contributions (body-start + cumulative declared length), reducing dependence on raw full-payload concatenation in those paths.
+- Completed: native LRCP extraction now walks a bounded number of packet boundaries within a tile-part and applies preview-derived body slicing across multiple packet starts.
+- Completed: native LRCP packet-preview iteration budget is now progression-aware (layer/component/resolution scaled with caps) instead of fixed-count previewing.
+- Completed: native LRCP preview loop now uses explicit packet-context traversal scaffolding (`layer/resolution/component`) and includes LRCP context in preflight error diagnostics.
+- Completed: native LRCP packet preflight now carries per-context `Lblock` state across packet walking and applies state-evolved `Lblock` values during classic segment-length parsing.
+- Completed: native LRCP packet-context state now persists inclusion/history counters (`packets_seen`, `contributions_seen`, `ever_included`) and surfaces these in LRCP-context diagnostics.
+- Completed: native LRCP packet-context state now tracks inclusion-transition history (`first_included_packet_index`, `last_included_packet_index`, `packets_since_last_inclusion`, `zero_length_packets`) and updates it in packet-header preflight.
+- Completed: LRCP tile-part packet-body assembly now stages preview slices per tile-part and reverts to conservative full tile-part payload when post-preview non-zero packets have no previewed contribution (ambiguous body-span case).
+- Note: current LRCP packet walker is single-pass over `(layer,resolution,component)` contexts, so same-context inclusion-history fallback hooks are in place but cannot yet be fully exploited until packet-context revisit traversal is implemented.
+- Completed: LRCP packet walker now supports bounded context-round revisits, enabling same-context packet-state continuity across multiple packet positions in one tile-part.
+- Completed: preview budget logic now allows revisit rounds with explicit hard bounds (`x2` revisit factor, clamp to 128).
+- Completed: ambiguous non-zero/no-preview packet handling is now context-aware under revisit traversal: same-context prior inclusion forces full tile-part fallback, while new-context ambiguity preserves collected preview spans and halts preview walking.
+- Completed: packet preflight now detects bounded contribution-preview cap exhaustion (no observed inclusion termination) and routes extraction to conservative full tile-part fallback for that ambiguous packet-body span case.
+- Completed: native constrained RLCP traversal support added (RLCP packet-context cursor ordering, bounded revisit rounds, RLCP-context diagnostics).
+- Completed: tile-part COD progression overrides to RLCP are now consumed by native packet traversal rather than failing as unsupported progression mode.
+- Completed: packet-body accounting now appends unresolved tail bytes when preview walking halts at ambiguous new-context non-zero packets after collected preview contributions (LRCP and constrained RLCP paths).
+- Completed: LRCP and constrained RLCP walkers are now unified under one progression-parameterized traversal core, reducing divergence risk while preserving existing packet preflight/fallback semantics.
+- Completed: native packet walker now supports all progression orders (`LRCP`, `RLCP`, `RPCL`, `PCRL`, `CPRL`) within the current constrained model.
+- Completed: constrained `RPCL`/`PCRL`/`CPRL` cursor-order traversal is covered by deterministic tests and tile-part COD override fixtures.
+- Completed: packet context/state continuity now persists across tile-parts for a tile (instead of resetting per tile-part).
+- Completed: writer invariants hardened with decomposition-level bounds tied to image dimensions and color-space/component compatibility checks.
+- Completed: writer defaults now auto-cap decomposition levels to image-supported limits.
+- Completed: COD parser minimum length updated to accept standards-conformant 10-byte COD payloads (legacy padding no longer required).
+- Completed: active writer confidence tests added for single-band encode/decode shape smoke, multiband metadata roundtrip, and invariant rejection paths.
+- Completed: writer lossy-mode confidence smoke test added (encode/parse metadata behavior).
+- Completed: writer geometadata roundtrip test added (geo-transform, EPSG, NODATA).
+- Completed: lossy writer parameter validation now rejects non-finite/non-positive `quality_db` values.
+- Completed: differential corpus harness added for native-vs-bridge decode comparison with mismatch classification and optional enforcement mode.
+- Differential harness control env vars:
+  - `JPEG2000_DIFF_FIXTURES`
+  - `JPEG2000_DIFF_FIXTURE_FILE`
+  - `JPEG2000_DIFF_EPS`
+  - `JPEG2000_DIFF_ENFORCE`
+- Differential harness enhancements:
+  - optional JSON report output via `JPEG2000_DIFF_REPORT`
+  - threshold-based pass/fail gates via `JPEG2000_DIFF_MAX_*` and `JPEG2000_DIFF_MIN_OK`
+- Differential harness now tracks `native_unsupported_packet_header_markers` as
+  an explicit subtype of `native_error` (for `PLM`/`PLT`/`PPM`/`PPT` workflows).
+- Baseline corpus run (3 Sentinel-2 `R10m` band fixtures) report:
+  - **Before Chunk E:** `ok=0`, `native_error=3`, `native_unsupported_packet_header_markers=3`
+  - **After Chunk E (PLT skip fix):** `ok=0`, `native_error=0`, `metadata_mismatch=2`, `sample_value_mismatch=1`
+  - **After Chunk F (pixel_type + POC detection):** `ok=0`, `native_error=0`, `metadata_mismatch=0`, `sample_count_mismatch=0`, `sample_value_mismatch=3`
+  - Remaining issues (Chunk G):
+    - All 3 bands show sample_value_mismatch. Root cause: `decode_block` uses a
+      single-block MQ arithmetic decode approximation. Real JPEG2000 code-blocks
+      use per-code-block segment lengths from packet header Lblock fields, not a
+      single `bits + num_decomps` heuristic. This produces incorrect coefficients
+      for all real-world files that use standard code-block subdivision.
+  - Report artifact: `crates/wbraster/dev/jpeg2000_diff_report_sentinel2_chunk_f.json`
+- Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
+- Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
+
+2. Align bitstream stuffing and arithmetic decode boundary behavior.
+3. Add fixture-backed regression tests that fail on lattice/checkerboard signatures.
+
+## Regression test ideas
+
+- Sentinel JP2 real fixture decode test:
+  - Assert value range is plausible (not mostly {0, max, fixed periodic values}).
+  - Assert row samples do not show period-4 repeating pattern.
+- Multiband JP2 smoke:
+  - Assert decode succeeds with expected sample count and no per-band aliasing.
+
+## Exit criteria for bridge removal
+
+- Native-only build passes all new JP2 regression tests.
+- Native decode reproduces expected stats and row signatures on known problematic scenes.
+- `jpeg2000-vendored-bridge` path can be disabled by default, then removed in follow-up.

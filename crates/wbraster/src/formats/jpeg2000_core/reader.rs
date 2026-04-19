@@ -1587,18 +1587,6 @@ impl GeoJp2 {
         let target_component = _component;
         let nc = self.components.max(1) as usize;
 
-        // When nc > 1 the packet stream interleaves data for all components;
-        // component-aware traversal for this path is Phase A pending work.
-        if nc > 1 {
-            return Err(Jp2Error::NotImplemented(
-                format!(
-                    "native decode_component_v2 does not yet handle multicomponent \
-                     codestreams (requested component {target_component} of {nc}); \
-                     enable the jpeg2000-vendored-bridge feature for full support"
-                ),
-            ));
-        }
-
         let w   = self.width  as usize;
         let h   = self.height as usize;
         let nl  = self.cod.num_decomps as usize;
@@ -1632,7 +1620,7 @@ impl GeoJp2 {
             subbands.push(SubbandDesc { row_off: rh[d], col_off: rw[d], sb_w: hl_w, sb_h: lh_h,   qcd_idx: 3*r     });
         }
 
-        // ── 3. Per-code-block accumulation state ──────────────────────────────
+        // ── 3. Per-code-block accumulation state (one vec per component) ─────
         struct CbState {
             data: Vec<u8>,
             lblock: u32,
@@ -1641,22 +1629,29 @@ impl GeoJp2 {
             incl_value: u32,
             incl_initialized: bool,
         }
-        let mut cb: Vec<CbState> = subbands.iter().map(|_| CbState {
-            data: Vec::new(),
-            lblock: 3,
-            ever_included: false,
-            missing_bitplanes: 0,
-            incl_value: 0,
-            incl_initialized: false,
-        }).collect();
+        let make_cb_v2 = |n: usize| -> Vec<CbState> {
+            (0..n).map(|_| CbState {
+                data: Vec::new(),
+                lblock: 3,
+                ever_included: false,
+                missing_bitplanes: 0,
+                incl_value: 0,
+                incl_initialized: false,
+            }).collect()
+        };
+        let num_subbands = subbands.len();
+        let mut all_cb: Vec<Vec<CbState>> = (0..nc).map(|_| make_cb_v2(num_subbands)).collect();
 
         // ── 4. Locate SOD ─────────────────────────────────────────────────────
         let (sod_start, tile_end) = Self::find_tile_sod(&self.codestream)?;
         let body = &self.codestream[sod_start..tile_end];
 
-        // ── 5. Parse packets (PCRL: outer=res 0..=nl, inner=layer 0..num_layers) ──
+        // ── 5. Parse packets (PCRL: outer=comp 0..nc, then res 0..=nl, inner=layer) ──
         let mut byte_pos = 0usize;
-        'outer: for res in 0..=nl {
+        'outer: for comp in 0..nc {
+        let cb = &mut all_cb[comp];
+        let is_target = comp == target_component;
+        for res in 0..=nl {
             let cb_start = if res == 0 { 0 } else { 1 + 3 * (res - 1) };
             let num_cbs  = if res == 0 { 1 } else { 3 };
 
@@ -1766,21 +1761,25 @@ impl GeoJp2 {
                     if seg_valid[cb_local] {
                         let end = byte_pos + seg_lens[cb_local] as usize;
                         if end > body.len() { break 'outer; }
-                        let seg_start = cb[cb_start + cb_local].data.len();
-                        cb[cb_start + cb_local].data.extend_from_slice(&body[byte_pos..end]);
-                        if debug_enabled && cb_start + cb_local == 0 {
-                            eprintln!("[layer {}] sb[0] segment: {} bytes (idx count {} → {})", 
-                                _layer, seg_lens[cb_local], seg_start, cb[0].data.len());
+                        if is_target {
+                            let seg_start = cb[cb_start + cb_local].data.len();
+                            cb[cb_start + cb_local].data.extend_from_slice(&body[byte_pos..end]);
+                            if debug_enabled && cb_start + cb_local == 0 {
+                                eprintln!("[layer {}] sb[0] segment: {} bytes (idx count {} → {})",
+                                    _layer, seg_lens[cb_local], seg_start, cb[0].data.len());
+                            }
                         }
                         byte_pos = end;
-                    } else if debug_enabled && cb_start + cb_local == 0 {
+                    } else if debug_enabled && is_target && cb_start + cb_local == 0 {
                         eprintln!("[layer {}] sb[0] no segment", _layer);
                     }
                 }
             }
-        }
+        } // end for res
+        } // end for comp
 
         // ── 6. Decode + assemble coefficient grid ────────────────────────────
+        let cb = &all_cb[target_component];
         if lossless {
             let mut coeff = vec![0i32; w * h];
             let guard_bits = ((self.qcd.sqcd >> 5) & 0x07) as usize;

@@ -170,6 +170,53 @@ Estimated Phase A remaining total:
 - Most likely: 4.5-8 engineering days.
 - Conservative: 7-11 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
 
+### Phase A Hard Timebox Protocol (final spike)
+
+Purpose:
+- Prevent indefinite codec-deep work by running one bounded final spike with
+  measurable checkpoints and explicit stop conditions.
+
+Timebox:
+- Maximum effort: 2-3 engineering days (no extension without explicit
+  go-decision).
+
+Execution windows:
+- Window 1 (Day 0 to Day 1): CL semantics correction attempt
+  - Focus only on LL cleanup significance/sign semantics and context-state
+    handling inferred from CL stream divergence.
+  - Keep all changes behind diagnostic toggles where possible until KPI
+    movement is demonstrated.
+- Window 2 (Day 1 to Day 2): validation and hardening
+  - Re-run parity matrix and differential corpus.
+  - Keep only net-positive changes; revert non-winning experiments.
+- Window 3 (Day 2 to Day 3): final decision checkpoint
+  - Produce go/no-go decision for continued native parity effort in Phase A.
+
+Success criteria (must hit at least one):
+- Reduce multicomponent mismatch class count on agreed local fixture trio, or
+- Keep mismatch class count unchanged but achieve clear first-mismatch
+  magnitude improvement across at least 2 of 3 fixtures with no regressions,
+  and provide a coherent root-cause fix narrative.
+
+Stop criteria (any one triggers immediate pivot):
+- No KPI movement after two distinct CL-lane correction attempts.
+- Any attempted fix only shifts mismatch shape/magnitude without stable net
+  gain on matrix reruns.
+- New regressions in baseline matrix profiles that cannot be eliminated in the
+  same window.
+
+If stop criteria are met (fallback posture):
+- Freeze bridge-backed decode as default for problematic JP2 classes.
+- Keep native path enabled for verified-safe classes only.
+- Move full parity completion to a scheduled follow-up milestone instead of
+  blocking broader roadmap delivery.
+
+Decision outputs required at end of timebox:
+- Go: continue Phase A parity work with narrowed CL-lane plan and updated
+  remaining estimate.
+- No-Go: mark Phase A parity as partial completion, adopt fallback posture,
+  and proceed with non-blocked roadmap work.
+
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:
 - crates/wbraster/src/formats/jpeg2000_core/reader.rs
@@ -282,3 +329,7 @@ Exit criteria:
   captured LL first-block samples. Standard path consumes mixed SIG contexts
   (`ctx 0..3`) while legacy cleanup consumes context 18 stream, confirming
   divergence at CL symbol/context stream level before reconstruction.
+- 2026-04-19: Adopted a hard 2-3 day final Phase A spike protocol with
+  explicit success and stop gates. If stop gates trigger, fallback posture is
+  bridge-default for problematic JP2 classes plus native-only for verified-safe
+  classes.

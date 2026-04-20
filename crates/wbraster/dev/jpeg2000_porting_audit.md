@@ -276,6 +276,22 @@ Status: in progress.
       before full-block reconstruction diverges.
     - Treat future runtime fixes as acceptable only if they survive the full
       parity matrix with no regression in existing baseline profiles.
+  - Re-entry Step 1 baseline freeze completed (2026-04-20):
+    - Build preflight: `cargo check -p wbraster` passed.
+    - Baseline artifact captured:
+      - `crates/wbraster/dev/baselines/jpeg2000_parity_baseline_2026-04-20.txt`
+    - Baseline profile signature (fixture trio):
+      - `baseline_standard`: (`8192` / `8193` / `8192`)
+      - `standard_runmode_on`: (`32768` / `32831` / `32784`)
+      - `legacy_all_subbands`: (`4097` / `8192` / `16384`)
+      - `legacy_ll_only`: (`4097` / `8192` / `16384`)
+      - `legacy_hf_only`: (`8192` / `8193` / `8192`)
+      - `ll_disable_sp`: (`8193` / `16384` / `8193`)
+      - `ll_disable_mr`: (`16384` / `16384` / `16384`)
+      - `ll_disable_cl`: (`32768` / `32768` / `32768`)
+    - KPI class remains unchanged: `multicomponent_sample_value_mismatch=3`.
+    - Step 2 gate status: cleared to begin packet/body and segment accounting
+      audit against `wbjpeg2000` using this frozen baseline.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

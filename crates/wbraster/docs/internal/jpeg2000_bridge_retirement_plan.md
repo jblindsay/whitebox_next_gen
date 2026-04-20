@@ -335,6 +335,11 @@ Step 1. Freeze the re-entry baseline (0.5 day)
 - Verification commands:
   - `cargo check -p wbraster`
   - `./dev/run_jpeg2000_parity_matrix.sh`
+- Status (2026-04-20): completed.
+  - Artifact: `crates/wbraster/dev/baselines/jpeg2000_parity_baseline_2026-04-20.txt`
+  - Baseline signature remained stable (`8192/8193/8192` in
+    `baseline_standard`; mismatch class still
+    `multicomponent_sample_value_mismatch=3`).
 
 Step 2. Audit packet/body and segment accounting (1-2 days)
 - Objective:

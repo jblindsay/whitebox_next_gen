@@ -661,9 +661,10 @@ pub fn decode_block_standard_j2k_with_probe(
                                 cl_eligible_pixels += 1;
                                 let ctx = significance_context_bool(&sig, i, width, height);
                                 cl_sig_decode_attempts += 1;
-                                let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                let decode_ctx = ctx::SIG[ctx.min(8)];
+                                let bit = dec.decode(decode_ctx);
                                 if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
-                                    cl_stream.push((bp, i, ctx.min(8), bit));
+                                    cl_stream.push((bp, i, decode_ctx, bit));
                                 }
                                 if bit == 1 {
                                     mags[i] |= threshold;
@@ -682,9 +683,10 @@ pub fn decode_block_standard_j2k_with_probe(
                                 cl_eligible_pixels += 1;
                                 let ctx = significance_context_bool(&sig, i, width, height);
                                 cl_sig_decode_attempts += 1;
-                                let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                let decode_ctx = ctx::SIG[ctx.min(8)];
+                                let bit = dec.decode(decode_ctx);
                                 if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
-                                    cl_stream.push((bp, i, ctx.min(8), bit));
+                                    cl_stream.push((bp, i, decode_ctx, bit));
                                 }
                                 if bit == 1 {
                                     mags[i] |= threshold;

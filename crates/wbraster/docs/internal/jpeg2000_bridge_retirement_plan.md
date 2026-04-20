@@ -186,6 +186,10 @@ Execution windows:
     handling inferred from CL stream divergence.
   - Keep all changes behind diagnostic toggles where possible until KPI
     movement is demonstrated.
+  - Status:
+    - Attempt 1 completed and reverted: routing LL cleanup zero-context samples
+      through uniform context produced no class improvement and regressed
+      first-mismatch magnitude on 3/3 matrix fixtures.
 - Window 2 (Day 1 to Day 2): validation and hardening
   - Re-run parity matrix and differential corpus.
   - Keep only net-positive changes; revert non-winning experiments.

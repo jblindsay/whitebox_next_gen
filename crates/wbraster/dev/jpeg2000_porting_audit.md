@@ -233,6 +233,15 @@ Status: in progress.
         the symbol/context stream level before reconstruction, tightening
         root-cause scope to CL context/significance semantics mismatch rather
         than only downstream inverse-transform or level-shift handling.
+    - Window 1 attempt 1 under hard timebox:
+      - Tried LL-only correction routing zero-context cleanup samples through
+        uniform context instead of `SIG[0]`.
+      - Result: no mismatch-class improvement and clear regressions in
+        first-mismatch magnitude (`rgb_8x8: 8192 -> 8193`,
+        `sentinel_style_16x16_4band: 8193 -> 16384`,
+        `tiled_rgb_64x64_block32: 8192 -> 8193`).
+      - Outcome: reverted. Counts as first distinct non-winning CL-lane
+        correction attempt under the stop protocol.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

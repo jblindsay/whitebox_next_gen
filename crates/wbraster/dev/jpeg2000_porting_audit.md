@@ -141,6 +141,21 @@ Status: in progress.
       - `rgb_8x8_lossless`: `32668 -> 8092`
       - `sentinel_style_16x16_4band_lossless`: `31831 -> 7193`
       - `tiled_rgb_64x64_block32_lossless`: `32684 -> 8092`
+  - Follow-up experiments after this stabilization:
+    - SP/MR stripe-column traversal experiment in `decode_block_standard_j2k`
+      produced mixed results and was reverted:
+      - `rgb_8x8_lossless`: first-mismatch abs err improved to `99`
+      - `sentinel_style_16x16_4band_lossless` / `tiled_rgb_64x64_block32_lossless`:
+        first-mismatch abs err regressed to `15384` / `16284`
+    - Pass-limit decoding integration (using packet-declared coding-pass totals)
+      produced no measurable KPI change on local fixture trio and was reverted.
+    - Debug forcing `missing_bp=0` in proper/v2 paths caused catastrophic
+      over-range mismatch (`native=-65536` at first mismatch on rgb fixture)
+      and was reverted.
+    - Differential-helper inverse RCT experiment (`JPEG2000_DIFF_APPLY_INTERNAL_RCT`)
+      worsened 3-band fixture mismatch magnitudes (`24476`) and was reverted.
+  - Net: no additional runtime fix beyond default run-mode disable passed
+    acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:
     - `cblk_style=0x00`, `progression=Lrcp`, `scod=0x01` (baseline coding style).
     - Non-empty code-block payload bytes are collected (e.g., 69 bytes for band 0).

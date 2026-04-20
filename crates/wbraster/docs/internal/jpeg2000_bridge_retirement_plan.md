@@ -253,3 +253,7 @@ Exit criteria:
 - 2026-04-19: Added explicit `nc > 1` guards to `decode_component_proper` and `decode_component_v2`
   returning `NotImplemented` with a bridge-fallback advisory, replacing prior silent wrong-data decode
   risk for multicomponent codestreams routed to those paths. Full JPEG2000 suite: 60 passed, 0 failed.
+- 2026-04-19: Added one-command parity matrix workflow (`dev/run_jpeg2000_parity_matrix.sh`) to run
+  baseline + targeted decoder profiles each iteration. Latest matrix reinforced LL-dominant divergence:
+  LL-only legacy fallback matches all-subband legacy signature, while HF-only legacy fallback remains
+  near standard baseline; cleanup run-mode enabled remains strongly regressive.

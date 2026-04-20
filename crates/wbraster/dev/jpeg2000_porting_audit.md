@@ -174,6 +174,17 @@ Status: in progress.
         mismatch class (`multicomponent_sample_value_mismatch=3`).
       - This isolates current dominant divergence to LL tier-1 decode behavior,
         with HF changes only nudging low-order parity.
+    - Added parity matrix runner script:
+      - `dev/run_jpeg2000_parity_matrix.sh`
+      - Runs baseline + key decoder profiles in one invocation and prints
+        compact KPI summaries and first mismatch rows.
+      - Latest matrix confirms:
+        - baseline standard: (`8192` / `8193` / `8192`)
+        - standard run-mode on: severe regression (`~32768` class values)
+        - legacy all and legacy LL-only: identical (`4097` / `8192` / `16384`)
+        - legacy HF-only: baseline-like (`8192` / `8193` / `8192`)
+      - Throughput impact: captures 5 profile comparisons per iteration with a
+        single command, reducing per-cycle manual command overhead.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

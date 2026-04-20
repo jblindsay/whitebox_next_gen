@@ -9180,61 +9180,82 @@ impl Tool for ImageSegmentationTool {
             }
         }
 
-        // Merge undersized segments into most similar neighboring segment.
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for sid in 0..seg_cells.len() {
-                if seg_size[sid] == 0 || seg_size[sid] >= min_area {
-                    continue;
-                }
-                let mut neigh = std::collections::HashSet::<usize>::new();
-                // Collect neighboring segments by iterating only the cells in this segment (not all n pixels).
-                for &idx in &seg_cells[sid] {
-                    let r = (idx / rasters[0].cols) as isize;
-                    let c = (idx % rasters[0].cols) as isize;
-                    for (dr, dc) in n8 {
-                        let nr = r + dr;
-                        let nc = c + dc;
-                        if nr < 0 || nc < 0 || nr >= rows || nc >= cols {
-                            continue;
-                        }
-                        let ni = raster_index(rasters[0].cols, nr, nc);
-                        let ns = seg[ni];
-                        if ns >= 0 && ns as usize != sid {
-                            neigh.insert(ns as usize);
-                        }
-                    }
-                }
-                if neigh.is_empty() {
-                    continue;
-                }
-                let mut best = None;
-                let mut best_d = f64::INFINITY;
-                for nid in neigh {
-                    if seg_size[nid] == 0 {
+        // Merge undersized segments into the most similar neighboring segment.
+        // Queue-based processing avoids repeated full passes over all segment IDs.
+        let mut merge_queue = VecDeque::<usize>::new();
+        for sid in 0..seg_cells.len() {
+            if seg_size[sid] > 0 && seg_size[sid] < min_area {
+                merge_queue.push_back(sid);
+            }
+        }
+        let initial_merge_targets = merge_queue.len().max(1);
+        let mut merge_processed = 0usize;
+
+        while let Some(sid) = merge_queue.pop_front() {
+            merge_processed += 1;
+
+            if seg_size[sid] == 0 || seg_size[sid] >= min_area {
+                continue;
+            }
+
+            let mut neigh = std::collections::HashSet::<usize>::new();
+            // Collect neighboring segments by iterating only the cells in this segment.
+            for &idx in &seg_cells[sid] {
+                let r = (idx / rasters[0].cols) as isize;
+                let c = (idx % rasters[0].cols) as isize;
+                for (dr, dc) in n8 {
+                    let nr = r + dr;
+                    let nc = c + dc;
+                    if nr < 0 || nc < 0 || nr >= rows || nc >= cols {
                         continue;
                     }
-                    let d = sqr_dist(&seg_center[sid], &seg_center[nid]);
-                    if d < best_d {
-                        best_d = d;
-                        best = Some(nid);
+                    let ni = raster_index(rasters[0].cols, nr, nc);
+                    let ns = seg[ni];
+                    if ns >= 0 && ns as usize != sid {
+                        neigh.insert(ns as usize);
                     }
                 }
-                if let Some(nid) = best {
-                    let n1 = seg_size[nid] as f64;
-                    let n2 = seg_size[sid] as f64;
-                    for d in 0..dims {
-                        seg_center[nid][d] = (seg_center[nid][d] * n1 + seg_center[sid][d] * n2) / (n1 + n2).max(1.0);
-                    }
-                    // Remap pixels from sid to nid, iterating only the cells in segment sid (not all n pixels).
-                    for &idx in &seg_cells[sid] {
-                        seg[idx] = nid as isize;
-                    }
-                    seg_size[nid] += seg_size[sid];
-                    seg_size[sid] = 0;
-                    changed = true;
+            }
+
+            if neigh.is_empty() {
+                continue;
+            }
+
+            let mut best = None;
+            let mut best_d = f64::INFINITY;
+            for nid in neigh {
+                if seg_size[nid] == 0 {
+                    continue;
                 }
+                let d = sqr_dist(&seg_center[sid], &seg_center[nid]);
+                if d < best_d {
+                    best_d = d;
+                    best = Some(nid);
+                }
+            }
+
+            if let Some(nid) = best {
+                let n1 = seg_size[nid] as f64;
+                let n2 = seg_size[sid] as f64;
+                for d in 0..dims {
+                    seg_center[nid][d] = (seg_center[nid][d] * n1 + seg_center[sid][d] * n2)
+                        / (n1 + n2).max(1.0);
+                }
+                for &idx in &seg_cells[sid] {
+                    seg[idx] = nid as isize;
+                }
+                seg_size[nid] += seg_size[sid];
+                seg_size[sid] = 0;
+
+                // If the destination segment remains undersized, revisit it.
+                if seg_size[nid] > 0 && seg_size[nid] < min_area {
+                    merge_queue.push_back(nid);
+                }
+            }
+
+            if merge_processed % 256 == 0 {
+                let frac = (merge_processed as f64 / initial_merge_targets as f64).min(1.0);
+                coalescer.emit_unit_fraction(ctx.progress, 0.65 + 0.25 * frac);
             }
         }
 

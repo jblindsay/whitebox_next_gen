@@ -133,6 +133,14 @@ Status: in progress.
   - Interpretation: segment-body bytes and bitplane count are plausibly present,
     and the highest-leverage next fix is in `decode_block_standard_j2k`
     (context/pass logic) rather than packet body extraction or level-shift.
+  - Interim stabilization landed: cleanup run-mode in `decode_block_standard_j2k`
+    is now disabled by default, with opt-in override
+    `JPEG2000_STDJK_ENABLE_RUNMODE=1` for experimentation.
+    - On local multicomponent fixture trio, mismatch count remained `3` but
+      first-mismatch absolute error dropped substantially (about 4x):
+      - `rgb_8x8_lossless`: `32668 -> 8092`
+      - `sentinel_style_16x16_4band_lossless`: `31831 -> 7193`
+      - `tiled_rgb_64x64_block32_lossless`: `32684 -> 8092`
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:
     - `cblk_style=0x00`, `progression=Lrcp`, `scod=0x01` (baseline coding style).
     - Non-empty code-block payload bytes are collected (e.g., 69 bytes for band 0).

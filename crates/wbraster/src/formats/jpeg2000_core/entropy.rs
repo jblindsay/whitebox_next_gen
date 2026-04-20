@@ -507,6 +507,12 @@ pub fn decode_block_standard_j2k(
     let mut dec      = MqDecoder::new(data);
     dec.init_standard_j2k_contexts();
     let trace = width == 64 && height == 64 && num_bitplanes >= 10;
+    // Run-mode currently degrades external-fixture parity in this implementation.
+    // Keep it disabled by default until the cleanup/run context path is corrected.
+    let run_mode_enabled = std::env::var("JPEG2000_STDJK_ENABLE_RUNMODE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
     for bp in (0..num_bitplanes).rev() {
         let threshold = 1u32 << bp;
@@ -558,7 +564,7 @@ pub fn decode_block_standard_j2k(
                 if !any_needs { continue; }
 
                 // Run-mode eligible: full band of 4, all pixels need CL, all zero sig-context.
-                let run_eligible = band_h == 4
+                let run_eligible = run_mode_enabled && band_h == 4
                     && (0..4).all(|j| {
                         let i = (band_row + j) * width + c;
                         !sig[i] && !sp_visit[i] && significance_context_bool(&sig, i, width, height) == 0

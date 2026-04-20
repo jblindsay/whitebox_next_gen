@@ -154,6 +154,11 @@ Status: in progress.
       and was reverted.
     - Differential-helper inverse RCT experiment (`JPEG2000_DIFF_APPLY_INTERNAL_RCT`)
       worsened 3-band fixture mismatch magnitudes (`24476`) and was reverted.
+    - Porting LL/LH zero-coding context lookup (from `wbjpeg2000`) into
+      `decode_block_standard_j2k` significance context mapping produced no
+      meaningful KPI change on the local fixture trio (still
+      `multicomponent_sample_value_mismatch=3` and first-mismatch abs error
+      remained around `~8k` / `~7.2k`) and was reverted.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

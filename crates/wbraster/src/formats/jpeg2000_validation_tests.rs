@@ -109,6 +109,42 @@ mod jpeg2000_byte_alignment_validation {
     }
 
     #[test]
+    fn a4_sentinel_style_adapter_formula_and_ranges() {
+        let fixture_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sentinel_style_16x16_4band_lossless.jp2");
+        let ras = read(fixture_path).expect("A4 sentinel: adapter read should decode fixture");
+
+        assert_eq!(ras.bands, 4, "A4 sentinel: raster bands");
+        assert_eq!(ras.rows, 16, "A4 sentinel: raster rows");
+        assert_eq!(ras.cols, 16, "A4 sentinel: raster cols");
+
+        let mut band_min = [u16::MAX; 4];
+        let mut band_max = [0u16; 4];
+
+        for band in 0isize..4isize {
+            for row in 0isize..16isize {
+                for col in 0isize..16isize {
+                    let expected = ((band as u16 + 1) * 1000) + (row as u16 * 16) + col as u16;
+                    let got = ras.get(band, row, col) as u16;
+                    assert_eq!(got, expected, "A4 sentinel formula mismatch at band={band}, row={row}, col={col}");
+
+                    let b = band as usize;
+                    band_min[b] = band_min[b].min(got);
+                    band_max[b] = band_max[b].max(got);
+                }
+            }
+        }
+
+        assert_eq!(band_min[0], 1000, "A4 sentinel: band 0 min mismatch");
+        assert_eq!(band_max[0], 1255, "A4 sentinel: band 0 max mismatch");
+        assert_eq!(band_min[1], 2000, "A4 sentinel: band 1 min mismatch");
+        assert_eq!(band_max[1], 2255, "A4 sentinel: band 1 max mismatch");
+        assert_eq!(band_min[2], 3000, "A4 sentinel: band 2 min mismatch");
+        assert_eq!(band_max[2], 3255, "A4 sentinel: band 2 max mismatch");
+        assert_eq!(band_min[3], 4000, "A4 sentinel: band 3 min mismatch");
+        assert_eq!(band_max[3], 4255, "A4 sentinel: band 3 max mismatch");
+    }
+
+    #[test]
     fn a5_tiled_multicomponent_fixture_metadata_and_probes() {
         let jp2 = crate::formats::jpeg2000_core::reader::GeoJp2::from_bytes(TILED_RGB_64X64_BLOCK32_FIXTURE)
             .expect("A5: should parse tiled fixture");

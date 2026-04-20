@@ -636,4 +636,5 @@ mod writer_tests {
         assert_ne!(b1, b2, "A4: band 1 and band 2 should not be identical");
         assert_ne!(b0, b2, "A4: band 0 and band 2 should not be identical");
     }
+
 }

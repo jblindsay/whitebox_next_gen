@@ -1112,8 +1112,23 @@ impl GeoJp2 {
         }
 
         if debug {
-            eprintln!("[decode_component_proper] img={}x{} tiles={}x{} tilesize={}x{} nl={} layers={} lossless={} cb={}x{}",
-                img_w, img_h, tiles_x, tiles_y, tw, th, nl, num_layers, lossless, cb_w, cb_h);
+            eprintln!(
+                "[decode_component_proper] img={}x{} tiles={}x{} tilesize={}x{} nl={} layers={} lossless={} cb={}x{} cblk_style=0x{:02X} progression={:?} scod=0x{:02X}",
+                img_w,
+                img_h,
+                tiles_x,
+                tiles_y,
+                tw,
+                th,
+                nl,
+                num_layers,
+                lossless,
+                cb_w,
+                cb_h,
+                self.cod.cblk_style,
+                self.cod.progression,
+                self.cod.scod
+            );
         }
 
         let mut out = vec![0i32; img_w * img_h];
@@ -1606,8 +1621,20 @@ impl GeoJp2 {
         if debug_enabled {
             let cb_w = 1usize << (self.cod.xcb as usize + 2);
             let cb_h = 1usize << (self.cod.ycb as usize + 2);
-            eprintln!("[decode_component_v2] w={} h={} nl={} num_layers={} lossless={} cb={}x{} precincts={:?}",
-                w, h, nl, num_layers, lossless, cb_w, cb_h, self.cod.precincts);
+            eprintln!(
+                "[decode_component_v2] w={} h={} nl={} num_layers={} lossless={} cb={}x{} cblk_style=0x{:02X} progression={:?} scod=0x{:02X} precincts={:?}",
+                w,
+                h,
+                nl,
+                num_layers,
+                lossless,
+                cb_w,
+                cb_h,
+                self.cod.cblk_style,
+                self.cod.progression,
+                self.cod.scod,
+                self.cod.precincts
+            );
         }
 
         // ── 1. Subband region sizes within the W×H coefficient grid ──────────

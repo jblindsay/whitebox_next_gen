@@ -115,6 +115,20 @@ Status: in progress.
     (`raw-missing-1` -> `raw-missing`) had no measurable effect.
   - Internal-reader inverse RCT post-pass for lossless 3-band RGB had no
     measurable effect on first-mismatch metrics.
+  - Lossless subband raw-bitplane derivation tweak (`proper`/`v2`) using
+    `comp_bits + subband_gain` instead of QCD exponent showed no measurable
+    mismatch-count improvement and was reverted.
+  - Added targeted decode diagnostics for `decode_component_proper`/`v2`
+    (`cblk_style`, progression order, `scod`) to improve triage on external
+    codestream behavior.
+  - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:
+    - `cblk_style=0x00`, `progression=Lrcp`, `scod=0x01` (baseline coding style).
+    - Non-empty code-block payload bytes are collected (e.g., 69 bytes for band 0).
+    - Decoded coefficient grid remains all zeros before inverse DWT for those
+      payload bytes, then level-shift produces flat ~32768 outputs.
+  - This narrows the blocker: primary failure is now strongly indicated in
+    tier-1 code-block entropy/packet-body interpretation (or segment assembly),
+    not in post-IDWT color/level-shift handling.
   - Conclusion: remaining blocker is likely deeper in tier-1 entropy / packet
     interpretation rather than simple post-processing or off-by-one bitplane math.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.

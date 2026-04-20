@@ -262,3 +262,8 @@ Exit criteria:
   Result: LL cleanup disable caused strongest regression (~32768 class), LL MR disable produced
   mid-level regression (~16384 class), and LL SP disable smaller/mixed regression. This prioritizes
   LL cleanup semantics as next critical debugging lane.
+- 2026-04-19: Added LL code-block A/B debug instrumentation
+  (`JPEG2000_DEBUG_LL_BLOCK_AB`) in proper-path first LL block decode. Initial runs confirmed
+  cleanup-pass indispensability (`no_cl` decoding yields zero nonzero coefficients) but still showed
+  substantial standard-vs-legacy LL coefficient pattern divergence; a follow-on table-driven sign-context
+  trial did not improve parity KPIs and was reverted.

@@ -1072,6 +1072,7 @@ impl GeoJp2 {
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
         let debug_entropy_ab = std::env::var("JPEG2000_DEBUG_ENTROPY_AB").is_ok();
+        let debug_ll_block_ab = std::env::var("JPEG2000_DEBUG_LL_BLOCK_AB").is_ok();
         let use_legacy_t1 = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
@@ -1534,6 +1535,69 @@ impl GeoJp2 {
                         eprintln!(
                             "[entropy_ab] std[0..8]={:?} legacy[0..8]={:?}",
                             &std_dec[..8.min(std_dec.len())],
+                            &legacy_dec[..8.min(legacy_dec.len())]
+                        );
+                    }
+
+                    if debug_ll_block_ab && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
+                        let std_dec = decode_block(
+                            &cb.data,
+                            actual_w,
+                            actual_h,
+                            num_bp,
+                            LlPassProbeConfig::default(),
+                        );
+                        let no_sp_dec = decode_block(
+                            &cb.data,
+                            actual_w,
+                            actual_h,
+                            num_bp,
+                            LlPassProbeConfig { disable_sp: true, disable_mr: false, disable_cl: false },
+                        );
+                        let no_mr_dec = decode_block(
+                            &cb.data,
+                            actual_w,
+                            actual_h,
+                            num_bp,
+                            LlPassProbeConfig { disable_sp: false, disable_mr: true, disable_cl: false },
+                        );
+                        let no_cl_dec = decode_block(
+                            &cb.data,
+                            actual_w,
+                            actual_h,
+                            num_bp,
+                            LlPassProbeConfig { disable_sp: false, disable_mr: false, disable_cl: true },
+                        );
+                        let legacy_dec = decode_block_legacy(&cb.data, actual_w, actual_h, num_bp);
+
+                        let nnz = |v: &[i32]| v.iter().filter(|&&x| x != 0).count();
+                        let first_nz = |v: &[i32]| v.iter().position(|&x| x != 0).map(|idx| (idx, v[idx]));
+
+                        eprintln!(
+                            "[ll_block_ab] num_bp={} dims={}x{} nnz std={} no_sp={} no_mr={} no_cl={} legacy={}",
+                            num_bp,
+                            actual_w,
+                            actual_h,
+                            nnz(&std_dec),
+                            nnz(&no_sp_dec),
+                            nnz(&no_mr_dec),
+                            nnz(&no_cl_dec),
+                            nnz(&legacy_dec)
+                        );
+                        eprintln!(
+                            "[ll_block_ab] first_nz std={:?} no_sp={:?} no_mr={:?} no_cl={:?} legacy={:?}",
+                            first_nz(&std_dec),
+                            first_nz(&no_sp_dec),
+                            first_nz(&no_mr_dec),
+                            first_nz(&no_cl_dec),
+                            first_nz(&legacy_dec)
+                        );
+                        eprintln!(
+                            "[ll_block_ab] head std={:?} no_sp={:?} no_mr={:?} no_cl={:?} legacy={:?}",
+                            &std_dec[..8.min(std_dec.len())],
+                            &no_sp_dec[..8.min(no_sp_dec.len())],
+                            &no_mr_dec[..8.min(no_mr_dec.len())],
+                            &no_cl_dec[..8.min(no_cl_dec.len())],
                             &legacy_dec[..8.min(legacy_dec.len())]
                         );
                     }

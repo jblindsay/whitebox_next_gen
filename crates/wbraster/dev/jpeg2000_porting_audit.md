@@ -194,6 +194,18 @@ Status: in progress.
       - Interpretation: LL cleanup semantics remain highest-priority root-cause
         lane (including interaction with run-mode gating and CL eligibility),
         with LL MR behavior as secondary lane.
+    - Added targeted LL code-block A/B diagnostics in proper path
+      (`JPEG2000_DEBUG_LL_BLOCK_AB=1`) for first LL block per component.
+      - Example (`rgb_8x8_lossless`, comp 0, LL cb0):
+        - `nnz std=60`, `no_sp=61`, `no_mr=60`, `no_cl=0`, `legacy=55`
+        - `first_nz std=(-24576)`, `no_sp=(-24575)`, `no_mr=(-16384)`,
+          `no_cl=None`, `legacy=(-28671)`
+      - Confirms cleanup pass is structurally essential (no-CL -> all zeros)
+        and that standard-vs-legacy divergence is not just sparse/non-sparse;
+        reconstructed LL coefficient magnitude patterns still differ.
+    - Table-driven sign-context experiment in standard decoder bool path was
+      tested via full parity matrix and reverted after no KPI class improvement
+      plus regression in tiled fixture first-mismatch magnitude.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

@@ -292,6 +292,25 @@ Status: in progress.
     - KPI class remains unchanged: `multicomponent_sample_value_mismatch=3`.
     - Step 2 gate status: cleared to begin packet/body and segment accounting
       audit against `wbjpeg2000` using this frozen baseline.
+  - Re-entry Step 2 kickoff trace captured (2026-04-20):
+    - Artifact:
+      - `crates/wbraster/dev/baselines/jpeg2000_step2_accounting_trace_2026-04-20_rgb8x8.txt`
+    - Command profile:
+      - `JPEG2000_DIFF_FIXTURES=tests/fixtures/rgb_8x8_lossless.jp2`
+      - `JPEG2000_DEBUG_DEQUANT=1`
+      - `JPEG2000_DEBUG_LL_BLOCK_AB=1`
+      - `cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+    - Key packet/body accounting observations from kickoff trace:
+      - LL CB(0,0) first packet contribution reports `passes=43`, `lblock=3`,
+        `len_bits=8`, `seg=69` bytes.
+      - Header alignment checkpoints are explicitly logged before/after byte
+        alignment for each packet header sample.
+      - Baseline mismatch remains unchanged on this fixture:
+        `native=8192`, `bridge=100`, `abs_err=8092` at first mismatch.
+    - Next immediate Step 2 action:
+      - Collect corresponding `wbjpeg2000`-side block-input/accounting trace
+        for the same fixture/block and compare declared segment and consumed
+        byte windows side by side.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

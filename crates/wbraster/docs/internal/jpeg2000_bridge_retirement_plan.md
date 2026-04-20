@@ -363,6 +363,14 @@ Step 2. Audit packet/body and segment accounting (1-2 days)
 - Verification commands:
   - `cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
   - `JPEG2000_DEBUG_LL_BLOCK_AB=1 cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+- Status (2026-04-20): kickoff started.
+  - Artifact:
+    - `crates/wbraster/dev/baselines/jpeg2000_step2_accounting_trace_2026-04-20_rgb8x8.txt`
+  - Kickoff command:
+    - `JPEG2000_DIFF_FIXTURES=tests/fixtures/rgb_8x8_lossless.jp2 JPEG2000_DEBUG_DEQUANT=1 JPEG2000_DEBUG_LL_BLOCK_AB=1 cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+  - Next subtask:
+    - Add matching `wbjpeg2000` reference-side accounting trace for the same
+      fixture/block and diff packet-body span accounting line by line.
 
 Step 3. Build a side-by-side LL reference trace harness (1-1.5 days)
 - Objective:

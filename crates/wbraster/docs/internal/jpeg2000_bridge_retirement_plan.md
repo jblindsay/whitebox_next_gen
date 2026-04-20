@@ -83,6 +83,7 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
 
 4. A4 - Bit-depth and signedness alignment checks (0.5-1 day)
   - [x] Verify signed/unsigned handling parity with existing adapter expectations.
+  - [x] Thread per-component bit-depth/signedness through all native decode paths (`decode_component_single_layer`, `decode_component_proper`, `decode_component_v2`) for dequant/level-shift math.
   - [x] Add targeted fixtures/assertions for bit-depth/signedness stability in current multiband fixtures.
   - [ ] Add mixed-precision edge fixtures/assertions used in remote-sensing products.
   - [x] Locations: `decode_component*` path plus adapter mapping in `jpeg2000.rs`.

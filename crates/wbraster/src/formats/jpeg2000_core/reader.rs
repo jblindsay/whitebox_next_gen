@@ -1441,11 +1441,11 @@ impl GeoJp2 {
                 if sb.qcd_idx < self.qcd.step_sizes.len() {
                     let s = self.qcd.step_sizes[sb.qcd_idx];
                     ((s >> 11) as i32, (s & 0x7FF) as f64)
-                } else { (self.bits as i32, 0.0f64) }
+                } else { (comp_bits as i32, 0.0f64) }
             } else {
                 if sb.qcd_idx < self.qcd.step_sizes.len() {
                     ((self.qcd.step_sizes[sb.qcd_idx] >> 11) as usize as i32, 0.0f64)
-                } else { (self.bits as i32 + nl as i32, 0.0f64) }
+                } else { (comp_bits as i32 + nl as i32, 0.0f64) }
             };
 
             let log_gain: i32 = if sb.qcd_idx == 0 { 0 } else if sb.qcd_idx % 3 == 0 { 2 } else { 1 };
@@ -1486,7 +1486,7 @@ impl GeoJp2 {
                         }
                     } else {
                         // Dequantise and place.
-                        let r_b = self.bits as i32 + log_gain;
+                        let r_b = comp_bits as i32 + log_gain;
                         let delta = 2.0f64.powi(r_b - exp) * (1.0 + mnt_f / 2048.0);
                         for r in 0..actual_h {
                             for c in 0..actual_w {
@@ -1536,10 +1536,10 @@ impl GeoJp2 {
                 let (exp, mnt_f): (i32, f64) = if sb.qcd_idx < self.qcd.step_sizes.len() {
                     let s = self.qcd.step_sizes[sb.qcd_idx];
                     ((s >> 11) as i32, (s & 0x7FF) as f64)
-                } else { (self.bits as i32, 0.0f64) };
+                } else { (comp_bits as i32, 0.0f64) };
                 let log_gain: i32 = if sb.qcd_idx == 0 { 0 } else if sb.qcd_idx % 3 == 0 { 2 } else { 1 };
                 let raw_bp = ((guard_bits as i32) + exp).max(0) as usize;
-                let r_b = self.bits as i32 + log_gain;
+                let r_b = comp_bits as i32 + log_gain;
                 let delta = 2.0f64.powi(r_b - exp) * (1.0 + mnt_f / 2048.0);
 
                 let ncb_h = cb_grid[si].len();
@@ -1794,7 +1794,7 @@ impl GeoJp2 {
             let guard_bits = ((self.qcd.sqcd >> 5) & 0x07) as usize;
             let debug_enabled = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
             if debug_enabled {
-                eprintln!("[lossless] guard_bits={} bits={} nl={}", guard_bits, self.bits, nl);
+                eprintln!("[lossless] guard_bits={} bits={} nl={}", guard_bits, comp_bits, nl);
             }
             for (si, sb) in subbands.iter().enumerate() {
                 if sb.sb_w == 0 || sb.sb_h == 0 || cb[si].data.is_empty() { continue; }
@@ -1841,13 +1841,13 @@ impl GeoJp2 {
                     let s = self.qcd.step_sizes[sb.qcd_idx];
                     (((s >> 11) as i32), (s & 0x7FF) as f64)
                 } else {
-                    (self.bits as i32, 0.0f64)
+                    (comp_bits as i32, 0.0f64)
                 };
                 let raw_bp = guard_bits.saturating_add(exp.max(0) as usize).saturating_sub(1);
                 let num_bp = raw_bp.saturating_sub(cb[si].missing_bitplanes).max(1);
 
                 let log_gain = if sb.qcd_idx == 0 { 0 } else if sb.qcd_idx % 3 == 0 { 2 } else { 1 };
-                let r_b = self.bits as i32 + log_gain;
+                let r_b = comp_bits as i32 + log_gain;
                 let delta = 2.0f64.powi(r_b - exp) * (1.0 + mnt / 2048.0);
 
                 if debug_enabled && si == 0 {

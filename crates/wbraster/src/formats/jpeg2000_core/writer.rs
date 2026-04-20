@@ -612,9 +612,13 @@ mod writer_tests {
         let jp2 = GeoJp2::from_bytes(&cur.into_inner())
             .expect("A4: reader should parse multiband JP2");
 
+        assert_eq!(jp2.bits_per_sample(), 16, "A4: bits_per_sample should be 16");
+        assert!(!jp2.is_signed(), "A4: U16 image should not be signed");
+
         let b0 = jp2.read_band_u16(0).expect("A4: band 0 decode");
         let b1 = jp2.read_band_u16(1).expect("A4: band 1 decode");
         let b2 = jp2.read_band_u16(2).expect("A4: band 2 decode");
+        let b0_i16 = jp2.read_band_i16(0).expect("A4: band 0 i16 decode");
 
         assert_eq!(b0.len(), npix, "A4: band 0 length mismatch");
         assert_eq!(b1.len(), npix, "A4: band 1 length mismatch");
@@ -624,6 +628,8 @@ mod writer_tests {
         assert_eq!(b0, jp2.read_band_u16(0).expect("A4: repeated band 0 decode"));
         assert_eq!(b1, jp2.read_band_u16(1).expect("A4: repeated band 1 decode"));
         assert_eq!(b2, jp2.read_band_u16(2).expect("A4: repeated band 2 decode"));
+        assert_eq!(b0_i16, jp2.read_band_i16(0).expect("A4: repeated band 0 i16 decode"));
+        assert_eq!(b0_i16.len(), npix, "A4: band 0 i16 length mismatch");
 
         // Component demux: bands must not all collapse to the same output.
         assert_ne!(b0, b1, "A4: band 0 and band 1 should not be identical");

@@ -140,6 +140,31 @@ A8 Gate A report (2026-04-19):
 
 Phase A estimate subtotal: 5.5-10 days (roughly 1.5-3 weeks focused work; 2-4 weeks calendar including review/iteration).
 
+### Phase A remaining estimate (as of 2026-04-19)
+
+Current blocker profile:
+- Differential corpus still reports multicomponent sample-value mismatches on local fixture trio (`multicomponent_sample_value_mismatch=3`), while native/bridge/metadata/sample-count error classes are currently 0 for this set.
+
+Remaining work packages:
+- A4 mixed-precision edge coverage:
+  - Add remote-sensing-oriented mixed precision fixtures/assertions and stabilize expectations.
+  - Estimate: 0.5-1.0 engineering day.
+- Native parity root-cause and fix pass (critical path):
+  - Complete deeper packet-header / tier-1 decode correctness work for multicomponent value parity.
+  - Target: reduce `multicomponent_sample_value_mismatch` from current baseline to agreed threshold (ideally 0 for the agreed fixture set).
+  - Estimate: 4-8 engineering days (highest uncertainty item).
+- Differential reruns + KPI gating tune:
+  - Re-baseline reports and tighten `JPEG2000_DIFF_MAX_MULTICOMPONENT_*` thresholds based on improved parity.
+  - Estimate: 0.5-1.0 engineering day.
+- Final Phase A closure checks:
+  - Confirm checklist/exit criteria status, produce final A8 update, and verify no regressions in JPEG2000 suites.
+  - Estimate: 0.5-1.0 engineering day.
+
+Estimated Phase A remaining total:
+- Best case: 5-6 engineering days.
+- Most likely: 6-10 engineering days.
+- Conservative: 10-14 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
+
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:
 - crates/wbraster/src/formats/jpeg2000_core/reader.rs

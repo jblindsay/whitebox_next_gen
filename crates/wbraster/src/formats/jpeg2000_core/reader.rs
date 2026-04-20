@@ -1068,6 +1068,9 @@ impl GeoJp2 {
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
         let debug_entropy_ab = std::env::var("JPEG2000_DEBUG_ENTROPY_AB").is_ok();
+        let use_legacy_t1 = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
 
         // Target component for this decode call.
         let target_component = _component;
@@ -1515,7 +1518,11 @@ impl GeoJp2 {
                         );
                     }
 
-                    let dec = decode_block(&cb.data, actual_w, actual_h, num_bp);
+                    let dec = if use_legacy_t1 {
+                        decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
+                    } else {
+                        decode_block(&cb.data, actual_w, actual_h, num_bp)
+                    };
 
                     if lossless {
                         // Place decoded coefficients into the grid.
@@ -1595,7 +1602,11 @@ impl GeoJp2 {
                         let num_bp = raw_bp.saturating_sub(cb.missing_bp).saturating_sub(1).max(1);
                         let actual_w = cb_w.min(sb.sb_w.saturating_sub(cbx * cb_w)).max(1);
                         let actual_h = cb_h.min(sb.sb_h.saturating_sub(cby * cb_h)).max(1);
-                        let dec = decode_block(&cb.data, actual_w, actual_h, num_bp);
+                        let dec = if use_legacy_t1 {
+                            decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
+                        } else {
+                            decode_block(&cb.data, actual_w, actual_h, num_bp)
+                        };
                         for r in 0..actual_h {
                             for c in 0..actual_w {
                                 let row = sb.row_off + cby * cb_h + r;

@@ -159,6 +159,12 @@ Status: in progress.
       meaningful KPI change on the local fixture trio (still
       `multicomponent_sample_value_mismatch=3` and first-mismatch abs error
       remained around `~8k` / `~7.2k`) and was reverted.
+    - Added temporary env-gated probe (`JPEG2000_DIFF_FORCE_LEGACY_T1=1`) to
+      force proper-path block decode through legacy tier-1 for A/B parity
+      checks. Result was mixed/regressive: `rgb_8x8` improved first mismatch
+      (`8193 -> 4097`), `sentinel_style_16x16_4band` unchanged (`8192`), and
+      `tiled_rgb_64x64_block32` worsened (`8193 -> 16384`), with mismatch class
+      still `multicomponent_sample_value_mismatch=3`.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

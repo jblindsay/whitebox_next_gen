@@ -596,6 +596,15 @@ mod differential_tests {
             .position(|(x, y)| (x - y).abs() > eps)
     }
 
+    fn mismatch_position(idx: usize, cols: usize, rows: usize) -> (usize, usize, usize, usize) {
+        let npix = rows.saturating_mul(cols).max(1);
+        let band = idx / npix;
+        let pixel = idx % npix;
+        let row = pixel / cols.max(1);
+        let col = pixel % cols.max(1);
+        (band, row, col, pixel)
+    }
+
     fn is_packet_header_marker_workflow_error(msg: &str) -> bool {
         msg.contains("PPM/PPT") || msg.contains("PLM/PLT/PPM/PPT")
     }
@@ -724,9 +733,11 @@ mod differential_tests {
                 if is_multicomponent {
                     summary.multicomponent_sample_value_mismatch += 1;
                 }
+                let (band, row, col, pixel) = mismatch_position(i, cols, rows);
+                let abs_err = (native_data[i] - bridge_data[i]).abs();
                 details.push(format!(
-                    "SAMPLE_VALUE_MISMATCH|{}|idx={} native={} bridge={} eps={}",
-                    path, i, native_data[i], bridge_data[i], eps
+                    "SAMPLE_VALUE_MISMATCH|{}|idx={} band={} row={} col={} pixel={} native={} bridge={} abs_err={} eps={}",
+                    path, i, band, row, col, pixel, native_data[i], bridge_data[i], abs_err, eps
                 ));
                 continue;
             }

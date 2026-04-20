@@ -88,6 +88,9 @@ Status: in progress.
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_NATIVE_ERROR`
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_METADATA_MISMATCH`
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_VALUE_MISMATCH`
+  - sample mismatch details now include localization fields:
+    - `band`, `row`, `col`, and within-band `pixel` index
+    - absolute error value `abs_err`
 - Differential harness now tracks `native_unsupported_packet_header_markers` as
   an explicit subtype of `native_error` (for `PLM`/`PLT`/`PPM`/`PPT` workflows).
 - Baseline corpus run (3 Sentinel-2 `R10m` band fixtures) report:

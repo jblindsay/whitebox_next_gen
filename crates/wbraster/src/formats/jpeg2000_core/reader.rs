@@ -1063,7 +1063,11 @@ impl GeoJp2 {
     /// precinct, tag trees for inclusion and zero-bitplane counts, and multi-layer
     /// quality-progression.  Both lossless (5/3) and lossy (9/7) DWT paths.
     fn decode_component_proper(&self, _component: usize) -> Result<Vec<i32>> {
-        use super::entropy::{decode_block as decode_block_legacy, decode_block_standard_j2k as decode_block};
+        use super::entropy::{
+            decode_block as decode_block_legacy,
+            decode_block_standard_j2k_with_probe as decode_block,
+            LlPassProbeConfig,
+        };
         use std::collections::HashMap;
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
@@ -1075,6 +1079,15 @@ impl GeoJp2 {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
         let use_legacy_t1_hf = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1_HF")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let ll_disable_sp = std::env::var("JPEG2000_DIFF_LL_DISABLE_SP")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let ll_disable_mr = std::env::var("JPEG2000_DIFF_LL_DISABLE_MR")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let ll_disable_cl = std::env::var("JPEG2000_DIFF_LL_DISABLE_CL")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
@@ -1497,7 +1510,8 @@ impl GeoJp2 {
                     }
 
                     if debug_entropy_ab && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
-                        let std_dec = decode_block(&cb.data, actual_w, actual_h, num_bp);
+                        let std_probe = LlPassProbeConfig::default();
+                        let std_dec = decode_block(&cb.data, actual_w, actual_h, num_bp, std_probe);
                         let legacy_dec = decode_block_legacy(&cb.data, actual_w, actual_h, num_bp);
 
                         let std_nonzero = std_dec.iter().filter(|&&v| v != 0).count();
@@ -1527,10 +1541,19 @@ impl GeoJp2 {
                     let use_legacy_for_sb = use_legacy_t1
                         || (use_legacy_t1_ll && sb.qcd_idx == 0)
                         || (use_legacy_t1_hf && sb.qcd_idx != 0);
+                    let ll_probe = if sb.qcd_idx == 0 {
+                        LlPassProbeConfig {
+                            disable_sp: ll_disable_sp,
+                            disable_mr: ll_disable_mr,
+                            disable_cl: ll_disable_cl,
+                        }
+                    } else {
+                        LlPassProbeConfig::default()
+                    };
                     let dec = if use_legacy_for_sb {
                         decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                     } else {
-                        decode_block(&cb.data, actual_w, actual_h, num_bp)
+                        decode_block(&cb.data, actual_w, actual_h, num_bp, ll_probe)
                     };
 
                     if lossless {
@@ -1614,10 +1637,19 @@ impl GeoJp2 {
                         let use_legacy_for_sb = use_legacy_t1
                             || (use_legacy_t1_ll && sb.qcd_idx == 0)
                             || (use_legacy_t1_hf && sb.qcd_idx != 0);
+                        let ll_probe = if sb.qcd_idx == 0 {
+                            LlPassProbeConfig {
+                                disable_sp: ll_disable_sp,
+                                disable_mr: ll_disable_mr,
+                                disable_cl: ll_disable_cl,
+                            }
+                        } else {
+                            LlPassProbeConfig::default()
+                        };
                         let dec = if use_legacy_for_sb {
                             decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                         } else {
-                            decode_block(&cb.data, actual_w, actual_h, num_bp)
+                            decode_block(&cb.data, actual_w, actual_h, num_bp, ll_probe)
                         };
                         for r in 0..actual_h {
                             for c in 0..actual_w {

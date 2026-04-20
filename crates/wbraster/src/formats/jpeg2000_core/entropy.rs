@@ -499,6 +499,23 @@ pub fn decode_block_standard_j2k(
     height: usize,
     num_bitplanes: usize,
 ) -> Vec<i32> {
+    decode_block_standard_j2k_with_probe(data, width, height, num_bitplanes, LlPassProbeConfig::default())
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LlPassProbeConfig {
+    pub disable_sp: bool,
+    pub disable_mr: bool,
+    pub disable_cl: bool,
+}
+
+pub fn decode_block_standard_j2k_with_probe(
+    data: &[u8],
+    width: usize,
+    height: usize,
+    num_bitplanes: usize,
+    ll_probe: LlPassProbeConfig,
+) -> Vec<i32> {
     let n = width * height;
     let mut mags     = vec![0u32; n];
     let mut signs    = vec![0u8;  n];
@@ -523,107 +540,113 @@ pub fn decode_block_standard_j2k(
         for v in sp_visit.iter_mut() { *v = false; }
 
         // ── Significance Propagation (SP) ──────────────────────────────────
-        for i in 0..n {
-            if !sig[i] {
-                let ctx = significance_context_bool(&sig, i, width, height);
-                if ctx > 0 {
-                    sp_visit[i] = true;
-                    let bit = dec.decode(ctx::SIG[ctx.min(8)]);
-                    if bit == 1 {
-                        mags[i] |= threshold;
-                        sig[i] = true;
-                        sp_sig_count += 1;
-                        let (sctx, flip) = sign_context_bool(&sig, &signs, i, width, height);
-                        signs[i] = dec.decode(sctx) ^ flip;
+        if !ll_probe.disable_sp {
+            for i in 0..n {
+                if !sig[i] {
+                    let ctx = significance_context_bool(&sig, i, width, height);
+                    if ctx > 0 {
+                        sp_visit[i] = true;
+                        let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                        if bit == 1 {
+                            mags[i] |= threshold;
+                            sig[i] = true;
+                            sp_sig_count += 1;
+                            let (sctx, flip) = sign_context_bool(&sig, &signs, i, width, height);
+                            signs[i] = dec.decode(sctx) ^ flip;
+                        }
                     }
                 }
             }
         }
 
         // ── Magnitude Refinement (MR) ──────────────────────────────────────
-        for i in 0..n {
-            if sig[i] && mags[i] >= threshold * 2 {
-                let ctx = mag_refinement_context_bool(&sig, i, width, height, bp, num_bitplanes);
-                let bit = dec.decode(ctx::MAG[ctx]);
-                if bit == 1 { mags[i] |= threshold; }
+        if !ll_probe.disable_mr {
+            for i in 0..n {
+                if sig[i] && mags[i] >= threshold * 2 {
+                    let ctx = mag_refinement_context_bool(&sig, i, width, height, bp, num_bitplanes);
+                    let bit = dec.decode(ctx::MAG[ctx]);
+                    if bit == 1 { mags[i] |= threshold; }
+                }
             }
         }
 
         // ── Cleanup (CL) – stripe-column order with run-mode ───────────────
-        let mut band_row = 0usize;
-        while band_row < height {
-            let band_end = (band_row + 4).min(height);
-            let band_h   = band_end - band_row;
+        if !ll_probe.disable_cl {
+            let mut band_row = 0usize;
+            while band_row < height {
+                let band_end = (band_row + 4).min(height);
+                let band_h   = band_end - band_row;
 
-            for c in 0..width {
-                // A pixel needs CL if insignificant AND not visited by SP this bitplane.
-                let any_needs = (0..band_h).any(|j| {
-                    let i = (band_row + j) * width + c;
-                    !sig[i] && !sp_visit[i]
-                });
-                if !any_needs { continue; }
-
-                // Run-mode eligible: full band of 4, all pixels need CL, all zero sig-context.
-                let run_eligible = run_mode_enabled && band_h == 4
-                    && (0..4).all(|j| {
+                for c in 0..width {
+                    // A pixel needs CL if insignificant AND not visited by SP this bitplane.
+                    let any_needs = (0..band_h).any(|j| {
                         let i = (band_row + j) * width + c;
-                        !sig[i] && !sp_visit[i] && significance_context_bool(&sig, i, width, height) == 0
+                        !sig[i] && !sp_visit[i]
                     });
-                if run_eligible {
-                    // Run-mode aggregate decode.
-                    let agg = dec.decode(ctx::CLEANUP); // AGG context = 18
-                    if agg == 0 {
-                        // No significant pixel in this stripe column.
-                        continue;
-                    }
-                    // Decode run start position (2 uniform bits → 0..3).
-                    let rp_hi = dec.decode(ctx::ZERO);
-                    let rp_lo = dec.decode(ctx::ZERO);
-                    let run_pos = ((rp_hi << 1) | rp_lo) as usize; // 0, 1, 2, or 3
+                    if !any_needs { continue; }
 
-                    // First significant pixel at run_pos.
-                    let first_i = (band_row + run_pos) * width + c;
-                    mags[first_i] |= threshold;
-                    sig[first_i] = true;
-                    cl_sig_count += 1;
-                    // Sign from uniform context (XOR with sign-context prediction).
-                    let (sctx, flip) = sign_context_bool(&sig, &signs, first_i, width, height);
-                    signs[first_i] = dec.decode(sctx) ^ flip;
+                    // Run-mode eligible: full band of 4, all pixels need CL, all zero sig-context.
+                    let run_eligible = run_mode_enabled && band_h == 4
+                        && (0..4).all(|j| {
+                            let i = (band_row + j) * width + c;
+                            !sig[i] && !sp_visit[i] && significance_context_bool(&sig, i, width, height) == 0
+                        });
+                    if run_eligible {
+                        // Run-mode aggregate decode.
+                        let agg = dec.decode(ctx::CLEANUP); // AGG context = 18
+                        if agg == 0 {
+                            // No significant pixel in this stripe column.
+                            continue;
+                        }
+                        // Decode run start position (2 uniform bits -> 0..3).
+                        let rp_hi = dec.decode(ctx::ZERO);
+                        let rp_lo = dec.decode(ctx::ZERO);
+                        let run_pos = ((rp_hi << 1) | rp_lo) as usize; // 0, 1, 2, or 3
 
-                    // Process remaining pixels after run_pos individually.
-                    for j in (run_pos + 1)..band_h {
-                        let i = (band_row + j) * width + c;
-                        if !sig[i] && !sp_visit[i] {
-                            let ctx = significance_context_bool(&sig, i, width, height);
-                            let bit = dec.decode(ctx::SIG[ctx.min(8)]);
-                            if bit == 1 {
-                                mags[i] |= threshold;
-                                sig[i] = true;
-                                cl_sig_count += 1;
-                                let (sctx2, flip2) = sign_context_bool(&sig, &signs, i, width, height);
-                                signs[i] = dec.decode(sctx2) ^ flip2;
+                        // First significant pixel at run_pos.
+                        let first_i = (band_row + run_pos) * width + c;
+                        mags[first_i] |= threshold;
+                        sig[first_i] = true;
+                        cl_sig_count += 1;
+                        // Sign from uniform context (XOR with sign-context prediction).
+                        let (sctx, flip) = sign_context_bool(&sig, &signs, first_i, width, height);
+                        signs[first_i] = dec.decode(sctx) ^ flip;
+
+                        // Process remaining pixels after run_pos individually.
+                        for j in (run_pos + 1)..band_h {
+                            let i = (band_row + j) * width + c;
+                            if !sig[i] && !sp_visit[i] {
+                                let ctx = significance_context_bool(&sig, i, width, height);
+                                let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                if bit == 1 {
+                                    mags[i] |= threshold;
+                                    sig[i] = true;
+                                    cl_sig_count += 1;
+                                    let (sctx2, flip2) = sign_context_bool(&sig, &signs, i, width, height);
+                                    signs[i] = dec.decode(sctx2) ^ flip2;
+                                }
                             }
                         }
-                    }
-                } else {
-                    // Non-run-mode: process each pixel individually.
-                    for j in 0..band_h {
-                        let i = (band_row + j) * width + c;
-                        if !sig[i] && !sp_visit[i] {
-                            let ctx = significance_context_bool(&sig, i, width, height);
-                            let bit = dec.decode(ctx::SIG[ctx.min(8)]);
-                            if bit == 1 {
-                                mags[i] |= threshold;
-                                sig[i] = true;
-                                cl_sig_count += 1;
-                                let (sctx, flip) = sign_context_bool(&sig, &signs, i, width, height);
-                                signs[i] = dec.decode(sctx) ^ flip;
+                    } else {
+                        // Non-run-mode: process each pixel individually.
+                        for j in 0..band_h {
+                            let i = (band_row + j) * width + c;
+                            if !sig[i] && !sp_visit[i] {
+                                let ctx = significance_context_bool(&sig, i, width, height);
+                                let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                if bit == 1 {
+                                    mags[i] |= threshold;
+                                    sig[i] = true;
+                                    cl_sig_count += 1;
+                                    let (sctx, flip) = sign_context_bool(&sig, &signs, i, width, height);
+                                    signs[i] = dec.decode(sctx) ^ flip;
+                                }
                             }
                         }
                     }
                 }
+                band_row += 4;
             }
-            band_row += 4;
         }
         if trace && bp >= num_bitplanes - 3 {
             eprintln!("[decode_block_stdjk] bp={} threshold={} sp_sig={} cl_sig={}", bp, threshold, sp_sig_count, cl_sig_count);

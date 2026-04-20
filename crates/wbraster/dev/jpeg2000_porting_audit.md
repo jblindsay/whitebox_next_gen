@@ -185,6 +185,15 @@ Status: in progress.
         - legacy HF-only: baseline-like (`8192` / `8193` / `8192`)
       - Throughput impact: captures 5 profile comparisons per iteration with a
         single command, reducing per-cycle manual command overhead.
+    - Expanded matrix with LL pass-level isolation probes:
+      - `JPEG2000_DIFF_LL_DISABLE_SP=1`: (`8193` / `16384` / `8193`)
+      - `JPEG2000_DIFF_LL_DISABLE_MR=1`: (`16384` / `16384` / `16384`)
+      - `JPEG2000_DIFF_LL_DISABLE_CL=1`: (`32768` / `32768` / `32768`)
+      - All three retain mismatch class `multicomponent_sample_value_mismatch=3`,
+        but magnitude escalation ranks cleanup > MR > SP.
+      - Interpretation: LL cleanup semantics remain highest-priority root-cause
+        lane (including interaction with run-mode gating and CL eligibility),
+        with LL MR behavior as secondary lane.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

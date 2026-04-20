@@ -257,3 +257,8 @@ Exit criteria:
   baseline + targeted decoder profiles each iteration. Latest matrix reinforced LL-dominant divergence:
   LL-only legacy fallback matches all-subband legacy signature, while HF-only legacy fallback remains
   near standard baseline; cleanup run-mode enabled remains strongly regressive.
+- 2026-04-19: Added LL pass-level probe controls (`JPEG2000_DIFF_LL_DISABLE_SP`,
+  `JPEG2000_DIFF_LL_DISABLE_MR`, `JPEG2000_DIFF_LL_DISABLE_CL`) and extended matrix runs.
+  Result: LL cleanup disable caused strongest regression (~32768 class), LL MR disable produced
+  mid-level regression (~16384 class), and LL SP disable smaller/mixed regression. This prioritizes
+  LL cleanup semantics as next critical debugging lane.

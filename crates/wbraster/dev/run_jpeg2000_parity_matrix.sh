@@ -61,6 +61,9 @@ run_profile "standard_runmode_on" JPEG2000_STDJK_ENABLE_RUNMODE=1
 run_profile "legacy_all_subbands" JPEG2000_DIFF_FORCE_LEGACY_T1=1
 run_profile "legacy_ll_only" JPEG2000_DIFF_FORCE_LEGACY_T1_LL=1
 run_profile "legacy_hf_only" JPEG2000_DIFF_FORCE_LEGACY_T1_HF=1
+run_profile "ll_disable_sp" JPEG2000_DIFF_LL_DISABLE_SP=1
+run_profile "ll_disable_mr" JPEG2000_DIFF_LL_DISABLE_MR=1
+run_profile "ll_disable_cl" JPEG2000_DIFF_LL_DISABLE_CL=1
 
 echo ""
 echo "Matrix run complete."

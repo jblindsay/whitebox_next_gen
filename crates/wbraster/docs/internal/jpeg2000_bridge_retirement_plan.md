@@ -285,8 +285,16 @@ B2 Status: **PARTIAL** (safe subset implemented, 2026-04-20)
   - `JPEG2000_DIFF_FIXTURES="tests/fixtures/rgb_8x8_lossless.jp2,tests/fixtures/sentinel_style_16x16_4band_lossless.jp2,tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2" cargo test -p wbraster formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus -- --nocapture` remains green.
 - Remaining B2 work:
   1. Full multi-segment POC boundary transitions during packet walking.
-  2. Tile-part POC transition support.
+  2. ~~Tile-part POC transition support.~~ ✅ Done: single full-range tile-part POC safe-subset implemented and verified.
   3. POC-positive fixture corpus to validate real boundary-switch behavior.
+- Public fixture sourcing status (verified 2026-04-20):
+  - GDAL fixture `byte_one_poc.j2k` is publicly downloadable from `https://raw.githubusercontent.com/OSGeo/gdal/master/autotest/gdrivers/data/jpeg2000/byte_one_poc.j2k` and was marker-verified to contain `POC`.
+  - `byte_one_poc.j2k` is now vendored locally at `crates/wbraster/tests/fixtures/byte_one_poc.j2k`.
+  - Native reader raw-codestream ingest was updated so `.j2k` fixtures now parse through `GeoJp2::from_bytes()` instead of failing during JP2 box parsing.
+  - Current differential status for the local `byte_one_poc.j2k` fixture (updated 2026-04-20): tile-part POC safe-subset implemented. Native decode now succeeds: `read_band_u8(0)` returns 400 samples for 20×20 greyscale fixture. Unit test `raw_j2k_poc_fixture_decodes_with_tile_part_poc_safe_subset` passes. Differential harness shows `bridge_error=1` because the vendored bridge C library (`decode_native()`) fails on this fixture with "unsupported marker" in tile data — this is a pre-existing bridge limitation unrelated to native changes. Differential `ok=1` cannot be reached for this fixture due to bridge failure; native correctness is validated by unit tests and by comparison with known bridge metadata (20×20, Gray, 8-bit match confirmed during fixture acquisition).
+  - GDAL fixture `byte_tlm_plt.jp2` is publicly downloadable from `https://raw.githubusercontent.com/OSGeo/gdal/master/autotest/gdrivers/data/jpeg2000/byte_tlm_plt.jp2` and was marker-verified to contain `TLM` and `PLT`.
+  - User-provided Sentinel-2 sample JP2 files were inspected and do not contain `POC`, `PPM`, or `PPT`; they are not useful for Phase B marker-boundary coverage.
+  - No public `PPM` or `PPT` fixture has been verified yet from GDAL/OpenJPEG search passes; Phase C may require either a synthesized fixture or a broader upstream fixture search.
 - Impact: Phase B now has a functioning low-risk baseline; Phase C can still proceed in parallel.
 
 - Best case: 2-3 engineering weeks.

@@ -35,6 +35,7 @@ struct TilePartInfo {
     has_poc: bool,
     has_packet_header_markers: bool,
     cod_override: Option<Cod>,
+    poc_override: Option<Poc>,
 }
 
 #[derive(Debug, Clone)]
@@ -668,7 +669,7 @@ impl GeoJp2 {
     }
 
     /// Parse a JP2 from any `Read + Seek` reader.
-    pub fn from_reader<R: Read + Seek>(reader: R) -> Result<Self> {
+    pub fn from_reader<R: Read + Seek>(mut reader: R) -> Result<Self> {
         fn collect_metadata_from_boxes(
             boxes_in: &[RawBox],
             ihdr: &mut Option<ImageHeader>,
@@ -714,7 +715,102 @@ impl GeoJp2 {
             Ok(())
         }
 
-        let mut br = BoxReader::new(reader)?;
+        fn build_from_codestream(
+            codestream: Vec<u8>,
+            ihdr: Option<ImageHeader>,
+            colr: Option<ColourSpec>,
+            crs: Option<CrsInfo>,
+        ) -> Result<GeoJp2> {
+            let markers = codestream::parse_codestream_markers(&codestream)?;
+            let mut siz: Option<Siz> = None;
+            let mut cod: Option<Cod> = None;
+            let mut qcd: Option<Qcd> = None;
+            let mut main_header_poc: Option<Poc> = None;
+            let mut poc_data: Option<&[u8]> = None;
+            for m in &markers {
+                match m.marker {
+                    marker::SIZ => siz = Some(Siz::parse(&m.data)?),
+                    marker::COD => cod = Some(Cod::parse(&m.data)?),
+                    marker::QCD => qcd = Some(Qcd::parse(&m.data)?),
+                    marker::POC => {
+                        poc_data = Some(&m.data);
+                    }
+                    _ => {}
+                }
+            }
+
+            let siz = if let Some(siz) = siz {
+                siz
+            } else if let Some(ihdr) = ihdr.as_ref() {
+                Siz::new(
+                    ihdr.width,
+                    ihdr.height,
+                    ihdr.bits_per_component().max(1),
+                    ihdr.is_signed(),
+                    ihdr.components,
+                )
+            } else {
+                return Err(Jp2Error::InvalidCodestream {
+                    offset: 0,
+                    message: "Missing SIZ marker".into(),
+                });
+            };
+            let (width, height, components) = if let Some(ihdr) = ihdr.as_ref() {
+                (ihdr.width, ihdr.height, ihdr.components)
+            } else {
+                (
+                    siz.xsiz.saturating_sub(siz.x_osiz),
+                    siz.ysiz.saturating_sub(siz.y_osiz),
+                    siz.components.len() as u16,
+                )
+            };
+            let cod = cod.unwrap_or_else(|| Cod::lossless(5, components));
+            let qcd = qcd.unwrap_or_else(|| Qcd::no_quantisation(5, siz.components[0].bits()));
+
+            if let Some(poc_bytes) = poc_data {
+                main_header_poc = Some(Poc::parse(poc_bytes, siz.components.len() as u16)?);
+            }
+
+            let color_space = colr
+                .as_ref()
+                .and_then(|c| c.enumcs)
+                .map(ColorSpace::from_enumcs)
+                .unwrap_or_else(|| {
+                    if components == 1 {
+                        ColorSpace::Greyscale
+                    } else {
+                        ColorSpace::MultiBand
+                    }
+                });
+
+            let bits = siz.components.first().map(|c| c.bits()).unwrap_or(8);
+            let signed = siz.components.first().map(|c| c.signed()).unwrap_or(false);
+
+            Ok(GeoJp2 {
+                width,
+                height,
+                components,
+                bits,
+                signed,
+                siz,
+                cod,
+                qcd,
+                color_space,
+                crs,
+                main_header_poc,
+                codestream,
+            })
+        }
+
+        reader.seek(std::io::SeekFrom::Start(0)).map_err(Jp2Error::Io)?;
+        let mut file_bytes = Vec::new();
+        reader.read_to_end(&mut file_bytes).map_err(Jp2Error::Io)?;
+
+        if file_bytes.starts_with(&marker::SOC.to_be_bytes()) {
+            return build_from_codestream(file_bytes, None, None, None);
+        }
+
+        let mut br = BoxReader::new(std::io::Cursor::new(file_bytes))?;
         let all_boxes = br.read_all()?;
 
         // ── Validate signature ────────────────────────────────────────────
@@ -756,54 +852,7 @@ impl GeoJp2 {
             message: "Missing codestream box".into(),
         })?;
 
-        // ── Parse codestream header markers ───────────────────────────────
-        let markers = codestream::parse_codestream_markers(&codestream)?;
-        let mut siz: Option<Siz> = None;
-        let mut cod: Option<Cod> = None;
-        let mut qcd: Option<Qcd> = None;
-
-        let mut main_header_poc: Option<Poc> = None;
-            let mut poc_data: Option<&[u8]> = None;
-        for m in &markers {
-            match m.marker {
-                marker::SIZ => siz = Some(Siz::parse(&m.data)?),
-                marker::COD => cod = Some(Cod::parse(&m.data)?),
-                marker::QCD => qcd = Some(Qcd::parse(&m.data)?),
-                marker::POC => {
-                    poc_data = Some(&m.data);
-                }
-                _ => {}
-            }
-        }
-
-        let siz = siz.unwrap_or_else(|| Siz::new(ihdr.width, ihdr.height, ihdr.bits_per_component().max(1), ihdr.is_signed(), ihdr.components));
-        let cod = cod.unwrap_or_else(|| Cod::lossless(5, ihdr.components));
-        let qcd = qcd.unwrap_or_else(|| Qcd::no_quantisation(5, siz.components[0].bits()));
-
-        // Parse POC now that we have num_components from SIZ
-        if let Some(poc_bytes) = poc_data {
-            main_header_poc = Some(Poc::parse(poc_bytes, siz.components.len() as u16)?);
-        }
-
-        let color_space = colr.as_ref()
-            .and_then(|c| c.enumcs)
-            .map(ColorSpace::from_enumcs)
-            .unwrap_or_default();
-
-        let bits   = siz.components.first().map(|c| c.bits()).unwrap_or(8);
-        let signed = siz.components.first().map(|c| c.signed()).unwrap_or(false);
-
-        Ok(Self {
-            width:  ihdr.width,
-            height: ihdr.height,
-            components: ihdr.components,
-            bits, signed,
-            siz, cod, qcd,
-            color_space,
-            crs,
-            main_header_poc,
-            codestream,
-        })
+        build_from_codestream(codestream, Some(ihdr), colr, crs)
     }
 
     // ── Metadata accessors ────────────────────────────────────────────────────
@@ -2309,13 +2358,42 @@ impl GeoJp2 {
     }
 
     fn resolve_progression_for_plan(&self, plan: &PacketTraversalPlan) -> Result<ProgressionOrder> {
-        // Tile-part POC support requires per-part progression windows, which
-        // is not yet implemented in the bounded packet walker.
+        // Tile-part POC safe subset: accept a single full-range POC entry that
+        // acts as a global progression override across all tile-parts.
         if plan.has_poc {
-            return Err(Jp2Error::NotImplemented(
-                "native packet walker does not yet support tile-part POC progression changes"
+            // Collect the first parsed tile-part POC across all tile-parts.
+            let tp_poc = plan.tile_parts.iter().find_map(|p| p.poc_override.as_ref());
+            let poc = tp_poc.ok_or_else(|| Jp2Error::NotImplemented(
+                "native packet walker does not yet support tile-part POC without parseable POC payload"
                     .into(),
-            ));
+            ))?;
+
+            if poc.changes.len() != 1 {
+                return Err(Jp2Error::NotImplemented(
+                    "native packet walker does not yet support multi-segment tile-part POC changes"
+                        .into(),
+                ));
+            }
+
+            let c = poc.changes[0];
+            let layers = usize::from(plan.num_layers).max(1);
+            let resolutions = (usize::from(self.cod.num_decomps) + 1).max(1);
+            let components = usize::from(self.components).max(1);
+
+            let full_range = c.res_start == 0
+                && c.comp_start == 0
+                && usize::from(c.layer_end) >= layers
+                && usize::from(c.res_end) >= resolutions
+                && usize::from(c.comp_end) >= components;
+
+            if !full_range {
+                return Err(Jp2Error::NotImplemented(
+                    "native packet walker only supports single full-range tile-part POC entry"
+                        .into(),
+                ));
+            }
+
+            return Ok(c.progression);
         }
 
         if let Some(poc) = &self.main_header_poc {
@@ -2929,6 +3007,7 @@ impl GeoJp2 {
                 let mut has_poc = false;
                 let mut has_packet_header_markers = false;
                 let mut cod_override: Option<Cod> = None;
+                let mut poc_override: Option<Poc> = None;
                 let mut j = sot_segment_end;
                 while j + 1 < tile_part_end {
                     if cs[j] != 0xFF {
@@ -2974,6 +3053,12 @@ impl GeoJp2 {
 
                     if m == marker::POC {
                         has_poc = true;
+                        let data_start = j + 4;
+                        if data_start <= next {
+                            if let Ok(poc) = Poc::parse(&cs[data_start..next], self.components) {
+                                poc_override = Some(poc);
+                            }
+                        }
                     }
                     // PLT/PLM are packet-length hint tables only; they do not
                     // move headers out of the packet body so they can be skipped
@@ -3012,6 +3097,7 @@ impl GeoJp2 {
                     has_poc,
                     has_packet_header_markers,
                     cod_override,
+                    poc_override,
                 });
                 last_part_index.insert(isot, tpsot);
                 i = tile_part_end;
@@ -4155,6 +4241,28 @@ mod multiband_failfast_tests {
             msg.contains("tile-part POC"),
             "unexpected error message: {msg}"
         );
+    }
+
+    #[test]
+    fn from_bytes_supports_raw_j2k_poc_fixture() {
+        let fixture = include_bytes!("../../../tests/fixtures/byte_one_poc.j2k");
+        let jp2 = GeoJp2::from_bytes(fixture).expect("raw J2K POC fixture should parse");
+
+        assert!(jp2.width() > 0, "raw J2K width should be populated from SIZ");
+        assert!(jp2.height() > 0, "raw J2K height should be populated from SIZ");
+        assert!(jp2.component_count() > 0, "raw J2K component count should be populated from SIZ");
+        assert!(jp2.main_header_poc.is_some(), "raw J2K POC fixture should retain main-header POC");
+    }
+
+    #[test]
+    fn raw_j2k_poc_fixture_decodes_with_tile_part_poc_safe_subset() {
+        let fixture = include_bytes!("../../../tests/fixtures/byte_one_poc.j2k");
+        let jp2 = GeoJp2::from_bytes(fixture).expect("raw J2K POC fixture should parse");
+
+        let band = jp2
+            .read_band_u8(0)
+            .expect("single full-range tile-part POC should now decode successfully");
+        assert_eq!(band.len(), 20 * 20, "expected 20x20 = 400 samples");
     }
 
     #[test]

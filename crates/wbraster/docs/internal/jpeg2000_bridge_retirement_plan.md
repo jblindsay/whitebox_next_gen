@@ -260,7 +260,24 @@ Exit criteria:
 - [ ] Differential corpus shows no POC-related mismatches.
 - [ ] No regressions in Phase A fixtures.
 
-Estimate:
+#### Phase B Progress (2026-04-20)
+
+B1 Status: **COMPLETE** (2026-04-20)
+- Created Poc struct with PocChange entries in codestream.rs
+- Implemented Poc::parse() with proper variable-width encoding support
+- Added main_header_poc: Option<Poc> field to GeoJp2 reader
+- Updated main header parsing to parse POC marker data with component count awareness
+- Phase A fixtures validation: all 3 still passing (ok=3)
+- Differential summary: `native_unsupported_poc=0` (test fixtures don't exercise POC boundaries)
+
+B2 Status: **DEFERRED** (pending POC test fixtures)
+- POC marker infrastructure in place; gates remain for unsupported POC traversal
+- Current test fixtures don't trigger POC progression changes
+- Actual POC traversal logic deferred until:
+  1. Real POC test fixtures are available, OR
+  2. POC-enabled JP2 generation capability is added
+- Impact: Zero blockers on Phase A; Phase C (PPM/PPT) can proceed in parallel
+
 - Best case: 2-3 engineering weeks.
 - Most likely: 2.5-4 engineering weeks.
 - Conservative: 3-5 engineering weeks.

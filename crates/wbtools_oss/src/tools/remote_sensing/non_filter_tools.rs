@@ -9189,10 +9189,8 @@ impl Tool for ImageSegmentationTool {
                     continue;
                 }
                 let mut neigh = std::collections::HashSet::<usize>::new();
-                for idx in 0..n {
-                    if seg[idx] != sid as isize {
-                        continue;
-                    }
+                // Collect neighboring segments by iterating only the cells in this segment (not all n pixels).
+                for &idx in &seg_cells[sid] {
                     let r = (idx / rasters[0].cols) as isize;
                     let c = (idx % rasters[0].cols) as isize;
                     for (dr, dc) in n8 {
@@ -9229,10 +9227,9 @@ impl Tool for ImageSegmentationTool {
                     for d in 0..dims {
                         seg_center[nid][d] = (seg_center[nid][d] * n1 + seg_center[sid][d] * n2) / (n1 + n2).max(1.0);
                     }
-                    for idx in 0..n {
-                        if seg[idx] == sid as isize {
-                            seg[idx] = nid as isize;
-                        }
+                    // Remap pixels from sid to nid, iterating only the cells in segment sid (not all n pixels).
+                    for &idx in &seg_cells[sid] {
+                        seg[idx] = nid as isize;
                     }
                     seg_size[nid] += seg_size[sid];
                     seg_size[sid] = 0;

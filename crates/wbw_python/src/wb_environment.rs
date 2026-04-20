@@ -1009,16 +1009,44 @@ pub(crate) fn run_unary_tool_runtime_with_callback(
 
 fn extract_typed_output_path(tool_id: &str, response: &serde_json::Value) -> PyResult<PathBuf> {
     let outputs = response.get("outputs").unwrap_or(response);
-    let path = outputs
-        .get("path")
+
+    // Preferred legacy shape: outputs.path
+    if let Some(path) = outputs.get("path").and_then(serde_json::Value::as_str) {
+        return Ok(PathBuf::from(path));
+    }
+
+    // Common keyed shape for single-output tools: outputs.output.path
+    if let Some(path) = outputs
+        .get("output")
+        .and_then(|v| v.get("path"))
         .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "tool '{}' did not return a typed output path",
-                tool_id
-            ))
-        })?;
-    Ok(PathBuf::from(path))
+    {
+        return Ok(PathBuf::from(path));
+    }
+
+    // Some tools emit plain strings instead of typed objects.
+    if let Some(path) = outputs.get("output").and_then(serde_json::Value::as_str) {
+        return Ok(PathBuf::from(path));
+    }
+
+    // Final fallback: if there is exactly one output entry and it contains a path, use it.
+    if let Some(map) = outputs.as_object() {
+        if map.len() == 1 {
+            if let Some((_, value)) = map.iter().next() {
+                if let Some(path) = value.get("path").and_then(serde_json::Value::as_str) {
+                    return Ok(PathBuf::from(path));
+                }
+                if let Some(path) = value.as_str() {
+                    return Ok(PathBuf::from(path));
+                }
+            }
+        }
+    }
+
+    Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+        "tool '{}' did not return a typed output path",
+        tool_id
+    )))
 }
 
 fn extract_typed_output_path_by_key(
@@ -20999,6 +21027,98 @@ impl WbEnvironment {
             })?;
         if self.verbose { println!("Completed image_segmentation tool"); }
         Ok(Raster { file_path: out_path, active_band: 1 })
+    }
+
+    #[pyo3(signature = (input_rasters, coarse_k=800.0, fine_k=250.0, output_prefix=None, callback=None))]
+    fn segment_multiresolution_hierarchical(
+        &self,
+        input_rasters: &Bound<'_, pyo3::types::PyList>,
+        coarse_k: f64,
+        fine_k: f64,
+        output_prefix: Option<&str>,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<(Raster, Raster, String)> {
+        let band_paths: Vec<String> = input_rasters
+            .iter()
+            .map(|item| {
+                item.cast::<Raster>()
+                    .map(|r| r.borrow().file_path.to_string_lossy().to_string())
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyTypeError, _>(format!("expected Raster: {e}")))
+            })
+            .collect::<PyResult<_>>()?;
+
+        if band_paths.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "segment_multiresolution_hierarchical requires at least one input raster",
+            ));
+        }
+
+        let resolved_prefix = self
+            .resolve_output_path_for_wd(output_prefix)
+            .unwrap_or_else(|| {
+                self.working_directory
+                    .join("segment_multiresolution_hierarchical")
+                    .to_string_lossy()
+                    .to_string()
+            });
+
+        let mut args = serde_json::Map::new();
+        args.insert("inputs".to_string(), serde_json::json!(band_paths));
+        args.insert("coarse_k".to_string(), serde_json::json!(coarse_k.max(1.0)));
+        args.insert("fine_k".to_string(), serde_json::json!(fine_k.max(1.0)));
+        args.insert("output_prefix".to_string(), serde_json::json!(resolved_prefix));
+
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+
+        let response = if let Some(cb) = callback {
+            let sink = PyCallbackSink::new(cb);
+            let r = self
+                .runtime
+                .run_tool_json_with_progress_sink("segment_multiresolution_hierarchical", &args_json, &sink)
+                .map_err(map_tool_error)?;
+            if let Some(msg) = sink.take_error() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(msg));
+            }
+            r
+        } else {
+            self.runtime
+                .run_tool_json_with_progress("segment_multiresolution_hierarchical", &args_json)
+                .map_err(map_tool_error)?
+        };
+
+        let coarse = extract_output_path_by_key(
+            "segment_multiresolution_hierarchical",
+            &response,
+            "segments_coarse",
+        )?;
+        let fine = extract_output_path_by_key(
+            "segment_multiresolution_hierarchical",
+            &response,
+            "segments_fine",
+        )?;
+        let hierarchy = extract_output_path_by_key(
+            "segment_multiresolution_hierarchical",
+            &response,
+            "hierarchy",
+        )?;
+
+        if self.verbose {
+            println!("Completed segment_multiresolution_hierarchical tool");
+        }
+
+        Ok((
+            Raster {
+                file_path: coarse,
+                active_band: 1,
+            },
+            Raster {
+                file_path: fine,
+                active_band: 1,
+            },
+            hierarchy.to_string_lossy().to_string(),
+        ))
     }
 
     #[pyo3(signature = (input, window_size=7, distance=1, angles="0,45,90,135", features="contrast,homogeneity,energy,entropy", direction_aggregation="mean", levels=32, symmetric=true, output_path=None, callback=None))]

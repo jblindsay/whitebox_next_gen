@@ -165,6 +165,15 @@ Status: in progress.
       (`8193 -> 4097`), `sentinel_style_16x16_4band` unchanged (`8192`), and
       `tiled_rgb_64x64_block32` worsened (`8193 -> 16384`), with mismatch class
       still `multicomponent_sample_value_mismatch=3`.
+    - Added targeted subband probes:
+      - `JPEG2000_DIFF_FORCE_LEGACY_T1_LL=1` (LL-only legacy tier-1) matched
+        the all-subband legacy signature exactly on the fixture trio
+        (`4097` / `8192` / `16384`, mismatch class still `=3`).
+      - `JPEG2000_DIFF_FORCE_LEGACY_T1_HF=1` (HF-only legacy tier-1) stayed
+        near standard baseline (`8192` / `8193` / `8192`) and did not reduce
+        mismatch class (`multicomponent_sample_value_mismatch=3`).
+      - This isolates current dominant divergence to LL tier-1 decode behavior,
+        with HF changes only nudging low-order parity.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

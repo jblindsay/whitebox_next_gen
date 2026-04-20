@@ -1071,6 +1071,12 @@ impl GeoJp2 {
         let use_legacy_t1 = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
+        let use_legacy_t1_ll = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1_LL")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let use_legacy_t1_hf = std::env::var("JPEG2000_DIFF_FORCE_LEGACY_T1_HF")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
 
         // Target component for this decode call.
         let target_component = _component;
@@ -1518,7 +1524,10 @@ impl GeoJp2 {
                         );
                     }
 
-                    let dec = if use_legacy_t1 {
+                    let use_legacy_for_sb = use_legacy_t1
+                        || (use_legacy_t1_ll && sb.qcd_idx == 0)
+                        || (use_legacy_t1_hf && sb.qcd_idx != 0);
+                    let dec = if use_legacy_for_sb {
                         decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                     } else {
                         decode_block(&cb.data, actual_w, actual_h, num_bp)
@@ -1602,7 +1611,10 @@ impl GeoJp2 {
                         let num_bp = raw_bp.saturating_sub(cb.missing_bp).saturating_sub(1).max(1);
                         let actual_w = cb_w.min(sb.sb_w.saturating_sub(cbx * cb_w)).max(1);
                         let actual_h = cb_h.min(sb.sb_h.saturating_sub(cby * cb_h)).max(1);
-                        let dec = if use_legacy_t1 {
+                        let use_legacy_for_sb = use_legacy_t1
+                            || (use_legacy_t1_ll && sb.qcd_idx == 0)
+                            || (use_legacy_t1_hf && sb.qcd_idx != 0);
+                        let dec = if use_legacy_for_sb {
                             decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                         } else {
                             decode_block(&cb.data, actual_w, actual_h, num_bp)

@@ -243,22 +243,22 @@ Timebox decision checkpoint (2026-04-20 UPDATED):
   - Document root-cause discovery narrative in Phase A closure report.
 
 ### Phase B - POC Progression Support (2-4 weeks)
-**Status: Ready for entry. Gate A Go decision enables Phase B kickoff.**
+**Status: In progress. Narrow main-header POC subset implemented and verified.**
 
 Targets:
 - crates/wbraster/src/formats/jpeg2000_core/reader.rs (POC marker packet traversal)
 - crates/wbraster/src/formats/jpeg2000.rs (adapter handling)
 
 Tasks:
-- [ ] Implement POC packet progression order transitions.
+- [~] Implement POC packet progression order transitions. (safe subset complete: single full-range main-header POC acts as a global progression override)
 - [ ] Add POC-style fixtures with progression order changes.
 - [ ] Add parity assertions for POC-enabled variants.
-- [ ] Verify no regressions in Phase A multicomponent fixtures.
+- [x] Verify no regressions in Phase A multicomponent fixtures.
 
 Exit criteria:
 - [ ] POC-enabled fixtures pass native decode.
 - [ ] Differential corpus shows no POC-related mismatches.
-- [ ] No regressions in Phase A fixtures.
+- [x] No regressions in Phase A fixtures.
 
 #### Phase B Progress (2026-04-20)
 
@@ -270,13 +270,24 @@ B1 Status: **COMPLETE** (2026-04-20)
 - Phase A fixtures validation: all 3 still passing (ok=3)
 - Differential summary: `native_unsupported_poc=0` (test fixtures don't exercise POC boundaries)
 
-B2 Status: **DEFERRED** (pending POC test fixtures)
-- POC marker infrastructure in place; gates remain for unsupported POC traversal
-- Current test fixtures don't trigger POC progression changes
-- Actual POC traversal logic deferred until:
-  1. Real POC test fixtures are available, OR
-  2. POC-enabled JP2 generation capability is added
-- Impact: Zero blockers on Phase A; Phase C (PPM/PPT) can proceed in parallel
+B2 Status: **PARTIAL** (safe subset implemented, 2026-04-20)
+- Implemented safe main-header POC subset in packet traversal planning:
+  - Supports exactly one full-range main-header POC entry as a global progression override.
+  - Rejects multi-segment and partial-range main-header POC with explicit NotImplemented errors.
+  - Keeps tile-part POC unsupported (explicit NotImplemented) pending full per-part progression window support.
+- Added unit tests for supported and rejected shapes:
+  - Accept single full-range main-header POC.
+  - Reject partial-range main-header POC.
+  - Reject tile-part POC.
+- Regression validation: Phase A differential corpus remains green (`ok=3`, `native_unsupported_poc=0`).
+- Verification completed on code path:
+  - `cargo test -p wbraster resolve_progression_ -- --nocapture` passes.
+  - `JPEG2000_DIFF_FIXTURES="tests/fixtures/rgb_8x8_lossless.jp2,tests/fixtures/sentinel_style_16x16_4band_lossless.jp2,tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2" cargo test -p wbraster formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus -- --nocapture` remains green.
+- Remaining B2 work:
+  1. Full multi-segment POC boundary transitions during packet walking.
+  2. Tile-part POC transition support.
+  3. POC-positive fixture corpus to validate real boundary-switch behavior.
+- Impact: Phase B now has a functioning low-risk baseline; Phase C can still proceed in parallel.
 
 - Best case: 2-3 engineering weeks.
 - Most likely: 2.5-4 engineering weeks.

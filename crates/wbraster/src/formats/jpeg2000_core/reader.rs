@@ -2308,23 +2308,64 @@ impl GeoJp2 {
         })
     }
 
+    fn resolve_progression_for_plan(&self, plan: &PacketTraversalPlan) -> Result<ProgressionOrder> {
+        // Tile-part POC support requires per-part progression windows, which
+        // is not yet implemented in the bounded packet walker.
+        if plan.has_poc {
+            return Err(Jp2Error::NotImplemented(
+                "native packet walker does not yet support tile-part POC progression changes"
+                    .into(),
+            ));
+        }
+
+        if let Some(poc) = &self.main_header_poc {
+            if poc.changes.len() != 1 {
+                return Err(Jp2Error::NotImplemented(
+                    "native packet walker does not yet support multi-segment main-header POC changes"
+                        .into(),
+                ));
+            }
+
+            let c = poc.changes[0];
+            let layers = usize::from(plan.num_layers).max(1);
+            let resolutions = (usize::from(self.cod.num_decomps) + 1).max(1);
+            let components = usize::from(self.components).max(1);
+
+            // Safe subset: a single main-header POC entry that covers the full
+            // packet domain. In this case, POC acts as a global progression
+            // override and we can switch cursor ordering directly.
+            let full_range = c.res_start == 0
+                && c.comp_start == 0
+                && usize::from(c.layer_end) >= layers
+                && usize::from(c.res_end) >= resolutions
+                && usize::from(c.comp_end) >= components;
+
+            if !full_range {
+                return Err(Jp2Error::NotImplemented(
+                    "native packet walker only supports single full-range main-header POC entry"
+                        .into(),
+                ));
+            }
+
+            return Ok(c.progression);
+        }
+
+        Ok(plan.progression)
+    }
+
     fn collect_tile_packet_payload(
         &self,
         plan: &PacketTraversalPlan,
         target_component: Option<usize>,
     ) -> Result<Vec<u8>> {
-        if self.main_header_poc.is_some() || plan.has_poc {
-            return Err(Jp2Error::NotImplemented(
-                "native packet walker does not yet support POC progression changes".into(),
-            ));
-        }
+        let progression = self.resolve_progression_for_plan(plan)?;
         if plan.has_packet_header_markers {
             return Err(Jp2Error::NotImplemented(
                 "native packet walker does not yet support PPM/PPT external packet-header marker workflows".into(),
             ));
         }
 
-        match plan.progression {
+        match progression {
             ProgressionOrder::Lrcp => {
                 self.collect_tile_packet_payload_for_progression(
                     plan,
@@ -4031,6 +4072,89 @@ mod multiband_failfast_tests {
             let budget = jp2.packet_preview_budget_for_plan(&plan);
             assert_eq!(budget, 128);
         }
+    }
+
+    #[test]
+    fn resolve_progression_uses_single_full_range_main_header_poc() {
+        let mut jp2 = jp2_with_codestream(vec![], 3);
+        jp2.cod.num_decomps = 1; // resolutions = 2
+        jp2.main_header_poc = Some(Poc {
+            changes: vec![super::codestream::PocChange {
+                res_start: 0,
+                comp_start: 0,
+                layer_end: 2,
+                res_end: 2,
+                comp_end: 3,
+                progression: ProgressionOrder::Rlcp,
+            }],
+        });
+
+        let plan = PacketTraversalPlan {
+            progression: ProgressionOrder::Lrcp,
+            num_layers: 2,
+            tile_parts: vec![],
+            has_poc: false,
+            has_packet_header_markers: false,
+        };
+
+        let resolved = jp2
+            .resolve_progression_for_plan(&plan)
+            .expect("single full-range POC should be supported");
+        assert_eq!(resolved, ProgressionOrder::Rlcp);
+    }
+
+    #[test]
+    fn resolve_progression_rejects_partial_range_main_header_poc() {
+        let mut jp2 = jp2_with_codestream(vec![], 3);
+        jp2.cod.num_decomps = 1;
+        jp2.main_header_poc = Some(Poc {
+            changes: vec![super::codestream::PocChange {
+                res_start: 0,
+                comp_start: 0,
+                layer_end: 2,
+                res_end: 2,
+                comp_end: 2, // partial component range (not full)
+                progression: ProgressionOrder::Rlcp,
+            }],
+        });
+
+        let plan = PacketTraversalPlan {
+            progression: ProgressionOrder::Lrcp,
+            num_layers: 2,
+            tile_parts: vec![],
+            has_poc: false,
+            has_packet_header_markers: false,
+        };
+
+        let err = jp2
+            .resolve_progression_for_plan(&plan)
+            .expect_err("partial-range POC should remain unsupported");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("single full-range main-header POC"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn resolve_progression_rejects_tile_part_poc() {
+        let jp2 = jp2_with_codestream(vec![], 3);
+        let plan = PacketTraversalPlan {
+            progression: ProgressionOrder::Lrcp,
+            num_layers: 1,
+            tile_parts: vec![],
+            has_poc: true,
+            has_packet_header_markers: false,
+        };
+
+        let err = jp2
+            .resolve_progression_for_plan(&plan)
+            .expect_err("tile-part POC should remain unsupported");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("tile-part POC"),
+            "unexpected error message: {msg}"
+        );
     }
 
     #[test]

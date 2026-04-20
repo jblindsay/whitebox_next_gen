@@ -42,15 +42,15 @@ Targets:
 - crates/wbraster/src/formats/jpeg2000.rs
 
 Tasks:
-- [ ] Implement native multicomponent decode path (remove current fail-fast guard for supported codestreams).
-- [ ] Validate component ordering, signedness, and bit-depth handling.
-- [ ] Add/expand multiband fixtures and expected outputs.
-- [ ] Add parity assertions against bridge-backed baseline corpus.
+- [x] Implement native multicomponent decode path (remove current fail-fast guard for supported codestreams).
+- [ ] Validate component ordering, signedness, and bit-depth handling. (partial: bit-depth/signedness checks landed; ordering/value parity still open)
+- [x] Add/expand multiband fixtures and expected outputs.
+- [x] Add parity assertions against bridge-backed baseline corpus.
 
 Exit criteria:
 - [ ] Native multicomponent fixtures pass.
 - [ ] Differential mismatch rate is within agreed epsilon/threshold.
-- [ ] No regressions in existing JPEG2000 tests.
+- [x] No regressions in existing JPEG2000 tests.
 
 #### Phase A kickoff workboard (function-level)
 
@@ -58,37 +58,36 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
 
 1. A1 - Decode dispatch and capability gate cleanup (0.5-1 day)
   - [x] Update `decode_component` to route supported multicomponent flows into native packet path.
-  - [ ] Keep explicit fail-fast for still-unsupported marker workflows during Phase A.
-  - [ ] Location: `reader.rs` function `decode_component`.
+  - [x] Keep explicit fail-fast for still-unsupported marker workflows during Phase A.
+  - [x] Location: `reader.rs` function `decode_component`.
   - Done when:
-  - [ ] Existing fail-fast tests still pass for unsupported workflows.
-  - [ ] Supported multicomponent fixture no longer trips generic multicomponent NotImplemented.
+  - [x] Existing fail-fast tests still pass for unsupported workflows.
+  - [x] Supported multicomponent fixture no longer trips generic multicomponent NotImplemented.
 
 2. A2 - Packet payload extraction for multicomponent contexts (1-2 days)
   - [x] Verify component-aware packet traversal context state in `collect_tile_packet_payload_for_progression`.
-  - [ ] Ensure payload windows are not incorrectly shared/collapsed across components.
-  - [ ] Locations: `extract_tile_data`, `build_packet_traversal_plan`, `collect_tile_packet_payload`, `collect_tile_packet_payload_for_progression`.
+  - [ ] Ensure payload windows are not incorrectly shared/collapsed across components. (partially evidenced; residual value mismatch indicates further validation needed)
+  - [x] Locations: `extract_tile_data`, `build_packet_traversal_plan`, `collect_tile_packet_payload`, `collect_tile_packet_payload_for_progression`.
   - Done when:
-  - [ ] Per-component sample counts are correct for test fixtures.
-  - [ ] No packet-body overrun/underrun errors on representative multiband fixtures.
+  - [x] Per-component sample counts are correct for test fixtures.
+  - [x] No packet-body overrun/underrun errors on representative multiband fixtures.
 
 3. A3 - Component decode reconstruction path (1-2 days)
   - [x] Implement/complete per-component reconstruction in native path used by multicomponent decode.
-  - [ ] Full component-loop for `decode_component_proper` / `decode_component_v2` (multi-layer external codestreams).
-  - Note: `decode_component_proper` and `decode_component_v2` now return `NotImplemented` for nc>1 (preventing silent wrong-data decode) with clear bridge-fallback advisory.
+  - [x] Full component-loop for `decode_component_proper` / `decode_component_v2` (multi-layer external codestreams).
   - [ ] Validate inter-component ordering matches output contract expected by adapter layer.
-  - [ ] Locations: `decode_component_v2`, `decode_component_proper`.
+  - [x] Locations: `decode_component_v2`, `decode_component_proper`.
   - Done when:
-  - [ ] Decoded component buffers have expected lengths and deterministic ordering.
+  - [x] Decoded component buffers have expected lengths and deterministic ordering.
   - [ ] RGB-like fixture sanity checks pass (channel identity checks).
 
 4. A4 - Bit-depth and signedness alignment checks (0.5-1 day)
-  - [ ] Verify signed/unsigned handling parity with existing adapter expectations.
+  - [x] Verify signed/unsigned handling parity with existing adapter expectations.
   - [ ] Add targeted fixtures/assertions for mixed precision edge cases used in remote-sensing products.
-  - [ ] Locations: `decode_component*` path plus adapter mapping in `jpeg2000.rs`.
+  - [x] Locations: `decode_component*` path plus adapter mapping in `jpeg2000.rs`.
   - Done when:
   - [ ] No systematic value bias/offset in multicomponent outputs.
-  - [ ] Typed output mapping remains stable for U8/U16/I16 paths.
+  - [x] Typed output mapping remains stable for U8/U16/I16 paths.
 
 5. A5 - Test fixture expansion and expected-output baselines (1-2 days)
   - [x] Add at least 3 multicomponent fixtures: small RGB JP2, Sentinel-style multiband sample, tiled multicomponent sample.

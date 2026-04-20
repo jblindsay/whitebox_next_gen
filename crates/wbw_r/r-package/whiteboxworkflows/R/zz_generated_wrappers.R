@@ -991,6 +991,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Segments multi-band raster stacks into contiguous homogeneous regions using seeded region growing.
     run_tool("image_segmentation", list(...))
   }
+  session$segment_multiresolution_hierarchical <- function(...) {
+    # Builds coarse and fine segmentations and outputs a hierarchy mapping from fine objects to parent coarse objects.
+    run_tool("segment_multiresolution_hierarchical", list(...))
+  }
   session$image_slider <- function(...) {
     # Creates an interactive HTML image slider from two raster images.
     run_tool("image_slider", list(...))
@@ -2720,6 +2724,126 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("zonal_statistics", list(...))
   }
 
+  session$build_object_hierarchy_multiscale <- function(...) {
+    # Runs the build_object_hierarchy_multiscale tool.
+    run_tool("build_object_hierarchy_multiscale", list(...))
+  }
+  session$classify_objects_ensemble_pro <- function(...) {
+    # Runs the classify_objects_ensemble_pro tool.
+    run_tool("classify_objects_ensemble_pro", list(...))
+  }
+  session$classify_objects_random_forest <- function(...) {
+    # Runs the classify_objects_random_forest tool.
+    run_tool("classify_objects_random_forest", list(...))
+  }
+  session$classify_objects_rules_basic <- function(...) {
+    # Runs the classify_objects_rules_basic tool.
+    run_tool("classify_objects_rules_basic", list(...))
+  }
+  session$classify_objects_rules_hierarchical <- function(...) {
+    # Runs the classify_objects_rules_hierarchical tool.
+    run_tool("classify_objects_rules_hierarchical", list(...))
+  }
+  session$classify_objects_svm <- function(...) {
+    # Runs the classify_objects_svm tool.
+    run_tool("classify_objects_svm", list(...))
+  }
+  session$evaluate_object_classification_accuracy <- function(...) {
+    # Runs the evaluate_object_classification_accuracy tool.
+    run_tool("evaluate_object_classification_accuracy", list(...))
+  }
+  session$evaluate_segmentation_quality_pro <- function(...) {
+    # Runs the evaluate_segmentation_quality_pro tool.
+    run_tool("evaluate_segmentation_quality_pro", list(...))
+  }
+  session$feature_preserving_smoothing_multiscale <- function(...) {
+    # Runs the feature_preserving_smoothing_multiscale tool.
+    run_tool("feature_preserving_smoothing_multiscale", list(...))
+  }
+  session$obia_audit_report_pro <- function(...) {
+    # Runs the obia_audit_report_pro tool.
+    run_tool("obia_audit_report_pro", list(...))
+  }
+  session$obia_batch_orchestrator_pro <- function(...) {
+    # Runs the obia_batch_orchestrator_pro tool.
+    run_tool("obia_batch_orchestrator_pro", list(...))
+  }
+  session$obia_pipeline_basic <- function(...) {
+    # Runs the obia_pipeline_basic tool.
+    run_tool("obia_pipeline_basic", list(...))
+  }
+  session$object_class_probability_maps <- function(...) {
+    # Runs the object_class_probability_maps tool.
+    run_tool("object_class_probability_maps", list(...))
+  }
+  session$object_features_context_neighbors <- function(...) {
+    # Runs the object_features_context_neighbors tool.
+    run_tool("object_features_context_neighbors", list(...))
+  }
+  session$object_features_shape_basic <- function(...) {
+    # Runs the object_features_shape_basic tool.
+    run_tool("object_features_shape_basic", list(...))
+  }
+  session$object_features_spectral_basic <- function(...) {
+    # Runs the object_features_spectral_basic tool.
+    run_tool("object_features_spectral_basic", list(...))
+  }
+  session$object_features_texture_glcm_basic <- function(...) {
+    # Runs the object_features_texture_glcm_basic tool.
+    run_tool("object_features_texture_glcm_basic", list(...))
+  }
+  session$object_features_topology_relations <- function(...) {
+    # Runs the object_features_topology_relations tool.
+    run_tool("object_features_topology_relations", list(...))
+  }
+  session$object_uncertainty_diagnostics_pro <- function(...) {
+    # Runs the object_uncertainty_diagnostics_pro tool.
+    run_tool("object_uncertainty_diagnostics_pro", list(...))
+  }
+  session$objects_boundary_refinement_pro <- function(...) {
+    # Runs the objects_boundary_refinement_pro tool.
+    run_tool("objects_boundary_refinement_pro", list(...))
+  }
+  session$objects_enforce_min_mapping_unit <- function(...) {
+    # Runs the objects_enforce_min_mapping_unit tool.
+    run_tool("objects_enforce_min_mapping_unit", list(...))
+  }
+  session$polygons_to_segments <- function(...) {
+    # Runs the polygons_to_segments tool.
+    run_tool("polygons_to_segments", list(...))
+  }
+  session$propagate_labels_across_hierarchy <- function(...) {
+    # Runs the propagate_labels_across_hierarchy tool.
+    run_tool("propagate_labels_across_hierarchy", list(...))
+  }
+  session$segment_graph_felzenszwalb <- function(...) {
+    # Runs the segment_graph_felzenszwalb tool.
+    run_tool("segment_graph_felzenszwalb", list(...))
+  }
+  session$segment_scale_parameter_optimizer <- function(...) {
+    # Runs the segment_scale_parameter_optimizer tool.
+    run_tool("segment_scale_parameter_optimizer", list(...))
+  }
+  session$segment_slic_superpixels <- function(...) {
+    # Runs the segment_slic_superpixels tool.
+    run_tool("segment_slic_superpixels", list(...))
+  }
+  session$segment_watershed_markers <- function(...) {
+    # Runs the segment_watershed_markers tool.
+    run_tool("segment_watershed_markers", list(...))
+  }
+  session$segments_merge_small_regions <- function(...) {
+    # Runs the segments_merge_small_regions tool.
+    run_tool("segments_merge_small_regions", list(...))
+  }
+  session$segments_split_low_cohesion <- function(...) {
+    # Runs the segments_split_low_cohesion tool.
+    run_tool("segments_split_low_cohesion", list(...))
+  }
+  session$segments_to_polygons <- function(...) {
+    # Runs the segments_to_polygons tool.
+    run_tool("segments_to_polygons", list(...))
+  }
   session
 }
 
@@ -4100,6 +4224,12 @@ image_segmentation <- function(...) {
   # Segments multi-band raster stacks into contiguous homogeneous regions using seeded region growing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$image_segmentation(...)
+}
+
+segment_multiresolution_hierarchical <- function(...) {
+  # Builds coarse and fine segmentations and outputs a hierarchy mapping from fine objects to parent coarse objects.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_multiresolution_hierarchical(...)
 }
 
 image_slider <- function(...) {
@@ -6736,3 +6866,184 @@ yield_data_conditioning_and_qa <- function(...) {
   session$yield_data_conditioning_and_qa(...)
 }
 
+
+
+build_object_hierarchy_multiscale <- function(...) {
+  # Runs the build_object_hierarchy_multiscale tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$build_object_hierarchy_multiscale(...)
+}
+
+classify_objects_ensemble_pro <- function(...) {
+  # Runs the classify_objects_ensemble_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_ensemble_pro(...)
+}
+
+classify_objects_random_forest <- function(...) {
+  # Runs the classify_objects_random_forest tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_random_forest(...)
+}
+
+classify_objects_rules_basic <- function(...) {
+  # Runs the classify_objects_rules_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_rules_basic(...)
+}
+
+classify_objects_rules_hierarchical <- function(...) {
+  # Runs the classify_objects_rules_hierarchical tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_rules_hierarchical(...)
+}
+
+classify_objects_svm <- function(...) {
+  # Runs the classify_objects_svm tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_svm(...)
+}
+
+evaluate_object_classification_accuracy <- function(...) {
+  # Runs the evaluate_object_classification_accuracy tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$evaluate_object_classification_accuracy(...)
+}
+
+evaluate_segmentation_quality_pro <- function(...) {
+  # Runs the evaluate_segmentation_quality_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$evaluate_segmentation_quality_pro(...)
+}
+
+feature_preserving_smoothing_multiscale <- function(...) {
+  # Runs the feature_preserving_smoothing_multiscale tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$feature_preserving_smoothing_multiscale(...)
+}
+
+obia_audit_report_pro <- function(...) {
+  # Runs the obia_audit_report_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_audit_report_pro(...)
+}
+
+obia_batch_orchestrator_pro <- function(...) {
+  # Runs the obia_batch_orchestrator_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_batch_orchestrator_pro(...)
+}
+
+obia_pipeline_basic <- function(...) {
+  # Runs the obia_pipeline_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_pipeline_basic(...)
+}
+
+object_class_probability_maps <- function(...) {
+  # Runs the object_class_probability_maps tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_class_probability_maps(...)
+}
+
+object_features_context_neighbors <- function(...) {
+  # Runs the object_features_context_neighbors tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_context_neighbors(...)
+}
+
+object_features_shape_basic <- function(...) {
+  # Runs the object_features_shape_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_shape_basic(...)
+}
+
+object_features_spectral_basic <- function(...) {
+  # Runs the object_features_spectral_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_spectral_basic(...)
+}
+
+object_features_texture_glcm_basic <- function(...) {
+  # Runs the object_features_texture_glcm_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_texture_glcm_basic(...)
+}
+
+object_features_topology_relations <- function(...) {
+  # Runs the object_features_topology_relations tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_topology_relations(...)
+}
+
+object_uncertainty_diagnostics_pro <- function(...) {
+  # Runs the object_uncertainty_diagnostics_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_uncertainty_diagnostics_pro(...)
+}
+
+objects_boundary_refinement_pro <- function(...) {
+  # Runs the objects_boundary_refinement_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$objects_boundary_refinement_pro(...)
+}
+
+objects_enforce_min_mapping_unit <- function(...) {
+  # Runs the objects_enforce_min_mapping_unit tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$objects_enforce_min_mapping_unit(...)
+}
+
+polygons_to_segments <- function(...) {
+  # Runs the polygons_to_segments tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygons_to_segments(...)
+}
+
+propagate_labels_across_hierarchy <- function(...) {
+  # Runs the propagate_labels_across_hierarchy tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$propagate_labels_across_hierarchy(...)
+}
+
+segment_graph_felzenszwalb <- function(...) {
+  # Runs the segment_graph_felzenszwalb tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_graph_felzenszwalb(...)
+}
+
+segment_scale_parameter_optimizer <- function(...) {
+  # Runs the segment_scale_parameter_optimizer tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_scale_parameter_optimizer(...)
+}
+
+segment_slic_superpixels <- function(...) {
+  # Runs the segment_slic_superpixels tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_slic_superpixels(...)
+}
+
+segment_watershed_markers <- function(...) {
+  # Runs the segment_watershed_markers tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_watershed_markers(...)
+}
+
+segments_merge_small_regions <- function(...) {
+  # Runs the segments_merge_small_regions tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segments_merge_small_regions(...)
+}
+
+segments_split_low_cohesion <- function(...) {
+  # Runs the segments_split_low_cohesion tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segments_split_low_cohesion(...)
+}
+
+segments_to_polygons <- function(...) {
+  # Runs the segments_to_polygons tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segments_to_polygons(...)
+}

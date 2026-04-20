@@ -2,7 +2,7 @@
 
 Status: Draft (execution-ready)
 Owner: wbraster core team
-Last updated: 2026-04-19
+Last updated: 2026-04-20
 
 ## Objective
 Retire the feature-gated vendored bridge decode path in wbraster and run JPEG2000 decode on native jpeg2000_core by default, with no regression for production GIS scenes.
@@ -241,6 +241,55 @@ Timebox decision checkpoint (2026-04-20):
     classes.
   - Treat native multicomponent parity as partial completion pending a later,
     explicitly scheduled codec-deep follow-up milestone.
+
+### Follow-up Milestone - Native Parity Recovery (scheduled later, not in Phase A)
+
+Goal:
+- Resume multicomponent native parity only under an explicitly scheduled
+  codec-deep milestone with fresh budget, rather than continuing ad hoc CL
+  experiments inside Phase A.
+
+Entry criteria:
+- Bridge-backed decode remains the production default for problematic
+  multicomponent JP2 classes.
+- The follow-up work is scoped as a dedicated milestone with its own estimate
+  and stop/go checkpoint.
+- No more CL-only correction attempts are started without new evidence that
+  changes the root-cause model.
+
+Priority work lanes:
+- Lane 1: code-block segment and pass accounting audit
+  - Reconcile packet-declared coding-pass totals, segment assembly, and
+    code-block body slicing against `wbjpeg2000` reference behavior.
+  - Confirm that the bytes consumed by native LL block decode match the
+    intended packet/header interpretation before adjusting entropy semantics.
+- Lane 2: side-by-side tier-1 reference trace harness
+  - Add a narrow fixture-backed trace path for first failing LL code blocks,
+    capturing significance decisions, sign decisions, MQ context labels, and
+    byte-consumption checkpoints for both implementations.
+  - Required outcome: make divergence observable at a smaller unit than the
+    current whole-block matrix summary.
+- Lane 3: targeted port of proven reference semantics
+  - Prefer porting a verified `wbjpeg2000` tier-1 behavior slice into
+    `jpeg2000_core` over additional context-remap speculation.
+  - Focus first on the smallest behavior slice that can explain the current LL
+    divergence signature.
+- Lane 4: acceptance gates and regression fixtures
+  - Keep the existing parity matrix as a fast screen.
+  - Add fixture-backed acceptance criteria for any future parity fix:
+    mismatch-class reduction or stable first-mismatch improvement on at least
+    2 of 3 agreed fixtures with no regressions.
+
+Initial estimate for the follow-up milestone:
+- Best case: 3-5 engineering days.
+- Most likely: 5-8 engineering days.
+- Conservative: 8-12 engineering days.
+
+Definition of done for re-entry:
+- A new fix narrative is grounded in segment-accounting or reference-trace
+  evidence, not only in cleanup-context experimentation.
+- The first retained runtime change survives full matrix reruns without
+  regression in the existing baseline profiles.
 
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:

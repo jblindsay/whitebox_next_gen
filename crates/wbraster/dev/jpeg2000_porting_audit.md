@@ -265,6 +265,17 @@ Status: in progress.
     not in post-IDWT color/level-shift handling.
   - Conclusion: remaining blocker is likely deeper in tier-1 entropy / packet
     interpretation rather than simple post-processing or off-by-one bitplane math.
+  - Recommended next investigation posture after the stop decision:
+    - Do not spend more Phase A time on cleanup-context remapping variants
+      without new evidence.
+    - Re-enter through code-block segment accounting and packet/body assembly
+      validation against `wbjpeg2000`, since repeated CL-only fixes changed
+      magnitude signatures but not mismatch class.
+    - Build a narrower reference-trace harness for the first failing LL block
+      so byte consumption, context labels, and symbol decisions can be compared
+      before full-block reconstruction diverges.
+    - Treat future runtime fixes as acceptable only if they survive the full
+      parity matrix with no regression in existing baseline profiles.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

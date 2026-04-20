@@ -983,6 +983,8 @@ impl GeoJp2 {
             }
         }
 
+        // JPEG 2000 MCT applies to the first three components when enabled,
+        // even if extra components (e.g. NIR/alpha) are present.
         if self.cod.mc_transform != 0 && nc >= 3 {
             let shifts: Vec<i32> = (0..3)
                 .map(|component| {
@@ -1047,6 +1049,37 @@ impl GeoJp2 {
             }
         }
 
+        // Clamp each component to its legal sample domain. This keeps the
+        // interleaved path aligned with typed band readers and bridge behavior.
+        for p in 0..npix {
+            let base = p * nc;
+            for c in 0..nc {
+                let bits = self
+                    .siz
+                    .components
+                    .get(c)
+                    .map(|comp| comp.bits())
+                    .unwrap_or(self.bits)
+                    .clamp(1, 31);
+                let signed = self
+                    .siz
+                    .components
+                    .get(c)
+                    .map(|comp| comp.signed())
+                    .unwrap_or(self.signed);
+
+                let (min_v, max_v) = if signed && bits != 16 {
+                    let max = (1i32 << (bits - 1)) - 1;
+                    let min = -(1i32 << (bits - 1));
+                    (min, max)
+                } else {
+                    (0, (1i32 << bits) - 1)
+                };
+
+                out[base + c] = out[base + c].clamp(min_v, max_v);
+            }
+        }
+
         Ok(out)
     }
 
@@ -1078,6 +1111,30 @@ impl GeoJp2 {
 
     /// Decode one component (band) from the codestream to a flat i32 pixel buffer.
     fn decode_component(&self, component: usize) -> Result<Vec<i32>> {
+        if std::env::var("JPEG2000_DEBUG_COMPONENT_META").is_ok() {
+            let bits = self
+                .siz
+                .components
+                .get(component)
+                .map(|c| c.bits())
+                .unwrap_or(self.bits);
+            let signed = self
+                .siz
+                .components
+                .get(component)
+                .map(|c| c.signed())
+                .unwrap_or(self.signed);
+            eprintln!(
+                "[decode_component_meta] component={} bits={} signed={} image_bits={} image_signed={} mc_transform={}",
+                component,
+                bits,
+                signed,
+                self.bits,
+                self.signed,
+                self.cod.mc_transform
+            );
+        }
+
         // Files with explicit precinct sizes (COD Scod bit 0 = 1) use the full
         // standard-conformant multi-precinct, multi-code-block decoder.
         let has_explicit_precincts = self.cod.scod & 0x01 != 0;
@@ -1117,9 +1174,32 @@ impl GeoJp2 {
         let comp_bits   = self.siz.components.get(component).map(|c| c.bits()).unwrap_or(self.bits);
         let comp_signed = self.siz.components.get(component).map(|c| c.signed()).unwrap_or(self.signed);
 
-        // Find the SOT/SOD for the tile that contains this component
-        // For a single-tile image this is straightforward
-        let tile_data = self.extract_tile_data(0)?;
+        // Legacy single-layer layout expects raw tile-part payload bytes
+        // (SOD..end-of-tile-part), not packet-walker reconstructed payload.
+        let mut tile_parts: Vec<TilePartInfo> = self
+            .parse_tile_parts()?
+            .into_iter()
+            .filter(|p| p.isot == 0)
+            .collect();
+        tile_parts.sort_by_key(|p| p.tpsot);
+
+        if tile_parts.is_empty() {
+            return Err(Jp2Error::InvalidCodestream {
+                offset: 0,
+                message: "Tile 0 not found in codestream".into(),
+            });
+        }
+
+        let mut tile_data: Vec<u8> = Vec::new();
+        for part in &tile_parts {
+            if part.sod_start > part.tile_part_end || part.tile_part_end > self.codestream.len() {
+                return Err(Jp2Error::InvalidCodestream {
+                    offset: part.sod_start,
+                    message: "Invalid tile-part payload bounds".into(),
+                });
+            }
+            tile_data.extend_from_slice(&self.codestream[part.sod_start..part.tile_part_end]);
+        }
 
         // Determine number of bit-planes from QCD
         let num_bitplanes = ((comp_bits + nl as u8).min(31)) as usize;
@@ -1131,40 +1211,86 @@ impl GeoJp2 {
         let decoded_ints = if nc <= 1 {
             decode_block(&tile_data, w, h, num_bitplanes)
         } else {
+            // Preferred in-house layout: [u32_be stream_len][stream_bytes] per component.
+            // Fall back to legacy consumed-length scanning for backward compatibility.
             let mut offset = 0usize;
             let mut selected: Option<Vec<i32>> = None;
+            let mut length_prefixed_ok = true;
+
             for c in 0..nc {
-                if offset >= tile_data.len() {
-                    return Err(Jp2Error::InvalidCodestream {
-                        offset,
-                        message: "Truncated multicomponent tile payload while decoding component streams".into(),
-                    });
-                }
-                let (coeffs, consumed) = super::entropy::decode_block_with_consumed(
-                    &tile_data[offset..],
-                    w,
-                    h,
-                    num_bitplanes,
-                );
-                if consumed == 0 {
-                    return Err(Jp2Error::InvalidCodestream {
-                        offset,
-                        message: "Could not advance while decoding multicomponent code-block stream".into(),
-                    });
-                }
-                offset = offset.saturating_add(consumed);
-                if c == component {
-                    selected = Some(coeffs);
+                if offset + 4 > tile_data.len() {
+                    length_prefixed_ok = false;
                     break;
                 }
+
+                let len = u32::from_be_bytes([
+                    tile_data[offset],
+                    tile_data[offset + 1],
+                    tile_data[offset + 2],
+                    tile_data[offset + 3],
+                ]) as usize;
+                offset += 4;
+
+                if offset + len > tile_data.len() {
+                    length_prefixed_ok = false;
+                    break;
+                }
+
+                if c == component {
+                    selected = Some(decode_block(
+                        &tile_data[offset..offset + len],
+                        w,
+                        h,
+                        num_bitplanes,
+                    ));
+                }
+                offset += len;
             }
-            selected.ok_or_else(|| Jp2Error::InvalidCodestream {
-                offset,
-                message: format!(
-                    "Component {} stream not found in multicomponent payload",
-                    component
-                ),
-            })?
+
+            if length_prefixed_ok {
+                selected.ok_or_else(|| Jp2Error::InvalidCodestream {
+                    offset,
+                    message: format!(
+                        "Component {} stream not found in length-prefixed multicomponent payload",
+                        component
+                    ),
+                })?
+            } else {
+                let mut offset = 0usize;
+                let mut selected: Option<Vec<i32>> = None;
+                for c in 0..nc {
+                    if offset >= tile_data.len() {
+                        return Err(Jp2Error::InvalidCodestream {
+                            offset,
+                            message: "Truncated multicomponent tile payload while decoding component streams".into(),
+                        });
+                    }
+                    let (coeffs, consumed) = super::entropy::decode_block_with_consumed(
+                        &tile_data[offset..],
+                        w,
+                        h,
+                        num_bitplanes,
+                    );
+                    if consumed == 0 {
+                        return Err(Jp2Error::InvalidCodestream {
+                            offset,
+                            message: "Could not advance while decoding multicomponent code-block stream".into(),
+                        });
+                    }
+                    offset = offset.saturating_add(consumed);
+                    if c == component {
+                        selected = Some(coeffs);
+                        break;
+                    }
+                }
+                selected.ok_or_else(|| Jp2Error::InvalidCodestream {
+                    offset,
+                    message: format!(
+                        "Component {} stream not found in multicomponent payload",
+                        component
+                    ),
+                })?
+            }
         };
 
         // Inverse DWT
@@ -1214,15 +1340,27 @@ impl GeoJp2 {
         };
         use std::collections::HashMap;
 
-        fn standard_subband_kind(qcd_idx: usize) -> StandardSubbandKind {
+        fn standard_subband_kind(qcd_idx: usize, swap_hl_lh: bool) -> StandardSubbandKind {
             if qcd_idx == 0 {
                 StandardSubbandKind::Ll
-            } else if qcd_idx % 3 == 1 {
-                StandardSubbandKind::Hl
-            } else if qcd_idx % 3 == 2 {
-                StandardSubbandKind::Lh
             } else {
-                StandardSubbandKind::Hh
+                match qcd_idx % 3 {
+                    1 => {
+                        if swap_hl_lh {
+                            StandardSubbandKind::Lh
+                        } else {
+                            StandardSubbandKind::Hl
+                        }
+                    }
+                    2 => {
+                        if swap_hl_lh {
+                            StandardSubbandKind::Hl
+                        } else {
+                            StandardSubbandKind::Lh
+                        }
+                    }
+                    _ => StandardSubbandKind::Hh,
+                }
             }
         }
 
@@ -1247,6 +1385,52 @@ impl GeoJp2 {
         let ll_disable_cl = std::env::var("JPEG2000_DIFF_LL_DISABLE_CL")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
+        let force_halved_highres_precinct_dims = std::env::var(
+            "JPEG2000_FORCE_HALVED_HIGHRES_PRECINCT_DIMS",
+        )
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+        let force_legacy_idwt = std::env::var("JPEG2000_FORCE_LEGACY_IDWT")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let swap_hl_lh_kind = std::env::var("JPEG2000_SWAP_HL_LH_KIND")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let debug_packet_assignment = std::env::var("JPEG2000_DEBUG_PACKET_ASSIGNMENT_TRACE")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let debug_packet_comp = std::env::var("JPEG2000_DEBUG_PACKET_ASSIGNMENT_COMP")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+        let debug_packet_res_max = std::env::var("JPEG2000_DEBUG_PACKET_ASSIGNMENT_RES_MAX")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+        let debug_packet_layer_max = std::env::var("JPEG2000_DEBUG_PACKET_ASSIGNMENT_LAYER_MAX")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+        let debug_packet_precinct_max = std::env::var("JPEG2000_DEBUG_PACKET_ASSIGNMENT_PRECINCT_MAX")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(3);
+        let probe_comp = std::env::var("JPEG2000_PACKET_PROBE_COMP")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok());
+        let probe_res = std::env::var("JPEG2000_PACKET_PROBE_RES")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok());
+        let probe_precinct = std::env::var("JPEG2000_PACKET_PROBE_PRECINCT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok());
+        let probe_layer = std::env::var("JPEG2000_PACKET_PROBE_LAYER")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok());
 
         // Target component for this decode call.
         let target_component = _component;
@@ -1259,8 +1443,8 @@ impl GeoJp2 {
         let nl         = self.cod.num_decomps as usize;
         let num_layers = self.cod.num_layers.max(1) as usize;
         let lossless   = self.cod.wavelet == 1;
-        let cb_w       = 1usize << (self.cod.xcb as usize + 2);
-        let cb_h       = 1usize << (self.cod.ycb as usize + 2);
+        let base_cb_w  = 1usize << (self.cod.xcb as usize + 2);
+        let base_cb_h  = 1usize << (self.cod.ycb as usize + 2);
         let guard_bits = ((self.qcd.sqcd >> 5) & 0x07) as usize;
 
         // ── Tile grid ──────────────────────────────────────────────────────────
@@ -1303,8 +1487,8 @@ impl GeoJp2 {
                 nl,
                 num_layers,
                 lossless,
-                cb_w,
-                cb_h,
+                base_cb_w,
+                base_cb_h,
                 self.cod.cblk_style,
                 self.cod.progression,
                 self.cod.scod
@@ -1331,83 +1515,669 @@ impl GeoJp2 {
             let h = tile_y1 - tile_y0;
 
             // ── 1. Resolution-level dimensions for this tile ──────────────────
+            // Build the low-pass pyramid from component tile coordinates, not
+            // just widths/heights, so odd component/tile origins are handled
+            // correctly when splitting LL/HL/LH/HH at each level.
+            let target_xrsiz = self
+                .siz
+                .components
+                .get(target_component)
+                .map(|c| c.xrsiz.max(1) as usize)
+                .unwrap_or(1);
+            let target_yrsiz = self
+                .siz
+                .components
+                .get(target_component)
+                .map(|c| c.yrsiz.max(1) as usize)
+                .unwrap_or(1);
+            let mut rx0 = tile_x0.div_ceil(target_xrsiz);
+            let mut ry0 = tile_y0.div_ceil(target_yrsiz);
+            let mut rx1 = tile_x1.div_ceil(target_xrsiz);
+            let mut ry1 = tile_y1.div_ceil(target_yrsiz);
+            let target_comp_tile_x0 = rx0;
+            let target_comp_tile_y0 = ry0;
+            let target_comp_tile_x1 = rx1;
+            let target_comp_tile_y1 = ry1;
+
             let mut rw = vec![0usize; nl + 1];
             let mut rh = vec![0usize; nl + 1];
-            rw[0] = w;  rh[0] = h;
-            for i in 0..nl { rw[i + 1] = (rw[i] + 1) / 2; rh[i + 1] = (rh[i] + 1) / 2; }
+            rw[0] = rx1.saturating_sub(rx0);
+            rh[0] = ry1.saturating_sub(ry0);
+            for i in 0..nl {
+                rx0 = rx0.div_ceil(2);
+                ry0 = ry0.div_ceil(2);
+                rx1 = rx1.div_ceil(2);
+                ry1 = ry1.div_ceil(2);
+                rw[i + 1] = rx1.saturating_sub(rx0);
+                rh[i + 1] = ry1.saturating_sub(ry0);
+            }
 
         // ── 3. Subband descriptors (placement in the coefficient grid) ─────────
         // subbands[0]     = LL (at decomp level nl)
         // subbands[1..4]  = HL/LH/HH at level nl  (resolution 1)
         // subbands[4..7]  = HL/LH/HH at level nl-1 (resolution 2) …
-        struct SubbandDesc { row_off: usize, col_off: usize, sb_w: usize, sb_h: usize, qcd_idx: usize }
+        struct SubbandDesc {
+            place_row_off: usize,
+            place_col_off: usize,
+            place_w: usize,
+            place_h: usize,
+            packet_row_off: usize,
+            packet_col_off: usize,
+            packet_w: usize,
+            packet_h: usize,
+            qcd_idx: usize,
+            cb_w: usize,
+            cb_h: usize,
+            packet_grid_x0: usize,
+            packet_grid_y0: usize,
+            packet_grid_x1: usize,
+            packet_grid_y1: usize,
+        }
+
+        let packet_subband_rect = |res: usize, xo_b: usize, yo_b: usize| -> (usize, usize, usize, usize) {
+            // Bridge-style B-15 subband rectangle in component-tile coordinates.
+            let decomp_level = if res == 0 { nl } else { nl - (res - 1) };
+            let numerator_x = if decomp_level > 0 {
+                (1usize << (decomp_level - 1)).saturating_mul(xo_b)
+            } else {
+                0usize
+            };
+            let numerator_y = if decomp_level > 0 {
+                (1usize << (decomp_level - 1)).saturating_mul(yo_b)
+            } else {
+                0usize
+            };
+            let denominator = 1usize << decomp_level;
+            let x0 = target_comp_tile_x0.saturating_sub(numerator_x).div_ceil(denominator);
+            let x1 = target_comp_tile_x1.saturating_sub(numerator_x).div_ceil(denominator);
+            let y0 = target_comp_tile_y0.saturating_sub(numerator_y).div_ceil(denominator);
+            let y1 = target_comp_tile_y1.saturating_sub(numerator_y).div_ceil(denominator);
+            (x0, y0, x1, y1)
+        };
+
         let mut subbands: Vec<SubbandDesc> = Vec::with_capacity(1 + 3 * nl);
-        subbands.push(SubbandDesc { row_off: 0, col_off: 0, sb_w: rw[nl], sb_h: rh[nl], qcd_idx: 0 });
+        let ll_pp = self.cod.precincts.get(0).copied().unwrap_or(0xFF);
+        let ll_ppx = (ll_pp & 0x0F) as usize;
+        let ll_ppy = ((ll_pp >> 4) & 0x0F) as usize;
+        let ll_cb_w = 1usize << ((self.cod.xcb as usize + 2).min(ll_ppx));
+        let ll_cb_h = 1usize << ((self.cod.ycb as usize + 2).min(ll_ppy));
+        let (ll_packet_x0, ll_packet_y0, ll_packet_x1, ll_packet_y1) = packet_subband_rect(0, 0, 0);
+        subbands.push(SubbandDesc {
+            place_row_off: 0,
+            place_col_off: 0,
+            place_w: rw[nl],
+            place_h: rh[nl],
+            packet_row_off: ll_packet_y0,
+            packet_col_off: ll_packet_x0,
+            packet_w: ll_packet_x1.saturating_sub(ll_packet_x0),
+            packet_h: ll_packet_y1.saturating_sub(ll_packet_y0),
+            qcd_idx: 0,
+            cb_w: ll_cb_w,
+            cb_h: ll_cb_h,
+            packet_grid_x0: (ll_packet_x0 / ll_cb_w) * ll_cb_w,
+            packet_grid_y0: (ll_packet_y0 / ll_cb_h) * ll_cb_h,
+            packet_grid_x1: ll_packet_x1.div_ceil(ll_cb_w) * ll_cb_w,
+            packet_grid_y1: ll_packet_y1.div_ceil(ll_cb_h) * ll_cb_h,
+        });
         for r in 1..=nl {
             let d = nl + 1 - r;
             let hl_w = rw[d - 1].saturating_sub(rw[d]);
             let lh_h = rh[d - 1].saturating_sub(rh[d]);
-            subbands.push(SubbandDesc { row_off: 0,     col_off: rw[d], sb_w: hl_w,  sb_h: rh[d],  qcd_idx: 3 * r - 2 });
-            subbands.push(SubbandDesc { row_off: rh[d], col_off: 0,     sb_w: rw[d], sb_h: lh_h,   qcd_idx: 3 * r - 1 });
-            subbands.push(SubbandDesc { row_off: rh[d], col_off: rw[d], sb_w: hl_w,  sb_h: lh_h,   qcd_idx: 3 * r     });
+            let pp = self.cod.precincts.get(r).copied().unwrap_or(0xFF);
+            let ppx = (pp & 0x0F) as usize;
+            let ppy = ((pp >> 4) & 0x0F) as usize;
+            let cb_w = 1usize << ((self.cod.xcb as usize + 2).min(ppx.saturating_sub(1)));
+            let cb_h = 1usize << ((self.cod.ycb as usize + 2).min(ppy.saturating_sub(1)));
+            let hl_col_off = rw[d];
+            let hl_row_off = 0usize;
+            let lh_col_off = 0usize;
+            let lh_row_off = rh[d];
+            let hh_col_off = rw[d];
+            let hh_row_off = rh[d];
+            let (hl_packet_x0, hl_packet_y0, hl_packet_x1, hl_packet_y1) = packet_subband_rect(r, 1, 0);
+            let (lh_packet_x0, lh_packet_y0, lh_packet_x1, lh_packet_y1) = packet_subband_rect(r, 0, 1);
+            let (hh_packet_x0, hh_packet_y0, hh_packet_x1, hh_packet_y1) = packet_subband_rect(r, 1, 1);
+
+            subbands.push(SubbandDesc {
+                place_row_off: hl_row_off,
+                place_col_off: hl_col_off,
+                place_w: hl_w,
+                place_h: rh[d],
+                packet_row_off: hl_packet_y0,
+                packet_col_off: hl_packet_x0,
+                packet_w: hl_packet_x1.saturating_sub(hl_packet_x0),
+                packet_h: hl_packet_y1.saturating_sub(hl_packet_y0),
+                qcd_idx: 3 * r - 2,
+                cb_w,
+                cb_h,
+                packet_grid_x0: (hl_packet_x0 / cb_w) * cb_w,
+                packet_grid_y0: (hl_packet_y0 / cb_h) * cb_h,
+                packet_grid_x1: hl_packet_x1.div_ceil(cb_w) * cb_w,
+                packet_grid_y1: hl_packet_y1.div_ceil(cb_h) * cb_h,
+            });
+            subbands.push(SubbandDesc {
+                place_row_off: lh_row_off,
+                place_col_off: lh_col_off,
+                place_w: rw[d],
+                place_h: lh_h,
+                packet_row_off: lh_packet_y0,
+                packet_col_off: lh_packet_x0,
+                packet_w: lh_packet_x1.saturating_sub(lh_packet_x0),
+                packet_h: lh_packet_y1.saturating_sub(lh_packet_y0),
+                qcd_idx: 3 * r - 1,
+                cb_w,
+                cb_h,
+                packet_grid_x0: (lh_packet_x0 / cb_w) * cb_w,
+                packet_grid_y0: (lh_packet_y0 / cb_h) * cb_h,
+                packet_grid_x1: lh_packet_x1.div_ceil(cb_w) * cb_w,
+                packet_grid_y1: lh_packet_y1.div_ceil(cb_h) * cb_h,
+            });
+            subbands.push(SubbandDesc {
+                place_row_off: hh_row_off,
+                place_col_off: hh_col_off,
+                place_w: hl_w,
+                place_h: lh_h,
+                packet_row_off: hh_packet_y0,
+                packet_col_off: hh_packet_x0,
+                packet_w: hh_packet_x1.saturating_sub(hh_packet_x0),
+                packet_h: hh_packet_y1.saturating_sub(hh_packet_y0),
+                qcd_idx: 3 * r,
+                cb_w,
+                cb_h,
+                packet_grid_x0: (hh_packet_x0 / cb_w) * cb_w,
+                packet_grid_y0: (hh_packet_y0 / cb_h) * cb_h,
+                packet_grid_x1: hh_packet_x1.div_ceil(cb_w) * cb_w,
+                packet_grid_y1: hh_packet_y1.div_ceil(cb_h) * cb_h,
+            });
         }
+
+        let precinct_cb_bounds = |sb: &SubbandDesc,
+                                  prec_x0: usize,
+                                  prec_y0: usize,
+                                  prec_x1: usize,
+                                  prec_y1: usize|
+         -> Option<(usize, usize, usize, usize)> {
+            let sb_x0 = sb.packet_col_off;
+            let sb_y0 = sb.packet_row_off;
+            let sb_x1 = sb.packet_col_off + sb.packet_w;
+            let sb_y1 = sb.packet_row_off + sb.packet_h;
+
+            let inter_x0 = prec_x0.max(sb_x0);
+            let inter_y0 = prec_y0.max(sb_y0);
+            let inter_x1 = prec_x1.min(sb_x1);
+            let inter_y1 = prec_y1.min(sb_y1);
+
+            if inter_x0 >= inter_x1 || inter_y0 >= inter_y1 {
+                return None;
+            }
+
+            let cb_x0 = (inter_x0 / sb.cb_w) * sb.cb_w;
+            let cb_y0 = (inter_y0 / sb.cb_h) * sb.cb_h;
+            let cb_x1 = inter_x1.div_ceil(sb.cb_w) * sb.cb_w;
+            let cb_y1 = inter_y1.div_ceil(sb.cb_h) * sb.cb_h;
+
+            let first_cbx = (cb_x0.saturating_sub(sb.packet_grid_x0)) / sb.cb_w;
+            let first_cby = (cb_y0.saturating_sub(sb.packet_grid_y0)) / sb.cb_h;
+            let cbx_end = (cb_x1.saturating_sub(sb.packet_grid_x0)) / sb.cb_w;
+            let cby_end = (cb_y1.saturating_sub(sb.packet_grid_y0)) / sb.cb_h;
+
+            Some((first_cbx, first_cby, cbx_end, cby_end))
+        };
 
         // ── 4. Per-code-block accumulation state (one cb_grid per component) ─────
         struct CbState { data: Vec<u8>, lblock: u32, missing_bp: usize, ever_included: bool }
         let make_cb_grid = |sbs: &Vec<SubbandDesc>| -> Vec<Vec<Vec<CbState>>> {
             sbs.iter().map(|sb| {
-                let ncb_w = sb.sb_w.div_ceil(cb_w).max(1);
-                let ncb_h = sb.sb_h.div_ceil(cb_h).max(1);
-                (0..ncb_h).map(|_| (0..ncb_w).map(|_| CbState {
-                    data: Vec::new(), lblock: 3, missing_bp: 0, ever_included: false,
-                }).collect()).collect()
+                if sb.packet_w == 0 || sb.packet_h == 0 {
+                    Vec::new()
+                } else {
+                    let ncb_w = ((sb.packet_grid_x1.saturating_sub(sb.packet_grid_x0)) / sb.cb_w).max(1);
+                    let ncb_h = ((sb.packet_grid_y1.saturating_sub(sb.packet_grid_y0)) / sb.cb_h).max(1);
+                    (0..ncb_h).map(|_| (0..ncb_w).map(|_| CbState {
+                        data: Vec::new(), lblock: 3, missing_bp: 0, ever_included: false,
+                    }).collect()).collect()
+                }
             }).collect()
         };
         // Allocate one cb_grid for each component; reuse the same subband layout
         // (assumes all components have identical subsampling / tile geometry).
         let mut all_cb_grids: Vec<Vec<Vec<Vec<CbState>>>> =
             (0..nc).map(|_| make_cb_grid(&subbands)).collect();
+        let mut incl_trees_by_precinct: HashMap<(usize, usize, u64, usize), TagTree> =
+            HashMap::new();
+        let mut zbp_trees_by_precinct: HashMap<(usize, usize, u64, usize), TagTree> =
+            HashMap::new();
 
         let mut byte_pos = 0usize;
+
+        #[derive(Clone, Copy)]
+        struct PacketOrderEntry {
+            layer: usize,
+            res: usize,
+            comp: usize,
+            precinct_idx: u64,
+            py: usize,
+            px: usize,
+        }
+
+        #[derive(Clone, Copy)]
+        struct PrecinctPositionEntry {
+            res: usize,
+            comp: usize,
+            precinct_idx: u64,
+            py: usize,
+            px: usize,
+            rect_x0: usize,
+            rect_y0: usize,
+            rect_x1: usize,
+            rect_y1: usize,
+            sort_y: u32,
+            sort_x: u32,
+        }
+
+        #[derive(Clone, Copy)]
+        struct PrecinctSubbandTopology {
+            first_cbx: usize,
+            first_cby: usize,
+            cbx_end: usize,
+            cby_end: usize,
+            ncb_w_prec: usize,
+            ncb_h_prec: usize,
+        }
+
+        let force_component_first_precinct_order = std::env::var(
+            "JPEG2000_FORCE_COMPONENT_FIRST_PRECINCT_ORDER",
+        )
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+        let force_x_major_precinct_order = std::env::var(
+            "JPEG2000_FORCE_X_MAJOR_PRECINCT_ORDER",
+        )
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+        let effective_precinct_dims = |res: usize| -> (usize, usize) {
+            let pw = if force_halved_highres_precinct_dims && res > 0 {
+                (precinct_w[res] / 2).max(1)
+            } else {
+                precinct_w[res]
+            };
+            let ph = if force_halved_highres_precinct_dims && res > 0 {
+                (precinct_h[res] / 2).max(1)
+            } else {
+                precinct_h[res]
+            };
+            (pw, ph)
+        };
+
+        let mut num_px_by_res = vec![1usize; nl + 1];
+        let mut num_py_by_res = vec![1usize; nl + 1];
+        for res in 0..=nl {
+            let ref_w = rw[nl - res.min(nl)];
+            let ref_h = rh[nl - res.min(nl)];
+            let (pw, ph) = effective_precinct_dims(res);
+            num_px_by_res[res] = ref_w.div_ceil(pw).max(1);
+            num_py_by_res[res] = ref_h.div_ceil(ph).max(1);
+        }
+
+        let mut position_entries = Vec::new();
+        for comp in 0..nc {
+            let xrsiz = self
+                .siz
+                .components
+                .get(comp)
+                .map(|c| c.xrsiz.max(1) as u32)
+                .unwrap_or(1);
+            let yrsiz = self
+                .siz
+                .components
+                .get(comp)
+                .map(|c| c.yrsiz.max(1) as u32)
+                .unwrap_or(1);
+
+            let comp_tile_x0 = (tile_x0 as u32).div_ceil(xrsiz);
+            let comp_tile_y0 = (tile_y0 as u32).div_ceil(yrsiz);
+            let comp_tile_x1 = (tile_x1 as u32).div_ceil(xrsiz);
+            let comp_tile_y1 = (tile_y1 as u32).div_ceil(yrsiz);
+
+            for res in 0..=nl {
+                let scale_shift = (nl - res) as u32;
+                let rect_x0 = (comp_tile_x0 as u64).div_ceil(1u64 << scale_shift) as u32;
+                let rect_y0 = (comp_tile_y0 as u64).div_ceil(1u64 << scale_shift) as u32;
+                let rect_x1 = (comp_tile_x1 as u64).div_ceil(1u64 << scale_shift) as u32;
+                let rect_y1 = (comp_tile_y1 as u64).div_ceil(1u64 << scale_shift) as u32;
+
+                let pp = self.cod.precincts.get(res).copied().unwrap_or(0xFF);
+                let orig_ppx = (pp & 0x0F) as u8;
+                let orig_ppy = ((pp >> 4) & 0x0F) as u8;
+
+                let num_precincts_x = if rect_x0 == rect_x1 {
+                    0usize
+                } else {
+                    rect_x1.div_ceil(1u32 << orig_ppx) as usize - (rect_x0 / (1u32 << orig_ppx)) as usize
+                };
+                let num_precincts_y = if rect_y0 == rect_y1 {
+                    0usize
+                } else {
+                    rect_y1.div_ceil(1u32 << orig_ppy) as usize - (rect_y0 / (1u32 << orig_ppy)) as usize
+                };
+
+                if num_precincts_x == 0 || num_precincts_y == 0 {
+                    continue;
+                }
+
+                let mut ppx = orig_ppx;
+                let mut ppy = orig_ppy;
+                let mut x_start = (rect_x0 / (1u32 << ppx)) * (1u32 << ppx);
+                let mut y_start = (rect_y0 / (1u32 << ppy)) * (1u32 << ppy);
+                if res > 0 {
+                    ppx = ppx.saturating_sub(1);
+                    ppy = ppy.saturating_sub(1);
+                    x_start /= 2;
+                    y_start /= 2;
+                }
+                let ppx_pow2 = 1u32 << ppx;
+                let ppy_pow2 = 1u32 << ppy;
+
+                let nl_minus_r = (nl - res) as u32;
+                let x_stride = 1u32.checked_shl((orig_ppx as u32) + nl_minus_r).unwrap_or(0);
+                let y_stride = 1u32.checked_shl((orig_ppy as u32) + nl_minus_r).unwrap_or(0);
+                let precinct_x_step = xrsiz.saturating_mul(x_stride.max(1));
+                let precinct_y_step = yrsiz.saturating_mul(y_stride.max(1));
+
+                let mut r_x = tile_x0 as u32;
+                let mut r_y = tile_y0 as u32;
+                if precinct_x_step > 0
+                    && r_x % precinct_x_step != 0
+                    && (rect_x0.checked_shl(nl_minus_r).unwrap_or(0)) % precinct_x_step == 0
+                {
+                    r_x = r_x.next_multiple_of(precinct_x_step);
+                }
+                if precinct_y_step > 0
+                    && r_y % precinct_y_step != 0
+                    && (rect_y0.checked_shl(nl_minus_r).unwrap_or(0)) % precinct_y_step == 0
+                {
+                    r_y = r_y.next_multiple_of(precinct_y_step);
+                }
+
+                for py in 0..num_precincts_y {
+                    let current_r_y = r_y;
+                    let mut current_r_x = r_x;
+                    for px in 0..num_precincts_x {
+                        let rect_x0 = (px as u32 * ppx_pow2 + x_start) as usize;
+                        let rect_y0 = (py as u32 * ppy_pow2 + y_start) as usize;
+                        let rect_x1 = rect_x0 + ppx_pow2 as usize;
+                        let rect_y1 = rect_y0 + ppy_pow2 as usize;
+                        position_entries.push(PrecinctPositionEntry {
+                            res,
+                            comp,
+                            precinct_idx: (num_precincts_x * py + px) as u64,
+                            py,
+                            px,
+                            rect_x0,
+                            rect_y0,
+                            rect_x1,
+                            rect_y1,
+                            sort_y: current_r_y,
+                            sort_x: current_r_x,
+                        });
+                        current_r_x = (current_r_x + 1).next_multiple_of(precinct_x_step.max(1));
+                    }
+                    r_y = (r_y + 1).next_multiple_of(precinct_y_step.max(1));
+                }
+            }
+        }
+
+        let mut position_entries_by_cr: HashMap<(usize, usize), Vec<PrecinctPositionEntry>> = HashMap::new();
+        for entry in &position_entries {
+            position_entries_by_cr
+                .entry((entry.comp, entry.res))
+                .or_default()
+                .push(*entry);
+        }
+        let mut position_entry_by_key: HashMap<(usize, usize, u64), PrecinctPositionEntry> = HashMap::new();
+        for entry in &position_entries {
+            position_entry_by_key.insert((entry.comp, entry.res, entry.precinct_idx), *entry);
+        }
+
+        let mut precinct_topology_by_key: HashMap<(usize, usize, u64, usize), PrecinctSubbandTopology> =
+            HashMap::new();
+        for entry in &position_entries {
+            let sb_start = if entry.res == 0 { 0usize } else { 1 + 3 * (entry.res - 1) };
+            let sb_count = if entry.res == 0 { 1usize } else { 3 };
+            for si in sb_start..sb_start + sb_count {
+                let sb = &subbands[si];
+                if let Some((first_cbx, first_cby, cbx_end, cby_end)) = precinct_cb_bounds(
+                    sb,
+                    entry.rect_x0,
+                    entry.rect_y0,
+                    entry.rect_x1,
+                    entry.rect_y1,
+                ) {
+                    precinct_topology_by_key.insert(
+                        (entry.comp, entry.res, entry.precinct_idx, si),
+                        PrecinctSubbandTopology {
+                            first_cbx,
+                            first_cby,
+                            cbx_end,
+                            cby_end,
+                            ncb_w_prec: cbx_end.saturating_sub(first_cbx).max(1),
+                            ncb_h_prec: cby_end.saturating_sub(first_cby).max(1),
+                        },
+                    );
+                } else if probe_comp == Some(entry.comp)
+                    && probe_res == Some(entry.res)
+                    && probe_precinct == Some(entry.precinct_idx)
+                {
+                    let sb_x0 = sb.packet_col_off;
+                    let sb_y0 = sb.packet_row_off;
+                    let sb_x1 = sb.packet_col_off + sb.packet_w;
+                    let sb_y1 = sb.packet_row_off + sb.packet_h;
+                    eprintln!(
+                        "[native_topology_probe] comp={} res={} precinct={} subband={} precinct_rect=[{}..{}, {}..{}] packet_subband_rect=[{}..{}, {}..{}] place_subband_rect=[{}..{}, {}..{}]",
+                        entry.comp,
+                        entry.res,
+                        entry.precinct_idx,
+                        si,
+                        entry.rect_x0,
+                        entry.rect_x1,
+                        entry.rect_y0,
+                        entry.rect_y1,
+                        sb_x0,
+                        sb_x1,
+                        sb_y0,
+                        sb_y1,
+                        sb.place_col_off,
+                        sb.place_col_off + sb.place_w,
+                        sb.place_row_off,
+                        sb.place_row_off + sb.place_h
+                    );
+                }
+            }
+        }
+
+        let packet_order: Vec<PacketOrderEntry> = match self.cod.progression {
+            ProgressionOrder::Lrcp => {
+                let mut entries = Vec::new();
+                for layer in 0..num_layers {
+                    for res in 0..=nl {
+                        for comp in 0..nc {
+                            if let Some(positions) = position_entries_by_cr.get(&(comp, res)) {
+                                for entry in positions {
+                                    entries.push(PacketOrderEntry {
+                                        layer,
+                                        res,
+                                        comp,
+                                        precinct_idx: entry.precinct_idx,
+                                        py: entry.py,
+                                        px: entry.px,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                entries
+            }
+            ProgressionOrder::Rlcp => {
+                let mut entries = Vec::new();
+                for res in 0..=nl {
+                    for layer in 0..num_layers {
+                        for comp in 0..nc {
+                            if let Some(positions) = position_entries_by_cr.get(&(comp, res)) {
+                                for entry in positions {
+                                    entries.push(PacketOrderEntry {
+                                        layer,
+                                        res,
+                                        comp,
+                                        precinct_idx: entry.precinct_idx,
+                                        py: entry.py,
+                                        px: entry.px,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                entries
+            }
+            ProgressionOrder::Rpcl => {
+                let mut positions = position_entries
+                    .iter()
+                    .map(|p| (p.res, p.comp, p.py, p.px, p.sort_y, p.sort_x, p.precinct_idx))
+                    .collect::<Vec<_>>();
+                positions.sort_by_key(|(res, comp, _py, _px, sort_y, sort_x, precinct_idx)| {
+                    if force_x_major_precinct_order {
+                        (*res, *sort_x, *sort_y, *comp as u32, *precinct_idx)
+                    } else {
+                        (*res, *sort_y, *sort_x, *comp as u32, *precinct_idx)
+                    }
+                });
+
+                let mut entries = Vec::new();
+                for (res, comp, py, px, _sort_y, _sort_x, _precinct_idx) in positions {
+                    for layer in 0..num_layers {
+                        entries.push(PacketOrderEntry {
+                            layer,
+                            res,
+                            comp,
+                            precinct_idx: _precinct_idx,
+                            py,
+                            px,
+                        });
+                    }
+                }
+                entries
+            }
+            ProgressionOrder::Pcrl => {
+                let mut base = position_entries
+                    .iter()
+                    .map(|p| (p.comp, p.res, p.py, p.px, p.sort_y, p.sort_x, p.precinct_idx))
+                    .collect::<Vec<_>>();
+                base.sort_by_key(|(comp, res, _py, _px, sort_y, sort_x, precinct_idx)| {
+                    if force_component_first_precinct_order {
+                        if force_x_major_precinct_order {
+                            (*comp as u64, *sort_x as u64, *sort_y as u64, *res as u64, *precinct_idx)
+                        } else {
+                            (*comp as u64, *sort_y as u64, *sort_x as u64, *res as u64, *precinct_idx)
+                        }
+                    } else if force_x_major_precinct_order {
+                        (*sort_x as u64, *sort_y as u64, *comp as u64, *res as u64, *precinct_idx)
+                    } else {
+                        (*sort_y as u64, *sort_x as u64, *comp as u64, *res as u64, *precinct_idx)
+                    }
+                });
+
+                let mut entries = Vec::new();
+                for (comp, res, py, px, _sort_y, _sort_x, _precinct_idx) in base {
+                    for layer in 0..num_layers {
+                        entries.push(PacketOrderEntry {
+                            layer,
+                            res,
+                            comp,
+                            precinct_idx: _precinct_idx,
+                            py,
+                            px,
+                        });
+                    }
+                }
+                entries
+            }
+            ProgressionOrder::Cprl => {
+                let mut entries = Vec::new();
+                for comp in 0..nc {
+                    let mut positions = position_entries
+                        .iter()
+                        .filter(|p| p.comp == comp)
+                        .map(|p| (p.res, p.py, p.px, p.sort_y, p.sort_x, p.precinct_idx))
+                        .collect::<Vec<_>>();
+                    positions.sort_by_key(|(res, _py, _px, sort_y, sort_x, precinct_idx)| {
+                        if force_x_major_precinct_order {
+                            (*sort_x, *sort_y, *res as u32, *precinct_idx)
+                        } else {
+                            (*sort_y, *sort_x, *res as u32, *precinct_idx)
+                        }
+                    });
+
+                    for (res, py, px, _sort_y, _sort_x, _precinct_idx) in positions {
+                        for layer in 0..num_layers {
+                            entries.push(PacketOrderEntry {
+                                layer,
+                                res,
+                                comp,
+                                precinct_idx: _precinct_idx,
+                                py,
+                                px,
+                            });
+                        }
+                    }
+                }
+                entries
+            }
+        };
 
         if debug && tile_tx == 0 && tile_ty == 0 {
             eprintln!("[decode_component_proper] tile({tile_tx},{tile_ty}) w={w} h={h} body.len={}", body.len());
         }
 
-        // ── 6. LRCP packet loop ────────────────────────────────────────────────
-        'lrcp: for _layer in 0..num_layers {
-            for res in 0..=nl {
+        // ── 6. Packet loop in actual codestream progression order ─────────────
+        let mut packet_seq = 0usize;
+        'packet_loop: for PacketOrderEntry {
+            layer: _layer,
+            res,
+            comp,
+            precinct_idx,
+            py,
+            px,
+        } in packet_order {
+            packet_seq += 1;
                 // Resolution r maps to subbands:
                 //   res 0  → subband 0 (LL)
                 //   res r  → subbands [1+3*(r-1) .. 1+3*(r-1)+2] = HL/LH/HH at level (nl-r+1)
                 let sb_start = if res == 0 { 0usize } else { 1 + 3 * (res - 1) };
                 let sb_count = if res == 0 { 1usize } else { 3 };
 
-                // Reference grid dimensions at this resolution.
-                // Resolution 0 → rw[nl], resolution r → rw[nl - r].
-                let ref_w = rw[nl - res.min(nl)];
-                let ref_h = rh[nl - res.min(nl)];
-
-                let pw = precinct_w[res];
-                let ph = precinct_h[res];
-
-                let num_px = ref_w.div_ceil(pw).max(1);
-                let num_py = ref_h.div_ceil(ph).max(1);
-
-                // LRCP progression: inner loops are component → precinct.
-                for comp in 0..nc {
                 let cb_grid = &mut all_cb_grids[comp];
                 let is_target = comp == target_component;
-                let num_py = ref_h.div_ceil(ph).max(1);
+                let packet_probe_hit = probe_comp == Some(comp)
+                    && probe_res == Some(res)
+                    && probe_precinct == Some(precinct_idx)
+                    && probe_layer == Some(_layer);
+                let Some(position_entry) = position_entry_by_key
+                    .get(&(comp, res, precinct_idx))
+                else {
+                    continue;
+                };
 
                 // Per-precinct tag trees (one inclusion + one zero-bitplane set per subband).
                 // We reset the tag trees at the start of each (resolution) packet group.
                 // NOTE: tag trees persist across layers for the same precinct; but since we
                 // iterate precincts as the innermost loop, they reset per-precinct naturally
                 // because each precinct is a separate packet.
-                for py in 0..num_py {
-                    for px in 0..num_px {
-                        if byte_pos >= body.len() { break 'lrcp; }
+                {
+                        if byte_pos >= body.len() { break 'packet_loop; }
 
                         // Compute how many code blocks fall inside this precinct for each subband.
                         // For subband sb_idx, the code block grid is ncb_w × ncb_h.
@@ -1428,14 +2198,14 @@ impl GeoJp2 {
                         // Skip optional SOP marker.
                         if body.get(byte_pos) == Some(&0xFF) && body.get(byte_pos + 1) == Some(&0x91) {
                             byte_pos += 6;
-                            if byte_pos > body.len() { break 'lrcp; }
+                            if byte_pos > body.len() { break 'packet_loop; }
                         }
 
                         if byte_pos >= body.len() {
                             if debug && _layer == 0 && res == 0 && px == 0 && py == 0 {
                                 eprintln!("[proper] res={res} px={px} py={py}: body exhausted at byte_pos={byte_pos}/{}", body.len());
                             }
-                            break 'lrcp;
+                            break 'packet_loop;
                         }
                         let mut hdr = HeaderBitReader::new(body, byte_pos * 8);
 
@@ -1454,60 +2224,60 @@ impl GeoJp2 {
                             continue;
                         }
 
-                        // Per-subband packet-local tag trees (reset per precinct per layer).
-                        // These cover code blocks within this precinct for this subband.
-                        let mut incl_trees: Vec<TagTree> = (sb_start..sb_start + sb_count).map(|si| {
-                            let sb = &subbands[si];
-                            // Code blocks of this subband that fall inside precinct (px, py).
-                            // Precinct px covers ref-grid columns [px*pw .. (px+1)*pw).
-                            // A CB at col offset cb_col in subband maps to ref-grid col = sb.col_off + cb_col.
-                            // Actually, for sub-band HL the col_off = rw[d] (offset beyond LL),
-                            // and ref_grid columns for CBs are sb.col_off + cby*cb_h etc.
-                            // Because precinct is defined over reference grid, and HL has col_off > 0,
-                            // we need to check if the CB's ref grid position falls in the precinct.
-                            //
-                            // SIMPLIFICATION: for standard JPEG 2000 with default or explicit precincts,
-                            // the precinct divides the REFERENCE GRID, and subbands within a resolution
-                            // level occupy a portion:
-                            //   res 0 (LL): occupies [0, rw[nl]) × [0, rh[nl]) of the resolution-0 ref grid.
-                            //   res r (HL/LH/HH): each occupies a portion of the resolution-r ref grid.
-                            //     HL occupies [rw[nl-r+1], rw[nl-r]) × [0, rh[nl-r+1]).  But rw[nl-r+1] = rw of the NEXT finer level... hmm.
-                            // For now, use a conservative approach: since each subband may have
-                            // ncb_w × ncb_h code blocks total, and each precinct handles a 4×4 (or similar)
-                            // sub-grid of code blocks, compute the range of CBs for this precinct.
-                            let first_cbx = px * pw / cb_w;
-                            let first_cby = py * ph / cb_h;
-                            let last_cbx  = ((px + 1) * pw + cb_w - 1) / cb_w;
-                            let last_cby  = ((py + 1) * ph + cb_h - 1) / cb_h;
-                            let ncb_w_sb  = cb_grid[si][0].len();
-                            let ncb_h_sb  = cb_grid[si].len();
-                            let ncb_w_prec = last_cbx.min(ncb_w_sb).saturating_sub(first_cbx).max(1);
-                            let ncb_h_prec = last_cby.min(ncb_h_sb).saturating_sub(first_cby).max(1);
-                            TagTree::new(ncb_w_prec, ncb_h_prec)
-                        }).collect();
-                        let mut zbp_trees: Vec<TagTree> = incl_trees.iter()
-                            .map(|t| TagTree::new(t.ncb_w, t.ncb_h))
-                            .collect();
+                        // Segment lengths accumulated:
+                        // (si, cbx_in_sb, cby_in_sb, local_cbx, local_cby, seg_len, passes, lblock)
+                        let mut segs: Vec<(usize, usize, usize, usize, usize, u32, u32, u32)> = Vec::new();
 
-                        // Segment lengths accumulated: (si, cbx_in_sb, cby_in_sb, seg_len)
-                        let mut segs: Vec<(usize, usize, usize, u32)> = Vec::new();
+                        'sb_loop: for si in sb_start..sb_start + sb_count {
+                            let Some(topology) = precinct_topology_by_key
+                                .get(&(comp, res, precinct_idx, si))
+                                .copied()
+                            else {
+                                if packet_probe_hit {
+                                    eprintln!(
+                                        "[native_packet_probe] pkt={} comp={} res={} precinct={} layer={} subband={} topology=missing",
+                                        packet_seq,
+                                        comp,
+                                        res,
+                                        precinct_idx,
+                                        _layer,
+                                        si
+                                    );
+                                }
+                                continue;
+                            };
+                            if packet_probe_hit {
+                                eprintln!(
+                                    "[native_packet_probe] pkt={} comp={} res={} precinct={} layer={} subband={} topology=present cb_range_x=[{}..{}) cb_range_y=[{}..{})",
+                                    packet_seq,
+                                    comp,
+                                    res,
+                                    precinct_idx,
+                                    _layer,
+                                    si,
+                                    topology.first_cbx,
+                                    topology.cbx_end,
+                                    topology.first_cby,
+                                    topology.cby_end
+                                );
+                            }
+                            let first_cbx = topology.first_cbx;
+                            let first_cby = topology.first_cby;
+                            let cbx_end = topology.cbx_end;
+                            let cby_end = topology.cby_end;
+                            let tree_key = (comp, res, precinct_idx, si);
 
-                        'sb_loop: for (tree_idx, si) in (sb_start..sb_start + sb_count).enumerate() {
-                            let ncb_w_sb = cb_grid[si][0].len();
-                            let ncb_h_sb = cb_grid[si].len();
-                            let first_cbx = px * pw / cb_w;
-                            let first_cby = py * ph / cb_h;
-                            let last_cbx  = ((px + 1) * pw + cb_w - 1) / cb_w;
-                            let last_cby  = ((py + 1) * ph + cb_h - 1) / cb_h;
-                            let cbx_end = last_cbx.min(ncb_w_sb);
-                            let cby_end = last_cby.min(ncb_h_sb);
+                            incl_trees_by_precinct
+                                .entry(tree_key)
+                                .or_insert_with(|| TagTree::new(topology.ncb_w_prec, topology.ncb_h_prec));
+                            zbp_trees_by_precinct
+                                .entry(tree_key)
+                                .or_insert_with(|| TagTree::new(topology.ncb_w_prec, topology.ncb_h_prec));
 
                             for local_cby in 0..(cby_end.saturating_sub(first_cby)) {
                                 let cby = first_cby + local_cby;
-                                if cby >= ncb_h_sb { break; }
                                 for local_cbx in 0..(cbx_end.saturating_sub(first_cbx)) {
                                     let cbx = first_cbx + local_cbx;
-                                    if cbx >= ncb_w_sb { break; }
 
                                     let cb = &cb_grid[si][cby][cbx];
                                     let threshold = (_layer as u32) + 1;
@@ -1517,18 +2287,48 @@ impl GeoJp2 {
                                         hdr.read_bits_with_stuffing(1).map(|b| b != 0)
                                     } else {
                                         // First inclusion: read from tag tree.
-                                        incl_trees[tree_idx].read_threshold(local_cbx, local_cby, threshold, &mut hdr)
+                                        incl_trees_by_precinct
+                                            .get_mut(&tree_key)
+                                            .expect("inclusion tree present")
+                                            .read_threshold(local_cbx, local_cby, threshold, &mut hdr)
                                     };
 
                                     let incl = match incl {
                                         Some(v) => v,
                                         None => {
+                                            if packet_probe_hit {
+                                                eprintln!(
+                                                    "[native_packet_probe] pkt={} comp={} res={} precinct={} layer={} subband={} cb_local=({}, {}) incl=truncated",
+                                                    packet_seq,
+                                                    comp,
+                                                    res,
+                                                    precinct_idx,
+                                                    _layer,
+                                                    si,
+                                                    local_cbx,
+                                                    local_cby
+                                                );
+                                            }
                                             if debug && _layer == 0 && res == 0 && px == 0 && py == 0 {
                                                 eprintln!("[proper] CB({cbx},{cby}) incl=None (truncated)");
                                             }
                                             break 'sb_loop;
                                         }
                                     };
+                                    if packet_probe_hit {
+                                        eprintln!(
+                                            "[native_packet_probe] pkt={} comp={} res={} precinct={} layer={} subband={} cb_local=({}, {}) incl={}",
+                                            packet_seq,
+                                            comp,
+                                            res,
+                                            precinct_idx,
+                                            _layer,
+                                            si,
+                                            local_cbx,
+                                            local_cby,
+                                            incl
+                                        );
+                                    }
                                     if debug && _layer == 0 && res == 0 && px == 0 && py == 0 {
                                         eprintln!("[proper] CB({cbx},{cby}) incl={incl}");
                                     }
@@ -1538,7 +2338,10 @@ impl GeoJp2 {
                                     if !cb.ever_included {
                                         let mut zbp = 0usize;
                                         loop {
-                                            match zbp_trees[tree_idx].read_threshold(local_cbx, local_cby, zbp as u32 + 1, &mut hdr) {
+                                            match zbp_trees_by_precinct
+                                                .get_mut(&tree_key)
+                                                .expect("zbp tree present")
+                                                .read_threshold(local_cbx, local_cby, zbp as u32 + 1, &mut hdr) {
                                                 Some(true)  => break,          // confirmed < zbp+1 → zbp is correct
                                                 Some(false) => { zbp += 1; },  // not included at this zbp threshold → increment
                                                 None        => break,
@@ -1586,7 +2389,32 @@ impl GeoJp2 {
                                         Some(l) => l,
                                         None    => break 'sb_loop,
                                     };
-                                    segs.push((si, cbx, cby, seg_len));
+                                    if packet_probe_hit {
+                                        eprintln!(
+                                            "[native_packet_probe] pkt={} comp={} res={} precinct={} layer={} subband={} cb_local=({}, {}) passes={} lblock={} seg_len={}",
+                                            packet_seq,
+                                            comp,
+                                            res,
+                                            precinct_idx,
+                                            _layer,
+                                            si,
+                                            local_cbx,
+                                            local_cby,
+                                            passes,
+                                            lblock,
+                                            seg_len
+                                        );
+                                    }
+                                    segs.push((
+                                        si,
+                                        cbx,
+                                        cby,
+                                        local_cbx,
+                                        local_cby,
+                                        seg_len,
+                                        passes as u32,
+                                        lblock,
+                                    ));
                                 }
                             }
                         }
@@ -1615,9 +2443,38 @@ impl GeoJp2 {
                         if debug && _layer == 0 && res == 0 && px < 2 && py == 0 {
                             eprintln!("[proper] layer={_layer} res={res} px={px} py={py}: segs={} byte_pos={byte_pos}", segs.len());
                         }
-                        for (si, cbx, cby, seg_len) in segs {
+                        for (si, cbx, cby, local_cbx, local_cby, seg_len, passes, lblock) in segs {
+                            let start = byte_pos;
                             let end = byte_pos + seg_len as usize;
-                            if end > body.len() { break 'lrcp; }
+                            if end > body.len() { break 'packet_loop; }
+                            if debug_packet_assignment
+                                && tile_tx == 0
+                                && tile_ty == 0
+                                && target_component == debug_packet_comp
+                                && comp == debug_packet_comp
+                                && _layer <= debug_packet_layer_max
+                                && res <= debug_packet_res_max
+                                && precinct_idx <= debug_packet_precinct_max
+                            {
+                                eprintln!(
+                                    "[native_packet_assign] pkt={} comp={} res={} precinct={} layer={} subband={} cb_global=({}, {}) cb_local=({}, {}) passes={} lblock={} seg_len={} byte=[{}..{})",
+                                    packet_seq,
+                                    comp,
+                                    res,
+                                    precinct_idx,
+                                    _layer,
+                                    si,
+                                    cbx,
+                                    cby,
+                                    local_cbx,
+                                    local_cby,
+                                    passes,
+                                    lblock,
+                                    seg_len,
+                                    start,
+                                    end
+                                );
+                            }
                             if is_target {
                                 if debug && si == 0 && cbx < 2 && cby == 0 {
                                     eprintln!("[proper]   cb si={si} ({cbx},{cby}) seg={seg_len} bytes");
@@ -1626,9 +2483,29 @@ impl GeoJp2 {
                             }
                             byte_pos = end;
                         }
+                }
+        }
+
+        if std::env::var("JPEG2000_DEBUG_CB_SUMMARY").is_ok() {
+            let cb_grid = &all_cb_grids[target_component];
+            for (si, grid) in cb_grid.iter().enumerate() {
+                let mut non_empty = 0usize;
+                let mut total = 0usize;
+                for row in grid {
+                    for cb in row {
+                        if !cb.data.is_empty() {
+                            non_empty += 1;
+                            total += cb.data.len();
+                        }
                     }
                 }
-                } // end for comp in 0..nc
+                eprintln!(
+                    "[cb_summary] component={} subband={} non_empty={} total_bytes={}",
+                    target_component,
+                    si,
+                    non_empty,
+                    total
+                );
             }
         }
 
@@ -1637,7 +2514,7 @@ impl GeoJp2 {
         let cb_grid = &all_cb_grids[target_component];
 
         for (si, sb) in subbands.iter().enumerate() {
-            if sb.sb_w == 0 || sb.sb_h == 0 { continue; }
+            if sb.place_w == 0 || sb.place_h == 0 { continue; }
 
             // Quantisation parameters for this subband.
             let (exp, mnt_f): (i32, f64) = if !lossless {
@@ -1665,8 +2542,18 @@ impl GeoJp2 {
                     let num_bp = raw_bp.saturating_sub(cb.missing_bp).saturating_sub(1).max(1);
 
                     // Actual code block dimensions (may be smaller at edges).
-                    let actual_w = cb_w.min(sb.sb_w.saturating_sub(cbx * cb_w)).max(1);
-                    let actual_h = cb_h.min(sb.sb_h.saturating_sub(cby * cb_h)).max(1);
+                    let block_x0_packet = sb.packet_grid_x0 + cbx * sb.cb_w;
+                    let block_y0_packet = sb.packet_grid_y0 + cby * sb.cb_h;
+                    let delta_x = sb.place_col_off as isize - sb.packet_col_off as isize;
+                    let delta_y = sb.place_row_off as isize - sb.packet_row_off as isize;
+                    let block_x0_place = (block_x0_packet as isize + delta_x).max(0) as usize;
+                    let block_y0_place = (block_y0_packet as isize + delta_y).max(0) as usize;
+                    let place_x0 = block_x0_place.max(sb.place_col_off);
+                    let place_y0 = block_y0_place.max(sb.place_row_off);
+                    let block_x1 = (block_x0_place + sb.cb_w).min(sb.place_col_off + sb.place_w);
+                    let block_y1 = (block_y0_place + sb.cb_h).min(sb.place_row_off + sb.place_h);
+                    let actual_w = block_x1.saturating_sub(place_x0).max(1);
+                    let actual_h = block_y1.saturating_sub(place_y0).max(1);
 
                     if debug && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
                         eprintln!("[proper] sb[0] cb(0,0) bytes={} missing_bp={} raw_bp={} num_bp={} actual={}x{}",
@@ -1785,15 +2672,27 @@ impl GeoJp2 {
                     let dec = if use_legacy_for_sb {
                         decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                     } else {
-                        decode_block(&cb.data, actual_w, actual_h, num_bp, standard_subband_kind(sb.qcd_idx), ll_probe)
+                        decode_block(
+                            &cb.data,
+                            actual_w,
+                            actual_h,
+                            num_bp,
+                            standard_subband_kind(sb.qcd_idx, swap_hl_lh_kind),
+                            ll_probe,
+                        )
                     };
+
+                    if debug && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
+                        let row0: Vec<i32> = (0..8.min(actual_w)).map(|c| dec[c]).collect();
+                        eprintln!("[proper] LL cb(0,0) T1 decoded row0[0..8]: {:?}", row0);
+                    }
 
                     if lossless {
                         // Place decoded coefficients into the grid.
                         for r in 0..actual_h {
                             for c in 0..actual_w {
-                                let row = sb.row_off + cby * cb_h + r;
-                                let col = sb.col_off + cbx * cb_w + c;
+                                let row = place_y0 + r;
+                                let col = place_x0 + c;
                                 if row < h && col < w {
                                     coeff[row * w + col] = dec[r * actual_w + c];
                                 }
@@ -1805,8 +2704,8 @@ impl GeoJp2 {
                         let delta = 2.0f64.powi(r_b - exp) * (1.0 + mnt_f / 2048.0);
                         for r in 0..actual_h {
                             for c in 0..actual_w {
-                                let row = sb.row_off + cby * cb_h + r;
-                                let col = sb.col_off + cbx * cb_w + c;
+                                let row = place_y0 + r;
+                                let col = place_x0 + c;
                                 if row < h && col < w {
                                     let v = dec[r * actual_w + c];
                                     let sign = if v < 0 { -1.0f64 } else { 1.0 };
@@ -1826,9 +2725,24 @@ impl GeoJp2 {
         // ── 8. Inverse DWT + level-shift ──────────────────────────────────────
         let tile_pixels: Vec<i32> = if lossless {
             if debug && tile_tx == 0 && tile_ty == 0 {
-                eprintln!("[proper] LOSSLESS PATH: coeff[0..4] before idwt: {:?}", &coeff[..4.min(coeff.len())]);
+                eprintln!("[proper] LOSSLESS PATH: nl={} w={} h={} rw={:?} rh={:?}", nl, w, h, &rw[..=nl], &rh[..=nl]);
+                eprintln!("[proper] LOSSLESS PATH: coeff[0..8] before idwt: {:?}", &coeff[..8.min(coeff.len())]);
+                // Also dump coeff row 0 up to width 8 so we see LL vs HL boundary
+                let row0: Vec<i32> = (0..8.min(w)).map(|c| coeff[c]).collect();
+                eprintln!("[proper] LOSSLESS PATH: coeff row0[0..8] before idwt: {:?}", row0);
             }
-            super::wavelet::inv_dwt_53_multilevel_proper(&mut coeff, w, h, nl as u8);
+            if force_legacy_idwt {
+                super::wavelet::inv_dwt_53_multilevel(&mut coeff, w, h, nl as u8);
+            } else {
+                super::wavelet::inv_dwt_53_multilevel_proper_with_origin(
+                    &mut coeff,
+                    w,
+                    h,
+                    nl as u8,
+                    target_comp_tile_x0,
+                    target_comp_tile_y0,
+                );
+            }
             if debug && tile_tx == 0 && tile_ty == 0 {
                 eprintln!("[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: {:?}", &coeff[..4.min(coeff.len())]);
             }
@@ -1847,7 +2761,7 @@ impl GeoJp2 {
             // For lossy we need the full float pipeline; redo with f64 grid.
             let mut fcoeff = vec![0.0f64; w * h];
             for (si, sb) in subbands.iter().enumerate() {
-                if sb.sb_w == 0 || sb.sb_h == 0 { continue; }
+                if sb.place_w == 0 || sb.place_h == 0 { continue; }
                 let (exp, mnt_f): (i32, f64) = if sb.qcd_idx < self.qcd.step_sizes.len() {
                     let s = self.qcd.step_sizes[sb.qcd_idx];
                     ((s >> 11) as i32, (s & 0x7FF) as f64)
@@ -1864,8 +2778,18 @@ impl GeoJp2 {
                         let cb = &cb_grid[si][cby][cbx];
                         if cb.data.is_empty() { continue; }
                         let num_bp = raw_bp.saturating_sub(cb.missing_bp).saturating_sub(1).max(1);
-                        let actual_w = cb_w.min(sb.sb_w.saturating_sub(cbx * cb_w)).max(1);
-                        let actual_h = cb_h.min(sb.sb_h.saturating_sub(cby * cb_h)).max(1);
+                        let block_x0_packet = sb.packet_grid_x0 + cbx * sb.cb_w;
+                        let block_y0_packet = sb.packet_grid_y0 + cby * sb.cb_h;
+                        let delta_x = sb.place_col_off as isize - sb.packet_col_off as isize;
+                        let delta_y = sb.place_row_off as isize - sb.packet_row_off as isize;
+                        let block_x0_place = (block_x0_packet as isize + delta_x).max(0) as usize;
+                        let block_y0_place = (block_y0_packet as isize + delta_y).max(0) as usize;
+                        let place_x0 = block_x0_place.max(sb.place_col_off);
+                        let place_y0 = block_y0_place.max(sb.place_row_off);
+                        let block_x1 = (block_x0_place + sb.cb_w).min(sb.place_col_off + sb.place_w);
+                        let block_y1 = (block_y0_place + sb.cb_h).min(sb.place_row_off + sb.place_h);
+                        let actual_w = block_x1.saturating_sub(place_x0).max(1);
+                        let actual_h = block_y1.saturating_sub(place_y0).max(1);
                         let use_legacy_for_sb = use_legacy_t1
                             || (use_legacy_t1_ll && sb.qcd_idx == 0)
                             || (use_legacy_t1_hf && sb.qcd_idx != 0);
@@ -1881,12 +2805,19 @@ impl GeoJp2 {
                         let dec = if use_legacy_for_sb {
                             decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                         } else {
-                            decode_block(&cb.data, actual_w, actual_h, num_bp, standard_subband_kind(sb.qcd_idx), ll_probe)
+                            decode_block(
+                                &cb.data,
+                                actual_w,
+                                actual_h,
+                                num_bp,
+                                standard_subband_kind(sb.qcd_idx, swap_hl_lh_kind),
+                                ll_probe,
+                            )
                         };
                         for r in 0..actual_h {
                             for c in 0..actual_w {
-                                let row = sb.row_off + cby * cb_h + r;
-                                let col = sb.col_off + cbx * cb_w + c;
+                                let row = place_y0 + r;
+                                let col = place_x0 + c;
                                 if row < h && col < w {
                                     let v = dec[r * actual_w + c];
                                     let sign = if v < 0 { -1.0f64 } else { 1.0f64 };
@@ -1897,7 +2828,18 @@ impl GeoJp2 {
                     }
                 }
             }
-            let mut samples = super::wavelet::inv_dwt_97_multilevel(&fcoeff, w, h, nl as u8);
+            let mut samples = if force_legacy_idwt {
+                super::wavelet::inv_dwt_97_multilevel(&fcoeff, w, h, nl as u8)
+            } else {
+                super::wavelet::inv_dwt_97_multilevel_proper_with_origin(
+                    &fcoeff,
+                    w,
+                    h,
+                    nl as u8,
+                    target_comp_tile_x0,
+                    target_comp_tile_y0,
+                )
+            };
             if !comp_signed || comp_bits == 16 {
                 let shift = 1i32 << comp_bits.saturating_sub(1);
                 for v in samples.iter_mut() { *v += shift; }
@@ -4263,6 +5205,42 @@ mod multiband_failfast_tests {
             .read_band_u8(0)
             .expect("single full-range tile-part POC should now decode successfully");
         assert_eq!(band.len(), 20 * 20, "expected 20x20 = 400 samples");
+    }
+
+    #[test]
+    fn fake_sentinel_preview_fixture_decodes_first_band() {
+        let fixture = include_bytes!("../../../tests/fixtures/fake_sent2_preview.jp2");
+        let jp2 = GeoJp2::from_bytes(fixture).expect("Sentinel-style fixture should parse");
+
+        assert_eq!(jp2.component_count(), 1, "fixture should be single-band preview");
+        let band = jp2
+            .read_band_u8(0)
+            .expect("Sentinel-style fixture first band should decode");
+        assert_eq!(band.len(), jp2.width() as usize * jp2.height() as usize);
+    }
+
+    #[test]
+    fn pleiades_fixture_decodes_first_band_u16() {
+        let fixture = include_bytes!("../../../tests/fixtures/IMG_md_ple_R1C1.jp2");
+        let jp2 = GeoJp2::from_bytes(fixture).expect("Pléiades fixture should parse");
+
+        assert_eq!(jp2.component_count(), 4, "fixture should expose four components");
+        let band = jp2
+            .read_band_u16(0)
+            .expect("Pléiades fixture first band should decode");
+        assert_eq!(band.len(), jp2.width() as usize * jp2.height() as usize);
+    }
+
+    #[test]
+    fn pleiades_neo_fixture_decodes_first_band_u16() {
+        let fixture = include_bytes!("../../../tests/fixtures/IMG_md_pneo_R1C1.jp2");
+        let jp2 = GeoJp2::from_bytes(fixture).expect("Pléiades Neo fixture should parse");
+
+        assert_eq!(jp2.component_count(), 4, "fixture should expose four components");
+        let band = jp2
+            .read_band_u16(0)
+            .expect("Pléiades Neo fixture first band should decode");
+        assert_eq!(band.len(), jp2.width() as usize * jp2.height() as usize);
     }
 
     #[test]

@@ -227,6 +227,28 @@ fn interleave(buf: &mut [i32]) {
     buf.copy_from_slice(&tmp);
 }
 
+fn interleave_with_phase(buf: &mut [i32], low_starts_at_odd: bool) {
+    if !low_starts_at_odd {
+        interleave(buf);
+        return;
+    }
+
+    let n = buf.len();
+    let low_count = n / 2;
+    let mut tmp = vec![0i32; n];
+    for k in 0..n {
+        let src = if k < low_count {
+            2 * k + 1
+        } else {
+            2 * (k - low_count)
+        };
+        if src < n {
+            tmp[src] = buf[k];
+        }
+    }
+    buf.copy_from_slice(&tmp);
+}
+
 fn deinterleave_f(buf: &mut [f64]) {
     let n = buf.len();
     let mut tmp = vec![0.0f64; n];
@@ -242,6 +264,28 @@ fn interleave_f(buf: &mut [f64]) {
     for k in 0..n {
         let src = if k < half { 2 * k } else { 2 * (k - half) + 1 };
         tmp[src] = buf[k];
+    }
+    buf.copy_from_slice(&tmp);
+}
+
+fn interleave_f_with_phase(buf: &mut [f64], low_starts_at_odd: bool) {
+    if !low_starts_at_odd {
+        interleave_f(buf);
+        return;
+    }
+
+    let n = buf.len();
+    let low_count = n / 2;
+    let mut tmp = vec![0.0f64; n];
+    for k in 0..n {
+        let src = if k < low_count {
+            2 * k + 1
+        } else {
+            2 * (k - low_count)
+        };
+        if src < n {
+            tmp[src] = buf[k];
+        }
     }
     buf.copy_from_slice(&tmp);
 }
@@ -389,6 +433,38 @@ pub fn inv_dwt_53_2d_strided(data: &mut [i32], region_w: usize, region_h: usize,
     }
 }
 
+pub fn inv_dwt_53_2d_strided_with_phase(
+    data: &mut [i32],
+    region_w: usize,
+    region_h: usize,
+    full_stride: usize,
+    x_phase_odd: bool,
+    y_phase_odd: bool,
+) {
+    let mut col_buf = vec![0i32; region_h];
+    for col in 0..region_w {
+        for r in 0..region_h {
+            col_buf[r] = data[r * full_stride + col];
+        }
+        interleave_with_phase(&mut col_buf, y_phase_odd);
+        inv_lift_53(&mut col_buf);
+        for r in 0..region_h {
+            data[r * full_stride + col] = col_buf[r];
+        }
+    }
+    let mut row_buf = vec![0i32; region_w];
+    for row in 0..region_h {
+        for c in 0..region_w {
+            row_buf[c] = data[row * full_stride + c];
+        }
+        interleave_with_phase(&mut row_buf, x_phase_odd);
+        inv_lift_53(&mut row_buf);
+        for c in 0..region_w {
+            data[row * full_stride + c] = row_buf[c];
+        }
+    }
+}
+
 /// Multi-level inverse 5/3 DWT for the standard JPEG 2000 coefficient layout.
 ///
 /// `data` is a flat W×H row-major buffer with stride = `width`.  Subbands are stored
@@ -402,6 +478,50 @@ pub fn inv_dwt_53_multilevel_proper(data: &mut [i32], width: usize, height: usiz
     for i in 0..nl { rw[i+1] = (rw[i]+1)/2; rh[i+1] = (rh[i]+1)/2; }
     for lvl in (0..nl).rev() {
         inv_dwt_53_2d_strided(data, rw[lvl], rh[lvl], width);
+    }
+}
+
+pub fn inv_dwt_53_multilevel_proper_with_origin(
+    data: &mut [i32],
+    width: usize,
+    height: usize,
+    num_levels: u8,
+    origin_x: usize,
+    origin_y: usize,
+) {
+    let nl = num_levels as usize;
+    let mut rw = vec![0usize; nl + 1];
+    let mut rh = vec![0usize; nl + 1];
+    let mut rx0 = vec![0usize; nl + 1];
+    let mut ry0 = vec![0usize; nl + 1];
+    let mut rx1 = vec![0usize; nl + 1];
+    let mut ry1 = vec![0usize; nl + 1];
+
+    rx0[0] = origin_x;
+    ry0[0] = origin_y;
+    rx1[0] = origin_x + width;
+    ry1[0] = origin_y + height;
+    rw[0] = width;
+    rh[0] = height;
+
+    for i in 0..nl {
+        rx0[i + 1] = rx0[i].div_ceil(2);
+        ry0[i + 1] = ry0[i].div_ceil(2);
+        rx1[i + 1] = rx1[i].div_ceil(2);
+        ry1[i + 1] = ry1[i].div_ceil(2);
+        rw[i + 1] = rx1[i + 1].saturating_sub(rx0[i + 1]);
+        rh[i + 1] = ry1[i + 1].saturating_sub(ry0[i + 1]);
+    }
+
+    for lvl in (0..nl).rev() {
+        inv_dwt_53_2d_strided_with_phase(
+            data,
+            rw[lvl],
+            rh[lvl],
+            width,
+            (rx0[lvl] & 1) != 0,
+            (ry0[lvl] & 1) != 0,
+        );
     }
 }
 /// Perform `num_levels` forward decomposition levels of 9/7 DWT.
@@ -461,6 +581,38 @@ pub fn inv_dwt_97_2d_strided(data: &mut [f64], region_w: usize, region_h: usize,
     }
 }
 
+pub fn inv_dwt_97_2d_strided_with_phase(
+    data: &mut [f64],
+    region_w: usize,
+    region_h: usize,
+    full_stride: usize,
+    x_phase_odd: bool,
+    y_phase_odd: bool,
+) {
+    let mut col = vec![0.0f64; region_h];
+    for c in 0..region_w {
+        for r in 0..region_h {
+            col[r] = data[r * full_stride + c];
+        }
+        interleave_f_with_phase(&mut col, y_phase_odd);
+        inv_lift_97(&mut col);
+        for r in 0..region_h {
+            data[r * full_stride + c] = col[r];
+        }
+    }
+    let mut row = vec![0.0f64; region_w];
+    for r in 0..region_h {
+        for c in 0..region_w {
+            row[c] = data[r * full_stride + c];
+        }
+        interleave_f_with_phase(&mut row, x_phase_odd);
+        inv_lift_97(&mut row);
+        for c in 0..region_w {
+            data[r * full_stride + c] = row[c];
+        }
+    }
+}
+
 /// Multi-level inverse 9/7 DWT for the standard JPEG 2000 coefficient layout.
 pub fn inv_dwt_97_multilevel_proper(buf: &[f64], width: usize, height: usize, num_levels: u8) -> Vec<i32> {
     let mut data = buf.to_vec();
@@ -472,6 +624,53 @@ pub fn inv_dwt_97_multilevel_proper(buf: &[f64], width: usize, height: usize, nu
     for lvl in (0..nl).rev() {
         inv_dwt_97_2d_strided(&mut data, rw[lvl], rh[lvl], width);
     }
+    data.iter().map(|&x| x.round() as i32).collect()
+}
+
+pub fn inv_dwt_97_multilevel_proper_with_origin(
+    buf: &[f64],
+    width: usize,
+    height: usize,
+    num_levels: u8,
+    origin_x: usize,
+    origin_y: usize,
+) -> Vec<i32> {
+    let mut data = buf.to_vec();
+    let nl = num_levels as usize;
+    let mut rw = vec![0usize; nl + 1];
+    let mut rh = vec![0usize; nl + 1];
+    let mut rx0 = vec![0usize; nl + 1];
+    let mut ry0 = vec![0usize; nl + 1];
+    let mut rx1 = vec![0usize; nl + 1];
+    let mut ry1 = vec![0usize; nl + 1];
+
+    rx0[0] = origin_x;
+    ry0[0] = origin_y;
+    rx1[0] = origin_x + width;
+    ry1[0] = origin_y + height;
+    rw[0] = width;
+    rh[0] = height;
+
+    for i in 0..nl {
+        rx0[i + 1] = rx0[i].div_ceil(2);
+        ry0[i + 1] = ry0[i].div_ceil(2);
+        rx1[i + 1] = rx1[i].div_ceil(2);
+        ry1[i + 1] = ry1[i].div_ceil(2);
+        rw[i + 1] = rx1[i + 1].saturating_sub(rx0[i + 1]);
+        rh[i + 1] = ry1[i + 1].saturating_sub(ry0[i + 1]);
+    }
+
+    for lvl in (0..nl).rev() {
+        inv_dwt_97_2d_strided_with_phase(
+            &mut data,
+            rw[lvl],
+            rh[lvl],
+            width,
+            (rx0[lvl] & 1) != 0,
+            (ry0[lvl] & 1) != 0,
+        );
+    }
+
     data.iter().map(|&x| x.round() as i32).collect()
 }
 

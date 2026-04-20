@@ -351,6 +351,14 @@ impl GeoJp2Writer {
 
                 // Entropy encode
                 let compressed = encode_block(&encoded_ints, w, h);
+                if nc > 1 {
+                    let len = u32::try_from(compressed.len()).map_err(|_| {
+                        Jp2Error::UnsupportedCodingParam(
+                            "component stream too large for legacy length prefix".into(),
+                        )
+                    })?;
+                    tile_body.extend_from_slice(&len.to_be_bytes());
+                }
                 tile_body.extend_from_slice(&compressed);
             }
 

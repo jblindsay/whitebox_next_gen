@@ -74,22 +74,55 @@ pub fn read(path: &str) -> Result<Raster> {
 
     // Keep external decode bridge feature-gated so core can be built without it.
     #[cfg(feature = "jpeg2000-vendored-bridge")]
-    let (bands, data_type, data) = match decode_samples_with_dj2k(path, rows, cols) {
-        Ok(decoded) => {
-            eprintln!("[jpeg2000::read] Successfully decoded with vendored bridge");
-            decoded
-        },
-        Err(ext_err) => {
-            eprintln!("[jpeg2000::read] Vendored bridge failed: {}, falling back to native", ext_err);
-            // Avoid silently returning potentially corrupted multiband output
-            // from the legacy native path if vendored decode fails.
-            if jp2f.component_count() > 1 {
-                return Err(RasterError::Other(format!(
-                    "JPEG2000 vendored decode failed for multiband image: {ext_err}"
-                )));
+    let (bands, data_type, data) = {
+        let native_first = std::env::var("JPEG2000_ADAPTER_NATIVE_FIRST")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes"))
+            .unwrap_or(false);
+
+        if native_first {
+            match decode_samples_with_internal_reader(&jp2f, rows, cols) {
+                Ok(decoded) => {
+                    eprintln!("[jpeg2000::read] Native-first mode: native decoder succeeded");
+                    decoded
+                }
+                Err(native_err) => {
+                    eprintln!(
+                        "[jpeg2000::read] Native-first mode: native decoder failed ({}), trying vendored bridge",
+                        native_err
+                    );
+                    match decode_samples_with_dj2k(path, rows, cols) {
+                        Ok(decoded) => {
+                            eprintln!("[jpeg2000::read] Native-first mode: vendored bridge fallback succeeded");
+                            decoded
+                        }
+                        Err(bridge_err) => {
+                            return Err(RasterError::Other(format!(
+                                "JPEG2000 read failed in native-first mode: native={native_err}; bridge={bridge_err}"
+                            )));
+                        }
+                    }
+                }
             }
-            eprintln!("[jpeg2000::read] Using native decoder");
-            decode_samples_with_internal_reader(&jp2f, rows, cols)?
+        } else {
+            match decode_samples_with_dj2k(path, rows, cols) {
+                Ok(decoded) => {
+                    eprintln!("[jpeg2000::read] Successfully decoded with vendored bridge");
+                    decoded
+                },
+                Err(ext_err) => {
+                    eprintln!("[jpeg2000::read] Vendored bridge failed: {}, falling back to native", ext_err);
+                    // Avoid silently returning potentially corrupted multiband output
+                    // from the legacy native path if vendored decode fails.
+                    if jp2f.component_count() > 1 {
+                        return Err(RasterError::Other(format!(
+                            "JPEG2000 vendored decode failed for multiband image: {ext_err}"
+                        )));
+                    }
+                    eprintln!("[jpeg2000::read] Using native decoder");
+                    decode_samples_with_internal_reader(&jp2f, rows, cols)?
+                }
+            }
         }
     };
 
@@ -169,11 +202,12 @@ pub fn read(path: &str) -> Result<Raster> {
 /// An off-by-one bit-depth (e.g., 15 instead of 16) with 2-byte storage
 /// indicates a dequantization error that requires 2x correction.
 fn detect_and_correct_precision_bug(reported_bit_depth: u8, bytes_per_sample: u8) -> f64 {
-    // JP2 convention: bit_depth > 8 always uses 2-byte storage
-    // If we have 2-byte storage but reported bit_depth is <= 15, check for off-by-one
-    if bytes_per_sample == 2 && reported_bit_depth > 8 && reported_bit_depth < 16 {
-        // Likely precision off-by-one: actual is 16-bit but reported as 15-bit
-        // This causes 2x scaling error during dequantization
+    // JP2 convention: bit_depth > 8 always uses 2-byte storage.
+    // Keep correction narrowly scoped to the known off-by-one case (15 reported
+    // instead of 16). Applying a blanket correction to all 9..15-bit products
+    // distorts valid high-bit-depth imagery (e.g., 13-bit multispectral scenes).
+    if bytes_per_sample == 2 && reported_bit_depth == 15 {
+        // Known precision off-by-one case: actual is 16-bit but reported as 15-bit.
         eprintln!("[bridge] PRECISION BUG DETECTED: reported {} bits with 2-byte storage", reported_bit_depth);
         2.0
     } else {
@@ -302,6 +336,16 @@ fn decode_samples_with_internal_reader(
             data[b * npix + p] = all_chunky[p * bands + b] as f64;
         }
     }
+
+    if std::env::var("JPEG2000_DEBUG_NATIVE_HEAD").is_ok() && npix > 0 {
+        let head = 10.min(npix);
+        eprintln!(
+            "[native] first {} pixels (component 0): {:?}",
+            head,
+            &data[0..head]
+        );
+    }
+
     let data_type = map_data_type(jp2f.pixel_type())?;
     Ok((bands, data_type, data))
 }
@@ -469,6 +513,13 @@ fn write_with_writer(writer: jp2::GeoJp2Writer, path: &str, raster: &Raster) -> 
 mod adapter_read_path_tests {
     use super::*;
 
+    fn set_native_first(value: Option<&str>) {
+        match value {
+            Some(v) => std::env::set_var("JPEG2000_ADAPTER_NATIVE_FIRST", v),
+            None => std::env::remove_var("JPEG2000_ADAPTER_NATIVE_FIRST"),
+        }
+    }
+
     #[test]
     fn a7_adapter_read_multiband_supported_fixture() {
         let fixture = concat!(
@@ -506,6 +557,38 @@ mod adapter_read_path_tests {
             }
             other => panic!("A7: expected RasterError::Other, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a8_adapter_native_first_reads_multiband_fixture_without_bridge() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/multiband_5ch_16x16_lossless.jp2"
+        );
+
+        set_native_first(Some("1"));
+        let ras = read(fixture).expect("A8: native-first should decode multiband fixture");
+        set_native_first(None);
+
+        assert_eq!(ras.bands, 5, "A8: expected 5 bands");
+        assert_eq!(ras.rows, 16, "A8: expected 16 rows");
+        assert_eq!(ras.cols, 16, "A8: expected 16 cols");
+    }
+
+    #[test]
+    fn a8_adapter_native_first_reads_supported_4band_fixture() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/sentinel_style_16x16_4band_lossless.jp2"
+        );
+
+        set_native_first(Some("1"));
+        let ras = read(fixture).expect("A8: native-first should decode supported 4-band fixture");
+        set_native_first(None);
+
+        assert_eq!(ras.bands, 4, "A8: expected 4 bands");
+        assert_eq!(ras.rows, 16, "A8: expected 16 rows");
+        assert_eq!(ras.cols, 16, "A8: expected 16 cols");
     }
 }
 
@@ -605,6 +688,27 @@ mod differential_tests {
         let row = pixel / cols.max(1);
         let col = pixel % cols.max(1);
         (band, row, col, pixel)
+    }
+
+    fn emit_band_heads(label: &str, data: &[f64], bands: usize, cols: usize, rows: usize, count: usize) {
+        let plane = cols.saturating_mul(rows);
+        if plane == 0 {
+            return;
+        }
+        for band in 0..bands {
+            let start = band.saturating_mul(plane);
+            let end = (start + plane).min(data.len());
+            if start >= end {
+                break;
+            }
+            let head_len = count.min(end - start);
+            eprintln!(
+                "[diff_heads] {} band={} head={:?}",
+                label,
+                band,
+                &data[start..start + head_len]
+            );
+        }
     }
 
     fn is_packet_header_marker_workflow_error(msg: &str) -> bool {
@@ -744,6 +848,10 @@ mod differential_tests {
                 summary.sample_value_mismatch += 1;
                 if is_multicomponent {
                     summary.multicomponent_sample_value_mismatch += 1;
+                }
+                if std::env::var("JPEG2000_DEBUG_DIFF_HEADS").is_ok() {
+                    emit_band_heads("native", &native_data, native_bands, cols, rows, 12);
+                    emit_band_heads("bridge", &bridge_data, bridge_bands, cols, rows, 12);
                 }
                 let (band, row, col, pixel) = mismatch_position(i, cols, rows);
                 let abs_err = (native_data[i] - bridge_data[i]).abs();

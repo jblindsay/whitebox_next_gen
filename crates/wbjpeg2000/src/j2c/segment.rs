@@ -20,6 +20,53 @@ fn debug_accounting_trace_enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "std")]
+fn debug_accounting_packet_scope(
+    progression_data: &ProgressionData,
+    cb_x: u32,
+    cb_y: u32,
+) -> bool {
+    let enabled = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_PACKET_TRACE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if !enabled {
+        return false;
+    }
+
+    let comp = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_COMP")
+        .ok()
+        .and_then(|v| v.parse::<u8>().ok())
+        .unwrap_or(0);
+    let res_max = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_RES_MAX")
+        .ok()
+        .and_then(|v| v.parse::<u8>().ok())
+        .unwrap_or(0);
+    let layer_max = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_LAYER_MAX")
+        .ok()
+        .and_then(|v| v.parse::<u8>().ok())
+        .unwrap_or(0);
+    let precinct_max = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_PRECINCT_MAX")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(3);
+    let cbx_max = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_CBX_MAX")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(4);
+    let cby_max = std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_CBY_MAX")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(4);
+
+    progression_data.component == comp
+        && progression_data.resolution <= res_max
+        && progression_data.layer_num <= layer_max
+        && progression_data.precinct <= precinct_max
+        && cb_x <= cbx_max
+        && cb_y <= cby_max
+}
+
 #[cfg(not(feature = "std"))]
 fn debug_accounting_trace_enabled() -> bool {
     false
@@ -297,6 +344,24 @@ fn resolve_classic_segments(
                 // Will be set later.
                 data: &[],
             });
+
+            if debug_accounting_packet_scope(progression_data, code_block.x_idx, code_block.y_idx) {
+                #[cfg(feature = "std")]
+                eprintln!(
+                    "[wbjpeg2000_packet_assign] comp={} res={} precinct={} layer={} subband={:?} cb=({}, {}) segment={} passes={} seg_len={} lblock={}",
+                    progression_data.component,
+                    progression_data.resolution,
+                    progression_data.precinct,
+                    progression_data.layer_num,
+                    sub_band.sub_band_type,
+                    code_block.x_idx,
+                    code_block.y_idx,
+                    segment,
+                    coding_passes_for_segment,
+                    length,
+                    code_block.l_block
+                );
+            }
 
             if debug_trace
                 && progression_data.component == 0

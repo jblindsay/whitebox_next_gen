@@ -145,6 +145,10 @@ Phase A estimate subtotal: 5.5-10 days (roughly 1.5-3 weeks focused work; 2-4 we
 
 Current blocker profile:
 - Differential corpus still reports multicomponent sample-value mismatches on local fixture trio (`multicomponent_sample_value_mismatch=3`), while native/bridge/metadata/sample-count error classes are currently 0 for this set.
+- Latest LL cleanup tracing reduced uncertainty around one branch: on the
+  checked fixture, run-mode path selection is not currently active
+  (`run_eligible_cols=0`), narrowing likely root-cause scope to cleanup
+  significance/sign semantics and/or CL context-state preparation.
 
 Remaining work packages:
 - A4 mixed-precision edge coverage:
@@ -153,7 +157,7 @@ Remaining work packages:
 - Native parity root-cause and fix pass (critical path):
   - Complete deeper packet-header / tier-1 decode correctness work for multicomponent value parity.
   - Target: reduce `multicomponent_sample_value_mismatch` from current baseline to agreed threshold (ideally 0 for the agreed fixture set).
-  - Estimate: 4-8 engineering days (highest uncertainty item).
+  - Estimate: 3.5-7 engineering days (still highest uncertainty item, but branch scope narrowed).
 - Differential reruns + KPI gating tune:
   - Re-baseline reports and tighten `JPEG2000_DIFF_MAX_MULTICOMPONENT_*` thresholds based on improved parity.
   - Estimate: 0.5-1.0 engineering day.
@@ -162,9 +166,9 @@ Remaining work packages:
   - Estimate: 0.5-1.0 engineering day.
 
 Estimated Phase A remaining total:
-- Best case: 5-6 engineering days.
-- Most likely: 6-10 engineering days.
-- Conservative: 10-14 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
+- Best case: 4.5-6 engineering days.
+- Most likely: 5-9 engineering days.
+- Conservative: 8-12 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
 
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:
@@ -267,3 +271,9 @@ Exit criteria:
   cleanup-pass indispensability (`no_cl` decoding yields zero nonzero coefficients) but still showed
   substantial standard-vs-legacy LL coefficient pattern divergence; a follow-on table-driven sign-context
   trial did not improve parity KPIs and was reverted.
+- 2026-04-19: Added LL cleanup eligibility/run trace counters
+  (`JPEG2000_DEBUG_LL_CLEANUP_TRACE`). Initial rgb fixture run showed zero
+  run-eligible columns while run-mode is disabled, with cleanup activity
+  concentrated at the top decoded bitplane before SP/MR dominate subsequent
+  bitplanes. This narrows immediate Phase A focus to CL significance/sign
+  semantics and context-state setup rather than run-mode branch gating.

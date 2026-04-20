@@ -206,6 +206,19 @@ Status: in progress.
     - Table-driven sign-context experiment in standard decoder bool path was
       tested via full parity matrix and reverted after no KPI class improvement
       plus regression in tiled fixture first-mismatch magnitude.
+    - Added LL cleanup trace counters in `decode_block_standard_j2k`
+      (`JPEG2000_DEBUG_LL_CLEANUP_TRACE=1`) and ran targeted differential on
+      `rgb_8x8_lossless`:
+      - Component 0 LL path (bp14): `cl_eligible_pixels=64`,
+        `cl_sig_decode_attempts=64`, `cl_sig=33`, `run_eligible_cols=0`.
+      - Lower bitplanes then show `cl_eligible_pixels=0`, with significance
+        activity shifting almost entirely to SP/MR.
+      - Equivalent pattern observed for components 1 and 2 at their top
+        bitplanes (`cl_sig=35` and `cl_sig=34`, respectively), again with
+        `run_eligible_cols=0` while run-mode remains disabled.
+      - Interpretation: current LL divergence is unlikely to be run-mode branch
+        selection itself on this fixture and is more likely in cleanup
+        significance/sign decode semantics or upstream context state feeding CL.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

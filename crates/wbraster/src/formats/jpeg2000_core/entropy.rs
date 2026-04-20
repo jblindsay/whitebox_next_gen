@@ -530,11 +530,19 @@ pub fn decode_block_standard_j2k_with_probe(
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let debug_cleanup_trace = std::env::var("JPEG2000_DEBUG_LL_CLEANUP_TRACE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
     for bp in (0..num_bitplanes).rev() {
         let threshold = 1u32 << bp;
         let mut cl_sig_count = 0usize;
         let mut sp_sig_count = 0usize;
+        let mut cl_eligible_pixels = 0usize;
+        let mut run_eligible_cols = 0usize;
+        let mut run_agg_one_cols = 0usize;
+        let mut cl_sig_decode_attempts = 0usize;
 
         // Reset per-bitplane visited flag.
         for v in sp_visit.iter_mut() { *v = false; }
@@ -592,12 +600,16 @@ pub fn decode_block_standard_j2k_with_probe(
                             !sig[i] && !sp_visit[i] && significance_context_bool(&sig, i, width, height) == 0
                         });
                     if run_eligible {
+                        run_eligible_cols += 1;
+                    }
+                    if run_eligible {
                         // Run-mode aggregate decode.
                         let agg = dec.decode(ctx::CLEANUP); // AGG context = 18
                         if agg == 0 {
                             // No significant pixel in this stripe column.
                             continue;
                         }
+                        run_agg_one_cols += 1;
                         // Decode run start position (2 uniform bits -> 0..3).
                         let rp_hi = dec.decode(ctx::ZERO);
                         let rp_lo = dec.decode(ctx::ZERO);
@@ -616,7 +628,9 @@ pub fn decode_block_standard_j2k_with_probe(
                         for j in (run_pos + 1)..band_h {
                             let i = (band_row + j) * width + c;
                             if !sig[i] && !sp_visit[i] {
+                                cl_eligible_pixels += 1;
                                 let ctx = significance_context_bool(&sig, i, width, height);
+                                cl_sig_decode_attempts += 1;
                                 let bit = dec.decode(ctx::SIG[ctx.min(8)]);
                                 if bit == 1 {
                                     mags[i] |= threshold;
@@ -632,7 +646,9 @@ pub fn decode_block_standard_j2k_with_probe(
                         for j in 0..band_h {
                             let i = (band_row + j) * width + c;
                             if !sig[i] && !sp_visit[i] {
+                                cl_eligible_pixels += 1;
                                 let ctx = significance_context_bool(&sig, i, width, height);
+                                cl_sig_decode_attempts += 1;
                                 let bit = dec.decode(ctx::SIG[ctx.min(8)]);
                                 if bit == 1 {
                                     mags[i] |= threshold;
@@ -647,6 +663,20 @@ pub fn decode_block_standard_j2k_with_probe(
                 }
                 band_row += 4;
             }
+        }
+        if debug_cleanup_trace {
+            eprintln!(
+                "[ll_cleanup_trace] bp={} threshold={} sp_sig={} cl_sig={} cl_eligible_pixels={} cl_sig_decode_attempts={} run_eligible_cols={} run_agg_one_cols={} run_mode_enabled={}",
+                bp,
+                threshold,
+                sp_sig_count,
+                cl_sig_count,
+                cl_eligible_pixels,
+                cl_sig_decode_attempts,
+                run_eligible_cols,
+                run_agg_one_cols,
+                run_mode_enabled
+            );
         }
         if trace && bp >= num_bitplanes - 3 {
             eprintln!("[decode_block_stdjk] bp={} threshold={} sp_sig={} cl_sig={}", bp, threshold, sp_sig_count, cl_sig_count);

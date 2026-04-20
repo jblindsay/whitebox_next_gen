@@ -473,6 +473,8 @@ mod differential_tests {
 
     #[derive(Default, Debug)]
     struct DiffSummary {
+        fixtures_total: usize,
+        multicomponent_fixtures: usize,
         ok: usize,
         native_error: usize,
         native_unsupported_packet_header_markers: usize,
@@ -481,6 +483,9 @@ mod differential_tests {
         metadata_mismatch: usize,
         sample_count_mismatch: usize,
         sample_value_mismatch: usize,
+        multicomponent_native_error: usize,
+        multicomponent_metadata_mismatch: usize,
+        multicomponent_sample_value_mismatch: usize,
     }
 
     fn parse_fixture_list(var: &str) -> Vec<String> {
@@ -592,6 +597,8 @@ mod differential_tests {
         let mut details: Vec<String> = Vec::new();
 
         for path in fixtures {
+            summary.fixtures_total += 1;
+
             let jp2f = match jp2::GeoJp2::open(&path) {
                 Ok(v) => v,
                 Err(e) => {
@@ -603,6 +610,10 @@ mod differential_tests {
 
             let rows = jp2f.height() as usize;
             let cols = jp2f.width() as usize;
+            let is_multicomponent = jp2f.component_count() > 1;
+            if is_multicomponent {
+                summary.multicomponent_fixtures += 1;
+            }
 
             let native = decode_samples_with_internal_reader(&jp2f, rows, cols);
             let bridge = decode_samples_with_dj2k(&path, rows, cols);
@@ -612,6 +623,9 @@ mod differential_tests {
                 Err(e) => {
                     let msg = e.to_string();
                     summary.native_error += 1;
+                    if is_multicomponent {
+                        summary.multicomponent_native_error += 1;
+                    }
                     if is_packet_header_marker_workflow_error(&msg) {
                         summary.native_unsupported_packet_header_markers += 1;
                     }
@@ -634,6 +648,9 @@ mod differential_tests {
 
             if native_bands != bridge_bands || native_dtype != bridge_dtype {
                 summary.metadata_mismatch += 1;
+                if is_multicomponent {
+                    summary.multicomponent_metadata_mismatch += 1;
+                }
                 details.push(format!(
                     "METADATA_MISMATCH|{}|native=({}, {:?}) bridge=({}, {:?})",
                     path, native_bands, native_dtype, bridge_bands, bridge_dtype
@@ -654,6 +671,9 @@ mod differential_tests {
 
             if let Some(i) = first_mismatch_index(&native_data, &bridge_data, eps) {
                 summary.sample_value_mismatch += 1;
+                if is_multicomponent {
+                    summary.multicomponent_sample_value_mismatch += 1;
+                }
                 details.push(format!(
                     "SAMPLE_VALUE_MISMATCH|{}|idx={} native={} bridge={} eps={}",
                     path, i, native_data[i], bridge_data[i], eps
@@ -665,7 +685,9 @@ mod differential_tests {
         }
 
         eprintln!(
-            "JPEG2000 differential summary: ok={} native_error={} native_unsupported_packet_header_markers={} native_unsupported_poc={} bridge_error={} metadata_mismatch={} sample_count_mismatch={} sample_value_mismatch={}",
+            "JPEG2000 differential summary: fixtures_total={} multicomponent_fixtures={} ok={} native_error={} native_unsupported_packet_header_markers={} native_unsupported_poc={} bridge_error={} metadata_mismatch={} sample_count_mismatch={} sample_value_mismatch={} multicomponent_native_error={} multicomponent_metadata_mismatch={} multicomponent_sample_value_mismatch={}",
+            summary.fixtures_total,
+            summary.multicomponent_fixtures,
             summary.ok,
             summary.native_error,
             summary.native_unsupported_packet_header_markers,
@@ -673,7 +695,10 @@ mod differential_tests {
             summary.bridge_error,
             summary.metadata_mismatch,
             summary.sample_count_mismatch,
-            summary.sample_value_mismatch
+            summary.sample_value_mismatch,
+            summary.multicomponent_native_error,
+            summary.multicomponent_metadata_mismatch,
+            summary.multicomponent_sample_value_mismatch
         );
         for line in &details {
             eprintln!("{}", line);
@@ -682,7 +707,8 @@ mod differential_tests {
         if let Some(path) = report_path.as_ref() {
             let mut report = String::new();
             let _ = writeln!(&mut report, "{{");
-            let _ = writeln!(&mut report, "  \"fixtures\": {},", summary.ok + summary.native_error + summary.bridge_error + summary.metadata_mismatch + summary.sample_count_mismatch + summary.sample_value_mismatch);
+            let _ = writeln!(&mut report, "  \"fixtures\": {},", summary.fixtures_total);
+            let _ = writeln!(&mut report, "  \"multicomponent_fixtures\": {},", summary.multicomponent_fixtures);
             let _ = writeln!(&mut report, "  \"eps\": {},", eps);
             let _ = writeln!(&mut report, "  \"summary\": {{");
             let _ = writeln!(&mut report, "    \"ok\": {},", summary.ok);
@@ -700,7 +726,22 @@ mod differential_tests {
             let _ = writeln!(&mut report, "    \"bridge_error\": {},", summary.bridge_error);
             let _ = writeln!(&mut report, "    \"metadata_mismatch\": {},", summary.metadata_mismatch);
             let _ = writeln!(&mut report, "    \"sample_count_mismatch\": {},", summary.sample_count_mismatch);
-            let _ = writeln!(&mut report, "    \"sample_value_mismatch\": {}", summary.sample_value_mismatch);
+            let _ = writeln!(&mut report, "    \"sample_value_mismatch\": {},", summary.sample_value_mismatch);
+            let _ = writeln!(
+                &mut report,
+                "    \"multicomponent_native_error\": {},",
+                summary.multicomponent_native_error
+            );
+            let _ = writeln!(
+                &mut report,
+                "    \"multicomponent_metadata_mismatch\": {},",
+                summary.multicomponent_metadata_mismatch
+            );
+            let _ = writeln!(
+                &mut report,
+                "    \"multicomponent_sample_value_mismatch\": {}",
+                summary.multicomponent_sample_value_mismatch
+            );
             let _ = writeln!(&mut report, "  }},");
             let _ = writeln!(&mut report, "  \"details\": [");
             for (i, line) in details.iter().enumerate() {

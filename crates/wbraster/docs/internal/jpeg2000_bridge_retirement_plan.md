@@ -103,11 +103,11 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
   - [ ] New fixtures run in CI and are stable across reruns.
 
 6. A6 - Differential parity harness updates (0.5-1 day)
-  - [ ] Extend differential corpus gating to report multicomponent-native parity progress clearly.
-  - [ ] Capture counts for native_error, metadata_mismatch, sample_value_mismatch specific to multicomponent files.
-  - [ ] Location: `jpeg2000.rs` differential test module.
+  - [x] Extend differential corpus gating to report multicomponent-native parity progress clearly.
+  - [x] Capture counts for native_error, metadata_mismatch, sample_value_mismatch specific to multicomponent files.
+  - [x] Location: `jpeg2000.rs` differential test module.
   - Done when:
-  - [ ] Summary output can be used as weekly progress KPI.
+  - [x] Summary output can be used as weekly progress KPI.
 
 7. A7 - Adapter-level behavior check under bridge-enabled builds (0.5 day)
   - [ ] Confirm native path outputs are consumable by adapter fallback/selection logic without regressions.

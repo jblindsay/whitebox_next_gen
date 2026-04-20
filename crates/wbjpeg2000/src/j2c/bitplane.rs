@@ -19,6 +19,45 @@ use super::decode::{DecompositionStorage, TileDecodeContext};
 use crate::error::{bail, DecodingError, Result};
 use crate::reader::BitReader;
 
+#[cfg(feature = "std")]
+fn debug_accounting_trace_enabled() -> bool {
+    std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_TRACE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "std"))]
+fn debug_accounting_trace_enabled() -> bool {
+    false
+}
+
+#[cfg(feature = "std")]
+fn debug_symbol_trace_enabled() -> bool {
+    std::env::var("WBJPEG2000_DEBUG_SYMBOL_TRACE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "std"))]
+fn debug_symbol_trace_enabled() -> bool {
+    false
+}
+
+#[cfg(feature = "std")]
+fn debug_symbol_trace_max() -> usize {
+    std::env::var("WBJPEG2000_DEBUG_SYMBOL_TRACE_MAX")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(48)
+}
+
+#[cfg(not(feature = "std"))]
+fn debug_symbol_trace_max() -> usize {
+    0
+}
+
 /// Decode the layers of the given code block into coefficients.
 ///
 /// The result will be stored in the form of a vector of signs and magnitudes
@@ -59,6 +98,10 @@ fn decode_inner(
     bp_buffers: &mut BitPlaneDecodeBuffers,
 ) -> Option<()> {
     bp_buffers.reset();
+    let debug_trace = debug_accounting_trace_enabled()
+        && ctx.sub_band_type == SubBandType::LowLow
+        && code_block.x_idx == 0
+        && code_block.y_idx == 0;
 
     let mut last_segment_idx = 0;
     let mut coding_passes = 0;
@@ -86,6 +129,26 @@ fn decode_inner(
     }
 
     assert_eq!(coding_passes, code_block.number_of_coding_passes);
+
+    if debug_trace {
+        #[cfg(feature = "std")]
+        eprintln!(
+            "[wbjpeg2000_accounting][bitplane_assemble] subband={:?} cb=({}, {}) missing_bp={} total_passes={} combined_bytes={} segment_ranges={:?} segment_coding_passes={:?}",
+            ctx.sub_band_type,
+            code_block.x_idx,
+            code_block.y_idx,
+            code_block.missing_bit_planes,
+            code_block.number_of_coding_passes,
+            bp_buffers.combined_layers.len(),
+            bp_buffers.segment_ranges,
+            bp_buffers.segment_coding_passes
+        );
+        #[cfg(feature = "std")]
+        eprintln!(
+            "[wbjpeg2000_accounting][bitplane_head] data_head={:02X?}",
+            &bp_buffers.combined_layers[..bp_buffers.combined_layers.len().min(16)]
+        );
+    }
 
     bp_buffers
         .segment_ranges
@@ -593,6 +656,13 @@ impl BitPlaneDecodeContext {
 ///
 /// See also the flow chart in Figure 7.3 in the JPEG2000 book.
 fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) -> Option<()> {
+    let debug_symbol_trace = debug_symbol_trace_enabled()
+        && ctx.sub_band_type == SubBandType::LowLow
+        && ctx.width == 8
+        && ctx.height == 8;
+    let debug_symbol_trace_max = debug_symbol_trace_max();
+    let mut debug_symbol_trace_count = 0usize;
+
     for_each_position(
         ctx.width,
         ctx.height,
@@ -623,6 +693,19 @@ fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) 
                     // stream."
                     let bit = decoder.read_bit(ctx.arithmetic_decoder_context(17))?;
 
+                    if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
+                        #[cfg(feature = "std")]
+                        eprintln!(
+                            "[wbjpeg2000_symbol_trace][cleanup_run_agg] bp={} idx={} ctx=17 bit={} x={} y={}",
+                            ctx.current_bit_position,
+                            cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                            bit,
+                            cur_pos.index_x - 1,
+                            cur_pos.real_y()
+                        );
+                        debug_symbol_trace_count += 1;
+                    }
+
                     if bit == 0 {
                         // "If the symbol 0 is returned, then all four contiguous coefficients in
                         // the column remain insignificant and are set to zero."
@@ -646,6 +729,19 @@ fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) 
                         num_zeroes = (num_zeroes << 1)
                             | decoder.read_bit(ctx.arithmetic_decoder_context(18))?;
 
+                        if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
+                            #[cfg(feature = "std")]
+                            eprintln!(
+                                "[wbjpeg2000_symbol_trace][cleanup_run_pos] bp={} idx={} ctx=18 run_pos={} x={} y={}",
+                                ctx.current_bit_position,
+                                cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                                num_zeroes,
+                                cur_pos.index_x - 1,
+                                cur_pos.real_y()
+                            );
+                            debug_symbol_trace_count += 1;
+                        }
+
                         for _ in 0..num_zeroes {
                             ctx.push_magnitude_bit(*cur_pos, 0);
                             cur_pos.index_y += 1;
@@ -655,7 +751,21 @@ fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) 
                     }
                 } else {
                     let ctx_label = context_label_zero_coding(*cur_pos, ctx);
-                    decoder.read_bit(ctx.arithmetic_decoder_context(ctx_label))?
+                    let bit = decoder.read_bit(ctx.arithmetic_decoder_context(ctx_label))?;
+                    if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
+                        #[cfg(feature = "std")]
+                        eprintln!(
+                            "[wbjpeg2000_symbol_trace][cleanup] bp={} idx={} ctx={} bit={} x={} y={} use_rl=0",
+                            ctx.current_bit_position,
+                            cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                            ctx_label,
+                            bit,
+                            cur_pos.index_x - 1,
+                            cur_pos.real_y()
+                        );
+                        debug_symbol_trace_count += 1;
+                    }
+                    bit
                 };
 
                 ctx.push_magnitude_bit(*cur_pos, bit);

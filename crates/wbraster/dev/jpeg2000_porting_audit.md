@@ -311,6 +311,48 @@ Status: in progress.
       - Collect corresponding `wbjpeg2000`-side block-input/accounting trace
         for the same fixture/block and compare declared segment and consumed
         byte windows side by side.
+  - Re-entry Step 2 first comparison result (2026-04-20):
+    - Reference artifact captured:
+      - `crates/wbraster/dev/baselines/jpeg2000_step2_reference_trace_2026-04-20_rgb8x8.txt`
+    - First LL-block packet/body accounting matches between native and
+      `wbjpeg2000` for the canonical failing fixture (`rgb_8x8_lossless.jp2`,
+      component 0, LL CB(0,0)):
+      - `missing_bp=2`
+      - `passes=43`
+      - `lblock=3`
+      - first declared segment length `=69` bytes
+      - first 16 payload bytes match exactly:
+        `[11, 50, 54, AF, 86, F9, 0C, 15, 11, DE, 73, 6E, EF, 8D, 03, AE]`
+    - Equivalent matches are also visible for the later LL block slices in the
+      same fixture (`60` bytes with `missing_bp=9`, and `18` bytes with
+      `missing_bp=10`).
+    - Decision:
+      - Packet/body span accounting is not the active first-block mismatch for
+        this fixture, so no runtime semantics change was made from this result.
+      - The next highest-value move is Step 3 symbol-level/reference event
+        tracing inside tier-1 decode rather than more packet-body edits.
+  - Re-entry Step 3 first symbol-trace result (2026-04-20):
+    - Artifact:
+      - `crates/wbraster/dev/baselines/jpeg2000_step3_symbol_trace_2026-04-20_rgb8x8.txt`
+    - Native standard cleanup stream and `wbjpeg2000` diverge immediately at
+      the top of the first LL block (`rgb_8x8_lossless`, component 0, bp14):
+      - Native standard begins with direct per-sample cleanup decisions such as
+        `(bp14, idx0, ctx1, bit1)`, `(idx8, ctx2, bit1)`, `(idx16, ctx2, bit0)`.
+      - `wbjpeg2000` begins with cleanup run-length mode:
+        - aggregate decode `ctx=17` at `idx0` with `bit=1`
+        - run-position decode `ctx=18` at `idx0` with `run_pos=0`
+        - followed by per-sample cleanup symbols beginning at `idx8` with
+          markedly different context labels (`ctx=3`, then `ctx=6/7` patterns).
+    - Interpretation:
+      - The active lead is now cleanup run-mode / cleanup zero-coding context
+        semantics at the top of the first LL block, not packet/body assembly.
+      - This also explains why simply enabling the current native run-mode path
+        was regressive: the divergence appears to be in run-mode correctness,
+        not merely in whether the branch is taken.
+    - Runtime decision:
+      - No runtime semantic change retained yet.
+      - Next safe move is to trace or port `wbjpeg2000` cleanup run-mode logic
+        more faithfully before re-enabling any native run-mode path.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

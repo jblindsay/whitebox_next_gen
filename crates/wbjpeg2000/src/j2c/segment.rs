@@ -12,6 +12,19 @@ use super::tile::{Tile, TilePart};
 use crate::error::{bail, DecodingError, Result, TileError};
 use crate::reader::BitReader;
 
+#[cfg(feature = "std")]
+fn debug_accounting_trace_enabled() -> bool {
+    std::env::var("WBJPEG2000_DEBUG_ACCOUNTING_TRACE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "std"))]
+fn debug_accounting_trace_enabled() -> bool {
+    false
+}
+
 pub(crate) const MAX_BITPLANE_COUNT: u8 = 32;
 
 pub(crate) fn parse<'a, 'b>(
@@ -175,6 +188,7 @@ fn resolve_classic_segments(
         return None;
     };
     let code_blocks = &mut storage.code_blocks[precinct.code_blocks.clone()];
+    let debug_trace = debug_accounting_trace_enabled();
 
     for code_block in code_blocks {
         let inclusion = resolve_code_block_inclusion(
@@ -206,6 +220,32 @@ fn resolve_classic_segments(
 
         let previous_layers_passes = code_block.number_of_coding_passes;
         let cumulative_passes = previous_layers_passes.checked_add(added_coding_passes)?;
+
+        if debug_trace
+            && progression_data.component == 0
+            && progression_data.resolution == 0
+            && progression_data.precinct == 0
+            && progression_data.layer_num == 0
+            && code_block.x_idx == 0
+            && code_block.y_idx == 0
+        {
+            #[cfg(feature = "std")]
+            eprintln!(
+                "[wbjpeg2000_accounting][segment_header] subband={:?} comp={} res={} precinct={} layer={} cb=({}, {}) missing_bp={} prev_passes={} added_passes={} cumulative_passes={} lblock={}",
+                sub_band.sub_band_type,
+                progression_data.component,
+                progression_data.resolution,
+                progression_data.precinct,
+                progression_data.layer_num,
+                code_block.x_idx,
+                code_block.y_idx,
+                code_block.missing_bit_planes,
+                previous_layers_passes,
+                added_coding_passes,
+                cumulative_passes,
+                code_block.l_block
+            );
+        }
 
         if cumulative_passes > MAX_CODING_PASSES {
             return None;
@@ -258,6 +298,26 @@ fn resolve_classic_segments(
                 data: &[],
             });
 
+            if debug_trace
+                && progression_data.component == 0
+                && progression_data.resolution == 0
+                && progression_data.precinct == 0
+                && progression_data.layer_num == 0
+                && code_block.x_idx == 0
+                && code_block.y_idx == 0
+            {
+                #[cfg(feature = "std")]
+                eprintln!(
+                    "[wbjpeg2000_accounting][segment_length] segment={} coding_passes={} length={} lblock={} cb=({}, {})",
+                    segment,
+                    coding_passes_for_segment,
+                    length,
+                    code_block.l_block,
+                    code_block.x_idx,
+                    code_block.y_idx
+                );
+            }
+
             ltrace!("length({segment}) {}", length);
 
             Some(())
@@ -287,6 +347,23 @@ fn resolve_classic_segments(
         layer.segments = Some(start..end);
         code_block.number_of_coding_passes += added_coding_passes;
         code_block.non_empty_layer_count += 1;
+
+        if debug_trace
+            && progression_data.component == 0
+            && progression_data.resolution == 0
+            && progression_data.precinct == 0
+            && progression_data.layer_num == 0
+            && code_block.x_idx == 0
+            && code_block.y_idx == 0
+        {
+            #[cfg(feature = "std")]
+            eprintln!(
+                "[wbjpeg2000_accounting][segment_commit] layer_segments={:?} total_passes={} non_empty_layers={}",
+                layer.segments,
+                code_block.number_of_coding_passes,
+                code_block.non_empty_layer_count
+            );
+        }
     }
 
     Some(())

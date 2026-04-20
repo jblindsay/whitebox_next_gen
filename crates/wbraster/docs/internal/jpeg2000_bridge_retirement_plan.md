@@ -371,6 +371,19 @@ Step 2. Audit packet/body and segment accounting (1-2 days)
   - Next subtask:
     - Add matching `wbjpeg2000` reference-side accounting trace for the same
       fixture/block and diff packet-body span accounting line by line.
+  - First comparison result (2026-04-20):
+    - Reference artifact:
+      - `crates/wbraster/dev/baselines/jpeg2000_step2_reference_trace_2026-04-20_rgb8x8.txt`
+    - Native and `wbjpeg2000` agree on first-block packet/body accounting for
+      the canonical failing LL block (same `missing_bp`, coding-pass totals,
+      first segment length, and payload-byte head).
+    - Outcome:
+      - The packet/body accounting hypothesis is cleared for this first-block
+        fixture case.
+      - No runtime semantics change was retained from Step 2, because the
+        evidence does not justify one.
+      - The next active work item is Step 3: side-by-side symbol/context trace
+        harness inside tier-1 decode.
 
 Step 3. Build a side-by-side LL reference trace harness (1-1.5 days)
 - Objective:
@@ -392,6 +405,20 @@ Step 3. Build a side-by-side LL reference trace harness (1-1.5 days)
   - Audit notes describing the first proven divergence point.
 - Verification commands:
   - `JPEG2000_DEBUG_CL_SIG_STREAM=1 JPEG2000_DEBUG_LL_BLOCK_AB=1 cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+- Status (2026-04-20): started.
+  - Artifact:
+    - `crates/wbraster/dev/baselines/jpeg2000_step3_symbol_trace_2026-04-20_rgb8x8.txt`
+  - First result:
+    - Native standard cleanup symbols diverge immediately from `wbjpeg2000`
+      at the top of the first LL block.
+    - `wbjpeg2000` enters cleanup run-length mode first (`ctx17` aggregate,
+      then `ctx18` run-position), while the current native standard path begins
+      with direct per-sample cleanup context decodes.
+  - Runtime decision:
+    - Do not retain a blind runtime semantic patch yet.
+    - The next focused implementation step should be a faithful trace-backed
+      correction of native cleanup run-mode / zero-coding semantics, followed
+      immediately by matrix validation.
 
 Step 4. Port the smallest proven semantic slice (1-2 days)
 - Objective:

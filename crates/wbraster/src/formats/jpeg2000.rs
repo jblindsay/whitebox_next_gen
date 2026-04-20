@@ -466,6 +466,50 @@ fn write_with_writer(writer: jp2::GeoJp2Writer, path: &str, raster: &Raster) -> 
 }
 
 #[cfg(all(test, feature = "jpeg2000-vendored-bridge"))]
+mod adapter_read_path_tests {
+    use super::*;
+
+    #[test]
+    fn a7_adapter_read_multiband_supported_fixture() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/sentinel_style_16x16_4band_lossless.jp2"
+        );
+        let ras = read(fixture).expect("A7: 4-band fixture should decode through adapter");
+
+        assert_eq!(ras.bands, 4, "A7: expected 4 bands");
+        assert_eq!(ras.rows, 16, "A7: expected 16 rows");
+        assert_eq!(ras.cols, 16, "A7: expected 16 cols");
+        assert_eq!(ras.data_type, DataType::U16, "A7: expected U16 output");
+
+        // Expected pattern from fixture generation: base=(band+1)*1000 + row*16 + col.
+        assert_eq!(ras.get(0, 0, 0) as u16, 1000, "A7 probe b0(0,0)");
+        assert_eq!(ras.get(0, 15, 15) as u16, 1255, "A7 probe b0(15,15)");
+        assert_eq!(ras.get(3, 0, 0) as u16, 4000, "A7 probe b3(0,0)");
+        assert_eq!(ras.get(3, 15, 15) as u16, 4255, "A7 probe b3(15,15)");
+    }
+
+    #[test]
+    fn a7_adapter_read_errors_when_bridge_fails_on_multiband() {
+        let fixture = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/multiband_5ch_16x16_lossless.jp2"
+        );
+        let err = read(fixture).expect_err("A7: 5-band fixture should fail bridge path and refuse native multiband fallback");
+
+        match err {
+            RasterError::Other(msg) => {
+                assert!(
+                    msg.contains("vendored decode failed for multiband image"),
+                    "A7: expected explicit multiband bridge-failure guard, got: {msg}"
+                );
+            }
+            other => panic!("A7: expected RasterError::Other, got {other:?}"),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "jpeg2000-vendored-bridge"))]
 mod differential_tests {
     use super::*;
     use std::collections::BTreeSet;

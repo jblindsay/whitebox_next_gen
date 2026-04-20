@@ -110,16 +110,31 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
   - [x] Summary output can be used as weekly progress KPI.
 
 7. A7 - Adapter-level behavior check under bridge-enabled builds (0.5 day)
-  - [ ] Confirm native path outputs are consumable by adapter fallback/selection logic without regressions.
-  - [ ] Location: `jpeg2000.rs` read adapter path.
+  - [x] Confirm native path outputs are consumable by adapter fallback/selection logic without regressions.
+  - [x] Location: `jpeg2000.rs` read adapter path.
   - Done when:
-  - [ ] Existing read-path tests and Sentinel smoke checks remain green.
+  - [x] Existing read-path tests and Sentinel smoke checks remain green.
 
 8. A8 - Phase A go/no-go report (0.5 day)
-  - [ ] Record which multicomponent classes are now supported natively and which remain explicitly out-of-scope for Phase A.
-  - [ ] Update this plan with checkbox status and residual blockers.
+  - [x] Record which multicomponent classes are now supported natively and which remain explicitly out-of-scope for Phase A.
+  - [x] Update this plan with checkbox status and residual blockers.
   - Done when:
-  - [ ] Gate A decision is evidence-backed (tests + differential metrics).
+  - [x] Gate A decision is evidence-backed (tests + differential metrics).
+
+A8 Gate A report (2026-04-19):
+- Decision: **No-Go** for bridge retirement at end of Phase A.
+- Evidence:
+  - A5 fixture validation tests are green through adapter path (bridge-enabled default) for RGB, Sentinel-style multiband, and tiled multicomponent fixtures.
+  - A6 differential harness reports multicomponent-specific KPIs and currently shows multicomponent sample-value mismatches on all local multicomponent fixtures (`multicomponent_sample_value_mismatch=3`, `multicomponent_native_error=0`, `multicomponent_metadata_mismatch=0`).
+  - A7 adapter read-path tests confirm guarded behavior: supported multiband bridge decode succeeds, and bridge-fail multiband inputs are blocked from unsafe native fallback.
+- Native multicomponent status:
+  - In-scope and partially complete: packet traversal / component handling / metadata alignment infrastructure.
+  - Not yet parity-complete: multicomponent sample-value correctness against bridge baseline.
+- Explicitly out-of-scope for Phase A completion:
+  - Full POC traversal support (Phase B).
+  - Full PPM/PPT packet-header sourcing support (Phase C).
+- Residual blocker to Gate A "Go":
+  - Eliminate multicomponent sample-value mismatches in differential corpus (target: drive `multicomponent_sample_value_mismatch` to 0 for agreed fixture set).
 
 Phase A estimate subtotal: 5.5-10 days (roughly 1.5-3 weeks focused work; 2-4 weeks calendar including review/iteration).
 

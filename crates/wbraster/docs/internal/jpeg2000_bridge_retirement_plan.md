@@ -104,7 +104,7 @@ Sprint target: remove multicomponent fail-fast for supported codestreams while p
 
 6. A6 - Differential parity harness updates (0.5-1 day)
   - [x] Extend differential corpus gating to report multicomponent-native parity progress clearly.
-  - [x] Capture counts for native_error, metadata_mismatch, sample_value_mismatch specific to multicomponent files.
+  - [x] Capture counts for native_error, bridge_error, metadata_mismatch, sample_count_mismatch, and sample_value_mismatch specific to multicomponent files.
   - [x] Add multicomponent-specific threshold env gates for KPI enforcement (`JPEG2000_DIFF_MAX_MULTICOMPONENT_*`).
   - [x] Enrich mismatch diagnostics with localization fields (`band`, `row`, `col`, `pixel`, `abs_err`).
   - [x] Location: `jpeg2000.rs` differential test module.

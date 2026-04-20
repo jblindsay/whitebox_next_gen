@@ -86,7 +86,9 @@ Status: in progress.
   - threshold-based pass/fail gates via `JPEG2000_DIFF_MAX_*` and `JPEG2000_DIFF_MIN_OK`
   - multicomponent-specific threshold gates via:
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_NATIVE_ERROR`
+    - `JPEG2000_DIFF_MAX_MULTICOMPONENT_BRIDGE_ERROR`
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_METADATA_MISMATCH`
+    - `JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_COUNT_MISMATCH`
     - `JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_VALUE_MISMATCH`
   - sample mismatch details now include localization fields:
     - `band`, `row`, `col`, and within-band `pixel` index

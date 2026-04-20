@@ -528,7 +528,9 @@ mod differential_tests {
         sample_count_mismatch: usize,
         sample_value_mismatch: usize,
         multicomponent_native_error: usize,
+        multicomponent_bridge_error: usize,
         multicomponent_metadata_mismatch: usize,
+        multicomponent_sample_count_mismatch: usize,
         multicomponent_sample_value_mismatch: usize,
     }
 
@@ -639,7 +641,9 @@ mod differential_tests {
         let max_sample_count_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_COUNT_MISMATCH");
         let max_sample_value_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_VALUE_MISMATCH");
         let max_multicomponent_native_error = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_NATIVE_ERROR");
+        let max_multicomponent_bridge_error = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_BRIDGE_ERROR");
         let max_multicomponent_metadata_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_METADATA_MISMATCH");
+        let max_multicomponent_sample_count_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_COUNT_MISMATCH");
         let max_multicomponent_sample_value_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_VALUE_MISMATCH");
         let min_ok = parse_env_usize("JPEG2000_DIFF_MIN_OK");
         let has_thresholds = max_native_error.is_some()
@@ -648,7 +652,9 @@ mod differential_tests {
             || max_sample_count_mismatch.is_some()
             || max_sample_value_mismatch.is_some()
             || max_multicomponent_native_error.is_some()
+            || max_multicomponent_bridge_error.is_some()
             || max_multicomponent_metadata_mismatch.is_some()
+            || max_multicomponent_sample_count_mismatch.is_some()
             || max_multicomponent_sample_value_mismatch.is_some()
             || min_ok.is_some();
 
@@ -700,6 +706,9 @@ mod differential_tests {
                 Ok(v) => v,
                 Err(e) => {
                     summary.bridge_error += 1;
+                    if is_multicomponent {
+                        summary.multicomponent_bridge_error += 1;
+                    }
                     details.push(format!("BRIDGE_DECODE_ERROR|{}|{}", path, e));
                     continue;
                 }
@@ -719,6 +728,9 @@ mod differential_tests {
 
             if native_data.len() != bridge_data.len() {
                 summary.sample_count_mismatch += 1;
+                if is_multicomponent {
+                    summary.multicomponent_sample_count_mismatch += 1;
+                }
                 details.push(format!(
                     "SAMPLE_COUNT_MISMATCH|{}|native={} bridge={}",
                     path,
@@ -746,7 +758,7 @@ mod differential_tests {
         }
 
         eprintln!(
-            "JPEG2000 differential summary: fixtures_total={} multicomponent_fixtures={} ok={} native_error={} native_unsupported_packet_header_markers={} native_unsupported_poc={} bridge_error={} metadata_mismatch={} sample_count_mismatch={} sample_value_mismatch={} multicomponent_native_error={} multicomponent_metadata_mismatch={} multicomponent_sample_value_mismatch={}",
+            "JPEG2000 differential summary: fixtures_total={} multicomponent_fixtures={} ok={} native_error={} native_unsupported_packet_header_markers={} native_unsupported_poc={} bridge_error={} metadata_mismatch={} sample_count_mismatch={} sample_value_mismatch={} multicomponent_native_error={} multicomponent_bridge_error={} multicomponent_metadata_mismatch={} multicomponent_sample_count_mismatch={} multicomponent_sample_value_mismatch={}",
             summary.fixtures_total,
             summary.multicomponent_fixtures,
             summary.ok,
@@ -758,7 +770,9 @@ mod differential_tests {
             summary.sample_count_mismatch,
             summary.sample_value_mismatch,
             summary.multicomponent_native_error,
+            summary.multicomponent_bridge_error,
             summary.multicomponent_metadata_mismatch,
+            summary.multicomponent_sample_count_mismatch,
             summary.multicomponent_sample_value_mismatch
         );
         for line in &details {
@@ -795,8 +809,18 @@ mod differential_tests {
             );
             let _ = writeln!(
                 &mut report,
+                "    \"multicomponent_bridge_error\": {},",
+                summary.multicomponent_bridge_error
+            );
+            let _ = writeln!(
+                &mut report,
                 "    \"multicomponent_metadata_mismatch\": {},",
                 summary.multicomponent_metadata_mismatch
+            );
+            let _ = writeln!(
+                &mut report,
+                "    \"multicomponent_sample_count_mismatch\": {},",
+                summary.multicomponent_sample_count_mismatch
             );
             let _ = writeln!(
                 &mut report,
@@ -860,11 +884,27 @@ mod differential_tests {
                         v
                     );
                 }
+                if let Some(v) = max_multicomponent_bridge_error {
+                    assert!(
+                        summary.multicomponent_bridge_error <= v,
+                        "multicomponent_bridge_error {} exceeds threshold {}",
+                        summary.multicomponent_bridge_error,
+                        v
+                    );
+                }
                 if let Some(v) = max_multicomponent_metadata_mismatch {
                     assert!(
                         summary.multicomponent_metadata_mismatch <= v,
                         "multicomponent_metadata_mismatch {} exceeds threshold {}",
                         summary.multicomponent_metadata_mismatch,
+                        v
+                    );
+                }
+                if let Some(v) = max_multicomponent_sample_count_mismatch {
+                    assert!(
+                        summary.multicomponent_sample_count_mismatch <= v,
+                        "multicomponent_sample_count_mismatch {} exceeds threshold {}",
+                        summary.multicomponent_sample_count_mismatch,
                         v
                     );
                 }

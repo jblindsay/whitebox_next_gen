@@ -574,10 +574,19 @@ mod writer_tests {
             let decoded = jp2.read_band_u16(band).expect("A4: band should decode");
             assert_eq!(decoded.len(), (w * h) as usize,
                 "A4: band {} length mismatch", band);
-            // All values must be in a valid unsigned 16-bit range (not sign-extended negatives).
-            assert!(decoded.iter().all(|&v| v <= 65535),
-                "A4: band {} has out-of-range value", band);
+            // Determinism check: repeated decode of same band must be identical.
+            let decoded_again = jp2.read_band_u16(band).expect("A4: repeated band decode should succeed");
+            assert_eq!(decoded, decoded_again,
+                "A4: band {} decode is not deterministic across repeated reads", band);
         }
+
+        // Component-separation sanity: decoded bands should remain distinct.
+        let b0 = jp2.read_band_u16(0).expect("A4: band 0 decode");
+        let b1 = jp2.read_band_u16(1).expect("A4: band 1 decode");
+        let b2 = jp2.read_band_u16(2).expect("A4: band 2 decode");
+        assert_ne!(b0, b1, "A4: band 0 and band 1 should not be identical");
+        assert_ne!(b1, b2, "A4: band 1 and band 2 should not be identical");
+        assert_ne!(b0, b2, "A4: band 0 and band 2 should not be identical");
     }
 
     #[test]
@@ -611,11 +620,10 @@ mod writer_tests {
         assert_eq!(b1.len(), npix, "A4: band 1 length mismatch");
         assert_eq!(b2.len(), npix, "A4: band 2 length mismatch");
 
-        // No sign-inversion: all decoded u16 values must be in [0, 65535] (always
-        // true for u16, but this also ensures read_band_u16 did not panic/clamp).
-        assert!(b0.iter().all(|&v| v <= 65535), "A4: band 0 out-of-range value");
-        assert!(b1.iter().all(|&v| v <= 65535), "A4: band 1 out-of-range value");
-        assert!(b2.iter().all(|&v| v <= 65535), "A4: band 2 out-of-range value");
+        // Determinism check on repeated reads.
+        assert_eq!(b0, jp2.read_band_u16(0).expect("A4: repeated band 0 decode"));
+        assert_eq!(b1, jp2.read_band_u16(1).expect("A4: repeated band 1 decode"));
+        assert_eq!(b2, jp2.read_band_u16(2).expect("A4: repeated band 2 decode"));
 
         // Component demux: bands must not all collapse to the same output.
         assert_ne!(b0, b1, "A4: band 0 and band 1 should not be identical");

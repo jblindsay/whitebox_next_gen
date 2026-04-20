@@ -629,12 +629,18 @@ mod differential_tests {
         let max_metadata_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_METADATA_MISMATCH");
         let max_sample_count_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_COUNT_MISMATCH");
         let max_sample_value_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_SAMPLE_VALUE_MISMATCH");
+        let max_multicomponent_native_error = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_NATIVE_ERROR");
+        let max_multicomponent_metadata_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_METADATA_MISMATCH");
+        let max_multicomponent_sample_value_mismatch = parse_env_usize("JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_VALUE_MISMATCH");
         let min_ok = parse_env_usize("JPEG2000_DIFF_MIN_OK");
         let has_thresholds = max_native_error.is_some()
             || max_bridge_error.is_some()
             || max_metadata_mismatch.is_some()
             || max_sample_count_mismatch.is_some()
             || max_sample_value_mismatch.is_some()
+            || max_multicomponent_native_error.is_some()
+            || max_multicomponent_metadata_mismatch.is_some()
+            || max_multicomponent_sample_value_mismatch.is_some()
             || min_ok.is_some();
 
         let mut summary = DiffSummary::default();
@@ -834,6 +840,30 @@ mod differential_tests {
                 }
                 if let Some(v) = max_sample_value_mismatch {
                     assert!(summary.sample_value_mismatch <= v, "sample_value_mismatch {} exceeds threshold {}", summary.sample_value_mismatch, v);
+                }
+                if let Some(v) = max_multicomponent_native_error {
+                    assert!(
+                        summary.multicomponent_native_error <= v,
+                        "multicomponent_native_error {} exceeds threshold {}",
+                        summary.multicomponent_native_error,
+                        v
+                    );
+                }
+                if let Some(v) = max_multicomponent_metadata_mismatch {
+                    assert!(
+                        summary.multicomponent_metadata_mismatch <= v,
+                        "multicomponent_metadata_mismatch {} exceeds threshold {}",
+                        summary.multicomponent_metadata_mismatch,
+                        v
+                    );
+                }
+                if let Some(v) = max_multicomponent_sample_value_mismatch {
+                    assert!(
+                        summary.multicomponent_sample_value_mismatch <= v,
+                        "multicomponent_sample_value_mismatch {} exceeds threshold {}",
+                        summary.multicomponent_sample_value_mismatch,
+                        v
+                    );
                 }
                 if let Some(v) = min_ok {
                     assert!(summary.ok >= v, "ok {} is below minimum threshold {}", summary.ok, v);

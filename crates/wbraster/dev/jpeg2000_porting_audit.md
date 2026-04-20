@@ -84,6 +84,10 @@ Status: in progress.
 - Differential harness enhancements:
   - optional JSON report output via `JPEG2000_DIFF_REPORT`
   - threshold-based pass/fail gates via `JPEG2000_DIFF_MAX_*` and `JPEG2000_DIFF_MIN_OK`
+  - multicomponent-specific threshold gates via:
+    - `JPEG2000_DIFF_MAX_MULTICOMPONENT_NATIVE_ERROR`
+    - `JPEG2000_DIFF_MAX_MULTICOMPONENT_METADATA_MISMATCH`
+    - `JPEG2000_DIFF_MAX_MULTICOMPONENT_SAMPLE_VALUE_MISMATCH`
 - Differential harness now tracks `native_unsupported_packet_header_markers` as
   an explicit subtype of `native_error` (for `PLM`/`PLT`/`PPM`/`PPT` workflows).
 - Baseline corpus run (3 Sentinel-2 `R10m` band fixtures) report:

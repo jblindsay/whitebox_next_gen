@@ -291,6 +291,136 @@ Definition of done for re-entry:
 - The first retained runtime change survives full matrix reruns without
   regression in the existing baseline profiles.
 
+Immediate execution posture (effective now):
+- Do not spend additional Phase A time on native LL cleanup-context
+  experimentation.
+- Keep bridge-backed decode as the operational default for problematic
+  multicomponent JP2 classes.
+- Restrict JPEG2000 work in the near term to non-blocking items only:
+  fixture hygiene, negative-test coverage, marker-support planning,
+  documentation, and bridge-safe regression checks.
+- Prefer roadmap execution order:
+  1. Non-JPEG2000 roadmap work that is fully unblocked by this parity gap.
+  2. JPEG2000 work that does not depend on native multicomponent value parity
+     being solved.
+  3. Native parity recovery only when the dedicated follow-up milestone is
+     explicitly scheduled.
+
+Allowed near-term JPEG2000 tasks under fallback posture:
+- Maintain or expand corpus fixtures and differential reporting.
+- Improve unsupported-marker diagnostics and fail-fast coverage.
+- Prepare POC and PPM/PPT fixtures, planning notes, and parser scaffolding
+  that do not require native parity closure.
+- Add regression tests that protect bridge-backed behavior for the currently
+  problematic classes.
+
+Deferred until the follow-up milestone:
+- Additional LL cleanup/significance experiments.
+- Native-first cutover decisions.
+- Any attempt to claim Gate A parity closure.
+
+#### Follow-up milestone implementation sequence
+
+Step 1. Freeze the re-entry baseline (0.5 day)
+- Objective:
+  - Reconfirm the exact failing signature before any new instrumentation or
+    runtime change is introduced.
+- Primary files:
+  - `crates/wbraster/dev/run_jpeg2000_parity_matrix.sh`
+  - `crates/wbraster/dev/jpeg2000_porting_audit.md`
+- Deliverables:
+  - Fresh matrix output for the agreed fixture trio.
+  - One pinned baseline note in the audit recording first-mismatch rows and
+    active decoder profile assumptions.
+- Verification commands:
+  - `cargo check -p wbraster`
+  - `./dev/run_jpeg2000_parity_matrix.sh`
+
+Step 2. Audit packet/body and segment accounting (1-2 days)
+- Objective:
+  - Verify that LL code-block byte windows, coding-pass totals, and declared
+    segment spans match `wbjpeg2000` reference expectations before touching
+    tier-1 semantics again.
+- Primary files:
+  - `crates/wbraster/src/formats/jpeg2000_core/reader.rs`
+  - `crates/wbjpeg2000/src/j2c/decode.rs`
+  - `crates/wbjpeg2000/src/j2c/bitplane.rs`
+- Work items:
+  - Add targeted debug output for first failing LL block packet spans,
+    `passes`, `lblock`, declared segment lengths, and accumulated body bytes.
+  - Compare native packet/body assembly against the reference implementation on
+    the same fixture/block.
+  - Reject any new entropy hypothesis until byte-accounting mismatches are
+    either fixed or ruled out.
+- Checkpoint rule:
+  - Do not proceed to Step 3 unless native and reference block-input slices are
+    either aligned or the remaining discrepancy is precisely described.
+- Verification commands:
+  - `cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+  - `JPEG2000_DEBUG_LL_BLOCK_AB=1 cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+
+Step 3. Build a side-by-side LL reference trace harness (1-1.5 days)
+- Objective:
+  - Make standard-vs-reference divergence observable at the symbol stream and
+    byte-consumption level for the first failing LL block.
+- Primary files:
+  - `crates/wbraster/src/formats/jpeg2000_core/entropy.rs`
+  - `crates/wbraster/src/formats/jpeg2000_core/reader.rs`
+  - `crates/wbjpeg2000/src/j2c/bitplane.rs`
+- Work items:
+  - Capture ordered trace events for significance decode, sign decode, MR
+    decode, MQ context label, decoded bit, and byte/bit offset checkpoints.
+  - Keep tracing bounded to the first failing LL block and gated by env vars.
+  - Ensure traces can be compared side by side without modifying runtime
+    behavior.
+- Deliverables:
+  - A repeatable trace command that emits comparable native/reference LL event
+    streams for one fixture.
+  - Audit notes describing the first proven divergence point.
+- Verification commands:
+  - `JPEG2000_DEBUG_CL_SIG_STREAM=1 JPEG2000_DEBUG_LL_BLOCK_AB=1 cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+
+Step 4. Port the smallest proven semantic slice (1-2 days)
+- Objective:
+  - Replace one verified divergent behavior with reference-backed logic instead
+    of trying another speculative remap.
+- Primary files:
+  - `crates/wbraster/src/formats/jpeg2000_core/entropy.rs`
+  - `crates/wbjpeg2000/src/j2c/bitplane.rs`
+- Work items:
+  - Choose the earliest divergence that has a coherent reference-backed fix.
+  - Keep the change narrow and, if practical, behind a short-lived diagnostic
+    toggle until matrix results are known.
+  - Revert immediately if the matrix shows only shape changes without net gain.
+- Acceptance threshold for retaining the change:
+  - Either mismatch-class reduction, or stable first-mismatch improvement on at
+    least 2 of 3 agreed fixtures with no regression.
+- Verification commands:
+  - `cargo check -p wbraster`
+  - `./dev/run_jpeg2000_parity_matrix.sh`
+
+Step 5. Harden and decide (0.5-1 day)
+- Objective:
+  - Convert any winning slice into a stable retained state or formally stop
+    again with evidence.
+- Work items:
+  - Remove failed toggles and dead-end probes.
+  - Update the audit with retained behavior only.
+  - Re-run corpus and targeted JPEG2000 tests.
+  - Produce a fresh go/no-go checkpoint for whether the milestone continues.
+- Verification commands:
+  - `cargo check -p wbraster`
+  - `cargo test -p wbraster jpeg2000_native_vs_bridge_differential_corpus -- --nocapture`
+  - `./dev/run_jpeg2000_parity_matrix.sh`
+
+Checkpoint discipline for the follow-up milestone:
+- Commit only after a stable checkpoint: baseline frozen, trace harness added,
+  first retained semantic fix, or final decision state.
+- Revert non-winning runtime changes in the same working session that proves
+  they are non-winning.
+- Do not continue beyond Step 3 if evidence still does not isolate a smaller
+  divergence unit than the current whole-block mismatch signal.
+
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:
 - crates/wbraster/src/formats/jpeg2000_core/reader.rs

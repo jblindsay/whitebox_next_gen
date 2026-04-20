@@ -1,0 +1,642 @@
+warning: fields `encoded_codestream` and `uses_openjph_htj2k` are never read
+   --> crates/wbjpeg2000/src/lib.rs:151:16
+    |
+147 | pub struct Image<'a> {
+    |            ----- fields in this struct
+...
+151 |     pub(crate) encoded_codestream: &'a [u8],
+    |                ^^^^^^^^^^^^^^^^^^
+...
+160 |     pub(crate) uses_openjph_htj2k: bool,
+    |                ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_raw_bitmap_to_u8` is never used
+   --> crates/wbjpeg2000/src/lib.rs:379:4
+    |
+379 | fn copy_raw_bitmap_to_u8(raw: &RawBitmap, buf: &mut [u8]) {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `wbjpeg2000` (lib) generated 2 warnings
+   Compiling wbraster v0.1.2 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbraster)
+warning: unused import: `wbraster::error::RasterError`
+    --> crates/wbraster/tests/integration.rs:2069:9
+     |
+2069 |     use wbraster::error::RasterError;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wbraster` (test "integration") generated 1 warning (run `cargo fix --test "integration" -p wbraster` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.86s
+     Running unittests src/lib.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/wbraster-9ea1ef0c4ad085e8)
+
+running 1 test
+[decode_component] component=0 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=13 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=12 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=11 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=10 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=9 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=8 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=39 ctx=17 bit=0 x=7 y=4
+[cl_sig_stream][standard] w=8 h=8 num_bp=15 samples=[]
+[decode_component] component=1 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=39 ctx=17 bit=0 x=7 y=4
+[cl_sig_stream][standard] w=8 h=8 num_bp=8 samples=[]
+[decode_component] component=2 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=5 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=4 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=3 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=2 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=1 idx=39 ctx=17 bit=0 x=7 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=0 ctx=17 bit=0 x=0 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=1 ctx=17 bit=0 x=1 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=2 ctx=17 bit=0 x=2 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=3 ctx=17 bit=0 x=3 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=4 ctx=17 bit=0 x=4 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=5 ctx=17 bit=0 x=5 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=6 ctx=17 bit=0 x=6 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=7 ctx=17 bit=0 x=7 y=0
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=32 ctx=17 bit=0 x=0 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=33 ctx=17 bit=0 x=1 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=34 ctx=17 bit=0 x=2 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=35 ctx=17 bit=0 x=3 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=36 ctx=17 bit=0 x=4 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=37 ctx=17 bit=0 x=5 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=38 ctx=17 bit=0 x=6 y=4
+[native_symbol_trace][cleanup_run_agg] bp=0 idx=39 ctx=17 bit=0 x=7 y=4
+[cl_sig_stream][standard] w=8 h=8 num_bp=7 samples=[]
+[bridge] Image dimensions: 8x8
+[bridge] Color space: RGB
+[bridge] Original bit depth: 16
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=14 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=14 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=7 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=7 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=6 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[bridge] Raw dimensions: 8x8
+[bridge] Raw bytes_per_sample: 2
+[bridge] Raw num_components: 3
+[bridge] Raw bit_depth: 16
+[bridge] Raw data length: 384
+[bridge] 16-bit path: first 10 pixels (component 0): [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+[bridge] 16-bit path: first 10 pixels after correction: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+JPEG2000 differential summary: fixtures_total=1 multicomponent_fixtures=1 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=1 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=1
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=32768 bridge=100 abs_err=32668 eps=0
+test formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 0.01s
+
+     Running tests/integration.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/integration-5f935e281ff4dbda)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/reprojection_parity.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/reprojection_parity-623e1739416b87bb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

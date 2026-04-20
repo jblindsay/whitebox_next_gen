@@ -353,6 +353,97 @@ Status: in progress.
       - No runtime semantic change retained yet.
       - Next safe move is to trace or port `wbjpeg2000` cleanup run-mode logic
         more faithfully before re-enabling any native run-mode path.
+  - Re-entry Step 4 first trace-backed correction result (2026-04-20):
+    - Artifacts:
+      - `crates/wbraster/dev/baselines/jpeg2000_step4_candidate_trace_2026-04-20_rgb8x8.txt`
+      - `crates/wbraster/dev/baselines/jpeg2000_step4_runmode_enabled_trace_2026-04-20_rgb8x8.txt`
+      - `crates/wbraster/dev/baselines/jpeg2000_step4_native_vs_reference_runtrace_2026-04-20_rgb8x8.txt`
+    - Changes tested:
+      - Threaded subband kind into native standard tier-1 decode.
+      - Replaced count-based standard zero-coding selection with
+        subband-aware lookup tables.
+      - Corrected standard sign/MR/run/uniform context numbering.
+    - Result:
+      - Compile passed, but the canonical fixture KPI did not improve.
+      - With default run-mode posture preserved, `rgb_8x8_lossless.jp2`
+        remained at `native=4096` vs `bridge=100` for the first mismatch.
+      - With `JPEG2000_STDJK_ENABLE_RUNMODE=1`, the mismatch worsened to
+        `native=32768` vs `bridge=100`.
+      - New native run-trace evidence shows the first cleanup run-aggregate
+        decision already diverges from the reference: native emits
+        `ctx17 bit=0` at `bp14 idx0`, while `wbjpeg2000` emits `ctx17 bit=1`
+        at the same event.
+    - Interpretation:
+      - The active lead has narrowed from cleanup branch selection to an even
+        earlier state mismatch entering cleanup: either MQ context-state
+        initialization or pre-cleanup SP/MR bit consumption is still wrong.
+      - Do not spend more time on cleanup zero-coding remaps alone until that
+        earlier event-level divergence is isolated.
+  - Re-entry Step 5 entropy-state checkpoint (2026-04-20):
+    - Artifact:
+      - `crates/wbraster/dev/baselines/jpeg2000_step5_entropy_state_trace_2026-04-20_rgb8x8.txt`
+    - Changes:
+      - Added native MQ state snapshots around cleanup run-aggregate decode.
+      - Added `wbjpeg2000` arithmetic decoder state snapshots around the same
+        run-aggregate event.
+    - First-event result (canonical fixture):
+      - Native before first `ctx17` decode:
+        `a=0x8000 c=0x08A80000 ct=1 pos=2 cur=0x54`.
+      - Reference before first `ctx17` decode:
+        `a=0x8000 c=0x77578000 ct=1 base=1 cur=0x50 next=0x54`.
+      - Native first run-aggregate bit remains `0` while reference is `1`.
+    - Interpretation:
+      - Divergence now localizes to entropy decoder initialization/byte-in
+        state setup before the first cleanup run-aggregate symbol, not to
+        cleanup branch conditions alone.
+      - Next patch lane should compare native `init/byte_in/renorm_d` against
+        reference `initialize/read_byte/renormalize` step-by-step.
+  - Re-entry Step 5b MQ init/BYTEIN alignment result (2026-04-20):
+    - Artifact:
+      - `crates/wbraster/dev/baselines/jpeg2000_step5b_mq_init_alignment_trace_2026-04-20_rgb8x8.txt`
+    - Change:
+      - Native MQ `init` and `byte_in` were aligned to reference semantics
+        (`c` initialization with `^0xFF`, and reference-style byte transition
+        arithmetic using current/next-byte pointer behavior).
+    - Result:
+      - First cleanup run-aggregate event now matches reference (`ctx17 bit=1`
+        at `bp14 idx0`).
+      - Canonical mismatch class improved from prior `~32768` to `~8193` on
+        runmode-enabled comparison (`native=8193` vs `bridge=100`).
+      - Matrix under this patch shows baseline standard and runmode-on profiles
+        at the improved class (`rgb/tiled=8193`, `sentinel=2049`).
+    - Remaining gap:
+      - Parity is still not solved (`sample_value_mismatch` remains for all
+        three matrix fixtures), so the next lane is post-entry symbol stream
+        alignment after the first matched run-aggregate event.
+  - Re-entry Step 5c/5d parity recovery result (2026-04-20):
+    - Retained native fixes:
+      - Corrected MQ LPS exchange semantics in the standard tier-1 decoder.
+      - Corrected native neighbor-significance bit packing to match the
+        reference zero-coding/sign-context lookup indexing.
+      - Corrected MR context-state handling by tracking whether each
+        coefficient has already undergone magnitude refinement.
+      - Restored standard cleanup run-mode as the default native path.
+      - Applied inverse multicomponent transform in the native assembled
+        multiband read path with the correct shift ordering (undo shift,
+        inverse MCT, reapply shift).
+    - Verified effect:
+      - First LL code-block coefficient heads now match `wbjpeg2000`
+        exactly on the canonical `rgb_8x8_lossless.jp2` fixture for all three
+        components.
+      - Canonical differential fixture now reaches full parity:
+        `ok=1`, `sample_value_mismatch=0`.
+      - Current matrix after these fixes improves from `ok=0/3` to `ok=2/3`
+        in the baseline standard profile; only
+        `tiled_rgb_64x64_block32_lossless.jp2` remains mismatched, now at a
+        narrowed first-sample error of `native=79` vs `bridge=100`.
+    - Updated interpretation:
+      - The earlier dominant parity gap was a compound issue spanning
+        standard tier-1 state evolution and post-tier-1 multicomponent
+        reconstruction, not cleanup run-mode alone.
+      - The remaining native gap is no longer the canonical small RGB fixture;
+        follow-on work should concentrate on the tiled RGB case and any
+        residual multi-code-block / tiled reconstruction differences.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

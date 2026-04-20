@@ -1,0 +1,52 @@
+Running JPEG2000 parity matrix
+fixtures=tests/fixtures/rgb_8x8_lossless.jp2,tests/fixtures/sentinel_style_16x16_4band_lossless.jp2,tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2
+
+=== profile: baseline_standard ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=1 bridge=100 abs_err=99 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=316 bridge=1000 abs_err=684 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=61 bridge=100 abs_err=39 eps=0
+
+=== profile: standard_runmode_on ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=1 bridge=100 abs_err=99 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=316 bridge=1000 abs_err=684 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=61 bridge=100 abs_err=39 eps=0
+
+=== profile: legacy_all_subbands ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=24532 bridge=100 abs_err=24432 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=46060 bridge=1000 abs_err=45060 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=31861 bridge=100 abs_err=31761 eps=0
+
+=== profile: legacy_ll_only ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=24532 bridge=100 abs_err=24432 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=46060 bridge=1000 abs_err=45060 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=31861 bridge=100 abs_err=31761 eps=0
+
+=== profile: legacy_hf_only ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=1 bridge=100 abs_err=99 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=316 bridge=1000 abs_err=684 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=61 bridge=100 abs_err=39 eps=0
+
+=== profile: ll_disable_sp ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=1 bridge=100 abs_err=99 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=316 bridge=1000 abs_err=684 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=61 bridge=100 abs_err=39 eps=0
+
+=== profile: ll_disable_mr ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=16384 bridge=100 abs_err=16284 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=16384 bridge=1000 abs_err=15384 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=16384 bridge=100 abs_err=16284 eps=0
+
+=== profile: ll_disable_cl ===
+JPEG2000 differential summary: fixtures_total=3 multicomponent_fixtures=3 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=3 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=3
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=32768 bridge=100 abs_err=32668 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/sentinel_style_16x16_4band_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=32768 bridge=1000 abs_err=31768 eps=0
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=32768 bridge=100 abs_err=32668 eps=0
+
+Matrix run complete.

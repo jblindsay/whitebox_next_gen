@@ -419,6 +419,36 @@ Step 3. Build a side-by-side LL reference trace harness (1-1.5 days)
     - The next focused implementation step should be a faithful trace-backed
       correction of native cleanup run-mode / zero-coding semantics, followed
       immediately by matrix validation.
+  - Follow-up result (2026-04-20, Step 4 first correction pass):
+    - The first standards-path correction pass compiled but did not improve the
+      canonical fixture KPI.
+    - Default posture still mismatched at `native=4096` vs `bridge=100` on the
+      first pixel of `rgb_8x8_lossless.jp2`.
+    - Re-enabling native run-mode remained regressive (`native=32768`).
+    - New native run-trace instrumentation showed the first cleanup
+      run-aggregate event is already wrong: native emits `ctx17 bit=0` at the
+      first eligible LL stripe-column, while `wbjpeg2000` emits `ctx17 bit=1`.
+    - Implication: the next debugging lane is no longer just cleanup
+      run-mode/zero-coding semantics; it is the earlier state feeding cleanup
+      entry, most likely MQ state initialization or pre-cleanup SP/MR symbol
+      consumption.
+  - Step 5 entropy-state checkpoint (2026-04-20):
+    - Added direct native/reference entropy register trace at cleanup
+      run-aggregate entry (`ctx17`) for the canonical fixture.
+    - First-event states differ before decode:
+      - Native: `a=0x8000 c=0x08A80000 ct=1 pos=2 cur=0x54`.
+      - Reference: `a=0x8000 c=0x77578000 ct=1 base=1 cur=0x50 next=0x54`.
+    - First-event outcome remains divergent (`native bit=0`, reference
+      `bit=1`), which narrows the active root cause to MQ initialization/
+      byte-in state transition behavior rather than cleanup decision flow.
+  - Step 5b follow-up (2026-04-20):
+    - Aligned native MQ `init`/`BYTEIN` behavior to reference arithmetic
+      decoder semantics.
+    - Immediate effect: first canonical run-aggregate event now matches
+      reference (`ctx17 bit=1` at first LL cleanup event).
+    - Matrix effect: baseline standard profile improved from prior severe
+      classes to `rgb/tiled=8193` and `sentinel=2049`, but all three fixtures
+      still mismatch, so this is a significant narrowing step, not a closure.
 
 Step 4. Port the smallest proven semantic slice (1-2 days)
 - Objective:
@@ -573,6 +603,35 @@ Exit criteria:
   captured LL first-block samples. Standard path consumes mixed SIG contexts
   (`ctx 0..3`) while legacy cleanup consumes context 18 stream, confirming
   divergence at CL symbol/context stream level before reconstruction.
+- 2026-04-20: Added native run-aggregate/run-position cleanup trace events and
+  captured a three-artifact Step 4 checkpoint. Result: even after correcting
+  standard context numbering and subband-aware zero-coding lookup, the first
+  native cleanup run-aggregate decision remains wrong (`ctx17 bit=0` vs
+  reference `ctx17 bit=1`), so the active root-cause lane has moved earlier
+  than cleanup branch selection itself.
+- 2026-04-20: Added entropy-state snapshots on both native and reference
+  run-aggregate decode events. First canonical event shows register mismatch
+  before `ctx17` decode, confirming the next correction lane is decoder
+  initialization/byte-in semantics.
+- 2026-04-20: Aligned native MQ initialization/BYTEIN semantics to reference.
+  This fixed the first run-aggregate event match and materially reduced mismatch
+  magnitude class, but did not yet complete parity.
+- 2026-04-20: Landed the next retained native parity fixes in Phase A follow-up:
+  corrected MQ LPS exchange semantics, corrected standard neighbor-significance
+  bit packing, corrected MR context-state tracking, and re-enabled standard
+  cleanup run-mode by default. These changes brought the canonical
+  `rgb_8x8_lossless.jp2` LL coefficient stream into direct agreement with the
+  `wbjpeg2000` reference decoder.
+- 2026-04-20: Added inverse multicomponent transform handling to the native
+  assembled multiband read path with correct sign-shift ordering. This closed
+  the canonical RGB parity gap completely: the differential harness now reports
+  `ok=1` and `sample_value_mismatch=0` for
+  `rgb_8x8_lossless.jp2`.
+- 2026-04-20: Re-ran the parity matrix after the retained Tier-1 and inverse
+  MCT fixes. Baseline standard/native default posture improved to `ok=2/3` on
+  the agreed fixture trio; the only remaining baseline mismatch is now
+  `tiled_rgb_64x64_block32_lossless.jp2` with a narrowed first-sample error of
+  `native=79` vs `bridge=100`.
 - 2026-04-19: Adopted a hard 2-3 day final Phase A spike protocol with
   explicit success and stop gates. If stop gates trigger, fallback posture is
   bridge-default for problematic JP2 classes plus native-only for verified-safe

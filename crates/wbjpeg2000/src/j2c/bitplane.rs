@@ -691,7 +691,43 @@ fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) 
                     // coefficients from previous magnitude, significance and cleanup passes), then the
                     // unique run-length context is given to the arithmetic decoder along with the bit
                     // stream."
+                    if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
+                        if let Some((a_before, c_before, shift_before, base_before, cur_before, next_before)) = decoder.debug_state() {
+                            #[cfg(feature = "std")]
+                            eprintln!(
+                                "[wbjpeg2000_entropy_state][before_run_agg] bp={} idx={} ctx=17 a=0x{:04X} c=0x{:08X} ct={} base={} cur=0x{:02X} next=0x{:02X}",
+                                ctx.current_bit_position,
+                                cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                                a_before,
+                                c_before,
+                                shift_before,
+                                base_before,
+                                cur_before,
+                                next_before
+                            );
+                            debug_symbol_trace_count += 1;
+                        }
+                    }
                     let bit = decoder.read_bit(ctx.arithmetic_decoder_context(17))?;
+
+                    if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
+                        if let Some((a_after, c_after, shift_after, base_after, cur_after, next_after)) = decoder.debug_state() {
+                            #[cfg(feature = "std")]
+                            eprintln!(
+                                "[wbjpeg2000_entropy_state][after_run_agg] bp={} idx={} ctx=17 bit={} a=0x{:04X} c=0x{:08X} ct={} base={} cur=0x{:02X} next=0x{:02X}",
+                                ctx.current_bit_position,
+                                cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                                bit,
+                                a_after,
+                                c_after,
+                                shift_after,
+                                base_after,
+                                cur_after,
+                                next_after
+                            );
+                            debug_symbol_trace_count += 1;
+                        }
+                    }
 
                     if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
                         #[cfg(feature = "std")]
@@ -751,7 +787,52 @@ fn cleanup_pass(ctx: &mut BitPlaneDecodeContext, decoder: &mut impl BitDecoder) 
                     }
                 } else {
                     let ctx_label = context_label_zero_coding(*cur_pos, ctx);
+                    if debug_symbol_trace
+                        && debug_symbol_trace_count < debug_symbol_trace_max
+                        && ctx.current_bit_position >= ctx.bitplanes.saturating_sub(1)
+                        && (cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize) <= 32
+                    {
+                        if let Some((a_before, c_before, shift_before, base_before, cur_before, next_before)) = decoder.debug_state() {
+                            #[cfg(feature = "std")]
+                            eprintln!(
+                                "[wbjpeg2000_entropy_state][before_cleanup_sym] bp={} idx={} ctx={} a=0x{:04X} c=0x{:08X} ct={} base={} cur=0x{:02X} next=0x{:02X}",
+                                ctx.current_bit_position,
+                                cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                                ctx_label,
+                                a_before,
+                                c_before,
+                                shift_before,
+                                base_before,
+                                cur_before,
+                                next_before
+                            );
+                            debug_symbol_trace_count += 1;
+                        }
+                    }
                     let bit = decoder.read_bit(ctx.arithmetic_decoder_context(ctx_label))?;
+                    if debug_symbol_trace
+                        && debug_symbol_trace_count < debug_symbol_trace_max
+                        && ctx.current_bit_position >= ctx.bitplanes.saturating_sub(1)
+                        && (cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize) <= 32
+                    {
+                        if let Some((a_after, c_after, shift_after, base_after, cur_after, next_after)) = decoder.debug_state() {
+                            #[cfg(feature = "std")]
+                            eprintln!(
+                                "[wbjpeg2000_entropy_state][after_cleanup_sym] bp={} idx={} ctx={} bit={} a=0x{:04X} c=0x{:08X} ct={} base={} cur=0x{:02X} next=0x{:02X}",
+                                ctx.current_bit_position,
+                                cur_pos.real_y() as usize * ctx.width as usize + (cur_pos.index_x - 1) as usize,
+                                ctx_label,
+                                bit,
+                                a_after,
+                                c_after,
+                                shift_after,
+                                base_after,
+                                cur_after,
+                                next_after
+                            );
+                            debug_symbol_trace_count += 1;
+                        }
+                    }
                     if debug_symbol_trace && debug_symbol_trace_count < debug_symbol_trace_max {
                         #[cfg(feature = "std")]
                         eprintln!(
@@ -1098,6 +1179,10 @@ trait BitDecoder {
     const IS_BYPASS: bool;
 
     fn read_bit(&mut self, context: &mut ArithmeticDecoderContext) -> Option<u32>;
+
+    fn debug_state(&self) -> Option<(u32, u32, u32, u32, u8, u8)> {
+        None
+    }
 }
 
 impl BitDecoder for ArithmeticDecoder<'_> {
@@ -1106,6 +1191,11 @@ impl BitDecoder for ArithmeticDecoder<'_> {
     #[inline(always)]
     fn read_bit(&mut self, context: &mut ArithmeticDecoderContext) -> Option<u32> {
         Some(Self::read_bit(self, context))
+    }
+
+    #[inline(always)]
+    fn debug_state(&self) -> Option<(u32, u32, u32, u32, u8, u8)> {
+        Some(Self::debug_state(self))
     }
 }
 

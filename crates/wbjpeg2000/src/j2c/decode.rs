@@ -302,6 +302,7 @@ fn decode_component_tile_bit_planes<'a>(
                 decode_sub_band_bitplanes(
                     sub_band_idx,
                     resolution,
+                    tile_decompositions_idx,
                     component_info,
                     tile_ctx,
                     storage,
@@ -317,12 +318,21 @@ fn decode_component_tile_bit_planes<'a>(
 fn decode_sub_band_bitplanes(
     sub_band_idx: usize,
     resolution: u8,
+    component_idx: usize,
     component_info: &ComponentInfo,
     tile_ctx: &mut TileDecodeContext,
     storage: &mut DecompositionStorage<'_>,
     header: &Header<'_>,
 ) -> Result<()> {
     let sub_band = &storage.sub_bands[sub_band_idx];
+    let debug_cb_head = std::env::var("WBJPEG2000_DEBUG_CB_HEAD")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let debug_ll_decode_head = std::env::var("WBJPEG2000_DEBUG_LL_DECODE_HEAD")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
     let dequantization_step = {
         if component_info.quantization_info.quantization_style == QuantizationStyle::NoQuantization
@@ -372,6 +382,45 @@ fn decode_sub_band_bitplanes(
             .clone()
             .map(|idx| &storage.code_blocks[idx])
         {
+            if debug_cb_head
+                && resolution == 0
+                && matches!(sub_band.sub_band_type, SubBandType::LowLow)
+                && code_block.x_idx == 0
+                && code_block.y_idx == 0
+            {
+                let mut head_bytes: Vec<u8> = Vec::new();
+                for layer_idx in code_block.layers.clone() {
+                    if let Some(seg_range) = storage.layers[layer_idx].segments.clone() {
+                        for seg_idx in seg_range {
+                            for &b in storage.segments[seg_idx].data {
+                                if head_bytes.len() >= 16 {
+                                    break;
+                                }
+                                head_bytes.push(b);
+                            }
+                            if head_bytes.len() >= 16 {
+                                break;
+                            }
+                        }
+                    }
+                    if head_bytes.len() >= 16 {
+                        break;
+                    }
+                }
+
+                eprintln!(
+                    "[wbjpeg2000_cb_head] comp={} res={} missing_bp={} passes={} lblock={} rect={}x{} data_head={:02X?}",
+                    component_idx,
+                    resolution,
+                    code_block.missing_bit_planes,
+                    code_block.number_of_coding_passes,
+                    code_block.l_block,
+                    code_block.rect.width(),
+                    code_block.rect.height(),
+                    head_bytes
+                );
+            }
+
             // Turn the signs and magnitudes into singular coefficients and
             // copy them into the sub-band.
 
@@ -423,6 +472,35 @@ fn decode_sub_band_bitplanes(
                     storage,
                     header.strict,
                 )?;
+
+                if debug_ll_decode_head
+                    && resolution == 0
+                    && matches!(sub_band.sub_band_type, SubBandType::LowLow)
+                    && code_block.x_idx == 0
+                    && code_block.y_idx == 0
+                {
+                    let mut coeff_head: Vec<i32> = Vec::new();
+                    for row in tile_ctx.bit_plane_decode_context.coefficient_rows() {
+                        for c in row.iter().take(8) {
+                            coeff_head.push(c.get());
+                            if coeff_head.len() >= 16 {
+                                break;
+                            }
+                        }
+                        if coeff_head.len() >= 16 {
+                            break;
+                        }
+                    }
+
+                    eprintln!(
+                        "[wbjpeg2000_ll_decode_head] comp={} res={} cb=({}, {}) coeff_head={:?}",
+                        component_idx,
+                        resolution,
+                        code_block.x_idx,
+                        code_block.y_idx,
+                        coeff_head
+                    );
+                }
 
                 let base_store = &mut storage.coefficients[sub_band.coefficients.clone()];
                 let mut base_idx = (y_offset * sub_band.rect.width()) as usize + x_offset as usize;

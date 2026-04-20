@@ -1,0 +1,194 @@
+warning: fields `encoded_codestream` and `uses_openjph_htj2k` are never read
+   --> crates/wbjpeg2000/src/lib.rs:151:16
+    |
+147 | pub struct Image<'a> {
+    |            ----- fields in this struct
+...
+151 |     pub(crate) encoded_codestream: &'a [u8],
+    |                ^^^^^^^^^^^^^^^^^^
+...
+160 |     pub(crate) uses_openjph_htj2k: bool,
+    |                ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_raw_bitmap_to_u8` is never used
+   --> crates/wbjpeg2000/src/lib.rs:379:4
+    |
+379 | fn copy_raw_bitmap_to_u8(raw: &RawBitmap, buf: &mut [u8]) {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `wbjpeg2000` (lib) generated 2 warnings
+warning: unused import: `wbraster::error::RasterError`
+    --> crates/wbraster/tests/integration.rs:2069:9
+     |
+2069 |     use wbraster::error::RasterError;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wbraster` (test "integration") generated 1 warning (run `cargo fix --test "integration" -p wbraster` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/debug/deps/wbraster-9ea1ef0c4ad085e8)
+
+running 1 test
+[decode_component] component=0 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[decode_component_proper] img=64x64 tiles=1x2 tilesize=64x32 nl=0 layers=1 lossless=true cb=64x64 cblk_style=0x00 progression=Lrcp scod=0x01
+[decode_component_proper] tile(0,0) w=64 h=32 body.len=3957
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] target_comp=0 packet_comp=0 LL CB(0,0) zbp(missing_bp)=2
+[proper] target_comp=0 packet_comp=0 LL CB(0,0) passes=43 lblock_inc=3 lblock=6 len_bits=11
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper]   cb si=0 (0,0) seg=1984 bytes
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=1989
+[proper] CB(0,0) incl=true
+[proper] target_comp=0 packet_comp=1 LL CB(0,0) zbp(missing_bp)=6
+[proper] target_comp=0 packet_comp=1 LL CB(0,0) passes=31 lblock_inc=3 lblock=6 len_bits=10
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=1993
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2590
+[proper] CB(0,0) incl=true
+[proper] target_comp=0 packet_comp=2 LL CB(0,0) zbp(missing_bp)=9
+[proper] target_comp=0 packet_comp=2 LL CB(0,0) passes=22 lblock_inc=4 lblock=7 len_bits=11
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2595
+[proper] sb[0] cb(0,0) bytes=1984 missing_bp=2 raw_bp=18 num_bp=15 actual=64x32
+[proper] sb[0] cb(0,0) data[0..16]: [11, 50, 54, AF, FF, 7B, 25, 2D, 57, 3D, E0, 3F, 1B, 94, 01, 59]
+[proper] LOSSLESS PATH: coeff[0..4] before idwt: [-32643, -32643, -32642, -32641]
+[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: [-32643, -32643, -32642, -32641]
+[proper] LOSSLESS PATH: applying level-shift of 32768 (bits=16, signed=false)
+[proper] LOSSLESS PATH: tile_pixels[0..10] after shift: [125, 125, 126, 127, 128, 128, 129, 130, 131, 131]
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper]   cb si=0 (0,0) seg=2064 bytes
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2069
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2073
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2776
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2781
+[decode_component] component=1 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[decode_component_proper] img=64x64 tiles=1x2 tilesize=64x32 nl=0 layers=1 lossless=true cb=64x64 cblk_style=0x00 progression=Lrcp scod=0x01
+[decode_component_proper] tile(0,0) w=64 h=32 body.len=3957
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] target_comp=1 packet_comp=0 LL CB(0,0) zbp(missing_bp)=2
+[proper] target_comp=1 packet_comp=0 LL CB(0,0) passes=43 lblock_inc=3 lblock=6 len_bits=11
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=1989
+[proper] CB(0,0) incl=true
+[proper] target_comp=1 packet_comp=1 LL CB(0,0) zbp(missing_bp)=6
+[proper] target_comp=1 packet_comp=1 LL CB(0,0) passes=31 lblock_inc=3 lblock=6 len_bits=10
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=1993
+[proper]   cb si=0 (0,0) seg=597 bytes
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2590
+[proper] CB(0,0) incl=true
+[proper] target_comp=1 packet_comp=2 LL CB(0,0) zbp(missing_bp)=9
+[proper] target_comp=1 packet_comp=2 LL CB(0,0) passes=22 lblock_inc=4 lblock=7 len_bits=11
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2595
+[proper] sb[0] cb(0,0) bytes=597 missing_bp=6 raw_bp=18 num_bp=11 actual=64x32
+[proper] sb[0] cb(0,0) data[0..16]: [E7, C6, 20, 3C, AF, FF, 7E, BC, 33, FC, 00, 00, 00, 00, 0C, 24]
+[proper] LOSSLESS PATH: coeff[0..4] before idwt: [193, 133, 128, 197]
+[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: [193, 133, 128, 197]
+[proper] LOSSLESS PATH: applying level-shift of 32768 (bits=16, signed=false)
+[proper] LOSSLESS PATH: tile_pixels[0..10] after shift: [32961, 32901, 32896, 32965, 32571, 32634, 32635, 32636, 32633, 32574]
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2069
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2073
+[proper]   cb si=0 (0,0) seg=703 bytes
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2776
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2781
+[decode_component] component=2 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[decode_component_proper] img=64x64 tiles=1x2 tilesize=64x32 nl=0 layers=1 lossless=true cb=64x64 cblk_style=0x00 progression=Lrcp scod=0x01
+[decode_component_proper] tile(0,0) w=64 h=32 body.len=3957
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] target_comp=2 packet_comp=0 LL CB(0,0) zbp(missing_bp)=2
+[proper] target_comp=2 packet_comp=0 LL CB(0,0) passes=43 lblock_inc=3 lblock=6 len_bits=11
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=1989
+[proper] CB(0,0) incl=true
+[proper] target_comp=2 packet_comp=1 LL CB(0,0) zbp(missing_bp)=6
+[proper] target_comp=2 packet_comp=1 LL CB(0,0) passes=31 lblock_inc=3 lblock=6 len_bits=10
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=1993
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2590
+[proper] CB(0,0) incl=true
+[proper] target_comp=2 packet_comp=2 LL CB(0,0) zbp(missing_bp)=9
+[proper] target_comp=2 packet_comp=2 LL CB(0,0) passes=22 lblock_inc=4 lblock=7 len_bits=11
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2595
+[proper]   cb si=0 (0,0) seg=1362 bytes
+[proper] sb[0] cb(0,0) bytes=1362 missing_bp=9 raw_bp=18 num_bp=8 actual=64x32
+[proper] sb[0] cb(0,0) data[0..16]: [88, 13, 19, 3D, CB, EA, B0, 6C, 8B, F9, 15, 8A, 91, 5F, 10, FC]
+[proper] LOSSLESS PATH: coeff[0..4] before idwt: [2, -2, -26, -4]
+[proper] LOSSLESS PATH: coeff[0..4] after idwt, before shift: [2, -2, -26, -4]
+[proper] LOSSLESS PATH: applying level-shift of 32768 (bits=16, signed=false)
+[proper] LOSSLESS PATH: tile_pixels[0..10] after shift: [32770, 32766, 32742, 32764, 32782, 32762, 32665, 32750, 32810, 32656]
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=0
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=5
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2069
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2073
+[proper] layer=0 res=0 px=0 py=0: zero_bit=1 byte_pos=2776
+[proper] CB(0,0) incl=true
+[proper] layer=0 res=0 px=0 py=0: segs=1 byte_pos=2781
+[proper]   cb si=0 (0,0) seg=1350 bytes
+[bridge] Image dimensions: 64x64
+[bridge] Color space: RGB
+[bridge] Original bit depth: 16
+[wbjpeg2000_cb_head] comp=0 res=0 missing_bp=2 passes=43 lblock=6 rect=64x32 data_head=[11, 50, 54, AF, FF, 7B, 25, 2D, 57, 3D, E0, 3F, 1B, 94, 01, 59]
+[wbjpeg2000_cb_head] comp=1 res=0 missing_bp=6 passes=31 lblock=6 rect=64x32 data_head=[E7, C6, 20, 3C, AF, FF, 7E, BC, 33, FC, 00, 00, 00, 00, 0C, 24]
+[wbjpeg2000_cb_head] comp=2 res=0 missing_bp=9 passes=22 lblock=7 rect=64x32 data_head=[88, 13, 19, 3D, CB, EA, B0, 6C, 8B, F9, 15, 8A, 91, 5F, 10, FC]
+[wbjpeg2000_cb_head] comp=0 res=0 missing_bp=2 passes=43 lblock=7 rect=64x32 data_head=[11, 50, 54, AF, FF, 7B, 25, 2D, 48, 1B, C1, BD, 92, D3, 49, 0D]
+[wbjpeg2000_cb_head] comp=1 res=0 missing_bp=5 passes=34 lblock=5 rect=64x32 data_head=[AE, 80, 03, CA, FF, 7F, 91, 1C, 11, 38, 00, 00, 00, 00, 00, 61]
+[wbjpeg2000_cb_head] comp=2 res=0 missing_bp=9 passes=22 lblock=7 rect=64x32 data_head=[AA, 23, 19, 3B, 47, 00, 4F, FF, 75, 4F, B7, C5, 29, F2, D5, B2]
+[bridge] Raw dimensions: 64x64
+[bridge] Raw bytes_per_sample: 2
+[bridge] Raw num_components: 3
+[bridge] Raw bit_depth: 16
+[bridge] Raw data length: 24576
+[bridge] 16-bit path: first 10 pixels (component 0): [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+[bridge] 16-bit path: first 10 pixels after correction: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+JPEG2000 differential summary: fixtures_total=1 multicomponent_fixtures=1 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=1 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=1
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=79 bridge=100 abs_err=21 eps=0
+test formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 0.00s
+
+     Running tests/integration.rs (target/debug/deps/integration-5f935e281ff4dbda)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/reprojection_parity.rs (target/debug/deps/reprojection_parity-623e1739416b87bb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

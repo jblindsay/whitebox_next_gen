@@ -287,6 +287,18 @@ impl<'a> ArithmeticDecoder<'a> {
             .copied()
             .unwrap_or(0xFF)
     }
+
+    #[inline(always)]
+    pub(crate) fn debug_state(&self) -> (u32, u32, u32, u32, u8, u8) {
+        (
+            self.a,
+            self.c,
+            self.shift_count,
+            self.base_pointer,
+            self.current_byte(),
+            self.next_byte(),
+        )
+    }
 }
 
 // Previously, we stored the context as 2 u32's, but doing it with a bit-packed

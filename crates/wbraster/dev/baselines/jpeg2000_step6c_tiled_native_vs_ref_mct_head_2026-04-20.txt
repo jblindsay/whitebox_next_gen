@@ -1,0 +1,120 @@
+   Compiling wbjpeg2000 v0.5.0 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbjpeg2000)
+warning: fields `encoded_codestream` and `uses_openjph_htj2k` are never read
+   --> crates/wbjpeg2000/src/lib.rs:151:16
+    |
+147 | pub struct Image<'a> {
+    |            ----- fields in this struct
+...
+151 |     pub(crate) encoded_codestream: &'a [u8],
+    |                ^^^^^^^^^^^^^^^^^^
+...
+160 |     pub(crate) uses_openjph_htj2k: bool,
+    |                ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_raw_bitmap_to_u8` is never used
+   --> crates/wbjpeg2000/src/lib.rs:379:4
+    |
+379 | fn copy_raw_bitmap_to_u8(raw: &RawBitmap, buf: &mut [u8]) {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling wbraster v0.1.2 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbraster)
+warning: `wbjpeg2000` (lib) generated 2 warnings
+warning: unused import: `wbraster::error::RasterError`
+    --> crates/wbraster/tests/integration.rs:2069:9
+     |
+2069 |     use wbraster::error::RasterError;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wbraster` (test "integration") generated 1 warning (run `cargo fix --test "integration" -p wbraster` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.53s
+     Running unittests src/lib.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/wbraster-9ea1ef0c4ad085e8)
+
+running 1 test
+[decode_component] component=0 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[decode_component] component=1 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[decode_component] component=2 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=36 byte_pos=4 bit_offset=4
+[packet_header_align] AFTER: byte_pos=5 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=15944 byte_pos=1993 bit_offset=0
+[packet_header_align] AFTER: byte_pos=1993 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=20757 byte_pos=2594 bit_offset=5
+[packet_header_align] AFTER: byte_pos=2595 (segs.len=1)
+[native_mct_head_pre] p=0 c0=125 c1=32961 c2=32770 mc_transform=1
+[native_mct_head_pre] p=1 c0=125 c1=32901 c2=32766 mc_transform=1
+[native_mct_head_pre] p=2 c0=126 c1=32896 c2=32742 mc_transform=1
+[native_mct_head_pre] p=3 c0=127 c1=32965 c2=32764 mc_transform=1
+[native_mct_head_pre] p=4 c0=128 c1=32571 c2=32782 mc_transform=1
+[native_mct_head_pre] p=5 c0=128 c1=32634 c2=32762 mc_transform=1
+[native_mct_head_pre] p=6 c0=129 c1=32635 c2=32665 mc_transform=1
+[native_mct_head_pre] p=7 c0=130 c1=32636 c2=32750 mc_transform=1
+[native_mct_head_post] p=0 c0=79 c1=77 c2=270 mc_transform=1
+[native_mct_head_post] p=1 c0=91 c1=93 c2=226 mc_transform=1
+[native_mct_head_post] p=2 c0=75 c1=101 c2=229 mc_transform=1
+[native_mct_head_post] p=3 c0=75 c1=79 c2=276 mc_transform=1
+[native_mct_head_post] p=4 c0=188 c1=174 c2=-23 mc_transform=1
+[native_mct_head_post] p=5 c0=157 c1=163 c2=29 mc_transform=1
+[native_mct_head_post] p=6 c0=85 c1=188 c2=55 mc_transform=1
+[native_mct_head_post] p=7 c0=150 c1=168 c2=36 mc_transform=1
+[bridge] Image dimensions: 64x64
+[bridge] Color space: RGB
+[bridge] Original bit depth: 16
+[wbjpeg2000_mct_head_pre] p=0 c0=-32643 c1=-200 c2=-100 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=1 c0=-32643 c1=-200 c2=-101 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=2 c0=-32642 c1=-200 c2=-102 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=3 c0=-32641 c1=-200 c2=-103 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=4 c0=-32640 c1=-200 c2=-104 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=5 c0=-32640 c1=-200 c2=-105 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=6 c0=-32639 c1=-200 c2=-106 transform=Reversible53
+[wbjpeg2000_mct_head_pre] p=7 c0=-32638 c1=-200 c2=-107 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=0 c0=-32668 c1=-32568 c2=-32768 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=1 c0=-32668 c1=-32567 c2=-32767 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=2 c0=-32668 c1=-32566 c2=-32766 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=3 c0=-32668 c1=-32565 c2=-32765 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=4 c0=-32668 c1=-32564 c2=-32764 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=5 c0=-32668 c1=-32563 c2=-32763 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=6 c0=-32668 c1=-32562 c2=-32762 transform=Reversible53
+[wbjpeg2000_mct_head_post] p=7 c0=-32668 c1=-32561 c2=-32761 transform=Reversible53
+[bridge] Raw dimensions: 64x64
+[bridge] Raw bytes_per_sample: 2
+[bridge] Raw num_components: 3
+[bridge] Raw bit_depth: 16
+[bridge] Raw data length: 24576
+[bridge] 16-bit path: first 10 pixels (component 0): [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+[bridge] 16-bit path: first 10 pixels after correction: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+JPEG2000 differential summary: fixtures_total=1 multicomponent_fixtures=1 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=1 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=1
+SAMPLE_VALUE_MISMATCH|tests/fixtures/tiled_rgb_64x64_block32_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=79 bridge=100 abs_err=21 eps=0
+test formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 0.01s
+
+     Running tests/integration.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/integration-5f935e281ff4dbda)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/reprojection_parity.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/reprojection_parity-623e1739416b87bb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

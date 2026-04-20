@@ -1,0 +1,809 @@
+warning: fields `encoded_codestream` and `uses_openjph_htj2k` are never read
+   --> crates/wbjpeg2000/src/lib.rs:151:16
+    |
+147 | pub struct Image<'a> {
+    |            ----- fields in this struct
+...
+151 |     pub(crate) encoded_codestream: &'a [u8],
+    |                ^^^^^^^^^^^^^^^^^^
+...
+160 |     pub(crate) uses_openjph_htj2k: bool,
+    |                ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `copy_raw_bitmap_to_u8` is never used
+   --> crates/wbjpeg2000/src/lib.rs:379:4
+    |
+379 | fn copy_raw_bitmap_to_u8(raw: &RawBitmap, buf: &mut [u8]) {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `wbjpeg2000` (lib) generated 2 warnings
+warning: unused import: `wbraster::error::RasterError`
+    --> crates/wbraster/tests/integration.rs:2069:9
+     |
+2069 |     use wbraster::error::RasterError;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `wbraster` (test "integration") generated 1 warning (run `cargo fix --test "integration" -p wbraster` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/wbraster-9ea1ef0c4ad085e8)
+
+running 1 test
+[decode_component] component=0 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_entropy_state][before_run_agg] bp=14 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 pos=1 cur=0x50
+[native_entropy_state][after_run_agg] bp=14 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 pos=2 cur=0x54
+[native_symbol_trace][cleanup_run_agg] bp=14 idx=0 ctx=17 bit=1 x=0 y=0
+[native_symbol_trace][cleanup_run_pos] bp=14 idx=0 ctx=18 run_pos=0 x=0 y=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=14 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 pos=2 cur=0x54
+[native_symbol_trace][cleanup] bp=14 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=14 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=24 ctx=3 a=0xBC01 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=1 ctx=8 a=0xDFFE c=0x9F7D4000 ct=6 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=1 ctx=8 bit=1 a=0xAC02 c=0x2B008000 ct=5 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=1 ctx=8 bit=1 x=1 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=9 ctx=8 a=0xAC02 c=0x56010000 ct=4 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=9 ctx=8 bit=1 a=0xF002 c=0xAC020000 ct=3 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=9 ctx=8 bit=1 x=1 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=17 ctx=8 a=0xAC02 c=0x24020000 ct=2 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=17 ctx=8 bit=1 a=0x9401 c=0x24020000 ct=2 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=17 ctx=8 bit=1 x=1 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=25 ctx=7 a=0xF800 c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=25 ctx=7 bit=0 a=0xA1FF c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=14 idx=25 ctx=7 bit=0 x=1 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=2 ctx=8 a=0xA1FF c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=14 idx=2 ctx=8 bit=0 a=0xC008 c=0x3053C800 ct=5 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=2 ctx=8 bit=0 x=2 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=10 ctx=8 a=0xC008 c=0x3053C800 ct=5 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=10 ctx=8 bit=1 a=0x8807 c=0x3053C800 ct=5 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=10 ctx=8 bit=1 x=2 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=18 ctx=7 a=0xA80C c=0x60A79000 ct=4 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=18 ctx=7 bit=0 a=0xAC02 c=0x1D392000 ct=3 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=18 ctx=7 bit=0 x=2 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=26 ctx=1 a=0xAC02 c=0x1D392000 ct=3 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=26 ctx=1 bit=0 a=0xAC02 c=0x3A724000 ct=2 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=26 ctx=1 bit=0 x=2 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=3 ctx=5 a=0xAC02 c=0x3A724000 ct=2 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=3 ctx=5 bit=0 a=0xAC02 c=0x74E48000 ct=1 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=3 ctx=5 bit=0 x=3 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=11 ctx=5 a=0xAC02 c=0x74E48000 ct=1 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=11 ctx=5 bit=0 a=0xF002 c=0xE9C90000 ct=0 pos=4 cur=0x86
+[native_symbol_trace][cleanup] bp=14 idx=11 ctx=5 bit=0 x=3 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=19 ctx=1 a=0xF002 c=0xE9C90000 ct=0 pos=4 cur=0x86
+[native_entropy_state][after_cleanup_sym] bp=14 idx=19 ctx=1 bit=1 a=0xD004 c=0xB7201800 ct=6 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=19 ctx=1 bit=1 x=3 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=27 ctx=3 a=0xD004 c=0x6C746000 ct=4 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=27 ctx=3 bit=1 a=0xB803 c=0x6C746000 ct=4 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=27 ctx=3 bit=1 x=3 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=4 ctx=0 a=0xA002 c=0x6C746000 ct=4 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=4 ctx=0 bit=0 a=0xAC02 c=0x44E6C000 ct=3 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=4 ctx=0 bit=0 x=4 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=12 ctx=5 a=0xAC02 c=0x44E6C000 ct=3 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=12 ctx=5 bit=0 a=0x9401 c=0x44E6C000 ct=3 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=12 ctx=5 bit=0 x=4 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=20 ctx=8 a=0x9401 c=0x44E6C000 ct=3 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=20 ctx=8 bit=1 a=0xB800 c=0x89CD8000 ct=2 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=20 ctx=8 bit=1 x=4 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=28 ctx=7 a=0x9FFF c=0x89CD8000 ct=2 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=28 ctx=7 bit=1 a=0xD004 c=0x773E0000 ct=0 pos=5 cur=0xF9
+[native_symbol_trace][cleanup] bp=14 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=5 ctx=0 a=0x9C03 c=0x773E0000 ct=0 pos=5 cur=0xF9
+[native_entropy_state][after_cleanup_sym] bp=14 idx=5 ctx=0 bit=1 a=0xD004 c=0x3CF3CC00 ct=6 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=5 ctx=0 bit=1 x=5 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=13 ctx=7 a=0xF406 c=0x79E79800 ct=5 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=13 ctx=7 bit=0 a=0x9E05 c=0x79E79800 ct=5 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=13 ctx=7 bit=0 x=5 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=21 ctx=8 a=0x9E05 c=0x79E79800 ct=5 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=21 ctx=8 bit=0 a=0xC004 c=0x2F8E6000 ct=3 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=21 ctx=8 bit=0 x=5 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=29 ctx=6 a=0xC004 c=0x2F8E6000 ct=3 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=29 ctx=6 bit=0 a=0xD406 c=0x5F1CC000 ct=2 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=29 ctx=6 bit=0 x=5 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=6 ctx=5 a=0xD406 c=0x5F1CC000 ct=2 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=6 ctx=5 bit=0 a=0xBC05 c=0x5F1CC000 ct=2 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=6 ctx=5 bit=0 x=6 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=14 ctx=1 a=0xBC05 c=0x5F1CC000 ct=2 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=14 ctx=1 bit=0 a=0xCC08 c=0xBE398000 ct=1 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=14 ctx=1 bit=0 x=6 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=22 ctx=0 a=0xCC08 c=0xBE398000 ct=1 pos=6 cur=0x0C
+[native_entropy_state][after_cleanup_sym] bp=14 idx=22 ctx=0 bit=1 a=0xAC02 c=0x90650000 ct=0 pos=6 cur=0x0C
+[native_symbol_trace][cleanup] bp=14 idx=22 ctx=0 bit=1 x=6 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=30 ctx=3 a=0xA802 c=0x70C9D400 ct=7 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=30 ctx=3 bit=1 a=0x9001 c=0x70C9D400 ct=7 pos=7 cur=0x15
+[native_symbol_trace][cleanup] bp=14 idx=30 ctx=3 bit=1 x=6 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=7 ctx=0 a=0xF000 c=0xE193A800 ct=6 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=7 ctx=0 bit=0 a=0xAC02 c=0x8F295000 ct=5 pos=7 cur=0x15
+[native_symbol_trace][cleanup] bp=14 idx=7 ctx=0 bit=0 x=7 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=15 ctx=5 a=0xAC02 c=0x8F295000 ct=5 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=15 ctx=5 bit=0 a=0x9401 c=0x8F295000 ct=5 pos=7 cur=0x15
+[native_symbol_trace][cleanup] bp=14 idx=15 ctx=5 bit=0 x=7 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=23 ctx=8 a=0x9401 c=0x8F295000 ct=5 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=23 ctx=8 bit=0 a=0x9002 c=0x8652A000 ct=4 pos=7 cur=0x15
+[native_symbol_trace][cleanup] bp=14 idx=23 ctx=8 bit=0 x=7 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=31 ctx=6 a=0x9002 c=0x8652A000 ct=4 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=31 ctx=6 bit=1 a=0xD004 c=0xA9468000 ct=2 pos=7 cur=0x15
+[native_symbol_trace][cleanup] bp=14 idx=31 ctx=6 bit=1 x=7 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=14 idx=32 ctx=3 a=0xB803 c=0xA9468000 ct=2 pos=7 cur=0x15
+[native_entropy_state][after_cleanup_sym] bp=14 idx=32 ctx=3 bit=0 a=0xC008 c=0x4A25DC00 ct=7 pos=8 cur=0x11
+[native_symbol_trace][cleanup] bp=14 idx=32 ctx=3 bit=0 x=0 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=40 ctx=0 bit=0 x=0 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=48 ctx=0 bit=1 x=0 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=33 ctx=1 bit=1 x=1 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=41 ctx=7 bit=0 x=1 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=49 ctx=8 bit=0 x=1 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=57 ctx=6 bit=0 x=1 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=34 ctx=6 bit=1 x=2 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=42 ctx=3 bit=1 x=2 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=50 ctx=3 bit=1 x=2 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=58 ctx=3 bit=1 x=2 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=35 ctx=8 bit=0 x=3 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=43 ctx=8 bit=0 x=3 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=51 ctx=8 bit=1 x=3 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=59 ctx=7 bit=1 x=3 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=36 ctx=3 bit=1 x=4 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=44 ctx=7 bit=0 x=4 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=52 ctx=8 bit=0 x=4 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=60 ctx=6 bit=0 x=4 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=14 idx=37 ctx=6 bit=0 x=5 y=4 use_rl=0
+[cl_sig_stream][standard] w=8 h=8 num_bp=15 samples=[(14, 8, 3, 1), (14, 16, 3, 1), (14, 24, 3, 1), (14, 1, 8, 1), (14, 9, 8, 1), (14, 17, 8, 1), (14, 25, 7, 0), (14, 2, 8, 0), (14, 10, 8, 1), (14, 18, 7, 0), (14, 26, 1, 0), (14, 3, 5, 0), (14, 11, 5, 0), (14, 19, 1, 1), (14, 27, 3, 1), (14, 4, 0, 0), (14, 12, 5, 0), (14, 20, 8, 1), (14, 28, 7, 1), (14, 5, 0, 1), (14, 13, 7, 0), (14, 21, 8, 0), (14, 29, 6, 0), (14, 6, 5, 0), (14, 14, 1, 0), (14, 22, 0, 1), (14, 30, 3, 1), (14, 7, 0, 0), (14, 15, 5, 0), (14, 23, 8, 0), (14, 31, 6, 1), (14, 32, 3, 0), (14, 40, 0, 0), (14, 48, 0, 1), (14, 56, 3, 1), (14, 33, 1, 1), (14, 41, 7, 0), (14, 49, 8, 0), (14, 57, 6, 0), (14, 34, 6, 1), (14, 42, 3, 1), (14, 50, 3, 1), (14, 58, 3, 1), (14, 35, 8, 0), (14, 43, 8, 0), (14, 51, 8, 1), (14, 59, 7, 1), (14, 36, 3, 1), (14, 44, 7, 0), (14, 52, 8, 0), (14, 60, 6, 0), (14, 37, 6, 0), (14, 45, 1, 1), (14, 53, 3, 1), (14, 61, 3, 1), (14, 38, 7, 1), (14, 46, 8, 1), (14, 54, 8, 1), (14, 62, 7, 0), (14, 39, 8, 1), (14, 47, 8, 0), (14, 55, 6, 1), (14, 63, 3, 1), (13, 7, 1, 0)]
+[decode_component] component=1 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_entropy_state][before_run_agg] bp=7 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 pos=1 cur=0x50
+[native_entropy_state][after_run_agg] bp=7 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 pos=2 cur=0x54
+[native_symbol_trace][cleanup_run_agg] bp=7 idx=0 ctx=17 bit=1 x=0 y=0
+[native_symbol_trace][cleanup_run_pos] bp=7 idx=0 ctx=18 run_pos=0 x=0 y=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=7 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 pos=2 cur=0x54
+[native_symbol_trace][cleanup] bp=7 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=7 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEB200 ct=7 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=24 ctx=3 a=0xBC01 c=0x4FBEB200 ct=7 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEB200 ct=7 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=1 ctx=8 a=0xDFFE c=0x9F7D6400 ct=6 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=1 ctx=8 bit=1 a=0xAC02 c=0x2B00C800 ct=5 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=1 ctx=8 bit=1 x=1 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=9 ctx=8 a=0xAC02 c=0x56019000 ct=4 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=9 ctx=8 bit=1 a=0xF002 c=0xAC032000 ct=3 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=9 ctx=8 bit=1 x=1 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=17 ctx=8 a=0xAC02 c=0x24044000 ct=2 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=17 ctx=8 bit=1 a=0x9401 c=0x24044000 ct=2 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=17 ctx=8 bit=1 x=1 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=25 ctx=7 a=0xF800 c=0x90110000 ct=0 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=25 ctx=7 bit=0 a=0xA1FF c=0x90110000 ct=0 pos=3 cur=0xA6
+[native_symbol_trace][cleanup] bp=7 idx=25 ctx=7 bit=0 x=1 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=2 ctx=8 a=0xA1FF c=0x90110000 ct=0 pos=3 cur=0xA6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=2 ctx=8 bit=0 a=0xC008 c=0x30984800 ct=5 pos=4 cur=0xF6
+[native_symbol_trace][cleanup] bp=7 idx=2 ctx=8 bit=0 x=2 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=10 ctx=8 a=0xC008 c=0x30984800 ct=5 pos=4 cur=0xF6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=10 ctx=8 bit=1 a=0x8807 c=0x30984800 ct=5 pos=4 cur=0xF6
+[native_symbol_trace][cleanup] bp=7 idx=10 ctx=8 bit=1 x=2 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=18 ctx=7 a=0xA80C c=0x61309000 ct=4 pos=4 cur=0xF6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=18 ctx=7 bit=0 a=0xAC02 c=0x1E4B2000 ct=3 pos=4 cur=0xF6
+[native_symbol_trace][cleanup] bp=7 idx=18 ctx=7 bit=0 x=2 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=26 ctx=1 a=0xAC02 c=0x1E4B2000 ct=3 pos=4 cur=0xF6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=26 ctx=1 bit=0 a=0xAC02 c=0x3C964000 ct=2 pos=4 cur=0xF6
+[native_symbol_trace][cleanup] bp=7 idx=26 ctx=1 bit=0 x=2 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=3 ctx=5 a=0xAC02 c=0x3C964000 ct=2 pos=4 cur=0xF6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=3 ctx=5 bit=0 a=0xAC02 c=0x792C8000 ct=1 pos=4 cur=0xF6
+[native_symbol_trace][cleanup] bp=7 idx=3 ctx=5 bit=0 x=3 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=11 ctx=5 a=0xAC02 c=0x792C8000 ct=1 pos=4 cur=0xF6
+[native_entropy_state][after_cleanup_sym] bp=7 idx=11 ctx=5 bit=1 a=0xD004 c=0x04AFA800 ct=7 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=11 ctx=5 bit=1 x=3 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=19 ctx=3 a=0xB803 c=0x04AFA800 ct=7 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=19 ctx=3 bit=1 a=0xA002 c=0x04AFA800 ct=7 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=19 ctx=3 bit=1 x=3 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=27 ctx=3 a=0x8801 c=0x04AFA800 ct=7 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=27 ctx=3 bit=1 a=0xE000 c=0x095F5000 ct=6 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=27 ctx=3 bit=1 x=3 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=4 ctx=5 a=0xC7FF c=0x095F5000 ct=6 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=4 ctx=5 bit=0 a=0xE3FC c=0x12BEA000 ct=5 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=4 ctx=5 bit=0 x=4 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=12 ctx=8 a=0xE3FC c=0x12BEA000 ct=5 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=12 ctx=8 bit=1 a=0xABFB c=0x12BEA000 ct=5 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=12 ctx=8 bit=1 x=4 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=20 ctx=8 a=0x93FA c=0x12BEA000 ct=5 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=20 ctx=8 bit=1 a=0xB7F2 c=0x257D4000 ct=4 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=20 ctx=8 bit=1 x=4 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=28 ctx=7 a=0x83F1 c=0x257D4000 ct=4 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=28 ctx=7 bit=0 a=0x9FE0 c=0x4AFA8000 ct=3 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=28 ctx=7 bit=0 x=4 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=5 ctx=5 a=0x9FE0 c=0x4AFA8000 ct=3 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=5 ctx=5 bit=1 a=0x97BE c=0x95F50000 ct=2 pos=5 cur=0x2B
+[native_symbol_trace][cleanup] bp=7 idx=5 ctx=5 bit=1 x=5 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=13 ctx=8 a=0xD004 c=0xC8E00000 ct=0 pos=5 cur=0x2B
+[native_entropy_state][after_cleanup_sym] bp=7 idx=13 ctx=8 bit=0 a=0xC004 c=0xA3751000 ct=6 pos=6 cur=0xBB
+[native_symbol_trace][cleanup] bp=7 idx=13 ctx=8 bit=0 x=5 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=21 ctx=6 a=0xC004 c=0xA3751000 ct=6 pos=6 cur=0xBB
+[native_entropy_state][after_cleanup_sym] bp=7 idx=21 ctx=6 bit=1 a=0xAC02 c=0x72E42000 ct=5 pos=6 cur=0xBB
+[native_symbol_trace][cleanup] bp=7 idx=21 ctx=6 bit=1 x=5 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=29 ctx=3 a=0x9401 c=0x72E42000 ct=5 pos=6 cur=0xBB
+[native_entropy_state][after_cleanup_sym] bp=7 idx=29 ctx=3 bit=1 a=0x8940 c=0x72E42000 ct=5 pos=6 cur=0xBB
+[native_symbol_trace][cleanup] bp=7 idx=29 ctx=3 bit=1 x=5 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=6 ctx=5 a=0xC008 c=0x0D290000 ct=2 pos=6 cur=0xBB
+[native_entropy_state][after_cleanup_sym] bp=7 idx=6 ctx=5 bit=0 a=0xD40E c=0x1A520000 ct=1 pos=6 cur=0xBB
+[native_symbol_trace][cleanup] bp=7 idx=6 ctx=5 bit=0 x=6 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=14 ctx=6 a=0xD40E c=0x1A520000 ct=1 pos=6 cur=0xBB
+[native_entropy_state][after_cleanup_sym] bp=7 idx=14 ctx=6 bit=1 a=0xA00D c=0x1A520000 ct=1 pos=6 cur=0xBB
+[native_symbol_trace][cleanup] bp=7 idx=14 ctx=6 bit=1 x=6 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=22 ctx=8 a=0x9418 c=0x34A40000 ct=0 pos=6 cur=0xBB
+[native_entropy_state][after_cleanup_sym] bp=7 idx=22 ctx=8 bit=1 a=0x982E c=0x69495200 ct=7 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=22 ctx=8 bit=1 x=6 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=30 ctx=7 a=0xD004 c=0x14714800 ct=5 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=30 ctx=7 bit=0 a=0xB803 c=0x14714800 ct=5 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=30 ctx=7 bit=0 x=6 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=7 ctx=5 a=0xB803 c=0x14714800 ct=5 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=7 ctx=5 bit=0 a=0xC804 c=0x28E29000 ct=4 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=7 ctx=5 bit=0 x=7 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=15 ctx=8 a=0xC804 c=0x28E29000 ct=4 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=15 ctx=8 bit=1 a=0x9003 c=0x28E29000 ct=4 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=15 ctx=8 bit=1 x=7 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=23 ctx=7 a=0xF004 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=23 ctx=7 bit=0 a=0xD803 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=23 ctx=7 bit=0 x=7 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=31 ctx=1 a=0xD803 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=31 ctx=1 bit=0 a=0xA402 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=31 ctx=1 bit=0 x=7 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=7 idx=32 ctx=3 a=0xA402 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_entropy_state][after_cleanup_sym] bp=7 idx=32 ctx=3 bit=1 a=0x9941 c=0x51C52000 ct=3 pos=7 cur=0x56
+[native_symbol_trace][cleanup] bp=7 idx=32 ctx=3 bit=1 x=0 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=40 ctx=3 bit=1 x=0 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=48 ctx=3 bit=1 x=0 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=33 ctx=8 bit=1 x=1 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=41 ctx=8 bit=1 x=1 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=49 ctx=8 bit=1 x=1 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=57 ctx=7 bit=0 x=1 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=34 ctx=8 bit=0 x=2 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=42 ctx=8 bit=1 x=2 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=50 ctx=7 bit=0 x=2 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=58 ctx=1 bit=0 x=2 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=35 ctx=7 bit=0 x=3 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=43 ctx=5 bit=1 x=3 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=51 ctx=3 bit=1 x=3 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=59 ctx=3 bit=1 x=3 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=36 ctx=6 bit=1 x=4 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=44 ctx=8 bit=1 x=4 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=52 ctx=8 bit=1 x=4 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=60 ctx=7 bit=0 x=4 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=7 idx=37 ctx=8 bit=1 x=5 y=4 use_rl=0
+[cl_sig_stream][standard] w=8 h=8 num_bp=8 samples=[(7, 8, 3, 1), (7, 16, 3, 1), (7, 24, 3, 1), (7, 1, 8, 1), (7, 9, 8, 1), (7, 17, 8, 1), (7, 25, 7, 0), (7, 2, 8, 0), (7, 10, 8, 1), (7, 18, 7, 0), (7, 26, 1, 0), (7, 3, 5, 0), (7, 11, 5, 1), (7, 19, 3, 1), (7, 27, 3, 1), (7, 4, 5, 0), (7, 12, 8, 1), (7, 20, 8, 1), (7, 28, 7, 0), (7, 5, 5, 1), (7, 13, 8, 0), (7, 21, 6, 1), (7, 29, 3, 1), (7, 6, 5, 0), (7, 14, 6, 1), (7, 22, 8, 1), (7, 30, 7, 0), (7, 7, 5, 0), (7, 15, 8, 1), (7, 23, 7, 0), (7, 31, 1, 0), (7, 32, 3, 1), (7, 40, 3, 1), (7, 48, 3, 1), (7, 56, 3, 1), (7, 33, 8, 1), (7, 41, 8, 1), (7, 49, 8, 1), (7, 57, 7, 0), (7, 34, 8, 0), (7, 42, 8, 1), (7, 50, 7, 0), (7, 58, 1, 0), (7, 35, 7, 0), (7, 43, 5, 1), (7, 51, 3, 1), (7, 59, 3, 1), (7, 36, 6, 1), (7, 44, 8, 1), (7, 52, 8, 1), (7, 60, 7, 0), (7, 37, 8, 1), (7, 45, 8, 1), (7, 53, 7, 0), (7, 61, 1, 1), (7, 38, 8, 1), (7, 46, 7, 0), (7, 54, 6, 1), (7, 62, 7, 1), (7, 39, 5, 1), (7, 47, 7, 0), (7, 55, 8, 1), (7, 63, 7, 1)]
+[decode_component] component=2 has_explicit_precincts=true num_layers=1 scod=0x01
+[decode_component] -> taking decode_component_proper path
+[packet_header_align] BEFORE: bit_pos=30 byte_pos=3 bit_offset=6
+[packet_header_align] AFTER: byte_pos=4 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=613 byte_pos=76 bit_offset=5
+[packet_header_align] AFTER: byte_pos=77 (segs.len=1)
+[packet_header_align] BEFORE: bit_pos=1126 byte_pos=140 bit_offset=6
+[packet_header_align] AFTER: byte_pos=141 (segs.len=1)
+[native_entropy_state][before_run_agg] bp=6 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 pos=1 cur=0x50
+[native_entropy_state][after_run_agg] bp=6 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 pos=2 cur=0x54
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=1 x=0 y=0
+[native_symbol_trace][cleanup_run_pos] bp=6 idx=0 ctx=18 run_pos=0 x=0 y=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=6 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 pos=2 cur=0x54
+[native_symbol_trace][cleanup] bp=6 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 pos=2 cur=0x54
+[native_entropy_state][after_cleanup_sym] bp=6 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=24 ctx=3 a=0xBC01 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEA000 ct=7 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=1 ctx=8 a=0xDFFE c=0x9F7D4000 ct=6 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=1 ctx=8 bit=1 a=0xAC02 c=0x2B008000 ct=5 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=1 ctx=8 bit=1 x=1 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=9 ctx=8 a=0xAC02 c=0x56010000 ct=4 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=9 ctx=8 bit=1 a=0xF002 c=0xAC020000 ct=3 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=9 ctx=8 bit=1 x=1 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=17 ctx=8 a=0xAC02 c=0x24020000 ct=2 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=17 ctx=8 bit=1 a=0x9401 c=0x24020000 ct=2 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=17 ctx=8 bit=1 x=1 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=25 ctx=7 a=0xF800 c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=25 ctx=7 bit=0 a=0xA1FF c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_symbol_trace][cleanup] bp=6 idx=25 ctx=7 bit=0 x=1 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=2 ctx=8 a=0xA1FF c=0x90080000 ct=0 pos=3 cur=0xAF
+[native_entropy_state][after_cleanup_sym] bp=6 idx=2 ctx=8 bit=0 a=0xC008 c=0x30501800 ct=5 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=2 ctx=8 bit=0 x=2 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=10 ctx=8 a=0xC008 c=0x30501800 ct=5 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=10 ctx=8 bit=1 a=0x8807 c=0x30501800 ct=5 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=10 ctx=8 bit=1 x=2 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=18 ctx=7 a=0xA80C c=0x60A03000 ct=4 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=18 ctx=7 bit=0 a=0xAC02 c=0x1D2A6000 ct=3 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=18 ctx=7 bit=0 x=2 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=26 ctx=1 a=0xAC02 c=0x1D2A6000 ct=3 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=26 ctx=1 bit=0 a=0xAC02 c=0x3A54C000 ct=2 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=26 ctx=1 bit=0 x=2 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=3 ctx=5 a=0xAC02 c=0x3A54C000 ct=2 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=3 ctx=5 bit=0 a=0xAC02 c=0x74A98000 ct=1 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=3 ctx=5 bit=0 x=3 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=11 ctx=5 a=0xAC02 c=0x74A98000 ct=1 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=11 ctx=5 bit=0 a=0xF002 c=0xE9530000 ct=0 pos=4 cur=0xFC
+[native_symbol_trace][cleanup] bp=6 idx=11 ctx=5 bit=0 x=3 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=19 ctx=1 a=0xF002 c=0xE9530000 ct=0 pos=4 cur=0xFC
+[native_entropy_state][after_cleanup_sym] bp=6 idx=19 ctx=1 bit=1 a=0xD004 c=0xB549BC00 ct=6 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=19 ctx=1 bit=1 x=3 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=27 ctx=3 a=0xD004 c=0x651AF000 ct=4 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=27 ctx=3 bit=1 a=0xB803 c=0x651AF000 ct=4 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=27 ctx=3 bit=1 x=3 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=4 ctx=0 a=0xA002 c=0x651AF000 ct=4 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=4 ctx=0 bit=0 a=0xAC02 c=0x3633E000 ct=3 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=4 ctx=0 bit=0 x=4 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=12 ctx=5 a=0xAC02 c=0x3633E000 ct=3 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=12 ctx=5 bit=0 a=0x9401 c=0x3633E000 ct=3 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=12 ctx=5 bit=0 x=4 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=20 ctx=8 a=0x9401 c=0x3633E000 ct=3 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=20 ctx=8 bit=1 a=0xB800 c=0x6C67C000 ct=2 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=20 ctx=8 bit=1 x=4 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=28 ctx=7 a=0x9FFF c=0x6C67C000 ct=2 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=28 ctx=7 bit=1 a=0xD004 c=0x01A70000 ct=0 pos=5 cur=0x90
+[native_symbol_trace][cleanup] bp=6 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=5 ctx=0 a=0x9C03 c=0x01A70000 ct=0 pos=5 cur=0x90
+[native_entropy_state][after_cleanup_sym] bp=6 idx=5 ctx=0 bit=0 a=0xD004 c=0x034EEE00 ct=7 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=5 ctx=0 bit=0 x=5 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=13 ctx=5 a=0xD004 c=0x034EEE00 ct=7 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=13 ctx=5 bit=0 a=0xB803 c=0x034EEE00 ct=7 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=13 ctx=5 bit=0 x=5 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=21 ctx=8 a=0xB803 c=0x034EEE00 ct=7 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=21 ctx=8 bit=1 a=0x8802 c=0x034EEE00 ct=7 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=21 ctx=8 bit=1 x=5 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=29 ctx=7 a=0xE002 c=0x069DDC00 ct=6 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=29 ctx=7 bit=0 a=0x8A01 c=0x069DDC00 ct=6 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=29 ctx=7 bit=0 x=5 y=3 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=6 ctx=0 a=0x8A01 c=0x069DDC00 ct=6 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=6 ctx=0 bit=0 a=0xE400 c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=6 ctx=0 bit=0 x=6 y=0 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=14 ctx=5 a=0xE400 c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=14 ctx=5 bit=0 a=0xCBFF c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=14 ctx=5 bit=0 x=6 y=1 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=22 ctx=5 a=0xCBFF c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=22 ctx=5 bit=0 a=0xB3FE c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=22 ctx=5 bit=0 x=6 y=2 use_rl=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=30 ctx=1 a=0xB3FE c=0x0D3BB800 ct=5 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=30 ctx=1 bit=0 a=0xBBFA c=0x1A777000 ct=4 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=30 ctx=1 bit=0 x=6 y=3 use_rl=0
+[native_entropy_state][before_run_agg] bp=6 idx=7 ctx=17 a=0xBBFA c=0x1A777000 ct=4 pos=6 cur=0x88
+[native_entropy_state][after_run_agg] bp=6 idx=7 ctx=17 bit=0 a=0x9FF9 c=0x1A777000 ct=4 pos=6 cur=0x88
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=7 ctx=17 bit=0 x=7 y=0
+[native_entropy_state][before_cleanup_sym] bp=6 idx=32 ctx=3 a=0x9FF9 c=0x1A777000 ct=4 pos=6 cur=0x88
+[native_entropy_state][after_cleanup_sym] bp=6 idx=32 ctx=3 bit=1 a=0x87F8 c=0x1A777000 ct=4 pos=6 cur=0x88
+[native_symbol_trace][cleanup] bp=6 idx=32 ctx=3 bit=1 x=0 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=40 ctx=3 bit=1 x=0 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=48 ctx=3 bit=1 x=0 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=33 ctx=8 bit=1 x=1 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=41 ctx=8 bit=1 x=1 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=49 ctx=8 bit=1 x=1 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=57 ctx=7 bit=0 x=1 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=34 ctx=8 bit=1 x=2 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=42 ctx=8 bit=0 x=2 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=50 ctx=6 bit=0 x=2 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=58 ctx=1 bit=0 x=2 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=35 ctx=7 bit=0 x=3 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=43 ctx=1 bit=0 x=3 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=51 ctx=0 bit=0 x=3 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=59 ctx=0 bit=0 x=3 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=36 ctx=3 bit=1 x=4 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=44 ctx=3 bit=0 x=4 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=52 ctx=0 bit=0 x=4 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=60 ctx=0 bit=0 x=4 y=7 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=37 ctx=6 bit=0 x=5 y=4 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=45 ctx=1 bit=0 x=5 y=5 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=53 ctx=0 bit=0 x=5 y=6 use_rl=0
+[native_symbol_trace][cleanup] bp=6 idx=61 ctx=0 bit=0 x=5 y=7 use_rl=0
+[native_entropy_state][before_run_agg] bp=6 idx=38 ctx=17 a=0x9F87 c=0x672FE000 ct=3 pos=8 cur=0x00
+[native_entropy_state][after_run_agg] bp=6 idx=38 ctx=17 bit=0 a=0x8386 c=0x672FE000 ct=3 pos=8 cur=0x00
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=38 ctx=17 bit=0 x=6 y=4
+[native_entropy_state][before_run_agg] bp=6 idx=39 ctx=17 a=0x8386 c=0x672FE000 ct=3 pos=8 cur=0x00
+[native_entropy_state][after_run_agg] bp=6 idx=39 ctx=17 bit=0 a=0xCF0A c=0xCE5FC000 ct=2 pos=8 cur=0x00
+[native_symbol_trace][cleanup_run_agg] bp=6 idx=39 ctx=17 bit=0 x=7 y=4
+[cl_sig_stream][standard] w=8 h=8 num_bp=7 samples=[(6, 8, 3, 1), (6, 16, 3, 1), (6, 24, 3, 1), (6, 1, 8, 1), (6, 9, 8, 1), (6, 17, 8, 1), (6, 25, 7, 0), (6, 2, 8, 0), (6, 10, 8, 1), (6, 18, 7, 0), (6, 26, 1, 0), (6, 3, 5, 0), (6, 11, 5, 0), (6, 19, 1, 1), (6, 27, 3, 1), (6, 4, 0, 0), (6, 12, 5, 0), (6, 20, 8, 1), (6, 28, 7, 1), (6, 5, 0, 0), (6, 13, 5, 0), (6, 21, 8, 1), (6, 29, 7, 0), (6, 6, 0, 0), (6, 14, 5, 0), (6, 22, 5, 0), (6, 30, 1, 0), (6, 32, 3, 1), (6, 40, 3, 1), (6, 48, 3, 1), (6, 56, 3, 1), (6, 33, 8, 1), (6, 41, 8, 1), (6, 49, 8, 1), (6, 57, 7, 0), (6, 34, 8, 1), (6, 42, 8, 0), (6, 50, 6, 0), (6, 58, 1, 0), (6, 35, 7, 0), (6, 43, 1, 0), (6, 51, 0, 0), (6, 59, 0, 0), (6, 36, 3, 1), (6, 44, 3, 0), (6, 52, 0, 0), (6, 60, 0, 0), (6, 37, 6, 0), (6, 45, 1, 0), (6, 53, 0, 0), (6, 61, 0, 0), (5, 6, 5, 0), (5, 7, 0, 0), (5, 15, 5, 1)]
+[bridge] Image dimensions: 8x8
+[bridge] Color space: RGB
+[bridge] Original bit depth: 16
+[wbjpeg2000_entropy_state][before_run_agg] bp=14 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 base=1 cur=0x50 next=0x54
+[wbjpeg2000_entropy_state][after_run_agg] bp=14 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=14 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=14 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=24 ctx=3 a=0xBC01 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=1 ctx=6 a=0xDFFE c=0x9F7D4000 ct=6 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=1 ctx=6 bit=1 a=0xAC02 c=0x2B008000 ct=5 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=9 ctx=7 a=0xAC02 c=0x56010000 ct=4 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=9 ctx=7 bit=1 a=0xAC02 c=0x00000000 ct=3 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=17 ctx=7 a=0xAC02 c=0x00000000 ct=2 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=17 ctx=7 bit=1 a=0xF002 c=0x00000000 ct=1 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=25 ctx=7 a=0xBC01 c=0x00000000 ct=1 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=25 ctx=7 bit=1 a=0xA400 c=0x00000000 ct=1 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=2 ctx=6 a=0xDFFE c=0x00000000 ct=0 base=3 cur=0xAF next=0x86
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=2 ctx=6 bit=1 a=0xABFD c=0x00000000 ct=0 base=3 cur=0xAF next=0x86
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=10 ctx=7 a=0xEFF8 c=0x0000F200 ct=7 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=10 ctx=7 bit=1 a=0xD7F7 c=0x0000F200 ct=7 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=18 ctx=7 a=0xBFF6 c=0x0000F200 ct=7 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=18 ctx=7 bit=1 a=0xA7F5 c=0x0000F200 ct=7 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=26 ctx=7 a=0x8FF4 c=0x0000F200 ct=7 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=26 ctx=7 bit=1 a=0xEFE6 c=0x0001E400 ct=6 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=3 ctx=6 a=0xD7E5 c=0x0001E400 ct=6 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=3 ctx=6 bit=1 a=0xA3E4 c=0x0001E400 ct=6 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=11 ctx=7 a=0x8BE3 c=0x0001E400 ct=6 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=11 ctx=7 bit=1 a=0x8122 c=0x0001E400 ct=6 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=19 ctx=7 a=0xD242 c=0x0003C800 ct=5 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=19 ctx=7 bit=1 a=0xC781 c=0x0003C800 ct=5 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=27 ctx=7 a=0xBCC0 c=0x0003C800 ct=5 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=27 ctx=7 bit=1 a=0xB1FF c=0x0003C800 ct=5 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=4 ctx=6 a=0xA73E c=0x0003C800 ct=5 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=4 ctx=6 bit=1 a=0xE67A c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=12 ctx=7 a=0xCE79 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=12 ctx=7 bit=1 a=0xC3B8 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=20 ctx=7 a=0xB8F7 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=20 ctx=7 bit=1 a=0xAE36 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=28 ctx=7 a=0xA375 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=28 ctx=7 bit=1 a=0x98B4 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=5 ctx=6 a=0x8DF3 c=0x00079000 ct=4 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=5 ctx=6 bit=1 a=0xEBE4 c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=13 ctx=7 a=0xD3E3 c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=13 ctx=7 bit=1 a=0xC922 c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=21 ctx=7 a=0xBE61 c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=21 ctx=7 bit=1 a=0xB3A0 c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=29 ctx=7 a=0xA8DF c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=29 ctx=7 bit=1 a=0x9E1E c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=29 ctx=7 bit=1 x=5 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=6 ctx=6 a=0x935D c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=6 ctx=6 bit=1 a=0x889C c=0x000F2000 ct=3 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=6 ctx=6 bit=1 x=6 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=14 ctx=7 a=0xE136 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=14 ctx=7 bit=1 a=0xD675 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=14 ctx=7 bit=1 x=6 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=22 ctx=7 a=0xCBB4 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=22 ctx=7 bit=1 a=0xC0F3 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=22 ctx=7 bit=1 x=6 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=30 ctx=7 a=0xB632 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=30 ctx=7 bit=1 a=0xAB71 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=30 ctx=7 bit=1 x=6 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=7 ctx=6 a=0xA0B0 c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=7 ctx=6 bit=1 a=0x95EF c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=7 ctx=6 bit=1 x=7 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=15 ctx=7 a=0x8B2E c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=15 ctx=7 bit=1 a=0x806D c=0x001E4000 ct=2 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=15 ctx=7 bit=1 x=7 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=23 ctx=7 a=0xEB58 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=23 ctx=7 bit=1 a=0xE097 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=23 ctx=7 bit=1 x=7 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=31 ctx=7 a=0xDB76 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=31 ctx=7 bit=1 a=0xD0B5 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=31 ctx=7 bit=1 x=7 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=14 idx=32 ctx=3 a=0xCB94 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=14 idx=32 ctx=3 bit=1 a=0xB393 c=0x003C8000 ct=1 base=4 cur=0x86 next=0xF9
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=32 ctx=3 bit=1 x=0 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=40 ctx=3 bit=1 x=0 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=48 ctx=3 bit=1 x=0 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=33 ctx=7 bit=1 x=1 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=41 ctx=7 bit=1 x=1 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=49 ctx=7 bit=1 x=1 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=57 ctx=7 bit=1 x=1 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=34 ctx=7 bit=1 x=2 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=42 ctx=7 bit=1 x=2 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=50 ctx=7 bit=1 x=2 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=58 ctx=7 bit=1 x=2 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=35 ctx=7 bit=1 x=3 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=43 ctx=7 bit=1 x=3 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=51 ctx=7 bit=1 x=3 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=59 ctx=7 bit=1 x=3 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=36 ctx=7 bit=1 x=4 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=44 ctx=7 bit=1 x=4 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=52 ctx=7 bit=1 x=4 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=60 ctx=7 bit=1 x=4 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=14 idx=37 ctx=7 bit=1 x=5 y=4 use_rl=0
+[wbjpeg2000_entropy_state][before_run_agg] bp=7 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 base=1 cur=0x50 next=0x54
+[wbjpeg2000_entropy_state][after_run_agg] bp=7 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 base=2 cur=0x54 next=0xA6
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=7 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=7 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 base=2 cur=0x54 next=0xA6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 base=2 cur=0x54 next=0xA6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 base=2 cur=0x54 next=0xA6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEB200 ct=7 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=24 ctx=3 a=0xBC01 c=0x4FBEB200 ct=7 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEB200 ct=7 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=1 ctx=6 a=0xDFFE c=0x9F7D6400 ct=6 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=1 ctx=6 bit=1 a=0xAC02 c=0x2B00C800 ct=5 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=9 ctx=7 a=0xAC02 c=0x56019000 ct=4 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=9 ctx=7 bit=1 a=0xAC02 c=0x00012000 ct=3 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=17 ctx=7 a=0xAC02 c=0x00024000 ct=2 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=17 ctx=7 bit=1 a=0xF002 c=0x00048000 ct=1 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=25 ctx=7 a=0xBC01 c=0x00048000 ct=1 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=25 ctx=7 bit=1 a=0xA400 c=0x00048000 ct=1 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=2 ctx=6 a=0xDFFE c=0x00090000 ct=0 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=2 ctx=6 bit=1 a=0xABFD c=0x00090000 ct=0 base=3 cur=0xA6 next=0xF6
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=10 ctx=7 a=0xEFF8 c=0x00121200 ct=7 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=10 ctx=7 bit=1 a=0xD7F7 c=0x00121200 ct=7 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=18 ctx=7 a=0xBFF6 c=0x00121200 ct=7 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=18 ctx=7 bit=1 a=0xA7F5 c=0x00121200 ct=7 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=26 ctx=7 a=0x8FF4 c=0x00121200 ct=7 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=26 ctx=7 bit=1 a=0xEFE6 c=0x00242400 ct=6 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=3 ctx=6 a=0xD7E5 c=0x00242400 ct=6 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=3 ctx=6 bit=1 a=0xA3E4 c=0x00242400 ct=6 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=11 ctx=7 a=0x8BE3 c=0x00242400 ct=6 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=11 ctx=7 bit=1 a=0x8122 c=0x00242400 ct=6 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=19 ctx=7 a=0xD242 c=0x00484800 ct=5 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=19 ctx=7 bit=1 a=0xC781 c=0x00484800 ct=5 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=27 ctx=7 a=0xBCC0 c=0x00484800 ct=5 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=27 ctx=7 bit=1 a=0xB1FF c=0x00484800 ct=5 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=4 ctx=6 a=0xA73E c=0x00484800 ct=5 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=4 ctx=6 bit=1 a=0xE67A c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=12 ctx=7 a=0xCE79 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=12 ctx=7 bit=1 a=0xC3B8 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=20 ctx=7 a=0xB8F7 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=20 ctx=7 bit=1 a=0xAE36 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=28 ctx=7 a=0xA375 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=28 ctx=7 bit=1 a=0x98B4 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=5 ctx=6 a=0x8DF3 c=0x00909000 ct=4 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=5 ctx=6 bit=1 a=0xEBE4 c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=13 ctx=7 a=0xD3E3 c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=13 ctx=7 bit=1 a=0xC922 c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=21 ctx=7 a=0xBE61 c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=21 ctx=7 bit=1 a=0xB3A0 c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=29 ctx=7 a=0xA8DF c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=29 ctx=7 bit=1 a=0x9E1E c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=29 ctx=7 bit=1 x=5 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=6 ctx=6 a=0x935D c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=6 ctx=6 bit=1 a=0x889C c=0x01212000 ct=3 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=6 ctx=6 bit=1 x=6 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=14 ctx=7 a=0xE136 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=14 ctx=7 bit=1 a=0xD675 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=14 ctx=7 bit=1 x=6 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=22 ctx=7 a=0xCBB4 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=22 ctx=7 bit=1 a=0xC0F3 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=22 ctx=7 bit=1 x=6 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=30 ctx=7 a=0xB632 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=30 ctx=7 bit=1 a=0xAB71 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=30 ctx=7 bit=1 x=6 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=7 ctx=6 a=0xA0B0 c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=7 ctx=6 bit=1 a=0x95EF c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=7 ctx=6 bit=1 x=7 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=15 ctx=7 a=0x8B2E c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=15 ctx=7 bit=1 a=0x806D c=0x02424000 ct=2 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=15 ctx=7 bit=1 x=7 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=23 ctx=7 a=0xEB58 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=23 ctx=7 bit=1 a=0xE097 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=23 ctx=7 bit=1 x=7 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=31 ctx=7 a=0xDB76 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=31 ctx=7 bit=1 a=0xD0B5 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=31 ctx=7 bit=1 x=7 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=7 idx=32 ctx=3 a=0xCB94 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=7 idx=32 ctx=3 bit=1 a=0xB393 c=0x04848000 ct=1 base=4 cur=0xF6 next=0x2B
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=32 ctx=3 bit=1 x=0 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=40 ctx=3 bit=1 x=0 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=48 ctx=3 bit=1 x=0 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=33 ctx=7 bit=1 x=1 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=41 ctx=7 bit=1 x=1 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=49 ctx=7 bit=1 x=1 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=57 ctx=7 bit=1 x=1 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=34 ctx=7 bit=1 x=2 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=42 ctx=7 bit=1 x=2 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=50 ctx=7 bit=1 x=2 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=58 ctx=7 bit=1 x=2 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=35 ctx=7 bit=1 x=3 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=43 ctx=7 bit=1 x=3 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=51 ctx=7 bit=1 x=3 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=59 ctx=7 bit=1 x=3 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=36 ctx=7 bit=1 x=4 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=44 ctx=7 bit=1 x=4 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=52 ctx=7 bit=1 x=4 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=60 ctx=7 bit=1 x=4 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=7 idx=37 ctx=7 bit=1 x=5 y=4 use_rl=0
+[wbjpeg2000_entropy_state][before_run_agg] bp=6 idx=0 ctx=17 a=0x8000 c=0x77578000 ct=1 base=1 cur=0x50 next=0x54
+[wbjpeg2000_entropy_state][after_run_agg] bp=6 idx=0 ctx=17 bit=1 a=0xAC10 c=0x218D5800 ct=5 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_symbol_trace][cleanup_run_agg] bp=6 idx=0 ctx=17 bit=1 x=0 y=0
+[wbjpeg2000_symbol_trace][cleanup_run_pos] bp=6 idx=0 ctx=18 run_pos=0 x=0 y=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=8 ctx=3 a=0xAC02 c=0x5FF8C000 ct=2 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=8 ctx=3 bit=1 a=0xAC02 c=0x13EF8000 ct=1 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=8 ctx=3 bit=1 x=0 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=16 ctx=3 a=0xAC02 c=0x27DF0000 ct=0 base=2 cur=0x54 next=0xAF
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=16 ctx=3 bit=1 a=0xF002 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=16 ctx=3 bit=1 x=0 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=24 ctx=3 a=0xBC01 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=24 ctx=3 bit=1 a=0xA400 c=0x4FBEA000 ct=7 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=24 ctx=3 bit=1 x=0 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=1 ctx=6 a=0xDFFE c=0x9F7D4000 ct=6 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=1 ctx=6 bit=1 a=0xAC02 c=0x2B008000 ct=5 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=1 ctx=6 bit=1 x=1 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=9 ctx=7 a=0xAC02 c=0x56010000 ct=4 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=9 ctx=7 bit=1 a=0xAC02 c=0x00000000 ct=3 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=9 ctx=7 bit=1 x=1 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=17 ctx=7 a=0xAC02 c=0x00000000 ct=2 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=17 ctx=7 bit=1 a=0xF002 c=0x00000000 ct=1 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=17 ctx=7 bit=1 x=1 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=25 ctx=7 a=0xBC01 c=0x00000000 ct=1 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=25 ctx=7 bit=1 a=0xA400 c=0x00000000 ct=1 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=25 ctx=7 bit=1 x=1 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=2 ctx=6 a=0xDFFE c=0x00000000 ct=0 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=2 ctx=6 bit=1 a=0xABFD c=0x00000000 ct=0 base=3 cur=0xAF next=0xFC
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=2 ctx=6 bit=1 x=2 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=10 ctx=7 a=0xEFF8 c=0x00000600 ct=7 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=10 ctx=7 bit=1 a=0xD7F7 c=0x00000600 ct=7 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=10 ctx=7 bit=1 x=2 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=18 ctx=7 a=0xBFF6 c=0x00000600 ct=7 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=18 ctx=7 bit=1 a=0xA7F5 c=0x00000600 ct=7 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=18 ctx=7 bit=1 x=2 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=26 ctx=7 a=0x8FF4 c=0x00000600 ct=7 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=26 ctx=7 bit=1 a=0xEFE6 c=0x00000C00 ct=6 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=26 ctx=7 bit=1 x=2 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=3 ctx=6 a=0xD7E5 c=0x00000C00 ct=6 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=3 ctx=6 bit=1 a=0xA3E4 c=0x00000C00 ct=6 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=3 ctx=6 bit=1 x=3 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=11 ctx=7 a=0x8BE3 c=0x00000C00 ct=6 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=11 ctx=7 bit=1 a=0x8122 c=0x00000C00 ct=6 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=11 ctx=7 bit=1 x=3 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=19 ctx=7 a=0xD242 c=0x00001800 ct=5 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=19 ctx=7 bit=1 a=0xC781 c=0x00001800 ct=5 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=19 ctx=7 bit=1 x=3 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=27 ctx=7 a=0xBCC0 c=0x00001800 ct=5 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=27 ctx=7 bit=1 a=0xB1FF c=0x00001800 ct=5 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=27 ctx=7 bit=1 x=3 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=4 ctx=6 a=0xA73E c=0x00001800 ct=5 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=4 ctx=6 bit=1 a=0xE67A c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=4 ctx=6 bit=1 x=4 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=12 ctx=7 a=0xCE79 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=12 ctx=7 bit=1 a=0xC3B8 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=12 ctx=7 bit=1 x=4 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=20 ctx=7 a=0xB8F7 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=20 ctx=7 bit=1 a=0xAE36 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=20 ctx=7 bit=1 x=4 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=28 ctx=7 a=0xA375 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=28 ctx=7 bit=1 a=0x98B4 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=28 ctx=7 bit=1 x=4 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=5 ctx=6 a=0x8DF3 c=0x00003000 ct=4 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=5 ctx=6 bit=1 a=0xEBE4 c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=5 ctx=6 bit=1 x=5 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=13 ctx=7 a=0xD3E3 c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=13 ctx=7 bit=1 a=0xC922 c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=13 ctx=7 bit=1 x=5 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=21 ctx=7 a=0xBE61 c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=21 ctx=7 bit=1 a=0xB3A0 c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=21 ctx=7 bit=1 x=5 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=29 ctx=7 a=0xA8DF c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=29 ctx=7 bit=1 a=0x9E1E c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=29 ctx=7 bit=1 x=5 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=6 ctx=6 a=0x935D c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=6 ctx=6 bit=1 a=0x889C c=0x00006000 ct=3 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=6 ctx=6 bit=1 x=6 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=14 ctx=7 a=0xE136 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=14 ctx=7 bit=1 a=0xD675 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=14 ctx=7 bit=1 x=6 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=22 ctx=7 a=0xCBB4 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=22 ctx=7 bit=1 a=0xC0F3 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=22 ctx=7 bit=1 x=6 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=30 ctx=7 a=0xB632 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=30 ctx=7 bit=1 a=0xAB71 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=30 ctx=7 bit=1 x=6 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=7 ctx=6 a=0xA0B0 c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=7 ctx=6 bit=1 a=0x95EF c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=7 ctx=6 bit=1 x=7 y=0 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=15 ctx=7 a=0x8B2E c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=15 ctx=7 bit=1 a=0x806D c=0x0000C000 ct=2 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=15 ctx=7 bit=1 x=7 y=1 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=23 ctx=7 a=0xEB58 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=23 ctx=7 bit=1 a=0xE097 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=23 ctx=7 bit=1 x=7 y=2 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=31 ctx=7 a=0xDB76 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=31 ctx=7 bit=1 a=0xD0B5 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=31 ctx=7 bit=1 x=7 y=3 use_rl=0
+[wbjpeg2000_entropy_state][before_cleanup_sym] bp=6 idx=32 ctx=3 a=0xCB94 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_entropy_state][after_cleanup_sym] bp=6 idx=32 ctx=3 bit=1 a=0xB393 c=0x00018000 ct=1 base=4 cur=0xFC next=0x90
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=32 ctx=3 bit=1 x=0 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=40 ctx=3 bit=1 x=0 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=48 ctx=3 bit=1 x=0 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=56 ctx=3 bit=1 x=0 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=33 ctx=7 bit=1 x=1 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=41 ctx=7 bit=1 x=1 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=49 ctx=7 bit=1 x=1 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=57 ctx=7 bit=1 x=1 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=34 ctx=7 bit=1 x=2 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=42 ctx=7 bit=1 x=2 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=50 ctx=7 bit=1 x=2 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=58 ctx=7 bit=1 x=2 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=35 ctx=7 bit=1 x=3 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=43 ctx=7 bit=1 x=3 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=51 ctx=7 bit=1 x=3 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=59 ctx=7 bit=1 x=3 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=36 ctx=7 bit=1 x=4 y=4 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=44 ctx=7 bit=1 x=4 y=5 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=52 ctx=7 bit=1 x=4 y=6 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=60 ctx=7 bit=1 x=4 y=7 use_rl=0
+[wbjpeg2000_symbol_trace][cleanup] bp=6 idx=37 ctx=7 bit=1 x=5 y=4 use_rl=0
+[bridge] Raw dimensions: 8x8
+[bridge] Raw bytes_per_sample: 2
+[bridge] Raw num_components: 3
+[bridge] Raw bit_depth: 16
+[bridge] Raw data length: 384
+[bridge] 16-bit path: first 10 pixels (component 0): [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+[bridge] 16-bit path: first 10 pixels after correction: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]
+JPEG2000 differential summary: fixtures_total=1 multicomponent_fixtures=1 ok=0 native_error=0 native_unsupported_packet_header_markers=0 native_unsupported_poc=0 bridge_error=0 metadata_mismatch=0 sample_count_mismatch=0 sample_value_mismatch=1 multicomponent_native_error=0 multicomponent_bridge_error=0 multicomponent_metadata_mismatch=0 multicomponent_sample_count_mismatch=0 multicomponent_sample_value_mismatch=1
+SAMPLE_VALUE_MISMATCH|tests/fixtures/rgb_8x8_lossless.jp2|idx=0 band=0 row=0 col=0 pixel=0 native=11480 bridge=100 abs_err=11380 eps=0
+test formats::jpeg2000::differential_tests::jpeg2000_native_vs_bridge_differential_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 0.01s
+
+     Running tests/integration.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/integration-5f935e281ff4dbda)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+     Running tests/reprojection_parity.rs (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/target/debug/deps/reprojection_parity-623e1739416b87bb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+

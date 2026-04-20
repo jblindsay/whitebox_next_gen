@@ -898,12 +898,96 @@ impl GeoJp2 {
         let npix = self.width as usize * self.height as usize;
         let nc   = self.components as usize;
         let mut out = vec![0i32; npix * nc];
+        let debug_mct_head = std::env::var("JPEG2000_DEBUG_NATIVE_MCT_HEAD")
+            .ok()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         for c in 0..nc {
             let band = self.decode_component(c)?;
             for p in 0..npix {
                 out[p * nc + c] = band[p];
             }
         }
+
+        if debug_mct_head && nc >= 3 {
+            let head = npix.min(8);
+            for p in 0..head {
+                let base = p * nc;
+                eprintln!(
+                    "[native_mct_head_pre] p={} c0={} c1={} c2={} mc_transform={}",
+                    p,
+                    out[base],
+                    out[base + 1],
+                    out[base + 2],
+                    self.cod.mc_transform
+                );
+            }
+        }
+
+        if self.cod.mc_transform != 0 && nc >= 3 {
+            let shifts: Vec<i32> = (0..3)
+                .map(|component| {
+                    let bits = self
+                        .siz
+                        .components
+                        .get(component)
+                        .map(|c| c.bits())
+                        .unwrap_or(self.bits);
+                    let signed = self
+                        .siz
+                        .components
+                        .get(component)
+                        .map(|c| c.signed())
+                        .unwrap_or(self.signed);
+                    if !signed || bits == 16 {
+                        1i32 << bits.saturating_sub(1)
+                    } else {
+                        0
+                    }
+                })
+                .collect();
+
+            for p in 0..npix {
+                let base = p * nc;
+                let y0 = out[base] - shifts[0];
+                let y1 = out[base + 1] - shifts[1];
+                let y2 = out[base + 2] - shifts[2];
+
+                let (i0, i1, i2) = if self.cod.mc_transform == 1 {
+                    let green = y0 - (((y2 + y1) as f64) * 0.25).floor() as i32;
+                    (y2 + green, green, y1 + green)
+                } else {
+                    let y0f = y0 as f64;
+                    let y1f = y1 as f64;
+                    let y2f = y2 as f64;
+                    (
+                        (y0f + 1.402 * y2f).round() as i32,
+                        (y0f - 0.34413 * y1f - 0.71414 * y2f).round() as i32,
+                        (y0f + 1.772 * y1f).round() as i32,
+                    )
+                };
+
+                out[base] = i0 + shifts[0];
+                out[base + 1] = i1 + shifts[1];
+                out[base + 2] = i2 + shifts[2];
+            }
+
+            if debug_mct_head {
+                let head = npix.min(8);
+                for p in 0..head {
+                    let base = p * nc;
+                    eprintln!(
+                        "[native_mct_head_post] p={} c0={} c1={} c2={} mc_transform={}",
+                        p,
+                        out[base],
+                        out[base + 1],
+                        out[base + 2],
+                        self.cod.mc_transform
+                    );
+                }
+            }
+        }
+
         Ok(out)
     }
 
@@ -1067,8 +1151,21 @@ impl GeoJp2 {
             decode_block as decode_block_legacy,
             decode_block_standard_j2k_with_probe as decode_block,
             LlPassProbeConfig,
+            StandardSubbandKind,
         };
         use std::collections::HashMap;
+
+        fn standard_subband_kind(qcd_idx: usize) -> StandardSubbandKind {
+            if qcd_idx == 0 {
+                StandardSubbandKind::Ll
+            } else if qcd_idx % 3 == 1 {
+                StandardSubbandKind::Hl
+            } else if qcd_idx % 3 == 2 {
+                StandardSubbandKind::Lh
+            } else {
+                StandardSubbandKind::Hh
+            }
+        }
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
         let debug_entropy_ab = std::env::var("JPEG2000_DEBUG_ENTROPY_AB").is_ok();
@@ -1390,7 +1487,11 @@ impl GeoJp2 {
                                             if zbp > 31 { break; }
                                         }
                                         if debug && tile_tx == 0 && tile_ty == 0 && si == 0 && cbx == 0 && cby == 0 {
-                                            eprintln!("[proper] LL CB(0,0) zbp(missing_bp)={zbp}");
+                                            eprintln!(
+                                                "[proper] target_comp={} packet_comp={} LL CB(0,0) zbp(missing_bp)={zbp}",
+                                                target_component,
+                                                comp
+                                            );
                                         }
                                         cb_grid[si][cby][cbx].missing_bp = zbp;
                                         cb_grid[si][cby][cbx].ever_included = true;
@@ -1414,7 +1515,11 @@ impl GeoJp2 {
                                     let lblock = cb_grid[si][cby][cbx].lblock;
                                     let len_bits = lblock.saturating_add(passes.ilog2());
                                     if debug && tile_tx == 0 && tile_ty == 0 && si == 0 && cbx == 0 && cby == 0 {
-                                        eprintln!("[proper] LL CB(0,0) passes={passes} lblock_inc={inc} lblock={lblock} len_bits={len_bits}");
+                                        eprintln!(
+                                            "[proper] target_comp={} packet_comp={} LL CB(0,0) passes={passes} lblock_inc={inc} lblock={lblock} len_bits={len_bits}",
+                                            target_component,
+                                            comp
+                                        );
                                     }
                                     if len_bits > 31 { break 'sb_loop; }
 
@@ -1512,7 +1617,7 @@ impl GeoJp2 {
 
                     if debug_entropy_ab && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
                         let std_probe = LlPassProbeConfig::default();
-                        let std_dec = decode_block(&cb.data, actual_w, actual_h, num_bp, std_probe);
+                        let std_dec = decode_block(&cb.data, actual_w, actual_h, num_bp, StandardSubbandKind::Ll, std_probe);
                         let legacy_dec = decode_block_legacy(&cb.data, actual_w, actual_h, num_bp);
 
                         let std_nonzero = std_dec.iter().filter(|&&v| v != 0).count();
@@ -1545,6 +1650,7 @@ impl GeoJp2 {
                             actual_w,
                             actual_h,
                             num_bp,
+                            StandardSubbandKind::Ll,
                             LlPassProbeConfig::default(),
                         );
                         let no_sp_dec = decode_block(
@@ -1552,6 +1658,7 @@ impl GeoJp2 {
                             actual_w,
                             actual_h,
                             num_bp,
+                            StandardSubbandKind::Ll,
                             LlPassProbeConfig { disable_sp: true, disable_mr: false, disable_cl: false },
                         );
                         let no_mr_dec = decode_block(
@@ -1559,6 +1666,7 @@ impl GeoJp2 {
                             actual_w,
                             actual_h,
                             num_bp,
+                            StandardSubbandKind::Ll,
                             LlPassProbeConfig { disable_sp: false, disable_mr: true, disable_cl: false },
                         );
                         let no_cl_dec = decode_block(
@@ -1566,6 +1674,7 @@ impl GeoJp2 {
                             actual_w,
                             actual_h,
                             num_bp,
+                            StandardSubbandKind::Ll,
                             LlPassProbeConfig { disable_sp: false, disable_mr: false, disable_cl: true },
                         );
                         let legacy_dec = decode_block_legacy(&cb.data, actual_w, actual_h, num_bp);
@@ -1617,7 +1726,7 @@ impl GeoJp2 {
                     let dec = if use_legacy_for_sb {
                         decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                     } else {
-                        decode_block(&cb.data, actual_w, actual_h, num_bp, ll_probe)
+                        decode_block(&cb.data, actual_w, actual_h, num_bp, standard_subband_kind(sb.qcd_idx), ll_probe)
                     };
 
                     if lossless {
@@ -1713,7 +1822,7 @@ impl GeoJp2 {
                         let dec = if use_legacy_for_sb {
                             decode_block_legacy(&cb.data, actual_w, actual_h, num_bp)
                         } else {
-                            decode_block(&cb.data, actual_w, actual_h, num_bp, ll_probe)
+                            decode_block(&cb.data, actual_w, actual_h, num_bp, standard_subband_kind(sb.qcd_idx), ll_probe)
                         };
                         for r in 0..actual_h {
                             for c in 0..actual_w {

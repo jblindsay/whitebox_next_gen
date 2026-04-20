@@ -212,48 +212,57 @@ impl<'a> MqDecoder<'a> {
         dec
     }
 
-    /// Initialize context states per ISO 15444-1 standard (for decoding external J2K data).
-    /// Context 0 (UNI) starts at state 46 (uniform), context 18 (AGG) starts at state 3.
+    /// Initialize context states per ISO 15444-1 table D.7 for external codestream decode.
+    /// Context 0 starts at state index 4, context 17 is cleanup run aggregate,
+    /// and context 18 is uniform.
     pub fn init_standard_j2k_contexts(&mut self) {
-        self.cx[0]  = (46, 0); // UNI/ZERO: uniform context, fixed-point state 46
-        self.cx[18] = (3,  0); // AGG/CLEANUP: aggregate run context, state 3
+        self.cx[0] = (4,  0);
+        self.cx[17] = (3,  0);
+        self.cx[18] = (46, 0);
     }
 
     fn init(&mut self) {
-        self.c = (self.next_byte() as u32) << 16;
+        self.c = ((self.current_byte() as u32) ^ 0xFF) << 16;
         self.byte_in();
         self.c <<= 7;
         self.ct -= 7;
         self.a = 0x8000;
     }
 
-    fn next_byte(&mut self) -> u8 {
-        if self.pos < self.data.len() {
-            let b = self.data[self.pos];
-            self.pos += 1;
-            b
-        } else {
-            0xFF
-        }
+    fn current_byte(&self) -> u8 {
+        self.data
+            .get(self.pos)
+            .copied()
+            .unwrap_or(0xFF)
+    }
+
+    fn next_byte(&self) -> u8 {
+        self.data
+            .get(self.pos + 1)
+            .copied()
+            .unwrap_or(0xFF)
     }
 
     fn byte_in(&mut self) {
-        let b = self.next_byte();
-        if b == 0xFF {
+        if self.current_byte() == 0xFF {
             let b2 = self.next_byte();
             if b2 > 0x8F {
-                // Marker — stop
-                self.c += 0xFF00;
+                // Marker or termination padding.
                 self.ct = 8;
-                // Rewind safely even for very short streams (0-1 byte payloads).
-                self.pos = self.pos.saturating_sub(2);
             } else {
-                self.c += (b as u32) << 9;
-                self.c += (b2 as u32) << 1;
+                self.pos += 1;
+                self.c = self
+                    .c
+                    .wrapping_add(0xFE00)
+                    .wrapping_sub((self.current_byte() as u32) << 9);
                 self.ct = 7;
             }
         } else {
-            self.c += (b as u32) << 8;
+            self.pos += 1;
+            self.c = self
+                .c
+                .wrapping_add(0xFF00)
+                .wrapping_sub((self.current_byte() as u32) << 8);
             self.ct = 8;
         }
     }
@@ -295,12 +304,12 @@ impl<'a> MqDecoder<'a> {
             self.c -= self.a << 16;
             d = if self.a < qe {
                 self.a = qe;
-                if QE_TABLE[state as usize].switch != 0 { self.cx[cx_idx].1 ^= 1; }
-                self.cx[cx_idx].0 = QE_TABLE[state as usize].nlps;
+                self.cx[cx_idx].0 = QE_TABLE[state as usize].nmps;
                 mps
             } else {
                 self.a = qe;
-                self.cx[cx_idx].0 = QE_TABLE[state as usize].nmps;
+                if QE_TABLE[state as usize].switch != 0 { self.cx[cx_idx].1 ^= 1; }
+                self.cx[cx_idx].0 = QE_TABLE[state as usize].nlps;
                 1 - mps
             };
             self.renorm_d();
@@ -311,6 +320,16 @@ impl<'a> MqDecoder<'a> {
     /// Number of source bytes consumed so far.
     pub fn consumed_bytes(&self) -> usize {
         self.pos.min(self.data.len())
+    }
+
+    /// Expose internal MQ state for deterministic debug comparisons.
+    pub fn debug_state(&self) -> (u32, u32, i32, usize, u8) {
+        let cur_byte = if self.pos < self.data.len() {
+            self.data[self.pos]
+        } else {
+            0xFF
+        };
+        (self.a, self.c, self.ct, self.pos.min(self.data.len()), cur_byte)
     }
 }
 
@@ -334,6 +353,13 @@ mod ctx {
     pub const SIGN:    [usize; 5] = [10,11,12,13,14]; // sign contexts
     pub const MAG:     [usize; 3] = [15,16,17]; // mag refinement contexts
     pub const CLEANUP: usize = 18; // cleanup pass context
+}
+
+mod std_ctx {
+    pub const SIGN: [usize; 5] = [9, 10, 11, 12, 13];
+    pub const MAG: [usize; 3] = [14, 15, 16];
+    pub const RUN: usize = 17;
+    pub const UNIFORM: usize = 18;
 }
 
 /// Encode a code-block of integer DWT coefficients into a compressed byte stream.
@@ -520,7 +546,14 @@ pub fn decode_block_standard_j2k(
     height: usize,
     num_bitplanes: usize,
 ) -> Vec<i32> {
-    decode_block_standard_j2k_with_probe(data, width, height, num_bitplanes, LlPassProbeConfig::default())
+    decode_block_standard_j2k_with_probe(
+        data,
+        width,
+        height,
+        num_bitplanes,
+        StandardSubbandKind::Ll,
+        LlPassProbeConfig::default(),
+    )
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -530,27 +563,51 @@ pub struct LlPassProbeConfig {
     pub disable_cl: bool,
 }
 
+fn for_each_stripe_index(width: usize, height: usize, mut action: impl FnMut(usize)) {
+    for base_row in (0..height).step_by(4) {
+        for c in 0..width {
+            for j in 0..4 {
+                let row = base_row + j;
+                if row >= height {
+                    break;
+                }
+                action(row * width + c);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StandardSubbandKind {
+    Ll,
+    Hl,
+    Lh,
+    Hh,
+}
+
 pub fn decode_block_standard_j2k_with_probe(
     data: &[u8],
     width: usize,
     height: usize,
     num_bitplanes: usize,
+    subband_kind: StandardSubbandKind,
     ll_probe: LlPassProbeConfig,
 ) -> Vec<i32> {
     let n = width * height;
     let mut mags     = vec![0u32; n];
     let mut signs    = vec![0u8;  n];
     let mut sig      = vec![false; n]; // ever been significant?
+    let mut mag_refined = vec![false; n];
     let mut sp_visit = vec![false; n]; // visited in SP this pass
     let mut dec      = MqDecoder::new(data);
     dec.init_standard_j2k_contexts();
     let trace = width == 64 && height == 64 && num_bitplanes >= 10;
-    // Run-mode currently degrades external-fixture parity in this implementation.
-    // Keep it disabled by default until the cleanup/run context path is corrected.
+    // Standard JPEG2000 cleanup run-mode is enabled by default.
+    // The env var remains as an explicit override (`0`/`false` to disable).
     let run_mode_enabled = std::env::var("JPEG2000_STDJK_ENABLE_RUNMODE")
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+        .unwrap_or(true);
     let debug_cl_stream = std::env::var("JPEG2000_DEBUG_CL_SIG_STREAM")
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -560,11 +617,11 @@ pub fn decode_block_standard_j2k_with_probe(
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(48usize);
     let mut cl_stream: Vec<(usize, usize, usize, u8)> = Vec::new(); // (bp, idx, ctx, bit)
+    let mut native_symbol_trace_count = 0usize;
     let debug_cleanup_trace = std::env::var("JPEG2000_DEBUG_LL_CLEANUP_TRACE")
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
-
     for bp in (0..num_bitplanes).rev() {
         let threshold = 1u32 << bp;
         let mut cl_sig_count = 0usize;
@@ -579,12 +636,12 @@ pub fn decode_block_standard_j2k_with_probe(
 
         // ── Significance Propagation (SP) ──────────────────────────────────
         if !ll_probe.disable_sp {
-            for i in 0..n {
+            for_each_stripe_index(width, height, |i| {
                 if !sig[i] {
-                    let ctx = significance_context_bool(&sig, i, width, height);
-                    if ctx > 0 {
+                    let ctx_label = zero_coding_context_bool(&sig, i, width, height, subband_kind);
+                    if ctx_label > 0 {
                         sp_visit[i] = true;
-                        let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                        let bit = dec.decode(ctx_label);
                         if bit == 1 {
                             mags[i] |= threshold;
                             sig[i] = true;
@@ -594,18 +651,19 @@ pub fn decode_block_standard_j2k_with_probe(
                         }
                     }
                 }
-            }
+            });
         }
 
         // ── Magnitude Refinement (MR) ──────────────────────────────────────
         if !ll_probe.disable_mr {
-            for i in 0..n {
+            for_each_stripe_index(width, height, |i| {
                 if sig[i] && mags[i] >= threshold * 2 {
-                    let ctx = mag_refinement_context_bool(&sig, i, width, height, bp, num_bitplanes);
-                    let bit = dec.decode(ctx::MAG[ctx]);
+                    let ctx = mag_refinement_context_bool(&sig, &mag_refined, i, width, height);
+                    let bit = dec.decode(std_ctx::MAG[ctx]);
                     if bit == 1 { mags[i] |= threshold; }
+                    mag_refined[i] = true;
                 }
-            }
+            });
         }
 
         // ── Cleanup (CL) – stripe-column order with run-mode ───────────────
@@ -627,23 +685,78 @@ pub fn decode_block_standard_j2k_with_probe(
                     let run_eligible = run_mode_enabled && band_h == 4
                         && (0..4).all(|j| {
                             let i = (band_row + j) * width + c;
-                            !sig[i] && !sp_visit[i] && significance_context_bool(&sig, i, width, height) == 0
+                            !sig[i] && !sp_visit[i] && zero_coding_context_bool(&sig, i, width, height, subband_kind) == 0
                         });
                     if run_eligible {
                         run_eligible_cols += 1;
                     }
                     if run_eligible {
                         // Run-mode aggregate decode.
-                        let agg = dec.decode(ctx::CLEANUP); // AGG context = 18
+                        if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                            let (a_before, c_before, ct_before, pos_before, cur_byte_before) = dec.debug_state();
+                            eprintln!(
+                                "[native_entropy_state][before_run_agg] bp={} idx={} ctx={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                bp,
+                                band_row * width + c,
+                                std_ctx::RUN,
+                                a_before,
+                                c_before,
+                                ct_before,
+                                pos_before,
+                                cur_byte_before
+                            );
+                            native_symbol_trace_count += 1;
+                        }
+                        let agg = dec.decode(std_ctx::RUN);
+                        if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                            let (a_after, c_after, ct_after, pos_after, cur_byte_after) = dec.debug_state();
+                            eprintln!(
+                                "[native_entropy_state][after_run_agg] bp={} idx={} ctx={} bit={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                bp,
+                                band_row * width + c,
+                                std_ctx::RUN,
+                                agg,
+                                a_after,
+                                c_after,
+                                ct_after,
+                                pos_after,
+                                cur_byte_after
+                            );
+                            native_symbol_trace_count += 1;
+                        }
+                        if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                            eprintln!(
+                                "[native_symbol_trace][cleanup_run_agg] bp={} idx={} ctx={} bit={} x={} y={}",
+                                bp,
+                                band_row * width + c,
+                                std_ctx::RUN,
+                                agg,
+                                c,
+                                band_row
+                            );
+                            native_symbol_trace_count += 1;
+                        }
                         if agg == 0 {
                             // No significant pixel in this stripe column.
                             continue;
                         }
                         run_agg_one_cols += 1;
                         // Decode run start position (2 uniform bits -> 0..3).
-                        let rp_hi = dec.decode(ctx::ZERO);
-                        let rp_lo = dec.decode(ctx::ZERO);
+                        let rp_hi = dec.decode(std_ctx::UNIFORM);
+                        let rp_lo = dec.decode(std_ctx::UNIFORM);
                         let run_pos = ((rp_hi << 1) | rp_lo) as usize; // 0, 1, 2, or 3
+                        if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                            eprintln!(
+                                "[native_symbol_trace][cleanup_run_pos] bp={} idx={} ctx={} run_pos={} x={} y={}",
+                                bp,
+                                band_row * width + c,
+                                std_ctx::UNIFORM,
+                                run_pos,
+                                c,
+                                band_row
+                            );
+                            native_symbol_trace_count += 1;
+                        }
 
                         // First significant pixel at run_pos.
                         let first_i = (band_row + run_pos) * width + c;
@@ -659,10 +772,61 @@ pub fn decode_block_standard_j2k_with_probe(
                             let i = (band_row + j) * width + c;
                             if !sig[i] && !sp_visit[i] {
                                 cl_eligible_pixels += 1;
-                                let ctx = significance_context_bool(&sig, i, width, height);
+                                let ctx = zero_coding_context_bool(&sig, i, width, height, subband_kind);
                                 cl_sig_decode_attempts += 1;
-                                let decode_ctx = ctx::SIG[ctx.min(8)];
+                                let decode_ctx = ctx;
+                                if debug_cl_stream
+                                    && native_symbol_trace_count < debug_cl_stream_max
+                                    && bp >= num_bitplanes.saturating_sub(1)
+                                    && i <= 32
+                                {
+                                    let (a_before, c_before, ct_before, pos_before, cur_byte_before) = dec.debug_state();
+                                    eprintln!(
+                                        "[native_entropy_state][before_cleanup_sym] bp={} idx={} ctx={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        a_before,
+                                        c_before,
+                                        ct_before,
+                                        pos_before,
+                                        cur_byte_before
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
                                 let bit = dec.decode(decode_ctx);
+                                if debug_cl_stream
+                                    && native_symbol_trace_count < debug_cl_stream_max
+                                    && bp >= num_bitplanes.saturating_sub(1)
+                                    && i <= 32
+                                {
+                                    let (a_after, c_after, ct_after, pos_after, cur_byte_after) = dec.debug_state();
+                                    eprintln!(
+                                        "[native_entropy_state][after_cleanup_sym] bp={} idx={} ctx={} bit={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        bit,
+                                        a_after,
+                                        c_after,
+                                        ct_after,
+                                        pos_after,
+                                        cur_byte_after
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
+                                if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                                    eprintln!(
+                                        "[native_symbol_trace][cleanup] bp={} idx={} ctx={} bit={} x={} y={} use_rl=0",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        bit,
+                                        i % width,
+                                        i / width
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
                                 if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
                                     cl_stream.push((bp, i, decode_ctx, bit));
                                 }
@@ -681,10 +845,61 @@ pub fn decode_block_standard_j2k_with_probe(
                             let i = (band_row + j) * width + c;
                             if !sig[i] && !sp_visit[i] {
                                 cl_eligible_pixels += 1;
-                                let ctx = significance_context_bool(&sig, i, width, height);
+                                let ctx = zero_coding_context_bool(&sig, i, width, height, subband_kind);
                                 cl_sig_decode_attempts += 1;
-                                let decode_ctx = ctx::SIG[ctx.min(8)];
+                                let decode_ctx = ctx;
+                                if debug_cl_stream
+                                    && native_symbol_trace_count < debug_cl_stream_max
+                                    && bp >= num_bitplanes.saturating_sub(1)
+                                    && i <= 32
+                                {
+                                    let (a_before, c_before, ct_before, pos_before, cur_byte_before) = dec.debug_state();
+                                    eprintln!(
+                                        "[native_entropy_state][before_cleanup_sym] bp={} idx={} ctx={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        a_before,
+                                        c_before,
+                                        ct_before,
+                                        pos_before,
+                                        cur_byte_before
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
                                 let bit = dec.decode(decode_ctx);
+                                if debug_cl_stream
+                                    && native_symbol_trace_count < debug_cl_stream_max
+                                    && bp >= num_bitplanes.saturating_sub(1)
+                                    && i <= 32
+                                {
+                                    let (a_after, c_after, ct_after, pos_after, cur_byte_after) = dec.debug_state();
+                                    eprintln!(
+                                        "[native_entropy_state][after_cleanup_sym] bp={} idx={} ctx={} bit={} a=0x{:04X} c=0x{:08X} ct={} pos={} cur=0x{:02X}",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        bit,
+                                        a_after,
+                                        c_after,
+                                        ct_after,
+                                        pos_after,
+                                        cur_byte_after
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
+                                if debug_cl_stream && native_symbol_trace_count < debug_cl_stream_max {
+                                    eprintln!(
+                                        "[native_symbol_trace][cleanup] bp={} idx={} ctx={} bit={} x={} y={} use_rl=0",
+                                        bp,
+                                        i,
+                                        decode_ctx,
+                                        bit,
+                                        i % width,
+                                        i / width
+                                    );
+                                    native_symbol_trace_count += 1;
+                                }
                                 if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
                                     cl_stream.push((bp, i, decode_ctx, bit));
                                 }
@@ -751,6 +966,102 @@ fn significance_context_bool(sig: &[bool], idx: usize, w: usize, h: usize) -> us
         .min(8)
 }
 
+#[rustfmt::skip]
+const ZERO_CTX_LL_LH_LOOKUP: [usize; 256] = [
+    0, 3, 1, 3, 5, 7, 6, 7, 1, 3, 2, 3, 6, 7, 6, 7, 5, 7, 6, 7, 8, 8, 8, 8, 6,
+    7, 6, 7, 8, 8, 8, 8, 1, 3, 2, 3, 6, 7, 6, 7, 2, 3, 2, 3, 6, 7, 6, 7, 6, 7,
+    6, 7, 8, 8, 8, 8, 6, 7, 6, 7, 8, 8, 8, 8, 3, 4, 3, 4, 7, 7, 7, 7, 3, 4, 3,
+    4, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 7, 7, 7, 7, 8, 8, 8, 8, 3, 4, 3, 4,
+    7, 7, 7, 7, 3, 4, 3, 4, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 7, 7, 7, 7, 8,
+    8, 8, 8, 1, 3, 2, 3, 6, 7, 6, 7, 2, 3, 2, 3, 6, 7, 6, 7, 6, 7, 6, 7, 8, 8,
+    8, 8, 6, 7, 6, 7, 8, 8, 8, 8, 2, 3, 2, 3, 6, 7, 6, 7, 2, 3, 2, 3, 6, 7, 6,
+    7, 6, 7, 6, 7, 8, 8, 8, 8, 6, 7, 6, 7, 8, 8, 8, 8, 3, 4, 3, 4, 7, 7, 7, 7,
+    3, 4, 3, 4, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 7, 7, 7, 7, 8, 8, 8, 8, 3,
+    4, 3, 4, 7, 7, 7, 7, 3, 4, 3, 4, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 7, 7,
+    7, 7, 8, 8, 8, 8,
+];
+
+#[rustfmt::skip]
+const ZERO_CTX_HL_LOOKUP: [usize; 256] = [
+    0, 5, 1, 6, 3, 7, 3, 7, 1, 6, 2, 6, 3, 7, 3, 7, 3, 7, 3, 7, 4, 7, 4, 7, 3,
+    7, 3, 7, 4, 7, 4, 7, 1, 6, 2, 6, 3, 7, 3, 7, 2, 6, 2, 6, 3, 7, 3, 7, 3, 7,
+    3, 7, 4, 7, 4, 7, 3, 7, 3, 7, 4, 7, 4, 7, 5, 8, 6, 8, 7, 8, 7, 8, 6, 8, 6,
+    8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 6, 8, 6, 8,
+    7, 8, 7, 8, 6, 8, 6, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7,
+    8, 7, 8, 1, 6, 2, 6, 3, 7, 3, 7, 2, 6, 2, 6, 3, 7, 3, 7, 3, 7, 3, 7, 4, 7,
+    4, 7, 3, 7, 3, 7, 4, 7, 4, 7, 2, 6, 2, 6, 3, 7, 3, 7, 2, 6, 2, 6, 3, 7, 3,
+    7, 3, 7, 3, 7, 4, 7, 4, 7, 3, 7, 3, 7, 4, 7, 4, 7, 6, 8, 6, 8, 7, 8, 7, 8,
+    6, 8, 6, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 6,
+    8, 6, 8, 7, 8, 7, 8, 6, 8, 6, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8, 7, 8,
+    7, 8, 7, 8, 7, 8,
+];
+
+#[rustfmt::skip]
+const ZERO_CTX_HH_LOOKUP: [usize; 256] = [
+    0, 1, 3, 4, 1, 2, 4, 5, 3, 4, 6, 7, 4, 5, 7, 7, 1, 2, 4, 5, 2, 2, 5, 5, 4,
+    5, 7, 7, 5, 5, 7, 7, 3, 4, 6, 7, 4, 5, 7, 7, 6, 7, 8, 8, 7, 7, 8, 8, 4, 5,
+    7, 7, 5, 5, 7, 7, 7, 7, 8, 8, 7, 7, 8, 8, 1, 2, 4, 5, 2, 2, 5, 5, 4, 5, 7,
+    7, 5, 5, 7, 7, 2, 2, 5, 5, 2, 2, 5, 5, 5, 5, 7, 7, 5, 5, 7, 7, 4, 5, 7, 7,
+    5, 5, 7, 7, 7, 7, 8, 8, 7, 7, 8, 8, 5, 5, 7, 7, 5, 5, 7, 7, 7, 7, 8, 8, 7,
+    7, 8, 8, 3, 4, 6, 7, 4, 5, 7, 7, 6, 7, 8, 8, 7, 7, 8, 8, 4, 5, 7, 7, 5, 5,
+    7, 7, 7, 7, 8, 8, 7, 7, 8, 8, 6, 7, 8, 8, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    8, 7, 7, 8, 8, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 5, 7, 7, 5, 5, 7, 7,
+    7, 7, 8, 8, 7, 7, 8, 8, 5, 5, 7, 7, 5, 5, 7, 7, 7, 7, 8, 8, 7, 7, 8, 8, 7,
+    7, 8, 8, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 7, 7, 8, 8, 7, 7, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8,
+];
+
+
+fn neighbor_significance_bits_bool(sig: &[bool], idx: usize, w: usize, h: usize) -> u8 {
+    let r = idx / w;
+    let c = idx % w;
+    let mut bits = 0u8;
+
+    // Bit order must match the table indexing used by JPEG2000:
+    // top-left, top, top-right, left, bottom-left, right, bottom-right, bottom.
+    if r > 0 && c > 0 && sig[(r - 1) * w + (c - 1)] {
+        bits |= 1 << 7;
+    }
+    if r > 0 && sig[(r - 1) * w + c] {
+        bits |= 1 << 6;
+    }
+    if r > 0 && c + 1 < w && sig[(r - 1) * w + (c + 1)] {
+        bits |= 1 << 5;
+    }
+    if c > 0 && sig[r * w + (c - 1)] {
+        bits |= 1 << 4;
+    }
+    if r + 1 < h && c > 0 && sig[(r + 1) * w + (c - 1)] {
+        bits |= 1 << 3;
+    }
+    if c + 1 < w && sig[r * w + (c + 1)] {
+        bits |= 1 << 2;
+    }
+    if r + 1 < h && c + 1 < w && sig[(r + 1) * w + (c + 1)] {
+        bits |= 1 << 1;
+    }
+    if r + 1 < h && sig[(r + 1) * w + c] {
+        bits |= 1;
+    }
+
+    bits
+}
+
+fn zero_coding_context_bool(
+    sig: &[bool],
+    idx: usize,
+    w: usize,
+    h: usize,
+    subband_kind: StandardSubbandKind,
+) -> usize {
+    let neighbors = neighbor_significance_bits_bool(sig, idx, w, h) as usize;
+    match subband_kind {
+        StandardSubbandKind::Ll | StandardSubbandKind::Lh => ZERO_CTX_LL_LH_LOOKUP[neighbors],
+        StandardSubbandKind::Hl => ZERO_CTX_HL_LOOKUP[neighbors],
+        StandardSubbandKind::Hh => ZERO_CTX_HH_LOOKUP[neighbors],
+    }
+}
+
 /// Sign context using `bool` sig array.  Returns `(context_label, flip_bit)`.
 fn sign_context_bool(sig: &[bool], signs: &[u8], idx: usize, w: usize, h: usize) -> (usize, u8) {
     let r = idx / w;
@@ -770,27 +1081,33 @@ fn sign_context_bool(sig: &[bool], signs: &[u8], idx: usize, w: usize, h: usize)
 
     // Lookup table per ISO 15444-1 Table D.2.
     match (h_contrib, v_contrib) {
-        ( 1,  1) => (ctx::SIGN[0], 0),
-        ( 1,  0) => (ctx::SIGN[1], 0),
-        ( 1, -1) => (ctx::SIGN[2], 0),
-        ( 0,  1) => (ctx::SIGN[3], 0),
-        ( 0,  0) => (ctx::SIGN[4], 0),
-        ( 0, -1) => (ctx::SIGN[3], 1),
-        (-1,  1) => (ctx::SIGN[2], 1),
-        (-1,  0) => (ctx::SIGN[1], 1),
-        (-1, -1) => (ctx::SIGN[0], 1),
-        _        => (ctx::SIGN[4], 0),
+        ( 1,  1) => (std_ctx::SIGN[0], 0),
+        ( 1,  0) => (std_ctx::SIGN[1], 0),
+        ( 1, -1) => (std_ctx::SIGN[2], 0),
+        ( 0,  1) => (std_ctx::SIGN[3], 0),
+        ( 0,  0) => (std_ctx::SIGN[4], 0),
+        ( 0, -1) => (std_ctx::SIGN[3], 1),
+        (-1,  1) => (std_ctx::SIGN[2], 1),
+        (-1,  0) => (std_ctx::SIGN[1], 1),
+        (-1, -1) => (std_ctx::SIGN[0], 1),
+        _        => (std_ctx::SIGN[4], 0),
     }
 }
 
 /// Magnitude-refinement context using `bool` sig array.
-fn mag_refinement_context_bool(sig: &[bool], idx: usize, w: usize, h: usize, bp: usize, total_bp: usize) -> usize {
-    if bp == total_bp.saturating_sub(1) {
-        0
+fn mag_refinement_context_bool(
+    sig: &[bool],
+    mag_refined: &[bool],
+    idx: usize,
+    w: usize,
+    h: usize,
+) -> usize {
+    if mag_refined[idx] {
+        2
     } else if significance_context_bool(sig, idx, w, h) > 0 {
         1
     } else {
-        2
+        0
     }
 }
 

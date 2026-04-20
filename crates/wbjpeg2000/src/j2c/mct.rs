@@ -12,6 +12,11 @@ pub(crate) fn apply_inverse(
     component_infos: &[super::codestream::ComponentInfo],
     header: &Header<'_>,
 ) -> Result<()> {
+    let debug_mct_head = std::env::var("WBJPEG2000_DEBUG_MCT_HEAD")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
     if tile_ctx.channel_data.len() < 3 {
         return if header.strict {
             err!(ColorError::Mct)
@@ -35,12 +40,40 @@ pub(crate) fn apply_inverse(
         bail!(ColorError::Mct);
     }
 
+    if debug_mct_head {
+        let head = s0.container.len().min(8);
+        for p in 0..head {
+            eprintln!(
+                "[wbjpeg2000_mct_head_pre] p={} c0={} c1={} c2={} transform={:?}",
+                p,
+                s0.container[p],
+                s1.container[p],
+                s2.container[p],
+                transform
+            );
+        }
+    }
+
     apply_inner(
         transform,
         &mut s0.container,
         &mut s1.container,
         &mut s2.container,
     );
+
+    if debug_mct_head {
+        let head = s0.container.len().min(8);
+        for p in 0..head {
+            eprintln!(
+                "[wbjpeg2000_mct_head_post] p={} c0={} c1={} c2={} transform={:?}",
+                p,
+                s0.container[p],
+                s1.container[p],
+                s2.container[p],
+                transform
+            );
+        }
+    }
 
     Ok(())
 }

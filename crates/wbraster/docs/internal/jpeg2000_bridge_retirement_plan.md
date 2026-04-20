@@ -190,6 +190,10 @@ Execution windows:
     - Attempt 1 completed and reverted: routing LL cleanup zero-context samples
       through uniform context produced no class improvement and regressed
       first-mismatch magnitude on 3/3 matrix fixtures.
+    - Attempt 2 completed and reverted: routing all LL non-run-mode cleanup
+      significance samples through cleanup context produced no class
+      improvement and regressed to near cleanup-disabled mismatch magnitudes on
+      3/3 matrix fixtures.
 - Window 2 (Day 1 to Day 2): validation and hardening
   - Re-run parity matrix and differential corpus.
   - Keep only net-positive changes; revert non-winning experiments.
@@ -220,6 +224,23 @@ Decision outputs required at end of timebox:
   remaining estimate.
 - No-Go: mark Phase A parity as partial completion, adopt fallback posture,
   and proceed with non-blocked roadmap work.
+
+Timebox decision checkpoint (2026-04-20):
+- Decision: No-Go for further immediate CL-lane parity iteration inside Phase A.
+- Evidence:
+  - Attempt 1 (zero-context uniform routing) produced no mismatch-class
+    improvement and regressed first-mismatch magnitude on all 3 matrix
+    fixtures.
+  - Attempt 2 (all cleanup samples via cleanup context 18) again produced no
+    mismatch-class improvement and regressed to near cleanup-disabled error
+    scale on all 3 matrix fixtures.
+  - Hard-stop criterion hit: no KPI movement after two distinct CL-lane
+    correction attempts.
+- Required posture:
+  - Keep bridge-backed decode as default for problematic multicomponent JP2
+    classes.
+  - Treat native multicomponent parity as partial completion pending a later,
+    explicitly scheduled codec-deep follow-up milestone.
 
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:

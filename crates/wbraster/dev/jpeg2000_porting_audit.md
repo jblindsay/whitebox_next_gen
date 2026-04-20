@@ -242,6 +242,17 @@ Status: in progress.
         `tiled_rgb_64x64_block32: 8192 -> 8193`).
       - Outcome: reverted. Counts as first distinct non-winning CL-lane
         correction attempt under the stop protocol.
+    - Window 1 attempt 2 under hard timebox:
+      - Tried LL-only correction routing all non-run-mode cleanup
+        significance samples through cleanup context 18 instead of
+        `SIG[ctx]`.
+      - Result: no mismatch-class improvement and strong regression to the
+        cleanup-disabled error scale (`rgb_8x8: 8192 -> 32768`,
+        `sentinel_style_16x16_4band: 8193 -> 32753`,
+        `tiled_rgb_64x64_block32: 8192 -> 32768`).
+      - Outcome: reverted. This is the second distinct non-winning CL-lane
+        correction attempt, so the hard-stop criterion is now met and the
+        spike should pivot to fallback posture rather than more CL speculation.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

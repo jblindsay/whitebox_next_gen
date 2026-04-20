@@ -432,6 +432,15 @@ pub fn decode_block_with_consumed(
     let mut signs = vec![0u8;  n];
     let mut sig   = vec![SigState::Insignificant; n];
     let mut dec   = MqDecoder::new(data);
+    let debug_cl_stream = std::env::var("JPEG2000_DEBUG_CL_SIG_STREAM")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let debug_cl_stream_max = std::env::var("JPEG2000_DEBUG_CL_SIG_STREAM_MAX")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(48usize);
+    let mut cl_stream: Vec<(usize, usize, usize, u8)> = Vec::new(); // (bp, idx, ctx, bit)
 
     for bp in (0..num_bitplanes).rev() {
         let threshold = 1u32 << bp;
@@ -467,6 +476,9 @@ pub fn decode_block_with_consumed(
                 let ctx = significance_context(&sig, i, width, height);
                 if ctx == 0 {
                     let bit = dec.decode(ctx::CLEANUP);
+                    if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
+                        cl_stream.push((bp, i, ctx::CLEANUP, bit));
+                    }
                     if bit == 1 {
                         mags[i] |= threshold;
                         sig[i] = SigState::Significant;
@@ -480,6 +492,15 @@ pub fn decode_block_with_consumed(
     let out = mags.iter().zip(signs.iter())
         .map(|(&m, &s)| if s == 0 { m as i32 } else { -(m as i32) })
         .collect();
+    if debug_cl_stream {
+        eprintln!(
+            "[cl_sig_stream][legacy] w={} h={} num_bp={} samples={:?}",
+            width,
+            height,
+            num_bitplanes,
+            cl_stream
+        );
+    }
     (out, dec.consumed_bytes())
 }
 
@@ -530,6 +551,15 @@ pub fn decode_block_standard_j2k_with_probe(
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let debug_cl_stream = std::env::var("JPEG2000_DEBUG_CL_SIG_STREAM")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let debug_cl_stream_max = std::env::var("JPEG2000_DEBUG_CL_SIG_STREAM_MAX")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(48usize);
+    let mut cl_stream: Vec<(usize, usize, usize, u8)> = Vec::new(); // (bp, idx, ctx, bit)
     let debug_cleanup_trace = std::env::var("JPEG2000_DEBUG_LL_CLEANUP_TRACE")
         .ok()
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -632,6 +662,9 @@ pub fn decode_block_standard_j2k_with_probe(
                                 let ctx = significance_context_bool(&sig, i, width, height);
                                 cl_sig_decode_attempts += 1;
                                 let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
+                                    cl_stream.push((bp, i, ctx.min(8), bit));
+                                }
                                 if bit == 1 {
                                     mags[i] |= threshold;
                                     sig[i] = true;
@@ -650,6 +683,9 @@ pub fn decode_block_standard_j2k_with_probe(
                                 let ctx = significance_context_bool(&sig, i, width, height);
                                 cl_sig_decode_attempts += 1;
                                 let bit = dec.decode(ctx::SIG[ctx.min(8)]);
+                                if debug_cl_stream && cl_stream.len() < debug_cl_stream_max {
+                                    cl_stream.push((bp, i, ctx.min(8), bit));
+                                }
                                 if bit == 1 {
                                     mags[i] |= threshold;
                                     sig[i] = true;
@@ -686,6 +722,15 @@ pub fn decode_block_standard_j2k_with_probe(
     let result: Vec<i32> = mags.iter().zip(signs.iter())
         .map(|(&m, &s)| if s == 0 { m as i32 } else { -(m as i32) })
         .collect();
+    if debug_cl_stream {
+        eprintln!(
+            "[cl_sig_stream][standard] w={} h={} num_bp={} samples={:?}",
+            width,
+            height,
+            num_bitplanes,
+            cl_stream
+        );
+    }
     
     if width == 64 && height == 64 && trace {
         eprintln!("[decode_stdjk_result] coeff[0..8]: {:?}", &result[0..8]);

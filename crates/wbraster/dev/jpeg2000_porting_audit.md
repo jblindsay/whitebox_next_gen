@@ -219,6 +219,20 @@ Status: in progress.
       - Interpretation: current LL divergence is unlikely to be run-mode branch
         selection itself on this fixture and is more likely in cleanup
         significance/sign decode semantics or upstream context state feeding CL.
+    - Added cleanup bitstream stream tracing for both standard and legacy
+      decoders (`JPEG2000_DEBUG_CL_SIG_STREAM=1`) and captured side-by-side
+      LL block samples via `JPEG2000_DEBUG_LL_BLOCK_AB=1` on
+      `rgb_8x8_lossless`:
+      - Standard CL decode attempts include mixed significance contexts
+        (`ctx=0..3`) in stripe order with early samples such as
+        `(bp14, idx0, ctx0, bit1)`, `(bp14, idx8, ctx1, bit1)`,
+        `(bp14, idx16, ctx1, bit0)`, `(bp14, idx24, ctx0, bit1)`.
+      - Legacy cleanup stream is restricted to cleanup context label 18
+        (`(bp14, idx0, ctx18, bit1)`, `(bp14, idx2, ctx18, bit1)`, ...).
+      - This confirms that standard and legacy CL decode decisions diverge at
+        the symbol/context stream level before reconstruction, tightening
+        root-cause scope to CL context/significance semantics mismatch rather
+        than only downstream inverse-transform or level-shift handling.
   - Net: no additional runtime fix beyond default run-mode disable passed
     acceptance; unresolved blocker remains in standard tier-1 decode semantics.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:

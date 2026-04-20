@@ -157,7 +157,7 @@ Remaining work packages:
 - Native parity root-cause and fix pass (critical path):
   - Complete deeper packet-header / tier-1 decode correctness work for multicomponent value parity.
   - Target: reduce `multicomponent_sample_value_mismatch` from current baseline to agreed threshold (ideally 0 for the agreed fixture set).
-  - Estimate: 3.5-7 engineering days (still highest uncertainty item, but branch scope narrowed).
+  - Estimate: 3-6.5 engineering days (still highest uncertainty item; CL stream divergence now directly evidenced).
 - Differential reruns + KPI gating tune:
   - Re-baseline reports and tighten `JPEG2000_DIFF_MAX_MULTICOMPONENT_*` thresholds based on improved parity.
   - Estimate: 0.5-1.0 engineering day.
@@ -166,9 +166,9 @@ Remaining work packages:
   - Estimate: 0.5-1.0 engineering day.
 
 Estimated Phase A remaining total:
-- Best case: 4.5-6 engineering days.
-- Most likely: 5-9 engineering days.
-- Conservative: 8-12 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
+- Best case: 4-5.5 engineering days.
+- Most likely: 4.5-8 engineering days.
+- Conservative: 7-11 engineering days (if deeper entropy/packet interpretation issues require iterative fixes).
 
 ### Phase B - POC Progression Support (1.5-3 weeks)
 Targets:
@@ -277,3 +277,8 @@ Exit criteria:
   concentrated at the top decoded bitplane before SP/MR dominate subsequent
   bitplanes. This narrows immediate Phase A focus to CL significance/sign
   semantics and context-state setup rather than run-mode branch gating.
+- 2026-04-19: Added side-by-side cleanup bitstream tracing
+  (`JPEG2000_DEBUG_CL_SIG_STREAM`) for standard and legacy decoders and
+  captured LL first-block samples. Standard path consumes mixed SIG contexts
+  (`ctx 0..3`) while legacy cleanup consumes context 18 stream, confirming
+  divergence at CL symbol/context stream level before reconstruction.

@@ -361,6 +361,116 @@ impl Qcd {
     }
 }
 
+// ── POC: Progression Order Change ─────────────────────────────────────────────
+
+/// POC marker segment — defines progression order changes.
+/// 
+/// ISO 15444-1 Table A.18: Each POC change specifies a boundary where packets
+/// with (component ≥ comp_bound, resolution ≥ res_bound, layer ≥ layer_bound)
+/// follow a new progression order.
+#[derive(Debug, Clone)]
+pub struct Poc {
+    /// List of POC changes, each specifying layer, resolution, component bounds and a new progression order.
+    pub changes: Vec<PocChange>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PocChange {
+    /// RSpoc: resolution level starting index for this change.
+    pub res_start: u8,
+    /// CSpoc: component starting index for this change.
+    pub comp_start: u16,
+    /// LYEpoc: layer ending index (exclusive).
+    pub layer_end: u16,
+    /// REpoc: resolution level ending index (exclusive).
+    pub res_end: u8,
+    /// CEpoc: component ending index (exclusive).
+    pub comp_end: u16,
+    /// Ppoc: progression order.
+    pub progression: ProgressionOrder,
+}
+
+impl Poc {
+    /// Parse POC marker segment data.
+    /// 
+    /// Each entry in a POC marker is variable-width (4-6 bytes depending on Cpoc encoding):
+    /// - 1 byte: RSpoc (res start)
+    /// - 2 bytes: CSpoc (comp start) if Cpoc is 2 bytes (multicomponent), else depends on architecture
+    /// - 2 bytes: LYEpoc (layer end)
+    /// - 1 byte: REpoc (res end)
+    /// - 2 bytes: CEpoc (comp end)
+    /// - 1 byte: Ppoc (progression order)
+    pub fn parse(data: &[u8], num_components: u16) -> Result<Self> {
+        if data.is_empty() {
+            return Err(Jp2Error::InvalidCodestream {
+                offset: 0,
+                message: "POC marker is empty".into(),
+            });
+        }
+
+        let mut changes = Vec::new();
+        let mut pos = 0;
+
+        // Determine Cpoc size: if num_components > 256, Cpoc is 2 bytes, else 1 byte
+        let cpoc_size = if num_components > 256 { 2 } else { 1 };
+        let entry_size = 1 + cpoc_size + 2 + 1 + cpoc_size + 1; // RSpoc + CSpoc + LYEpoc + REpoc + CEpoc + Ppoc
+
+        if data.len() % entry_size != 0 {
+            return Err(Jp2Error::InvalidCodestream {
+                offset: 0,
+                message: format!("POC marker data length {} is not a multiple of {} (num_components={})",
+                    data.len(), entry_size, num_components),
+            });
+        }
+
+        while pos < data.len() {
+            if pos + entry_size > data.len() { break; }
+
+            let res_start = data[pos];
+            pos += 1;
+
+            let comp_start = if cpoc_size == 2 {
+                u16::from_be_bytes([data[pos], data[pos+1]])
+            } else {
+                data[pos] as u16
+            };
+            pos += cpoc_size;
+
+            let layer_end = u16::from_be_bytes([data[pos], data[pos+1]]);
+            pos += 2;
+
+            let res_end = data[pos];
+            pos += 1;
+
+            let comp_end = if cpoc_size == 2 {
+                u16::from_be_bytes([data[pos], data[pos+1]])
+            } else {
+                data[pos] as u16
+            };
+            pos += cpoc_size;
+
+            let progression = ProgressionOrder::from_u8(data[pos]);
+            pos += 1;
+
+            changes.push(PocChange {
+                res_start,
+                comp_start,
+                layer_end,
+                res_end,
+                comp_end,
+                progression,
+            });
+        }
+
+        Ok(Self { changes })
+    }
+
+    /// Check if this POC has any changes defined.
+    pub fn is_empty(&self) -> bool {
+        self.changes.is_empty()
+    }
+}
+
 // ── SOT: Start of tile-part ───────────────────────────────────────────────────
 
 /// SOT marker segment.

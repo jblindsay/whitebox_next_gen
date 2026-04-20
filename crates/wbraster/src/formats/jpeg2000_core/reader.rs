@@ -17,7 +17,7 @@ use std::path::Path;
 use std::collections::HashMap;
 
 use super::boxes::{self, BoxReader, ColourSpec, ImageHeader, RawBox, GEOJP2_UUID};
-use super::codestream::{self, marker, Cod, ProgressionOrder, Qcd, Siz};
+use super::codestream::{self, marker, Cod, Poc, ProgressionOrder, Qcd, Siz};
 use super::entropy::{decode_block, dequantise};
 use super::error::{Jp2Error, Result};
 use super::geo_meta::{parse_geojp2_payload, parse_gmljp2_xml_payload, CrsInfo};
@@ -646,7 +646,9 @@ pub struct GeoJp2 {
     // main codestream header.  Tile-part-level POC is captured per tile-part
     // in TilePartInfo.has_poc; main-header POC changes the global progression
     // order and is not yet supported by the native packet walker.
-    has_main_header_poc: bool,
+    // POC marker from main header (if present).
+    // Tile-part-level POC is captured per tile-part in TilePartInfo.
+    main_header_poc: Option<Poc>,
     // Raw codestream (kept in memory for decode-on-demand)
     codestream: Vec<u8>,
 }
@@ -760,13 +762,16 @@ impl GeoJp2 {
         let mut cod: Option<Cod> = None;
         let mut qcd: Option<Qcd> = None;
 
-        let mut has_main_header_poc = false;
+        let mut main_header_poc: Option<Poc> = None;
+            let mut poc_data: Option<&[u8]> = None;
         for m in &markers {
             match m.marker {
                 marker::SIZ => siz = Some(Siz::parse(&m.data)?),
                 marker::COD => cod = Some(Cod::parse(&m.data)?),
                 marker::QCD => qcd = Some(Qcd::parse(&m.data)?),
-                marker::POC => has_main_header_poc = true,
+                marker::POC => {
+                    poc_data = Some(&m.data);
+                }
                 _ => {}
             }
         }
@@ -774,6 +779,11 @@ impl GeoJp2 {
         let siz = siz.unwrap_or_else(|| Siz::new(ihdr.width, ihdr.height, ihdr.bits_per_component().max(1), ihdr.is_signed(), ihdr.components));
         let cod = cod.unwrap_or_else(|| Cod::lossless(5, ihdr.components));
         let qcd = qcd.unwrap_or_else(|| Qcd::no_quantisation(5, siz.components[0].bits()));
+
+        // Parse POC now that we have num_components from SIZ
+        if let Some(poc_bytes) = poc_data {
+            main_header_poc = Some(Poc::parse(poc_bytes, siz.components.len() as u16)?);
+        }
 
         let color_space = colr.as_ref()
             .and_then(|c| c.enumcs)
@@ -791,7 +801,7 @@ impl GeoJp2 {
             siz, cod, qcd,
             color_space,
             crs,
-            has_main_header_poc,
+            main_header_poc,
             codestream,
         })
     }
@@ -2303,7 +2313,7 @@ impl GeoJp2 {
         plan: &PacketTraversalPlan,
         target_component: Option<usize>,
     ) -> Result<Vec<u8>> {
-        if self.has_main_header_poc || plan.has_poc {
+        if self.main_header_poc.is_some() || plan.has_poc {
             return Err(Jp2Error::NotImplemented(
                 "native packet walker does not yet support POC progression changes".into(),
             ));
@@ -3078,7 +3088,7 @@ mod multiband_failfast_tests {
             qcd: Qcd::no_quantisation(1, 8),
             color_space: if components > 1 { ColorSpace::MultiBand } else { ColorSpace::Greyscale },
             crs: None,
-            has_main_header_poc: false,
+            main_header_poc: None,
             codestream,
         }
     }

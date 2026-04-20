@@ -106,6 +106,17 @@ Status: in progress.
       single `bits + num_decomps` heuristic. This produces incorrect coefficients
       for all real-world files that use standard code-block subdivision.
   - Report artifact: `crates/wbraster/dev/jpeg2000_diff_report_sentinel2_chunk_f.json`
+- Follow-up controlled experiments against local multicomponent fixture trio
+  (`rgb_8x8_lossless.jp2`, `sentinel_style_16x16_4band_lossless.jp2`,
+  `tiled_rgb_64x64_block32_lossless.jp2`) showed no mismatch-count reduction:
+  - `decode_component_proper`: `decode_block_standard_j2k` -> `decode_block`
+    changed sample values but kept `multicomponent_sample_value_mismatch=3`.
+  - `decode_component_proper`: lossless bitplane count tweak
+    (`raw-missing-1` -> `raw-missing`) had no measurable effect.
+  - Internal-reader inverse RCT post-pass for lossless 3-band RGB had no
+    measurable effect on first-mismatch metrics.
+  - Conclusion: remaining blocker is likely deeper in tier-1 entropy / packet
+    interpretation rather than simple post-processing or off-by-one bitplane math.
 - Completed: deterministic unit tests added for `Psot` boundary parsing and multi tile-part payload concatenation.
 - Remaining: packet header parsing and progression traversal port from `wbjpeg2000` into native core.
 

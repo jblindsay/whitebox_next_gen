@@ -1063,10 +1063,11 @@ impl GeoJp2 {
     /// precinct, tag trees for inclusion and zero-bitplane counts, and multi-layer
     /// quality-progression.  Both lossless (5/3) and lossy (9/7) DWT paths.
     fn decode_component_proper(&self, _component: usize) -> Result<Vec<i32>> {
-        use super::entropy::{decode_block_standard_j2k as decode_block};
+        use super::entropy::{decode_block as decode_block_legacy, decode_block_standard_j2k as decode_block};
         use std::collections::HashMap;
 
         let debug = std::env::var("JPEG2000_DEBUG_DEQUANT").is_ok();
+        let debug_entropy_ab = std::env::var("JPEG2000_DEBUG_ENTROPY_AB").is_ok();
 
         // Target component for this decode call.
         let target_component = _component;
@@ -1484,6 +1485,34 @@ impl GeoJp2 {
                         eprintln!("[proper] sb[0] cb(0,0) bytes={} missing_bp={} raw_bp={} num_bp={} actual={}x{}",
                             cb.data.len(), cb.missing_bp, raw_bp, num_bp, actual_w, actual_h);
                         eprintln!("[proper] sb[0] cb(0,0) data[0..16]: {:02X?}", &cb.data[..cb.data.len().min(16)]);
+                    }
+
+                    if debug_entropy_ab && tile_tx == 0 && tile_ty == 0 && si == 0 && cby == 0 && cbx == 0 {
+                        let std_dec = decode_block(&cb.data, actual_w, actual_h, num_bp);
+                        let legacy_dec = decode_block_legacy(&cb.data, actual_w, actual_h, num_bp);
+
+                        let std_nonzero = std_dec.iter().filter(|&&v| v != 0).count();
+                        let legacy_nonzero = legacy_dec.iter().filter(|&&v| v != 0).count();
+                        let std_first_nz = std_dec.iter().position(|&v| v != 0).map(|idx| (idx, std_dec[idx]));
+                        let legacy_first_nz = legacy_dec.iter().position(|&v| v != 0).map(|idx| (idx, legacy_dec[idx]));
+
+                        eprintln!(
+                            "[entropy_ab] comp={} sb={} cb=({}, {}) num_bp={} std_nonzero={} legacy_nonzero={} std_first_nz={:?} legacy_first_nz={:?}",
+                            target_component,
+                            si,
+                            cbx,
+                            cby,
+                            num_bp,
+                            std_nonzero,
+                            legacy_nonzero,
+                            std_first_nz,
+                            legacy_first_nz
+                        );
+                        eprintln!(
+                            "[entropy_ab] std[0..8]={:?} legacy[0..8]={:?}",
+                            &std_dec[..8.min(std_dec.len())],
+                            &legacy_dec[..8.min(legacy_dec.len())]
+                        );
                     }
 
                     let dec = decode_block(&cb.data, actual_w, actual_h, num_bp);

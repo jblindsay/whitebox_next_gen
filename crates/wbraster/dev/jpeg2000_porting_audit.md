@@ -121,6 +121,18 @@ Status: in progress.
   - Added targeted decode diagnostics for `decode_component_proper`/`v2`
     (`cblk_style`, progression order, `scod`) to improve triage on external
     codestream behavior.
+  - Added debug-only entropy A/B probe (`JPEG2000_DEBUG_ENTROPY_AB`) in
+    `decode_component_proper` for first code-block comparison:
+    - `decode_block_standard_j2k` output: all-zero coefficients on the failing
+      fixture sample.
+    - Legacy `decode_block` output: non-zero coefficient field from the same
+      payload bytes and `num_bp`.
+    - Example (`rgb_8x8_lossless`, band 0, LL cb0):
+      - `std_nonzero=0`
+      - `legacy_nonzero=55`
+  - Interpretation: segment-body bytes and bitplane count are plausibly present,
+    and the highest-leverage next fix is in `decode_block_standard_j2k`
+    (context/pass logic) rather than packet body extraction or level-shift.
   - Single-fixture (`rgb_8x8_lossless.jp2`) debug run shows:
     - `cblk_style=0x00`, `progression=Lrcp`, `scod=0x01` (baseline coding style).
     - Non-empty code-block payload bytes are collected (e.g., 69 bytes for band 0).

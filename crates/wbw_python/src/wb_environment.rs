@@ -20987,7 +20987,16 @@ impl WbEnvironment {
                 .map_err(map_tool_error)?
         };
 
-        let out_path = extract_typed_output_path("image_segmentation", &response)?;
+        let out_path = extract_optional_typed_output_path_by_key(&response, "output")
+            .or_else(|| {
+                // Backward-compatible fallback for tools that still emit `outputs.path`.
+                extract_typed_output_path("image_segmentation", &response).ok()
+            })
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "tool 'image_segmentation' did not return a typed output path",
+                )
+            })?;
         if self.verbose { println!("Completed image_segmentation tool"); }
         Ok(Raster { file_path: out_path, active_band: 1 })
     }

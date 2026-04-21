@@ -1,0 +1,979 @@
+version = 1
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "obia"
+tools = [
+  "build_object_hierarchy_multiscale",
+  "classify_objects_ensemble_pro",
+  "classify_objects_random_forest",
+  "classify_objects_rules_basic",
+  "classify_objects_rules_hierarchical",
+  "classify_objects_svm",
+  "evaluate_object_classification_accuracy",
+  "evaluate_segmentation_quality_pro",
+  "image_segmentation",
+  "image_slider",
+  "image_stack_profile",
+  "obia_audit_report_pro",
+  "obia_batch_orchestrator_pro",
+  "obia_pipeline_basic",
+  "object_class_probability_maps",
+  "object_features_context_neighbors",
+  "object_features_shape_basic",
+  "object_features_spectral_basic",
+  "object_features_texture_glcm_basic",
+  "object_features_topology_relations",
+  "object_uncertainty_diagnostics_pro",
+  "objects_boundary_refinement_pro",
+  "objects_enforce_min_mapping_unit",
+  "polygons_to_segments",
+  "propagate_labels_across_hierarchy",
+  "segment_graph_felzenszwalb",
+  "segment_multiresolution_hierarchical",
+  "segment_scale_parameter_optimizer",
+  "segment_slic_superpixels",
+  "segment_watershed_markers",
+  "segments_merge_small_regions",
+  "segments_split_low_cohesion",
+  "segments_to_polygons",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "classification"
+tools = [
+  "evaluate_training_sites",
+  "fuzzy_knn_classification",
+  "generalize_classified_raster",
+  "generalize_with_similarity",
+  "k_means_clustering",
+  "knn_classification",
+  "knn_regression",
+  "logistic_regression",
+  "min_dist_classification",
+  "modified_k_means_clustering",
+  "nnd_classification",
+  "otsu_thresholding",
+  "parallelepiped_classification",
+  "random_forest_classification",
+  "random_forest_regression",
+  "svm_classification",
+  "svm_regression",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "change_detection"
+tools = [
+  "change_vector_analysis",
+  "remote_sensing_change_detection",
+  "time_series_change_intelligence",
+  "write_function_memory_insertion",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "radiometric_correction"
+tools = [
+  "brdf_surface_reflectance_consistency",
+  "correct_vignetting",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "edge_feature_detection"
+tools = [
+  "canny_edge_detection",
+  "corner_detection",
+  "laplacian_filter",
+  "laplacian_of_gaussians_filter",
+  "prewitt_filter",
+  "roberts_cross_filter",
+  "sobel_filter",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "enhancement_contrast"
+tools = [
+  "balance_contrast_enhancement",
+  "create_colour_composite",
+  "direct_decorrelation_stretch",
+  "false_colour_composite",
+  "gamma_correction",
+  "gaussian_contrast_stretch",
+  "histogram_equalization",
+  "histogram_matching",
+  "histogram_matching_two_images",
+  "ihs_to_rgb",
+  "min_max_contrast_stretch",
+  "mosaic",
+  "mosaic_with_feathering",
+  "normalized_difference_index",
+  "panchromatic_sharpening",
+  "percentage_contrast_stretch",
+  "piecewise_contrast_stretch",
+  "resample",
+  "rgb_to_ihs",
+  "sigmoidal_contrast_stretch",
+  "split_colour_composite",
+  "standard_deviation_contrast_stretch",
+  "true_colour_composite",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "filters"
+tools = [
+  "adaptive_filter",
+  "anisotropic_diffusion_filter",
+  "bilateral_filter",
+  "closing",
+  "conservative_smoothing_filter",
+  "diff_of_gaussians_filter",
+  "diversity_filter",
+  "edge_preserving_mean_filter",
+  "emboss_filter",
+  "fast_almost_gaussian_filter",
+  "flip_image",
+  "frangi_filter",
+  "gabor_filter_bank",
+  "gaussian_filter",
+  "glcm_texture",
+  "guided_filter",
+  "high_pass_bilateral_filter",
+  "high_pass_filter",
+  "high_pass_median_filter",
+  "integral_image_transform",
+  "k_nearest_mean_filter",
+  "kuwahara_filter",
+  "lee_filter",
+  "line_detection_filter",
+  "line_thinning",
+  "lidar_ground_point_filter",
+  "majority_filter",
+  "maximum_filter",
+  "mean_filter",
+  "median_filter",
+  "minimum_filter",
+  "non_local_means_filter",
+  "opening",
+  "olympic_filter",
+  "percentile_filter",
+  "range_filter",
+  "remove_spurs",
+  "savitzky_golay_2d_filter",
+  "scharr_filter",
+  "standard_deviation_filter",
+  "thicken_raster_line",
+  "tophat_transform",
+  "total_filter",
+  "unsharp_masking",
+  "user_defined_weights_filter",
+  "wiener_filter",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "sar"
+tools = [
+  "sar_coregistration",
+  "sar_analysis_readiness",
+  "sar_interferogram_coherence",
+  "frost_filter",
+  "gamma_map_filter",
+  "kuan_filter",
+]
+
+[[mapping]]
+category = "remote_sensing"
+subcategory = "workflow_products"
+tools = [
+  "terrain_corrected_optical_analytics",
+  "multi_sensor_fusion_monitoring",
+  "guided_uav_image_intake_workflow",
+  "registration_oriented_feature_workflow",
+]
+
+[[mapping]]
+category = "lidar"
+subcategory = "io_management"
+tools = [
+  "ascii_to_las",
+  "las_to_ascii",
+  "las_to_shapefile",
+  "lidar_colourize",
+  "lidar_join",
+  "lidar_shift",
+  "lidar_tile",
+  "lidar_tophat_transform",
+  "recover_flightline_info",
+  "select_tiles_by_polygon",
+  "sort_lidar",
+  "split_lidar",
+]
+
+[[mapping]]
+category = "lidar"
+subcategory = "filtering_classification"
+tools = [
+  "classify_buildings_in_lidar",
+  "classify_lidar",
+  "classify_overlap_points",
+  "clip_lidar_to_polygon",
+  "erase_polygon_from_lidar",
+  "filter_lidar",
+  "filter_lidar_by_percentile",
+  "filter_lidar_by_reference_surface",
+  "filter_lidar_classes",
+  "filter_lidar_noise",
+  "filter_lidar_scan_angles",
+  "height_above_ground",
+  "improved_ground_point_filter",
+  "individual_tree_segmentation",
+  "lidar_classify_subset",
+  "lidar_elevation_slice",
+  "lidar_remove_outliers",
+  "lidar_segmentation",
+  "lidar_segmentation_based_filter",
+  "modify_lidar",
+  "normalize_lidar",
+  "remove_duplicates",
+]
+
+[[mapping]]
+category = "lidar"
+subcategory = "interpolation_gridding"
+tools = [
+  "flightline_overlap",
+  "lidar_block_maximum",
+  "lidar_block_minimum",
+  "lidar_construct_vector_tin",
+  "lidar_contour",
+  "lidar_digital_surface_model",
+  "lidar_hex_bin",
+  "lidar_hillshade",
+  "lidar_idw_interpolation",
+  "lidar_nearest_neighbour_gridding",
+  "lidar_radial_basis_function_interpolation",
+  "lidar_sibson_interpolation",
+  "lidar_thin",
+  "lidar_thin_high_density",
+  "lidar_tile_footprint",
+  "lidar_tin_gridding",
+]
+
+[[mapping]]
+category = "lidar"
+subcategory = "analysis_metrics"
+tools = [
+  "colourize_based_on_class",
+  "colourize_based_on_point_returns",
+  "find_flightline_edge_points",
+  "individual_tree_detection",
+  "lidar_eigenvalue_features",
+  "lidar_histogram",
+  "lidar_info",
+  "lidar_kappa",
+  "lidar_point_density",
+  "lidar_point_return_analysis",
+  "lidar_point_stats",
+  "lidar_ransac_planes",
+  "lidar_rooftop_analysis",
+  "normal_vectors",
+]
+
+[[mapping]]
+category = "lidar"
+subcategory = "workflow_products"
+tools = [
+  "lidar_qa_and_confidence",
+  "lidar_terrain_product_suite",
+  "lidar_change_and_disturbance_analysis",
+  "sidewalk_vegetation_accessibility_monitoring",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "linear_referencing"
+tools = [
+  "route_event_governance_for_linear_assets",
+  "locate_points_along_routes",
+  "points_along_lines",
+  "route_calibrate",
+  "route_event_lines_from_layer",
+  "route_event_lines_from_table",
+  "route_event_merge",
+  "route_event_overlay",
+  "route_event_points_from_layer",
+  "route_event_points_from_table",
+  "route_event_split",
+  "route_measure_qa",
+  "route_recalibrate",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "network_analysis"
+tools = [
+  "network_readiness_and_diagnostics_intelligence",
+  "service_area_planning_and_coverage_optimization",
+  "fleet_routing_and_dispatch_optimizer",
+  "closest_facility_network",
+  "k_shortest_paths_network",
+  "location_allocation_network",
+  "map_matching_v1",
+  "multimodal_od_cost_matrix",
+  "multimodal_routes_from_od",
+  "multimodal_shortest_path",
+  "network_accessibility_metrics",
+  "network_centrality_metrics",
+  "network_connected_components",
+  "network_node_degree",
+  "network_od_cost_matrix",
+  "network_routes_from_od",
+  "network_service_area",
+  "network_topology_audit",
+  "od_sensitivity_analysis",
+  "shortest_path_network",
+  "travelling_salesman_problem",
+  "vehicle_routing_cvrp",
+  "vehicle_routing_pickup_delivery",
+  "vehicle_routing_vrptw",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "overlay_analysis"
+tools = [
+  "clip",
+  "difference",
+  "dissolve",
+  "erase",
+  "intersect",
+  "line_intersections",
+  "line_polygon_clip",
+  "near",
+  "select_by_location",
+  "spatial_join",
+  "symmetrical_difference",
+  "union",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "geometry_processing"
+tools = [
+  "buffer_vector",
+  "centroid_vector",
+  "concave_hull",
+  "densify_features",
+  "eliminate_coincident_points",
+  "extend_vector_lines",
+  "merge_line_segments",
+  "minimum_bounding_box",
+  "minimum_bounding_circle",
+  "minimum_bounding_envelope",
+  "minimum_convex_hull",
+  "polygonize",
+  "reproject_vector",
+  "simplify_features",
+  "smooth_vectors",
+  "snap_endnodes",
+  "split_vector_lines",
+  "split_with_lines",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "shape_metrics"
+tools = [
+  "add_geometry_attributes",
+  "compactness_ratio",
+  "deviation_from_regional_direction",
+  "elongation_ratio",
+  "hole_proportion",
+  "linearity_index",
+  "narrowness_index",
+  "patch_orientation",
+  "perimeter_area_ratio",
+  "polygon_area",
+  "polygon_long_axis",
+  "polygon_perimeter",
+  "polygon_short_axis",
+  "related_circumscribing_circle",
+  "shape_complexity_index_vector",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "sampling_gridding"
+tools = [
+  "construct_vector_tin",
+  "contours_from_points",
+  "contours_from_raster",
+  "extract_nodes",
+  "extract_raster_values_at_points",
+  "find_lowest_or_highest_points",
+  "hexagonal_grid_from_raster_base",
+  "hexagonal_grid_from_vector_base",
+  "layer_footprint_raster",
+  "layer_footprint_vector",
+  "medoid",
+  "random_points_in_polygon",
+  "rectangular_grid_from_raster_base",
+  "rectangular_grid_from_vector_base",
+  "vector_hex_binning",
+  "voronoi_diagram",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "attribute_analysis"
+tools = [
+  "add_field",
+  "attribute_correlation",
+  "attribute_histogram",
+  "attribute_scattergram",
+  "delete_field",
+  "extract_by_attribute",
+  "field_calculator",
+  "filter_vector_features_by_area",
+  "list_unique_values",
+  "rename_field",
+]
+
+[[mapping]]
+category = "vector"
+subcategory = "workflow_products"
+tools = [
+  "utility_corridor_encroachment_and_access_planning",
+  "parcel_and_land_fabric_topology_compliance_workflow",
+  "emergency_scenario_routing_and_accessibility_simulator",
+  "market_access_and_site_intelligence_workflow",
+]
+
+[[mapping]]
+category = "hydrology"
+subcategory = "flow_routing"
+tools = [
+  "average_flowpath_slope",
+  "average_upslope_flowpath_length",
+  "d8_flow_accum",
+  "d8_mass_flux",
+  "d8_pointer",
+  "dinf_flow_accum",
+  "dinf_mass_flux",
+  "dinf_pointer",
+  "downslope_flowpath_length",
+  "fd8_flow_accum",
+  "fd8_pointer",
+  "flow_accum_full_workflow",
+  "flow_length_diff",
+  "max_upslope_flowpath_length",
+  "max_upslope_value",
+  "mdinf_flow_accum",
+  "minimal_dispersion_flow_algorithm",
+  "num_inflowing_neighbours",
+  "qin_flow_accumulation",
+  "quinn_flow_accumulation",
+  "rho8_flow_accum",
+  "rho8_pointer",
+  "trace_downslope_flowpaths",
+]
+
+[[mapping]]
+category = "hydrology"
+subcategory = "depressions_storage"
+tools = [
+  "breach_depressions_least_cost",
+  "breach_single_cell_pits",
+  "burn_streams",
+  "burn_streams_at_roads",
+  "depth_in_sink",
+  "fill_burn",
+  "fill_depressions",
+  "fill_depressions_planchon_and_darboux",
+  "fill_depressions_wang_and_liu",
+  "fill_pits",
+  "flatten_lakes",
+  "impoundment_size_index",
+  "insert_dams",
+  "raise_walls",
+  "sink",
+  "stochastic_depression_analysis",
+  "topological_breach_burn",
+  "upslope_depression_storage",
+]
+
+[[mapping]]
+category = "hydrology"
+subcategory = "watersheds_basins"
+tools = [
+  "basins",
+  "flood_order",
+  "hillslopes",
+  "isobasins",
+  "jenson_snap_pour_points",
+  "longest_flowpath",
+  "max_branch_length",
+  "snap_pour_points",
+  "subbasins",
+  "unnest_basins",
+  "watershed",
+  "watershed_from_raster_pour_points",
+]
+
+[[mapping]]
+category = "hydrology"
+subcategory = "hydrologic_indices"
+tools = [
+  "depth_to_water",
+  "distance_to_outlet",
+  "downslope_distance_to_stream",
+  "downslope_index",
+  "edge_contamination",
+  "elev_relative_to_watershed_min_max",
+  "elevation_above_stream",
+  "elevation_above_stream_euclidean",
+  "find_noflow_cells",
+  "find_parallel_flow",
+  "hydrologic_connectivity",
+  "relative_stream_power_index",
+  "sediment_transport_index",
+  "wetness_index",
+]
+
+[[mapping]]
+category = "streams"
+subcategory = "network_extraction"
+tools = [
+  "extract_streams",
+  "extract_valleys",
+  "prune_vector_streams",
+  "raster_streams_to_vector",
+  "rasterize_streams",
+  "remove_short_streams",
+  "repair_stream_vector_topology",
+  "river_centerlines",
+]
+
+[[mapping]]
+category = "streams"
+subcategory = "longitudinal_analysis"
+tools = [
+  "farthest_channel_head",
+  "find_main_stem",
+  "length_of_upstream_channels",
+  "long_profile",
+  "long_profile_from_points",
+]
+
+[[mapping]]
+category = "streams"
+subcategory = "ordering_metrics"
+tools = [
+  "hack_stream_order",
+  "horton_ratios",
+  "horton_stream_order",
+  "shreve_stream_magnitude",
+  "strahler_order_basins",
+  "strahler_stream_order",
+  "stream_link_class",
+  "stream_link_identifier",
+  "stream_link_length",
+  "stream_link_slope",
+  "stream_slope_continuous",
+  "topological_stream_order",
+  "tributary_identifier",
+  "vector_stream_network_analysis",
+]
+
+[[mapping]]
+category = "conversion"
+subcategory = "vector_table_io"
+tools = [
+  "add_point_coordinates_to_table",
+  "clean_vector",
+  "csv_points_to_vector",
+  "export_table_to_csv",
+  "join_tables",
+  "merge_table_with_csv",
+  "merge_vectors",
+  "reinitialize_attribute_table",
+  "vector_summary_statistics",
+]
+
+[[mapping]]
+category = "conversion"
+subcategory = "geometry_topology"
+tools = [
+  "fix_dangling_arcs",
+  "lines_to_polygons",
+  "multipart_to_singlepart",
+  "polygons_to_lines",
+  "remove_polygon_holes",
+  "singlepart_to_multipart",
+  "topology_rule_autofix",
+  "topology_rule_validate",
+  "topology_validation_report",
+]
+
+[[mapping]]
+category = "conversion"
+subcategory = "raster_vector_conversion"
+tools = [
+  "convert_nodata_to_zero",
+  "modify_nodata_value",
+  "new_raster_from_base_raster",
+  "new_raster_from_base_vector",
+  "raster_to_vector_lines",
+  "raster_to_vector_points",
+  "raster_to_vector_polygons",
+  "remove_raster_polygon_holes",
+  "set_nodata_value",
+  "vector_lines_to_raster",
+  "vector_points_to_raster",
+  "vector_polygons_to_raster",
+]
+
+[[mapping]]
+category = "raster"
+subcategory = "overlay_math"
+tools = [
+  "add",
+  "average_overlay",
+  "bool_and",
+  "bool_not",
+  "bool_or",
+  "bool_xor",
+  "count_if",
+  "divide",
+  "highest_position",
+  "lowest_position",
+  "max_absolute_overlay",
+  "max_overlay",
+  "min_absolute_overlay",
+  "min_overlay",
+  "modulo",
+  "multiply",
+  "multiply_overlay",
+  "percent_equal_to",
+  "percent_greater_than",
+  "percent_less_than",
+  "pick_from_list",
+  "power",
+  "standard_deviation_overlay",
+  "subtract",
+  "sum_overlay",
+  "update_nodata_cells",
+  "weighted_overlay",
+  "weighted_sum",
+]
+
+[[mapping]]
+category = "raster"
+subcategory = "local_neighborhood"
+tools = [
+  "image_correlation_neighbourhood_analysis",
+  "natural_neighbour_interpolation",
+  "nearest_neighbour_interpolation",
+]
+
+[[mapping]]
+category = "raster"
+subcategory = "reclass_mask"
+tools = [
+  "conditional_evaluation",
+  "reclass",
+  "reclass_equal_interval",
+]
+
+[[mapping]]
+category = "raster"
+subcategory = "distance_cost"
+tools = [
+  "buffer_raster",
+  "cost_allocation",
+  "cost_distance",
+  "cost_pathway",
+  "euclidean_allocation",
+  "euclidean_distance",
+]
+
+[[mapping]]
+category = "raster"
+subcategory = "general"
+tools = [
+  "abs",
+  "aggregate_raster",
+  "anova",
+  "arccos",
+  "arcosh",
+  "arcsin",
+  "arctan",
+  "arsinh",
+  "artanh",
+  "atan2",
+  "block_maximum",
+  "block_minimum",
+  "boundary_shape_complexity",
+  "ceil",
+  "centroid_raster",
+  "clip_raster_to_polygon",
+  "clump",
+  "cos",
+  "cosh",
+  "create_plane",
+  "crispness_index",
+  "cross_tabulation",
+  "cumulative_distribution",
+  "dbscan",
+  "decrement",
+  "edge_proportion",
+  "equal_to",
+  "erase_polygon_from_raster",
+  "exp",
+  "exp2",
+  "filter_raster_features_by_area",
+  "find_patch_edge_cells",
+  "floor",
+  "greater_than",
+  "heat_map",
+  "idw_interpolation",
+  "image_autocorrelation",
+  "image_correlation",
+  "image_regression",
+  "increment",
+  "inplace_add",
+  "inplace_divide",
+  "inplace_multiply",
+  "inplace_subtract",
+  "integer_division",
+  "inverse_pca",
+  "is_nodata",
+  "kappa_index",
+  "ks_normality_test",
+  "less_than",
+  "list_unique_values_raster",
+  "ln",
+  "log10",
+  "log2",
+  "map_features",
+  "max",
+  "min",
+  "modified_shepard_interpolation",
+  "negate",
+  "nibble",
+  "not_equal_to",
+  "paired_sample_t_test",
+  "phi_coefficient",
+  "principal_component_analysis",
+  "print_geotiff_tags",
+  "quantiles",
+  "radial_basis_function_interpolation",
+  "radius_of_gyration",
+  "random_field",
+  "random_forest_classification_fit",
+  "random_forest_classification_predict",
+  "random_forest_regression_fit",
+  "random_forest_regression_predict",
+  "random_sample",
+  "raster_area",
+  "raster_calculator",
+  "raster_cell_assignment",
+  "raster_histogram",
+  "raster_perimeter",
+  "raster_summary_stats",
+  "reciprocal",
+  "rescale_value_range",
+  "root_mean_square_error",
+  "round",
+  "shape_complexity_index_raster",
+  "sieve",
+  "sin",
+  "sinh",
+  "sqrt",
+  "square",
+  "tan",
+  "tanh",
+  "tin_interpolation",
+  "to_degrees",
+  "to_radians",
+  "trend_surface",
+  "trend_surface_vector_points",
+  "truncate",
+  "turning_bands_simulation",
+  "two_sample_ks_test",
+  "wilcoxon_signed_rank_test",
+  "z_scores",
+  "zonal_statistics",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "general"
+tools = [
+  "assess_route",
+  "breakline_mapping",
+  "convergence_index",
+  "dem_void_filling",
+  "deviation_from_mean_elevation",
+  "difference_from_mean_elevation",
+  "directional_relief",
+  "elev_above_pit",
+  "elev_above_pit_dist",
+  "elevation_percentile",
+  "embankment_mapping",
+  "exposure_towards_wind_flux",
+  "feature_preserving_smoothing",
+  "feature_preserving_smoothing_multiscale",
+  "fetch_analysis",
+  "fill_missing_data",
+  "find_ridges",
+  "hillshade",
+  "hypsometrically_tinted_hillshade",
+  "local_hypsometric_analysis",
+  "low_points_on_headwater_divides",
+  "max_downslope_elev_change",
+  "max_upslope_elev_change",
+  "min_downslope_elev_change",
+  "multidirectional_hillshade",
+  "num_downslope_neighbours",
+  "num_upslope_neighbours",
+  "profile",
+  "slope_vs_aspect_plot",
+  "slope_vs_elev_plot",
+  "surface_area_ratio",
+  "topographic_hachures",
+  "map_off_terrain_objects",
+  "remove_off_terrain_objects",
+  "ridge_and_valley_vectors",
+  "smooth_vegetation_residual",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "visibility"
+tools = [
+  "average_horizon_distance",
+  "horizon_angle",
+  "horizon_area",
+  "openness",
+  "shadow_animation",
+  "shadow_image",
+  "sky_view_factor",
+  "skyline_analysis",
+  "time_in_daylight",
+  "viewshed",
+  "visibility_index",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "derivatives"
+tools = [
+  "accumulation_curvature",
+  "aspect",
+  "casorati_curvature",
+  "curvedness",
+  "difference_curvature",
+  "gaussian_curvature",
+  "generating_function",
+  "horizontal_excess_curvature",
+  "maximal_curvature",
+  "mean_curvature",
+  "minimal_curvature",
+  "plan_curvature",
+  "principal_curvature_direction",
+  "profile_curvature",
+  "ring_curvature",
+  "rotor",
+  "shape_index",
+  "slope",
+  "tangential_curvature",
+  "total_curvature",
+  "unsphericity",
+  "vertical_excess_curvature",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "roughness_texture"
+tools = [
+  "average_normal_vector_angular_deviation",
+  "circular_variance_of_aspect",
+  "edge_density",
+  "ruggedness_index",
+  "spherical_std_dev_of_normals",
+  "standard_deviation_of_slope",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "landform_indices"
+tools = [
+  "elev_relative_to_min_max",
+  "geomorphons",
+  "hypsometric_analysis",
+  "multiscale_topographic_position_class",
+  "pennock_landform_classification",
+  "percent_elev_range",
+  "relative_aspect",
+  "relative_topographic_position",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "multiscale_signatures"
+tools = [
+  "max_anisotropy_dev",
+  "max_anisotropy_dev_signature",
+  "max_difference_from_mean",
+  "max_elevation_deviation",
+  "max_elev_dev_signature",
+  "multiscale_curvatures",
+  "multiscale_elevated_index",
+  "multiscale_elevation_percentile",
+  "multiscale_low_lying_index",
+  "multiscale_roughness",
+  "multiscale_roughness_signature",
+  "multiscale_std_dev_normals",
+  "multiscale_std_dev_normals_signature",
+  "multiscale_topographic_position_image",
+  "topographic_position_animation",
+]
+
+[[mapping]]
+category = "terrain"
+subcategory = "workflow_products"
+tools = [
+  "topo_render",
+  "wetland_hydrogeomorphic_classification",
+  "urban_expansion_impact_assessment",
+  "wind_turbine_siting",
+  "solar_site_suitability_analysis",
+  "corridor_mapping_intelligence",
+  "landslide_susceptibility_assessment",
+  "river_corridor_health_assessment",
+  "carbon_sequestration_verification_audit",
+  "wildfire_fuel_loading_and_risk_matrix",
+  "mine_site_reclamation_compliance_tracker",
+  "terrain_constraint_and_conflict_analysis",
+  "terrain_constructability_and_cost_analysis",
+  "utility_corridor_encroachment_intelligence",
+  "forestry_structure_and_biomass_intelligence",
+]
+
+[[mapping]]
+category = "precision_agriculture"
+subcategory = "general"
+tools = [
+  "field_trafficability_and_operation_planning",
+  "in_season_crop_stress_intervention_planning",
+  "precision_irrigation_optimization",
+  "precision_ag_yield_zone_intelligence",
+  "soil_landscape_classification",
+  "yield_data_conditioning_and_qa",
+]

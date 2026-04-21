@@ -12,7 +12,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   milestones, owner/checklist fields, weekly deliverables, risk controls, and
   time estimates for native decode parity and bridge decommissioning.
 
+### Changed
+- Updated `wbraster` crate dependencies to current releases, including
+  `zip` 8.x, `png` 0.18.x, `thiserror` 2.x, `rayon` 1.12.x, `wide` 1.3.x,
+  and related codec/compression crate updates.
+
 ### Fixed
+- Updated GeoPackage PNG tile decode buffering for `png` 0.18 API behavior by
+  handling optional decoder output size explicitly and surfacing a clear error
+  when unavailable.
 - Retired the vendored JPEG2000 decode bridge from active build wiring:
   `wbraster` now decodes through native `jpeg2000_core` only, the
   `jpeg2000-vendored-bridge` feature was removed from default/build paths, and

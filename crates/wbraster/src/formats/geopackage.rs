@@ -1404,7 +1404,10 @@ fn decode_png_to_gray_u8(bytes: &[u8]) -> Result<(usize, usize, Vec<u8>)> {
     let mut reader = decoder
         .read_info()
         .map_err(|e| RasterError::Other(format!("PNG read_info failed: {e}")))?;
-    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let output_size = reader.output_buffer_size().ok_or_else(|| {
+        RasterError::Other("PNG decoder did not report an output buffer size".into())
+    })?;
+    let mut buf = vec![0u8; output_size];
     let info = reader
         .next_frame(&mut buf)
         .map_err(|e| RasterError::Other(format!("PNG next_frame failed: {e}")))?;

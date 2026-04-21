@@ -63,7 +63,7 @@ Treat the bridge decoder as a reference implementation and migrate correctness-c
 - Default (bridge enabled):
   - `cargo check -p wbraster`
 - Native-only validation (bridge disabled):
-  - `cargo check -p wbraster --no-default-features --features zstd-native`
+  - `cargo check -p wbraster`
 
 ## License note
 

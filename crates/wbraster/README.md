@@ -83,13 +83,6 @@ Crates.io dependency:
 wbraster = "0.1"
 ```
 
-`wbraster` enables `zstd-native` by default. If you prefer pure-Rust decode-only Zstandard support, disable default features and enable `zstd-pure-rust-decode` instead:
-
-```toml
-[dependencies]
-wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
-```
-
 Local workspace/path dependency:
 
 ```toml
@@ -955,7 +948,7 @@ wbraster/
 
 ### Design principles
 
-- **Small dependency surface** — GeoTIFF I/O delegates to the standalone `wbgeotiff` crate; CRS reprojection delegates to `wbprojection`; Zarr support uses `serde_json` plus compression crates (`flate2`, `lz4_flex`, and optional zstd backend via `zstd-native` or `zstd-pure-rust-decode`).
+- **Small dependency surface** — GeoTIFF I/O delegates to the standalone `wbgeotiff` crate; CRS reprojection delegates to `wbprojection`; Zarr support uses `serde_json` plus compression crates (`flate2`, `lz4_flex`, and pure-Rust `ruzstd`).
 - **Typed internal representation** — raster cells are stored in native typed
   buffers (`u8`, `u16`, `f32`, etc.) via `RasterData`, while convenience APIs
   still expose `f64` access where needed.
@@ -1115,9 +1108,7 @@ Notes:
 - Zarr support targets **local filesystem stores** for both v2 and v3.
 - Reads and writes **2D arrays** and **3D arrays** in `(band, y, x)` form.
 - Supported compressors: `zlib`, `gzip`, `zstd`, `lz4`, or none.
-- `zstd` behavior is feature-gated:
-  - `zstd-native` (default): read + write via native `zstd` bindings.
-  - `zstd-pure-rust-decode`: read-only zstd decode via `ruzstd`; zstd encoding is unavailable.
+- `zstd` read/write support uses the pure-Rust `ruzstd` crate.
 - Default write uses `zlib` level 6 and Zarr v2.
 - Select write version with metadata key `zarr_version` (`2` default, `3` for v3).
 
@@ -1376,19 +1367,8 @@ Record representative medians from your local run (same machine/config for fair 
 
 ## Compilation Features
 
-| Feature | Default | Purpose |
-|---------|:-------:|---------|
-| `zstd-native` | **yes** | Native-linked Zstandard bindings for read + write. Best throughput on most platforms. |
-| `zstd-pure-rust-decode` | no | Pure-Rust `ruzstd`-backed Zstandard **decode only**. Cannot write zstd. Suitable for WebAssembly or environments where native linking is unavailable. |
-
-At most one zstd variant should be enabled at a time. Example — disable native, enable pure-Rust decode:
-
-```toml
-[dependencies]
-wbraster = { version = "0.1", default-features = false, features = ["zstd-pure-rust-decode"] }
-```
-
-Example — no zstd at all:
+`wbraster` no longer exposes alternate zstd backends. Zarr zstd support is
+always provided through pure-Rust `ruzstd`.
 
 ```toml
 [dependencies]

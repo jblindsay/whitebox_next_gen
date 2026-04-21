@@ -1528,46 +1528,26 @@ fn decompress_bytes(compressor: &Option<(String, Option<i32>)>, bytes: &[u8]) ->
 }
 
 fn encode_zstd(raw: &[u8], level: i32) -> Result<Vec<u8>> {
-    #[cfg(feature = "zstd-native")]
-    {
-        return zstd::stream::encode_all(raw, level)
-            .map_err(|e| RasterError::Other(format!("zstd encode error: {e}")));
-    }
+    use ruzstd::encoding::{compress_to_vec, CompressionLevel};
 
-    #[cfg(not(feature = "zstd-native"))]
-    {
-        let _ = (raw, level);
-        Err(RasterError::UnsupportedDataType(
-            "zstd encode requires the 'zstd-native' feature".to_string(),
-        ))
-    }
+    let level = match level {
+        i32::MIN..=0 => CompressionLevel::Uncompressed,
+        1 => CompressionLevel::Fastest,
+        2 | 3 => CompressionLevel::Default,
+        4..=7 => CompressionLevel::Better,
+        _ => CompressionLevel::Best,
+    };
+
+    Ok(compress_to_vec(raw, level))
 }
 
 fn decode_zstd(bytes: &[u8]) -> Result<Vec<u8>> {
-    #[cfg(feature = "zstd-native")]
-    {
-        return zstd::stream::decode_all(bytes)
-            .map_err(|e| RasterError::Other(format!("zstd decode error: {e}")));
-    }
-
-    #[cfg(all(not(feature = "zstd-native"), feature = "zstd-pure-rust-decode"))]
-    {
-        let mut source = bytes;
-        let mut decoder = ruzstd::decoding::StreamingDecoder::new(&mut source)
-            .map_err(|e| RasterError::Other(format!("zstd decode error: {e}")))?;
-        let mut out = Vec::new();
-        decoder
-            .read_to_end(&mut out)
-            .map_err(|e| RasterError::Other(format!("zstd decode error: {e}")))?;
-        return Ok(out);
-    }
-
-    #[cfg(all(not(feature = "zstd-native"), not(feature = "zstd-pure-rust-decode")))]
-    {
-        let _ = bytes;
-        Err(RasterError::UnsupportedDataType(
-            "zstd decode requires either 'zstd-native' or 'zstd-pure-rust-decode'"
-                .to_string(),
-        ))
-    }
+    let mut source = bytes;
+    let mut decoder = ruzstd::decoding::StreamingDecoder::new(&mut source)
+        .map_err(|e| RasterError::Other(format!("zstd decode error: {e}")))?;
+    let mut out = Vec::new();
+    decoder
+        .read_to_end(&mut out)
+        .map_err(|e| RasterError::Other(format!("zstd decode error: {e}")))?;
+    Ok(out)
 }

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [Unreleased]
+
+### Changed
+- Replaced `wbraster`'s native `zstd` dependency with the pure-Rust `ruzstd`
+  crate for Zarr and Zarr v3 zstd compression/decompression support, removing
+  the crate-level zstd feature split and keeping the raster stack fully Rust.
+
 ## [0.1.3] - 2026-04-21
 
 ### Added

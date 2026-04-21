@@ -294,20 +294,7 @@ fn compress_fixture(raw: &[u8], compressor: &str) -> Vec<u8> {
             enc.write_all(raw).unwrap();
             enc.finish().unwrap()
         }
-        "zstd" => {
-            #[cfg(feature = "zstd-native")]
-            {
-                zstd::stream::encode_all(raw, 3).unwrap()
-            }
-            #[cfg(all(not(feature = "zstd-native"), feature = "zstd-pure-rust-decode"))]
-            {
-                ruzstd::encoding::compress_to_vec(raw, ruzstd::encoding::CompressionLevel::Fastest)
-            }
-            #[cfg(all(not(feature = "zstd-native"), not(feature = "zstd-pure-rust-decode")))]
-            {
-                panic!("zstd fixture compression requires 'zstd-native' or 'zstd-pure-rust-decode'")
-            }
-        }
+        "zstd" => ruzstd::encoding::compress_to_vec(raw, ruzstd::encoding::CompressionLevel::Default),
         "lz4" => {
             let mut enc = lz4_flex::frame::FrameEncoder::new(Vec::new());
             enc.write_all(raw).unwrap();
@@ -2066,7 +2053,6 @@ fn read_python_style_zarr_v3_dimension_names_unrecognized_2d_accepted() {
 fn read_python_style_zarr_v3_dimension_names_band_last_strict_fails() {
     // A 3D store whose dimension_names suggest a band-last layout (["y","x","band"])
     // should fail in strict mode (the default) because the reader assumes band-first.
-    use wbraster::error::RasterError;
     let dir = tmp("_py_v3_dim_names_band_last_strict.zarr");
     // Write as a 3D (1-band) store: shape [1, rows, cols]
     std::fs::create_dir_all(&dir).unwrap();

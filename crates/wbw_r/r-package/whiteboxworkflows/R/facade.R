@@ -3093,6 +3093,131 @@ wbw_stars_to_raster <- function(x, output_path, overwrite = FALSE) {
   invisible(output_path)
 }
 
+wbw_slug_to_title <- function(slug) {
+  mapping <- c(
+    remote_sensing = "Remote Sensing",
+    sar = "SAR",
+    obia = "OBIA",
+    edge_feature_detection = "Edge Feature Detection",
+    enhancement_contrast = "Enhancement / Contrast",
+    change_detection = "Change Detection",
+    radiometric_correction = "Radiometric Correction",
+    linear_referencing = "Linear Referencing",
+    network_analysis = "Network Analysis",
+    overlay_math = "Overlay / Math",
+    local_neighborhood = "Local Neighborhood",
+    reclass_mask = "Reclass / Mask",
+    distance_cost = "Distance / Cost",
+    roughness_texture = "Roughness / Texture",
+    landform_indices = "Landform Indices",
+    multiscale_signatures = "Multiscale Signatures"
+  )
+
+  if (slug %in% names(mapping)) {
+    return(unname(mapping[[slug]]))
+  }
+
+  parts <- strsplit(as.character(slug), "_", fixed = TRUE)[[1]]
+  paste(vapply(parts, function(part) {
+    paste0(toupper(substr(part, 1, 1)), substr(part, 2, nchar(part)))
+  }, character(1)), collapse = " ")
+}
+
+wbw_taxonomy_candidate_paths <- function() {
+  candidates <- c(
+    Sys.getenv("WBW_TOOL_TAXONOMY_JSON", unset = ""),
+    "crates/wbw_r/r-package/whiteboxworkflows/inst/extdata/tool_taxonomy.resolved.json",
+    "inst/extdata/tool_taxonomy.resolved.json",
+    system.file("extdata", "tool_taxonomy.resolved.json", package = "whiteboxworkflows")
+  )
+  candidates[nzchar(candidates)]
+}
+
+wbw_load_taxonomy_payload <- function() {
+  for (path in wbw_taxonomy_candidate_paths()) {
+    if (!file.exists(path)) {
+      next
+    }
+
+    payload <- tryCatch(
+      jsonlite::fromJSON(path, simplifyVector = FALSE),
+      error = function(e) NULL
+    )
+    if (is.list(payload)) {
+      return(payload)
+    }
+  }
+
+  NULL
+}
+
+wbw_taxonomy_index <- function() {
+  payload <- wbw_load_taxonomy_payload()
+  if (is.null(payload) || !is.list(payload$mapping)) {
+    return(list())
+  }
+
+  index <- list()
+  for (entry in payload$mapping) {
+    if (!is.list(entry)) {
+      next
+    }
+
+    category_slug <- as.character(entry$category %||% "")
+    subcategory_slug <- as.character(entry$subcategory %||% "")
+    tools <- entry$tools %||% list()
+    if (!nzchar(category_slug) || !nzchar(subcategory_slug) || !is.list(tools)) {
+      next
+    }
+
+    for (tool_id in unlist(tools, use.names = FALSE)) {
+      index[[as.character(tool_id)]] <- list(
+        category = wbw_slug_to_title(category_slug),
+        category_slug = category_slug,
+        subcategory = wbw_slug_to_title(subcategory_slug),
+        subcategory_slug = subcategory_slug
+      )
+    }
+  }
+
+  index
+}
+
+wbw_tool_catalog <- function(session = NULL) {
+  if (is.null(session)) {
+    session <- wbw_session()
+  }
+
+  tools <- session$list_tools()
+  taxonomy <- wbw_taxonomy_index()
+
+  data.frame(
+    id = vapply(tools, function(x) as.character(x$id %||% ""), character(1)),
+    display_name = vapply(tools, function(x) as.character(x$display_name %||% ""), character(1)),
+    summary = vapply(tools, function(x) as.character(x$summary %||% ""), character(1)),
+    license_tier = vapply(tools, function(x) as.character(x$license_tier %||% "Open"), character(1)),
+    stability = vapply(tools, function(x) as.character(x$stability %||% ""), character(1)),
+    category = vapply(tools, function(x) {
+      tool_id <- as.character(x$id %||% "")
+      taxonomy[[tool_id]]$category %||% as.character(x$category %||% "Other")
+    }, character(1)),
+    category_slug = vapply(tools, function(x) {
+      tool_id <- as.character(x$id %||% "")
+      taxonomy[[tool_id]]$category_slug %||% ""
+    }, character(1)),
+    subcategory = vapply(tools, function(x) {
+      tool_id <- as.character(x$id %||% "")
+      taxonomy[[tool_id]]$subcategory %||% ""
+    }, character(1)),
+    subcategory_slug = vapply(tools, function(x) {
+      tool_id <- as.character(x$id %||% "")
+      taxonomy[[tool_id]]$subcategory_slug %||% ""
+    }, character(1)),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
 #' Get all available tool categories.
 #'
 #' Returns a character vector of unique tool categories.
@@ -3101,12 +3226,7 @@ wbw_stars_to_raster <- function(x, output_path, overwrite = FALSE) {
 #'
 #' @export
 wbw_get_all_categories <- function(session = NULL) {
-  if (is.null(session)) {
-    session <- wbw_session()
-  }
-  tools <- session$list_tools()
-  categories <- unique(sapply(tools, function(x) x$category %||% "Other"))
-  sort(categories)
+  sort(unique(wbw_tool_catalog(session)$category))
 }
 
 #' Get tools organized by category.
@@ -3120,26 +3240,16 @@ wbw_get_all_categories <- function(session = NULL) {
 #'
 #' @export
 wbw_list_tools_by_category <- function(session = NULL) {
-  if (is.null(session)) {
-    session <- wbw_session()
-  }
-  tools <- session$list_tools()
-  categories <- wbw_get_all_categories(session)
+  catalog <- wbw_tool_catalog(session)
+  categories <- sort(unique(catalog$category))
 
   result <- list()
 
   for (cat in categories) {
-    cat_tools <- Filter(function(x) (x$category %||% "Other") == cat, tools)
-    tool_data <- data.frame(
-      id = sapply(cat_tools, function(x) x$id),
-      display_name = sapply(cat_tools, function(x) x$display_name %||% ""),
-      summary = sapply(cat_tools, function(x) x$summary %||% ""),
-      license_tier = sapply(cat_tools, function(x) x$license_tier %||% "Open"),
-      stability = sapply(cat_tools, function(x) x$stability %||% ""),
-      row.names = NULL,
-      stringsAsFactors = FALSE
-    )
-    result[[cat]] <- tool_data
+    result[[cat]] <- catalog[catalog$category == cat, c(
+      "id", "display_name", "summary", "license_tier", "stability",
+      "subcategory", "subcategory_slug"
+    ), drop = FALSE]
   }
 
   result
@@ -3159,13 +3269,13 @@ wbw_tools_in_category <- function(category, session = NULL) {
   if (!is.character(category) || length(category) != 1L) {
     stop("category must be a single string.", call. = FALSE)
   }
-  if (is.null(session)) {
-    session <- wbw_session()
-  }
-  tools <- session$list_tools()
-  cat_tools <- Filter(function(x) (x$category %||% "Other") == category, tools)
+  cat_tools <- wbw_tool_catalog(session)
+  cat_tools <- cat_tools[cat_tools$category == category, c(
+    "id", "display_name", "summary", "license_tier", "stability",
+    "subcategory", "subcategory_slug"
+  ), drop = FALSE]
 
-  if (length(cat_tools) == 0L) {
+  if (nrow(cat_tools) == 0L) {
     available <- paste(wbw_get_all_categories(session), collapse = ", ")
     stop(
       sprintf(
@@ -3177,15 +3287,74 @@ wbw_tools_in_category <- function(category, session = NULL) {
     )
   }
 
-  data.frame(
-    id = sapply(cat_tools, function(x) x$id),
-    display_name = sapply(cat_tools, function(x) x$display_name %||% ""),
-    summary = sapply(cat_tools, function(x) x$summary %||% ""),
-    license_tier = sapply(cat_tools, function(x) x$license_tier %||% "Open"),
-    stability = sapply(cat_tools, function(x) x$stability %||% ""),
-    row.names = NULL,
-    stringsAsFactors = FALSE
-  )
+  cat_tools
+}
+
+#' Get tools organized by subcategory.
+#'
+#' Uses the shared taxonomy export when available, returning a named list of
+#' per-subcategory data frames keyed as "Category - Subcategory".
+#'
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A named list of data frames.
+#'
+#' @export
+wbw_list_tools_by_subcategory <- function(session = NULL) {
+  catalog <- wbw_tool_catalog(session)
+  catalog <- catalog[nzchar(catalog$subcategory), , drop = FALSE]
+
+  keys <- sort(unique(paste(catalog$category, catalog$subcategory, sep = " - ")))
+  result <- list()
+  for (key in keys) {
+    parts <- strsplit(key, " - ", fixed = TRUE)[[1]]
+    result[[key]] <- catalog[
+      catalog$category == parts[[1]] & catalog$subcategory == parts[[2]],
+      c("id", "display_name", "summary", "license_tier", "stability"),
+      drop = FALSE
+    ]
+  }
+  result
+}
+
+#' Get tools in a specific subcategory.
+#'
+#' @param category Category display name.
+#' @param subcategory Subcategory display name.
+#' @param session Optional session object. If NULL, a default session is created.
+#'
+#' @return A data frame with columns: id, display_name, summary, license_tier, stability.
+#'
+#' @export
+wbw_tools_in_subcategory <- function(category, subcategory, session = NULL) {
+  if (!is.character(category) || length(category) != 1L || !nzchar(category)) {
+    stop("category must be a single non-empty string.", call. = FALSE)
+  }
+  if (!is.character(subcategory) || length(subcategory) != 1L || !nzchar(subcategory)) {
+    stop("subcategory must be a single non-empty string.", call. = FALSE)
+  }
+
+  catalog <- wbw_tool_catalog(session)
+  rows <- catalog[
+    catalog$category == category & catalog$subcategory == subcategory,
+    c("id", "display_name", "summary", "license_tier", "stability"),
+    drop = FALSE
+  ]
+
+  if (nrow(rows) == 0L) {
+    available <- paste(sort(unique(paste(catalog$category, catalog$subcategory, sep = " - "))), collapse = ", ")
+    stop(
+      sprintf(
+        "Subcategory '%s - %s' not found. Available subcategories: %s",
+        category,
+        subcategory,
+        available
+      ),
+      call. = FALSE
+    )
+  }
+
+  rows
 }
 
 wbw_is_remote_sensing_obia_tool <- function(tool) {
@@ -3261,14 +3430,11 @@ wbw_tools_in_remote_sensing_obia <- function(session = NULL) {
 #'
 #' @export
 wbw_category_summary <- function(session = NULL) {
-  if (is.null(session)) {
-    session <- wbw_session()
-  }
-  tools <- session$list_tools()
-  categories <- wbw_get_all_categories(session)
+  catalog <- wbw_tool_catalog(session)
+  categories <- sort(unique(catalog$category))
 
   counts <- sapply(categories, function(cat) {
-    length(Filter(function(x) (x$category %||% "Other") == cat, tools))
+    sum(catalog$category == cat)
   })
 
   data.frame(

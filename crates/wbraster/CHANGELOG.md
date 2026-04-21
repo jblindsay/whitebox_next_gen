@@ -16,6 +16,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Updated `wbraster` crate dependencies to current releases, including
   `zip` 8.x, `png` 0.18.x, `thiserror` 2.x, `rayon` 1.12.x, `wide` 1.3.x,
   and related codec/compression crate updates.
+- Reduced `wbraster` direct dependency surface by removing no-longer-used
+  direct entries (`weezl`, `webp`, `zune-core`, `zune-jpegxl`, `jxl-oxide`,
+  and `log`) after confirming clean compile/test-target builds.
 
 ### Fixed
 - Updated GeoPackage PNG tile decode buffering for `png` 0.18 API behavior by

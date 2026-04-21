@@ -3943,12 +3943,10 @@ dependencies = [
  "lz4_flex 0.11.6",
  "png 0.17.16",
  "rayon",
- "ruzstd",
  "tempfile",
  "thiserror 1.0.69",
  "webp",
  "weezl",
- "zstd",
  "zune-core",
  "zune-jpegxl",
 ]

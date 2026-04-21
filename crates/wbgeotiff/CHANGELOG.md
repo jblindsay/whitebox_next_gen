@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Changed
+- Removed unused direct `zstd` and `ruzstd` dependencies. Current `wbgeotiff`
+    codec support covers Deflate, LZW, PackBits, JPEG, WebP, and JPEG-XL; the
+    crate does not currently implement GeoTIFF Zstandard compression paths.
+
 ## [0.1.1] - 2026-04-11
 ### Added
 - Added `GeoTiff::value_transform()` to expose optional linear sample-value transforms

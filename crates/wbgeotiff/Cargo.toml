@@ -19,8 +19,6 @@ path = "src/lib.rs"
 [dependencies]
 thiserror = "1.0"
 flate2 = "1"
-zstd = "0.13"
-ruzstd = "0.8"
 lz4_flex = "0.11"
 weezl = "0.1"
 jpeg-encoder = "0.6"

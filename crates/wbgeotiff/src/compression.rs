@@ -39,11 +39,47 @@ pub fn compress_webp(
     samples_per_pixel: usize,
     quality: f32,
 ) -> Result<Vec<u8>> {
-    use webp::Encoder;
+    use webp_rust::{encode_lossless, encode_lossy, ImageBuffer};
 
     let encoded = match samples_per_pixel {
-        3 => Encoder::from_rgb(input, width, height).encode(quality).to_vec(),
-        4 => Encoder::from_rgba(input, width, height).encode(quality).to_vec(),
+        3 => {
+            let mut rgba = Vec::with_capacity(input.len() / 3 * 4);
+            for px in input.chunks_exact(3) {
+                rgba.extend_from_slice(px);
+                rgba.push(255);
+            }
+            let image = ImageBuffer {
+                width: width as usize,
+                height: height as usize,
+                rgba,
+            };
+            encode_lossy(&image, 0, quality.clamp(0.0, 100.0).round() as usize, None).map_err(
+                |e| GeoTiffError::CompressionError {
+                    codec: "WebP",
+                    message: format!("{e}"),
+                },
+            )?
+        }
+        4 => {
+            let image = ImageBuffer {
+                width: width as usize,
+                height: height as usize,
+                rgba: input.to_vec(),
+            };
+            let has_alpha = input.chunks_exact(4).any(|px| px[3] != 255);
+            if has_alpha {
+                encode_lossless(&image, 2, None).map_err(|e| GeoTiffError::CompressionError {
+                    codec: "WebP",
+                    message: format!("{e}"),
+                })?
+            } else {
+                encode_lossy(&image, 0, quality.clamp(0.0, 100.0).round() as usize, None)
+                    .map_err(|e| GeoTiffError::CompressionError {
+                        codec: "WebP",
+                        message: format!("{e}"),
+                    })?
+            }
+        }
         _ => {
             return Err(GeoTiffError::CompressionError {
                 codec: "WebP",
@@ -57,15 +93,12 @@ pub fn compress_webp(
 
 /// Decompress one WebP strip/tile chunk.
 pub fn decompress_webp(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
-    use webp::Decoder;
-
-    let decoder = Decoder::new(input);
-    let img = decoder.decode().ok_or_else(|| GeoTiffError::CompressionError {
+    let img = webp_rust::decode(input).map_err(|e| GeoTiffError::CompressionError {
         codec: "WebP",
-        message: "failed to decode WebP payload".into(),
+        message: format!("{e}"),
     })?;
 
-    let decoded = img.to_vec();
+    let decoded = img.rgba;
     if expected_len == 0 {
         return Ok(decoded);
     }
@@ -74,7 +107,7 @@ pub fn decompress_webp(input: &[u8], expected_len: usize) -> Result<Vec<u8>> {
         return Ok(decoded);
     }
 
-    let pixel_count = img.width() as usize * img.height() as usize;
+    let pixel_count = img.width * img.height;
     if pixel_count > 0 && decoded.len() == pixel_count * 3 {
         if expected_len == pixel_count * 3 {
             return Ok(decoded);

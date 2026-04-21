@@ -10,6 +10,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Removed unused direct `zstd` and `ruzstd` dependencies. Current `wbgeotiff`
     codec support covers Deflate, LZW, PackBits, JPEG, WebP, and JPEG-XL; the
     crate does not currently implement GeoTIFF Zstandard compression paths.
+- Swapped the WebP backend from the `webp`/`libwebp-sys` stack to pure-Rust
+    `webp-rust`. Opaque WebP writes stay lossy; alpha-bearing RGBA WebP writes
+    currently fall back to lossless WebP because the pure-Rust lossy encoder
+    does not yet support alpha input.
 
 ## [0.1.1] - 2026-04-11
 ### Added

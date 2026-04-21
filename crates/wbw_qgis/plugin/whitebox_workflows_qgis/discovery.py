@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import html
 import inspect
+import json
 import os
 import re
+from pathlib import Path
 
 from .bootstrap import get_runtime_capabilities, get_tool_catalog, load_whitebox_workflows
 
@@ -645,6 +647,153 @@ def _derive_remote_sensing_category(item: dict) -> str:
     return "Remote Sensing"
 
 
+
+
+# ---------------------------------------------------------------------------
+# Canonical taxonomy index — loaded from tool_taxonomy.resolved.json which is
+# the single source of truth shared across all three frontends.
+# ---------------------------------------------------------------------------
+
+_TAXONOMY_INDEX: dict[str, tuple[str, str]] | None = None  # tool_id → (category_slug, subcategory_slug)
+
+_CATEGORY_DISPLAY: dict[str, str] = {
+    "remote_sensing": "Remote Sensing",
+    "terrain": "Terrain",
+    "hydrology": "Hydrology",
+    "streams": "Hydrology - Streams",
+    "lidar": "LiDAR",
+    "vector": "Vector",
+    "raster": "Raster",
+    "conversion": "Conversion",
+}
+
+_SUBCATEGORY_DISPLAY: dict[str, str] = {
+    "obia": "OBIA",
+    "classification": "Classification",
+    "change_detection": "Change Detection",
+    "radiometric_correction": "Radiometric Correction",
+    "edge_feature_detection": "Edge & Feature Detection",
+    "enhancement_contrast": "Enhancement & Contrast",
+    "filters": "Filters",
+    "sar": "SAR",
+    "spectral": "Spectral",
+    "multiscale_signatures": "Multiscale Signatures",
+    "workflow_products": "Workflow Products",
+    "derivatives": "Derivatives",
+    "landform_indices": "Landform Indices",
+    "roughness_texture": "Roughness & Texture",
+    "visibility": "Visibility",
+    "local_neighborhood": "Local Neighborhood",
+    "flow_routing": "Flow Routing",
+    "depressions_storage": "Depressions & Storage",
+    "watersheds_basins": "Watersheds & Basins",
+    "hydrologic_indices": "Hydrologic Indices",
+    "network_extraction": "Network Extraction",
+    "ordering_metrics": "Ordering Metrics",
+    "longitudinal_analysis": "Longitudinal Analysis",
+    "analysis_metrics": "Analysis Metrics",
+    "filtering_classification": "Filtering & Classification",
+    "sampling_gridding": "Sampling & Gridding",
+    "interpolation_gridding": "Interpolation & Gridding",
+    "geometry_processing": "Geometry Processing",
+    "geometry_topology": "Geometry & Topology",
+    "attribute_analysis": "Attribute Analysis",
+    "overlay_analysis": "Overlay Analysis",
+    "distance_cost": "Distance & Cost",
+    "shape_metrics": "Shape Metrics",
+    "network_analysis": "Network Analysis",
+    "linear_referencing": "Linear Referencing",
+    "vector_table_io": "Vector & Table I/O",
+    "overlay_math": "Overlay Math",
+    "reclass_mask": "Reclassify & Mask",
+    "raster_vector_conversion": "Raster/Vector Conversion",
+    "io_management": "I/O & Management",
+    "general": "General",
+}
+
+
+def _taxonomy_display_group(category_slug: str, subcategory_slug: str) -> str:
+    """Convert taxonomy slugs to the canonical QGIS group display name."""
+    cat = _CATEGORY_DISPLAY.get(category_slug, category_slug.replace("_", " ").title())
+    if not subcategory_slug or subcategory_slug == "general":
+        return cat
+    sub = _SUBCATEGORY_DISPLAY.get(subcategory_slug, subcategory_slug.replace("_", " ").title())
+    return f"{cat} - {sub}"
+
+
+def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
+    """Load tool_taxonomy.resolved.json and return a tool_id→(category,subcategory) map."""
+    global _TAXONOMY_INDEX
+    if _TAXONOMY_INDEX is not None:
+        return _TAXONOMY_INDEX
+
+    candidate_paths = []
+
+    # 1. Env var override
+    env_path = os.environ.get("WBW_TOOL_TAXONOMY_JSON")
+    if env_path:
+        candidate_paths.append(Path(env_path).expanduser())
+
+    # 2. Adjacent to this file (bundled with the plugin)
+    candidate_paths.append(Path(__file__).parent / "tool_taxonomy.resolved.json")
+
+    # 3. Source tree location (for development without a sync step)
+    here = Path(__file__).resolve().parent
+    for _ in range(8):
+        candidate = here / "crates/wbw_python/tool_taxonomy.resolved.json"
+        if candidate.exists():
+            candidate_paths.append(candidate)
+            break
+        here = here.parent
+
+    idx: dict[str, tuple[str, str]] = {}
+    for path in candidate_paths:
+        try:
+            if not path.exists():
+                continue
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            for entry in payload.get("mapping", []):
+                cat = str(entry.get("category", "")).strip()
+                sub = str(entry.get("subcategory", "")).strip()
+                for tool_id in entry.get("tools", []):
+                    tid = str(tool_id).strip()
+                    if tid:
+                        idx[tid] = (cat, sub)
+            break  # stop at first usable file
+        except Exception:
+            continue
+
+    _TAXONOMY_INDEX = idx
+    return idx
+
+
+def _apply_taxonomy_override(catalog: list[dict]) -> list[dict]:
+    """Stamp each catalog item with canonical taxonomy category/subcategory.
+
+    Tools present in tool_taxonomy.resolved.json are authoritative; runtime
+    metadata heuristics are preserved only for tools not yet in the taxonomy.
+    """
+    index = _load_taxonomy_index()
+    if not index:
+        return catalog
+
+    out: list[dict] = []
+    for item in catalog:
+        tool_id = str(item.get("id", "") or "").strip()
+        if tool_id in index:
+            fixed = dict(item)
+            cat_slug, sub_slug = index[tool_id]
+            fixed["taxonomy_category"] = cat_slug
+            fixed["taxonomy_subcategory"] = sub_slug
+            # Rewrite the "category" field to the canonical display string so
+            # all downstream consumers (panel, algorithm group, etc.) pick it up.
+            fixed["category"] = _taxonomy_display_group(cat_slug, sub_slug)
+            out.append(fixed)
+        else:
+            out.append(item)
+    return out
+
+
 def _reclassify_broad_categories(catalog: list[dict]) -> list[dict]:
     out: list[dict] = []
     for item in catalog:
@@ -867,6 +1016,7 @@ def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[
     catalog = _inject_multiscale_topographic_position_class_render_hints(catalog)
     catalog = _normalize_lock_state(catalog)
     catalog = _reclassify_broad_categories(catalog)
+    catalog = _apply_taxonomy_override(catalog)
     catalog = _inject_projection_wrapper_tools(catalog)
     catalog = _hydrate_missing_params(catalog)
     catalog = _dedupe_catalog_params(catalog)

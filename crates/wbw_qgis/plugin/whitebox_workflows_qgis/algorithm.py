@@ -418,96 +418,13 @@ def _coerce_arg_from_default_type(value: Any, default_value: Any) -> Any:
 
 
 def _derive_group_name(manifest: dict[str, Any]) -> str:
-    base = str(manifest.get("category", "General") or "General")
-    tool_id = str(manifest.get("id", "") or "").strip().lower()
-    tags = [str(t).strip().lower() for t in manifest.get("tags", []) if str(t).strip()]
-    tag_set = set(tags)
-
-    # Preserve explicit non-broad categories UNLESS they have specific subcategory tags.
-    if base not in {"Raster", "Vector", "Lidar", "Other"}:
-        # Still check tags for terrain/hydrology/remote-sensing subcategories even
-        # if the base category is already "Terrain", "Hydrology", etc.
-        if base.lower() not in ("terrain", "hydrology", "raster", "vector", "lidar"):
-            return base
-
-    terrain_tags = {
-        "terrain", "geomorphometry", "curvature", "roughness", "local-relief", "dem"
-    }
-    hydrology_tags = {
-        "hydrology", "flow", "flow-accumulation", "flow-direction", "d8", "dinf", "streams", "stream_network", "depression", "watershed", "flowpath"
-    }
-    remote_tags = {
-        "remote_sensing", "image", "classification", "filter", "convolution", "multiscale"
-    }
-    obia_id_prefixes = (
-        "segment_slic_",
-        "segment_graph_",
-        "segments_merge_",
-        "object_features_",
-        "classify_objects_",
-        "evaluate_object_",
-        "obia_",
-    )
-    non_obia_line_morphology_ids = {
-        "thicken_raster_line",
-        "line_thinning",
-        "remove_spurs",
-    }
-
-    def _has(*names: str) -> bool:
-        return any(n in tag_set for n in names)
-
-    if tag_set.intersection(terrain_tags):
-        if _has("curvature", "roughness", "geomorphometry"):
-            return "Terrain - Geomorphometry"
-        return "Terrain"
-
-    if tag_set.intersection(hydrology_tags):
-        if _has("flow-accumulation", "flow-direction", "d8", "dinf"):
-            return "Hydrology - Flow"
-        if _has("stream_network", "streams", "flowpath"):
-            return "Hydrology - Streams"
-        if _has("depression"):
-            return "Hydrology - Depressions"
-        return "Hydrology"
-
-    if tag_set.intersection(remote_tags):
-        if tool_id in non_obia_line_morphology_ids:
-            return "Remote Sensing"
-        if tool_id == "image_segmentation" or tool_id.startswith(obia_id_prefixes) or _has("obia"):
-            return "Remote Sensing - OBIA"
-        if _has("classification", "knn"):
-            return "Remote Sensing - Classification"
-        if _has("filter", "convolution", "smoothing"):
-            return "Remote Sensing - Filters"
-        if _has("multiscale", "integral-image"):
-            return "Remote Sensing - Multi-scale"
-        return "Remote Sensing"
-
-    if base == "Raster":
-        if _has("math"):
-            return "Raster - Math"
-        if _has("statistics"):
-            return "Raster - Statistics"
-        if _has("overlay", "distance", "interpolation"):
-            return "Raster - Analysis"
-        return "Raster"
-
-    if base == "Vector":
-        if _has("network", "routing"):
-            return "Vector - Network"
-        if _has("linear-referencing", "linear_referencing"):
-            return "Vector - Linear Referencing"
-        return "Vector"
-
-    if base == "Lidar":
-        if _has("qa", "diagnostics"):
-            return "LiDAR - QA"
-        if _has("forestry", "biomass"):
-            return "LiDAR - Forestry"
-        return "LiDAR"
-
-    return base
+    # Prefer the taxonomy-stamped category that discover_tool_catalog() writes
+    # from the canonical tool_taxonomy.resolved.json.  This is the single
+    # source of truth shared across all three frontends (Python, R, QGIS).
+    category = str(manifest.get("category", "") or "").strip()
+    if category:
+        return category
+    return "General"
 
 
 def _infer_kind(name: str, description: str, default_value: Any = None) -> str:

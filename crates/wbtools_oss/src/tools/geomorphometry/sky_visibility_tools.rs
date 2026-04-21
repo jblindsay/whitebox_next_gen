@@ -1315,7 +1315,7 @@ impl SkyVisibilityCore {
             display_name: "Horizon Area",
             summary: "Calculates area of the horizon polygon (hectares).",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -1359,7 +1359,7 @@ impl SkyVisibilityCore {
             display_name: "Horizon Area".to_string(),
             summary: "Calculates area of the horizon polygon (hectares).".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],
@@ -1510,7 +1510,7 @@ impl SkyVisibilityCore {
             display_name: "Average Horizon Distance",
             summary: "Calculates average distance to horizon across azimuth directions.",
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec {
                     name: "dem",
@@ -1554,7 +1554,7 @@ impl SkyVisibilityCore {
             display_name: "Average Horizon Distance".to_string(),
             summary: "Calculates average distance to horizon across azimuth directions.".to_string(),
             category: ToolCategory::Terrain,
-            license_tier: LicenseTier::Pro,
+            license_tier: LicenseTier::Open,
             params: vec![],
             defaults,
             examples: vec![],

@@ -5484,7 +5484,7 @@ impl Tool for TopologicalBreachBurnTool {
 			display_name: "Topological Breach Burn",
 			summary: "Performs stream burning with topological safeguards and returns streams, burned DEM, D8 pointer, and D8 accumulation outputs.",
 			category: ToolCategory::Hydrology,
-			license_tier: LicenseTier::Pro,
+			license_tier: LicenseTier::Open,
 			params: vec![
 				ToolParamSpec { name: "streams", description: "Input streams vector", required: true },
 				ToolParamSpec { name: "dem", description: "Input DEM raster", required: true },
@@ -5505,7 +5505,7 @@ impl Tool for TopologicalBreachBurnTool {
 			display_name: "Topological Breach Burn".to_string(),
 			summary: "Burns streams into a DEM, conditions the surface, and returns stream, DEM, pointer, and accumulation rasters.".to_string(),
 			category: ToolCategory::Hydrology,
-			license_tier: LicenseTier::Pro,
+			license_tier: LicenseTier::Open,
 			params: vec![],
 			defaults,
 			examples: vec![ToolExample {

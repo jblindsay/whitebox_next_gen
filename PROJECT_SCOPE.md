@@ -37,6 +37,24 @@ Update this file whenever priorities, architecture, or non-negotiables change.
 - Sensitive/private repositories and licensing-related code should never be pushed publicly.
 - Prefer small checkpoint commits for risky changes.
 
+## Dependency Governance Tiers
+
+### Tier 1: Core Backend Crates (Strict)
+- Scope: wbgeotiff, wbprojection, wbraster, wbvector, wblidar, wbtopology, wbcore, wblicense_core.
+- Goal: Keep the core geospatial backend as pure-Rust as practical and dependency-light.
+- Rule: No new `-sys` or `links` dependencies without explicit approval and documented rationale.
+- Rule: Prefer pure-Rust codec/compression stacks when feature parity is acceptable.
+- Rule: Avoid adding broad "default feature" dependency bundles unless required by user-facing behavior.
+- Rule: Any Tier 1 dependency increase should include a short impact note (what was added, why needed, and alternatives considered).
+
+### Tier 2: Interop And Product-Surface Crates (Constrained)
+- Scope: wbtools_oss, wbtools_pro, wbw_python, wbw_r, wbw_qgis.
+- Goal: Preserve full platform interoperability while containing heavy format/runtime dependencies at the edges.
+- Rule: Heavier dependencies are allowed when they unlock required platform functionality (for example GeoParquet, Python/R interop, QGIS integration).
+- Rule: Keep heavy dependencies from leaking inward into Tier 1 when a boundary API can isolate them.
+- Rule: Prefer optional feature wiring in Tier 2 when it does not reduce required shipping functionality.
+- Rule: Frontend/interoperability crates should treat Tier 1 purity constraints as upstream non-negotiables.
+
 ## Pre-Work Alignment Checklist
 Before coding, restate:
 1. Mission and immediate goal

@@ -165,6 +165,79 @@ fn manifest_render_hints(manifest: &ToolManifest) -> Value {
     Value::Object(hints)
 }
 
+fn sensor_bundle_colour_helper_manifests() -> Vec<ToolManifest> {
+    vec![
+        ToolManifest {
+            id: "true_colour_composite".to_string(),
+            display_name: "True Colour Composite".to_string(),
+            summary: "Build a true-colour (RGB) composite raster from a supported optical sensor bundle."
+                .to_string(),
+            category: wbcore::ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                wbcore::ToolParamDescriptor {
+                    name: "bundle_root".to_string(),
+                    description: "Root path of the input sensor bundle.".to_string(),
+                    required: true,
+                },
+                wbcore::ToolParamDescriptor {
+                    name: "output_path".to_string(),
+                    description: "Output raster path.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults: ToolArgs::new(),
+            examples: Vec::new(),
+            tags: vec![
+                "remote_sensing".to_string(),
+                "enhancement".to_string(),
+                "sensor_bundle".to_string(),
+                "colour_composite".to_string(),
+            ],
+            stability: wbcore::ToolStability::Stable,
+        },
+        ToolManifest {
+            id: "false_colour_composite".to_string(),
+            display_name: "False Colour Composite".to_string(),
+            summary: "Build a false-colour (NIR/Red/Green) composite raster from a supported optical sensor bundle."
+                .to_string(),
+            category: wbcore::ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                wbcore::ToolParamDescriptor {
+                    name: "bundle_root".to_string(),
+                    description: "Root path of the input sensor bundle.".to_string(),
+                    required: true,
+                },
+                wbcore::ToolParamDescriptor {
+                    name: "output_path".to_string(),
+                    description: "Output raster path.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults: ToolArgs::new(),
+            examples: Vec::new(),
+            tags: vec![
+                "remote_sensing".to_string(),
+                "enhancement".to_string(),
+                "sensor_bundle".to_string(),
+                "colour_composite".to_string(),
+            ],
+            stability: wbcore::ToolStability::Stable,
+        },
+    ]
+}
+
+fn append_sensor_bundle_colour_helper_manifests(manifests: &mut Vec<ToolManifest>) {
+    let existing_ids: std::collections::BTreeSet<String> =
+        manifests.iter().map(|m| m.id.clone()).collect();
+    for helper in sensor_bundle_colour_helper_manifests() {
+        if !existing_ids.contains(&helper.id) {
+            manifests.push(helper);
+        }
+    }
+}
+
 
 pub struct PythonToolRuntime {
     runtime: RuntimeMode,
@@ -374,13 +447,14 @@ impl PythonToolRuntime {
         #[cfg(feature = "pro")]
         let mut manifests = oss.manifests();
         #[cfg(not(feature = "pro"))]
-        let manifests = oss.manifests();
+        let mut manifests = oss.manifests();
         #[cfg(feature = "pro")]
         {
             let mut pro = ProRegistry::new();
             register_default_pro_tools(&mut pro);
             manifests.extend(pro.manifests());
         }
+        append_sensor_bundle_colour_helper_manifests(&mut manifests);
         manifests
     }
 
@@ -390,7 +464,7 @@ impl PythonToolRuntime {
         #[cfg(feature = "pro")]
         let mut manifests = oss.manifests();
         #[cfg(not(feature = "pro"))]
-        let manifests = oss.manifests();
+        let mut manifests = oss.manifests();
 
         #[cfg(feature = "pro")]
         {
@@ -398,6 +472,8 @@ impl PythonToolRuntime {
             register_default_pro_tools(&mut pro);
             manifests.extend(pro.manifests());
         }
+
+        append_sensor_bundle_colour_helper_manifests(&mut manifests);
 
         manifests.into_iter().find(|m| m.id == tool_id)
     }

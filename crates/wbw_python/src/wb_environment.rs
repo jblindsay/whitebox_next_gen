@@ -1344,12 +1344,758 @@ fn category_slug_from_category_name(category: &str) -> &'static str {
         "RemoteSensing" => "remote_sensing",
         "Streams" => "streams",
         "Terrain" => "terrain",
+        "PrecisionAgriculture" => "precision_agriculture",
         "Conversion" => "conversion",
         _ => "other",
     }
 }
 
+// BEGIN AUTO-TAXONOMY-MAP
+const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
+    ("abs", "raster", "general"),
+    ("accumulation_curvature", "terrain", "derivatives"),
+    ("adaptive_filter", "remote_sensing", "filters"),
+    ("add", "raster", "overlay_math"),
+    ("add_field", "vector", "attribute_analysis"),
+    ("add_geometry_attributes", "vector", "shape_metrics"),
+    ("add_point_coordinates_to_table", "conversion", "vector_table_io"),
+    ("aggregate_raster", "raster", "general"),
+    ("anisotropic_diffusion_filter", "remote_sensing", "filters"),
+    ("anova", "raster", "general"),
+    ("arccos", "raster", "general"),
+    ("arcosh", "raster", "general"),
+    ("arcsin", "raster", "general"),
+    ("arctan", "raster", "general"),
+    ("arsinh", "raster", "general"),
+    ("artanh", "raster", "general"),
+    ("ascii_to_las", "lidar", "io_management"),
+    ("aspect", "terrain", "derivatives"),
+    ("assess_route", "terrain", "general"),
+    ("atan2", "raster", "general"),
+    ("attribute_correlation", "vector", "attribute_analysis"),
+    ("attribute_histogram", "vector", "attribute_analysis"),
+    ("attribute_scattergram", "vector", "attribute_analysis"),
+    ("average_flowpath_slope", "hydrology", "flow_routing"),
+    ("average_horizon_distance", "terrain", "visibility"),
+    ("average_normal_vector_angular_deviation", "terrain", "roughness_texture"),
+    ("average_overlay", "raster", "overlay_math"),
+    ("average_upslope_flowpath_length", "hydrology", "flow_routing"),
+    ("balance_contrast_enhancement", "remote_sensing", "enhancement_contrast"),
+    ("basins", "hydrology", "watersheds_basins"),
+    ("bilateral_filter", "remote_sensing", "filters"),
+    ("block_maximum", "raster", "general"),
+    ("block_minimum", "raster", "general"),
+    ("bool_and", "raster", "overlay_math"),
+    ("bool_not", "raster", "overlay_math"),
+    ("bool_or", "raster", "overlay_math"),
+    ("bool_xor", "raster", "overlay_math"),
+    ("boundary_shape_complexity", "raster", "general"),
+    ("brdf_surface_reflectance_consistency", "remote_sensing", "radiometric_correction"),
+    ("breach_depressions_least_cost", "hydrology", "depressions_storage"),
+    ("breach_single_cell_pits", "hydrology", "depressions_storage"),
+    ("breakline_mapping", "terrain", "general"),
+    ("buffer_raster", "raster", "distance_cost"),
+    ("buffer_vector", "vector", "geometry_processing"),
+    ("build_object_hierarchy_multiscale", "remote_sensing", "obia"),
+    ("burn_streams", "hydrology", "depressions_storage"),
+    ("burn_streams_at_roads", "hydrology", "depressions_storage"),
+    ("canny_edge_detection", "remote_sensing", "edge_feature_detection"),
+    ("carbon_sequestration_verification_audit", "terrain", "workflow_products"),
+    ("casorati_curvature", "terrain", "derivatives"),
+    ("ceil", "raster", "general"),
+    ("centroid_raster", "raster", "general"),
+    ("centroid_vector", "vector", "geometry_processing"),
+    ("change_vector_analysis", "remote_sensing", "change_detection"),
+    ("circular_variance_of_aspect", "terrain", "roughness_texture"),
+    ("classify_buildings_in_lidar", "lidar", "filtering_classification"),
+    ("classify_lidar", "lidar", "filtering_classification"),
+    ("classify_objects_ensemble_pro", "remote_sensing", "obia"),
+    ("classify_objects_random_forest", "remote_sensing", "obia"),
+    ("classify_objects_rules_basic", "remote_sensing", "obia"),
+    ("classify_objects_rules_hierarchical", "remote_sensing", "obia"),
+    ("classify_objects_svm", "remote_sensing", "obia"),
+    ("classify_overlap_points", "lidar", "filtering_classification"),
+    ("clean_vector", "conversion", "vector_table_io"),
+    ("clip", "vector", "overlay_analysis"),
+    ("clip_lidar_to_polygon", "lidar", "filtering_classification"),
+    ("clip_raster_to_polygon", "raster", "general"),
+    ("closest_facility_network", "vector", "network_analysis"),
+    ("closing", "remote_sensing", "filters"),
+    ("clump", "raster", "general"),
+    ("colourize_based_on_class", "lidar", "analysis_metrics"),
+    ("colourize_based_on_point_returns", "lidar", "analysis_metrics"),
+    ("compactness_ratio", "vector", "shape_metrics"),
+    ("concave_hull", "vector", "geometry_processing"),
+    ("conditional_evaluation", "raster", "reclass_mask"),
+    ("conservative_smoothing_filter", "remote_sensing", "filters"),
+    ("construct_vector_tin", "vector", "sampling_gridding"),
+    ("contours_from_points", "vector", "sampling_gridding"),
+    ("contours_from_raster", "vector", "sampling_gridding"),
+    ("convergence_index", "terrain", "general"),
+    ("convert_nodata_to_zero", "conversion", "raster_vector_conversion"),
+    ("corner_detection", "remote_sensing", "edge_feature_detection"),
+    ("correct_vignetting", "remote_sensing", "radiometric_correction"),
+    ("corridor_mapping_intelligence", "terrain", "workflow_products"),
+    ("cos", "raster", "general"),
+    ("cosh", "raster", "general"),
+    ("cost_allocation", "raster", "distance_cost"),
+    ("cost_distance", "raster", "distance_cost"),
+    ("cost_pathway", "raster", "distance_cost"),
+    ("count_if", "raster", "overlay_math"),
+    ("create_colour_composite", "remote_sensing", "enhancement_contrast"),
+    ("create_plane", "raster", "general"),
+    ("crispness_index", "raster", "general"),
+    ("cross_tabulation", "raster", "general"),
+    ("csv_points_to_vector", "conversion", "vector_table_io"),
+    ("cumulative_distribution", "raster", "general"),
+    ("curvedness", "terrain", "derivatives"),
+    ("d8_flow_accum", "hydrology", "flow_routing"),
+    ("d8_mass_flux", "hydrology", "flow_routing"),
+    ("d8_pointer", "hydrology", "flow_routing"),
+    ("dbscan", "raster", "general"),
+    ("decrement", "raster", "general"),
+    ("delete_field", "vector", "attribute_analysis"),
+    ("dem_void_filling", "terrain", "general"),
+    ("densify_features", "vector", "geometry_processing"),
+    ("depth_in_sink", "hydrology", "depressions_storage"),
+    ("depth_to_water", "hydrology", "hydrologic_indices"),
+    ("deviation_from_mean_elevation", "terrain", "general"),
+    ("deviation_from_regional_direction", "vector", "shape_metrics"),
+    ("diff_of_gaussians_filter", "remote_sensing", "filters"),
+    ("difference", "vector", "overlay_analysis"),
+    ("difference_curvature", "terrain", "derivatives"),
+    ("difference_from_mean_elevation", "terrain", "general"),
+    ("dinf_flow_accum", "hydrology", "flow_routing"),
+    ("dinf_mass_flux", "hydrology", "flow_routing"),
+    ("dinf_pointer", "hydrology", "flow_routing"),
+    ("direct_decorrelation_stretch", "remote_sensing", "enhancement_contrast"),
+    ("directional_relief", "terrain", "general"),
+    ("dissolve", "vector", "overlay_analysis"),
+    ("distance_to_outlet", "hydrology", "hydrologic_indices"),
+    ("diversity_filter", "remote_sensing", "filters"),
+    ("divide", "raster", "overlay_math"),
+    ("downslope_distance_to_stream", "hydrology", "hydrologic_indices"),
+    ("downslope_flowpath_length", "hydrology", "flow_routing"),
+    ("downslope_index", "hydrology", "hydrologic_indices"),
+    ("edge_contamination", "hydrology", "hydrologic_indices"),
+    ("edge_density", "terrain", "roughness_texture"),
+    ("edge_preserving_mean_filter", "remote_sensing", "filters"),
+    ("edge_proportion", "raster", "general"),
+    ("elev_above_pit", "terrain", "general"),
+    ("elev_above_pit_dist", "terrain", "general"),
+    ("elev_relative_to_min_max", "terrain", "landform_indices"),
+    ("elev_relative_to_watershed_min_max", "hydrology", "hydrologic_indices"),
+    ("elevation_above_stream", "hydrology", "hydrologic_indices"),
+    ("elevation_above_stream_euclidean", "hydrology", "hydrologic_indices"),
+    ("elevation_percentile", "terrain", "general"),
+    ("eliminate_coincident_points", "vector", "geometry_processing"),
+    ("elongation_ratio", "vector", "shape_metrics"),
+    ("embankment_mapping", "terrain", "general"),
+    ("emboss_filter", "remote_sensing", "filters"),
+    ("emergency_scenario_routing_and_accessibility_simulator", "vector", "workflow_products"),
+    ("equal_to", "raster", "general"),
+    ("erase", "vector", "overlay_analysis"),
+    ("erase_polygon_from_lidar", "lidar", "filtering_classification"),
+    ("erase_polygon_from_raster", "raster", "general"),
+    ("euclidean_allocation", "raster", "distance_cost"),
+    ("euclidean_distance", "raster", "distance_cost"),
+    ("evaluate_object_classification_accuracy", "remote_sensing", "obia"),
+    ("evaluate_segmentation_quality_pro", "remote_sensing", "obia"),
+    ("evaluate_training_sites", "remote_sensing", "classification"),
+    ("exp", "raster", "general"),
+    ("exp2", "raster", "general"),
+    ("export_table_to_csv", "conversion", "vector_table_io"),
+    ("exposure_towards_wind_flux", "terrain", "general"),
+    ("extend_vector_lines", "vector", "geometry_processing"),
+    ("extract_by_attribute", "vector", "attribute_analysis"),
+    ("extract_nodes", "vector", "sampling_gridding"),
+    ("extract_raster_values_at_points", "vector", "sampling_gridding"),
+    ("extract_streams", "streams", "network_extraction"),
+    ("extract_valleys", "streams", "network_extraction"),
+    ("false_colour_composite", "remote_sensing", "enhancement_contrast"),
+    ("farthest_channel_head", "streams", "longitudinal_analysis"),
+    ("fast_almost_gaussian_filter", "remote_sensing", "filters"),
+    ("fd8_flow_accum", "hydrology", "flow_routing"),
+    ("fd8_pointer", "hydrology", "flow_routing"),
+    ("feature_preserving_smoothing", "terrain", "general"),
+    ("feature_preserving_smoothing_multiscale", "terrain", "general"),
+    ("fetch_analysis", "terrain", "general"),
+    ("field_calculator", "vector", "attribute_analysis"),
+    ("field_trafficability_and_operation_planning", "precision_agriculture", "general"),
+    ("fill_burn", "hydrology", "depressions_storage"),
+    ("fill_depressions", "hydrology", "depressions_storage"),
+    ("fill_depressions_planchon_and_darboux", "hydrology", "depressions_storage"),
+    ("fill_depressions_wang_and_liu", "hydrology", "depressions_storage"),
+    ("fill_missing_data", "terrain", "general"),
+    ("fill_pits", "hydrology", "depressions_storage"),
+    ("filter_lidar", "lidar", "filtering_classification"),
+    ("filter_lidar_by_percentile", "lidar", "filtering_classification"),
+    ("filter_lidar_by_reference_surface", "lidar", "filtering_classification"),
+    ("filter_lidar_classes", "lidar", "filtering_classification"),
+    ("filter_lidar_noise", "lidar", "filtering_classification"),
+    ("filter_lidar_scan_angles", "lidar", "filtering_classification"),
+    ("filter_raster_features_by_area", "raster", "general"),
+    ("filter_vector_features_by_area", "vector", "attribute_analysis"),
+    ("find_flightline_edge_points", "lidar", "analysis_metrics"),
+    ("find_lowest_or_highest_points", "vector", "sampling_gridding"),
+    ("find_main_stem", "streams", "longitudinal_analysis"),
+    ("find_noflow_cells", "hydrology", "hydrologic_indices"),
+    ("find_parallel_flow", "hydrology", "hydrologic_indices"),
+    ("find_patch_edge_cells", "raster", "general"),
+    ("find_ridges", "terrain", "general"),
+    ("fix_dangling_arcs", "conversion", "geometry_topology"),
+    ("flatten_lakes", "hydrology", "depressions_storage"),
+    ("fleet_routing_and_dispatch_optimizer", "vector", "network_analysis"),
+    ("flightline_overlap", "lidar", "interpolation_gridding"),
+    ("flip_image", "remote_sensing", "filters"),
+    ("flood_order", "hydrology", "watersheds_basins"),
+    ("floor", "raster", "general"),
+    ("flow_accum_full_workflow", "hydrology", "flow_routing"),
+    ("flow_length_diff", "hydrology", "flow_routing"),
+    ("forestry_structure_and_biomass_intelligence", "terrain", "workflow_products"),
+    ("frangi_filter", "remote_sensing", "filters"),
+    ("frost_filter", "remote_sensing", "sar"),
+    ("fuzzy_knn_classification", "remote_sensing", "classification"),
+    ("gabor_filter_bank", "remote_sensing", "filters"),
+    ("gamma_correction", "remote_sensing", "enhancement_contrast"),
+    ("gamma_map_filter", "remote_sensing", "sar"),
+    ("gaussian_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("gaussian_curvature", "terrain", "derivatives"),
+    ("gaussian_filter", "remote_sensing", "filters"),
+    ("generalize_classified_raster", "remote_sensing", "classification"),
+    ("generalize_with_similarity", "remote_sensing", "classification"),
+    ("generating_function", "terrain", "derivatives"),
+    ("geomorphons", "terrain", "landform_indices"),
+    ("glcm_texture", "remote_sensing", "filters"),
+    ("greater_than", "raster", "general"),
+    ("guided_filter", "remote_sensing", "filters"),
+    ("guided_uav_image_intake_workflow", "remote_sensing", "workflow_products"),
+    ("hack_stream_order", "streams", "ordering_metrics"),
+    ("heat_map", "raster", "general"),
+    ("height_above_ground", "lidar", "filtering_classification"),
+    ("hexagonal_grid_from_raster_base", "vector", "sampling_gridding"),
+    ("hexagonal_grid_from_vector_base", "vector", "sampling_gridding"),
+    ("high_pass_bilateral_filter", "remote_sensing", "filters"),
+    ("high_pass_filter", "remote_sensing", "filters"),
+    ("high_pass_median_filter", "remote_sensing", "filters"),
+    ("highest_position", "raster", "overlay_math"),
+    ("hillshade", "terrain", "general"),
+    ("hillslopes", "hydrology", "watersheds_basins"),
+    ("histogram_equalization", "remote_sensing", "enhancement_contrast"),
+    ("histogram_matching", "remote_sensing", "enhancement_contrast"),
+    ("histogram_matching_two_images", "remote_sensing", "enhancement_contrast"),
+    ("hole_proportion", "vector", "shape_metrics"),
+    ("horizon_angle", "terrain", "visibility"),
+    ("horizon_area", "terrain", "visibility"),
+    ("horizontal_excess_curvature", "terrain", "derivatives"),
+    ("horton_ratios", "streams", "ordering_metrics"),
+    ("horton_stream_order", "streams", "ordering_metrics"),
+    ("hydrologic_connectivity", "hydrology", "hydrologic_indices"),
+    ("hypsometric_analysis", "terrain", "landform_indices"),
+    ("hypsometrically_tinted_hillshade", "terrain", "general"),
+    ("idw_interpolation", "raster", "general"),
+    ("ihs_to_rgb", "remote_sensing", "enhancement_contrast"),
+    ("image_autocorrelation", "raster", "general"),
+    ("image_correlation", "raster", "general"),
+    ("image_correlation_neighbourhood_analysis", "raster", "local_neighborhood"),
+    ("image_regression", "raster", "general"),
+    ("image_segmentation", "remote_sensing", "obia"),
+    ("image_slider", "remote_sensing", "obia"),
+    ("image_stack_profile", "remote_sensing", "obia"),
+    ("impoundment_size_index", "hydrology", "depressions_storage"),
+    ("improved_ground_point_filter", "lidar", "filtering_classification"),
+    ("in_season_crop_stress_intervention_planning", "precision_agriculture", "general"),
+    ("increment", "raster", "general"),
+    ("individual_tree_detection", "lidar", "analysis_metrics"),
+    ("individual_tree_segmentation", "lidar", "filtering_classification"),
+    ("inplace_add", "raster", "general"),
+    ("inplace_divide", "raster", "general"),
+    ("inplace_multiply", "raster", "general"),
+    ("inplace_subtract", "raster", "general"),
+    ("insert_dams", "hydrology", "depressions_storage"),
+    ("integer_division", "raster", "general"),
+    ("integral_image_transform", "remote_sensing", "filters"),
+    ("intersect", "vector", "overlay_analysis"),
+    ("inverse_pca", "raster", "general"),
+    ("is_nodata", "raster", "general"),
+    ("isobasins", "hydrology", "watersheds_basins"),
+    ("jenson_snap_pour_points", "hydrology", "watersheds_basins"),
+    ("join_tables", "conversion", "vector_table_io"),
+    ("k_means_clustering", "remote_sensing", "classification"),
+    ("k_nearest_mean_filter", "remote_sensing", "filters"),
+    ("k_shortest_paths_network", "vector", "network_analysis"),
+    ("kappa_index", "raster", "general"),
+    ("knn_classification", "remote_sensing", "classification"),
+    ("knn_regression", "remote_sensing", "classification"),
+    ("ks_normality_test", "raster", "general"),
+    ("kuan_filter", "remote_sensing", "sar"),
+    ("kuwahara_filter", "remote_sensing", "filters"),
+    ("landslide_susceptibility_assessment", "terrain", "workflow_products"),
+    ("laplacian_filter", "remote_sensing", "edge_feature_detection"),
+    ("laplacian_of_gaussians_filter", "remote_sensing", "edge_feature_detection"),
+    ("las_to_ascii", "lidar", "io_management"),
+    ("las_to_shapefile", "lidar", "io_management"),
+    ("layer_footprint_raster", "vector", "sampling_gridding"),
+    ("layer_footprint_vector", "vector", "sampling_gridding"),
+    ("lee_filter", "remote_sensing", "filters"),
+    ("length_of_upstream_channels", "streams", "longitudinal_analysis"),
+    ("less_than", "raster", "general"),
+    ("lidar_block_maximum", "lidar", "interpolation_gridding"),
+    ("lidar_block_minimum", "lidar", "interpolation_gridding"),
+    ("lidar_change_and_disturbance_analysis", "lidar", "workflow_products"),
+    ("lidar_classify_subset", "lidar", "filtering_classification"),
+    ("lidar_colourize", "lidar", "io_management"),
+    ("lidar_construct_vector_tin", "lidar", "interpolation_gridding"),
+    ("lidar_contour", "lidar", "interpolation_gridding"),
+    ("lidar_digital_surface_model", "lidar", "interpolation_gridding"),
+    ("lidar_eigenvalue_features", "lidar", "analysis_metrics"),
+    ("lidar_elevation_slice", "lidar", "filtering_classification"),
+    ("lidar_ground_point_filter", "remote_sensing", "filters"),
+    ("lidar_hex_bin", "lidar", "interpolation_gridding"),
+    ("lidar_hillshade", "lidar", "interpolation_gridding"),
+    ("lidar_histogram", "lidar", "analysis_metrics"),
+    ("lidar_idw_interpolation", "lidar", "interpolation_gridding"),
+    ("lidar_info", "lidar", "analysis_metrics"),
+    ("lidar_join", "lidar", "io_management"),
+    ("lidar_kappa", "lidar", "analysis_metrics"),
+    ("lidar_nearest_neighbour_gridding", "lidar", "interpolation_gridding"),
+    ("lidar_point_density", "lidar", "analysis_metrics"),
+    ("lidar_point_return_analysis", "lidar", "analysis_metrics"),
+    ("lidar_point_stats", "lidar", "analysis_metrics"),
+    ("lidar_qa_and_confidence", "lidar", "workflow_products"),
+    ("lidar_radial_basis_function_interpolation", "lidar", "interpolation_gridding"),
+    ("lidar_ransac_planes", "lidar", "analysis_metrics"),
+    ("lidar_remove_outliers", "lidar", "filtering_classification"),
+    ("lidar_rooftop_analysis", "lidar", "analysis_metrics"),
+    ("lidar_segmentation", "lidar", "filtering_classification"),
+    ("lidar_segmentation_based_filter", "lidar", "filtering_classification"),
+    ("lidar_shift", "lidar", "io_management"),
+    ("lidar_sibson_interpolation", "lidar", "interpolation_gridding"),
+    ("lidar_terrain_product_suite", "lidar", "workflow_products"),
+    ("lidar_thin", "lidar", "interpolation_gridding"),
+    ("lidar_thin_high_density", "lidar", "interpolation_gridding"),
+    ("lidar_tile", "lidar", "io_management"),
+    ("lidar_tile_footprint", "lidar", "interpolation_gridding"),
+    ("lidar_tin_gridding", "lidar", "interpolation_gridding"),
+    ("lidar_tophat_transform", "lidar", "io_management"),
+    ("line_detection_filter", "remote_sensing", "filters"),
+    ("line_intersections", "vector", "overlay_analysis"),
+    ("line_polygon_clip", "vector", "overlay_analysis"),
+    ("line_thinning", "remote_sensing", "filters"),
+    ("linearity_index", "vector", "shape_metrics"),
+    ("lines_to_polygons", "conversion", "geometry_topology"),
+    ("list_unique_values", "vector", "attribute_analysis"),
+    ("list_unique_values_raster", "raster", "general"),
+    ("ln", "raster", "general"),
+    ("local_hypsometric_analysis", "terrain", "general"),
+    ("locate_points_along_routes", "vector", "linear_referencing"),
+    ("location_allocation_network", "vector", "network_analysis"),
+    ("log10", "raster", "general"),
+    ("log2", "raster", "general"),
+    ("logistic_regression", "remote_sensing", "classification"),
+    ("long_profile", "streams", "longitudinal_analysis"),
+    ("long_profile_from_points", "streams", "longitudinal_analysis"),
+    ("longest_flowpath", "hydrology", "watersheds_basins"),
+    ("low_points_on_headwater_divides", "terrain", "general"),
+    ("lowest_position", "raster", "overlay_math"),
+    ("majority_filter", "remote_sensing", "filters"),
+    ("map_features", "raster", "general"),
+    ("map_matching_v1", "vector", "network_analysis"),
+    ("map_off_terrain_objects", "terrain", "general"),
+    ("market_access_and_site_intelligence_workflow", "vector", "workflow_products"),
+    ("max", "raster", "general"),
+    ("max_absolute_overlay", "raster", "overlay_math"),
+    ("max_anisotropy_dev", "terrain", "multiscale_signatures"),
+    ("max_anisotropy_dev_signature", "terrain", "multiscale_signatures"),
+    ("max_branch_length", "hydrology", "watersheds_basins"),
+    ("max_difference_from_mean", "terrain", "multiscale_signatures"),
+    ("max_downslope_elev_change", "terrain", "general"),
+    ("max_elev_dev_signature", "terrain", "multiscale_signatures"),
+    ("max_elevation_deviation", "terrain", "multiscale_signatures"),
+    ("max_overlay", "raster", "overlay_math"),
+    ("max_upslope_elev_change", "terrain", "general"),
+    ("max_upslope_flowpath_length", "hydrology", "flow_routing"),
+    ("max_upslope_value", "hydrology", "flow_routing"),
+    ("maximal_curvature", "terrain", "derivatives"),
+    ("maximum_filter", "remote_sensing", "filters"),
+    ("mdinf_flow_accum", "hydrology", "flow_routing"),
+    ("mean_curvature", "terrain", "derivatives"),
+    ("mean_filter", "remote_sensing", "filters"),
+    ("median_filter", "remote_sensing", "filters"),
+    ("medoid", "vector", "sampling_gridding"),
+    ("merge_line_segments", "vector", "geometry_processing"),
+    ("merge_table_with_csv", "conversion", "vector_table_io"),
+    ("merge_vectors", "conversion", "vector_table_io"),
+    ("min", "raster", "general"),
+    ("min_absolute_overlay", "raster", "overlay_math"),
+    ("min_dist_classification", "remote_sensing", "classification"),
+    ("min_downslope_elev_change", "terrain", "general"),
+    ("min_max_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("min_overlay", "raster", "overlay_math"),
+    ("mine_site_reclamation_compliance_tracker", "terrain", "workflow_products"),
+    ("minimal_curvature", "terrain", "derivatives"),
+    ("minimal_dispersion_flow_algorithm", "hydrology", "flow_routing"),
+    ("minimum_bounding_box", "vector", "geometry_processing"),
+    ("minimum_bounding_circle", "vector", "geometry_processing"),
+    ("minimum_bounding_envelope", "vector", "geometry_processing"),
+    ("minimum_convex_hull", "vector", "geometry_processing"),
+    ("minimum_filter", "remote_sensing", "filters"),
+    ("modified_k_means_clustering", "remote_sensing", "classification"),
+    ("modified_shepard_interpolation", "raster", "general"),
+    ("modify_lidar", "lidar", "filtering_classification"),
+    ("modify_nodata_value", "conversion", "raster_vector_conversion"),
+    ("modulo", "raster", "overlay_math"),
+    ("mosaic", "remote_sensing", "enhancement_contrast"),
+    ("mosaic_with_feathering", "remote_sensing", "enhancement_contrast"),
+    ("multi_sensor_fusion_monitoring", "remote_sensing", "workflow_products"),
+    ("multidirectional_hillshade", "terrain", "general"),
+    ("multimodal_od_cost_matrix", "vector", "network_analysis"),
+    ("multimodal_routes_from_od", "vector", "network_analysis"),
+    ("multimodal_shortest_path", "vector", "network_analysis"),
+    ("multipart_to_singlepart", "conversion", "geometry_topology"),
+    ("multiply", "raster", "overlay_math"),
+    ("multiply_overlay", "raster", "overlay_math"),
+    ("multiscale_curvatures", "terrain", "multiscale_signatures"),
+    ("multiscale_elevated_index", "terrain", "multiscale_signatures"),
+    ("multiscale_elevation_percentile", "terrain", "multiscale_signatures"),
+    ("multiscale_low_lying_index", "terrain", "multiscale_signatures"),
+    ("multiscale_roughness", "terrain", "multiscale_signatures"),
+    ("multiscale_roughness_signature", "terrain", "multiscale_signatures"),
+    ("multiscale_std_dev_normals", "terrain", "multiscale_signatures"),
+    ("multiscale_std_dev_normals_signature", "terrain", "multiscale_signatures"),
+    ("multiscale_topographic_position_class", "terrain", "landform_indices"),
+    ("multiscale_topographic_position_image", "terrain", "multiscale_signatures"),
+    ("narrowness_index", "vector", "shape_metrics"),
+    ("natural_neighbour_interpolation", "raster", "local_neighborhood"),
+    ("near", "vector", "overlay_analysis"),
+    ("nearest_neighbour_interpolation", "raster", "local_neighborhood"),
+    ("negate", "raster", "general"),
+    ("network_accessibility_metrics", "vector", "network_analysis"),
+    ("network_centrality_metrics", "vector", "network_analysis"),
+    ("network_connected_components", "vector", "network_analysis"),
+    ("network_node_degree", "vector", "network_analysis"),
+    ("network_od_cost_matrix", "vector", "network_analysis"),
+    ("network_readiness_and_diagnostics_intelligence", "vector", "network_analysis"),
+    ("network_routes_from_od", "vector", "network_analysis"),
+    ("network_service_area", "vector", "network_analysis"),
+    ("network_topology_audit", "vector", "network_analysis"),
+    ("new_raster_from_base_raster", "conversion", "raster_vector_conversion"),
+    ("new_raster_from_base_vector", "conversion", "raster_vector_conversion"),
+    ("nibble", "raster", "general"),
+    ("nnd_classification", "remote_sensing", "classification"),
+    ("non_local_means_filter", "remote_sensing", "filters"),
+    ("normal_vectors", "lidar", "analysis_metrics"),
+    ("normalize_lidar", "lidar", "filtering_classification"),
+    ("normalized_difference_index", "remote_sensing", "enhancement_contrast"),
+    ("not_equal_to", "raster", "general"),
+    ("num_downslope_neighbours", "terrain", "general"),
+    ("num_inflowing_neighbours", "hydrology", "flow_routing"),
+    ("num_upslope_neighbours", "terrain", "general"),
+    ("obia_audit_report_pro", "remote_sensing", "obia"),
+    ("obia_batch_orchestrator_pro", "remote_sensing", "obia"),
+    ("obia_pipeline_basic", "remote_sensing", "obia"),
+    ("object_class_probability_maps", "remote_sensing", "obia"),
+    ("object_features_context_neighbors", "remote_sensing", "obia"),
+    ("object_features_shape_basic", "remote_sensing", "obia"),
+    ("object_features_spectral_basic", "remote_sensing", "obia"),
+    ("object_features_texture_glcm_basic", "remote_sensing", "obia"),
+    ("object_features_topology_relations", "remote_sensing", "obia"),
+    ("object_uncertainty_diagnostics_pro", "remote_sensing", "obia"),
+    ("objects_boundary_refinement_pro", "remote_sensing", "obia"),
+    ("objects_enforce_min_mapping_unit", "remote_sensing", "obia"),
+    ("od_sensitivity_analysis", "vector", "network_analysis"),
+    ("olympic_filter", "remote_sensing", "filters"),
+    ("opening", "remote_sensing", "filters"),
+    ("openness", "terrain", "visibility"),
+    ("otsu_thresholding", "remote_sensing", "classification"),
+    ("paired_sample_t_test", "raster", "general"),
+    ("panchromatic_sharpening", "remote_sensing", "enhancement_contrast"),
+    ("parallelepiped_classification", "remote_sensing", "classification"),
+    ("parcel_and_land_fabric_topology_compliance_workflow", "vector", "workflow_products"),
+    ("patch_orientation", "vector", "shape_metrics"),
+    ("pennock_landform_classification", "terrain", "landform_indices"),
+    ("percent_elev_range", "terrain", "landform_indices"),
+    ("percent_equal_to", "raster", "overlay_math"),
+    ("percent_greater_than", "raster", "overlay_math"),
+    ("percent_less_than", "raster", "overlay_math"),
+    ("percentage_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("percentile_filter", "remote_sensing", "filters"),
+    ("perimeter_area_ratio", "vector", "shape_metrics"),
+    ("phi_coefficient", "raster", "general"),
+    ("pick_from_list", "raster", "overlay_math"),
+    ("piecewise_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("plan_curvature", "terrain", "derivatives"),
+    ("points_along_lines", "vector", "linear_referencing"),
+    ("polygon_area", "vector", "shape_metrics"),
+    ("polygon_long_axis", "vector", "shape_metrics"),
+    ("polygon_perimeter", "vector", "shape_metrics"),
+    ("polygon_short_axis", "vector", "shape_metrics"),
+    ("polygonize", "vector", "geometry_processing"),
+    ("polygons_to_lines", "conversion", "geometry_topology"),
+    ("polygons_to_segments", "remote_sensing", "obia"),
+    ("power", "raster", "overlay_math"),
+    ("precision_ag_yield_zone_intelligence", "precision_agriculture", "general"),
+    ("precision_irrigation_optimization", "precision_agriculture", "general"),
+    ("prewitt_filter", "remote_sensing", "edge_feature_detection"),
+    ("principal_component_analysis", "raster", "general"),
+    ("principal_curvature_direction", "terrain", "derivatives"),
+    ("print_geotiff_tags", "raster", "general"),
+    ("profile", "terrain", "general"),
+    ("profile_curvature", "terrain", "derivatives"),
+    ("propagate_labels_across_hierarchy", "remote_sensing", "obia"),
+    ("prune_vector_streams", "streams", "network_extraction"),
+    ("qin_flow_accumulation", "hydrology", "flow_routing"),
+    ("quantiles", "raster", "general"),
+    ("quinn_flow_accumulation", "hydrology", "flow_routing"),
+    ("radial_basis_function_interpolation", "raster", "general"),
+    ("radius_of_gyration", "raster", "general"),
+    ("raise_walls", "hydrology", "depressions_storage"),
+    ("random_field", "raster", "general"),
+    ("random_forest_classification", "remote_sensing", "classification"),
+    ("random_forest_classification_fit", "raster", "general"),
+    ("random_forest_classification_predict", "raster", "general"),
+    ("random_forest_regression", "remote_sensing", "classification"),
+    ("random_forest_regression_fit", "raster", "general"),
+    ("random_forest_regression_predict", "raster", "general"),
+    ("random_points_in_polygon", "vector", "sampling_gridding"),
+    ("random_sample", "raster", "general"),
+    ("range_filter", "remote_sensing", "filters"),
+    ("raster_area", "raster", "general"),
+    ("raster_calculator", "raster", "general"),
+    ("raster_cell_assignment", "raster", "general"),
+    ("raster_histogram", "raster", "general"),
+    ("raster_perimeter", "raster", "general"),
+    ("raster_streams_to_vector", "streams", "network_extraction"),
+    ("raster_summary_stats", "raster", "general"),
+    ("raster_to_vector_lines", "conversion", "raster_vector_conversion"),
+    ("raster_to_vector_points", "conversion", "raster_vector_conversion"),
+    ("raster_to_vector_polygons", "conversion", "raster_vector_conversion"),
+    ("rasterize_streams", "streams", "network_extraction"),
+    ("reciprocal", "raster", "general"),
+    ("reclass", "raster", "reclass_mask"),
+    ("reclass_equal_interval", "raster", "reclass_mask"),
+    ("recover_flightline_info", "lidar", "io_management"),
+    ("rectangular_grid_from_raster_base", "vector", "sampling_gridding"),
+    ("rectangular_grid_from_vector_base", "vector", "sampling_gridding"),
+    ("registration_oriented_feature_workflow", "remote_sensing", "workflow_products"),
+    ("reinitialize_attribute_table", "conversion", "vector_table_io"),
+    ("related_circumscribing_circle", "vector", "shape_metrics"),
+    ("relative_aspect", "terrain", "landform_indices"),
+    ("relative_stream_power_index", "hydrology", "hydrologic_indices"),
+    ("relative_topographic_position", "terrain", "landform_indices"),
+    ("remote_sensing_change_detection", "remote_sensing", "change_detection"),
+    ("remove_duplicates", "lidar", "filtering_classification"),
+    ("remove_off_terrain_objects", "terrain", "general"),
+    ("remove_polygon_holes", "conversion", "geometry_topology"),
+    ("remove_raster_polygon_holes", "conversion", "raster_vector_conversion"),
+    ("remove_short_streams", "streams", "network_extraction"),
+    ("remove_spurs", "remote_sensing", "filters"),
+    ("rename_field", "vector", "attribute_analysis"),
+    ("repair_stream_vector_topology", "streams", "network_extraction"),
+    ("reproject_vector", "vector", "geometry_processing"),
+    ("resample", "remote_sensing", "enhancement_contrast"),
+    ("rescale_value_range", "raster", "general"),
+    ("rgb_to_ihs", "remote_sensing", "enhancement_contrast"),
+    ("rho8_flow_accum", "hydrology", "flow_routing"),
+    ("rho8_pointer", "hydrology", "flow_routing"),
+    ("ridge_and_valley_vectors", "terrain", "general"),
+    ("ring_curvature", "terrain", "derivatives"),
+    ("river_centerlines", "streams", "network_extraction"),
+    ("river_corridor_health_assessment", "terrain", "workflow_products"),
+    ("roberts_cross_filter", "remote_sensing", "edge_feature_detection"),
+    ("root_mean_square_error", "raster", "general"),
+    ("rotor", "terrain", "derivatives"),
+    ("round", "raster", "general"),
+    ("route_calibrate", "vector", "linear_referencing"),
+    ("route_event_governance_for_linear_assets", "vector", "linear_referencing"),
+    ("route_event_lines_from_layer", "vector", "linear_referencing"),
+    ("route_event_lines_from_table", "vector", "linear_referencing"),
+    ("route_event_merge", "vector", "linear_referencing"),
+    ("route_event_overlay", "vector", "linear_referencing"),
+    ("route_event_points_from_layer", "vector", "linear_referencing"),
+    ("route_event_points_from_table", "vector", "linear_referencing"),
+    ("route_event_split", "vector", "linear_referencing"),
+    ("route_measure_qa", "vector", "linear_referencing"),
+    ("route_recalibrate", "vector", "linear_referencing"),
+    ("ruggedness_index", "terrain", "roughness_texture"),
+    ("sar_analysis_readiness", "remote_sensing", "sar"),
+    ("sar_coregistration", "remote_sensing", "sar"),
+    ("sar_interferogram_coherence", "remote_sensing", "sar"),
+    ("savitzky_golay_2d_filter", "remote_sensing", "filters"),
+    ("scharr_filter", "remote_sensing", "filters"),
+    ("sediment_transport_index", "hydrology", "hydrologic_indices"),
+    ("segment_graph_felzenszwalb", "remote_sensing", "obia"),
+    ("segment_multiresolution_hierarchical", "remote_sensing", "obia"),
+    ("segment_scale_parameter_optimizer", "remote_sensing", "obia"),
+    ("segment_slic_superpixels", "remote_sensing", "obia"),
+    ("segment_watershed_markers", "remote_sensing", "obia"),
+    ("segments_merge_small_regions", "remote_sensing", "obia"),
+    ("segments_split_low_cohesion", "remote_sensing", "obia"),
+    ("segments_to_polygons", "remote_sensing", "obia"),
+    ("select_by_location", "vector", "overlay_analysis"),
+    ("select_tiles_by_polygon", "lidar", "io_management"),
+    ("service_area_planning_and_coverage_optimization", "vector", "network_analysis"),
+    ("set_nodata_value", "conversion", "raster_vector_conversion"),
+    ("shadow_animation", "terrain", "visibility"),
+    ("shadow_image", "terrain", "visibility"),
+    ("shape_complexity_index_raster", "raster", "general"),
+    ("shape_complexity_index_vector", "vector", "shape_metrics"),
+    ("shape_index", "terrain", "derivatives"),
+    ("shortest_path_network", "vector", "network_analysis"),
+    ("shreve_stream_magnitude", "streams", "ordering_metrics"),
+    ("sidewalk_vegetation_accessibility_monitoring", "lidar", "workflow_products"),
+    ("sieve", "raster", "general"),
+    ("sigmoidal_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("simplify_features", "vector", "geometry_processing"),
+    ("sin", "raster", "general"),
+    ("singlepart_to_multipart", "conversion", "geometry_topology"),
+    ("sinh", "raster", "general"),
+    ("sink", "hydrology", "depressions_storage"),
+    ("sky_view_factor", "terrain", "visibility"),
+    ("skyline_analysis", "terrain", "visibility"),
+    ("slope", "terrain", "derivatives"),
+    ("slope_vs_aspect_plot", "terrain", "general"),
+    ("slope_vs_elev_plot", "terrain", "general"),
+    ("smooth_vectors", "vector", "geometry_processing"),
+    ("smooth_vegetation_residual", "terrain", "general"),
+    ("snap_endnodes", "vector", "geometry_processing"),
+    ("snap_pour_points", "hydrology", "watersheds_basins"),
+    ("sobel_filter", "remote_sensing", "edge_feature_detection"),
+    ("soil_landscape_classification", "precision_agriculture", "general"),
+    ("solar_site_suitability_analysis", "terrain", "workflow_products"),
+    ("sort_lidar", "lidar", "io_management"),
+    ("spatial_join", "vector", "overlay_analysis"),
+    ("spherical_std_dev_of_normals", "terrain", "roughness_texture"),
+    ("split_colour_composite", "remote_sensing", "enhancement_contrast"),
+    ("split_lidar", "lidar", "io_management"),
+    ("split_vector_lines", "vector", "geometry_processing"),
+    ("split_with_lines", "vector", "geometry_processing"),
+    ("sqrt", "raster", "general"),
+    ("square", "raster", "general"),
+    ("standard_deviation_contrast_stretch", "remote_sensing", "enhancement_contrast"),
+    ("standard_deviation_filter", "remote_sensing", "filters"),
+    ("standard_deviation_of_slope", "terrain", "roughness_texture"),
+    ("standard_deviation_overlay", "raster", "overlay_math"),
+    ("stochastic_depression_analysis", "hydrology", "depressions_storage"),
+    ("strahler_order_basins", "streams", "ordering_metrics"),
+    ("strahler_stream_order", "streams", "ordering_metrics"),
+    ("stream_link_class", "streams", "ordering_metrics"),
+    ("stream_link_identifier", "streams", "ordering_metrics"),
+    ("stream_link_length", "streams", "ordering_metrics"),
+    ("stream_link_slope", "streams", "ordering_metrics"),
+    ("stream_slope_continuous", "streams", "ordering_metrics"),
+    ("subbasins", "hydrology", "watersheds_basins"),
+    ("subtract", "raster", "overlay_math"),
+    ("sum_overlay", "raster", "overlay_math"),
+    ("surface_area_ratio", "terrain", "general"),
+    ("svm_classification", "remote_sensing", "classification"),
+    ("svm_regression", "remote_sensing", "classification"),
+    ("symmetrical_difference", "vector", "overlay_analysis"),
+    ("tan", "raster", "general"),
+    ("tangential_curvature", "terrain", "derivatives"),
+    ("tanh", "raster", "general"),
+    ("terrain_constraint_and_conflict_analysis", "terrain", "workflow_products"),
+    ("terrain_constructability_and_cost_analysis", "terrain", "workflow_products"),
+    ("terrain_corrected_optical_analytics", "remote_sensing", "workflow_products"),
+    ("thicken_raster_line", "remote_sensing", "filters"),
+    ("time_in_daylight", "terrain", "visibility"),
+    ("time_series_change_intelligence", "remote_sensing", "change_detection"),
+    ("tin_interpolation", "raster", "general"),
+    ("to_degrees", "raster", "general"),
+    ("to_radians", "raster", "general"),
+    ("tophat_transform", "remote_sensing", "filters"),
+    ("topo_render", "terrain", "workflow_products"),
+    ("topographic_hachures", "terrain", "general"),
+    ("topographic_position_animation", "terrain", "multiscale_signatures"),
+    ("topological_breach_burn", "hydrology", "depressions_storage"),
+    ("topological_stream_order", "streams", "ordering_metrics"),
+    ("topology_rule_autofix", "conversion", "geometry_topology"),
+    ("topology_rule_validate", "conversion", "geometry_topology"),
+    ("topology_validation_report", "conversion", "geometry_topology"),
+    ("total_curvature", "terrain", "derivatives"),
+    ("total_filter", "remote_sensing", "filters"),
+    ("trace_downslope_flowpaths", "hydrology", "flow_routing"),
+    ("travelling_salesman_problem", "vector", "network_analysis"),
+    ("trend_surface", "raster", "general"),
+    ("trend_surface_vector_points", "raster", "general"),
+    ("tributary_identifier", "streams", "ordering_metrics"),
+    ("true_colour_composite", "remote_sensing", "enhancement_contrast"),
+    ("truncate", "raster", "general"),
+    ("turning_bands_simulation", "raster", "general"),
+    ("two_sample_ks_test", "raster", "general"),
+    ("union", "vector", "overlay_analysis"),
+    ("unnest_basins", "hydrology", "watersheds_basins"),
+    ("unsharp_masking", "remote_sensing", "filters"),
+    ("unsphericity", "terrain", "derivatives"),
+    ("update_nodata_cells", "raster", "overlay_math"),
+    ("upslope_depression_storage", "hydrology", "depressions_storage"),
+    ("urban_expansion_impact_assessment", "terrain", "workflow_products"),
+    ("user_defined_weights_filter", "remote_sensing", "filters"),
+    ("utility_corridor_encroachment_and_access_planning", "vector", "workflow_products"),
+    ("utility_corridor_encroachment_intelligence", "terrain", "workflow_products"),
+    ("vector_hex_binning", "vector", "sampling_gridding"),
+    ("vector_lines_to_raster", "conversion", "raster_vector_conversion"),
+    ("vector_points_to_raster", "conversion", "raster_vector_conversion"),
+    ("vector_polygons_to_raster", "conversion", "raster_vector_conversion"),
+    ("vector_stream_network_analysis", "streams", "ordering_metrics"),
+    ("vector_summary_statistics", "conversion", "vector_table_io"),
+    ("vehicle_routing_cvrp", "vector", "network_analysis"),
+    ("vehicle_routing_pickup_delivery", "vector", "network_analysis"),
+    ("vehicle_routing_vrptw", "vector", "network_analysis"),
+    ("vertical_excess_curvature", "terrain", "derivatives"),
+    ("viewshed", "terrain", "visibility"),
+    ("visibility_index", "terrain", "visibility"),
+    ("voronoi_diagram", "vector", "sampling_gridding"),
+    ("watershed", "hydrology", "watersheds_basins"),
+    ("watershed_from_raster_pour_points", "hydrology", "watersheds_basins"),
+    ("weighted_overlay", "raster", "overlay_math"),
+    ("weighted_sum", "raster", "overlay_math"),
+    ("wetland_hydrogeomorphic_classification", "terrain", "workflow_products"),
+    ("wetness_index", "hydrology", "hydrologic_indices"),
+    ("wiener_filter", "remote_sensing", "filters"),
+    ("wilcoxon_signed_rank_test", "raster", "general"),
+    ("wildfire_fuel_loading_and_risk_matrix", "terrain", "workflow_products"),
+    ("wind_turbine_siting", "terrain", "workflow_products"),
+    ("write_function_memory_insertion", "remote_sensing", "change_detection"),
+    ("yield_data_conditioning_and_qa", "precision_agriculture", "general"),
+    ("z_scores", "raster", "general"),
+    ("zonal_statistics", "raster", "general"),
+];
+// END AUTO-TAXONOMY-MAP
+
+fn explicit_tool_category_slug(tool_id: &str) -> Option<&'static str> {
+    EXPLICIT_TOOL_CATEGORY_SUBCATEGORY
+        .iter()
+        .find(|(id, _, _)| id.eq_ignore_ascii_case(tool_id))
+        .map(|(_, category, _)| *category)
+}
+
+fn explicit_tool_subcategory_slug(tool_id: &str, category_slug: &str) -> Option<&'static str> {
+    EXPLICIT_TOOL_CATEGORY_SUBCATEGORY
+        .iter()
+        .find(|(id, category, _)| {
+            id.eq_ignore_ascii_case(tool_id) && category.eq_ignore_ascii_case(category_slug)
+        })
+        .map(|(_, _, subcategory)| *subcategory)
+}
+
 fn normalized_category_name(raw_category: &str, tool_id: &str, tags: &[String]) -> String {
+    if let Some(explicit_category_slug) = explicit_tool_category_slug(tool_id) {
+        return match explicit_category_slug {
+            "raster" => "Raster".to_string(),
+            "vector" => "Vector".to_string(),
+            "lidar" => "Lidar".to_string(),
+            "topology" => "Topology".to_string(),
+            "hydrology" => "Hydrology".to_string(),
+            "remote_sensing" => "RemoteSensing".to_string(),
+            "streams" => "Streams".to_string(),
+            "terrain" => "Terrain".to_string(),
+            "precision_agriculture" => "PrecisionAgriculture".to_string(),
+            "conversion" => "Conversion".to_string(),
+            _ => "Other".to_string(),
+        };
+    }
+
     let has_tag = |needle: &str| tags.iter().any(|tag| tag.eq_ignore_ascii_case(needle));
 
     let stream_theme = tags.iter().any(|tag| {
@@ -1449,41 +2195,233 @@ fn normalized_category_name_from_manifest_value(manifest_value: &serde_json::Val
 
 fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static str] {
     match category_slug {
+        // BEGIN AUTO-TAXONOMY-SUBCATEGORIES
+        "remote_sensing" => &[
+            "obia",
+            "classification",
+            "change_detection",
+            "radiometric_correction",
+            "edge_feature_detection",
+            "enhancement_contrast",
+            "filters",
+            "sar",
+            "workflow_products",
+        ],
+        "lidar" => &[
+            "io_management",
+            "filtering_classification",
+            "interpolation_gridding",
+            "analysis_metrics",
+            "workflow_products",
+        ],
         "vector" => &[
             "linear_referencing",
             "network_analysis",
+            "overlay_analysis",
+            "geometry_processing",
+            "shape_metrics",
+            "sampling_gridding",
+            "attribute_analysis",
+            "workflow_products",
+        ],
+        "hydrology" => &[
+            "flow_routing",
+            "depressions_storage",
+            "watersheds_basins",
+            "hydrologic_indices",
+        ],
+        "streams" => &[
+            "network_extraction",
+            "longitudinal_analysis",
+            "ordering_metrics",
+        ],
+        "conversion" => &[
+            "vector_table_io",
+            "geometry_topology",
+            "raster_vector_conversion",
         ],
         "raster" => &[
             "overlay_math",
             "local_neighborhood",
-            "morphology",
             "reclass_mask",
             "distance_cost",
-        ],
-        "remote_sensing" => &[
-            "filters",
-            "enhancement_contrast",
-            "edge_feature_detection",
-            "change_detection",
-            "radiometric_correction",
-            "classification",
-            "obia",
+            "general",
         ],
         "terrain" => &[
+            "general",
+            "visibility",
             "derivatives",
             "roughness_texture",
             "landform_indices",
             "multiscale_signatures",
+            "workflow_products",
         ],
+        "precision_agriculture" => &[
+            "general",
+        ],
+// END AUTO-TAXONOMY-SUBCATEGORIES
         _ => &[],
     }
 }
 
 fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, tags: &[String]) -> bool {
+    if let Some(explicit_subcategory) = explicit_tool_subcategory_slug(tool_id, category_slug) {
+        return explicit_subcategory.eq_ignore_ascii_case(subcategory);
+    }
+
     let id = tool_id.to_ascii_lowercase();
     let has_tag = |needle: &str| tags.iter().any(|t| t.eq_ignore_ascii_case(needle));
 
     match (category_slug, subcategory) {
+        ("lidar", "io_management") => {
+            matches!(
+                id.as_str(),
+                "ascii_to_las"
+                    | "las_to_ascii"
+                    | "las_to_shapefile"
+                    | "lidar_colourize"
+                    | "lidar_join"
+                    | "lidar_shift"
+                    | "lidar_tile"
+                    | "lidar_tophat_transform"
+                    | "recover_flightline_info"
+                    | "select_tiles_by_polygon"
+                    | "sort_lidar"
+                    | "split_lidar"
+            ) || id.contains("tile")
+                || id.contains("las")
+                || has_tag("lidar")
+        }
+        ("lidar", "filtering_classification") => {
+            matches!(
+                id.as_str(),
+                "classify_buildings_in_lidar"
+                    | "classify_lidar"
+                    | "classify_overlap_points"
+                    | "clip_lidar_to_polygon"
+                    | "erase_polygon_from_lidar"
+                    | "filter_lidar"
+                    | "filter_lidar_by_percentile"
+                    | "filter_lidar_by_reference_surface"
+                    | "filter_lidar_classes"
+                    | "filter_lidar_noise"
+                    | "filter_lidar_scan_angles"
+                    | "height_above_ground"
+                    | "individual_tree_segmentation"
+                    | "lidar_classify_subset"
+                    | "lidar_elevation_slice"
+                    | "lidar_remove_outliers"
+                    | "lidar_segmentation"
+                    | "modify_lidar"
+                    | "normalize_lidar"
+                    | "remove_duplicates"
+            ) || id.contains("classify")
+                || id.contains("filter")
+                || has_tag("classification")
+        }
+        ("lidar", "interpolation_gridding") => {
+            matches!(
+                id.as_str(),
+                "flightline_overlap"
+                    | "lidar_block_maximum"
+                    | "lidar_block_minimum"
+                    | "lidar_construct_vector_tin"
+                    | "lidar_contour"
+                    | "lidar_digital_surface_model"
+                    | "lidar_hex_bin"
+                    | "lidar_hillshade"
+                    | "lidar_idw_interpolation"
+                    | "lidar_nearest_neighbour_gridding"
+                    | "lidar_radial_basis_function_interpolation"
+                    | "lidar_sibson_interpolation"
+                    | "lidar_thin"
+                    | "lidar_thin_high_density"
+                    | "lidar_tile_footprint"
+                    | "lidar_tin_gridding"
+            ) || id.contains("interpolation")
+                || id.contains("gridding")
+                || id.contains("hillshade")
+        }
+        ("lidar", "analysis_metrics") => {
+            matches!(
+                id.as_str(),
+                "colourize_based_on_class"
+                    | "colourize_based_on_point_returns"
+                    | "find_flightline_edge_points"
+                    | "individual_tree_detection"
+                    | "lidar_eigenvalue_features"
+                    | "lidar_histogram"
+                    | "lidar_info"
+                    | "lidar_kappa"
+                    | "lidar_point_density"
+                    | "lidar_point_return_analysis"
+                    | "lidar_point_stats"
+                    | "lidar_ransac_planes"
+                    | "lidar_rooftop_analysis"
+                    | "normal_vectors"
+            ) || id.contains("analysis")
+                || id.contains("density")
+                || id.contains("histogram")
+        }
+        ("lidar", "workflow_products") => {
+            id.contains("suite")
+                || id.contains("confidence")
+                || id.contains("disturbance")
+                || id.contains("monitoring")
+                || has_tag("workflow")
+        }
+        ("conversion", "vector_table_io") => {
+            matches!(
+                id.as_str(),
+                "add_point_coordinates_to_table"
+                    | "clean_vector"
+                    | "csv_points_to_vector"
+                    | "export_table_to_csv"
+                    | "join_tables"
+                    | "merge_table_with_csv"
+                    | "merge_vectors"
+                    | "reinitialize_attribute_table"
+                    | "vector_summary_statistics"
+            ) || id.contains("table")
+                || id.contains("csv")
+                || has_tag("conversion")
+        }
+        ("conversion", "geometry_topology") => {
+            matches!(
+                id.as_str(),
+                "fix_dangling_arcs"
+                    | "lines_to_polygons"
+                    | "multipart_to_singlepart"
+                    | "polygons_to_lines"
+                    | "remove_polygon_holes"
+                    | "singlepart_to_multipart"
+                    | "topology_rule_autofix"
+                    | "topology_rule_validate"
+                    | "topology_validation_report"
+            ) || id.contains("topology")
+                || id.contains("polygon")
+                || id.contains("multipart")
+        }
+        ("conversion", "raster_vector_conversion") => {
+            matches!(
+                id.as_str(),
+                "convert_nodata_to_zero"
+                    | "modify_nodata_value"
+                    | "new_raster_from_base_raster"
+                    | "new_raster_from_base_vector"
+                    | "print_geotiff_tags"
+                    | "raster_to_vector_lines"
+                    | "raster_to_vector_points"
+                    | "raster_to_vector_polygons"
+                    | "remove_raster_polygon_holes"
+                    | "set_nodata_value"
+                    | "vector_lines_to_raster"
+                    | "vector_points_to_raster"
+                    | "vector_polygons_to_raster"
+            ) || id.contains("raster_to_vector")
+                || id.contains("vector_") && id.contains("_to_raster")
+                || id.contains("nodata")
+        }
         ("vector", "linear_referencing") => {
             id == "points_along_lines"
                 || id == "locate_points_along_routes"
@@ -1491,6 +2429,12 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id == "route_event_lines_from_table"
                 || id == "route_event_points_from_layer"
                 || id == "route_event_lines_from_layer"
+                || id == "route_calibrate"
+                || id == "route_event_merge"
+                || id == "route_event_overlay"
+                || id == "route_event_split"
+                || id == "route_measure_qa"
+                || id == "route_recalibrate"
                 || has_tag("linear-referencing")
                 || has_tag("linear_referencing")
         }
@@ -1503,8 +2447,173 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id == "network_routes_from_od"
                 || id == "k_shortest_paths_network"
                 || id == "travelling_salesman_problem"
+                || id == "multimodal_shortest_path"
+                || id == "multimodal_od_cost_matrix"
+                || id == "multimodal_routes_from_od"
+                || id == "network_accessibility_metrics"
+                || id == "network_centrality_metrics"
+                || id == "od_sensitivity_analysis"
+                || id == "vehicle_routing_cvrp"
+                || id == "vehicle_routing_pickup_delivery"
+                || id == "vehicle_routing_vrptw"
                 || id.starts_with("network_")
+                || id.starts_with("multimodal_")
+                || id.starts_with("vehicle_routing_")
                 || has_tag("network")
+        }
+        ("vector", "overlay_analysis") => {
+            matches!(
+                id.as_str(),
+                "clip"
+                    | "difference"
+                    | "dissolve"
+                    | "erase"
+                    | "intersect"
+                    | "line_intersections"
+                    | "line_polygon_clip"
+                    | "near"
+                    | "select_by_location"
+                    | "spatial_join"
+                    | "symmetrical_difference"
+                    | "union"
+            ) || has_tag("overlay")
+                || has_tag("spatial_join")
+        }
+        ("vector", "geometry_processing") => {
+            matches!(
+                id.as_str(),
+                "buffer_vector"
+                    | "centroid_vector"
+                    | "concave_hull"
+                    | "densify_features"
+                    | "eliminate_coincident_points"
+                    | "extend_vector_lines"
+                    | "merge_line_segments"
+                    | "polygonize"
+                    | "reproject_vector"
+                    | "simplify_features"
+                    | "smooth_vectors"
+                    | "snap_endnodes"
+                    | "split_vector_lines"
+                    | "split_with_lines"
+            ) || id.contains("simplify")
+                || id.contains("smooth")
+                || id.contains("densify")
+                || id.contains("reproject")
+        }
+        ("vector", "shape_metrics") => {
+            id.contains("compactness")
+                || id.contains("elongation")
+                || id.contains("linearity")
+                || id.contains("narrowness")
+                || id.contains("perimeter")
+                || id.starts_with("polygon_")
+                || id.contains("shape_complexity")
+                || id.contains("circumscribing")
+                || id.contains("patch_orientation")
+                || id.contains("hole_proportion")
+                || has_tag("shape")
+        }
+        ("vector", "sampling_gridding") => {
+            id.contains("contour")
+                || id.contains("grid")
+                || id.contains("footprint")
+                || id.contains("voronoi")
+                || id.contains("binning")
+                || id.contains("extract_nodes")
+                || id.contains("extract_raster_values")
+                || id.contains("minimum_bounding")
+                || id == "construct_vector_tin"
+                || id == "medoid"
+                || id == "random_points_in_polygon"
+                || has_tag("gridding")
+        }
+        ("vector", "attribute_analysis") => {
+            id.contains("attribute")
+                || id.contains("field")
+                || id == "extract_by_attribute"
+                || id == "list_unique_values"
+                || id == "filter_vector_features_by_area"
+                || has_tag("attributes")
+        }
+        ("vector", "workflow_products") => {
+            id.contains("workflow")
+                || id.contains("simulator")
+                || id.contains("intelligence")
+                || id.contains("planning")
+                || has_tag("workflow")
+        }
+        ("hydrology", "flow_routing") => {
+            id.contains("flow_accum")
+                || id.contains("pointer")
+                || id.contains("mass_flux")
+                || id.contains("flowpath")
+                || id.contains("trace_downslope")
+                || id.contains("inflowing")
+                || id.contains("minimal_dispersion")
+                || matches!(id.as_str(), "qin_flow_accumulation" | "quinn_flow_accumulation")
+        }
+        ("hydrology", "depressions_storage") => {
+            id.contains("breach")
+                || id.contains("fill_")
+                || id == "sink"
+                || id.contains("depression")
+                || id.contains("impoundment")
+                || id.contains("insert_dams")
+                || id.contains("raise_walls")
+                || id.contains("flatten_lakes")
+        }
+        ("hydrology", "watersheds_basins") => {
+            id.contains("basin")
+                || id.contains("watershed")
+                || id.contains("pour_points")
+                || id == "hillslopes"
+                || id == "flood_order"
+                || id == "longest_flowpath"
+        }
+        ("hydrology", "hydrologic_indices") => {
+            id.contains("wetness_index")
+                || id.contains("stream_power")
+                || id.contains("transport_index")
+                || id.contains("elevation_above_stream")
+                || id.contains("depth_to_water")
+                || id.contains("downslope_index")
+                || id.contains("downslope_distance_to_stream")
+                || id.contains("hydrologic_connectivity")
+                || id.contains("edge_contamination")
+        }
+        ("streams", "network_extraction") => {
+            matches!(
+                id.as_str(),
+                "burn_streams"
+                    | "extract_streams"
+                    | "extract_valleys"
+                    | "prune_vector_streams"
+                    | "raster_streams_to_vector"
+                    | "rasterize_streams"
+                    | "remove_short_streams"
+                    | "repair_stream_vector_topology"
+                    | "river_centerlines"
+            )
+        }
+        ("streams", "ordering_metrics") => {
+            id.contains("stream_order")
+                || id.contains("horton")
+                || id.contains("magnitude")
+                || id.contains("stream_link")
+                || id.contains("tributary")
+        }
+        ("streams", "longitudinal_analysis") => {
+            matches!(
+                id.as_str(),
+                "distance_to_outlet"
+                    | "farthest_channel_head"
+                    | "find_main_stem"
+                    | "length_of_upstream_channels"
+                    | "long_profile"
+                    | "long_profile_from_points"
+                    | "vector_stream_network_analysis"
+            )
         }
         ("raster", "overlay_math") => {
             matches!(
@@ -1547,8 +2656,15 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || has_tag("distance")
                 || has_tag("cost")
         }
+        ("raster", "general") => true,
         ("remote_sensing", "filters") => {
             id.contains("filter") || has_tag("filter")
+        }
+        ("remote_sensing", "sar") => {
+            id.starts_with("sar_") || has_tag("sar")
+        }
+        ("remote_sensing", "workflow_products") => {
+            id.contains("workflow") || id.contains("monitoring") || has_tag("workflow")
         }
         ("remote_sensing", "enhancement_contrast") => {
             id.contains("contrast")
@@ -1581,7 +2697,8 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || has_tag("classification")
         }
         ("remote_sensing", "obia") => {
-            id.starts_with("segment_")
+            id == "image_segmentation"
+                || id.starts_with("segment_")
                 || id.starts_with("segments_")
                 || id.starts_with("object_features_")
                 || id.starts_with("classify_objects_")
@@ -1596,6 +2713,14 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
                 || id.contains("hillshade")
                 || id.contains("sky_view")
                 || id.contains("horizon")
+        }
+        ("terrain", "general") => true,
+        ("terrain", "visibility") => {
+            id.contains("horizon")
+                || id.contains("viewshed")
+                || id.contains("visibility")
+                || id.contains("sky_view")
+                || id.contains("daylight")
         }
         ("terrain", "roughness_texture") => {
             id.contains("roughness")
@@ -1613,6 +2738,15 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
         }
         ("terrain", "multiscale_signatures") => {
             id.contains("multiscale") || id.ends_with("_signature")
+        }
+        ("terrain", "workflow_products") => {
+            id.contains("assessment")
+                || id.contains("audit")
+                || id.contains("optimization")
+                || id.contains("planning")
+                || id.contains("monitoring")
+                || id.contains("intelligence")
+                || has_tag("workflow")
         }
         _ => false,
     }
@@ -2015,7 +3149,7 @@ fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
     }
 
     match category {
-        "raster" | "hydrology" | "terrain" | "streams" | "topology" => Some("raster"),
+        "raster" | "hydrology" | "terrain" | "streams" | "topology" | "precision_agriculture" => Some("raster"),
         "vector" => Some("vector"),
         "lidar" => Some("lidar"),
         _ => None,
@@ -7282,12 +8416,8 @@ impl WbEnvironment {
 
     /// Precision agriculture tools (yield, zoning, irrigation).
     #[getter]
-    fn precision_agriculture(&self) -> WbDomainNamespace {
-        WbDomainNamespace {
-            runtime: Arc::clone(&self.runtime),
-            domain_tags: vec!["agriculture".to_string(), "precision-ag".to_string()],
-            domain_name: "precision_agriculture".to_string(),
-        }
+    fn precision_agriculture(&self) -> WbToolCategory {
+        self.make_tool_category("precision_agriculture")
     }
 
     // ─── Phase 2 Discovery APIs ─────────────────────────────────────────────────

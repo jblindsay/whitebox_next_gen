@@ -82,6 +82,10 @@ Prefer direct properties when available:
 - `wbe.vector`
 - `wbe.lidar`
 - `wbe.remote_sensing`
+- `wbe.conversion`
+- `wbe.streams`
+- `wbe.precision_agriculture`
+- `wbe.other`
 
 Use generic accessors for dynamic workflows:
 - `wbe.category(name)`
@@ -183,5 +187,6 @@ Special Python dunder methods are intentionally omitted.
 | `max_procs` | Maximum process count used by eligible parallel operations. |
 | `projection` | Namespace for CRS and coordinate transformation helper methods. |
 | `topology` | Namespace for geometry-topology helper methods. |
-| `hydrology`, `terrain`, `raster`, `vector`, `lidar`, `remote_sensing`, `conversion`, `topology_tools` | Typed category namespaces for tool discovery and execution. |
-| `other`, `precision_agriculture`, `streams` | Additional category/domain namespaces available in the environment. |
+| `hydrology`, `terrain`, `raster`, `vector`, `lidar`, `remote_sensing` | Primary category namespaces for tool discovery and execution. |
+| `precision_agriculture` | Pro-tier precision agriculture tools (yield zoning, irrigation, crop stress, trafficability). |
+| `conversion`, `streams`, `other` | Additional category namespaces available in the environment. |

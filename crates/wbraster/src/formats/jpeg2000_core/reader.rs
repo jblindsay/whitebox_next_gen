@@ -900,14 +900,15 @@ impl GeoJp2 {
     /// Pixel type inferred from bit depth and signedness.
     ///
     /// The native reader respects the SIZ signed flag for 32-bit data but
-    /// reports `Uint16` for 16-bit signed components to match the behaviour
-    /// of the `wbjpeg2000` bridge, which ignores the signed flag entirely and
-    /// always clamps unsigned.
+    /// reports `Uint16` for 16-bit signed components regardless of signedness.
+    /// This preserves established decode behaviour: 16-bit signed components
+    /// are treated as unsigned (consistent with how virtually all JP2 imagery
+    /// in the field is stored and interpreted).
     pub fn pixel_type(&self) -> PixelType {
         match (self.signed, self.bits) {
             (false, 8)      => PixelType::Uint8,
             (false, 16)     => PixelType::Uint16,
-            (_, 16)         => PixelType::Uint16,  // match bridge: ignore signed for 16-bit
+            (_, 16)         => PixelType::Uint16,  // treat 16-bit signed as unsigned (established behaviour)
             (true,  32)     => PixelType::Int32,
             _               => PixelType::Uint16,
         }

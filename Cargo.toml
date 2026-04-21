@@ -3,7 +3,6 @@ members = [
   "crates/wbgeotiff",
   "crates/wbprojection",
   "crates/wbraster",
-  "crates/wbjpeg2000",
   "crates/wbvector",
   "crates/wblidar",
   "crates/wbtopology",

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
-## [Unreleased]
+## [0.1.3] - 2026-04-21
 
 ### Added
 - Added an execution-tracked JPEG2000 bridge retirement implementation plan in
@@ -13,6 +13,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   time estimates for native decode parity and bridge decommissioning.
 
 ### Fixed
+- Retired the vendored JPEG2000 decode bridge from active build wiring:
+  `wbraster` now decodes through native `jpeg2000_core` only, the
+  `jpeg2000-vendored-bridge` feature was removed from default/build paths, and
+  `wbjpeg2000` was removed from workspace membership.
 - Native `jpeg2000_core` packet walker now supports component-selective packet
   payload extraction for multicomponent LRCP traversal contexts via
   `extract_tile_data_for_component`, and includes regression tests that verify

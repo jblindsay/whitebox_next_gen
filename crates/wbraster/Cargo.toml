@@ -1,6 +1,6 @@
 [package]
 name = "wbraster"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "A pure-Rust library for reading and writing raster GIS formats"
@@ -18,10 +18,9 @@ name = "wbraster"
 path = "src/lib.rs"
 
 [features]
-default = ["zstd-native", "jpeg2000-vendored-bridge"]
+default = ["zstd-native"]
 zstd-native = ["dep:zstd"]
 zstd-pure-rust-decode = ["dep:ruzstd"]
-jpeg2000-vendored-bridge = ["dep:wbjpeg2000"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -40,7 +39,6 @@ png = "0.17"
 zune-core = "0.5"
 zune-jpegxl = "0.5"
 jxl-oxide = "0.12"
-wbjpeg2000 = { path = "../wbjpeg2000", default-features = false, features = ["std"], optional = true }
 thiserror = "1.0"
 log = "0.4"
 rayon = "1.10"

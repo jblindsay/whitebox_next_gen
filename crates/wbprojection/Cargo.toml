@@ -15,7 +15,6 @@ exclude = ["dev/"]
 
 [dependencies]
 thiserror = "1.0"
-wbgeotiff = { path = "../wbgeotiff", version = "0.1.0" }
 wide = "1.2"
 
 [dev-dependencies]

@@ -3985,7 +3985,6 @@ dependencies = [
  "criterion 0.5.1",
  "serde",
  "thiserror 1.0.69",
- "wbgeotiff",
  "wide 1.3.0",
 ]
 

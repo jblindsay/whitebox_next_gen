@@ -106,7 +106,6 @@ This staged publishing model keeps the foundational backend stack available firs
 
 ```mermaid
 graph TD
-	wbgeotiff --> wbprojection
 	wbgeotiff --> wbraster
 	wbprojection --> wbraster
 	wbprojection --> wbvector

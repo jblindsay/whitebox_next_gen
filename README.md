@@ -13,7 +13,7 @@ Whitebox Next Gen is a ground-up redesign that improves on its predecessor in ne
 - **Vector I/O** — Expanded from Esri Shapefile-only to 11 formats, including GeoPackage, FlatGeobuf, GeoParquet, and other modern interchange formats.
 - **Vector topology** — A new, dedicated topology engine (`wbtopology`) enabling robust overlay, buffering, and related operations.
 - **LiDAR I/O** — Full support for LAS 1.0–1.5, LAZ, COPC, E57, and PLY via `wblidar`, a high-performance, modern LiDAR I/O engine.
-- **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin are in active development.
+- **Frontends** — Whitebox Workflows for Python (WbW-Python), Whitebox Workflows for R (WbW-R), and a QGIS 4-compliant plugin (`wbw_qgis`) are in active development.
 
 ## Design Goals
 
@@ -61,17 +61,23 @@ This structure is intentional. Revenue from the paid extension helps fund ongoin
 
 ## Workspace Crates
 
-- crates/wbgeotiff
-- crates/wbprojection
-- crates/wbraster
-- crates/wbvector
-- crates/wblidar
-- crates/wbtopology
-- crates/wbcore
-- crates/wblicense_core
-- crates/wbtools_oss
-- crates/wbw_python
-- crates/wbw_r
+The following Rust crates are members of the Cargo workspace:
+
+- `crates/wbgeotiff` — GeoTIFF/JPEG2000 I/O engine
+- `crates/wbprojection` — map projection and CRS engine
+- `crates/wbraster` — raster abstraction and I/O
+- `crates/wbvector` — vector I/O (Shapefile, GeoPackage, FlatGeobuf, GeoParquet, and more)
+- `crates/wblidar` — LiDAR I/O (LAS, LAZ, COPC, E57, PLY)
+- `crates/wbtopology` — vector topology and spatial indexing
+- `crates/wbcore` — shared runtime types and utilities
+- `crates/wblicense_core` — license entitlement verification
+- `crates/wbtools_oss` — open-source tool implementations (500+ tools)
+- `crates/wbw_python` — Whitebox Workflows for Python frontend runtime
+- `crates/wbw_r` — Whitebox Workflows for R frontend runtime
+
+The following frontend lives in `crates/` but is **not** a Cargo workspace member (it is a pure-Python QGIS plugin):
+
+- `crates/wbw_qgis` — QGIS 4 plugin frontend; exposes Whitebox tools as a QGIS Processing provider, depends on the `whitebox_workflows` Python package built from `wbw_python`
 
 ## Publication Status
 
@@ -91,6 +97,8 @@ Other workspace crates are open-source and developed in this monorepo, but are n
 - `wbtools_oss`
 - `wbw_python`
 - `wbw_r`
+
+`wbw_qgis` is a pure-Python QGIS plugin and is not published to crates.io. It is not yet published to the QGIS plugin portal either; current workflow is source-based development and local installation only.
 
 This staged publishing model keeps the foundational backend stack available first while higher-level crates continue to stabilize.
 
@@ -129,14 +137,15 @@ graph TD
 
 	wbtools_pro -. optional/external .-> wbw_python
 	wbtools_pro -. optional/external .-> wbw_r
+
+        wbw_python -. Python runtime .-> wbw_qgis
 ```
 
 Legend:
 
 - `A --> B` means crate `B` depends on crate `A`.
 - `wbtools_pro` is optional and outside this workspace.
-
-## Monorepo Publishing Model
+- `wbw_qgis` is a pure-Python QGIS plugin (not a Cargo workspace member); it depends on the `whitebox_workflows` Python package produced from `wbw_python`.
 
 This repository is a Cargo workspace (monorepo). Each crate is developed in-place
 under `crates/`, but published independently on crates.io.
@@ -204,26 +213,3 @@ Note on floating licenses: lease lifecycle support is present, and automatic
 provider bootstrap is configured (`WBW_LICENSE_PROVIDER_URL` +
 `WBW_FLOATING_LICENSE_ID`) and the provider exposes the v2 floating activation
 endpoint. See the runbook sections in the Python/R READMEs.
-
-## SIMD Guardrail Check
-
-Run the lightweight SIMD regression guardrail locally:
-
-```bash
-bash scripts/check_simd_guardrails.sh
-```
-
-What it checks:
-
-- wbprojection SIMD example runs and reports speedup above threshold
-- wbprojection kernel and geocentric batch correctness markers remain true
-- wbraster SIMD statistics example runs and reports speedups above threshold
-- wbraster full-raster and band scalar/SIMD match markers remain true
-
-Optional threshold overrides:
-
-```bash
-WBPROJ_SPEEDUP_MIN=1.10 WBRASTER_SPEEDUP_MIN=1.10 bash scripts/check_simd_guardrails.sh
-```
-
-Default thresholds are conservative and intended as a lightweight early warning, not a strict performance certification.

@@ -22,6 +22,12 @@ STUB_PATH = ROOT / "crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi"
 DEF_RE = re.compile(r"^(\s*def\s+(?P<name>[a-zA-Z0-9_]+)\((?P<params>.*)\)\s*->\s*.*)$")
 STR_PARAM_RE = re.compile(r"\b(?P<param>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*str\s*=\s*\"(?P<default>[^\"]*)\"")
 LITERAL_PARAM_RE = re.compile(r"\b(?P<param>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*Literal\[[^\]]+\]\s*=\s*\"(?P<default>[^\"]*)\"")
+PLACEHOLDER_RE = re.compile(
+    r"^(?P<indent>\s*)def\s+(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\(self,\s*\*args:\s*Any,\s*\*\*kwargs:\s*Any\)\s*->\s*Any:\s*\.\.\.\s*$"
+)
+FULL_DEF_RE = re.compile(
+    r"^(?P<indent>\s*)def\s+(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\((?P<params>.*)\)\s*->\s*(?P<ret>[^:]+):\s*\.\.\.\s*$"
+)
 
 
 def ensure_literal_import(stub_text: str) -> str:
@@ -210,6 +216,51 @@ def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, li
     }
 
 
+def fill_placeholders_from_existing_signatures(stub_text: str) -> tuple[str, int, int]:
+    """Fill Any placeholders using unambiguous signatures already present in the stub.
+
+    Returns: (updated_text, replacements, ambiguous_or_missing)
+    """
+    lines = stub_text.splitlines()
+
+    signatures_by_name: dict[str, set[tuple[str, str]]] = {}
+    for line in lines:
+        m = FULL_DEF_RE.match(line)
+        if not m:
+            continue
+        name = m.group("name")
+        params = m.group("params")
+        ret = m.group("ret").strip()
+        # Exclude the placeholder form from sources.
+        if params.strip() == "self, *args: Any, **kwargs: Any" and ret == "Any":
+            continue
+        signatures_by_name.setdefault(name, set()).add((params, ret))
+
+    replacements = 0
+    unresolved = 0
+    out_lines: list[str] = []
+
+    for line in lines:
+        pm = PLACEHOLDER_RE.match(line)
+        if not pm:
+            out_lines.append(line)
+            continue
+
+        name = pm.group("name")
+        indent = pm.group("indent")
+        sigs = signatures_by_name.get(name, set())
+        if len(sigs) != 1:
+            unresolved += 1
+            out_lines.append(line)
+            continue
+
+        params, ret = next(iter(sigs))
+        out_lines.append(f"{indent}def {name}({params}) -> {ret}: ...")
+        replacements += 1
+
+    return "\n".join(out_lines) + "\n", replacements, unresolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Roll out Literal typing in whitebox_workflows.pyi")
     parser.add_argument("--check", action="store_true", help="Only check for pending updates")
@@ -218,6 +269,11 @@ def main() -> int:
         "--fix-default-mismatch",
         action="store_true",
         help="Allow conversion when default normalizes to exactly one enum choice",
+    )
+    parser.add_argument(
+        "--fill-any-from-existing",
+        action="store_true",
+        help="Replace '*args/**kwargs -> Any' placeholders using unambiguous existing signatures",
     )
     args = parser.parse_args()
 
@@ -229,6 +285,13 @@ def main() -> int:
         lookup,
         fix_default_mismatch=args.fix_default_mismatch,
     )
+
+    placeholder_replacements = 0
+    placeholder_unresolved = 0
+    if args.fill_any_from_existing:
+        new_text, placeholder_replacements, placeholder_unresolved = (
+            fill_placeholders_from_existing_signatures(new_text)
+        )
 
     if args.report:
         report = build_coverage_report(new_text, lookup)
@@ -250,6 +313,9 @@ def main() -> int:
                 print(f"    - {tool_name}: {count}")
         else:
             print("  no directly convertible params remain")
+        if args.fill_any_from_existing:
+            print(f"  placeholder Any signatures replaced this run: {placeholder_replacements}")
+            print(f"  placeholder Any signatures unresolved (ambiguous/missing): {placeholder_unresolved}")
 
     if args.check:
         if new_text != STUB_PATH.read_text(encoding="utf-8"):
@@ -263,6 +329,8 @@ def main() -> int:
         msg = f"updated {STUB_PATH} ({replacement_count} replacement(s))"
         if mismatch_fix_count:
             msg += f", including {mismatch_fix_count} default mismatch fix(es)"
+        if args.fill_any_from_existing:
+            msg += f", plus {placeholder_replacements} placeholder signature fill(s)"
         print(msg)
     else:
         print("no stub updates needed")

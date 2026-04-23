@@ -9,6 +9,7 @@ use std::f64::consts::PI;
 use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::time::Instant;
 
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
@@ -37,7 +38,7 @@ use wbcore::{
 };
 use wblidar::{Crs as LidarCrs, PointCloud, PointRecord, Rgb16};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
-use wbtopology::{delaunay_triangulation, Coord as TopoCoord, PreparedSibsonInterpolator};
+use wbtopology::{delaunay_triangulation, delaunay_triangulation_fast, Coord as TopoCoord, PreparedSibsonInterpolator};
 
 use crate::memory_store;
 
@@ -230,23 +231,6 @@ pub(crate) fn lidar_crs_to_raster_crs(crs: Option<&LidarCrs>) -> CrsInfo {
     CrsInfo::default()
 }
 
-/// Validate that a LiDAR CRS is present for workflows that require CRS-aware outputs.
-pub(crate) fn require_lidar_crs(crs: Option<&LidarCrs>, tool_name: &str) -> Result<(), ToolError> {
-    let has_epsg = crs.and_then(|c| c.epsg).is_some();
-    let has_wkt = crs
-        .and_then(|c| c.wkt.as_deref())
-        .map(|w| !w.trim().is_empty())
-        .unwrap_or(false);
-    if has_epsg || has_wkt {
-        Ok(())
-    } else {
-        Err(ToolError::Validation(format!(
-            "{} requires input LiDAR CRS metadata to assign output CRS",
-            tool_name
-        )))
-    }
-}
-
 fn parse_lidar_path_value(value: &Value, param: &str) -> Result<String, ToolError> {
     if let Some(path) = value.as_str() {
         return Ok(path.to_string());
@@ -422,6 +406,145 @@ fn parse_f64_alias(args: &ToolArgs, names: &[&str], default: f64) -> f64 {
     default
 }
 
+fn parse_elevation_bounds(args: &ToolArgs) -> (f64, f64) {
+    let mut min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
+    let mut max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+    // QGIS numeric widgets may inject 0.0 defaults for optional min/max thresholds.
+    // Treat min=0 and max=0 as "no elevation threshold" for interpolation workflows.
+    if min_z == 0.0 && max_z == 0.0 {
+        min_z = f64::NEG_INFINITY;
+        max_z = f64::INFINITY;
+    }
+    (min_z, max_z)
+}
+
+fn deduplicate_xy_samples(samples: &[(f64, f64, f64)]) -> Vec<(f64, f64, f64)> {
+    let mut acc: HashMap<(u64, u64), (f64, usize)> = HashMap::with_capacity(samples.len());
+    for (x, y, z) in samples {
+        let key = point_key_bits(*x, *y);
+        let entry = acc.entry(key).or_insert((0.0, 0));
+        entry.0 += *z;
+        entry.1 += 1;
+    }
+    acc.into_iter()
+        .map(|((xb, yb), (sum, count))| {
+            (
+                f64::from_bits(xb),
+                f64::from_bits(yb),
+                sum / count.max(1) as f64,
+            )
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TriangulationThinMethod {
+    NearestCenter,
+    MinValue,
+    MaxValue,
+}
+
+fn parse_triangulation_thin_method(
+    value: Option<&str>,
+) -> Result<TriangulationThinMethod, ToolError> {
+    let method = value.unwrap_or("nearest_center").trim().to_ascii_lowercase();
+    match method.as_str() {
+        "nearest_center" | "nearestcentre" | "nearest_center_point" => {
+            Ok(TriangulationThinMethod::NearestCenter)
+        }
+        "min_value" | "minimum" | "min" | "lowest" => Ok(TriangulationThinMethod::MinValue),
+        "max_value" | "maximum" | "max" | "highest" => Ok(TriangulationThinMethod::MaxValue),
+        _ => Err(ToolError::Validation(format!(
+            "triangulation_thin_method must be one of nearest_center, min_value, max_value (received '{}')",
+            method
+        ))),
+    }
+}
+
+fn triangulation_thin_method_name(method: TriangulationThinMethod) -> &'static str {
+    match method {
+        TriangulationThinMethod::NearestCenter => "nearest_center",
+        TriangulationThinMethod::MinValue => "min_value",
+        TriangulationThinMethod::MaxValue => "max_value",
+    }
+}
+
+fn sample_lexicographic_lt(lhs: (f64, f64, f64), rhs: (f64, f64, f64)) -> bool {
+    match lhs.0.total_cmp(&rhs.0) {
+        Ordering::Less => true,
+        Ordering::Greater => false,
+        Ordering::Equal => match lhs.1.total_cmp(&rhs.1) {
+            Ordering::Less => true,
+            Ordering::Greater => false,
+            Ordering::Equal => lhs.2.total_cmp(&rhs.2).is_lt(),
+        },
+    }
+}
+
+fn thin_triangulation_samples(
+    samples: Vec<(f64, f64, f64)>,
+    cell_size: f64,
+    method: TriangulationThinMethod,
+) -> Vec<(f64, f64, f64)> {
+    if !cell_size.is_finite() || cell_size <= 0.0 || samples.len() < 2 {
+        return samples;
+    }
+
+    let inv_cell_size = 1.0 / cell_size;
+    match method {
+        TriangulationThinMethod::NearestCenter => {
+            let mut selected: HashMap<(i64, i64), (f64, (f64, f64, f64))> =
+                HashMap::with_capacity(samples.len() / 4 + 1);
+            for sample in samples {
+                let col = (sample.0 * inv_cell_size).floor() as i64;
+                let row = (sample.1 * inv_cell_size).floor() as i64;
+                let center_x = (col as f64 + 0.5) * cell_size;
+                let center_y = (row as f64 + 0.5) * cell_size;
+                let distance_sq = (sample.0 - center_x).powi(2) + (sample.1 - center_y).powi(2);
+                let entry = selected
+                    .entry((col, row))
+                    .or_insert((distance_sq, sample));
+                if distance_sq < entry.0
+                    || (distance_sq == entry.0 && sample_lexicographic_lt(sample, entry.1))
+                {
+                    *entry = (distance_sq, sample);
+                }
+            }
+            selected.into_values().map(|(_, sample)| sample).collect()
+        }
+        TriangulationThinMethod::MinValue => {
+            let mut selected: HashMap<(i64, i64), (f64, f64, f64)> =
+                HashMap::with_capacity(samples.len() / 4 + 1);
+            for sample in samples {
+                let key = (
+                    (sample.0 * inv_cell_size).floor() as i64,
+                    (sample.1 * inv_cell_size).floor() as i64,
+                );
+                let entry = selected.entry(key).or_insert(sample);
+                if sample.2 < entry.2 || (sample.2 == entry.2 && sample_lexicographic_lt(sample, *entry)) {
+                    *entry = sample;
+                }
+            }
+            selected.into_values().collect()
+        }
+        TriangulationThinMethod::MaxValue => {
+            let mut selected: HashMap<(i64, i64), (f64, f64, f64)> =
+                HashMap::with_capacity(samples.len() / 4 + 1);
+            for sample in samples {
+                let key = (
+                    (sample.0 * inv_cell_size).floor() as i64,
+                    (sample.1 * inv_cell_size).floor() as i64,
+                );
+                let entry = selected.entry(key).or_insert(sample);
+                if sample.2 > entry.2 || (sample.2 == entry.2 && sample_lexicographic_lt(sample, *entry)) {
+                    *entry = sample;
+                }
+            }
+            selected.into_values().collect()
+        }
+    }
+}
+
 fn parse_bool_alias(args: &ToolArgs, names: &[&str], default: bool) -> bool {
     for name in names {
         if let Some(value) = args.get(*name).and_then(Value::as_bool) {
@@ -514,9 +637,15 @@ fn default_class_palette() -> [Rgb16; 19] {
 }
 
 fn parse_returns_mode(args: &ToolArgs) -> ReturnsMode {
-    let text = args
-        .get("returns")
-        .or_else(|| args.get("returns_included"))
+    let raw = args.get("returns").or_else(|| args.get("returns_included"));
+    if let Some(idx) = raw.and_then(Value::as_u64) {
+        return match idx {
+            1 => ReturnsMode::First,
+            2 => ReturnsMode::Last,
+            _ => ReturnsMode::All,
+        };
+    }
+    let text = raw
         .and_then(Value::as_str)
         .unwrap_or("all")
         .to_lowercase();
@@ -2234,6 +2363,7 @@ fn collect_lidar_samples(
             rgb_value_missing_count += 1;
         }
     }
+
     if samples.is_empty() {
         if parameter == "rgb" && rgb_value_missing_count > 0 {
             return Err(ToolError::Validation(
@@ -2246,6 +2376,34 @@ fn collect_lidar_samples(
         ));
     }
     Ok(samples)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TriangulationBackend {
+    Auto,
+    Delaunator,
+    Wbtopology,
+}
+
+fn parse_triangulation_backend(value: Option<&str>) -> Result<TriangulationBackend, ToolError> {
+    let backend = value.unwrap_or("auto").trim().to_ascii_lowercase();
+    match backend.as_str() {
+        "auto" => Ok(TriangulationBackend::Auto),
+        "delaunator" | "fast" => Ok(TriangulationBackend::Delaunator),
+        "wbtopology" | "wb_topology" | "topology" => Ok(TriangulationBackend::Wbtopology),
+        _ => Err(ToolError::Validation(format!(
+            "triangulation_backend must be one of auto, fast, delaunator, wbtopology (received '{}')",
+            backend
+        ))),
+    }
+}
+
+fn triangulation_backend_name(backend: TriangulationBackend) -> &'static str {
+    match backend {
+        TriangulationBackend::Auto => "auto",
+        TriangulationBackend::Delaunator => "delaunator",
+        TriangulationBackend::Wbtopology => "wbtopology",
+    }
 }
 
 impl RbfPolyOrder {
@@ -3208,46 +3366,55 @@ impl Tool for LidarNearestNeighbourGriddingTool {
                     name: "input",
                     description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "resolution",
                     description: "Output cell size.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "search_radius",
                     description: "Maximum nearest-neighbour distance; cells beyond this become NoData.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "interpolation_parameter",
                     description: "Point attribute to interpolate (elevation, intensity, class, return_number, number_of_returns, scan_angle, time, rgb, user_data).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "returns_included",
                     description: "Return filtering mode: all, first, or last.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "excluded_classes",
                     description: "Classes to exclude (array or comma-delimited string).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "min_elev",
                     description: "Minimum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "max_elev",
                     description: "Maximum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "output",
                     description: "Optional output raster path.",
                     required: false,
+                        ..Default::default()
                 },
             ],
         }
@@ -3334,14 +3501,17 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
         let neighbor_paths = parse_batch_neighbor_inputs(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
-        require_lidar_crs(cloud.crs.as_ref(), "lidar_nearest_neighbour_gridding")?;
+        if cloud.crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
 
         let target_samples = collect_lidar_samples(
             &cloud.points,
@@ -3427,56 +3597,67 @@ impl Tool for LidarIdwInterpolationTool {
                     name: "input",
                     description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "resolution",
                     description: "Output cell size.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "weight",
                     description: "IDW exponent (power).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "search_radius",
                     description: "Neighbourhood radius; <=0 switches to k-nearest mode.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "interpolation_parameter",
                     description: "Point attribute to interpolate (elevation, intensity, class, return_number, number_of_returns, scan_angle, time, rgb, user_data).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "returns_included",
                     description: "Return filtering mode: all, first, or last.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "excluded_classes",
                     description: "Classes to exclude (array or comma-delimited string).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "min_elev",
                     description: "Minimum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "max_elev",
                     description: "Maximum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "min_points",
                     description: "Minimum number of points for k-nearest fallback.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "output",
                     description: "Optional output raster path.",
                     required: false,
+                        ..Default::default()
                 },
             ],
         }
@@ -3570,15 +3751,18 @@ impl Tool for LidarIdwInterpolationTool {
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
         let neighbor_paths = parse_batch_neighbor_inputs(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let min_points = args.get("min_points").and_then(Value::as_u64).unwrap_or(1) as usize;
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
-        require_lidar_crs(cloud.crs.as_ref(), "lidar_idw_interpolation")?;
+        if cloud.crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
 
         let target_samples = collect_lidar_samples(
             &cloud.points,
@@ -3734,6 +3918,31 @@ impl Tool for LidarTinGriddingTool {
                     description: "Optional output raster path.",
                     required: false,
                 },
+                ToolParamSpec {
+                    name: "triangulation_backend",
+                    description: "Triangulation backend selection: auto, delaunator, or wbtopology.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "triangulation_auto_threshold",
+                    description: "When backend=auto, switch to wbtopology at this sample count (default disabled; set explicitly to enable).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "triangulation_epsilon",
+                    description: "Epsilon used by wbtopology backend duplicate handling (default 1e-12).",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "triangulation_thin_cell_size",
+                    description: "Optional pre-thinning cell size for triangulation samples; values > 0 enable thinning and 0 disables it.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "triangulation_thin_method",
+                    description: "Representative-point method for thinning: nearest_center, min_value, or max_value.",
+                    required: false,
+                },
             ],
         }
     }
@@ -3772,6 +3981,33 @@ impl Tool for LidarTinGriddingTool {
                 "min_elev/minz must be <= max_elev/maxz".to_string(),
             ));
         }
+        let _ = parse_triangulation_backend(
+            args.get("triangulation_backend").and_then(Value::as_str),
+        )?;
+        let auto_threshold = args
+            .get("triangulation_auto_threshold")
+            .and_then(Value::as_u64)
+            .unwrap_or(1_500_000);
+        if auto_threshold == 0 {
+            return Err(ToolError::Validation(
+                "triangulation_auto_threshold must be >= 1".to_string(),
+            ));
+        }
+        let tri_eps = parse_f64_alias(args, &["triangulation_epsilon"], 1.0e-12);
+        if !tri_eps.is_finite() || tri_eps <= 0.0 {
+            return Err(ToolError::Validation(
+                "triangulation_epsilon must be a positive finite value".to_string(),
+            ));
+        }
+        let thin_cell_size = parse_f64_alias(args, &["triangulation_thin_cell_size"], 0.0);
+        if !thin_cell_size.is_finite() || thin_cell_size < 0.0 {
+            return Err(ToolError::Validation(
+                "triangulation_thin_cell_size must be a non-negative finite value".to_string(),
+            ));
+        }
+        let _ = parse_triangulation_thin_method(
+            args.get("triangulation_thin_method").and_then(Value::as_str),
+        )?;
         let _ = parse_optional_output_path(args, "output")?;
         Ok(())
     }
@@ -3825,15 +4061,35 @@ impl Tool for LidarTinGriddingTool {
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
         let neighbor_paths = parse_batch_neighbor_inputs(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let output_path = parse_optional_output_path(args, "output")?;
+        let requested_backend = parse_triangulation_backend(
+            args.get("triangulation_backend").and_then(Value::as_str),
+        )?;
+        let triangulation_auto_threshold = args
+            .get("triangulation_auto_threshold")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::MAX) as usize;
+        let triangulation_epsilon = parse_f64_alias(args, &["triangulation_epsilon"], 1.0e-12);
+        let triangulation_thin_cell_size =
+            parse_f64_alias(args, &["triangulation_thin_cell_size"], 0.0);
+        let triangulation_thin_method = parse_triangulation_thin_method(
+            args.get("triangulation_thin_method").and_then(Value::as_str),
+        )?;
 
+        let run_start = Instant::now();
         ctx.progress.info("reading input lidar");
+        let read_start = Instant::now();
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
-        require_lidar_crs(cloud.crs.as_ref(), "lidar_tin_gridding")?;
+        let read_elapsed = read_start.elapsed();
+        if cloud.crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
 
+        let sample_start = Instant::now();
         let target_samples = collect_lidar_samples(
             &cloud.points,
             &parameter,
@@ -3843,7 +4099,7 @@ impl Tool for LidarTinGriddingTool {
             max_z,
         )?;
         let mut samples = target_samples.clone();
-        for neighbor_path in neighbor_paths {
+        for neighbor_path in &neighbor_paths {
             let n_cloud = PointCloud::read(&neighbor_path)
                 .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
             let mut n_samples = collect_lidar_samples(
@@ -3856,6 +4112,7 @@ impl Tool for LidarTinGriddingTool {
             )?;
             samples.append(&mut n_samples);
         }
+        let sample_elapsed = sample_start.elapsed();
         if samples.len() < 3 || target_samples.is_empty() {
             return Err(ToolError::Validation(
                 "input lidar must contain at least three points for triangulation".to_string(),
@@ -3869,21 +4126,92 @@ impl Tool for LidarTinGriddingTool {
             DataType::F64,
         )?;
 
-        let topo_points: Vec<TopoCoord> = samples
-            .iter()
-            .map(|(x, y, _)| TopoCoord::xy(*x, *y))
-            .collect();
-        let triangulation = delaunay_triangulation(&topo_points, 1.0e-12);
-        if triangulation.triangles.is_empty() {
+        ctx.progress.info("building triangulation");
+        let tri_start = Instant::now();
+        let mut triangulation_samples = samples;
+        let source_sample_count = triangulation_samples.len();
+        if triangulation_thin_cell_size > 0.0 {
+            triangulation_samples = thin_triangulation_samples(
+                triangulation_samples,
+                triangulation_thin_cell_size,
+                triangulation_thin_method,
+            );
+        }
+        let selected_backend = match requested_backend {
+            TriangulationBackend::Auto => {
+                if triangulation_samples.len() >= triangulation_auto_threshold {
+                    TriangulationBackend::Wbtopology
+                } else {
+                    TriangulationBackend::Delaunator
+                }
+            }
+            other => other,
+        };
+
+        let (delaunay_points, z_values, tri_indices_flat): (Vec<TopoCoord>, Vec<f64>, Vec<usize>) =
+            match selected_backend {
+                TriangulationBackend::Delaunator | TriangulationBackend::Auto => {
+                    let mut topo_points: Vec<TopoCoord> = triangulation_samples
+                        .iter()
+                        .map(|(x, y, z)| TopoCoord::xyz(*x, *y, *z))
+                        .collect();
+                    let mut tri = delaunay_triangulation_fast(&topo_points, triangulation_epsilon);
+                    if tri.triangles.len() < 1 {
+                        // Fallback for duplicate-XY-heavy clouds that can destabilize triangulation.
+                        triangulation_samples = deduplicate_xy_samples(&triangulation_samples);
+                        if triangulation_samples.len() < 3 {
+                            return Err(ToolError::Validation(
+                                "input lidar must contain at least three unique XY points for triangulation"
+                                    .to_string(),
+                            ));
+                        }
+                        topo_points = triangulation_samples
+                            .iter()
+                            .map(|(x, y, z)| TopoCoord::xyz(*x, *y, *z))
+                            .collect();
+                        tri = delaunay_triangulation_fast(&topo_points, triangulation_epsilon);
+                    }
+                    let local_points = tri.points;
+                    let local_z_values: Vec<f64> = local_points.iter().map(|p| p.z.unwrap_or(0.0)).collect();
+                    let mut local_triangles = Vec::with_capacity(tri.triangles.len() * 3);
+                    for t in tri.triangles {
+                        local_triangles.push(t[0]);
+                        local_triangles.push(t[1]);
+                        local_triangles.push(t[2]);
+                    }
+                    (local_points, local_z_values, local_triangles)
+                }
+                TriangulationBackend::Wbtopology => {
+                    let topo_points: Vec<TopoCoord> = triangulation_samples
+                        .iter()
+                        .map(|(x, y, z)| TopoCoord::xyz(*x, *y, *z))
+                        .collect();
+                    let tri = delaunay_triangulation(&topo_points, triangulation_epsilon);
+                    let local_points: Vec<TopoCoord> = tri
+                        .points
+                        .iter()
+                        .map(|p| TopoCoord::xyz(p.x, p.y, p.z.unwrap_or(0.0)))
+                        .collect();
+                    let local_z_values: Vec<f64> = tri.points.iter().map(|p| p.z.unwrap_or(0.0)).collect();
+                    let mut local_triangles = Vec::with_capacity(tri.triangles.len() * 3);
+                    for t in tri.triangles {
+                        local_triangles.push(t[0]);
+                        local_triangles.push(t[1]);
+                        local_triangles.push(t[2]);
+                    }
+                    (local_points, local_z_values, local_triangles)
+                }
+            };
+
+        let num_triangles = tri_indices_flat.len() / 3;
+        if num_triangles == 0 {
             return Err(ToolError::Execution(
                 "failed to build triangulation from input lidar points".to_string(),
             ));
         }
-
-        let mut value_lookup = HashMap::with_capacity(samples.len());
-        for (x, y, value) in &samples {
-            value_lookup.entry(point_key_bits(*x, *y)).or_insert(*value);
-        }
+        let tri_elapsed = tri_start.elapsed();
+        ctx.progress.info("rasterizing triangulation");
+        let raster_start = Instant::now();
 
         let rows = output.rows;
         let cols = output.cols;
@@ -3898,62 +4226,205 @@ impl Tool for LidarTinGriddingTool {
             max_triangle_edge_length * max_triangle_edge_length
         };
 
-        let mut out_values = vec![nodata; output.data.len()];
-        for (tri_idx, tri) in triangulation.triangles.iter().enumerate() {
-            let p1 = triangulation.points[tri[0]];
-            let p2 = triangulation.points[tri[1]];
-            let p3 = triangulation.points[tri[2]];
+        struct PreparedTriangle {
+            p1: (f64, f64),
+            a12: f64,
+            b12: f64,
+            c12: f64,
+            a23: f64,
+            b23: f64,
+            c23: f64,
+            a31: f64,
+            b31: f64,
+            c31: f64,
+            ccw: bool,
+            z1: f64,
+            dzdx: f64,
+            dzdy: f64,
+            col_start: usize,
+            col_end: usize,
+            row_start: usize,
+            row_end: usize,
+        }
 
-            let z1 = *value_lookup.get(&point_key_bits(p1.x, p1.y)).ok_or_else(|| {
-                ToolError::Execution("triangulation lookup failed for vertex 1".to_string())
-            })?;
-            let z2 = *value_lookup.get(&point_key_bits(p2.x, p2.y)).ok_or_else(|| {
-                ToolError::Execution("triangulation lookup failed for vertex 2".to_string())
-            })?;
-            let z3 = *value_lookup.get(&point_key_bits(p3.x, p3.y)).ok_or_else(|| {
-                ToolError::Execution("triangulation lookup failed for vertex 3".to_string())
-            })?;
+        const TILE_ROWS: usize = 128;
+        let num_row_tiles = rows.div_ceil(TILE_ROWS);
+        let mut prepared_triangles: Vec<PreparedTriangle> = Vec::with_capacity(num_triangles);
+        let mut tile_triangles: Vec<Vec<usize>> = vec![Vec::new(); num_row_tiles];
+        let col_centers: Vec<f64> = (0..cols)
+            .map(|col| x_min + (col as f64 + 0.5) * cell_x)
+            .collect();
+        let row_centers: Vec<f64> = (0..rows)
+            .map(|row| y_max - (row as f64 + 0.5) * cell_y)
+            .collect();
+
+        for tri_idx in 0..num_triangles {
+            let base = tri_idx * 3;
+            let p1_idx = tri_indices_flat[base];
+            let p2_idx = tri_indices_flat[base + 1];
+            let p3_idx = tri_indices_flat[base + 2];
+
+            let p1 = &delaunay_points[p1_idx];
+            let p2 = &delaunay_points[p2_idx];
+            let p3 = &delaunay_points[p3_idx];
+
+            let z1 = z_values[p1_idx];
+            let z2 = z_values[p2_idx];
+            let z3 = z_values[p3_idx];
 
             if max_triangle_edge_length_2d_sq((p1.x, p1.y), (p2.x, p2.y), (p3.x, p3.y)) > max_edge_sq {
                 continue;
             }
 
+            let a = Vector3::new(p1.x, p1.y, z1);
+            let b = Vector3::new(p2.x, p2.y, z2);
+            let c = Vector3::new(p3.x, p3.y, z3);
+            let norm = (b - a).cross(&(c - a));
+            if norm.z.abs() <= 1.0e-12 {
+                continue;
+            }
+            let a12 = p1.y - p2.y;
+            let b12 = p2.x - p1.x;
+            let c12 = p1.x * p2.y - p2.x * p1.y;
+            let a23 = p2.y - p3.y;
+            let b23 = p3.x - p2.x;
+            let c23 = p2.x * p3.y - p3.x * p2.y;
+            let a31 = p3.y - p1.y;
+            let b31 = p1.x - p3.x;
+            let c31 = p3.x * p1.y - p1.x * p3.y;
+            let ccw = norm.z > 0.0;
+            let dzdx = -norm.x / norm.z;
+            let dzdy = -norm.y / norm.z;
             let min_x = p1.x.min(p2.x.min(p3.x));
             let max_x = p1.x.max(p2.x.max(p3.x));
             let min_y = p1.y.min(p2.y.min(p3.y));
             let max_y = p1.y.max(p2.y.max(p3.y));
-
             let col_start = (((min_x - x_min) / cell_x).floor() as isize).clamp(0, cols as isize - 1) as usize;
             let col_end = (((max_x - x_min) / cell_x).ceil() as isize).clamp(0, cols as isize - 1) as usize;
             let row_start = (((y_max - max_y) / cell_y).floor() as isize).clamp(0, rows as isize - 1) as usize;
             let row_end = (((y_max - min_y) / cell_y).ceil() as isize).clamp(0, rows as isize - 1) as usize;
-
-            for row in row_start..=row_end {
-                for col in col_start..=col_end {
-                    let x = x_min + (col as f64 + 0.5) * cell_x;
-                    let y = y_max - (row as f64 + 0.5) * cell_y;
-                    if let Some((w1, w2, w3)) = point_in_triangle_with_barycentric(
-                        x,
-                        y,
-                        (p1.x, p1.y),
-                        (p2.x, p2.y),
-                        (p3.x, p3.y),
-                        1.0e-10,
-                    ) {
-                        out_values[row * cols + col] = w1 * z1 + w2 * z2 + w3 * z3;
-                    }
-                }
+            if row_start > row_end || col_start > col_end {
+                continue;
             }
 
-            ctx.progress
-                .progress((tri_idx + 1) as f64 / triangulation.triangles.len().max(1) as f64 * 0.99);
+            let tri_id = prepared_triangles.len();
+            prepared_triangles.push(PreparedTriangle {
+                p1: (p1.x, p1.y),
+                a12,
+                b12,
+                c12,
+                a23,
+                b23,
+                c23,
+                a31,
+                b31,
+                c31,
+                ccw,
+                z1,
+                dzdx,
+                dzdy,
+                col_start,
+                col_end,
+                row_start,
+                row_end,
+            });
+
+            let tile_start = row_start / TILE_ROWS;
+            let tile_end = row_end / TILE_ROWS;
+            for tile_id in tile_start..=tile_end {
+                tile_triangles[tile_id].push(tri_id);
+            }
         }
 
-        for (idx, value) in out_values.iter().enumerate() {
-            output.data.set_f64(idx, *value);
+        if prepared_triangles.is_empty() {
+            return Err(ToolError::Execution(
+                "triangulation produced no rasterizable facets".to_string(),
+            ));
         }
 
+        let tile_results: Vec<(usize, Vec<f64>)> = (0..num_row_tiles)
+            .into_par_iter()
+            .map(|tile_id| {
+                let row_start = tile_id * TILE_ROWS;
+                let row_end_excl = ((tile_id + 1) * TILE_ROWS).min(rows);
+                let mut tile_values = vec![nodata; (row_end_excl - row_start) * cols];
+
+                for tri_id in &tile_triangles[tile_id] {
+                    let tri = &prepared_triangles[*tri_id];
+                    let r0 = tri.row_start.max(row_start);
+                    let r1 = tri.row_end.min(row_end_excl - 1);
+                    for row in r0..=r1 {
+                        let y = row_centers[row];
+                        let x0 = col_centers[tri.col_start];
+                        let mut e12 = tri.a12 * x0 + tri.b12 * y + tri.c12;
+                        let mut e23 = tri.a23 * x0 + tri.b23 * y + tri.c23;
+                        let mut e31 = tri.a31 * x0 + tri.b31 * y + tri.c31;
+                        let mut z = tri.z1 + tri.dzdx * (x0 - tri.p1.0) + tri.dzdy * (y - tri.p1.1);
+                        let e12_dx = tri.a12 * cell_x;
+                        let e23_dx = tri.a23 * cell_x;
+                        let e31_dx = tri.a31 * cell_x;
+                        let z_dx = tri.dzdx * cell_x;
+                        let row_offset = (row - row_start) * cols;
+                        for col in tri.col_start..=tri.col_end {
+                            let inside = if tri.ccw {
+                                e12 >= -1.0e-10 && e23 >= -1.0e-10 && e31 >= -1.0e-10
+                            } else {
+                                e12 <= 1.0e-10 && e23 <= 1.0e-10 && e31 <= 1.0e-10
+                            };
+                            if inside {
+                                tile_values[row_offset + col] = z;
+                            }
+                            e12 += e12_dx;
+                            e23 += e23_dx;
+                            e31 += e31_dx;
+                            z += z_dx;
+                        }
+                    }
+                }
+
+                (tile_id, tile_values)
+            })
+            .collect();
+
+        let mut out_values = vec![nodata; output.data.len()];
+        for (tile_id, tile_values) in tile_results {
+            let row_start = tile_id * TILE_ROWS;
+            let dst_start = row_start * cols;
+            out_values[dst_start..dst_start + tile_values.len()].copy_from_slice(&tile_values);
+        }
+        let raster_elapsed = raster_start.elapsed();
+        ctx.progress.progress(0.99);
+
+        output.data = wbraster::raster::RasterData::F64(out_values);
+
+        let write_start = Instant::now();
         let locator = store_or_write_output(output, output_path)?;
+        let write_elapsed = write_start.elapsed();
+        let total_elapsed = run_start.elapsed();
+        
+        // Only emit per-tile timing in single-file mode (not batch mode)
+        if neighbor_paths.is_empty() {
+            let thin_cell_size_label = if triangulation_thin_cell_size > 0.0 {
+                format!("{:.3}", triangulation_thin_cell_size)
+            } else {
+                "off".to_string()
+            };
+            ctx.progress.info(&format!(
+                "timings[s]: read={:.3}, sample={:.3}, triangulate={:.3}, rasterize={:.3}, write={:.3}, total={:.3}; backend={}, source_samples={}, triangulation_samples={}, triangles={}, thin_cell_size={}, thin_method={}",
+                read_elapsed.as_secs_f64(),
+                sample_elapsed.as_secs_f64(),
+                tri_elapsed.as_secs_f64(),
+                raster_elapsed.as_secs_f64(),
+                write_elapsed.as_secs_f64(),
+                total_elapsed.as_secs_f64(),
+                triangulation_backend_name(selected_backend),
+                source_sample_count,
+                delaunay_points.len(),
+                num_triangles,
+                thin_cell_size_label,
+                triangulation_thin_method_name(triangulation_thin_method)
+            ));
+        }
         ctx.progress.progress(1.0);
         Ok(build_raster_result(locator))
     }
@@ -3972,66 +4443,79 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
                     name: "input",
                     description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "resolution",
                     description: "Output cell size.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "num_points",
                     description: "Minimum number of neighbours used for local interpolation.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "search_radius",
                     description: "Neighbourhood radius; <=0 uses only k-nearest mode.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "func_type",
                     description: "RBF basis type (thinplatespline, polyharmonic, gaussian, multiquadric, inversemultiquadric).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "poly_order",
                     description: "Polynomial trend order used for local correction (none, constant, quadratic).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "weight",
                     description: "Basis shape parameter/exponent depending on func_type.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "interpolation_parameter",
                     description: "Point attribute to interpolate (elevation, intensity, class, return_number, number_of_returns, scan_angle, time, rgb, user_data).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "returns_included",
                     description: "Return filtering mode: all, first, or last.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "excluded_classes",
                     description: "Classes to exclude (array or comma-delimited string).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "min_elev",
                     description: "Minimum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "max_elev",
                     description: "Maximum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "output",
                     description: "Optional output raster path.",
                     required: false,
+                        ..Default::default()
                 },
             ],
         }
@@ -4126,8 +4610,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
         let neighbor_paths = parse_batch_neighbor_inputs(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let basis = RbfBasisType::parse(args.get("func_type").and_then(Value::as_str));
         let poly_order = RbfPolyOrder::parse(
             args.get("poly_order")
@@ -4139,7 +4622,11 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         ctx.progress.info("reading input lidar");
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
-        require_lidar_crs(cloud.crs.as_ref(), "lidar_radial_basis_function_interpolation")?;
+        if cloud.crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
 
         let target_samples = collect_lidar_samples(
             &cloud.points,
@@ -4270,41 +4757,49 @@ impl Tool for LidarSibsonInterpolationTool {
                     name: "input",
                     description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "resolution",
                     description: "Output cell size.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "interpolation_parameter",
                     description: "Point attribute to interpolate (elevation, intensity, class, return_number, number_of_returns, scan_angle, time, rgb, user_data).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "returns_included",
                     description: "Return filtering mode: all, first, or last.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "excluded_classes",
                     description: "Classes to exclude (array or comma-delimited string).",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "min_elev",
                     description: "Minimum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "max_elev",
                     description: "Maximum elevation threshold used for point inclusion filtering.",
                     required: false,
+                        ..Default::default()
                 },
                 ToolParamSpec {
                     name: "output",
                     description: "Optional output raster path.",
                     required: false,
+                        ..Default::default()
                 },
             ],
         }
@@ -4384,14 +4879,17 @@ impl Tool for LidarSibsonInterpolationTool {
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
         let neighbor_paths = parse_batch_neighbor_inputs(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
-        require_lidar_crs(cloud.crs.as_ref(), "lidar_sibson_interpolation")?;
+        if cloud.crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
 
         let target_samples = collect_lidar_samples(
             &cloud.points,
@@ -4553,14 +5051,14 @@ impl Tool for LidarBlockMaximumTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false },
-                ToolParamSpec { name: "interpolation_parameter", description: "Point attribute (elevation/intensity/class/return_number/number_of_returns/scan_angle/time/rgb/user_data).", required: false },
-                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "interpolation_parameter", description: "Point attribute (elevation/intensity/class/return_number/number_of_returns/scan_angle/time/rgb/user_data).", required: false, ..Default::default() },
+                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -4594,8 +5092,7 @@ impl Tool for LidarBlockMaximumTool {
         let parameter = args.get("interpolation_parameter").or_else(|| args.get("parameter")).and_then(Value::as_str).unwrap_or("elevation").to_lowercase();
         let returns_mode = parse_returns_mode(args);
         let include_classes = parse_excluded_classes(args)?;
-        let min_z = parse_f64_alias(args, &["min_elev", "minz"], f64::NEG_INFINITY);
-        let max_z = parse_f64_alias(args, &["max_elev", "maxz"], f64::INFINITY);
+        let (min_z, max_z) = parse_elevation_bounds(args);
         let output_path = parse_optional_output_path(args, "output")?;
 
         if let Some(input_path) = input_path {
@@ -4650,14 +5147,14 @@ impl Tool for LidarBlockMinimumTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false },
-                ToolParamSpec { name: "interpolation_parameter", description: "Point attribute (elevation/intensity/class/return_number/number_of_returns/scan_angle/time/rgb/user_data).", required: false },
-                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "interpolation_parameter", description: "Point attribute (elevation/intensity/class/return_number/number_of_returns/scan_angle/time/rgb/user_data).", required: false, ..Default::default() },
+                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -4747,14 +5244,14 @@ impl Tool for LidarPointDensityTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for point counting.", required: false },
-                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for point counting.", required: false, ..Default::default() },
+                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -4832,13 +5329,13 @@ impl Tool for LidarDigitalSurfaceModelTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for selecting top-surface candidates.", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum triangle edge length to suppress long-edge facets.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for selecting top-surface candidates.", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum triangle edge length to suppress long-edge facets.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -4913,16 +5410,16 @@ impl Tool for LidarHillshadeTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Compatibility parameter reserved for legacy hillshade neighborhood control.", required: false },
-                ToolParamSpec { name: "azimuth", description: "Illumination azimuth in degrees.", required: false },
-                ToolParamSpec { name: "altitude", description: "Illumination altitude in degrees.", required: false },
-                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output cell size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Compatibility parameter reserved for legacy hillshade neighborhood control.", required: false, ..Default::default() },
+                ToolParamSpec { name: "azimuth", description: "Illumination azimuth in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "altitude", description: "Illumination altitude in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "returns_included", description: "Return filtering mode: all, first, or last.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum elevation threshold used for point inclusion filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -4955,7 +5452,11 @@ impl Tool for LidarHillshadeTool {
         let run_single = |input_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
             let cloud = PointCloud::read(input_path)
                 .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path.to_string_lossy())))?;
-            require_lidar_crs(cloud.crs.as_ref(), "lidar_hillshade")?;
+            if cloud.crs.is_none() {
+                ctx.progress.info(
+                    "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+                );
+            }
 
             let samples = collect_lidar_samples(&cloud.points, "elevation", returns_mode, &include_classes, min_z, max_z)?;
             let mut output = build_lidar_output(&samples, resolution, lidar_crs_to_raster_crs(cloud.crs.as_ref()), DataType::F64)?;
@@ -5018,9 +5519,9 @@ impl Tool for FilterLidarClassesTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Classes to exclude (array or comma-delimited string).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5080,11 +5581,11 @@ impl Tool for LidarShiftTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "x_shift", description: "Shift to add to x coordinates.", required: false },
-                ToolParamSpec { name: "y_shift", description: "Shift to add to y coordinates.", required: false },
-                ToolParamSpec { name: "z_shift", description: "Shift to add to z coordinates.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "x_shift", description: "Shift to add to x coordinates.", required: false, ..Default::default() },
+                ToolParamSpec { name: "y_shift", description: "Shift to add to y coordinates.", required: false, ..Default::default() },
+                ToolParamSpec { name: "z_shift", description: "Shift to add to z coordinates.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5156,9 +5657,9 @@ impl Tool for RemoveDuplicatesTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "include_z", description: "If true, duplicate detection includes z; otherwise uses x/y only.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "include_z", description: "If true, duplicate detection includes z; otherwise uses x/y only.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5230,9 +5731,9 @@ impl Tool for FilterLidarScanAnglesTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "threshold", description: "Maximum absolute scan angle (integer LAS units; 1 unit = 0.006°). Required.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "threshold", description: "Maximum absolute scan angle (integer LAS units; 1 unit = 0.006°). Required.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5297,8 +5798,8 @@ impl Tool for FilterLidarNoiseTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5356,12 +5857,12 @@ impl Tool for LidarThinTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Grid cell size for thinning (default 1.0).", required: false },
-                ToolParamSpec { name: "method", description: "Point selection method per cell: first, last, lowest, highest, nearest (default 'first').", required: false },
-                ToolParamSpec { name: "save_filtered", description: "If true, also writes filtered-out points and returns their locator in outputs.filtered_path.", required: false },
-                ToolParamSpec { name: "filtered_output", description: "Optional output path for filtered-out points (single-input mode).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Grid cell size for thinning (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "method", description: "Point selection method per cell: first, last, lowest, highest, nearest (default 'first').", required: false, ..Default::default() },
+                ToolParamSpec { name: "save_filtered", description: "If true, also writes filtered-out points and returns their locator in outputs.filtered_path.", required: false, ..Default::default() },
+                ToolParamSpec { name: "filtered_output", description: "Optional output path for filtered-out points (single-input mode).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5562,13 +6063,13 @@ impl Tool for LidarElevationSliceTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "minz", description: "Lower bound of the elevation slice (default -infinity).", required: false },
-                ToolParamSpec { name: "maxz", description: "Upper bound of the elevation slice (default +infinity).", required: false },
-                ToolParamSpec { name: "classify", description: "If true, reclassify points instead of filtering them (default false).", required: false },
-                ToolParamSpec { name: "in_class_value", description: "Classification assigned to points inside the slice when classify=true (default 2).", required: false },
-                ToolParamSpec { name: "out_class_value", description: "Classification assigned to points outside the slice when classify=true (default 1).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "minz", description: "Lower bound of the elevation slice (default -infinity).", required: false, ..Default::default() },
+                ToolParamSpec { name: "maxz", description: "Upper bound of the elevation slice (default +infinity).", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify", description: "If true, reclassify points instead of filtering them (default false).", required: false, ..Default::default() },
+                ToolParamSpec { name: "in_class_value", description: "Classification assigned to points inside the slice when classify=true (default 2).", required: false, ..Default::default() },
+                ToolParamSpec { name: "out_class_value", description: "Classification assigned to points outside the slice when classify=true (default 1).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5653,8 +6154,8 @@ impl Tool for LidarJoinTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "inputs", description: "Array of input LiDAR paths or typed LiDAR objects.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "inputs", description: "Array of input LiDAR paths or typed LiDAR objects.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5700,12 +6201,12 @@ impl Tool for LidarThinHighDensityTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "density", description: "Target point density threshold in points per square unit.", required: true },
-                ToolParamSpec { name: "resolution", description: "Grid resolution used for x/y and z binning (default 1.0).", required: false },
-                ToolParamSpec { name: "save_filtered", description: "If true, writes filtered-out points and returns outputs.filtered_path.", required: false },
-                ToolParamSpec { name: "filtered_output", description: "Optional output path for filtered-out points in single-input mode.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "density", description: "Target point density threshold in points per square unit.", required: true, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Grid resolution used for x/y and z binning (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "save_filtered", description: "If true, writes filtered-out points and returns outputs.filtered_path.", required: false, ..Default::default() },
+                ToolParamSpec { name: "filtered_output", description: "Optional output path for filtered-out points in single-input mode.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -5909,14 +6410,14 @@ impl Tool for LidarTileTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "tile_width", description: "Tile width in x units (default 1000).", required: false },
-                ToolParamSpec { name: "tile_height", description: "Tile height in y units (default 1000).", required: false },
-                ToolParamSpec { name: "origin_x", description: "Grid origin x coordinate (default 0).", required: false },
-                ToolParamSpec { name: "origin_y", description: "Grid origin y coordinate (default 0).", required: false },
-                ToolParamSpec { name: "min_points_in_tile", description: "Minimum points required for writing a tile (default 2).", required: false },
-                ToolParamSpec { name: "output_laz_format", description: "If true, writes .laz outputs; otherwise .las (default true).", required: false },
-                ToolParamSpec { name: "output_directory", description: "Optional directory to write tile outputs; defaults to <input_dir>/<input_stem>/.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "tile_width", description: "Tile width in x units (default 1000).", required: false, ..Default::default() },
+                ToolParamSpec { name: "tile_height", description: "Tile height in y units (default 1000).", required: false, ..Default::default() },
+                ToolParamSpec { name: "origin_x", description: "Grid origin x coordinate (default 0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "origin_y", description: "Grid origin y coordinate (default 0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_points_in_tile", description: "Minimum points required for writing a tile (default 2).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_laz_format", description: "If true, writes .laz outputs; otherwise .las (default true).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_directory", description: "Optional directory to write tile outputs; defaults to <input_dir>/<input_stem>/.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6086,9 +6587,9 @@ impl Tool for SortLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "sort_criteria", description: "Sort criteria expression, e.g. 'x 100, y 100, z 10, scan_angle'.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "sort_criteria", description: "Sort criteria expression, e.g. 'x 100, y 100, z 10, scan_angle'.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6182,10 +6683,10 @@ impl Tool for FilterLidarByPercentileTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "percentile", description: "Percentile in [0, 100] (0=lowest, 100=highest).", required: false },
-                ToolParamSpec { name: "block_size", description: "Grid block size for local percentile selection (default 1.0).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "percentile", description: "Percentile in [0, 100] (0=lowest, 100=highest).", required: false, ..Default::default() },
+                ToolParamSpec { name: "block_size", description: "Grid block size for local percentile selection (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6286,11 +6787,11 @@ impl Tool for SplitLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "split_criterion", description: "Grouping criterion: num_pts, x, y, z, intensity, class, user_data, point_source_id, scan_angle, or time.", required: true },
-                ToolParamSpec { name: "interval", description: "Bin size for numeric criteria; for num_pts this is points-per-output-file.", required: false },
-                ToolParamSpec { name: "min_pts", description: "Minimum points needed before writing a split output file (default 5).", required: false },
-                ToolParamSpec { name: "output_directory", description: "Optional directory for split outputs.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "split_criterion", description: "Grouping criterion: num_pts, x, y, z, intensity, class, user_data, point_source_id, scan_angle, or time.", required: true, ..Default::default() },
+                ToolParamSpec { name: "interval", description: "Bin size for numeric criteria; for num_pts this is points-per-output-file.", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_pts", description: "Minimum points needed before writing a split output file (default 5).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_directory", description: "Optional directory for split outputs.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6448,12 +6949,12 @@ impl Tool for LidarRemoveOutliersTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighborhood radius for local residual calculation (default 2.0).", required: false },
-                ToolParamSpec { name: "elev_diff", description: "Absolute elevation residual threshold for outlier detection (default 50.0).", required: false },
-                ToolParamSpec { name: "use_median", description: "Use median instead of mean neighborhood elevation.", required: false },
-                ToolParamSpec { name: "classify", description: "If true, classify outliers as class 7/18 instead of removing them.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighborhood radius for local residual calculation (default 2.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "elev_diff", description: "Absolute elevation residual threshold for outlier detection (default 50.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "use_median", description: "Use median instead of mean neighborhood elevation.", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify", description: "If true, classify outliers as class 7/18 instead of removing them.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6589,10 +7090,10 @@ impl Tool for NormalizeLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "dtm", description: "Input DTM raster path or typed raster object.", required: true },
-                ToolParamSpec { name: "no_negatives", description: "Clamp negative normalized heights to zero.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "dtm", description: "Input DTM raster path or typed raster object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "no_negatives", description: "Clamp negative normalized heights to zero.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6655,8 +7156,8 @@ impl Tool for HeightAboveGroundTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6724,14 +7225,14 @@ impl Tool for LidarGroundPointFilterTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighborhood search radius (default 2.0).", required: false },
-                ToolParamSpec { name: "min_neighbours", description: "Minimum neighbors target (default 0).", required: false },
-                ToolParamSpec { name: "slope_threshold", description: "Slope threshold in degrees (default 45.0, max 88).", required: false },
-                ToolParamSpec { name: "height_threshold", description: "Minimum vertical separation to flag off-terrain (default 1.0).", required: false },
-                ToolParamSpec { name: "classify", description: "If true classify points (ground=2, off-terrain=1); else filter off-terrain points.", required: false },
-                ToolParamSpec { name: "height_above_ground", description: "If true, output z values as local height above nearest lower neighbor.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighborhood search radius (default 2.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_neighbours", description: "Minimum neighbors target (default 0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "slope_threshold", description: "Slope threshold in degrees (default 45.0, max 88).", required: false, ..Default::default() },
+                ToolParamSpec { name: "height_threshold", description: "Minimum vertical separation to flag off-terrain (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify", description: "If true classify points (ground=2, off-terrain=1); else filter off-terrain points.", required: false, ..Default::default() },
+                ToolParamSpec { name: "height_above_ground", description: "If true, output z values as local height above nearest lower neighbor.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false, ..Default::default() },
             ],
         }
     }
@@ -6898,9 +7399,9 @@ impl Tool for FilterLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "statement", description: "Boolean expression, e.g. '!is_noise && class == 2'.", required: true },
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false },
+                ToolParamSpec { name: "statement", description: "Boolean expression, e.g. '!is_noise && class == 2'.", required: true, ..Default::default() },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7003,9 +7504,9 @@ impl Tool for ModifyLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "statement", description: "One or more assignment expressions separated by semicolons, e.g. 'z = z + 1; class = if(z > 5, 2, class)'.", required: true },
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false },
+                ToolParamSpec { name: "statement", description: "One or more assignment expressions separated by semicolons, e.g. 'z = z + 1; class = if(z > 5, 2, class)'.", required: true, ..Default::default() },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path for single-input mode.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7253,15 +7754,15 @@ impl Tool for FilterLidarByReferenceSurfaceTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "ref_surface", description: "Reference raster path or typed raster object.", required: true },
-                ToolParamSpec { name: "query", description: "Query type: within, <, <=, >, >= (default within).", required: false },
-                ToolParamSpec { name: "threshold", description: "Absolute z-distance threshold used by query=within.", required: false },
-                ToolParamSpec { name: "classify", description: "If true classify points; otherwise filter and keep only matches.", required: false },
-                ToolParamSpec { name: "true_class_value", description: "Class value assigned to matching points in classify mode.", required: false },
-                ToolParamSpec { name: "false_class_value", description: "Class value assigned to non-matching points in classify mode.", required: false },
-                ToolParamSpec { name: "preserve_classes", description: "If true preserve non-matching classes in classify mode.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "ref_surface", description: "Reference raster path or typed raster object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "query", description: "Query type: within, <, <=, >, >= (default within).", required: false, ..Default::default() },
+                ToolParamSpec { name: "threshold", description: "Absolute z-distance threshold used by query=within.", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify", description: "If true classify points; otherwise filter and keep only matches.", required: false, ..Default::default() },
+                ToolParamSpec { name: "true_class_value", description: "Class value assigned to matching points in classify mode.", required: false, ..Default::default() },
+                ToolParamSpec { name: "false_class_value", description: "Class value assigned to non-matching points in classify mode.", required: false, ..Default::default() },
+                ToolParamSpec { name: "preserve_classes", description: "If true preserve non-matching classes in classify mode.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7367,15 +7868,15 @@ impl Tool for ClassifyLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighborhood radius (default 2.5).", required: false },
-                ToolParamSpec { name: "grd_threshold", description: "Height above local minimum considered ground (default 0.1).", required: false },
-                ToolParamSpec { name: "oto_threshold", description: "Height above local minimum considered off-terrain object (default 1.0).", required: false },
-                ToolParamSpec { name: "linearity_threshold", description: "Linearity threshold used in final unclassified screening (default 0.5).", required: false },
-                ToolParamSpec { name: "planarity_threshold", description: "Planarity threshold used in segmentation and refinement (default 0.85).", required: false },
-                ToolParamSpec { name: "num_iter", description: "Number of local RANSAC iterations for planarity/linearity estimates (default 30).", required: false },
-                ToolParamSpec { name: "facade_threshold", description: "Neighbor distance used when labeling building facades (default 0.5).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighborhood radius (default 2.5).", required: false, ..Default::default() },
+                ToolParamSpec { name: "grd_threshold", description: "Height above local minimum considered ground (default 0.1).", required: false, ..Default::default() },
+                ToolParamSpec { name: "oto_threshold", description: "Height above local minimum considered off-terrain object (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "linearity_threshold", description: "Linearity threshold used in final unclassified screening (default 0.5).", required: false, ..Default::default() },
+                ToolParamSpec { name: "planarity_threshold", description: "Planarity threshold used in segmentation and refinement (default 0.85).", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_iter", description: "Number of local RANSAC iterations for planarity/linearity estimates (default 30).", required: false, ..Default::default() },
+                ToolParamSpec { name: "facade_threshold", description: "Neighbor distance used when labeling building facades (default 0.5).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7809,12 +8310,12 @@ impl Tool for LidarClassifySubsetTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "base", description: "Base LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "subset", description: "Subset LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "subset_class_value", description: "Classification value assigned to matched subset points (0-18).", required: true },
-                ToolParamSpec { name: "nonsubset_class_value", description: "Optional class for non-matching points (0-18). Use 255 to preserve existing classes.", required: false },
-                ToolParamSpec { name: "tolerance", description: "3D nearest-neighbour matching tolerance in map units.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "base", description: "Base LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "subset", description: "Subset LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "subset_class_value", description: "Classification value assigned to matched subset points (0-18).", required: true, ..Default::default() },
+                ToolParamSpec { name: "nonsubset_class_value", description: "Optional class for non-matching points (0-18). Use 255 to preserve existing classes.", required: false, ..Default::default() },
+                ToolParamSpec { name: "tolerance", description: "3D nearest-neighbour matching tolerance in map units.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7900,9 +8401,9 @@ impl Tool for ClipLidarToPolygonTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -7950,9 +8451,9 @@ impl Tool for ErasePolygonFromLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -8000,11 +8501,11 @@ impl Tool for ClassifyOverlapPointsTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "resolution", description: "Grid cell size used for overlap analysis.", required: false },
-                ToolParamSpec { name: "overlap_criterion", description: "max scan angle, not min point source id, not min time, or multiple point source IDs.", required: false },
-                ToolParamSpec { name: "filter", description: "If true, remove overlap points; otherwise classify overlap points as class 12.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Grid cell size used for overlap analysis.", required: false, ..Default::default() },
+                ToolParamSpec { name: "overlap_criterion", description: "max scan angle, not min point source id, not min time, or multiple point source IDs.", required: false, ..Default::default() },
+                ToolParamSpec { name: "filter", description: "If true, remove overlap points; otherwise classify overlap points as class 12.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -8154,18 +8655,18 @@ impl Tool for LidarSegmentationTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for region growing.", required: false },
-                ToolParamSpec { name: "num_iterations", description: "Compatibility parameter for legacy RANSAC iterations.", required: false },
-                ToolParamSpec { name: "num_samples", description: "Compatibility parameter for legacy model sampling.", required: false },
-                ToolParamSpec { name: "inlier_threshold", description: "Compatibility parameter for legacy planar inlier threshold.", required: false },
-                ToolParamSpec { name: "acceptable_model_size", description: "Compatibility parameter for legacy planar model size.", required: false },
-                ToolParamSpec { name: "max_planar_slope", description: "Compatibility parameter for legacy planar slope filtering.", required: false },
-                ToolParamSpec { name: "norm_diff_threshold", description: "Compatibility parameter for normal-angle thresholding.", required: false },
-                ToolParamSpec { name: "max_z_diff", description: "Maximum Z difference allowed while growing a segment.", required: false },
-                ToolParamSpec { name: "classes", description: "If true, do not cross class boundaries while growing segments.", required: false },
-                ToolParamSpec { name: "ground", description: "If true, assigns class=2 to the largest segment and class=1 to other segmented points.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for region growing.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_iterations", description: "Compatibility parameter for legacy RANSAC iterations.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_samples", description: "Compatibility parameter for legacy model sampling.", required: false, ..Default::default() },
+                ToolParamSpec { name: "inlier_threshold", description: "Compatibility parameter for legacy planar inlier threshold.", required: false, ..Default::default() },
+                ToolParamSpec { name: "acceptable_model_size", description: "Compatibility parameter for legacy planar model size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_planar_slope", description: "Compatibility parameter for legacy planar slope filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "norm_diff_threshold", description: "Compatibility parameter for normal-angle thresholding.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_z_diff", description: "Maximum Z difference allowed while growing a segment.", required: false, ..Default::default() },
+                ToolParamSpec { name: "classes", description: "If true, do not cross class boundaries while growing segments.", required: false, ..Default::default() },
+                ToolParamSpec { name: "ground", description: "If true, assigns class=2 to the largest segment and class=1 to other segmented points.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -8304,33 +8805,33 @@ impl Tool for IndividualTreeSegmentationTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "only_use_veg", description: "If true, process only vegetation classes (default true).", required: false },
-                ToolParamSpec { name: "veg_classes", description: "Vegetation classes as comma-delimited text or integer array (default '3,4,5').", required: false },
-                ToolParamSpec { name: "min_height", description: "Minimum point height for segmentation (default 2.0).", required: false },
-                ToolParamSpec { name: "max_height", description: "Optional maximum point height.", required: false },
-                ToolParamSpec { name: "bandwidth_min", description: "Minimum horizontal bandwidth (default 1.0).", required: false },
-                ToolParamSpec { name: "bandwidth_max", description: "Maximum horizontal bandwidth (default 6.0).", required: false },
-                ToolParamSpec { name: "adaptive_bandwidth", description: "Estimate per-seed horizontal bandwidth from local crown geometry (default true).", required: false },
-                ToolParamSpec { name: "adaptive_neighbors", description: "Neighbour count used for adaptive local density scale (default 24).", required: false },
-                ToolParamSpec { name: "adaptive_sector_count", description: "Number of angular sectors for local crown-radius estimation (default 8).", required: false },
-                ToolParamSpec { name: "grid_acceleration", description: "Use MeanShift++-style grid approximation for faster mode updates (default false).", required: false },
-                ToolParamSpec { name: "grid_cell_size", description: "Grid cell size for accelerated mode updates (default 0.5).", required: false },
-                ToolParamSpec { name: "grid_refine_exact", description: "Run short exact-neighbour refinement after grid acceleration (default false).", required: false },
-                ToolParamSpec { name: "grid_refine_iterations", description: "Exact refinement iteration cap after grid mode updates (default 2).", required: false },
-                ToolParamSpec { name: "tile_size", description: "Optional tile size for seed scheduling; <=0 disables tiling (default 0.0).", required: false },
-                ToolParamSpec { name: "tile_overlap", description: "Tile overlap width for tiled seed scheduling (default 0.0).", required: false },
-                ToolParamSpec { name: "vertical_bandwidth", description: "Vertical kernel bandwidth (default 5.0).", required: false },
-                ToolParamSpec { name: "max_iterations", description: "Maximum mean-shift iterations per seed (default 30).", required: false },
-                ToolParamSpec { name: "convergence_tol", description: "Convergence tolerance for shift magnitude (default 0.05).", required: false },
-                ToolParamSpec { name: "min_cluster_points", description: "Minimum points per retained tree cluster (default 50).", required: false },
-                ToolParamSpec { name: "mode_merge_dist", description: "Distance threshold for merging converged modes (default 0.8).", required: false },
-                ToolParamSpec { name: "threads", description: "Thread count override (0 uses default Rayon pool).", required: false },
-                ToolParamSpec { name: "simd", description: "Enable SIMD-assisted arithmetic in weighting loops (default true).", required: false },
-                ToolParamSpec { name: "output_id_mode", description: "Output segment id encoding: rgb/user_data/point_source_id or combinations like rgb+user_data.", required: false },
-                ToolParamSpec { name: "output_sidecar_csv", description: "If true, write point_index,segment_id CSV beside lidar output.", required: false },
-                ToolParamSpec { name: "seed", description: "Deterministic seed for colour mapping (default 1).", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "only_use_veg", description: "If true, process only vegetation classes (default true).", required: false, ..Default::default() },
+                ToolParamSpec { name: "veg_classes", description: "Vegetation classes as comma-delimited text or integer array (default '3,4,5').", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_height", description: "Minimum point height for segmentation (default 2.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_height", description: "Optional maximum point height.", required: false, ..Default::default() },
+                ToolParamSpec { name: "bandwidth_min", description: "Minimum horizontal bandwidth (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "bandwidth_max", description: "Maximum horizontal bandwidth (default 6.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "adaptive_bandwidth", description: "Estimate per-seed horizontal bandwidth from local crown geometry (default true).", required: false, ..Default::default() },
+                ToolParamSpec { name: "adaptive_neighbors", description: "Neighbour count used for adaptive local density scale (default 24).", required: false, ..Default::default() },
+                ToolParamSpec { name: "adaptive_sector_count", description: "Number of angular sectors for local crown-radius estimation (default 8).", required: false, ..Default::default() },
+                ToolParamSpec { name: "grid_acceleration", description: "Use MeanShift++-style grid approximation for faster mode updates (default false).", required: false, ..Default::default() },
+                ToolParamSpec { name: "grid_cell_size", description: "Grid cell size for accelerated mode updates (default 0.5).", required: false, ..Default::default() },
+                ToolParamSpec { name: "grid_refine_exact", description: "Run short exact-neighbour refinement after grid acceleration (default false).", required: false, ..Default::default() },
+                ToolParamSpec { name: "grid_refine_iterations", description: "Exact refinement iteration cap after grid mode updates (default 2).", required: false, ..Default::default() },
+                ToolParamSpec { name: "tile_size", description: "Optional tile size for seed scheduling; <=0 disables tiling (default 0.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "tile_overlap", description: "Tile overlap width for tiled seed scheduling (default 0.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "vertical_bandwidth", description: "Vertical kernel bandwidth (default 5.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_iterations", description: "Maximum mean-shift iterations per seed (default 30).", required: false, ..Default::default() },
+                ToolParamSpec { name: "convergence_tol", description: "Convergence tolerance for shift magnitude (default 0.05).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_cluster_points", description: "Minimum points per retained tree cluster (default 50).", required: false, ..Default::default() },
+                ToolParamSpec { name: "mode_merge_dist", description: "Distance threshold for merging converged modes (default 0.8).", required: false, ..Default::default() },
+                ToolParamSpec { name: "threads", description: "Thread count override (0 uses default Rayon pool).", required: false, ..Default::default() },
+                ToolParamSpec { name: "simd", description: "Enable SIMD-assisted arithmetic in weighting loops (default true).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_id_mode", description: "Output segment id encoding: rgb/user_data/point_source_id or combinations like rgb+user_data.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_sidecar_csv", description: "If true, write point_index,segment_id CSV beside lidar output.", required: false, ..Default::default() },
+                ToolParamSpec { name: "seed", description: "Deterministic seed for colour mapping (default 1).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -8823,13 +9324,13 @@ impl Tool for IndividualTreeDetectionTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "min_search_radius", description: "Minimum search radius in map units (default 1.0).", required: false },
-                ToolParamSpec { name: "min_height", description: "Minimum height to consider points (default 0.0).", required: false },
-                ToolParamSpec { name: "max_search_radius", description: "Maximum search radius; if not set uses min_search_radius.", required: false },
-                ToolParamSpec { name: "max_height", description: "Maximum height; if not set uses min_height.", required: false },
-                ToolParamSpec { name: "only_use_veg", description: "If true, process only vegetation classes (default true).", required: false },
-                ToolParamSpec { name: "output", description: "Output vector shapefile path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "min_search_radius", description: "Minimum search radius in map units (default 1.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_height", description: "Minimum height to consider points (default 0.0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_search_radius", description: "Maximum search radius; if not set uses min_search_radius.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_height", description: "Maximum height; if not set uses min_height.", required: false, ..Default::default() },
+                ToolParamSpec { name: "only_use_veg", description: "If true, process only vegetation classes (default true).", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Output vector shapefile path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -8981,12 +9482,12 @@ impl Tool for LidarSegmentationBasedFilterTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for connected-component growth.", required: false },
-                ToolParamSpec { name: "norm_diff_threshold", description: "Compatibility parameter for legacy normal-angle checks.", required: false },
-                ToolParamSpec { name: "max_z_diff", description: "Maximum elevation difference for connected growth.", required: false },
-                ToolParamSpec { name: "classify_points", description: "If true, classify points instead of filtering.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for connected-component growth.", required: false, ..Default::default() },
+                ToolParamSpec { name: "norm_diff_threshold", description: "Compatibility parameter for legacy normal-angle checks.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_z_diff", description: "Maximum elevation difference for connected growth.", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify_points", description: "If true, classify points instead of filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9100,9 +9601,9 @@ impl Tool for LidarColourizeTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "image", description: "Input image raster path or typed raster object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "image", description: "Input image raster path or typed raster object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9162,12 +9663,12 @@ impl Tool for ColourizeBasedOnClassTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "intensity_blending_amount", description: "Percent blend [0,100] between class colour and intensity.", required: false },
-                ToolParamSpec { name: "clr_str", description: "Optional class-colour overrides, e.g. '2:(184,167,108);5:#9ab86c'.", required: false },
-                ToolParamSpec { name: "use_unique_clrs_for_buildings", description: "If true, assigns unique colours to connected building clusters.", required: false },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius used for building-cluster colouring.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "intensity_blending_amount", description: "Percent blend [0,100] between class colour and intensity.", required: false, ..Default::default() },
+                ToolParamSpec { name: "clr_str", description: "Optional class-colour overrides, e.g. '2:(184,167,108);5:#9ab86c'.", required: false, ..Default::default() },
+                ToolParamSpec { name: "use_unique_clrs_for_buildings", description: "If true, assigns unique colours to connected building clusters.", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius used for building-cluster colouring.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9309,13 +9810,13 @@ impl Tool for ColourizeBasedOnPointReturnsTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "intensity_blending_amount", description: "Percent blend [0,100] between return colour and intensity.", required: false },
-                ToolParamSpec { name: "only_ret_colour", description: "Colour for only-return points.", required: false },
-                ToolParamSpec { name: "first_ret_colour", description: "Colour for first-return points in multi-return pulses.", required: false },
-                ToolParamSpec { name: "intermediate_ret_colour", description: "Colour for intermediate-return points.", required: false },
-                ToolParamSpec { name: "last_ret_colour", description: "Colour for last-return points in multi-return pulses.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "intensity_blending_amount", description: "Percent blend [0,100] between return colour and intensity.", required: false, ..Default::default() },
+                ToolParamSpec { name: "only_ret_colour", description: "Colour for only-return points.", required: false, ..Default::default() },
+                ToolParamSpec { name: "first_ret_colour", description: "Colour for first-return points in multi-return pulses.", required: false, ..Default::default() },
+                ToolParamSpec { name: "intermediate_ret_colour", description: "Colour for intermediate-return points.", required: false, ..Default::default() },
+                ToolParamSpec { name: "last_ret_colour", description: "Colour for last-return points in multi-return pulses.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9412,9 +9913,9 @@ impl Tool for ClassifyBuildingsInLidarTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "buildings", description: "Input building-footprint polygon vector path or typed vector object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "buildings", description: "Input building-footprint polygon vector path or typed vector object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9462,10 +9963,10 @@ impl Tool for AsciiToLasTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "inputs", description: "Array of input ASCII file paths.", required: true },
-                ToolParamSpec { name: "pattern", description: "Field pattern, e.g. 'x,y,z,i,c,rn,nr,sa'.", required: true },
-                ToolParamSpec { name: "epsg_code", description: "EPSG code for output LAS CRS metadata.", required: false },
-                ToolParamSpec { name: "output_directory", description: "Optional output directory for generated LAS files.", required: false },
+                ToolParamSpec { name: "inputs", description: "Array of input ASCII file paths.", required: true, ..Default::default() },
+                ToolParamSpec { name: "pattern", description: "Field pattern, e.g. 'x,y,z,i,c,rn,nr,sa'.", required: true, ..Default::default() },
+                ToolParamSpec { name: "epsg_code", description: "EPSG code for output LAS CRS metadata.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_directory", description: "Optional output directory for generated LAS files.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9616,8 +10117,8 @@ impl Tool for LasToAsciiTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output CSV path (single-input mode only).", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output CSV path (single-input mode only).", required: false, ..Default::default() },
             ],
         }
     }
@@ -9683,9 +10184,9 @@ impl Tool for SelectTilesByPolygonTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input_directory", description: "Input directory containing LiDAR tiles.", required: true },
-                ToolParamSpec { name: "output_directory", description: "Output directory for selected LiDAR tiles.", required: true },
-                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true },
+                ToolParamSpec { name: "input_directory", description: "Input directory containing LiDAR tiles.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output_directory", description: "Output directory for selected LiDAR tiles.", required: true, ..Default::default() },
+                ToolParamSpec { name: "polygons", description: "Input polygon vector path or typed vector object.", required: true, ..Default::default() },
             ],
         }
     }
@@ -9821,11 +10322,11 @@ impl Tool for LidarInfoTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output report path (.html/.txt).", required: false },
-                ToolParamSpec { name: "show_point_density", description: "If true includes approximate bbox point density metrics.", required: false },
-                ToolParamSpec { name: "show_vlrs", description: "Compatibility flag; reserved for future detailed metadata output.", required: false },
-                ToolParamSpec { name: "show_geokeys", description: "Compatibility flag; reserved for future detailed CRS-key output.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output report path (.html/.txt).", required: false, ..Default::default() },
+                ToolParamSpec { name: "show_point_density", description: "If true includes approximate bbox point density metrics.", required: false, ..Default::default() },
+                ToolParamSpec { name: "show_vlrs", description: "Compatibility flag; reserved for future detailed metadata output.", required: false, ..Default::default() },
+                ToolParamSpec { name: "show_geokeys", description: "Compatibility flag; reserved for future detailed CRS-key output.", required: false, ..Default::default() },
             ],
         }
     }
@@ -9940,10 +10441,10 @@ impl Tool for LidarHistogramTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output HTML path for histogram report.", required: false },
-                ToolParamSpec { name: "parameter", description: "One of elevation, intensity, scan angle, class, or time.", required: false },
-                ToolParamSpec { name: "clip_percent", description: "Percentile clip amount in [0,50] for lower/upper tails.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output HTML path for histogram report.", required: false, ..Default::default() },
+                ToolParamSpec { name: "parameter", description: "One of elevation, intensity, scan angle, class, or time.", required: false, ..Default::default() },
+                ToolParamSpec { name: "clip_percent", description: "Percentile clip amount in [0,50] for lower/upper tails.", required: false, ..Default::default() },
             ],
         }
     }
@@ -10056,15 +10557,15 @@ impl Tool for LidarPointStatsTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Output grid resolution.", required: false },
-                ToolParamSpec { name: "num_points", description: "Create point-count raster.", required: false },
-                ToolParamSpec { name: "num_pulses", description: "Create early-return pulse-count raster.", required: false },
-                ToolParamSpec { name: "avg_points_per_pulse", description: "Create average points-per-pulse raster.", required: false },
-                ToolParamSpec { name: "z_range", description: "Create elevation-range raster.", required: false },
-                ToolParamSpec { name: "intensity_range", description: "Create intensity-range raster.", required: false },
-                ToolParamSpec { name: "predominant_class", description: "Create predominant-class raster.", required: false },
-                ToolParamSpec { name: "output_directory", description: "Optional output directory for generated rasters.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Output grid resolution.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_points", description: "Create point-count raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_pulses", description: "Create early-return pulse-count raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "avg_points_per_pulse", description: "Create average points-per-pulse raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "z_range", description: "Create elevation-range raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "intensity_range", description: "Create intensity-range raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "predominant_class", description: "Create predominant-class raster.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_directory", description: "Optional output directory for generated rasters.", required: false, ..Default::default() },
             ],
         }
     }
@@ -10282,17 +10783,17 @@ impl Tool for LidarContourTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output vector path (.shp/.geojson). In batch mode each input writes a sibling .shp.", required: false },
-                ToolParamSpec { name: "interval", description: "Contour interval (must be > 0).", required: false },
-                ToolParamSpec { name: "base_contour", description: "Base contour offset value.", required: false },
-                ToolParamSpec { name: "smooth", description: "Compatibility smoothing parameter (accepted for call-shape parity).", required: false },
-                ToolParamSpec { name: "interpolation_parameter", description: "One of elevation, intensity, scan_angle, time, or user_data.", required: false },
-                ToolParamSpec { name: "returns", description: "Returns filter: all, first, or last.", required: false },
-                ToolParamSpec { name: "excluded_classes", description: "Optional class values to exclude.", required: false },
-                ToolParamSpec { name: "min_elev", description: "Minimum allowed point elevation.", required: false },
-                ToolParamSpec { name: "max_elev", description: "Maximum allowed point elevation.", required: false },
-                ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum triangle edge length; longer triangles are skipped.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output vector path (.shp/.geojson). In batch mode each input writes a sibling .shp.", required: false, ..Default::default() },
+                ToolParamSpec { name: "interval", description: "Contour interval (must be > 0).", required: false, ..Default::default() },
+                ToolParamSpec { name: "base_contour", description: "Base contour offset value.", required: false, ..Default::default() },
+                ToolParamSpec { name: "smooth", description: "Compatibility smoothing parameter (accepted for call-shape parity).", required: false, ..Default::default() },
+                ToolParamSpec { name: "interpolation_parameter", description: "One of elevation, intensity, scan_angle, time, or user_data.", required: false, ..Default::default() },
+                ToolParamSpec { name: "returns", description: "Returns filter: all, first, or last.", required: false, ..Default::default() },
+                ToolParamSpec { name: "excluded_classes", description: "Optional class values to exclude.", required: false, ..Default::default() },
+                ToolParamSpec { name: "min_elev", description: "Minimum allowed point elevation.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_elev", description: "Maximum allowed point elevation.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum triangle edge length; longer triangles are skipped.", required: false, ..Default::default() },
             ],
         }
     }
@@ -10464,9 +10965,9 @@ impl Tool for LidarTileFootprintTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs over all LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output vector path for footprints.", required: false },
-                ToolParamSpec { name: "output_hulls", description: "If true writes convex-hull footprints; otherwise writes axis-aligned bounding boxes.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs over all LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output vector path for footprints.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_hulls", description: "If true writes convex-hull footprints; otherwise writes axis-aligned bounding boxes.", required: false, ..Default::default() },
             ],
         }
     }
@@ -10595,13 +11096,13 @@ impl Tool for LidarConstructVectorTinTool {
                     category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
-                        ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                        ToolParamSpec { name: "output", description: "Optional output vector path; in batch mode each input writes a sibling _tin.shp.", required: false },
-                        ToolParamSpec { name: "returns", description: "Returns filter: all, first, or last.", required: false },
-                        ToolParamSpec { name: "excluded_classes", description: "Optional class values to exclude.", required: false },
-                        ToolParamSpec { name: "min_elev", description: "Minimum allowed point elevation.", required: false },
-                        ToolParamSpec { name: "max_elev", description: "Maximum allowed point elevation.", required: false },
-                        ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum allowed triangle edge length.", required: false },
+                        ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "output", description: "Optional output vector path; in batch mode each input writes a sibling _tin.shp.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "returns", description: "Returns filter: all, first, or last.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "excluded_classes", description: "Optional class values to exclude.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "min_elev", description: "Minimum allowed point elevation.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "max_elev", description: "Maximum allowed point elevation.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "max_triangle_edge_length", description: "Optional maximum allowed triangle edge length.", required: false, ..Default::default() },
                     ],
                 }
             }
@@ -10737,10 +11238,10 @@ impl Tool for LidarConstructVectorTinTool {
                     category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
-                        ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                        ToolParamSpec { name: "width", description: "Hexagon width (distance between opposite sides).", required: true },
-                        ToolParamSpec { name: "orientation", description: "Grid orientation: h (pointy-up) or v (flat-up).", required: false },
-                        ToolParamSpec { name: "output", description: "Optional output vector path.", required: false },
+                        ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                        ToolParamSpec { name: "width", description: "Hexagon width (distance between opposite sides).", required: true, ..Default::default() },
+                        ToolParamSpec { name: "orientation", description: "Grid orientation: h (pointy-up) or v (flat-up).", required: false, ..Default::default() },
+                        ToolParamSpec { name: "output", description: "Optional output vector path.", required: false, ..Default::default() },
                     ],
                 }
             }
@@ -10908,10 +11409,10 @@ impl Tool for LidarConstructVectorTinTool {
                     category: ToolCategory::Lidar,
                     license_tier: LicenseTier::Open,
                     params: vec![
-                        ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                        ToolParamSpec { name: "create_output", description: "If true writes a classified LiDAR QC output.", required: false },
-                        ToolParamSpec { name: "output", description: "Optional LiDAR output path used when create_output=true.", required: false },
-                        ToolParamSpec { name: "report", description: "Optional text report output path.", required: false },
+                        ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                        ToolParamSpec { name: "create_output", description: "If true writes a classified LiDAR QC output.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "output", description: "Optional LiDAR output path used when create_output=true.", required: false, ..Default::default() },
+                        ToolParamSpec { name: "report", description: "Optional text report output path.", required: false, ..Default::default() },
                     ],
                 }
             }
@@ -11085,9 +11586,9 @@ impl Tool for LasToShapefileTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output vector path for single-input mode.", required: false },
-                ToolParamSpec { name: "output_multipoint", description: "If true outputs a multipoint geometry with one feature; otherwise outputs one point feature per point.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output vector path for single-input mode.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_multipoint", description: "If true outputs a multipoint geometry with one feature; otherwise outputs one point feature per point.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11203,9 +11704,9 @@ impl Tool for FlightlineOverlapTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "resolution", description: "Grid resolution used to count distinct flightlines per cell.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Grid resolution used to count distinct flightlines per cell.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11337,12 +11838,12 @@ impl Tool for RecoverFlightlineInfoTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "max_time_diff", description: "Maximum within-flightline GPS time gap before starting a new flightline.", required: false },
-                ToolParamSpec { name: "pt_src_id", description: "If true, write inferred flightline IDs to point_source_id.", required: false },
-                ToolParamSpec { name: "user_data", description: "If true, write inferred flightline IDs to user_data (modulo 256).", required: false },
-                ToolParamSpec { name: "rgb", description: "If true, assign a random colour per inferred flightline.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "max_time_diff", description: "Maximum within-flightline GPS time gap before starting a new flightline.", required: false, ..Default::default() },
+                ToolParamSpec { name: "pt_src_id", description: "If true, write inferred flightline IDs to point_source_id.", required: false, ..Default::default() },
+                ToolParamSpec { name: "user_data", description: "If true, write inferred flightline IDs to user_data (modulo 256).", required: false, ..Default::default() },
+                ToolParamSpec { name: "rgb", description: "If true, assign a random colour per inferred flightline.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11457,8 +11958,8 @@ impl Tool for FindFlightlineEdgePointsTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11502,9 +12003,9 @@ impl Tool for LidarTophatTransformTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius used for erosion and dilation.", required: true },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius used for erosion and dilation.", required: true, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11574,9 +12075,9 @@ impl Tool for NormalVectorsTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local plane fitting. Values <= 0 use an estimated nominal spacing.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local plane fitting. Values <= 0 use an estimated nominal spacing.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11641,12 +12142,12 @@ impl Tool for LidarKappaTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input1", description: "Classification LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "input2", description: "Reference LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "report", description: "Output HTML report path.", required: true },
-                ToolParamSpec { name: "resolution", description: "Grid resolution for spatial class-agreement output.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
-                ToolParamSpec { name: "output_class_accuracy", description: "Compatibility flag retained for legacy parity; the agreement raster is always produced.", required: false },
+                ToolParamSpec { name: "input1", description: "Classification LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "input2", description: "Reference LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "report", description: "Output HTML report path.", required: true, ..Default::default() },
+                ToolParamSpec { name: "resolution", description: "Grid resolution for spatial class-agreement output.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output_class_accuracy", description: "Compatibility flag retained for legacy parity; the agreement raster is always produced.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11815,10 +12316,10 @@ impl Tool for LidarEigenvalueFeaturesTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false },
-                ToolParamSpec { name: "num_neighbours", description: "Optional target neighbourhood size (excluding the point itself).", required: false },
-                ToolParamSpec { name: "search_radius", description: "Optional maximum search radius for neighbourhood collection.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output .eigen path in single-input mode.", required: false },
+                ToolParamSpec { name: "input", description: "Optional input LiDAR path or typed LiDAR object. If omitted, runs in batch mode over LiDAR files in current directory.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_neighbours", description: "Optional target neighbourhood size (excluding the point itself).", required: false, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Optional maximum search radius for neighbourhood collection.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output .eigen path in single-input mode.", required: false, ..Default::default() },
             ],
         }
     }
@@ -11972,16 +12473,16 @@ impl Tool for LidarRansacPlanesTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local plane fitting.", required: false },
-                ToolParamSpec { name: "num_iterations", description: "Number of RANSAC iterations per point.", required: false },
-                ToolParamSpec { name: "num_samples", description: "Number of sampled neighbour points per RANSAC iteration.", required: false },
-                ToolParamSpec { name: "inlier_threshold", description: "Maximum point-to-plane residual for inliers.", required: false },
-                ToolParamSpec { name: "acceptable_model_size", description: "Minimum number of inlier points required for a planar model.", required: false },
-                ToolParamSpec { name: "max_planar_slope", description: "Maximum accepted plane slope in degrees.", required: false },
-                ToolParamSpec { name: "classify", description: "If true classify planar vs non-planar points instead of filtering.", required: false },
-                ToolParamSpec { name: "only_last_returns", description: "If true, only use late returns in model fitting.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false },
+                ToolParamSpec { name: "input", description: "Input LiDAR path or typed LiDAR object.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local plane fitting.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_iterations", description: "Number of RANSAC iterations per point.", required: false, ..Default::default() },
+                ToolParamSpec { name: "num_samples", description: "Number of sampled neighbour points per RANSAC iteration.", required: false, ..Default::default() },
+                ToolParamSpec { name: "inlier_threshold", description: "Maximum point-to-plane residual for inliers.", required: false, ..Default::default() },
+                ToolParamSpec { name: "acceptable_model_size", description: "Minimum number of inlier points required for a planar model.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_planar_slope", description: "Maximum accepted plane slope in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "classify", description: "If true classify planar vs non-planar points instead of filtering.", required: false, ..Default::default() },
+                ToolParamSpec { name: "only_last_returns", description: "If true, only use late returns in model fitting.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output LiDAR path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -12106,16 +12607,16 @@ impl Tool for LidarRooftopAnalysisTool {
             category: ToolCategory::Lidar,
             license_tier: LicenseTier::Open,
             params: vec![
-                ToolParamSpec { name: "inputs", description: "Input LiDAR paths or typed LiDAR objects.", required: true },
-                ToolParamSpec { name: "building_footprints", description: "Building-footprint polygon layer.", required: true },
-                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local roof analysis.", required: false },
-                ToolParamSpec { name: "inlier_threshold", description: "Maximum residual for local planar support.", required: false },
-                ToolParamSpec { name: "acceptable_model_size", description: "Minimum segment size.", required: false },
-                ToolParamSpec { name: "max_planar_slope", description: "Maximum slope for rooftop facets in degrees.", required: false },
-                ToolParamSpec { name: "norm_diff_threshold", description: "Maximum angular difference between neighbouring normals in degrees.", required: false },
-                ToolParamSpec { name: "azimuth", description: "Illumination azimuth for hillshade-style facet lighting.", required: false },
-                ToolParamSpec { name: "altitude", description: "Illumination altitude for hillshade-style facet lighting.", required: false },
-                ToolParamSpec { name: "output", description: "Optional output vector path.", required: false },
+                ToolParamSpec { name: "inputs", description: "Input LiDAR paths or typed LiDAR objects.", required: true, ..Default::default() },
+                ToolParamSpec { name: "building_footprints", description: "Building-footprint polygon layer.", required: true, ..Default::default() },
+                ToolParamSpec { name: "search_radius", description: "Neighbourhood radius for local roof analysis.", required: false, ..Default::default() },
+                ToolParamSpec { name: "inlier_threshold", description: "Maximum residual for local planar support.", required: false, ..Default::default() },
+                ToolParamSpec { name: "acceptable_model_size", description: "Minimum segment size.", required: false, ..Default::default() },
+                ToolParamSpec { name: "max_planar_slope", description: "Maximum slope for rooftop facets in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "norm_diff_threshold", description: "Maximum angular difference between neighbouring normals in degrees.", required: false, ..Default::default() },
+                ToolParamSpec { name: "azimuth", description: "Illumination azimuth for hillshade-style facet lighting.", required: false, ..Default::default() },
+                ToolParamSpec { name: "altitude", description: "Illumination altitude for hillshade-style facet lighting.", required: false, ..Default::default() },
+                ToolParamSpec { name: "output", description: "Optional output vector path.", required: false, ..Default::default() },
             ],
         }
     }
@@ -12316,6 +12817,7 @@ impl Tool for LidarRooftopAnalysisTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn lidar_crs_prefers_epsg_when_available() {
@@ -12339,9 +12841,16 @@ mod tests {
     }
 
     #[test]
-    fn require_lidar_crs_rejects_missing_metadata() {
-        let err = require_lidar_crs(None, "lidar_idw_interpolation").unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("requires input LiDAR CRS metadata"));
+    fn parse_returns_mode_accepts_numeric_enum_indices() {
+        let mut args = ToolArgs::new();
+        args.insert("returns_included".to_string(), json!(2));
+        assert!(matches!(parse_returns_mode(&args), ReturnsMode::Last));
+
+        args.insert("returns_included".to_string(), json!(1));
+        assert!(matches!(parse_returns_mode(&args), ReturnsMode::First));
+
+        args.insert("returns_included".to_string(), json!(0));
+        assert!(matches!(parse_returns_mode(&args), ReturnsMode::All));
     }
+
 }

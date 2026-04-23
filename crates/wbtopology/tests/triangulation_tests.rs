@@ -1,4 +1,5 @@
 use wbtopology::{
+    delaunay_triangulation_fast,
     delaunay_triangulation,
     delaunay_triangulation_with_constraints,
     delaunay_triangulation_with_options,
@@ -197,4 +198,28 @@ fn constrained_triangulation_rejects_missing_constraint_edge() {
     );
 
     assert!(bad.is_err());
+}
+
+#[test]
+fn fast_delaunay_square_has_two_triangles() {
+    let pts = vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(1.0, 0.0),
+        Coord::xy(1.0, 1.0),
+        Coord::xy(0.0, 1.0),
+    ];
+    let tri = delaunay_triangulation_fast(&pts, 1.0e-12);
+    assert_eq!(tri.triangles.len(), 2);
+}
+
+#[test]
+fn fast_delaunay_collinear_yields_no_triangles() {
+    let pts = vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(1.0, 0.0),
+        Coord::xy(2.0, 0.0),
+        Coord::xy(3.0, 0.0),
+    ];
+    let tri = delaunay_triangulation_fast(&pts, 1.0e-12);
+    assert!(tri.triangles.is_empty());
 }

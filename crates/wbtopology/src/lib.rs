@@ -64,6 +64,7 @@
 pub mod algorithms;
 pub mod constructive;
 pub mod error;
+mod fast_triangulation;
 pub mod geom;
 pub mod graph;
 pub mod hull;
@@ -197,6 +198,7 @@ pub use triangulation::{
 	DelaunayTriangulation,
 	TriangulationOptions,
 };
+pub use fast_triangulation::delaunay_triangulation_fast;
 pub use voronoi::{
 	voronoi_diagram,
 	voronoi_diagram_with_clip,

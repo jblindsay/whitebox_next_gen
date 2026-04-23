@@ -26,9 +26,9 @@ Update this file whenever priorities, architecture, or non-negotiables change.
 - Taxonomy sync should regenerate both QGIS and R resolved JSON exports.
 
 ## Active Priorities
-- Priority 1:
-- Priority 2:
-- Priority 3:
+- Priority 1: Continue targeted Python stub typing cleanup to reduce unresolved `*args/**kwargs -> Any` placeholders in `crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi` while preserving conservative safety rules.
+- Priority 2: Keep signature-rollout automation centralized in `scripts/rollout_stub_literals.py` (Literal rollout + placeholder fill modes) and prefer unambiguous-only replacement paths.
+- Priority 3: Maintain taxonomy/runtime/frontend alignment checks after stub updates so Python/R/QGIS discovery/catalog behavior remains coherent.
 
 ## Out Of Scope (For Now)
 - 
@@ -63,4 +63,11 @@ Before coding, restate:
 4. Validation plan
 
 ## Session Notes (Optional)
-- 
+- Scope refresh completed on 2026-04-23 after targeted stub-typing follow-up.
+- Latest checkpoint commit: `d4836d77da4587e4d27a161fe4eeefd8ded74201`.
+- `whitebox_workflows.pyi` placeholder count reduced from 88 to 63 using runtime-signature-derived fills.
+- `scripts/rollout_stub_literals.py` now includes:
+	- `--fill-any-from-existing`
+	- `--fill-any-from-rust-signatures`
+	- `--fill-any-from-runtime-signatures`
+- Remaining placeholders are primarily ambiguous/missing-source cases and should be handled with manual high-confidence passes or additional source mapping.

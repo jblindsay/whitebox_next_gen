@@ -42,11 +42,12 @@ impl Point2 {
         if d.abs() <= 1.0e-30 {
             return f64::INFINITY;
         }
+        let inv_d = 1.0 / d;
         let a2 = self.x * self.x + self.y * self.y;
         let b2 = b.x * b.x + b.y * b.y;
         let c2 = c.x * c.x + c.y * c.y;
-        let ux = (a2 * (b.y - c.y) + b2 * (c.y - self.y) + c2 * (self.y - b.y)) / d;
-        let uy = (a2 * (c.x - b.x) + b2 * (self.x - c.x) + c2 * (b.x - self.x)) / d;
+        let ux = (a2 * (b.y - c.y) + b2 * (c.y - self.y) + c2 * (self.y - b.y)) * inv_d;
+        let uy = (a2 * (c.x - b.x) + b2 * (self.x - c.x) + c2 * (b.x - self.x)) * inv_d;
         let dx = ux - self.x;
         let dy = uy - self.y;
         dx * dx + dy * dy
@@ -58,11 +59,12 @@ impl Point2 {
         if d.abs() <= 1.0e-30 {
             return Self { x: f64::NAN, y: f64::NAN };
         }
+        let inv_d = 1.0 / d;
         let a2 = self.x * self.x + self.y * self.y;
         let b2 = b.x * b.x + b.y * b.y;
         let c2 = c.x * c.x + c.y * c.y;
-        let ux = (a2 * (b.y - c.y) + b2 * (c.y - self.y) + c2 * (self.y - b.y)) / d;
-        let uy = (a2 * (c.x - b.x) + b2 * (self.x - c.x) + c2 * (b.x - self.x)) / d;
+        let ux = (a2 * (b.y - c.y) + b2 * (c.y - self.y) + c2 * (self.y - b.y)) * inv_d;
+        let uy = (a2 * (c.x - b.x) + b2 * (self.x - c.x) + c2 * (b.x - self.x)) * inv_d;
         Self { x: ux, y: uy }
     }
 
@@ -92,18 +94,36 @@ struct Hull {
     next: Vec<usize>,
     tri: Vec<usize>,
     hash: Vec<usize>,
+    hash_mask: usize,
     start: usize,
     center: Point2,
 }
 
+/// Round `n` up to the next power of two (minimum 4).
+#[inline]
+fn next_pow2(n: usize) -> usize {
+    if n <= 4 { return 4; }
+    let mut v = n - 1;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v |= v >> 32;
+    v + 1
+}
+
 impl Hull {
     fn new(n: usize, center: Point2, i0: usize, i1: usize, i2: usize, points: &[Point2]) -> Self {
-        let hash_len = (n as f64).sqrt().max(4.0) as usize;
+        // Round up to next power-of-two so hash_key can use bitwise AND instead of modulo.
+        let hash_len = next_pow2((n as f64).sqrt() as usize);
+        let hash_mask = hash_len - 1;
         let mut hull = Self {
             prev: vec![0; n],
             next: vec![0; n],
             tri: vec![0; n],
             hash: vec![EMPTY; hash_len],
+            hash_mask,
             start: i0,
             center,
         };
@@ -132,7 +152,8 @@ impl Hull {
         let dy = p.y - self.center.y;
         let q = dx / (dx.abs() + dy.abs()).max(1.0e-30);
         let a = if dy > 0.0 { (3.0 - q) / 4.0 } else { (1.0 + q) / 4.0 };
-        ((self.hash.len() as f64 * a).floor() as usize) % self.hash.len()
+        // hash_mask == hash.len() - 1; len is power-of-two so AND replaces modulo
+        ((self.hash.len() as f64 * a).floor() as usize) & self.hash_mask
     }
 
     #[inline]
@@ -145,7 +166,7 @@ impl Hull {
         let mut start = EMPTY;
         let key = self.hash_key(p);
         for j in 0..self.hash.len() {
-            start = self.hash[(key + j) % self.hash.len()];
+            start = self.hash[(key + j) & self.hash_mask];
             if start != EMPTY && self.next[start] != EMPTY {
                 break;
             }
@@ -205,54 +226,78 @@ impl FastTriangulation {
         t
     }
 
-    fn legalize(&mut self, a: usize, points: &[Point2], hull: &mut Hull) -> usize {
-        let b = self.halfedges[a];
-        let ar = Self::prev_halfedge(a);
-        if b == EMPTY {
-            return ar;
-        }
-        let al = Self::next_halfedge(a);
-        let bl = Self::prev_halfedge(b);
+    fn legalize(&mut self, a0: usize, points: &[Point2], hull: &mut Hull) -> usize {
+        // Explicit stack version of the recursive legalize() to avoid stack overflow
+        // on large point clouds. We preserve recursive DFS order by pushing `br`
+        // and continuing immediately with `a`.
+        let mut pending: Vec<usize> = Vec::new();
+        let mut a = a0;
+        let mut last_ar: usize;
 
-        let p0 = self.triangles[ar];
-        let pr = self.triangles[a];
-        let pl = self.triangles[al];
-        let p1 = self.triangles[bl];
+        loop {
+            loop {
+                let b = self.halfedges[a];
+                let ar = Self::prev_halfedge(a);
+                last_ar = ar;
+                if b == EMPTY {
+                    break;
+                }
+                let al = Self::next_halfedge(a);
+                let bl = Self::prev_halfedge(b);
 
-        if points[p0].in_circle(points[pr], points[pl], points[p1]) {
-            self.triangles[a] = p1;
-            self.triangles[b] = p0;
+                let p0 = self.triangles[ar];
+                let pr = self.triangles[a];
+                let pl = self.triangles[al];
+                let p1 = self.triangles[bl];
 
-            let hbl = self.halfedges[bl];
-            let har = self.halfedges[ar];
+                if !points[p0].in_circle(points[pr], points[pl], points[p1]) {
+                    break;
+                }
 
-            if hbl == EMPTY {
-                let mut e = hull.start;
-                loop {
-                    if hull.tri[e] == bl {
-                        hull.tri[e] = a;
-                        break;
-                    }
-                    e = hull.next[e];
-                    if e == hull.start || e == EMPTY {
-                        break;
+                self.triangles[a] = p1;
+                self.triangles[b] = p0;
+
+                let hbl = self.halfedges[bl];
+                let har = self.halfedges[ar];
+
+                if hbl == EMPTY {
+                    let mut e = hull.start;
+                    loop {
+                        if hull.tri[e] == bl {
+                            hull.tri[e] = a;
+                            break;
+                        }
+                        e = hull.prev[e];
+                        if e == hull.start {
+                            break;
+                        }
                     }
                 }
+
+                self.halfedges[a] = hbl;
+                self.halfedges[b] = har;
+                self.halfedges[ar] = bl;
+
+                if hbl != EMPTY { self.halfedges[hbl] = a; }
+                if har != EMPTY { self.halfedges[har] = b; }
+                if bl != EMPTY { self.halfedges[bl] = ar; }
+
+                // Original recursion order:
+                //   legalize(a); return legalize(br);
+                // We emulate this with an explicit stack by deferring br and
+                // continuing immediately with a.
+                let br = Self::next_halfedge(b);
+                pending.push(br);
             }
 
-            self.halfedges[a] = hbl;
-            self.halfedges[b] = har;
-            self.halfedges[ar] = bl;
-
-            if hbl != EMPTY { self.halfedges[hbl] = a; }
-            if har != EMPTY { self.halfedges[har] = b; }
-            if bl != EMPTY { self.halfedges[bl] = ar; }
-
-            let br = Self::next_halfedge(b);
-            self.legalize(a, points, hull);
-            return self.legalize(br, points, hull);
+            if let Some(next_a) = pending.pop() {
+                a = next_a;
+            } else {
+                break;
+            }
         }
-        ar
+
+        last_ar
     }
 }
 

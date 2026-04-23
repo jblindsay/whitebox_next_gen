@@ -21,6 +21,7 @@ STUB_PATH = ROOT / "crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi"
 
 DEF_RE = re.compile(r"^(\s*def\s+(?P<name>[a-zA-Z0-9_]+)\((?P<params>.*)\)\s*->\s*.*)$")
 STR_PARAM_RE = re.compile(r"\b(?P<param>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*str\s*=\s*\"(?P<default>[^\"]*)\"")
+LITERAL_PARAM_RE = re.compile(r"\b(?P<param>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*Literal\[[^\]]+\]\s*=\s*\"(?P<default>[^\"]*)\"")
 
 
 def ensure_literal_import(stub_text: str) -> str:
@@ -98,15 +99,116 @@ def transform_stub(stub_text: str, choices_lookup: dict[str, dict[str, list[str]
     return "\n".join(updated_lines) + "\n", replacements
 
 
+def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, list[str]]]) -> dict[str, object]:
+    total_def_lines = 0
+    tool_lines_with_choices = 0
+    literal_params_total = 0
+    str_params_total = 0
+    str_params_with_choices = 0
+    str_params_convertible = 0
+    str_params_default_not_in_choices = 0
+
+    per_tool: dict[str, dict[str, int]] = {}
+
+    for line in stub_text.splitlines():
+        m = DEF_RE.match(line)
+        if not m:
+            continue
+        total_def_lines += 1
+        fn_name = m.group("name")
+        params = m.group("params")
+        param_choices = choices_lookup.get(fn_name, {})
+
+        tool_stats = per_tool.setdefault(
+            fn_name,
+            {
+                "literal": 0,
+                "str": 0,
+                "str_with_choices": 0,
+                "str_convertible": 0,
+                "str_default_not_in_choices": 0,
+            },
+        )
+
+        if param_choices:
+            tool_lines_with_choices += 1
+
+        for lm in LITERAL_PARAM_RE.finditer(params):
+            literal_params_total += 1
+            tool_stats["literal"] += 1
+
+        for sm in STR_PARAM_RE.finditer(params):
+            str_params_total += 1
+            tool_stats["str"] += 1
+            pname = sm.group("param")
+            default = sm.group("default")
+            choices = param_choices.get(pname)
+            if choices:
+                str_params_with_choices += 1
+                tool_stats["str_with_choices"] += 1
+                if default in choices:
+                    str_params_convertible += 1
+                    tool_stats["str_convertible"] += 1
+                else:
+                    str_params_default_not_in_choices += 1
+                    tool_stats["str_default_not_in_choices"] += 1
+
+    tools_with_literal = sum(1 for s in per_tool.values() if s["literal"] > 0)
+    tools_with_convertible_remaining = sum(1 for s in per_tool.values() if s["str_convertible"] > 0)
+
+    top_remaining = sorted(
+        (
+            (name, stats["str_convertible"])
+            for name, stats in per_tool.items()
+            if stats["str_convertible"] > 0
+        ),
+        key=lambda t: (-t[1], t[0]),
+    )[:20]
+
+    return {
+        "total_def_lines": total_def_lines,
+        "tool_lines_with_choices": tool_lines_with_choices,
+        "literal_params_total": literal_params_total,
+        "str_params_total": str_params_total,
+        "str_params_with_choices": str_params_with_choices,
+        "str_params_convertible": str_params_convertible,
+        "str_params_default_not_in_choices": str_params_default_not_in_choices,
+        "tools_with_literal": tools_with_literal,
+        "tools_with_convertible_remaining": tools_with_convertible_remaining,
+        "top_remaining": top_remaining,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Roll out Literal typing in whitebox_workflows.pyi")
     parser.add_argument("--check", action="store_true", help="Only check for pending updates")
+    parser.add_argument("--report", action="store_true", help="Print rollout coverage report")
     args = parser.parse_args()
 
     text = STUB_PATH.read_text(encoding="utf-8")
     text = ensure_literal_import(text)
     lookup = build_choices_lookup()
     new_text, replacement_count = transform_stub(text, lookup)
+
+    if args.report:
+        report = build_coverage_report(new_text, lookup)
+        print("Literal rollout coverage")
+        print(f"  def lines: {report['total_def_lines']}")
+        print(f"  tool lines with discoverable choices: {report['tool_lines_with_choices']}")
+        print(f"  literal params currently typed: {report['literal_params_total']}")
+        print(f"  remaining str params: {report['str_params_total']}")
+        print(f"  remaining str params with choices: {report['str_params_with_choices']}")
+        print(f"  remaining directly convertible params: {report['str_params_convertible']}")
+        print(f"  remaining blocked by default mismatch: {report['str_params_default_not_in_choices']}")
+        print(f"  tools with at least one Literal param: {report['tools_with_literal']}")
+        print(f"  tools with convertible params remaining: {report['tools_with_convertible_remaining']}")
+        remaining = report["top_remaining"]
+        if remaining:
+            print("  top tools with convertible params remaining:")
+            for tool_name, count in remaining:
+                print(f"    - {tool_name}: {count}")
+        else:
+            print("  no directly convertible params remain")
 
     if args.check:
         if new_text != STUB_PATH.read_text(encoding="utf-8"):

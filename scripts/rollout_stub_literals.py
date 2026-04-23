@@ -36,6 +36,22 @@ def quote_literal_value(value: str) -> str:
     return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
+def normalize_choice_token(value: str) -> str:
+    return "".join(c for c in value.lower() if c.isalnum())
+
+
+def resolve_default_choice(default: str, choices: list[str]) -> str | None:
+    if default in choices:
+        return default
+    norm_default = normalize_choice_token(default)
+    if not norm_default:
+        return None
+    matches = [c for c in choices if normalize_choice_token(c) == norm_default]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 def build_choices_lookup() -> dict[str, dict[str, list[str]]]:
     import whitebox_workflows as wb  # local dependency
 
@@ -63,9 +79,15 @@ def build_choices_lookup() -> dict[str, dict[str, list[str]]]:
     return out
 
 
-def transform_stub(stub_text: str, choices_lookup: dict[str, dict[str, list[str]]]) -> tuple[str, int]:
+def transform_stub(
+    stub_text: str,
+    choices_lookup: dict[str, dict[str, list[str]]],
+    *,
+    fix_default_mismatch: bool = False,
+) -> tuple[str, int, int]:
     updated_lines: list[str] = []
     replacements = 0
+    mismatch_fixes = 0
 
     for line in stub_text.splitlines():
         m = DEF_RE.match(line)
@@ -81,22 +103,27 @@ def transform_stub(stub_text: str, choices_lookup: dict[str, dict[str, list[str]
             continue
 
         def repl(pm: re.Match[str]) -> str:
-            nonlocal replacements
+            nonlocal replacements, mismatch_fixes
             param = pm.group("param")
             default = pm.group("default")
             choices = param_choices.get(param)
             if not choices:
                 return pm.group(0)
-            if default not in choices:
+            resolved_default = resolve_default_choice(default, choices)
+            if resolved_default is None:
+                return pm.group(0)
+            if default != resolved_default and not fix_default_mismatch:
                 return pm.group(0)
             literal = "Literal[" + ", ".join(quote_literal_value(v) for v in choices) + "]"
             replacements += 1
-            return f"{param}: {literal} = {quote_literal_value(default)}"
+            if default != resolved_default:
+                mismatch_fixes += 1
+            return f"{param}: {literal} = {quote_literal_value(resolved_default)}"
 
         new_line = STR_PARAM_RE.sub(repl, line)
         updated_lines.append(new_line)
 
-    return "\n".join(updated_lines) + "\n", replacements
+    return "\n".join(updated_lines) + "\n", replacements, mismatch_fixes
 
 
 def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, list[str]]]) -> dict[str, object]:
@@ -107,6 +134,7 @@ def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, li
     str_params_with_choices = 0
     str_params_convertible = 0
     str_params_default_not_in_choices = 0
+    str_params_normalizable_mismatch = 0
 
     per_tool: dict[str, dict[str, int]] = {}
 
@@ -152,6 +180,8 @@ def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, li
                 else:
                     str_params_default_not_in_choices += 1
                     tool_stats["str_default_not_in_choices"] += 1
+                    if resolve_default_choice(default, choices) is not None:
+                        str_params_normalizable_mismatch += 1
 
     tools_with_literal = sum(1 for s in per_tool.values() if s["literal"] > 0)
     tools_with_convertible_remaining = sum(1 for s in per_tool.values() if s["str_convertible"] > 0)
@@ -173,6 +203,7 @@ def build_coverage_report(stub_text: str, choices_lookup: dict[str, dict[str, li
         "str_params_with_choices": str_params_with_choices,
         "str_params_convertible": str_params_convertible,
         "str_params_default_not_in_choices": str_params_default_not_in_choices,
+        "str_params_normalizable_mismatch": str_params_normalizable_mismatch,
         "tools_with_literal": tools_with_literal,
         "tools_with_convertible_remaining": tools_with_convertible_remaining,
         "top_remaining": top_remaining,
@@ -183,12 +214,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Roll out Literal typing in whitebox_workflows.pyi")
     parser.add_argument("--check", action="store_true", help="Only check for pending updates")
     parser.add_argument("--report", action="store_true", help="Print rollout coverage report")
+    parser.add_argument(
+        "--fix-default-mismatch",
+        action="store_true",
+        help="Allow conversion when default normalizes to exactly one enum choice",
+    )
     args = parser.parse_args()
 
     text = STUB_PATH.read_text(encoding="utf-8")
     text = ensure_literal_import(text)
     lookup = build_choices_lookup()
-    new_text, replacement_count = transform_stub(text, lookup)
+    new_text, replacement_count, mismatch_fix_count = transform_stub(
+        text,
+        lookup,
+        fix_default_mismatch=args.fix_default_mismatch,
+    )
 
     if args.report:
         report = build_coverage_report(new_text, lookup)
@@ -200,6 +240,7 @@ def main() -> int:
         print(f"  remaining str params with choices: {report['str_params_with_choices']}")
         print(f"  remaining directly convertible params: {report['str_params_convertible']}")
         print(f"  remaining blocked by default mismatch: {report['str_params_default_not_in_choices']}")
+        print(f"  of blocked mismatches, auto-fixable by normalization: {report['str_params_normalizable_mismatch']}")
         print(f"  tools with at least one Literal param: {report['tools_with_literal']}")
         print(f"  tools with convertible params remaining: {report['tools_with_convertible_remaining']}")
         remaining = report["top_remaining"]
@@ -219,7 +260,10 @@ def main() -> int:
 
     if new_text != STUB_PATH.read_text(encoding="utf-8"):
         STUB_PATH.write_text(new_text, encoding="utf-8")
-        print(f"updated {STUB_PATH} ({replacement_count} replacement(s))")
+        msg = f"updated {STUB_PATH} ({replacement_count} replacement(s))"
+        if mismatch_fix_count:
+            msg += f", including {mismatch_fix_count} default mismatch fix(es)"
+        print(msg)
     else:
         print("no stub updates needed")
     return 0

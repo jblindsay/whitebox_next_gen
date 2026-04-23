@@ -20,6 +20,7 @@ path = "src/lib.rs"
 [dependencies]
 wbvector = { path = "../wbvector", version = "0.1.1" }
 rayon = { version = "1.10", optional = true }
+robust = "1"
 
 [features]
 default = []

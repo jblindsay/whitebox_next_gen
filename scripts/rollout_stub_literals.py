@@ -12,12 +12,14 @@ parameter and the default value is one of those choices.
 from __future__ import annotations
 
 import argparse
+import inspect
 import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 STUB_PATH = ROOT / "crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi"
+WB_ENV_RS_PATH = ROOT / "crates/wbw_python/src/wb_environment.rs"
 
 DEF_RE = re.compile(r"^(\s*def\s+(?P<name>[a-zA-Z0-9_]+)\((?P<params>.*)\)\s*->\s*.*)$")
 STR_PARAM_RE = re.compile(r"\b(?P<param>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*str\s*=\s*\"(?P<default>[^\"]*)\"")
@@ -28,6 +30,8 @@ PLACEHOLDER_RE = re.compile(
 FULL_DEF_RE = re.compile(
     r"^(?P<indent>\s*)def\s+(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\((?P<params>.*)\)\s*->\s*(?P<ret>[^:]+):\s*\.\.\.\s*$"
 )
+RUST_PYO3_SIGNATURE_RE = re.compile(r"#\[pyo3\(signature = \((?P<sig>.*)\)\)\]")
+RUST_FN_RE = re.compile(r"^\s*pub\s+fn\s+(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\s*\(")
 
 
 def ensure_literal_import(stub_text: str) -> str:
@@ -261,6 +265,245 @@ def fill_placeholders_from_existing_signatures(stub_text: str) -> tuple[str, int
     return "\n".join(out_lines) + "\n", replacements, unresolved
 
 
+def split_top_level_csv(text: str) -> list[str]:
+    parts: list[str] = []
+    cur: list[str] = []
+    depth_paren = 0
+    depth_bracket = 0
+    depth_brace = 0
+    in_single = False
+    in_double = False
+    escape = False
+
+    for ch in text:
+        if escape:
+            cur.append(ch)
+            escape = False
+            continue
+
+        if ch == "\\" and (in_single or in_double):
+            cur.append(ch)
+            escape = True
+            continue
+
+        if in_single:
+            cur.append(ch)
+            if ch == "'":
+                in_single = False
+            continue
+        if in_double:
+            cur.append(ch)
+            if ch == '"':
+                in_double = False
+            continue
+
+        if ch == "'":
+            cur.append(ch)
+            in_single = True
+            continue
+        if ch == '"':
+            cur.append(ch)
+            in_double = True
+            continue
+
+        if ch == "(":
+            depth_paren += 1
+            cur.append(ch)
+            continue
+        if ch == ")":
+            depth_paren -= 1
+            cur.append(ch)
+            continue
+        if ch == "[":
+            depth_bracket += 1
+            cur.append(ch)
+            continue
+        if ch == "]":
+            depth_bracket -= 1
+            cur.append(ch)
+            continue
+        if ch == "{":
+            depth_brace += 1
+            cur.append(ch)
+            continue
+        if ch == "}":
+            depth_brace -= 1
+            cur.append(ch)
+            continue
+
+        if ch == "," and depth_paren == 0 and depth_bracket == 0 and depth_brace == 0:
+            token = "".join(cur).strip()
+            if token:
+                parts.append(token)
+            cur = []
+            continue
+
+        cur.append(ch)
+
+    token = "".join(cur).strip()
+    if token:
+        parts.append(token)
+    return parts
+
+
+def normalize_rust_default(default_expr: str) -> str:
+    expr = default_expr.strip()
+    expr = expr.replace("f64::NEG_INFINITY", "-1.7976931348623157e308")
+    expr = expr.replace("f64::INFINITY", "1.7976931348623157e308")
+    expr = expr.replace("true", "True").replace("false", "False")
+    expr = re.sub(r"\b(-?\d+)(?:u8|u16|u32|u64|usize|i8|i16|i32|i64|isize)\b", r"\1", expr)
+    return expr
+
+
+def build_rust_signature_lookup(rs_text: str) -> dict[str, set[str]]:
+    pending_sig: str | None = None
+    by_name: dict[str, set[str]] = {}
+
+    for line in rs_text.splitlines():
+        sm = RUST_PYO3_SIGNATURE_RE.search(line)
+        if sm:
+            pending_sig = sm.group("sig").strip()
+            continue
+
+        fm = RUST_FN_RE.match(line)
+        if fm and pending_sig is not None:
+            fn_name = fm.group("name")
+            by_name.setdefault(fn_name, set()).add(pending_sig)
+            pending_sig = None
+
+    return by_name
+
+
+def rust_sig_to_stub_params(sig: str) -> str:
+    pieces = split_top_level_csv(sig)
+    out = ["self"]
+    for part in pieces:
+        token = part.strip()
+        if not token:
+            continue
+        if "=" in token:
+            name, default = token.split("=", 1)
+            out.append(f"{name.strip()}: Any = {normalize_rust_default(default)}")
+        else:
+            out.append(f"{token}: Any")
+    return ", ".join(out)
+
+
+def fill_placeholders_from_rust_signatures(stub_text: str, rs_text: str) -> tuple[str, int, int]:
+    """Fill Any placeholders from unambiguous Rust pyo3 signatures.
+
+    Returns: (updated_text, replacements, ambiguous_or_missing)
+    """
+    rust_lookup = build_rust_signature_lookup(rs_text)
+    lines = stub_text.splitlines()
+    out_lines: list[str] = []
+    replacements = 0
+    unresolved = 0
+
+    for line in lines:
+        pm = PLACEHOLDER_RE.match(line)
+        if not pm:
+            out_lines.append(line)
+            continue
+
+        name = pm.group("name")
+        indent = pm.group("indent")
+        sigs = rust_lookup.get(name, set())
+        if len(sigs) != 1:
+            unresolved += 1
+            out_lines.append(line)
+            continue
+
+        sig = next(iter(sigs))
+        params = rust_sig_to_stub_params(sig)
+        out_lines.append(f"{indent}def {name}({params}) -> Any: ...")
+        replacements += 1
+
+    return "\n".join(out_lines) + "\n", replacements, unresolved
+
+
+def render_python_default_literal(value: object) -> str:
+    if value is None:
+        return "None"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return quote_literal_value(value)
+    if isinstance(value, (list, tuple, dict, set)):
+        return repr(value)
+    return repr(value)
+
+
+def build_runtime_signature_lookup() -> dict[str, set[str]]:
+    import whitebox_workflows as wb  # local dependency
+
+    wbe = wb.WbEnvironment()
+    by_name: dict[str, set[str]] = {}
+
+    for tool in wbe.list_tools():
+        fn = getattr(wbe, tool, None)
+        if fn is None:
+            continue
+        try:
+            sig = inspect.signature(fn)
+        except (TypeError, ValueError):
+            continue
+
+        params_out = ["self"]
+        skip = False
+        for p in sig.parameters.values():
+            if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                skip = True
+                break
+            if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
+                if p.default is inspect._empty:
+                    params_out.append(f"{p.name}: Any")
+                else:
+                    default_lit = render_python_default_literal(p.default)
+                    params_out.append(f"{p.name}: Any = {default_lit}")
+
+        if skip:
+            continue
+
+        by_name.setdefault(tool, set()).add(", ".join(params_out))
+
+    return by_name
+
+
+def fill_placeholders_from_runtime_signatures(stub_text: str) -> tuple[str, int, int]:
+    """Fill Any placeholders from unambiguous runtime signatures.
+
+    Returns: (updated_text, replacements, ambiguous_or_missing)
+    """
+    runtime_lookup = build_runtime_signature_lookup()
+    lines = stub_text.splitlines()
+    out_lines: list[str] = []
+    replacements = 0
+    unresolved = 0
+
+    for line in lines:
+        pm = PLACEHOLDER_RE.match(line)
+        if not pm:
+            out_lines.append(line)
+            continue
+
+        name = pm.group("name")
+        indent = pm.group("indent")
+        sigs = runtime_lookup.get(name, set())
+        if len(sigs) != 1:
+            unresolved += 1
+            out_lines.append(line)
+            continue
+
+        params = next(iter(sigs))
+        out_lines.append(f"{indent}def {name}({params}) -> Any: ...")
+        replacements += 1
+
+    return "\n".join(out_lines) + "\n", replacements, unresolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Roll out Literal typing in whitebox_workflows.pyi")
     parser.add_argument("--check", action="store_true", help="Only check for pending updates")
@@ -274,6 +517,16 @@ def main() -> int:
         "--fill-any-from-existing",
         action="store_true",
         help="Replace '*args/**kwargs -> Any' placeholders using unambiguous existing signatures",
+    )
+    parser.add_argument(
+        "--fill-any-from-rust-signatures",
+        action="store_true",
+        help="Replace '*args/**kwargs -> Any' placeholders using unambiguous wb_environment.rs pyo3 signatures",
+    )
+    parser.add_argument(
+        "--fill-any-from-runtime-signatures",
+        action="store_true",
+        help="Replace '*args/**kwargs -> Any' placeholders using unambiguous WbEnvironment runtime signatures",
     )
     args = parser.parse_args()
 
@@ -291,6 +544,21 @@ def main() -> int:
     if args.fill_any_from_existing:
         new_text, placeholder_replacements, placeholder_unresolved = (
             fill_placeholders_from_existing_signatures(new_text)
+        )
+
+    rust_placeholder_replacements = 0
+    rust_placeholder_unresolved = 0
+    if args.fill_any_from_rust_signatures:
+        rs_text = WB_ENV_RS_PATH.read_text(encoding="utf-8")
+        new_text, rust_placeholder_replacements, rust_placeholder_unresolved = (
+            fill_placeholders_from_rust_signatures(new_text, rs_text)
+        )
+
+    runtime_placeholder_replacements = 0
+    runtime_placeholder_unresolved = 0
+    if args.fill_any_from_runtime_signatures:
+        new_text, runtime_placeholder_replacements, runtime_placeholder_unresolved = (
+            fill_placeholders_from_runtime_signatures(new_text)
         )
 
     if args.report:
@@ -316,6 +584,24 @@ def main() -> int:
         if args.fill_any_from_existing:
             print(f"  placeholder Any signatures replaced this run: {placeholder_replacements}")
             print(f"  placeholder Any signatures unresolved (ambiguous/missing): {placeholder_unresolved}")
+        if args.fill_any_from_rust_signatures:
+            print(
+                "  placeholder Any signatures replaced from Rust this run: "
+                f"{rust_placeholder_replacements}"
+            )
+            print(
+                "  placeholder Any signatures unresolved from Rust (ambiguous/missing): "
+                f"{rust_placeholder_unresolved}"
+            )
+        if args.fill_any_from_runtime_signatures:
+            print(
+                "  placeholder Any signatures replaced from runtime this run: "
+                f"{runtime_placeholder_replacements}"
+            )
+            print(
+                "  placeholder Any signatures unresolved from runtime (ambiguous/missing): "
+                f"{runtime_placeholder_unresolved}"
+            )
 
     if args.check:
         if new_text != STUB_PATH.read_text(encoding="utf-8"):
@@ -331,6 +617,10 @@ def main() -> int:
             msg += f", including {mismatch_fix_count} default mismatch fix(es)"
         if args.fill_any_from_existing:
             msg += f", plus {placeholder_replacements} placeholder signature fill(s)"
+        if args.fill_any_from_rust_signatures:
+            msg += f", plus {rust_placeholder_replacements} Rust-derived placeholder fill(s)"
+        if args.fill_any_from_runtime_signatures:
+            msg += f", plus {runtime_placeholder_replacements} runtime-derived placeholder fill(s)"
         print(msg)
     else:
         print("no stub updates needed")

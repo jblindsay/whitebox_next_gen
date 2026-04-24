@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use serde_json::{json, Value};
 use wbcore::{
@@ -35,15 +36,16 @@ fn parse_optional_output(args: &ToolArgs) -> Result<Option<&str>, ToolError> {
     }
 }
 
-fn load_input_raster(path: &str) -> Result<Raster, ToolError> {
+fn load_input_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path)
             .ok_or_else(|| ToolError::Validation("malformed in-memory raster path".to_string()))?;
-        return memory_store::get_raster_by_id(id)
+        return memory_store::get_raster_arc_by_id(id)
             .ok_or_else(|| ToolError::Validation(format!("unknown in-memory raster id '{id}'")));
     }
 
     Raster::read(path)
+        .map(Arc::new)
         .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))
 }
 

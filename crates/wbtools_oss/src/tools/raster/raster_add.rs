@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde_json::json;
 use wbcore::{
@@ -221,7 +222,7 @@ impl RasterAddTool {
         Ok((input1, input2))
     }
 
-    fn load_raster_from_arg(path: &str, param_name: &str) -> Result<Raster, ToolError> {
+    fn load_raster_from_arg(path: &str, param_name: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation(format!(
@@ -229,7 +230,7 @@ impl RasterAddTool {
                     param_name
                 ))
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter '{}' references unknown in-memory raster id '{}': store entry is missing",
                     param_name,
@@ -238,7 +239,7 @@ impl RasterAddTool {
             });
         }
 
-        Raster::read(path).map_err(|e| {
+        Raster::read(path).map(Arc::new).map_err(|e| {
             ToolError::Execution(format!("failed reading {} raster: {}", param_name, e))
         })
     }

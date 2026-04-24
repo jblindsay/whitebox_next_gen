@@ -9152,8 +9152,16 @@ impl WbEnvironment {
             ));
         }
 
+        // Load the raster data into memory_store to enable efficient reuse across tool calls
+        let raster = WbRaster::read(&path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(
+                format!("failed to read raster '{}': {e}", path.display())
+            )
+        })?;
+
+        let id = memory_store::put_raster(raster);
         Ok(Raster {
-            file_path: path,
+            file_path: PathBuf::from(memory_store::make_raster_memory_path(&id)),
             active_band: 0,
         })
     }

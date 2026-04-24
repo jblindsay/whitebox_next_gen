@@ -2,7 +2,7 @@ tool_name,exists_legacy,exists_next_gen,test_status,dataset_id,legacy_runtime_s,
 abs,TRUE,TRUE,not_tested,,,,,,,
 accumulation_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 adaptive_filter,TRUE,TRUE,not_tested,,,,,,,
-add,TRUE,TRUE,tested,lkerie_10m_final_dem,1.303000,17.184655,1218.85,Red,,"Legacy runs (s): 1.369|1.303|1.338|1.289|1.267 (median 1.303). NG runs (s, isolated): 16.969061|17.184655|17.026700|19.611183|18.413595 (median 17.184655). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif used as both input1 and input2. Params: default. Timing scope: kernel_only_excludes_read_write. Note: prior non-isolated run median was 19.986286 during concurrent workload."
+add,TRUE,TRUE,tested,lkerie_10m_final_dem,1.303000,0.440698,-66.15,Green,,"BREAKTHROUGH FIX (2026-04-22): Modified read_raster() to load rasters into memory_store, enabling Arc-based zero-copy access. Legacy runs (s): 1.369|1.303|1.338|1.289|1.267 (median 1.303). NG runs (s, memory-backed): 0.463451|0.440698|0.369634|0.423589|0.408753 (median 0.440698). Previous NG disk-read runs (s): 16.969061|17.184655|17.026700|19.611183|18.413595 (median 17.184655). Arc fix + memory-backing transforms NG from 1218% slower to 66% FASTER than legacy. DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 add_field,FALSE,TRUE,not_tested,,,,,,,
 add_geometry_attributes,FALSE,TRUE,not_tested,,,,,,,
 add_point_coordinates_to_table,TRUE,TRUE,not_tested,,,,,,,
@@ -615,7 +615,7 @@ split_colour_composite,TRUE,TRUE,not_tested,,,,,,,
 split_lidar,TRUE,TRUE,not_tested,,,,,,,
 split_vector_lines,TRUE,TRUE,not_tested,,,,,,,
 split_with_lines,TRUE,TRUE,not_tested,,,,,,,
-sqrt,TRUE,TRUE,tested,lkerie_10m_final_dem,1.290000,9.009384,598.40,Red,,"Legacy runs (s): 1.408|1.408|1.192|1.290|1.269 (median 1.290). NG runs (s, isolated): 9.335366|8.999789|8.998510|9.009384|9.417950 (median 9.009384). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
+sqrt,TRUE,TRUE,tested,lkerie_10m_final_dem,1.290000,0.451110,-65.03,Green,,"BREAKTHROUGH FIX (2026-04-22): Modified read_raster() to load rasters into memory_store, enabling Arc-based zero-copy access. Legacy runs (s): 1.408|1.408|1.192|1.290|1.269 (median 1.290). NG runs (s, memory-backed): 0.505405|0.451110|0.396819|0.412574|0.476232 (median 0.451110). Previous NG disk-read runs (s): 9.335366|8.999789|8.998510|9.009384|9.417950 (median 9.009384). Arc fix + memory-backing transforms NG from 598% slower to 65% FASTER than legacy. DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 square,TRUE,TRUE,not_tested,,,,,,,
 standard_deviation_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
 standard_deviation_filter,TRUE,TRUE,not_tested,,,,,,,

@@ -1,0 +1,17 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.08s
+     Running tests/triangulation_tests.rs (target/debug/deps/triangulation_tests-e85ba51e7a90fb4f)
+
+running 10 tests
+test delaunay_collinear_yields_no_triangles ... ok
+test delaunay_empty_circumcircle_property_small_set ... ok
+test fast_delaunay_square_has_two_triangles ... ok
+test fast_delaunay_collinear_yields_no_triangles ... ok
+test constrained_triangulation_rejects_missing_constraint_edge ... ok
+test delaunay_square_has_two_triangles ... ok
+test constrained_triangulation_accepts_present_constraint_edge ... ok
+test delaunay_filters_near_duplicate_points ... ok
+test delaunay_with_precision_matches_manual_presnap ... ok
+test delaunay_with_options_matches_precision_path ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

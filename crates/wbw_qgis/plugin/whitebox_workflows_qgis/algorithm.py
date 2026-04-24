@@ -1351,7 +1351,13 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
             if kind in ("file_out", "raster_out", "vector_out"):
                 lower_desc = output_description.lower()
                 is_mstp = self.name() == "multiscale_topographic_position_class"
-                if "optional" in lower_desc and not is_mstp:
+                is_auxiliary_output = (
+                    "report" in name.lower()
+                    or "diagnostic" in name.lower()
+                    or "report" in lower_desc
+                    or "diagnostic" in lower_desc
+                )
+                if "optional" in lower_desc and not is_mstp and not is_auxiliary_output:
                     output_description = "Output destination path (required in QGIS plugin)."
                 elif "required in qgis plugin" not in lower_desc:
                     output_description = f"{output_description} (required in QGIS plugin)."
@@ -1409,19 +1415,29 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     optional=not required,
                 )
             elif kind == "int":
+                numeric_default = (
+                    _coerce_int_default(default_value, 0)
+                    if default_value is not None
+                    else None
+                )
                 qgs_param = QgsProcessingParameterNumber(
                     name,
                     description,
                     QgsProcessingParameterNumber.Integer,
-                    defaultValue=_coerce_int_default(default_value, 0),
+                    defaultValue=numeric_default,
                     optional=not required,
                 )
             elif kind == "double":
+                numeric_default = (
+                    _coerce_float_default(default_value, 0.0)
+                    if default_value is not None
+                    else None
+                )
                 qgs_param = QgsProcessingParameterNumber(
                     name,
                     description,
                     QgsProcessingParameterNumber.Double,
-                    defaultValue=_coerce_float_default(default_value, 0.0),
+                    defaultValue=numeric_default,
                     optional=not required,
                 )
             elif kind == "file_out":
@@ -1552,19 +1568,29 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                         optional=not required,
                     )
                 elif kind == "int":
+                    numeric_default = (
+                        _coerce_int_default(default_value, 0)
+                        if default_value is not None
+                        else None
+                    )
                     qgs_param = QgsProcessingParameterNumber(
                         name,
                         description,
                         QgsProcessingParameterNumber.Integer,
-                        defaultValue=_coerce_int_default(default_value, 0),
+                        defaultValue=numeric_default,
                         optional=not required,
                     )
                 elif kind == "double":
+                    numeric_default = (
+                        _coerce_float_default(default_value, 0.0)
+                        if default_value is not None
+                        else None
+                    )
                     qgs_param = QgsProcessingParameterNumber(
                         name,
                         description,
                         QgsProcessingParameterNumber.Double,
-                        defaultValue=_coerce_float_default(default_value, 0.0),
+                        defaultValue=numeric_default,
                         optional=not required,
                     )
                 elif kind == "file_out":

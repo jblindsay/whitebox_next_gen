@@ -408,6 +408,18 @@ wbw_run_tool('gaussian_filter', args = list(
 wbw_run_tool('canny_edge_detection', args = list(
   i = b4$file_path(), output = 'edges.tif', sigma = 0.5,
   low_threshold = 0.05, high_threshold = 0.15, add_back = FALSE), session = s)
+
+# General-purpose GLCM texture (multiband output)
+wbw_run_tool('glcm_texture', args = list(
+  input                  = b5$file_path(),
+  window_size            = 9,
+  distance               = 1,
+  angles                 = '0,45,90,135',
+  features               = 'contrast,homogeneity,entropy',
+  direction_aggregation  = 'mean',
+  levels                 = 32,
+  output                 = 'glcm_texture.tif'
+), session = s)
 </code></pre>
 <hr />
 <h2 id="principal-component-analysis"><a class="header" href="#principal-component-analysis">Principal Component Analysis</a></h2>

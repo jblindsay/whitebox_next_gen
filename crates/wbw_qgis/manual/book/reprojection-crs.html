@@ -1,0 +1,560 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Reprojection and CRS - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">7.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">8.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html" class="active"><strong aria-hidden="true">9.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">10.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">11.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">12.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">13.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">14.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">15.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">16.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">17.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">19.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
+<p>A Coordinate Reference System (CRS) defines how coordinates in a dataset
+map to real-world locations. CRS mismatches are one of the most common sources
+of silent errors in GIS workflows: two layers may display correctly on screen
+(because QGIS reprojects them on-the-fly for display) while producing wrong
+results when passed to an analysis tool that expects matching CRS inputs.</p>
+<p>This chapter explains how to identify, verify, and correct CRS issues in
+WbW-QGIS workflows.</p>
+<hr />
+<h2 id="key-concepts"><a class="header" href="#key-concepts">Key Concepts</a></h2>
+<ul>
+<li><strong>Geographic CRS (GCS)</strong>: Coordinates in angular units (degrees of latitude
+and longitude). Common examples: WGS84 (EPSG:4326), NAD83 (EPSG:4269).
+<strong>Not suitable as a working CRS for distance/area calculations.</strong></li>
+<li><strong>Projected CRS (PCS)</strong>: Coordinates in linear units (metres or feet) on a
+flat map projection. Examples: UTM zones, Lambert Conformal Conic, Albers
+Equal Area.</li>
+<li><strong>EPSG code</strong>: A numeric registry identifier for a CRS. EPSG:4326 = WGS84;
+EPSG:32617 = UTM Zone 17N (WGS84); EPSG:3978 = Canada Atlas Lambert.</li>
+<li><strong>On-the-fly reprojection</strong>: QGIS displays all layers in the project CRS
+regardless of their native CRS. This is for <strong>display only</strong> — it does not
+change the file on disk.</li>
+<li><strong>Reproject (warp)</strong>: Permanently transform raster or vector data to a new
+CRS, writing a new file. Required before passing data to analysis tools.</li>
+<li><strong>Z factor</strong>: A unit-conversion factor applied when DEM horizontal units
+(metres) differ from vertical units (feet), or vice versa.</li>
+</ul>
+<hr />
+<h2 id="choosing-a-working-crs"><a class="header" href="#choosing-a-working-crs">Choosing a Working CRS</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Scenario</th><th>Recommended CRS type</th></tr></thead><tbody>
+<tr><td>Global or continental analysis</td><td>Geographic (WGS84 / EPSG:4326) for data exchange; Equal-Area projection for area measurements</td></tr>
+<tr><td>Regional / national analysis</td><td>National projected CRS (e.g. Canada Atlas Lambert / EPSG:3978)</td></tr>
+<tr><td>Local analysis (&lt; 500 km extent)</td><td>UTM zone covering the study area</td></tr>
+<tr><td>Terrain analysis, hydrology, LiDAR</td><td>Projected CRS in metres (UTM recommended)</td></tr>
+<tr><td>Slope / distance calculations</td><td><strong>Always</strong> use a projected CRS</td></tr>
+</tbody></table>
+</div>
+<p><strong>Finding your UTM zone</strong>: The UTM zone number equals ⌊(longitude + 180) / 6⌋ + 1.
+For Ottawa, Canada (longitude ≈ –75.7°): zone 18, northern hemisphere →
+EPSG:32618.</p>
+<hr />
+<h2 id="checking-the-crs-of-a-layer"><a class="header" href="#checking-the-crs-of-a-layer">Checking the CRS of a Layer</a></h2>
+<ol>
+<li>Right-click a layer in the Layers panel → <strong>Properties</strong>.</li>
+<li>Select the <strong>Information</strong> tab.</li>
+<li>Read the <strong>CRS</strong> field. Confirm:
+<ul>
+<li>Authority and code (e.g. <code>EPSG:32618</code>)</li>
+<li>Unit (metres vs degrees)</li>
+<li>Datum (WGS84, NAD83, etc.)</li>
+</ul>
+</li>
+</ol>
+<p>Or in the Python Console:</p>
+<pre><code class="language-python">from qgis.core import QgsProject
+
+layer = QgsProject.instance().mapLayersByName('dem')[0]
+crs = layer.crs()
+print(crs.authid())        # e.g. "EPSG:32618"
+print(crs.mapUnits())      # 0 = metres, 6 = degrees
+print(crs.isGeographic())  # True if GCS
+</code></pre>
+<hr />
+<h2 id="setting-the-project-crs"><a class="header" href="#setting-the-project-crs">Setting the Project CRS</a></h2>
+<p>The <strong>project CRS</strong> controls the display and the default output CRS for tools
+that do not inherit CRS from their inputs.</p>
+<p><strong>Project → Properties → CRS tab</strong> → search by EPSG code or name → click OK.</p>
+<p>Or use <strong>View → Panels → CRS Status</strong> at the bottom-right of the QGIS window
+to set the project CRS from any loaded layer.</p>
+<hr />
+<h2 id="reprojecting-a-raster"><a class="header" href="#reprojecting-a-raster">Reprojecting a Raster</a></h2>
+<p>Use <strong>Reproject Raster</strong> to permanently transform a raster to a new CRS.
+This is required before any terrain analysis on a DEM stored in geographic
+(degree) coordinates.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster → <code>Reproject Raster</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>dem_wgs84.tif</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Resampling method</td><td><code>bilinear</code> (elevation surfaces)</td></tr>
+<tr><td>Output</td><td><code>dem_utm18n.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>The <strong>Resampling method</strong> parameter accepts any of the methods supported by
+WbW's raster engine:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Best for</th></tr></thead><tbody>
+<tr><td><code>nearest</code></td><td>Categorical / integer rasters (classification maps, stream grids)</td></tr>
+<tr><td><code>bilinear</code></td><td>Continuous surfaces (DEMs, slope, TWI, reflectance)</td></tr>
+<tr><td><code>cubic</code></td><td>High-quality continuous-surface resampling</td></tr>
+<tr><td><code>lanczos</code></td><td>High-quality sinc-window resampling</td></tr>
+<tr><td><code>average</code></td><td>3×3 mean statistic</td></tr>
+<tr><td><code>min</code> / <code>max</code></td><td>3×3 extremum statistics</td></tr>
+<tr><td><code>mode</code></td><td>3×3 majority-class (smoothed categorical)</td></tr>
+<tr><td><code>median</code></td><td>3×3 median statistic</td></tr>
+<tr><td><code>stddev</code></td><td>3×3 standard deviation</td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_raster', {
+    'input': '/data/dem_wgs84.tif',
+    'epsg': 32618,
+    'resample': 'bilinear',
+    'output': '/data/dem_utm18n.tif',
+})
+</code></pre>
+<p>After running, load the output and confirm in Layer Properties → Information:
+CRS shows <code>EPSG:32618</code> and the extent is in metres.</p>
+<hr />
+<h2 id="reprojecting-a-vector-layer"><a class="header" href="#reprojecting-a-vector-layer">Reprojecting a Vector Layer</a></h2>
+<p>Use <strong>Reproject Vector</strong> to transform a vector dataset to a new CRS.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector → <code>Reproject Vector</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>roads_wgs84.shp</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Output</td><td><code>roads_utm18n.shp</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_vector', {
+    'input': '/data/roads_wgs84.shp',
+    'epsg': 32618,
+    'output': '/data/roads_utm18n.shp',
+})
+</code></pre>
+<hr />
+<h2 id="reprojecting-a-lidar-dataset"><a class="header" href="#reprojecting-a-lidar-dataset">Reprojecting a LiDAR Dataset</a></h2>
+<p>Use <strong>Reproject LiDAR</strong> to transform a point cloud to a new CRS.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR → <code>Reproject LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_wgs84.laz</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Output</td><td><code>cloud_utm18n.laz</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_lidar', {
+    'input': '/data/cloud_wgs84.laz',
+    'epsg': 32618,
+    'output': '/data/cloud_utm18n.laz',
+})
+</code></pre>
+<hr />
+<h2 id="assigning-a-missing-crs"><a class="header" href="#assigning-a-missing-crs">Assigning a Missing CRS</a></h2>
+<p>If a file has correct coordinates but missing or wrong CRS metadata (shown
+as "Unknown CRS" in Layer Properties), use one of the three <strong>Assign
+Projection</strong> tools to write the correct EPSG code into the file without
+moving any coordinates.</p>
+<blockquote>
+<p><strong>Assign vs. Reproject:</strong> Assigning a CRS only updates the metadata label.
+Use it when coordinates are already in the target system but the file has
+no CRS tag. If the coordinate values themselves need to change, use the
+Reproject tools above instead.</p>
+</blockquote>
+<h3 id="assign-projection-to-a-raster"><a class="header" href="#assign-projection-to-a-raster">Assign Projection to a Raster</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster → <code>Assign Projection Raster</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>dem_no_crs.tif</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_raster', {
+    'input': '/data/dem_no_crs.tif',
+    'epsg': 32618,
+})
+</code></pre>
+<h3 id="assign-projection-to-a-vector"><a class="header" href="#assign-projection-to-a-vector">Assign Projection to a Vector</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector → <code>Assign Projection Vector</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>roads_no_crs.shp</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_vector', {
+    'input': '/data/roads_no_crs.shp',
+    'epsg': 32618,
+})
+</code></pre>
+<h3 id="assign-projection-to-a-lidar-file"><a class="header" href="#assign-projection-to-a-lidar-file">Assign Projection to a LiDAR File</a></h3>
+<p><strong>Processing Toolbox -&gt; Whitebox Workflows -&gt; LiDAR -&gt; <code>Assign Projection LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_no_crs.laz</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_lidar', {
+  'input': '/data/cloud_no_crs.laz',
+  'epsg': 32618,
+})
+</code></pre>
+<hr />
+<h2 id="georeferencing-from-control-points"><a class="header" href="#georeferencing-from-control-points">Georeferencing from Control Points</a></h2>
+<p>Use <strong>Georeference Raster From Control Points</strong> when the raster has no valid
+georeferencing and you have control points that relate pixel coordinates to map
+coordinates.</p>
+<p><strong>Processing Toolbox -&gt; Whitebox Workflows -&gt; Raster -&gt; <code>Georeference Raster From Control Points</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input raster</td><td><code>historical_scan.tif</code></td></tr>
+<tr><td>Control points CSV</td><td><code>historical_scan_gcps.csv</code></td></tr>
+<tr><td>Destination EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Resampling method</td><td><code>bilinear</code> (continuous) or <code>nearest</code> (categorical)</td></tr>
+<tr><td>Georeferenced raster output</td><td><code>historical_scan_georef.tif</code></td></tr>
+<tr><td>Diagnostics report output</td><td><code>historical_scan_georef_report.json</code> (optional)</td></tr>
+</tbody></table>
+</div>
+<p>Control-points CSV fields must include source image coordinates and target map
+coordinates:</p>
+<ul>
+<li><code>source_col</code></li>
+<li><code>source_row</code></li>
+<li><code>target_x</code></li>
+<li><code>target_y</code></li>
+</ul>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:georeference_raster_from_control_points', {
+  'input': '/data/historical_scan.tif',
+  'control_points': '/data/historical_scan_gcps.csv',
+  'epsg': 32618,
+  'resample': 'bilinear',
+  'output': '/data/historical_scan_georef.tif',
+  'report': '/data/historical_scan_georef_report.json',
+})
+</code></pre>
+<h3 id="assign-projection-to-a-lidar-dataset"><a class="header" href="#assign-projection-to-a-lidar-dataset">Assign Projection to a LiDAR Dataset</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR → <code>Assign Projection LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_no_crs.laz</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_lidar', {
+    'input': '/data/cloud_no_crs.laz',
+    'epsg': 32618,
+})
+</code></pre>
+<hr />
+<h2 id="the-z-factor-for-terrain-tools"><a class="header" href="#the-z-factor-for-terrain-tools">The Z Factor for Terrain Tools</a></h2>
+<p>When a DEM's horizontal units differ from its vertical units, slope and
+curvature calculations are incorrect unless a Z factor is applied.</p>
+<div class="table-wrapper"><table><thead><tr><th>Horizontal unit</th><th>Vertical unit</th><th>Z factor</th></tr></thead><tbody>
+<tr><td>Metres</td><td>Metres</td><td><code>1.0</code> (no conversion needed)</td></tr>
+<tr><td>Metres</td><td>Feet</td><td><code>0.3048</code></td></tr>
+<tr><td>Feet</td><td>Feet</td><td><code>1.0</code></td></tr>
+<tr><td>Degrees (geographic)</td><td>Metres</td><td>Do <strong>not</strong> use — reproject first</td></tr>
+</tbody></table>
+</div>
+<p>All WbW terrain tools that accept a Z factor parameter apply the conversion
+as: <code>slope = atan(rise × z_factor / run)</code>.</p>
+<blockquote>
+<p><strong>Best practice</strong>: Reproject the DEM to a projected CRS in metres before
+running any terrain analysis. Set Z factor to <code>1.0</code> after reprojection if
+vertical units are also metres.</p>
+</blockquote>
+<hr />
+<h2 id="batch-reprojection-via-python-console"><a class="header" href="#batch-reprojection-via-python-console">Batch Reprojection via Python Console</a></h2>
+<p>Reproject all GeoPackages in a folder to EPSG:32618 using the Whitebox
+vector reprojection tool:</p>
+<pre><code class="language-python">import processing
+from pathlib import Path
+
+src_dir = Path('/data/raw_vectors')
+out_dir = Path('/data/projected')
+out_dir.mkdir(exist_ok=True)
+
+for gpkg in src_dir.glob('*.gpkg'):
+    out = out_dir / gpkg.name
+    processing.run('whitebox_workflows:reproject_vector', {
+        'input': str(gpkg),
+        'epsg': 32618,
+        'output': str(out),
+    })
+    print(f"Reprojected: {gpkg.name}")
+
+print("Batch reprojection complete.")
+</code></pre>
+<p>Reproject a folder of LiDAR files in the same pattern:</p>
+<pre><code class="language-python">import processing
+from pathlib import Path
+
+src_dir = Path('/data/raw_lidar')
+out_dir = Path('/data/projected_lidar')
+out_dir.mkdir(exist_ok=True)
+
+for las in src_dir.glob('*.laz'):
+    out = out_dir / las.name
+    processing.run('whitebox_workflows:reproject_lidar', {
+        'input': str(las),
+        'epsg': 32618,
+        'output': str(out),
+    })
+    print(f"Reprojected: {las.name}")
+
+print("Batch LiDAR reprojection complete.")
+</code></pre>
+<hr />
+<h2 id="common-crs-problems"><a class="header" href="#common-crs-problems">Common CRS Problems</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Layers display in wrong location</td><td>Layer has incorrect assigned CRS</td><td>Assign correct CRS (do not reproject)</td></tr>
+<tr><td>Slope values in hundreds of degrees</td><td>DEM in geographic CRS (degrees) — cell size &lt;&lt; 1°</td><td>Reproject DEM to metres before running slope</td></tr>
+<tr><td>Area calculations wildly wrong</td><td>Layer CRS is geographic (degrees)</td><td>Reproject to equal-area projected CRS</td></tr>
+<tr><td>Watershed does not close properly</td><td>Raster and vector inputs in different CRS</td><td>Reproject all inputs to same CRS before processing</td></tr>
+<tr><td>WbW tool silently returns NoData everywhere</td><td>CRS mismatch causes spatial extents not to overlap</td><td>Verify all inputs share the same CRS and extent</td></tr>
+<tr><td>"Datum transform not found" warning in QGIS</td><td>Datum shift grid file not installed</td><td>Install <code>proj-data</code> package, or accept approximate transform</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist"><a class="header" href="#validation-checklist">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Project CRS is set to the intended working CRS before analysis.</li>
+<li><input disabled="" type="checkbox"/>
+All raster inputs share the same CRS, extent, and cell size.</li>
+<li><input disabled="" type="checkbox"/>
+All vector inputs share the same CRS as the raster grid.</li>
+<li><input disabled="" type="checkbox"/>
+DEM CRS is projected (linear units — metres or feet), not geographic.</li>
+<li><input disabled="" type="checkbox"/>
+Z factor is set to <code>1.0</code> when both horizontal and vertical units are metres.</li>
+<li><input disabled="" type="checkbox"/>
+Reprojected outputs have been inspected (extent in metres, CRS code confirmed).</li>
+<li><input disabled="" type="checkbox"/>
+No layers show "Unknown CRS" in the Layers panel.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="data-formats.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="terrain-analysis.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="data-formats.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="terrain-analysis.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

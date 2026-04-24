@@ -485,7 +485,8 @@ let vv_set = bundle.read_measurements_for_polarization("VV")?;
 ### Unified Sensor Bundle Detection
 
 Use a single entrypoint to detect and open a supported bundle family
-(Sentinel SAFE, Landsat, ICEYE, PlanetScope, DIMAP, Maxar/WorldView, RADARSAT-2, RCM):
+(Sentinel SAFE, Landsat, ICEYE, PlanetScope, DIMAP, Maxar/WorldView,
+RADARSAT-2, RCM):
 
 ```rust
 use wbraster::{
@@ -519,7 +520,7 @@ match open_sensor_bundle("some_bundle_root")? {
   SensorBundle::Safe(pkg) => println!("SAFE bundle: {:?}", pkg),
 }
 
-// Also supports archive paths (.zip, .tar, .tar.gz, .tgz)
+// Path opener supports directories and supported archives.
 let opened = wbraster::open_sensor_bundle_path("LC09_scene_bundle.tar.gz")?;
 match opened.bundle {
   SensorBundle::Landsat(pkg) => println!("Landsat bands: {:?}", pkg.list_band_keys()),

@@ -222,6 +222,41 @@ for row in range(rows):
             if z &lt; 0:
                 a[row, col] = 0.0
 </code></pre>
+<h2 id="fast-random-cell-access-with-pinning"><a class="header" href="#fast-random-cell-access-with-pinning">Fast Random Cell Access with Pinning</a></h2>
+<p>For custom neighbourhood logic, flow-path traversal, or other pseudo-random
+cell access, use pinned raster views. Pinning avoids repeated per-access lookup
+and lock-routing overhead by holding a direct in-memory view during the loop.</p>
+<p>Single-raster pattern:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+pointer = wbe.read_raster("D8Pointer.tif")
+
+with pointer.pin() as p:
+    v = p[100, 200]
+    p[100, 200] = v + 1.0
+</code></pre>
+<p>Multi-raster scan-loop pattern (read one raster, write another):</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+src = wbe.read_raster("D8Pointer.tif")
+dst = wb.Raster.new_from_other(src, data_type="int32")
+
+with wb.pin_rasters(src, dst) as (srcp, dstp):
+    meta = src.metadata()
+    for row in range(meta.rows):
+        for col in range(meta.columns):
+            value = srcp[row, col]
+            # Replace this with your custom per-cell rule.
+            dstp[row, col] = value
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li>Use pinning for loops dominated by scalar <code>r[row, col]</code> accesses.</li>
+<li><code>with</code> scope exit flushes any pinned writes safely.</li>
+<li>For pure row-wise transforms, <code>get_row_data</code>/<code>set_row_data</code> is still efficient.</li>
+</ul>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
 <p>This example shows the common pattern of deriving a new raster while preserving
 georeferencing context from a base raster.</p>
@@ -311,6 +346,7 @@ from the tables to keep the reference readable.</p>
 <h3 id="grid-navigation-and-direct-editing"><a class="header" href="#grid-navigation-and-direct-editing">Grid Navigation and Direct Editing</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>get_value</code>, <code>set_value</code></td><td>Read or write an individual cell value.</td></tr>
+<tr><td><code>pin</code></td><td>Return a pinned raster view for low-overhead random read/write access in a <code>with</code> scope.</td></tr>
 <tr><td><code>get_row_data</code>, <code>set_row_data</code></td><td>Read or replace an entire row of raster values.</td></tr>
 <tr><td><code>increment</code>, <code>decrement</code></td><td>Add to or subtract from a single cell value.</td></tr>
 <tr><td><code>increment_row_data</code>, <code>decrement_row_data</code></td><td>Add to or subtract from every value in a row.</td></tr>

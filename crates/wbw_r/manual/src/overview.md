@@ -12,6 +12,15 @@ geomorphometry, hydrology, lidar processing, and remote sensing. Whitebox Next
 Gen is the current Rust-based major iteration focused on performance,
 cross-platform reliability, and modern data formats.
 
+Whitebox Next Gen is intentionally full-stack: core geospatial capabilities
+that are often delegated to external C/C++ dependencies in other GIS platforms
+(for example raster I/O, projections, geometry/topology operations, and lidar
+handling) are implemented in the Whitebox codebase itself. This architecture is
+unusual in GIS and provides practical benefits for users: consistent behavior
+across platforms, tighter control over correctness and performance, fewer
+system-level dependency issues during installation, and faster iteration when
+fixing bugs or introducing new capabilities.
+
 In this architecture, WbW-R is the orchestration layer for R users who need
 both practical scripting ergonomics and backend-scale performance.
 

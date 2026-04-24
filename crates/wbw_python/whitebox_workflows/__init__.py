@@ -1,6 +1,21 @@
 from .whitebox_workflows import *
 from . import callbacks
 from .callbacks import ProgressPrinter, make_progress_printer, print_progress
+from contextlib import ExitStack, contextmanager
+
+
+@contextmanager
+def pin_rasters(*rasters):
+    """Pin one or more rasters for low-overhead cell access within a scope.
+
+    Example:
+        with pin_rasters(source, target) as (srcp, dstp):
+            value = srcp[row, col]
+            dstp[row, col] = value
+    """
+    with ExitStack() as stack:
+        pinned = tuple(stack.enter_context(r.pin()) for r in rasters)
+        yield pinned
 
 
 def _add_if_not_none(args, key, value):

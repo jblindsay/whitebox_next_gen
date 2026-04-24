@@ -1,0 +1,1 @@
+{'id': 'breach_depressions_least_cost', 'display_name': 'Breach Depressions Least Cost', 'summary': 'Breaches depressions in a DEM using a constrained least-cost pathway search.', 'category': 'Hydrology', 'license_tier': 'open', 'is_pro': False, 'available_in_current_session': True, 'availability_reason': 'available', 'tags': ['hydrology', 'depression', 'dem'], 'params': []}

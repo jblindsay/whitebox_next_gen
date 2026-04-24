@@ -42,6 +42,16 @@ pub struct ToolParamSpec {
     pub required: bool,
 }
 
+impl Default for ToolParamSpec {
+    fn default() -> Self {
+        Self {
+            name: "",
+            description: "",
+            required: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolMetadata {
     pub id: ToolId,
@@ -216,6 +226,16 @@ pub struct ToolParamDescriptor {
     pub required: bool,
 }
 
+impl Default for ToolParamDescriptor {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            required: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDescriptor {
     pub id: String,
@@ -224,6 +244,26 @@ pub struct ToolDescriptor {
     pub category: ToolCategory,
     pub license_tier: LicenseTier,
     pub params: Vec<ToolParamDescriptor>,
+}
+
+impl From<ToolParamSpec> for ToolParamDescriptor {
+    fn from(p: ToolParamSpec) -> Self {
+        Self {
+            name: p.name.to_string(),
+            description: p.description.to_string(),
+            required: p.required,
+        }
+    }
+}
+
+impl From<&ToolParamSpec> for ToolParamDescriptor {
+    fn from(p: &ToolParamSpec) -> Self {
+        Self {
+            name: p.name.to_string(),
+            description: p.description.to_string(),
+            required: p.required,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -257,15 +297,7 @@ pub struct ToolManifest {
 
 impl From<ToolMetadata> for ToolDescriptor {
     fn from(m: ToolMetadata) -> Self {
-        let params = m
-            .params
-            .into_iter()
-            .map(|p| ToolParamDescriptor {
-                name: p.name.to_string(),
-                description: p.description.to_string(),
-                required: p.required,
-            })
-            .collect();
+        let params = m.params.into_iter().map(ToolParamDescriptor::from).collect();
 
         Self {
             id: m.id.to_string(),
@@ -293,15 +325,7 @@ impl From<ToolManifest> for ToolDescriptor {
 
 impl From<ToolMetadata> for ToolManifest {
     fn from(m: ToolMetadata) -> Self {
-        let params = m
-            .params
-            .into_iter()
-            .map(|p| ToolParamDescriptor {
-                name: p.name.to_string(),
-                description: p.description.to_string(),
-                required: p.required,
-            })
-            .collect();
+        let params = m.params.into_iter().map(ToolParamDescriptor::from).collect();
 
         Self {
             id: m.id.to_string(),
@@ -630,11 +654,13 @@ mod tests {
                         name: "input",
                         description: "Input values",
                         required: true,
+                            ..Default::default()
                     },
                     ToolParamSpec {
                         name: "constant",
                         description: "Added value",
                         required: true,
+                            ..Default::default()
                     },
                 ],
             }]

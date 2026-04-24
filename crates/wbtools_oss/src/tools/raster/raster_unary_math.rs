@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rayon::prelude::*;
 use serde_json::{json, Value};
 use wbcore::{
-    LicenseTier, PercentCoalescer, Tool, ToolArgs, ToolCategory, ToolContext, ToolError,
+    LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext, ToolError,
     ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec, ToolRunResult,
     ToolStability,
 };
@@ -16,9 +15,6 @@ struct UnaryRasterMathSpec {
     summary: &'static str,
     op: fn(f64) -> f64,
 }
-
-const UNARY_MATH_PAR_CHUNK: usize = 16_384;
-const UNARY_MATH_PROGRESS_BATCH_CHUNKS: usize = 64;
 
 fn parse_input(args: &ToolArgs) -> Result<&str, ToolError> {
     let input = args
@@ -141,38 +137,13 @@ fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext
         .info(&format!("running {}", spec.id));
 
     let input = load_input_raster(input_path)?;
-    let mut output = input.clone();
-
+    let mut output = Raster::new_like(&input);
     let len = output.data.len();
-    let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
-    let mut out_values = vec![input.nodata; len];
-    let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
-    let compute_progress = PercentCoalescer::new(1, 90);
-    let mut completed_chunks = 0usize;
-
-    while completed_chunks < total_chunks {
-        let batch_chunks = (total_chunks - completed_chunks).min(UNARY_MATH_PROGRESS_BATCH_CHUNKS);
-        let batch_start = completed_chunks * UNARY_MATH_PAR_CHUNK;
-        let batch_end = (batch_start + batch_chunks * UNARY_MATH_PAR_CHUNK).min(len);
-
-        out_values[batch_start..batch_end]
-            .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
-            .zip(in_values[batch_start..batch_end].par_chunks(UNARY_MATH_PAR_CHUNK))
-            .for_each(|(out_chunk, in_chunk)| {
-                for i in 0..out_chunk.len() {
-                    let z = in_chunk[i];
-                    out_chunk[i] = if input.is_nodata(z) { input.nodata } else { (spec.op)(z) };
-                }
-            });
-
-        completed_chunks += batch_chunks;
-        compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
-    }
-    compute_progress.finish(ctx.progress);
-
-    for (i, value) in out_values.iter().enumerate() {
-        output.data.set_f64(i, *value);
-    }
+    output.par_fill_with(|i| {
+        let z = input.data.get_f64(i);
+        if input.is_nodata(z) { input.nodata } else { (spec.op)(z) }
+    });
+    ctx.progress.progress(0.9);
 
     let output_locator = write_or_store_output(output, output_path)?;
     ctx.progress.progress(1.0);
@@ -331,38 +302,13 @@ impl Tool for RasterIsNodataTool {
         ctx.progress.info("running is_nodata");
 
         let input = load_input_raster(input_path)?;
-        let mut output = input.clone();
+        let mut output = Raster::new_like(&input);
         let len = output.data.len();
-
-        let in_values: Vec<f64> = (0..len).into_par_iter().map(|i| input.data.get_f64(i)).collect();
-        let mut out_values = vec![0.0; len];
-        let total_chunks = len.div_ceil(UNARY_MATH_PAR_CHUNK).max(1);
-        let compute_progress = PercentCoalescer::new(1, 90);
-        let mut completed_chunks = 0usize;
-
-        while completed_chunks < total_chunks {
-            let batch_chunks = (total_chunks - completed_chunks).min(UNARY_MATH_PROGRESS_BATCH_CHUNKS);
-            let batch_start = completed_chunks * UNARY_MATH_PAR_CHUNK;
-            let batch_end = (batch_start + batch_chunks * UNARY_MATH_PAR_CHUNK).min(len);
-
-            out_values[batch_start..batch_end]
-                .par_chunks_mut(UNARY_MATH_PAR_CHUNK)
-                .zip(in_values[batch_start..batch_end].par_chunks(UNARY_MATH_PAR_CHUNK))
-                .for_each(|(out_chunk, in_chunk)| {
-                    for i in 0..out_chunk.len() {
-                        let z = in_chunk[i];
-                        out_chunk[i] = if input.is_nodata(z) { 1.0 } else { 0.0 };
-                    }
-                });
-
-            completed_chunks += batch_chunks;
-            compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
-        }
-        compute_progress.finish(ctx.progress);
-
-        for (i, value) in out_values.iter().enumerate() {
-            output.data.set_f64(i, *value);
-        }
+        output.par_fill_with(|i| {
+            let z = input.data.get_f64(i);
+            if input.is_nodata(z) { 1.0 } else { 0.0 }
+        });
+        ctx.progress.progress(0.9);
 
         let output_locator = write_or_store_output(output, output_path)?;
         ctx.progress.progress(1.0);

@@ -346,13 +346,39 @@ print(roads_utm$crs_epsg())
 
 s &lt;- wbw_session()
 wbw_run_tool(
-  'lidar_reproject',
+  'reproject_lidar',
   args = list(input = 'survey.las', output = 'survey_utm.laz', epsg = 32618),
   session = s
 )
 
 survey_utm &lt;- wbw_read_lidar('survey_utm.laz')
 print(survey_utm$crs_epsg())
+</code></pre>
+<h2 id="georeference-raster-from-control-points"><a class="header" href="#georeference-raster-from-control-points">Georeference Raster from Control Points</a></h2>
+<p>Use this when a raster/image lacks reliable georeferencing and you have control
+points mapping pixel coordinates to map coordinates.</p>
+<p>Required CSV fields:</p>
+<ul>
+<li><code>source_col</code></li>
+<li><code>source_row</code></li>
+<li><code>target_x</code></li>
+<li><code>target_y</code></li>
+</ul>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+s &lt;- wbw_session()
+wbw_run_tool(
+  'georeference_raster_from_control_points',
+  args = list(
+    input = 'historical_scan.tif',
+    control_points = 'historical_scan_gcps.csv',
+    epsg = 32618,
+    resample = 'bilinear',
+    output = 'historical_scan_georef.tif',
+    report = 'historical_scan_georef_report.json'
+  ),
+  session = s
+)
 </code></pre>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ul>

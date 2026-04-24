@@ -411,6 +411,19 @@ edges_h = wbe.sobel_filter(red, variant='3x3')
 # Canny edge detector — more precise edge localisation
 canny_edges = wbe.canny_edge_detection(red, sigma=0.5,
                                         low_threshold=5.0, high_threshold=15.0)
+
+# General-purpose GLCM texture (multiband output)
+# Band names are recorded in raster metadata as band_1_name, band_2_name, ...
+glcm = wbe.glcm_texture(
+    red,
+    window_size=9,
+    distance=1,
+    angles="0,45,90,135",
+    features="contrast,homogeneity,entropy",
+    direction_aggregation="mean",
+    levels=32,
+    output_path="glcm_texture.tif",
+)
 </code></pre>
 <hr />
 <h2 id="principal-component-analysis-pca"><a class="header" href="#principal-component-analysis-pca">Principal Component Analysis (PCA)</a></h2>

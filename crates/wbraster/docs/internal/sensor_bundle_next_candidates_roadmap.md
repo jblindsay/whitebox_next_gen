@@ -23,18 +23,26 @@ Current package-level baseline already implemented:
 - SPOT/Pleiades DIMAP bundles ✅ (Tier A — complete)
 - Maxar/WorldView bundles ✅ (Tier A — complete)
 
+Recent outcome:
+
+- Experimental HDF5/NetCDF bundle readers were removed after real-file
+  validation showed the pure-Rust HDF5 approach was not viable enough for
+  production support.
+- Sentinel-3, MODIS, Sentinel-5P, SMAP, and VIIRS are not currently
+  implemented bundle families in `wbraster`.
+
 ---
 
-## Short Answer On Sentinel-3
-
-Yes, your concern is valid.
+## Short Answer On HDF5/NetCDF Families
 
 Many Sentinel-3 products are distributed as SAFE directories containing NetCDF-4 files. NetCDF-4 typically relies on HDF5 internals. Supporting this well in a pure-Rust + minimal-dependency stack is materially harder than current bundle readers that mostly orchestrate TIFF/JP2 assets.
 
 Practical implication:
 
-- Sentinel-3 SAFE is still high-value scientifically, but should not be the immediate next addition unless we first make an explicit decision on NetCDF/HDF5 strategy.
-- If pursued early, scope should be metadata/indexing-first (detect package, parse top-level XML/manifests), while deferring pixel read support for NetCDF assets.
+- HDF5/NetCDF-backed bundle families are deferred until there is an explicit,
+  credible dependency strategy.
+- Do not reintroduce Sentinel-3, MODIS, Sentinel-5P, SMAP, or VIIRS bundle
+  readers under the current pure-Rust-only HDF5 assumption.
 
 ---
 
@@ -51,106 +59,53 @@ and conformance env vars (`WBRASTER_PLANETSCOPE_EXPECT_PROFILES`, etc.).
 
 ### Tier B — current frontier (high value, medium complexity)
 
-4. Sentinel-3 SAFE (metadata/indexing phase)
-5. TerraSAR-X / TanDEM-X package deliveries
-6. ALOS PALSAR CEOS-style packages
+4. TerraSAR-X / TanDEM-X package deliveries
+5. ALOS PALSAR CEOS-style packages
+6. OPERA/HLS-style multi-file analysis bundles
 
 Why Tier B:
 
-- Valuable missions but with greater packaging variance or format friction.
-- Sentinel-3 specifically intersects NetCDF-4/HDF5 constraints (see strategy section below).
+- Valuable missions but with greater packaging variance or metadata friction.
 
-### Tier C — defer until strategy/fixture access
+### Tier C — defer until dependency strategy changes
 
-7. MODIS/VIIRS package products (HDF/netCDF-heavy)
-8. OPERA/HLS-style multi-file analysis bundles
+7. Sentinel-3 SAFE / SEN3 products
+8. MODIS, Sentinel-5P, SMAP, and VIIRS package products
 9. Capella/Umbra commercial SAR bundles
 
 Why Tier C:
 
-- Either stronger dependency pressure (HDF/netCDF) or less reliable public fixture accessibility.
+- Either strong HDF/netCDF dependency pressure or less reliable public fixture accessibility.
 
 ---
 
 ## Recommended Implementation Sequence
 
-1. Sentinel-3 SAFE metadata/indexing reader (no NetCDF pixel decode yet)
-2. TerraSAR-X / TanDEM-X reader
-3. ALOS PALSAR CEOS-style reader
-4. Full NetCDF pixel-read support (gated on explicit HDF5/NetCDF strategy decision)
+1. TerraSAR-X / TanDEM-X reader
+2. ALOS PALSAR CEOS-style reader
+3. OPERA/HLS-style bundle reader
+4. Revisit HDF5/NetCDF package support only after adopting a non-experimental strategy
 
-This sequence maximizes user-visible value without forcing an early NetCDF/HDF5 architecture decision.
-
----
-
-## Detailed Checklists For Tier B Candidates
-
-## 1) Sentinel-3 SAFE — Metadata/Index Phase
-
-### Typical package ingredients
-
-- SAFE directory with top-level `xfdumanifest.xml`.
-- `measurement/` subdirectory containing NetCDF-4 (`.nc`) assets.
-- `granules/` and `indices/` subdirectories with supporting metadata.
-
-### Proposed public API shape (Phase 1, metadata/index only)
-
-- `Sentinel3Bundle`
-- Fields:
-  - `bundle_root`
-  - `product_type` (e.g., `OL_1_EFR`, `SL_2_LST`, etc.)
-  - `acquisition_start_utc`, `acquisition_stop_utc`
-  - `mission` (`Sentinel3A`, `Sentinel3B`)
-  - `assets: BTreeMap<String, PathBuf>` — opaque NetCDF asset entries
-
-### Phase 1 methods
-
-- `open(bundle_root)`
-- `list_asset_keys() -> Vec<String>`
-- `asset_path(key) -> Option<&Path>`
-- `read_*` methods: return `Err(NotSupported)` with clear message until NetCDF pixel-read is implemented
-
-### Detection heuristics
-
-- SAFE directory with `xfdumanifest.xml` declaring `Sentinel-3` family.
-- Product type prefix matching (`OL_`, `SL_`, `SY_`, `SR_`, etc.).
-
-### Tests
-
-- Synthetic metadata parsing (mock `xfdumanifest.xml`).
-- Confirm `read_*` returns `Err` with useful message rather than panicking.
-
-### Optional smoke test env var
-
-- `WBRASTER_SENTINEL3_SAMPLE`
+This sequence maximizes user-visible value without reopening the HDF5/NetCDF dependency problem.
 
 ---
 
-## Sentinel-3 Strategy Options (explicit)
+## HDF5/NetCDF Re-entry Criteria
 
-If Sentinel-3 is prioritized soon, pick one of these before implementation:
+Do not restart work on these families until all of the following are true:
 
-1. Metadata/index-only phase (recommended first)
-- Detect Sentinel-3 SAFE family.
-- Parse mission/product metadata from XML manifests.
-- Index NetCDF assets as opaque entries.
-- Return clear `NotImplemented` for NetCDF pixel reads.
-
-2. Full pixel-read phase
-- Requires explicit NetCDF/HDF5 dependency strategy compatible with project policy.
-- Should be isolated behind a crate feature gate if adopted.
-
-Recommended now: Option 1 only, after Tier A readers.
+1. A viable dependency strategy has been chosen and validated against real files.
+2. The strategy supports NOAA/NASA-style HDF5 edge cases seen in production samples.
+3. The policy impact on core crate dependencies is explicitly accepted.
+4. Real-file smoke fixtures exist for each target family before implementation begins.
 
 ---
 
 ## Acceptance Criteria For This Roadmap
 
-We should treat Tier B work as the active frontier. This roadmap is considered current until:
+We should treat non-HDF Tier B work as the active frontier. This roadmap is considered current until:
 
-1. Sentinel-3 SAFE metadata/indexing phase is implemented and tested.
-2. At least one further Tier B reader (TerraSAR-X or ALOS PALSAR) is complete.
-3. At that point, revise Tier B/C ranking and update this document again.
-2. Unified sensor-bundle detection includes these families.
-3. Sentinel-3 decision is documented as metadata-only phase or dependency-backed full read phase.
+1. At least one further Tier B reader (TerraSAR-X, ALOS PALSAR, or OPERA/HLS) is complete.
+2. The Tier B/C ranking is revised after that delivery.
+3. Any future HDF5/NetCDF proposal includes a validated dependency decision up front.
 4. No core crate dependency policy violations are introduced.

@@ -184,6 +184,14 @@ evolved into a broad analysis platform with particular strength in
 geomorphometry, hydrological analysis, lidar processing, and remote sensing.
 Whitebox Next Gen is the current Rust-based major iteration, designed to pair
 high performance with modern APIs.</p>
+<p>Whitebox Next Gen is intentionally full-stack: core geospatial capabilities
+that are often delegated to external C/C++ dependencies in other GIS platforms
+(for example raster I/O, projections, geometry/topology operations, and lidar
+handling) are implemented in the Whitebox codebase itself. This architecture is
+unusual in GIS and provides practical benefits for users: consistent behavior
+across platforms, tighter control over correctness and performance, fewer
+system-level dependency issues during installation, and faster iteration when
+fixing bugs or introducing new capabilities.</p>
 <p>Within that architecture, WbW-Py is the user-facing orchestration layer for
 Python users. It is intended for three common use cases:</p>
 <ul>
@@ -381,12 +389,21 @@ if missing:
 <li><code>wbe.vector</code></li>
 <li><code>wbe.lidar</code></li>
 <li><code>wbe.remote_sensing</code></li>
+<li><code>wbe.conversion</code></li>
+<li><code>wbe.streams</code></li>
+<li><code>wbe.precision_agriculture</code></li>
+<li><code>wbe.other</code></li>
 </ul>
 <p>Use generic accessors for dynamic workflows:</p>
 <ul>
 <li><code>wbe.category(name)</code></li>
 <li><code>wbe.domain(name)</code></li>
 </ul>
+<p>Projection/georeferencing tools are cataloged under the canonical category key
+<code>projection_georeferencing</code> and can be queried with:</p>
+<pre><code class="language-python">proj_tools = wbe.category('projection_georeferencing').list_tools()
+print(proj_tools[:10])
+</code></pre>
 <h2 id="wbenvironment-method-reference"><a class="header" href="#wbenvironment-method-reference">WbEnvironment Method Reference</a></h2>
 <p>This reference lists callable <code>WbEnvironment</code> methods with brief descriptions.
 Special Python dunder methods are intentionally omitted.</p>
@@ -472,8 +489,9 @@ Special Python dunder methods are intentionally omitted.</p>
 <tr><td><code>max_procs</code></td><td>Maximum process count used by eligible parallel operations.</td></tr>
 <tr><td><code>projection</code></td><td>Namespace for CRS and coordinate transformation helper methods.</td></tr>
 <tr><td><code>topology</code></td><td>Namespace for geometry-topology helper methods.</td></tr>
-<tr><td><code>hydrology</code>, <code>terrain</code>, <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>remote_sensing</code>, <code>conversion</code>, <code>topology_tools</code></td><td>Typed category namespaces for tool discovery and execution.</td></tr>
-<tr><td><code>other</code>, <code>precision_agriculture</code>, <code>streams</code></td><td>Additional category/domain namespaces available in the environment.</td></tr>
+<tr><td><code>hydrology</code>, <code>terrain</code>, <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>remote_sensing</code></td><td>Primary category namespaces for tool discovery and execution.</td></tr>
+<tr><td><code>precision_agriculture</code></td><td>Pro-tier precision agriculture tools (yield zoning, irrigation, crop stress, trafficability).</td></tr>
+<tr><td><code>conversion</code>, <code>streams</code>, <code>other</code></td><td>Additional category namespaces available in the environment.</td></tr>
 </tbody></table>
 </div><div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-and-progress"><a class="header" href="#tool-execution-and-progress">Tool Execution and Progress</a></h1>
 <p>This chapter documents execution styles and progress handling.</p>
@@ -605,6 +623,41 @@ for row in range(rows):
             if z &lt; 0:
                 a[row, col] = 0.0
 </code></pre>
+<h2 id="fast-random-cell-access-with-pinning"><a class="header" href="#fast-random-cell-access-with-pinning">Fast Random Cell Access with Pinning</a></h2>
+<p>For custom neighbourhood logic, flow-path traversal, or other pseudo-random
+cell access, use pinned raster views. Pinning avoids repeated per-access lookup
+and lock-routing overhead by holding a direct in-memory view during the loop.</p>
+<p>Single-raster pattern:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+pointer = wbe.read_raster("D8Pointer.tif")
+
+with pointer.pin() as p:
+    v = p[100, 200]
+    p[100, 200] = v + 1.0
+</code></pre>
+<p>Multi-raster scan-loop pattern (read one raster, write another):</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+src = wbe.read_raster("D8Pointer.tif")
+dst = wb.Raster.new_from_other(src, data_type="int32")
+
+with wb.pin_rasters(src, dst) as (srcp, dstp):
+    meta = src.metadata()
+    for row in range(meta.rows):
+        for col in range(meta.columns):
+            value = srcp[row, col]
+            # Replace this with your custom per-cell rule.
+            dstp[row, col] = value
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li>Use pinning for loops dominated by scalar <code>r[row, col]</code> accesses.</li>
+<li><code>with</code> scope exit flushes any pinned writes safely.</li>
+<li>For pure row-wise transforms, <code>get_row_data</code>/<code>set_row_data</code> is still efficient.</li>
+</ul>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
 <p>This example shows the common pattern of deriving a new raster while preserving
 georeferencing context from a base raster.</p>
@@ -694,6 +747,7 @@ from the tables to keep the reference readable.</p>
 <h3 id="grid-navigation-and-direct-editing"><a class="header" href="#grid-navigation-and-direct-editing">Grid Navigation and Direct Editing</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>get_value</code>, <code>set_value</code></td><td>Read or write an individual cell value.</td></tr>
+<tr><td><code>pin</code></td><td>Return a pinned raster view for low-overhead random read/write access in a <code>with</code> scope.</td></tr>
 <tr><td><code>get_row_data</code>, <code>set_row_data</code></td><td>Read or replace an entire row of raster values.</td></tr>
 <tr><td><code>increment</code>, <code>decrement</code></td><td>Add to or subtract from a single cell value.</td></tr>
 <tr><td><code>increment_row_data</code>, <code>decrement_row_data</code></td><td>Add to or subtract from every value in a row.</td></tr>
@@ -1569,6 +1623,33 @@ las_utm = wbe.reproject_lidar(
 
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
 </code></pre>
+<h2 id="georeference-raster-from-control-points"><a class="header" href="#georeference-raster-from-control-points">Georeference Raster from Control Points</a></h2>
+<p>Use this tool when an image/raster has no reliable georeferencing and you have
+ground-control points (GCPs) linking image pixel coordinates to map coordinates.</p>
+<p>Required CSV fields:</p>
+<ul>
+<li><code>source_col</code></li>
+<li><code>source_row</code></li>
+<li><code>target_x</code></li>
+<li><code>target_y</code></li>
+</ul>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+result = wbe.georeference_raster_from_control_points(
+    input_raster='historical_scan.tif',
+    control_points_csv='historical_scan_gcps.csv',
+    epsg=32618,
+    resample='bilinear',
+    output='historical_scan_georef.tif',
+    report='historical_scan_georef_report.json',  # optional diagnostics JSON
+)
+
+print(result)
+</code></pre>
+<p>If you need raw runtime invocation style, the equivalent tool ID is
+<code>georeference_raster_from_control_points</code>.</p>
 <h2 id="projection-utility-namespace"><a class="header" href="#projection-utility-namespace">Projection Utility Namespace</a></h2>
 <p>This namespace is useful for CRS diagnostics and point-level coordinate
 transform tasks outside full dataset reprojection.</p>
@@ -3524,6 +3605,19 @@ edges_h = wbe.sobel_filter(red, variant='3x3')
 # Canny edge detector — more precise edge localisation
 canny_edges = wbe.canny_edge_detection(red, sigma=0.5,
                                         low_threshold=5.0, high_threshold=15.0)
+
+# General-purpose GLCM texture (multiband output)
+# Band names are recorded in raster metadata as band_1_name, band_2_name, ...
+glcm = wbe.glcm_texture(
+    red,
+    window_size=9,
+    distance=1,
+    angles="0,45,90,135",
+    features="contrast,homogeneity,entropy",
+    direction_aggregation="mean",
+    levels=32,
+    output_path="glcm_texture.tif",
+)
 </code></pre>
 <hr />
 <h2 id="principal-component-analysis-pca"><a class="header" href="#principal-component-analysis-pca">Principal Component Analysis (PCA)</a></h2>

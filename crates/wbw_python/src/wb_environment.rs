@@ -2,8 +2,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::json;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use wbraster::raster::RasterData;
 use wbraster::{
@@ -49,6 +50,99 @@ use wbvector::reproject::{
 use wbvector::{FieldDef, FieldType, FieldValue, Layer as WbLayer, VectorFormat};
 
 use crate::{map_tool_error, parse_tier, PyCallbackSink, PythonToolRuntime};
+
+struct CachedDiskRaster {
+    raster: WbRaster,
+    dirty: bool,
+}
+
+static DISK_RASTER_CACHE: OnceLock<Mutex<HashMap<String, Arc<Mutex<CachedDiskRaster>>>>> = OnceLock::new();
+
+fn disk_raster_cache() -> &'static Mutex<HashMap<String, Arc<Mutex<CachedDiskRaster>>>> {
+    DISK_RASTER_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_or_load_disk_raster_handle(path: &Path) -> PyResult<Arc<Mutex<CachedDiskRaster>>> {
+    let key = path.to_string_lossy().to_string();
+
+    {
+        let map = disk_raster_cache().lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "disk raster cache lock poisoned",
+            )
+        })?;
+
+        if let Some(handle) = map.get(&key) {
+            return Ok(handle.clone());
+        }
+    }
+
+    let loaded = WbRaster::read(path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to read raster '{}': {e}",
+            path.display()
+        ))
+    })?;
+
+    let entry = Arc::new(Mutex::new(CachedDiskRaster {
+        raster: loaded,
+        dirty: false,
+    }));
+
+    let mut map = disk_raster_cache().lock().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache lock poisoned")
+    })?;
+
+    if let Some(existing) = map.get(&key) {
+        Ok(existing.clone())
+    } else {
+        map.insert(key, entry.clone());
+        Ok(entry)
+    }
+}
+
+fn flush_cached_disk_raster(path: &Path) -> PyResult<()> {
+    let key = path.to_string_lossy().to_string();
+
+    let handle = {
+        let map = disk_raster_cache().lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache lock poisoned")
+        })?;
+        map.get(&key).cloned()
+    };
+
+    let Some(handle) = handle else {
+        return Ok(());
+    };
+
+    let mut cached = handle.lock().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+    })?;
+
+    if cached.dirty {
+        cached.raster.write_auto(path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write raster '{}': {e}",
+                path.display()
+            ))
+        })?;
+        cached.dirty = false;
+    }
+
+    Ok(())
+}
+
+fn replace_cached_disk_raster(path: &Path, raster: WbRaster, dirty: bool) -> PyResult<()> {
+    let key = path.to_string_lossy().to_string();
+    let mut map = disk_raster_cache().lock().map_err(|_| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache lock poisoned")
+    })?;
+    map.insert(
+        key,
+        Arc::new(Mutex::new(CachedDiskRaster { raster, dirty })),
+    );
+    Ok(())
+}
 
 #[cfg(feature = "r-interop")]
 use wbw_r;
@@ -626,6 +720,11 @@ fn write_raster_with_controls_for_env(
 
     let raster_path = raster.file_path.to_string_lossy();
     let is_memory_backed = memory_store::raster_is_memory_path(&raster_path);
+
+    if !is_memory_backed {
+        flush_cached_disk_raster(&raster.file_path)?;
+    }
+
     let requires_reencode = output_format == RasterFormat::GeoTiff && effective_controls.geotiff_options().is_some();
 
     if output_format != RasterFormat::GeoTiff
@@ -1278,6 +1377,17 @@ fn run_binary_tool_runtime_with_callback(
 pub struct Raster {
     pub file_path: PathBuf,
     pub active_band: usize,
+}
+
+/// A pinned in-memory view of a raster for fast random cell access within a scope.
+#[pyclass]
+pub struct PinnedRasterView {
+    source_path: PathBuf,
+    memory_id: Option<String>,
+    raster: Option<WbRaster>,
+    active_band: usize,
+    dirty: bool,
+    closed: bool,
 }
 
 /// A simple Vector wrapper that holds a file path.
@@ -2845,6 +2955,115 @@ fn license_tier_label(tier: wbcore::LicenseTier) -> &'static str {
     }
 }
 
+fn parse_choice_tokens(candidate: &str) -> Option<Vec<String>> {
+    let normalized = candidate
+        .replace(" or ", ",")
+        .replace(" and ", ",")
+        .replace('/', ",");
+    let mut out = Vec::new();
+    for part in normalized.split(',') {
+        let token = part
+            .trim()
+            .trim_matches(|c: char| matches!(c, '.' | ':' | ';' | '(' | ')' | '[' | ']' | '{' | '}'));
+        if token.is_empty() {
+            continue;
+        }
+        if !token
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        {
+            return None;
+        }
+        out.push(token.to_string());
+    }
+    out.dedup();
+    if (2..=16).contains(&out.len()) {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn infer_choices_from_description(description: &str) -> Option<Vec<String>> {
+    let lower = description.to_ascii_lowercase();
+    if let Some((_, rest)) = lower.split_once('(') {
+        if let Some((inside, _)) = rest.split_once(')') {
+            if let Some(v) = parse_choice_tokens(inside) {
+                return Some(v);
+            }
+        }
+    }
+    if let Some((_, after_colon)) = lower.split_once(':') {
+        let fragment = after_colon.split('.').next().unwrap_or(after_colon);
+        if let Some(v) = parse_choice_tokens(fragment) {
+            return Some(v);
+        }
+    }
+    None
+}
+
+fn enrich_param_metadata(tool_id: &str, param_name: &str, description: &str) -> (Option<&'static str>, Option<Vec<String>>, Option<&'static str>) {
+    if tool_id == "lidar_tin_gridding" {
+        return match param_name {
+            "input" => (Some("path"), None, None),
+            "resolution" => (Some("float"), None, Some("1.0")),
+            "max_triangle_edge_length" => (Some("float"), None, None),
+            "interpolation_parameter" => (
+                Some("string"),
+                Some(vec![
+                    "elevation".to_string(),
+                    "intensity".to_string(),
+                    "class".to_string(),
+                    "return_number".to_string(),
+                    "number_of_returns".to_string(),
+                    "scan_angle".to_string(),
+                    "time".to_string(),
+                    "rgb".to_string(),
+                    "user_data".to_string(),
+                ]),
+                Some("elevation"),
+            ),
+            "returns_included" => (
+                Some("string"),
+                Some(vec!["all".to_string(), "first".to_string(), "last".to_string()]),
+                Some("all"),
+            ),
+            "excluded_classes" => (Some("array[int]"), None, None),
+            "min_elev" => (Some("float"), None, None),
+            "max_elev" => (Some("float"), None, None),
+            "output" => (Some("path"), None, None),
+            "triangulation_backend" => (
+                Some("string"),
+                Some(vec![
+                    "auto".to_string(),
+                    "delaunator".to_string(),
+                    "wbtopology".to_string(),
+                ]),
+                Some("auto"),
+            ),
+            "triangulation_auto_threshold" => (Some("int"), None, None),
+            "triangulation_epsilon" => (Some("float"), None, Some("1e-12")),
+            "triangulation_thin_cell_size" => (Some("float"), None, Some("0.0")),
+            "triangulation_thin_method" => (
+                Some("string"),
+                Some(vec![
+                    "nearest_center".to_string(),
+                    "min_value".to_string(),
+                    "max_value".to_string(),
+                ]),
+                Some("nearest_center"),
+            ),
+            _ => (None, None, None),
+        };
+    }
+
+    if let Some(choices) = infer_choices_from_description(description) {
+        return (Some("string"), Some(choices), None);
+    }
+
+    (None, None, None)
+}
+
 /// Build a Python dict describing a single `ToolManifest`.
 ///
 /// `visible` is the slice of manifests that the current session can execute;
@@ -2888,6 +3107,17 @@ fn build_tool_info_dict(
             pd.set_item("name", &p.name)?;
             pd.set_item("description", &p.description)?;
             pd.set_item("required", p.required)?;
+            let (param_type, choices, default_value) =
+                enrich_param_metadata(&m.id, &p.name, &p.description);
+            if let Some(pt) = param_type {
+                pd.set_item("type", pt)?;
+            }
+            if let Some(cs) = choices {
+                pd.set_item("choices", cs)?;
+            }
+            if let Some(dv) = default_value {
+                pd.set_item("default_value", dv)?;
+            }
             Ok(pd.into_any().unbind())
         })
         .collect();
@@ -3129,6 +3359,17 @@ impl DataObjectOutput {
 }
 
 fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
+    let lower = path.to_ascii_lowercase();
+    if lower.starts_with("memory://raster/") {
+        return Some("raster");
+    }
+    if lower.starts_with("memory://vector/") {
+        return Some("vector");
+    }
+    if lower.starts_with("memory://lidar/") {
+        return Some("lidar");
+    }
+
     let ext = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
@@ -3154,6 +3395,32 @@ fn infer_data_object_kind(category: &str, path: &str) -> Option<&'static str> {
         "lidar" => Some("lidar"),
         _ => None,
     }
+}
+
+fn typed_kind_from_value(value: &serde_json::Value) -> Option<&'static str> {
+    match value
+        .get("__wbw_type__")
+        .and_then(serde_json::Value::as_str)
+        .map(|s| s.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("raster") => Some("raster"),
+        Some("vector") => Some("vector"),
+        Some("lidar") => Some("lidar"),
+        _ => None,
+    }
+}
+
+fn maybe_path_from_output_value(value: &serde_json::Value) -> Option<String> {
+    value
+        .as_str()
+        .map(|s| s.to_string())
+        .or_else(|| {
+            value
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .map(|s| s.to_string())
+        })
 }
 
 fn maybe_extract_single_output_path(response: &serde_json::Value) -> Option<String> {
@@ -3202,6 +3469,37 @@ fn maybe_extract_data_object_output(
     working_directory: &Path,
     response: &serde_json::Value,
 ) -> Option<DataObjectOutput> {
+    let outputs = response.get("outputs").unwrap_or(response);
+    if let (Some(kind), Some(path)) = (typed_kind_from_value(outputs), maybe_path_from_output_value(outputs)) {
+        let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
+        return match kind {
+            "raster" => Some(DataObjectOutput::Raster(Raster {
+                file_path: absolute,
+                active_band: 0,
+            })),
+            "vector" => Some(DataObjectOutput::Vector(Vector { file_path: absolute })),
+            "lidar" => Some(DataObjectOutput::Lidar(Lidar { file_path: absolute })),
+            _ => None,
+        };
+    }
+
+    if let Some(map) = outputs.as_object() {
+        if let Some(value) = map.get("output") {
+            if let (Some(kind), Some(path)) = (typed_kind_from_value(value), maybe_path_from_output_value(value)) {
+                let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
+                return match kind {
+                    "raster" => Some(DataObjectOutput::Raster(Raster {
+                        file_path: absolute,
+                        active_band: 0,
+                    })),
+                    "vector" => Some(DataObjectOutput::Vector(Vector { file_path: absolute })),
+                    "lidar" => Some(DataObjectOutput::Lidar(Lidar { file_path: absolute })),
+                    _ => None,
+                };
+            }
+        }
+    }
+
     let path = maybe_extract_single_output_path(response)?;
     let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
 
@@ -3251,25 +3549,18 @@ fn maybe_extract_data_object_outputs(
         return None;
     };
 
-    let mut pairs: Vec<(String, String)> = Vec::new();
+    let mut pairs: Vec<(String, String, &'static str)> = Vec::new();
     for (key, value) in map {
         if output_key_is_metadata(key) {
             continue;
         }
 
-        let path = value
-            .as_str()
-            .map(|s| s.to_string())
-            .or_else(|| {
-                value
-                    .get("path")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|s| s.to_string())
-            });
+        let path = maybe_path_from_output_value(value);
+        let typed_kind = typed_kind_from_value(value);
 
         if let Some(path) = path {
-            if infer_data_object_kind(category, &path).is_some() {
-                pairs.push((key.clone(), path));
+            if let Some(kind) = typed_kind.or_else(|| infer_data_object_kind(category, &path)) {
+                pairs.push((key.clone(), path, kind));
                 continue;
             }
         }
@@ -3284,11 +3575,10 @@ fn maybe_extract_data_object_outputs(
         return None;
     }
 
-    pairs.sort_by(|(ka, _), (kb, _)| sort_output_key(ka, kb));
+    pairs.sort_by(|(ka, _, _), (kb, _, _)| sort_output_key(ka, kb));
     let mut out: Vec<DataObjectOutput> = Vec::with_capacity(pairs.len());
-    for (_, path) in pairs {
+    for (_, path, kind) in pairs {
         let absolute = PathBuf::from(resolve_path_against_working_directory(working_directory, &path));
-        let kind = infer_data_object_kind(category, &path)?;
         let item = match kind {
             "raster" => DataObjectOutput::Raster(Raster {
                 file_path: absolute,
@@ -3714,7 +4004,7 @@ fn sensor_bundle_family_name(bundle: &SensorBundle) -> &'static str {
 }
 
 fn open_bundle_for_python_bundle(bundle: &Bundle) -> PyResult<SensorBundle> {
-    open_sensor_bundle(&bundle.bundle_root).map_err(|e| {
+    open_sensor_bundle_path(&bundle.bundle_root).map(|opened| opened.bundle).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
             "failed to open bundle '{}': {e}",
             bundle.bundle_root.display()
@@ -4522,6 +4812,44 @@ impl Raster {
         )
     }
 
+    /// Returns a pinned raster view for low-overhead random cell access.
+    ///
+    /// Use as a context manager to ensure writes are flushed:
+    /// `with raster.pin() as rp: ...`
+    fn pin(&self) -> PyResult<PinnedRasterView> {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
+            let r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory raster '{}' no longer exists",
+                    self.file_path.display()
+                ))
+            })?;
+            return Ok(PinnedRasterView {
+                source_path: self.file_path.clone(),
+                memory_id: Some(id.to_string()),
+                raster: Some(r),
+                active_band: self.active_band,
+                dirty: false,
+                closed: false,
+            });
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+
+        Ok(PinnedRasterView {
+            source_path: self.file_path.clone(),
+            memory_id: None,
+            raster: Some(cached.raster.clone()),
+            active_band: self.active_band,
+            dirty: false,
+            closed: false,
+        })
+    }
+
     #[getter]
     fn band_count(&self) -> PyResult<usize> {
         let r = self.load_wbraster()?;
@@ -5160,7 +5488,6 @@ impl Raster {
     fn new_from_other(other: &Raster, data_type: Option<&str>) -> PyResult<Raster> {
         let target_dt = parse_data_type_opt(data_type)?;
         let source = other.load_wbraster()?;
-        let out_path = other.derived_output_path("new_from_other");
         let mut out = source.clone();
         if let Some(dt) = target_dt {
             out = cast_raster_data_type(&out, dt);
@@ -5172,11 +5499,9 @@ impl Raster {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("failed building new raster: {e}"))
             })?;
         }
-        out.write_auto(&out_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path.display()))
-        })?;
+        let id = memory_store::put_raster(out);
         Ok(Raster {
-            file_path: out_path,
+            file_path: PathBuf::from(memory_store::make_raster_memory_path(&id)),
             active_band: other.active_band,
         })
     }
@@ -5189,12 +5514,9 @@ impl Raster {
         if let Some(dt) = target_dt {
             source = cast_raster_data_type(&source, dt);
         }
-        let out_path = other.derived_output_path("new_from_other_with_data");
-        source.write_auto(&out_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path.display()))
-        })?;
+        let id = memory_store::put_raster(source);
         Ok(Raster {
-            file_path: out_path,
+            file_path: PathBuf::from(memory_store::make_raster_memory_path(&id)),
             active_band: other.active_band,
         })
     }
@@ -5860,88 +6182,241 @@ impl Raster {
 
     #[pyo3(signature = (row, column, band=None))]
     fn get_value(&self, row: isize, column: isize, band: Option<usize>) -> PyResult<f64> {
-        let r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        Ok(r.get(b, row, column))
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            return Ok(r.get(b, row, column));
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        Ok(cached.raster.get(b, row, column))
     }
 
     #[pyo3(signature = (row, column, value, band=None))]
     fn set_value(&self, row: isize, column: isize, value: f64, band: Option<usize>) -> PyResult<()> {
-        let mut r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        r.set(b, row, column, value).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
-                "set_value out-of-bounds or invalid: {e}"
-            ))
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let mut r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            // Silently ignore out-of-bounds writes, matching legacy API behavior
+            if r.set(b, row, column, value).is_ok() {
+                return self.save_wbraster(&r);
+            }
+            return Ok(());
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let mut cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
         })?;
-        self.save_wbraster(&r)
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        // Silently ignore out-of-bounds writes, matching legacy API behavior
+        if cached.raster.set(b, row, column, value).is_ok() {
+            cached.dirty = true;
+        }
+        Ok(())
     }
 
     fn __getitem__(&self, row_column: (isize, isize)) -> PyResult<f64> {
-        self.get_value(row_column.0, row_column.1, None)
+        let (row, col) = row_column;
+        let raster_path = self.file_path.to_string_lossy();
+
+        if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
+            let r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory raster '{}' no longer exists",
+                    self.file_path.display()
+                ))
+            })?;
+            return Ok(r.get(self.active_band as isize, row, col));
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        Ok(cached.raster.get(self.active_band as isize, row, col))
     }
 
     fn __setitem__(&self, row_column: (isize, isize), value: f64) -> PyResult<()> {
-        self.set_value(row_column.0, row_column.1, value, None)
+        let (row, col) = row_column;
+        let raster_path = self.file_path.to_string_lossy();
+
+        if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
+            let mut r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory raster '{}' no longer exists",
+                    self.file_path.display()
+                ))
+            })?;
+            // Silently ignore out-of-bounds writes, matching legacy API behavior
+            if r.set(self.active_band as isize, row, col, value).is_ok() {
+                if memory_store::replace_raster_by_id(id, r) {
+                    return Ok(());
+                }
+                return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory raster '{}' no longer exists",
+                    self.file_path.display()
+                )));
+            }
+            return Ok(());
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let mut cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        cached
+            .raster
+            .set(self.active_band as isize, row, col, value)
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                    "set_value out-of-bounds or invalid: {e}"
+                ))
+            })?;
+        cached.dirty = true;
+        Ok(())
     }
 
     #[pyo3(signature = (row, col, band=None))]
     fn is_cell_nodata(&self, row: isize, col: isize, band: Option<usize>) -> PyResult<bool> {
-        let r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        Ok(r.get_opt(b, row, col).is_none())
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            return Ok(r.get_opt(b, row, col).is_none());
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        Ok(cached.raster.get_opt(b, row, col).is_none())
     }
 
     #[pyo3(signature = (row, band=None))]
     fn get_row_data(&self, row: isize, band: Option<usize>) -> PyResult<Vec<f64>> {
-        let r = self.load_wbraster()?;
-        if row < 0 || row >= r.rows as isize {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let r = self.load_wbraster()?;
+            if row < 0 || row >= r.rows as isize {
+                return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>(
+                    format!("row out of bounds: {row}"),
+                ));
+            }
+            let b = self.resolve_band_index(&r, band)?;
+            return Ok(r.row_slice(b, row));
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        if row < 0 || row >= cached.raster.rows as isize {
             return Err(PyErr::new::<pyo3::exceptions::PyIndexError, _>(
                 format!("row out of bounds: {row}"),
             ));
         }
-        let b = self.resolve_band_index(&r, band)?;
-        Ok(r.row_slice(b, row))
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        Ok(cached.raster.row_slice(b, row))
     }
 
     #[pyo3(signature = (row, values, band=None))]
     fn set_row_data(&self, row: isize, values: Vec<f64>, band: Option<usize>) -> PyResult<()> {
-        let mut r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        r.set_row_slice(b, row, &values).map_err(|e| {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let mut r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            r.set_row_slice(b, row, &values).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid row data: {e}"
+                ))
+            })?;
+            return self.save_wbraster(&r);
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let mut cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        cached.raster.set_row_slice(b, row, &values).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "invalid row data: {e}"
             ))
         })?;
-        self.save_wbraster(&r)
+        cached.dirty = true;
+        Ok(())
     }
 
     #[pyo3(signature = (row, column, value, band=None))]
     fn increment(&self, row: isize, column: isize, value: f64, band: Option<usize>) -> PyResult<()> {
-        let mut r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        if let Some(current) = r.get_opt(b, row, column) {
-            r.set(b, row, column, current + value).map_err(|e| {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let mut r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            if let Some(current) = r.get_opt(b, row, column) {
+                r.set(b, row, column, current + value).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                        "increment out-of-bounds: {e}"
+                    ))
+                })?;
+                self.save_wbraster(&r)?;
+            }
+            return Ok(());
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let mut cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        if let Some(current) = cached.raster.get_opt(b, row, column) {
+            cached.raster.set(b, row, column, current + value).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
                     "increment out-of-bounds: {e}"
                 ))
             })?;
-            self.save_wbraster(&r)?;
+            cached.dirty = true;
         }
         Ok(())
     }
 
     #[pyo3(signature = (row, column, value, band=None))]
     fn decrement(&self, row: isize, column: isize, value: f64, band: Option<usize>) -> PyResult<()> {
-        let mut r = self.load_wbraster()?;
-        let b = self.resolve_band_index(&r, band)?;
-        if let Some(current) = r.get_opt(b, row, column) {
-            r.set(b, row, column, current - value).map_err(|e| {
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let mut r = self.load_wbraster()?;
+            let b = self.resolve_band_index(&r, band)?;
+            if let Some(current) = r.get_opt(b, row, column) {
+                r.set(b, row, column, current - value).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
+                        "decrement out-of-bounds: {e}"
+                    ))
+                })?;
+                self.save_wbraster(&r)?;
+            }
+            return Ok(());
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let mut cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        let b = self.resolve_band_index(&cached.raster, band)?;
+        if let Some(current) = cached.raster.get_opt(b, row, column) {
+            cached.raster.set(b, row, column, current - value).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIndexError, _>(format!(
                     "decrement out-of-bounds: {e}"
                 ))
             })?;
-            self.save_wbraster(&r)?;
+            cached.dirty = true;
         }
         Ok(())
     }
@@ -7231,21 +7706,42 @@ impl Raster {
             });
         }
 
-        WbRaster::read(&self.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read raster '{}': {e}",
-                self.file_path.display()
-            ))
-        })
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        let cached = handle.lock().map_err(|_| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+        })?;
+        Ok(cached.raster.clone())
     }
 
     fn save_wbraster(&self, raster: &WbRaster) -> PyResult<()> {
-        raster.write_auto(&self.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to write raster '{}': {e}",
+        let raster_path = self.file_path.to_string_lossy().to_string();
+        if memory_store::raster_is_memory_path(&raster_path) {
+            let id = memory_store::raster_path_to_id(&raster_path).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "invalid in-memory raster path '{}'",
+                    self.file_path.display()
+                ))
+            })?;
+
+            if memory_store::replace_raster_by_id(id, raster.clone()) {
+                return Ok(());
+            }
+
+            return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                "in-memory raster '{}' no longer exists",
                 self.file_path.display()
-            ))
-        })
+            )));
+        }
+
+        let handle = get_or_load_disk_raster_handle(&self.file_path)?;
+        {
+            let mut cached = handle.lock().map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("disk raster cache entry lock poisoned")
+            })?;
+            cached.raster = raster.clone();
+            cached.dirty = true;
+        }
+        flush_cached_disk_raster(&self.file_path)
     }
 
     fn run_unary(
@@ -7544,6 +8040,92 @@ impl Raster {
         self.map_binary_operand_in_place(op_name, other, band_mode, bands, |a, b| {
             if predicate(a, b) { 1.0 } else { 0.0 }
         })
+    }
+}
+
+#[pymethods]
+impl PinnedRasterView {
+    fn __enter__(slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
+        slf
+    }
+
+    fn __exit__(
+        &mut self,
+        _exc_type: Option<&Bound<'_, PyAny>>,
+        _exc: Option<&Bound<'_, PyAny>>,
+        _tb: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        self.close()?;
+        Ok(false)
+    }
+
+    fn __getitem__(&self, row_column: (isize, isize)) -> PyResult<f64> {
+        if self.closed {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "PinnedRasterView is already closed",
+            ));
+        }
+
+        let (row, col) = row_column;
+        let r = self.raster.as_ref().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("PinnedRasterView has no raster data")
+        })?;
+        Ok(r.get(self.active_band as isize, row, col))
+    }
+
+    fn __setitem__(&mut self, row_column: (isize, isize), value: f64) -> PyResult<()> {
+        if self.closed {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "PinnedRasterView is already closed",
+            ));
+        }
+
+        let (row, col) = row_column;
+        let r = self.raster.as_mut().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("PinnedRasterView has no raster data")
+        })?;
+        // Silently ignore out-of-bounds writes, matching legacy API behavior
+        if r.set(self.active_band as isize, row, col, value).is_ok() {
+            self.dirty = true;
+        }
+        Ok(())
+    }
+
+    fn close(&mut self) -> PyResult<()> {
+        if self.closed {
+            return Ok(());
+        }
+
+        if self.dirty {
+            let raster = self.raster.as_ref().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("PinnedRasterView has no raster data")
+            })?;
+
+            if let Some(id) = &self.memory_id {
+                if !memory_store::replace_raster_by_id(id, raster.clone()) {
+                    return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                        "in-memory raster '{}' no longer exists",
+                        self.source_path.display()
+                    )));
+                }
+            } else {
+                raster.write_auto(&self.source_path).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "failed to write raster '{}': {e}",
+                        self.source_path.display()
+                    ))
+                })?;
+                replace_cached_disk_raster(&self.source_path, raster.clone(), false)?;
+            }
+            self.dirty = false;
+        }
+
+        self.closed = true;
+        Ok(())
+    }
+
+    fn __del__(&mut self) {
+        let _ = self.close();
     }
 }
 
@@ -7954,6 +8536,12 @@ pub struct WbEnvironment {
 }
 
 impl WbEnvironment {
+    fn reject_flat_tool_api(&self, tool_id: &str) -> PyResult<()> {
+        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Flat WbEnvironment tool methods are disabled in this build. Use category/subcategory access instead (e.g., wbe.lidar.interpolation_gridding.{tool_id}(...))."
+        )))
+    }
+
     pub(crate) fn from_runtime(runtime: PythonToolRuntime, include_pro: bool) -> Self {
         let max_tier = runtime.effective_tier();
         Self {
@@ -8054,11 +8642,10 @@ fn resolve_true_colour_band_paths(
         SensorBundle::Safe(SafeBundle::Sentinel1(_))
         | SensorBundle::Iceye(_)
         | SensorBundle::Radarsat2(_)
-        | SensorBundle::Rcm(_) => Err(pyo3::exceptions::PyValueError::new_err(
-            "true_colour_composite is not supported for SAR bundle families \
-             (sentinel1_safe, iceye, radarsat2, rcm). \
-             For SAR polarization composites, read individual measurements and \
-             call create_colour_composite() directly.",
+        | SensorBundle::Rcm(_)
+        => Err(pyo3::exceptions::PyValueError::new_err(
+            "true_colour_composite is only supported for optical directory bundles \
+             (sentinel2_safe, landsat, planetscope, dimap, maxar_worldview).",
         )),
     }
 }
@@ -8141,11 +8728,10 @@ fn resolve_false_colour_band_paths(
         SensorBundle::Safe(SafeBundle::Sentinel1(_))
         | SensorBundle::Iceye(_)
         | SensorBundle::Radarsat2(_)
-        | SensorBundle::Rcm(_) => Err(pyo3::exceptions::PyValueError::new_err(
-            "false_colour_composite is not supported for SAR bundle families \
-             (sentinel1_safe, iceye, radarsat2, rcm). \
-             For SAR polarization composites, read individual measurements and \
-             call create_colour_composite() directly.",
+        | SensorBundle::Rcm(_)
+        => Err(pyo3::exceptions::PyValueError::new_err(
+            "false_colour_composite is only supported for optical directory bundles \
+             (sentinel2_safe, landsat, planetscope, dimap, maxar_worldview).",
         )),
     }
 }
@@ -8919,6 +9505,56 @@ impl WbEnvironment {
             use_3d_transform,
             failure_policy,
         )
+    }
+
+    #[pyo3(signature = (input, control_points, epsg, output=None, report=None, callback=None, resample="bilinear"))]
+    fn georeference_raster_from_control_points(
+        &self,
+        input: &Raster,
+        control_points: &str,
+        epsg: u32,
+        output: Option<&str>,
+        report: Option<&str>,
+        callback: Option<Py<PyAny>>,
+        resample: &str,
+    ) -> PyResult<Raster> {
+        let mut args = serde_json::Map::new();
+        args.insert(
+            "input".to_string(),
+            json!(input.file_path.to_string_lossy().to_string()),
+        );
+        args.insert("control_points".to_string(), json!(control_points));
+        args.insert("epsg".to_string(), json!(epsg));
+        args.insert("resample".to_string(), json!(resample));
+
+        if let Some(path) = output {
+            args.insert(
+                "output".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+        if let Some(path) = report {
+            args.insert(
+                "report".to_string(),
+                json!(self.resolve_output_path_for_wd(Some(path)).unwrap()),
+            );
+        }
+
+        let response = run_tool_response_with_args(
+            &self.runtime,
+            "georeference_raster_from_control_points",
+            args,
+            callback,
+        )?;
+        let raster_path = extract_output_path_by_key(
+            "georeference_raster_from_control_points",
+            &response,
+            "path",
+        )?;
+        Ok(Raster {
+            file_path: raster_path,
+            active_band: input.active_band,
+        })
     }
 
     /// Reproject a list of rasters to a target EPSG, writing each to output_dir.
@@ -27194,7 +27830,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("lidar_idw_interpolation", args, 0, callback)
     }
 
-    #[pyo3(signature = (input=None, resolution=1.0, max_triangle_edge_length=f64::INFINITY, interpolation_parameter="elevation", returns_included="all", excluded_classes=None, min_elev=None, max_elev=None, output_path=None, callback=None))]
+    #[pyo3(signature = (input=None, resolution=1.0, max_triangle_edge_length=f64::INFINITY, interpolation_parameter="elevation", returns_included="all", excluded_classes=None, min_elev=None, max_elev=None, triangulation_backend="auto", triangulation_auto_threshold=None, triangulation_epsilon=1.0e-12, triangulation_thin_cell_size=0.0, triangulation_thin_method="nearest_center", output_path=None, callback=None))]
     fn lidar_tin_gridding(
         &self,
         input: Option<&Lidar>,
@@ -27205,6 +27841,11 @@ impl WbEnvironment {
         excluded_classes: Option<Vec<u8>>,
         min_elev: Option<f64>,
         max_elev: Option<f64>,
+        triangulation_backend: &str,
+        triangulation_auto_threshold: Option<usize>,
+        triangulation_epsilon: f64,
+        triangulation_thin_cell_size: f64,
+        triangulation_thin_method: &str,
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
@@ -27234,6 +27875,30 @@ impl WbEnvironment {
         if let Some(max_z) = max_elev {
             args.insert("max_elev".to_string(), json!(max_z));
         }
+        args.insert(
+            "triangulation_backend".to_string(),
+            json!(triangulation_backend),
+        );
+        if let Some(auto_threshold) = triangulation_auto_threshold {
+            args.insert(
+                "triangulation_auto_threshold".to_string(),
+                json!(auto_threshold),
+            );
+        }
+        args.insert(
+            "triangulation_epsilon".to_string(),
+            json!(triangulation_epsilon),
+        );
+        if triangulation_thin_cell_size > 0.0 {
+            args.insert(
+                "triangulation_thin_cell_size".to_string(),
+                json!(triangulation_thin_cell_size),
+            );
+        }
+        args.insert(
+            "triangulation_thin_method".to_string(),
+            json!(triangulation_thin_method),
+        );
         if let Some(out) = self.resolve_output_path_for_wd(output_path) {
             args.insert("output".to_string(), json!(out));
         }
@@ -30996,6 +31661,8 @@ impl WbEnvironment {
         args: serde_json::Map<String, serde_json::Value>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Vector> {
+        self.reject_flat_tool_api(tool_id)?;
+
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "invalid JSON arguments: {e}"
@@ -31028,6 +31695,8 @@ impl WbEnvironment {
         args: serde_json::Map<String, serde_json::Value>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Lidar> {
+        self.reject_flat_tool_api(tool_id)?;
+
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "invalid JSON arguments: {e}"
@@ -31061,6 +31730,8 @@ impl WbEnvironment {
         active_band: usize,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Raster> {
+        self.reject_flat_tool_api(tool_id)?;
+
         let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "invalid JSON arguments: {e}"

@@ -665,6 +665,7 @@ _CATEGORY_DISPLAY: dict[str, str] = {
     "vector": "Vector",
     "raster": "Raster",
     "conversion": "Conversion",
+    "projection_georeferencing": "Projection and Georeferencing",
 }
 
 _SUBCATEGORY_DISPLAY: dict[str, str] = {
@@ -825,9 +826,10 @@ def _inject_projection_wrapper_tools(catalog: list[dict]) -> list[dict]:
             "params": [
                 {"name": "input", "description": "Input raster layer.", "required": True},
                 {"name": "epsg", "description": "Target EPSG code.", "required": True},
+                {"name": "resample", "description": "Resampling method: nearest, bilinear, cubic, lanczos, average, min, max, mode, median, stddev. Default: bilinear.", "required": False},
                 {"name": "output", "description": "Output raster destination path.", "required": True},
             ],
-            "defaults": {"resample": "nearest"},
+            "defaults": {"resample": "bilinear"},
             "available": True,
             "locked": False,
             "locked_reason": None,
@@ -1016,8 +1018,8 @@ def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[
     catalog = _inject_multiscale_topographic_position_class_render_hints(catalog)
     catalog = _normalize_lock_state(catalog)
     catalog = _reclassify_broad_categories(catalog)
-    catalog = _apply_taxonomy_override(catalog)
     catalog = _inject_projection_wrapper_tools(catalog)
+    catalog = _apply_taxonomy_override(catalog)
     catalog = _hydrate_missing_params(catalog)
     catalog = _dedupe_catalog_params(catalog)
 

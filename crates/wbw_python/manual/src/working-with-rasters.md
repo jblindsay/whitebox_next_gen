@@ -58,6 +58,48 @@ for row in range(rows):
                 a[row, col] = 0.0
 ```
 
+## Fast Random Cell Access with Pinning
+
+For custom neighbourhood logic, flow-path traversal, or other pseudo-random
+cell access, use pinned raster views. Pinning avoids repeated per-access lookup
+and lock-routing overhead by holding a direct in-memory view during the loop.
+
+Single-raster pattern:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+pointer = wbe.read_raster("D8Pointer.tif")
+
+with pointer.pin() as p:
+    v = p[100, 200]
+    p[100, 200] = v + 1.0
+```
+
+Multi-raster scan-loop pattern (read one raster, write another):
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+src = wbe.read_raster("D8Pointer.tif")
+dst = wb.Raster.new_from_other(src, data_type="int32")
+
+with wb.pin_rasters(src, dst) as (srcp, dstp):
+    meta = src.metadata()
+    for row in range(meta.rows):
+        for col in range(meta.columns):
+            value = srcp[row, col]
+            # Replace this with your custom per-cell rule.
+            dstp[row, col] = value
+```
+
+Notes:
+- Use pinning for loops dominated by scalar `r[row, col]` accesses.
+- `with` scope exit flushes any pinned writes safely.
+- For pure row-wise transforms, `get_row_data`/`set_row_data` is still efficient.
+
 ## Writing Modified Data Back
 
 This example shows the common pattern of deriving a new raster while preserving
@@ -165,6 +207,7 @@ from the tables to keep the reference readable.
 | Method | Description |
 |---|---|
 | `get_value`, `set_value` | Read or write an individual cell value. |
+| `pin` | Return a pinned raster view for low-overhead random read/write access in a `with` scope. |
 | `get_row_data`, `set_row_data` | Read or replace an entire row of raster values. |
 | `increment`, `decrement` | Add to or subtract from a single cell value. |
 | `increment_row_data`, `decrement_row_data` | Add to or subtract from every value in a row. |

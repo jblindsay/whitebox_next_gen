@@ -56,6 +56,51 @@ desc = wbe.describe_tool('slope')
 print(desc)
 ```
 
+## Discovering Parameter Values with describe_tool
+
+`describe_tool` returns a dictionary containing structured parameter metadata.
+Each entry in the `params` list includes:
+
+| Key | Always present | Description |
+|---|---|---|
+| `name` | yes | Parameter name as used in tool calls |
+| `description` | yes | Human-readable description |
+| `required` | yes | `True` if the parameter must be supplied |
+| `type` | when set | Semantic type hint: `"string"`, `"float"`, `"int"`, `"bool"`, `"path"`, `"array[int]"` |
+| `choices` | when set | List of valid string values for constrained parameters |
+| `default_value` | when set | Default value as a string, for display purposes |
+
+Use this to enumerate valid values before calling a tool:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+desc = wbe.describe_tool('lidar_tin_gridding')
+for p in desc['params']:
+    name = p['name']
+    choices = p.get('choices')
+    default = p.get('default_value')
+    if choices:
+        print(f"{name}: choices={choices}, default={default!r}")
+    else:
+        print(f"{name}: type={p.get('type', 'any')}, default={default!r}")
+```
+
+Example output (selected parameters):
+
+```
+interpolation_parameter: choices=['elevation', 'intensity', 'class', 'return_number', 'number_of_returns', 'scan_angle', 'time', 'rgb', 'user_data'], default='elevation'
+returns_included: choices=['all', 'first', 'last'], default='all'
+triangulation_backend: choices=['auto', 'delaunator', 'wbtopology'], default='auto'
+triangulation_thin_method: choices=['nearest_center', 'min_value', 'max_value'], default='nearest_center'
+triangulation_thin_cell_size: type=float, default='0.0'
+```
+
+This is especially useful for building dynamic UIs, generating documentation,
+or writing validation helpers that do not hard-code allowed values.
+
 ## Validate Tool Availability
 
 Use hard checks like this in batch scripts so failures occur immediately, before
@@ -90,6 +135,14 @@ Prefer direct properties when available:
 Use generic accessors for dynamic workflows:
 - `wbe.category(name)`
 - `wbe.domain(name)`
+
+Projection/georeferencing tools are cataloged under the canonical category key
+`projection_georeferencing` and can be queried with:
+
+```python
+proj_tools = wbe.category('projection_georeferencing').list_tools()
+print(proj_tools[:10])
+```
 
 ## WbEnvironment Method Reference
 

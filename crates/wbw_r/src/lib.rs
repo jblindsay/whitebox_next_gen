@@ -2,9 +2,11 @@ use serde_json::{json, Value};
 use parquet::basic::Compression as ParquetCompression;
 #[cfg(feature = "pro")]
 use std::env;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 use wbcore::{
     generate_wrapper_stub, BindingTarget, ExecuteRequest, LicenseTier, OwnedToolRuntime,
     OwnedToolRuntimeWithCapabilities, RuntimeOptions,
@@ -28,7 +30,7 @@ use wblidar::{
     PointReader,
 };
 use wbprojection::{epsg_from_srs_reference, identify_epsg_from_wkt, to_ogc_wkt, Crs};
-use wbraster::{open_sensor_bundle, open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
+use wbraster::{open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
 use wbraster::{GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions, Raster, RasterFormat};
 use wbtopology::{
     buffer_linestring,
@@ -61,6 +63,72 @@ use wbtools_pro::{register_default_tools as register_default_pro_tools, ToolRegi
 
 fn to_invalid_request<E: std::fmt::Display>(err: E) -> ToolError {
     ToolError::InvalidRequest(err.to_string())
+}
+
+#[derive(Clone)]
+struct CachedDiskRaster {
+    raster: Raster,
+    dirty: bool,
+}
+
+static DISK_RASTER_CACHE: OnceLock<Mutex<HashMap<String, Arc<Mutex<CachedDiskRaster>>>>> = OnceLock::new();
+
+fn disk_raster_cache() -> &'static Mutex<HashMap<String, Arc<Mutex<CachedDiskRaster>>>> {
+    DISK_RASTER_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_or_load_disk_raster_handle(path: &Path) -> Result<Arc<Mutex<CachedDiskRaster>>, ToolError> {
+    let key = path.to_string_lossy().to_string();
+
+    {
+        let map = disk_raster_cache()
+            .lock()
+            .map_err(|_| ToolError::Execution("disk raster cache lock poisoned".to_string()))?;
+        if let Some(handle) = map.get(&key) {
+            return Ok(handle.clone());
+        }
+    }
+
+    let loaded = Raster::read(path).map_err(to_invalid_request)?;
+    let entry = Arc::new(Mutex::new(CachedDiskRaster {
+        raster: loaded,
+        dirty: false,
+    }));
+
+    let mut map = disk_raster_cache()
+        .lock()
+        .map_err(|_| ToolError::Execution("disk raster cache lock poisoned".to_string()))?;
+    if let Some(existing) = map.get(&key) {
+        Ok(existing.clone())
+    } else {
+        map.insert(key, entry.clone());
+        Ok(entry)
+    }
+}
+
+fn flush_cached_disk_raster(path: &Path) -> Result<(), ToolError> {
+    let key = path.to_string_lossy().to_string();
+    let handle = {
+        let map = disk_raster_cache()
+            .lock()
+            .map_err(|_| ToolError::Execution("disk raster cache lock poisoned".to_string()))?;
+        map.get(&key).cloned()
+    };
+
+    let Some(handle) = handle else {
+        return Ok(());
+    };
+
+    let mut cached = handle
+        .lock()
+        .map_err(|_| ToolError::Execution("disk raster cache entry lock poisoned".to_string()))?;
+
+    if cached.dirty {
+        cached.raster.write_auto(path).map_err(to_invalid_request)?;
+        cached.dirty = false;
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Default)]
@@ -801,7 +869,9 @@ pub fn sensor_bundle_resolve_raster_path(
     key: &str,
     key_type: &str,
 ) -> Result<String, ToolError> {
-    let bundle = open_sensor_bundle(bundle_root).map_err(to_invalid_request)?;
+    let bundle = open_sensor_bundle_path(bundle_root)
+        .map(|opened| opened.bundle)
+        .map_err(to_invalid_request)?;
     let path = match (&bundle, key_type) {
         (SensorBundle::Safe(SafeBundle::Sentinel2(pkg)), "band") => pkg.band_path(key),
         (SensorBundle::Landsat(pkg), "band") => pkg.band_path(key),
@@ -865,6 +935,55 @@ pub fn raster_metadata_json(path: &str) -> Result<String, ToolError> {
         "crs_epsg": raster.crs.epsg,
     });
     serde_json::to_string(&meta).map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Return a single raster cell value using zero-based indices.
+pub fn raster_get_value(path: &str, row: i32, col: i32, band: i32) -> Result<f64, ToolError> {
+    if row < 0 || col < 0 || band < 0 {
+        return Err(ToolError::InvalidRequest(
+            "row, col, and band must be >= 0".to_string(),
+        ));
+    }
+
+    let raster_path = Path::new(path);
+    let handle = get_or_load_disk_raster_handle(raster_path)?;
+    let cached = handle
+        .lock()
+        .map_err(|_| ToolError::Execution("disk raster cache entry lock poisoned".to_string()))?;
+
+    let r = &cached.raster;
+    if row as usize >= r.rows || col as usize >= r.cols || band as usize >= r.bands {
+        return Err(ToolError::InvalidRequest(format!(
+            "cell index out of bounds: row={}, col={}, band={} for raster dims rows={}, cols={}, bands={}",
+            row, col, band, r.rows, r.cols, r.bands
+        )));
+    }
+
+    Ok(r.get(band as isize, row as isize, col as isize))
+}
+
+/// Set a single raster cell value using zero-based indices.
+/// Silently ignores out-of-bounds writes, matching legacy API behavior.
+pub fn raster_set_value(path: &str, row: i32, col: i32, band: i32, value: f64) -> Result<(), ToolError> {
+    if row < 0 || col < 0 || band < 0 {
+        return Ok(()); // Silently ignore negative indices
+    }
+
+    let raster_path = Path::new(path);
+    let handle = get_or_load_disk_raster_handle(raster_path)?;
+    let mut cached = handle
+        .lock()
+        .map_err(|_| ToolError::Execution("disk raster cache entry lock poisoned".to_string()))?;
+
+    let r = &mut cached.raster;
+    if row as usize >= r.rows || col as usize >= r.cols || band as usize >= r.bands {
+        return Ok(()); // Silently ignore out-of-bounds writes
+    }
+
+    r.set(band as isize, row as isize, col as isize, value)
+        .map_err(to_invalid_request)?;
+    cached.dirty = true;
+    Ok(())
 }
 
 /// Return vector layer metadata as a JSON string.
@@ -1302,6 +1421,7 @@ pub fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) 
     let controls = parse_raster_write_controls(&options_value)?;
 
     let src_path = Path::new(src);
+    flush_cached_disk_raster(src_path)?;
     let dst_path = Path::new(dst);
     if let Some(parent) = dst_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
@@ -2783,6 +2903,16 @@ mod native_exports {
     }
 
     #[extendr]
+    fn raster_get_value(path: &str, row: i32, col: i32, band: i32) -> extendr_api::Result<f64> {
+        super::raster_get_value(path, row, col, band).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_set_value(path: &str, row: i32, col: i32, band: i32, value: f64) -> extendr_api::Result<()> {
+        super::raster_set_value(path, row, col, band, value).map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn vector_metadata_json(path: &str) -> extendr_api::Result<String> {
         super::vector_metadata_json(path).map_err(map_extendr_err)
     }
@@ -2951,6 +3081,8 @@ mod native_exports {
         fn lidar_write_with_options_json;
         fn raster_write_with_options_json;
         fn raster_metadata_json;
+        fn raster_get_value;
+        fn raster_set_value;
         fn vector_metadata_json;
         fn projection_to_ogc_wkt;
         fn projection_identify_epsg;

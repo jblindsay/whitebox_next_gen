@@ -60,6 +60,49 @@ for (row in seq_len(nr)) {
 }
 ```
 
+## Fast Random Cell Access with Pinning
+
+For neighbourhood logic or flow-path traversal that performs frequent random
+cell reads/writes, use pinned raster views. Pinning loads the raster values
+once and avoids repeated conversion overhead inside tight loops.
+
+Single-raster pinning:
+
+```r
+library(whiteboxworkflows)
+
+r <- wbw_read_raster("dem.tif")
+p <- wbw_pinned_raster(r)
+
+v <- p$get_value(100, 200)
+p$set_value(100, 200, v + 1)
+p$close()
+```
+
+Two-raster read/write scan loop:
+
+```r
+library(whiteboxworkflows)
+
+src <- wbw_read_raster("D8Pointer.tif")
+dst <- wbw_read_raster("output_template.tif")
+
+wbw_with_pinned_rasters(src, dst, .f = function(srcp, dstp) {
+  meta <- src$metadata()
+  for (row in seq_len(meta$rows)) {
+    for (col in seq_len(meta$columns)) {
+      value <- srcp$get_value(row, col)
+      dstp$set_value(row, col, value)
+    }
+  }
+})
+```
+
+Notes:
+- `wbw_with_pinned_rasters()` closes all pins automatically.
+- `wbw_pin_rasters(...)` is available when manual close control is preferred.
+- Pinned write-back currently targets file-backed rasters in wbw_r.
+
 ## Writing Modified Data Back
 
 This demonstrates creating a derived raster while preserving base geospatial
@@ -142,9 +185,11 @@ slope$write('slope_out.tif', overwrite = TRUE)
 | `file_path` | Return the backing raster path. |
 | `band_count` | Return raster band count. |
 | `active_band` | Return active band index. |
+| `get_value`, `set_value` | Read/write single cell values using 1-based row/column/band indices. |
 | `crs_epsg`, `crs_wkt` | Inspect CRS metadata. |
 | `to_array` | Convert raster to in-memory array for custom processing. |
 | `to_stars` | Convert raster to a `stars` object (requires `terra` support path). |
+| `pin` | Create a pinned view for low-overhead random cell access in tight loops. |
 
 ### Arithmetic and Unary Transform Methods
 

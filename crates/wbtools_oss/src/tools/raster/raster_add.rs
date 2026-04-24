@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
-use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_optional_output_path, parse_raster_path_arg, LicenseTier, PercentCoalescer, Tool,
+    parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool,
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
@@ -215,9 +214,6 @@ impl BinaryMathOp {
     }
 }
 
-const BINARY_MATH_PAR_CHUNK: usize = 16_384;
-const BINARY_MATH_PROGRESS_BATCH_CHUNKS: usize = 64;
-
 impl RasterAddTool {
     fn parse_input_paths(args: &ToolArgs) -> Result<(String, String), ToolError> {
         let input1 = parse_raster_path_arg(args, "input1")?;
@@ -334,47 +330,19 @@ impl RasterAddTool {
             ));
         }
 
-        let mut output = input1.clone();
-        let len = output.data.len();
+        let mut output = Raster::new_like(&input1);
 
         ctx.progress.info(op.processing_message());
-
-        let in1_values: Vec<f64> = (0..len).into_par_iter().map(|i| input1.data.get_f64(i)).collect();
-        let in2_values: Vec<f64> = (0..len).into_par_iter().map(|i| input2.data.get_f64(i)).collect();
-        let mut out_values = vec![input1.nodata; len];
-        let total_chunks = len.div_ceil(BINARY_MATH_PAR_CHUNK).max(1);
-        let compute_progress = PercentCoalescer::new(1, 90);
-        let mut completed_chunks = 0usize;
-
-        while completed_chunks < total_chunks {
-            let batch_chunks = (total_chunks - completed_chunks).min(BINARY_MATH_PROGRESS_BATCH_CHUNKS);
-            let batch_start = completed_chunks * BINARY_MATH_PAR_CHUNK;
-            let batch_end = (batch_start + batch_chunks * BINARY_MATH_PAR_CHUNK).min(len);
-
-            out_values[batch_start..batch_end]
-                .par_chunks_mut(BINARY_MATH_PAR_CHUNK)
-                .zip(in1_values[batch_start..batch_end].par_chunks(BINARY_MATH_PAR_CHUNK))
-                .zip(in2_values[batch_start..batch_end].par_chunks(BINARY_MATH_PAR_CHUNK))
-                .for_each(|((out_chunk, in1_chunk), in2_chunk)| {
-                    for i in 0..out_chunk.len() {
-                        let z1 = in1_chunk[i];
-                        let z2 = in2_chunk[i];
-                        out_chunk[i] = if input1.is_nodata(z1) || input2.is_nodata(z2) {
-                            input1.nodata
-                        } else {
-                            op.apply(z1, z2, input1.nodata)
-                        };
-                    }
-                });
-
-            completed_chunks += batch_chunks;
-            compute_progress.emit_unit_fraction(ctx.progress, completed_chunks as f64 / total_chunks as f64);
-        }
-        compute_progress.finish(ctx.progress);
-
-        for (i, value) in out_values.iter().enumerate() {
-            output.data.set_f64(i, *value);
-        }
+        output.par_fill_with(|i| {
+            let z1 = input1.data.get_f64(i);
+            let z2 = input2.data.get_f64(i);
+            if input1.is_nodata(z1) || input2.is_nodata(z2) {
+                input1.nodata
+            } else {
+                op.apply(z1, z2, input1.nodata)
+            }
+        });
+        ctx.progress.progress(0.9);
 
         let output_locator = if let Some(output_path) = output_path {
             if let Some(parent) = output_path.parent() {

@@ -23,6 +23,7 @@ pub use wb_environment::{
     Bundle,
     Lidar,
     LidarMetadata,
+    PinnedRasterView,
     Raster,
     RasterConfigs,
     Vector,
@@ -179,11 +180,13 @@ fn sensor_bundle_colour_helper_manifests() -> Vec<ToolManifest> {
                     name: "bundle_root".to_string(),
                     description: "Root path of the input sensor bundle.".to_string(),
                     required: true,
+                        ..Default::default()
                 },
                 wbcore::ToolParamDescriptor {
                     name: "output_path".to_string(),
                     description: "Output raster path.".to_string(),
                     required: false,
+                        ..Default::default()
                 },
             ],
             defaults: ToolArgs::new(),
@@ -208,11 +211,13 @@ fn sensor_bundle_colour_helper_manifests() -> Vec<ToolManifest> {
                     name: "bundle_root".to_string(),
                     description: "Root path of the input sensor bundle.".to_string(),
                     required: true,
+                        ..Default::default()
                 },
                 wbcore::ToolParamDescriptor {
                     name: "output_path".to_string(),
                     description: "Output raster path.".to_string(),
                     required: false,
+                        ..Default::default()
                 },
             ],
             defaults: ToolArgs::new(),
@@ -1845,6 +1850,7 @@ fn whitebox_tools(
 fn whitebox_workflows(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RuntimeSession>()?;
     m.add_class::<Raster>()?;
+    m.add_class::<PinnedRasterView>()?;
     m.add_class::<RasterConfigs>()?;
     m.add_class::<VectorMetadata>()?;
     m.add_class::<LidarMetadata>()?;

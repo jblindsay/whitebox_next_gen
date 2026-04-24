@@ -64,6 +64,7 @@
 pub mod algorithms;
 pub mod constructive;
 pub mod error;
+pub mod fixed_radius_search;
 mod fast_triangulation;
 pub mod geom;
 pub mod graph;
@@ -81,6 +82,7 @@ pub mod vector_io;
 pub mod voronoi;
 
 pub use error::{Result, TopologyError};
+pub use fixed_radius_search::{DistanceMetric, FixedRadiusSearch2D};
 pub use constructive::{
 	buffer_linestring,
 	buffer_linestring_with_precision,

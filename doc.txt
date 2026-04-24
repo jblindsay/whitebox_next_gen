@@ -1,0 +1,10 @@
+breach_depressions_least_cost
+Display name: Breach Depressions Least Cost
+
+Breaches depressions in a DEM using a constrained least-cost pathway search.
+
+Call style: tool_name(**kwargs[, callback=...])
+
+Return: runtime-decoded object (shape varies by tool; often dict/list/scalar).
+
+Tip: use wbe.describe_tool('<tool_id>', include_locked=True) for structured parameter metadata.

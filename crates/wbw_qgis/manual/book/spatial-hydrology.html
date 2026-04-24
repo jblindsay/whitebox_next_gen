@@ -1,0 +1,464 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Spatial Hydrology - Whitebox Workflows for QGIS User Manual</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">7.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">8.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">9.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">10.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html" class="active"><strong aria-hidden="true">11.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">12.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">13.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">14.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">15.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">16.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">17.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">19.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="spatial-hydrology"><a class="header" href="#spatial-hydrology">Spatial Hydrology</a></h1>
+<p>Spatial hydrology workflows extract hydrographic structure — flow directions,
+stream networks, watersheds, and hydrologic indices — from a terrain model.
+All hydrologic processing begins with a hydrologically conditioned DEM.
+This chapter demonstrates a complete watershed delineation workflow from raw
+DEM to labelled catchments.</p>
+<hr />
+<h2 id="key-concepts"><a class="header" href="#key-concepts">Key Concepts</a></h2>
+<ul>
+<li><strong>Hydrologic conditioning</strong>: Removing or breaching depressions so that flow
+can route from every cell to a basin outlet without interruption.</li>
+<li><strong>Flow direction</strong>: Per-cell pointer indicating which of the eight cardinal
+and diagonal neighbours receives runoff (D8 model) or a fractional
+multi-direction model (D-infinity, MD8).</li>
+<li><strong>Flow accumulation</strong>: Upslope contributing area (in cells or area units).
+High values mark channels; low values mark ridges.</li>
+<li><strong>Stream extraction threshold</strong>: Minimum contributing area that defines a
+first-order channel. Smaller thresholds produce denser networks.</li>
+<li><strong>Watershed / catchment</strong>: All cells draining to a common outlet.
+Delineated by tracing flow direction upstream from outlet points.</li>
+<li><strong>Strahler order</strong>: Hierarchical stream ordering from headwaters (order 1)
+to main channel (highest order). Used to characterise drainage network
+complexity.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-watershed-delineation"><a class="header" href="#end-to-end-workflow-watershed-delineation">End-to-End Workflow: Watershed Delineation</a></h2>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>dem.tif</code></td><td>GeoTIFF raster</td><td>Projected CRS, metres</td></tr>
+<tr><td><code>outlets.shp</code></td><td>Point vector</td><td>One or more pour points</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--breach-depressions-preferred-conditioning-method"><a class="header" href="#step-1--breach-depressions-preferred-conditioning-method">Step 1 — Breach Depressions (Preferred Conditioning Method)</a></h3>
+<p>Breaching cuts a narrow channel through depression rims rather than filling
+them, preserving more of the original topography.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Breach Depressions (Least Cost)</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem.tif</code></td></tr>
+<tr><td>Maximum search distance (cells)</td><td><code>10</code></td></tr>
+<tr><td>Maximum breach depth</td><td><code>2.0</code> (metres)</td></tr>
+<tr><td>Flat increment</td><td><code>0.001</code></td></tr>
+<tr><td>Fill remaining depressions</td><td>✓ enabled</td></tr>
+<tr><td>Output</td><td><code>dem_conditioned.tif</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>If the DEM has large lake or wetland depressions that should not be breached,
+use <strong><code>Fill Depressions</code></strong> instead.</p>
+</blockquote>
+<hr />
+<h3 id="step-2--d8-flow-direction"><a class="header" href="#step-2--d8-flow-direction">Step 2 — D8 Flow Direction</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>D8 Pointer</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_conditioned.tif</code></td></tr>
+<tr><td>Output</td><td><code>d8_pointer.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>The output is an integer raster (powers of 2: 1, 2, 4, 8, 16, 32, 64, 128)
+encoding the direction to the steepest downslope neighbour.</p>
+<hr />
+<h3 id="step-3--d8-flow-accumulation"><a class="header" href="#step-3--d8-flow-accumulation">Step 3 — D8 Flow Accumulation</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>D8 Flow Accumulation</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Output type</td><td><code>Cells</code></td></tr>
+<tr><td>Log-transform output</td><td>☐ (disable for threshold-based channel extraction)</td></tr>
+<tr><td>Output</td><td><code>d8_accum.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Visualise with a logarithmic stretch. The highest values form the main channel
+network.</p>
+<hr />
+<h3 id="step-4--extract-stream-network"><a class="header" href="#step-4--extract-stream-network">Step 4 — Extract Stream Network</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Extract Streams</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Flow accumulation raster</td><td><code>d8_accum.tif</code></td></tr>
+<tr><td>Threshold</td><td><code>500</code> (cells — adjust for DEM resolution and drainage density)</td></tr>
+<tr><td>Zero background</td><td>✓ enabled</td></tr>
+<tr><td>Output</td><td><code>streams.tif</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>Rule of thumb: for a 10 m DEM, a threshold of 500 cells ≈ 0.05 km²
+contributing area, producing a moderately dense first-order network.
+Halve or double the threshold to adjust density.</p>
+</blockquote>
+<p>Convert to vector for display: <strong>Processing → <code>Raster Streams to Vector</code></strong>
+→ <code>streams.shp</code>.</p>
+<hr />
+<h3 id="step-5--snap-pour-points"><a class="header" href="#step-5--snap-pour-points">Step 5 — Snap Pour Points</a></h3>
+<p>Pour points must sit on the channel raster. Snap them to the nearest
+high-accumulation cell to avoid off-channel watershed boundaries.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Snap Pour Points</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Pour points</td><td><code>outlets.shp</code></td></tr>
+<tr><td>Flow accumulation</td><td><code>d8_accum.tif</code></td></tr>
+<tr><td>Snap distance (map units)</td><td><code>200</code> (metres — adjust to point accuracy)</td></tr>
+<tr><td>Output</td><td><code>outlets_snapped.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-6--watershed-delineation"><a class="header" href="#step-6--watershed-delineation">Step 6 — Watershed Delineation</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Watershed</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Pour points</td><td><code>outlets_snapped.shp</code></td></tr>
+<tr><td>Output</td><td><code>watersheds.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Each outlet receives a unique integer ID; cells are assigned that ID. Use
+<strong><code>Raster to Vector (Polygons)</code></strong> in QGIS to produce watershed boundary
+polygons, then dissolve by ID if multiple raster cells share an outlet.</p>
+<hr />
+<h3 id="step-7--strahler-stream-order-optional"><a class="header" href="#step-7--strahler-stream-order-optional">Step 7 — Strahler Stream Order (Optional)</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Strahler Stream Order</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>strahler.tif</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent"><a class="header" href="#python-console-equivalent">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+dem = '/data/dem.tif'
+outlets = '/data/outlets.shp'
+
+# Step 1: condition DEM
+processing.run('whitebox_workflows:breach_depressions_least_cost', {
+    'dem': dem,
+    'max_dist': 10,
+    'max_depth': 2.0,
+    'flat_increment': 0.001,
+    'fill': True,
+    'output': '/data/dem_conditioned.tif',
+})
+
+# Step 2: flow direction
+processing.run('whitebox_workflows:d8_pointer', {
+    'dem': '/data/dem_conditioned.tif',
+    'output': '/data/d8_pointer.tif',
+})
+
+# Step 3: flow accumulation
+processing.run('whitebox_workflows:d8_flow_accumulation', {
+    'input': '/data/d8_pointer.tif',
+    'output_type': 'Cells',
+    'log': False,
+    'output': '/data/d8_accum.tif',
+})
+
+# Step 4: extract streams
+processing.run('whitebox_workflows:extract_streams', {
+    'flow_accum': '/data/d8_accum.tif',
+    'threshold': 500.0,
+    'zero_background': True,
+    'output': '/data/streams.tif',
+})
+
+# Step 5: snap pour points
+processing.run('whitebox_workflows:snap_pour_points', {
+    'pour_pts': outlets,
+    'flow_accum': '/data/d8_accum.tif',
+    'snap_dist': 200.0,
+    'output': '/data/outlets_snapped.shp',
+})
+
+# Step 6: watershed
+processing.run('whitebox_workflows:watershed', {
+    'd8_pntr': '/data/d8_pointer.tif',
+    'pour_pts': '/data/outlets_snapped.shp',
+    'output': '/data/watersheds.tif',
+})
+
+print("Watershed delineation complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-topographic-wetness-index"><a class="header" href="#advanced-topographic-wetness-index">Advanced: Topographic Wetness Index</a></h2>
+<p>TWI requires the specific catchment area (flow accumulation in area units per
+unit contour width) rather than the raw cell count.</p>
+<pre><code class="language-python"># SCA-based flow accumulation
+processing.run('whitebox_workflows:d8_flow_accumulation', {
+    'input': '/data/d8_pointer.tif',
+    'output_type': 'Specific Contributing Area',
+    'log': False,
+    'output': '/data/sca.tif',
+})
+
+# Slope in radians (required for TWI)
+processing.run('whitebox_workflows:slope', {
+    'dem': '/data/dem_conditioned.tif',
+    'units': 'Radians',
+    'output': '/data/slope_rad.tif',
+})
+
+# TWI
+processing.run('whitebox_workflows:wetness_index', {
+    'sca': '/data/sca.tif',
+    'slope': '/data/slope_rad.tif',
+    'output': '/data/twi.tif',
+})
+</code></pre>
+<hr />
+<h2 id="common-pitfalls"><a class="header" href="#common-pitfalls">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Watershed does not extend to expected ridgeline</td><td>Pour point not on channel raster</td><td>Run Snap Pour Points before Watershed</td></tr>
+<tr><td>Parallel flow stripes in accumulation raster</td><td>Flat areas in conditioned DEM</td><td>Enable fix-flats during conditioning</td></tr>
+<tr><td>Stream network is too sparse / too dense</td><td>Threshold too high / too low</td><td>Halve or double threshold and re-inspect</td></tr>
+<tr><td>Watershed covers entire DEM</td><td>Pour point is at or near the DEM outlet cell</td><td>Check that outlet coordinates fall inside the DEM extent</td></tr>
+<tr><td>TWI has very high values in flat areas</td><td>Slope is near-zero, causing division by tan(0)</td><td>Mask flat areas or apply a minimum slope floor (e.g. 0.001 rad)</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist"><a class="header" href="#validation-checklist">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Conditioned DEM has no isolated flat areas (check flow direction raster for NoData).</li>
+<li><input disabled="" type="checkbox"/>
+Flow accumulation values increase monotonically toward basin outlet.</li>
+<li><input disabled="" type="checkbox"/>
+Extracted channels follow expected valley geometry in the DEM.</li>
+<li><input disabled="" type="checkbox"/>
+Snapped pour points lie on the highest-accumulation cells within snap distance.</li>
+<li><input disabled="" type="checkbox"/>
+Watershed boundary is a closed polygon that contains the pour point.</li>
+<li><input disabled="" type="checkbox"/>
+Strahler orders are consistent with tributary junctions.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="terrain-analysis.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="lidar-processing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="terrain-analysis.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="lidar-processing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

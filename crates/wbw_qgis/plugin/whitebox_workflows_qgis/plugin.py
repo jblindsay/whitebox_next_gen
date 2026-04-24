@@ -97,6 +97,8 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_recent = "whitebox_workflows/recent_tools"
         self._settings_key_favorites = "whitebox_workflows/favorite_tools"
         self._settings_key_quick_open = "whitebox_workflows/quick_open_top_match"
+        self._settings_key_include_pro = "whitebox_workflows/include_pro"
+        self._settings_key_requested_tier = "whitebox_workflows/requested_tier"
         self._quick_open_top_match = True
         self._settings_key_panel_visible = "whitebox_workflows/panel_visible"
         self._settings_key_panel_width = "whitebox_workflows/panel_width"
@@ -162,6 +164,7 @@ class WhiteboxWorkflowsPlugin:
 
         self._load_recent_tools()
         self._load_favorite_tools()
+        self._load_runtime_preferences()
         self._load_quick_open_preference()
         self._load_panel_ui_state()
         self._load_last_tool()
@@ -488,6 +491,20 @@ class WhiteboxWorkflowsPlugin:
         except Exception:
             self._quick_open_top_match = True
 
+    def _load_runtime_preferences(self):
+        try:
+            settings = QSettings()
+            self.provider.include_pro = self._coerce_bool(
+                settings.value(self._settings_key_include_pro, self.provider.include_pro),
+                self.provider.include_pro,
+            )
+            self.provider.tier = str(
+                settings.value(self._settings_key_requested_tier, self.provider.tier)
+            ).strip().lower() or self.provider.tier
+        except Exception:
+            self.provider.include_pro = True
+            self.provider.tier = self.provider.tier or "open"
+
     def _load_panel_ui_state(self):
         try:
             settings = QSettings()
@@ -560,6 +577,14 @@ class WhiteboxWorkflowsPlugin:
                 self._quick_open_top_match = self._dock_panel.quick_open_enabled()
             settings = QSettings()
             settings.setValue(self._settings_key_quick_open, self._quick_open_top_match)
+        except Exception:
+            pass
+
+    def _save_runtime_preferences(self):
+        try:
+            settings = QSettings()
+            settings.setValue(self._settings_key_include_pro, self.provider.include_pro)
+            settings.setValue(self._settings_key_requested_tier, self.provider.tier)
         except Exception:
             pass
 
@@ -641,6 +666,7 @@ class WhiteboxWorkflowsPlugin:
         if runtime_changed:
             self.provider.include_pro = updated.include_pro
             self.provider.tier = updated.tier
+            self._save_runtime_preferences()
             self._refresh_catalog()
 
     def _show_diagnostics(self, *_args):

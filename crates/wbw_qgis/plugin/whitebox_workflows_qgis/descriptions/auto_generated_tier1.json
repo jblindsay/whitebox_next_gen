@@ -2540,8 +2540,8 @@
         "label": "DEM raster co-registered with optical bands. (default dem.tif)."
       },
       "bundle_root": {
-        "label": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades)...",
-        "tooltip": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, or DIMAP SPOT/Pleiades) used to auto-resolve required bands, QA when available, and solar metadata when explicit inputs are omitted."
+        "label": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, PlanetScope, DIMAP SPOT/Pleiades, or Maxar/WorldView)...",
+        "tooltip": "Optional optical sensor bundle root directory (currently Sentinel-2 SAFE, Landsat, PlanetScope, DIMAP SPOT/Pleiades, or Maxar/WorldView) used to auto-resolve required bands, QA when available, and solar metadata when explicit inputs are omitted."
       },
       "input_red": {
         "label": "Red band raster (optional when bundle_root is provided). (default red.tif). [optional]"

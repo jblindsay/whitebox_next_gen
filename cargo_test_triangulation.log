@@ -1,0 +1,145 @@
+   Compiling serde_json v1.0.149
+   Compiling wbprojection v0.1.0 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbprojection)
+   Compiling tinytemplate v1.2.1
+   Compiling criterion v0.5.1
+   Compiling wbvector v0.1.1 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbvector)
+   Compiling wbtopology v0.1.0 (/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtopology)
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.52s
+     Running unittests src/lib.rs (target/debug/deps/wbtopology-06ceb4d36b4543f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/buffer_negative_fixture_tests.rs (target/debug/deps/buffer_negative_fixture_tests-1a562b5d8a29230e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/constructive_tests.rs (target/debug/deps/constructive_tests-c18e19aed0c899c5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.00s
+
+     Running tests/de9im_differential_harness_tests.rs (target/debug/deps/de9im_differential_harness_tests-cf9b5c80527592e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/distance_tests.rs (target/debug/deps/distance_tests-618f8476a03cdcc7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/graph_tests.rs (target/debug/deps/graph_tests-4adbad44c592e88a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/hull_fixture_tests.rs (target/debug/deps/hull_fixture_tests-098280dbcddf74ab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/hull_tests.rs (target/debug/deps/hull_tests-bdec87db65fc9b27)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+     Running tests/io_tests.rs (target/debug/deps/io_tests-a935fca11e3c006e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/multi_geometry_tests.rs (target/debug/deps/multi_geometry_tests-f8acc3f3dfba6af1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/noding_tests.rs (target/debug/deps/noding_tests-fa26625990badbfa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/overlay_fixture_corpus_tests.rs (target/debug/deps/overlay_fixture_corpus_tests-fff3702e2c50ef5a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/overlay_fixture_extreme_diagnostics_tests.rs (target/debug/deps/overlay_fixture_extreme_diagnostics_tests-4efb19e77250e480)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/overlay_randomized_invariants_tests.rs (target/debug/deps/overlay_randomized_invariants_tests-4b97b0c77fb3626c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/overlay_tests.rs (target/debug/deps/overlay_tests-d4a85cd357a74efc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.00s
+
+     Running tests/precision_tests.rs (target/debug/deps/precision_tests-3793f99d954d61a1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/relate_tests.rs (target/debug/deps/relate_tests-bc69f55bc8215250)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/simplify_tests.rs (target/debug/deps/simplify_tests-ee1fac524d745fe5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/spatial_index_tests.rs (target/debug/deps/spatial_index_tests-a9c81ab925949d42)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+
+     Running tests/topology_tests.rs (target/debug/deps/topology_tests-98347e4b89a99f90)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/triangulation_tests.rs (target/debug/deps/triangulation_tests-e85ba51e7a90fb4f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/vector_io_tests.rs (target/debug/deps/vector_io_tests-ecc7d94b846543a6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/voronoi_tests.rs (target/debug/deps/voronoi_tests-865bca401afe6980)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

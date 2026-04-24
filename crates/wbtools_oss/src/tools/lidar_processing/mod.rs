@@ -38,7 +38,7 @@ use wbcore::{
 };
 use wblidar::{Crs as LidarCrs, PointCloud, PointRecord, Rgb16};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
-use wbtopology::{delaunay_triangulation, delaunay_triangulation_fast, Coord as TopoCoord, PreparedSibsonInterpolator};
+use wbtopology::{delaunay_triangulation, delaunay_triangulation_fast, Coord as TopoCoord, DistanceMetric, FixedRadiusSearch2D, PreparedSibsonInterpolator};
 
 use crate::memory_store;
 
@@ -2588,6 +2588,37 @@ fn build_lidar_output(
     }))
 }
 
+fn build_lidar_output_from_bounds(
+    min_x: f64,
+    max_x: f64,
+    min_y: f64,
+    max_y: f64,
+    cell_size: f64,
+    crs: CrsInfo,
+    data_type: DataType,
+) -> Result<Raster, ToolError> {
+    if !cell_size.is_finite() || cell_size <= 0.0 {
+        return Err(ToolError::Validation(
+            "resolution/cell_size must be a positive finite value".to_string(),
+        ));
+    }
+    let cols = (((max_x - min_x) / cell_size).ceil() as usize).max(1);
+    let rows = (((max_y - min_y) / cell_size).ceil() as usize).max(1);
+    Ok(Raster::new(RasterConfig {
+        cols,
+        rows,
+        bands: 1,
+        x_min: min_x,
+        y_min: max_y - rows as f64 * cell_size,
+        cell_size,
+        cell_size_y: Some(cell_size),
+        nodata: -32768.0,
+        data_type,
+        crs,
+        metadata: Vec::new(),
+    }))
+}
+
 fn store_or_write_output(
     output: Raster,
     output_path: Option<std::path::PathBuf>,
@@ -3755,49 +3786,140 @@ impl Tool for LidarIdwInterpolationTool {
         let min_points = args.get("min_points").and_then(Value::as_u64).unwrap_or(1) as usize;
         let output_path = parse_optional_output_path(args, "output")?;
 
+        let t_total = Instant::now();
+
         ctx.progress.info("reading input lidar");
+        let t_read = Instant::now();
         let cloud = PointCloud::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let read_s = t_read.elapsed().as_secs_f64();
         if cloud.crs.is_none() {
             ctx.progress.info(
                 "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
             );
         }
 
-        let target_samples = collect_lidar_samples(
-            &cloud.points,
-            &parameter,
-            returns_mode,
-            &include_classes,
-            min_z,
-            max_z,
-        )?;
-        let mut samples = target_samples.clone();
-        for neighbor_path in neighbor_paths {
-            let n_cloud = PointCloud::read(&neighbor_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
-            let mut n_samples = collect_lidar_samples(
-                &n_cloud.points,
-                &parameter,
-                returns_mode,
-                &include_classes,
-                min_z,
-                max_z,
-            )?;
-            samples.append(&mut n_samples);
-        }
-        let mut output = build_lidar_output(
-            &target_samples,
+        // Single pass over primary points: apply filters, track output-grid bounds, and populate
+        // the spatial index directly — no intermediate Vec allocation, no separate insert loop.
+        let t_filter = Instant::now();
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        let (frs, tree): (Option<FixedRadiusSearch2D<f64>>, Option<KdTree<f64, f64, [f64; 2]>>) =
+            if radius > 0.0 {
+                let mut index = FixedRadiusSearch2D::new(radius, DistanceMetric::Euclidean);
+                let mut n_primary = 0usize;
+                for p in &cloud.points {
+                    if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
+                        continue;
+                    }
+                    if p.z < min_z || p.z > max_z {
+                        continue;
+                    }
+                    if is_withheld(p) {
+                        continue;
+                    }
+                    if !return_filter_match(p, returns_mode) {
+                        continue;
+                    }
+                    if !include_classes[p.classification as usize] {
+                        continue;
+                    }
+                    if let Some(value) = select_point_value(p, &parameter) {
+                        if value.is_finite() {
+                            min_x = min_x.min(p.x);
+                            max_x = max_x.max(p.x);
+                            min_y = min_y.min(p.y);
+                            max_y = max_y.max(p.y);
+                            index.insert(p.x, p.y, value);
+                            n_primary += 1;
+                        }
+                    }
+                }
+                if n_primary == 0 {
+                    return Err(ToolError::Validation(
+                        "input lidar contains no valid points after filtering".to_string(),
+                    ));
+                }
+                // Neighbour tiles: insert into FRS only — output grid is sized to primary tile.
+                for neighbor_path in &neighbor_paths {
+                    let n_cloud = PointCloud::read(neighbor_path)
+                        .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+                    for p in &n_cloud.points {
+                        if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
+                            continue;
+                        }
+                        if p.z < min_z || p.z > max_z {
+                            continue;
+                        }
+                        if is_withheld(p) {
+                            continue;
+                        }
+                        if !return_filter_match(p, returns_mode) {
+                            continue;
+                        }
+                        if !include_classes[p.classification as usize] {
+                            continue;
+                        }
+                        if let Some(value) = select_point_value(p, &parameter) {
+                            if value.is_finite() {
+                                index.insert(p.x, p.y, value);
+                            }
+                        }
+                    }
+                }
+                (Some(index), None)
+            } else {
+                // k-nearest fallback: collect primary samples for bounds, then append neighbours.
+                let mut primary_samples = collect_lidar_samples(
+                    &cloud.points,
+                    &parameter,
+                    returns_mode,
+                    &include_classes,
+                    min_z,
+                    max_z,
+                )?;
+                for (x, y, _) in &primary_samples {
+                    min_x = min_x.min(*x);
+                    max_x = max_x.max(*x);
+                    min_y = min_y.min(*y);
+                    max_y = max_y.max(*y);
+                }
+                for neighbor_path in &neighbor_paths {
+                    let n_cloud = PointCloud::read(neighbor_path)
+                        .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+                    let mut n_samples = collect_lidar_samples(
+                        &n_cloud.points,
+                        &parameter,
+                        returns_mode,
+                        &include_classes,
+                        min_z,
+                        max_z,
+                    )?;
+                    primary_samples.append(&mut n_samples);
+                }
+                let mut index: KdTree<f64, f64, [f64; 2]> = KdTree::new(2);
+                for (x, y, value) in &primary_samples {
+                    index
+                        .add([*x, *y], *value)
+                        .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
+                }
+                (None, Some(index))
+            };
+        let filter_index_s = t_filter.elapsed().as_secs_f64();
+
+        let t_output = Instant::now();
+        let mut output = build_lidar_output_from_bounds(
+            min_x,
+            max_x,
+            min_y,
+            max_y,
             resolution,
             lidar_crs_to_raster_crs(cloud.crs.as_ref()),
             DataType::F64,
         )?;
-
-        let mut tree = KdTree::new(2);
-        for (x, y, value) in &samples {
-            tree.add([*x, *y], *value)
-                .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
-        }
+        let output_s = t_output.elapsed().as_secs_f64();
 
         let rows = output.rows;
         let cols = output.cols;
@@ -3808,55 +3930,89 @@ impl Tool for LidarIdwInterpolationTool {
         let cell_y = output.cell_size_y;
 
         let compute_progress = PercentCoalescer::new(1, 99);
+        let t_interp = Instant::now();
+        let row_values: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| -> Result<Vec<f64>, ToolError> {
+                let mut out_row = vec![nodata; cols];
+                for col in 0..cols {
+                    let x = x_min + (col as f64 + 0.5) * cell_x;
+                    let y = y_max - (row as f64 + 0.5) * cell_y;
+
+                    if let Some(ref index) = frs {
+                        let neighbours = index.search(x, y);
+                        if neighbours.is_empty() {
+                            continue;
+                        }
+                        let mut weighted_sum = 0.0;
+                        let mut sum_w = 0.0;
+                        let mut assigned = false;
+                        for (value, dist) in neighbours {
+                            if dist <= f64::EPSILON {
+                                out_row[col] = value;
+                                assigned = true;
+                                break;
+                            }
+                            let w = if weight == 0.0 { 1.0 } else { 1.0 / dist.powf(weight) };
+                            weighted_sum += value * w;
+                            sum_w += w;
+                        }
+                        if !assigned && sum_w > 0.0 {
+                            out_row[col] = weighted_sum / sum_w;
+                        }
+                    } else {
+                        let tree = tree
+                            .as_ref()
+                            .expect("k-nearest mode requires KD-tree index");
+                        let k = min_points.max(1).min(tree.size());
+                        let neighbours = tree
+                            .nearest(&[x, y], k, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("idw nearest-neighbour search failed: {e}")))?;
+                        if neighbours.is_empty() {
+                            continue;
+                        }
+                        let mut weighted_sum = 0.0;
+                        let mut sum_w = 0.0;
+                        let mut assigned = false;
+                        for (dist2, value) in neighbours {
+                            if dist2 <= f64::EPSILON {
+                                out_row[col] = *value;
+                                assigned = true;
+                                break;
+                            }
+                            let dist = dist2.sqrt();
+                            let w = if weight == 0.0 { 1.0 } else { 1.0 / dist.powf(weight) };
+                            weighted_sum += *value * w;
+                            sum_w += w;
+                        }
+                        if !assigned && sum_w > 0.0 {
+                            out_row[col] = weighted_sum / sum_w;
+                        }
+                    }
+                }
+                Ok(out_row)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let interp_s = t_interp.elapsed().as_secs_f64();
+
+        let t_pack = Instant::now();
         let mut out_values = vec![nodata; output.data.len()];
         for row in 0..rows {
-            for col in 0..cols {
-                let x = x_min + (col as f64 + 0.5) * cell_x;
-                let y = y_max - (row as f64 + 0.5) * cell_y;
-
-                let mut neighbours = if radius > 0.0 {
-                    tree.within(&[x, y], radius * radius, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("idw radius search failed: {e}")))?
-                } else {
-                    Vec::new()
-                };
-
-                if radius <= 0.0 || neighbours.len() < min_points.max(1) {
-                    let k = min_points.max(1).min(samples.len());
-                    neighbours = tree
-                        .nearest(&[x, y], k, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("idw nearest-neighbour search failed: {e}")))?;
-                }
-
-                if neighbours.is_empty() {
-                    continue;
-                }
-
-                let mut weighted_sum = 0.0;
-                let mut sum_w = 0.0;
-                let mut assigned = false;
-                for (dist2, value) in neighbours {
-                    if dist2 <= f64::EPSILON {
-                        out_values[row * cols + col] = *value;
-                        assigned = true;
-                        break;
-                    }
-                    let dist = dist2.sqrt();
-                    let w = if weight == 0.0 { 1.0 } else { 1.0 / dist.powf(weight) };
-                    weighted_sum += *value * w;
-                    sum_w += w;
-                }
-
-                if !assigned && sum_w > 0.0 {
-                    out_values[row * cols + col] = weighted_sum / sum_w;
-                }
-            }
+            let start = row * cols;
+            let end = start + cols;
+            out_values[start..end].copy_from_slice(&row_values[row]);
             compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
-
         for (idx, value) in out_values.iter().enumerate() {
             output.data.set_f64(idx, *value);
         }
+        let pack_s = t_pack.elapsed().as_secs_f64();
+
+        let timings_msg = format!(
+            "idw timings[s]: read={read_s:.3}, filter+index={filter_index_s:.3}, output={output_s:.3}, interp={interp_s:.3}, pack={pack_s:.3}, total={:.3}",
+            t_total.elapsed().as_secs_f64()
+        );
+        ctx.progress.info(&timings_msg);
 
         let locator = store_or_write_output(output, output_path)?;
         ctx.progress.progress(1.0);

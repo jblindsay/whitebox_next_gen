@@ -10,6 +10,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Replaced `wbraster`'s native `zstd` dependency with the pure-Rust `ruzstd`
   crate for Zarr and Zarr v3 zstd compression/decompression support, removing
   the crate-level zstd feature split and keeping the raster stack fully Rust.
+- Removed the experimental HDF5/NetCDF sensor-bundle readers and supporting
+  public API surface from `wbraster`, including MODIS HDF, Sentinel-3,
+  Sentinel-5P, SMAP, and VIIRS bundle types.
+- Narrowed unified bundle path APIs back to directory and archive inputs only;
+  single-file HDF5/NetCDF products are no longer accepted by
+  `detect_sensor_bundle_family_path` or `open_sensor_bundle_path`.
 
 ## [0.1.3] - 2026-04-21
 

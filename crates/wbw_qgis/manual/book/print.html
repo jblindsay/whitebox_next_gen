@@ -1,0 +1,2641 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Whitebox Workflows for QGIS User Manual</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">7.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">8.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">9.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">10.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">11.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">12.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">13.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">14.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">15.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">16.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">17.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">19.</strong> Troubleshooting</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Whitebox Workflows for QGIS User Manual</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
+<p>This manual is the long-form user guide for WbW-QGIS.</p>
+<p>WbW-QGIS (Whitebox Workflows for QGIS) is the QGIS frontend for Whitebox Next Gen.
+It provides a QGIS-native way to discover, configure, and run Whitebox tools
+through the Processing framework and plugin UI.</p>
+<p>Whitebox Next Gen uses a layered architecture:</p>
+<ul>
+<li>backend geospatial engines and tools in Rust,</li>
+<li>frontend runtimes for Python, R, and QGIS,</li>
+<li>shared tool taxonomy and capability metadata.</li>
+</ul>
+<p>Whitebox Next Gen is intentionally full-stack: core geospatial capabilities
+that are often delegated to external C/C++ dependencies in other GIS platforms
+(for example raster I/O, projections, geometry/topology operations, and lidar
+handling) are implemented in the Whitebox codebase itself. This architecture is
+unusual in GIS and provides practical benefits for users: consistent behavior
+across platforms, tighter control over correctness and performance, fewer
+system-level dependency issues during installation, and faster iteration when
+fixing bugs or introducing new capabilities.</p>
+<p>Within this model, WbW-QGIS is intentionally a thin integration layer. It handles
+QGIS presentation and orchestration while computation remains in the Whitebox
+backend runtime.</p>
+<h2 id="what-this-manual-covers"><a class="header" href="#what-this-manual-covers">What This Manual Covers</a></h2>
+<p>This guide focuses on practical use of WbW-QGIS:</p>
+<ul>
+<li>setting up the plugin and runtime correctly,</li>
+<li>understanding discovery and provider refresh,</li>
+<li>running tools through QGIS Processing,</li>
+<li>handling output and troubleshooting common issues.</li>
+</ul>
+<p>The manual is written for both analysts and developers who use QGIS as the
+primary working environment.</p>
+<h2 id="goals"><a class="header" href="#goals">Goals</a></h2>
+<ul>
+<li>Provide a stable onboarding path for local installation.</li>
+<li>Document the operational behavior of plugin discovery and execution.</li>
+<li>Clarify tier and licensing behavior in QGIS.</li>
+<li>Reduce setup friction and runtime ambiguity.</li>
+</ul>
+<h2 id="how-to-use-this-manual"><a class="header" href="#how-to-use-this-manual">How to Use This Manual</a></h2>
+<p>For first-time setup, read chapters in order:</p>
+<ol>
+<li>Installation and Setup</li>
+<li>Build and Preview</li>
+<li>Quick Start</li>
+<li>Runtime and Discovery</li>
+</ol>
+<p>After setup is stable, use the remaining chapters as reference material.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation-and-setup"><a class="header" href="#installation-and-setup">Installation and Setup</a></h1>
+<p>This chapter covers local installation of WbW-QGIS from source.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li>QGIS 4.x</li>
+<li>A Python environment used by QGIS</li>
+<li>Local checkout of whitebox_next_gen</li>
+</ul>
+<h2 id="install-the-whitebox-python-runtime"><a class="header" href="#install-the-whitebox-python-runtime">Install the Whitebox Python Runtime</a></h2>
+<p>From the repository root, install whitebox_workflows into the same Python
+environment used by QGIS:</p>
+<pre><code class="language-bash">./scripts/dev_python_install.sh
+</code></pre>
+<p>If you are working in an environment that supports Pro-enabled integration
+builds, use:</p>
+<pre><code class="language-bash">./scripts/dev_python_install.sh --pro
+</code></pre>
+<h2 id="install-or-symlink-the-plugin"><a class="header" href="#install-or-symlink-the-plugin">Install or Symlink the Plugin</a></h2>
+<p>Plugin source directory:</p>
+<ul>
+<li>crates/wbw_qgis/plugin/whitebox_workflows_qgis</li>
+</ul>
+<p>Target QGIS plugins directory:</p>
+<ul>
+<li><QGIS settings dir>/python/plugins/whitebox_workflows_qgis</li>
+</ul>
+<p>Typical local workflow from repository root:</p>
+<pre><code class="language-bash">export QGIS_PLUGIN_DIR="&lt;QGIS settings dir&gt;/python/plugins"
+mkdir -p "$QGIS_PLUGIN_DIR"
+ln -snf "$PWD/crates/wbw_qgis/plugin/whitebox_workflows_qgis" \
+  "$QGIS_PLUGIN_DIR/whitebox_workflows_qgis"
+</code></pre>
+<h2 id="verify-python-import-path"><a class="header" href="#verify-python-import-path">Verify Python Import Path</a></h2>
+<p>Before opening QGIS, verify whitebox_workflows import in the same Python
+environment QGIS uses:</p>
+<pre><code class="language-bash">python3 -c "import whitebox_workflows as wb; print(wb.__file__)"
+</code></pre>
+<p>If this fails, fix environment alignment before continuing.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="build-and-preview"><a class="header" href="#build-and-preview">Build and Preview</a></h1>
+<p>The WbW-QGIS manual uses mdBook, matching the WbW-Python and WbW-R manuals.</p>
+<h2 id="build-the-manual"><a class="header" href="#build-the-manual">Build the Manual</a></h2>
+<p>From the manual directory:</p>
+<pre><code class="language-bash">cd crates/wbw_qgis/manual
+mdbook build
+</code></pre>
+<p>Generated output will be written to:</p>
+<ul>
+<li>crates/wbw_qgis/manual/book</li>
+</ul>
+<h2 id="live-preview"><a class="header" href="#live-preview">Live Preview</a></h2>
+<p>For a local preview server:</p>
+<pre><code class="language-bash">cd crates/wbw_qgis/manual
+mdbook serve --open
+</code></pre>
+<p>This starts a local server and opens the manual in your browser.</p>
+<h2 id="writing-conventions"><a class="header" href="#writing-conventions">Writing Conventions</a></h2>
+<ul>
+<li>Keep examples task-oriented and reproducible.</li>
+<li>Prefer short, complete QGIS workflows over abstract API descriptions.</li>
+<li>Document expected outputs and validation checks where possible.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<p>This walkthrough verifies that WbW-QGIS is running and can execute tools.</p>
+<h2 id="1-enable-plugin"><a class="header" href="#1-enable-plugin">1. Enable Plugin</a></h2>
+<ol>
+<li>Start QGIS.</li>
+<li>Open Plugin Manager.</li>
+<li>Enable Whitebox Workflows.</li>
+</ol>
+<h2 id="2-confirm-provider-availability"><a class="header" href="#2-confirm-provider-availability">2. Confirm Provider Availability</a></h2>
+<ol>
+<li>Open the Processing Toolbox.</li>
+<li>Confirm Whitebox provider entries appear.</li>
+<li>If tools are missing, trigger a discovery refresh from the plugin panel.</li>
+</ol>
+<h2 id="3-run-a-first-tool"><a class="header" href="#3-run-a-first-tool">3. Run a First Tool</a></h2>
+<p>A common smoke test is a simple raster analysis tool with a small input file.</p>
+<p>Recommended pattern:</p>
+<ol>
+<li>Choose a small test raster.</li>
+<li>Run a lightweight tool from the Whitebox provider.</li>
+<li>Write output to a temporary file.</li>
+<li>Load and inspect the output layer in QGIS.</li>
+</ol>
+<h2 id="4-validate-results"><a class="header" href="#4-validate-results">4. Validate Results</a></h2>
+<ul>
+<li>Confirm the output file exists.</li>
+<li>Confirm layer metadata and CRS are as expected.</li>
+<li>Confirm visual result is plausible for the input.</li>
+</ul>
+<p>If any step fails, continue to the Troubleshooting chapter.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="runtime-and-discovery"><a class="header" href="#runtime-and-discovery">Runtime and Discovery</a></h1>
+<p>WbW-QGIS discovers tool availability at runtime using the active
+whitebox_workflows environment.</p>
+<h2 id="discovery-flow"><a class="header" href="#discovery-flow">Discovery Flow</a></h2>
+<p>At a high level:</p>
+<ol>
+<li>Import whitebox_workflows in the QGIS Python environment.</li>
+<li>Create a runtime session.</li>
+<li>Read runtime capability metadata.</li>
+<li>Read tool catalog metadata.</li>
+<li>Partition available vs locked tools.</li>
+<li>Refresh Processing provider algorithms.</li>
+</ol>
+<h2 id="when-to-refresh"><a class="header" href="#when-to-refresh">When to Refresh</a></h2>
+<p>Refresh discovery when:</p>
+<ul>
+<li>plugin settings change,</li>
+<li>runtime tier/entitlement changes,</li>
+<li>whitebox_workflows is rebuilt or reinstalled,</li>
+<li>tool taxonomy updates are introduced.</li>
+</ul>
+<h2 id="common-discovery-symptoms"><a class="header" href="#common-discovery-symptoms">Common Discovery Symptoms</a></h2>
+<ul>
+<li>Provider missing entirely: plugin import/runtime bootstrap failure.</li>
+<li>Provider appears but tools are absent: catalog read failure or stale cache.</li>
+<li>Tools show as locked unexpectedly: runtime capability/tier mismatch.</li>
+</ul>
+<p>In all cases, validate environment alignment first.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tool-execution-in-qgis"><a class="header" href="#tool-execution-in-qgis">Tool Execution in QGIS</a></h1>
+<p>WbW-QGIS executes tools through the QGIS Processing framework.</p>
+<h2 id="typical-execution-path"><a class="header" href="#typical-execution-path">Typical Execution Path</a></h2>
+<ol>
+<li>Select a Whitebox algorithm in Processing Toolbox.</li>
+<li>Fill parameters in the algorithm dialog.</li>
+<li>Execute and monitor progress/messages.</li>
+<li>Load or inspect output artifacts.</li>
+</ol>
+<h2 id="recommended-execution-practices"><a class="header" href="#recommended-execution-practices">Recommended Execution Practices</a></h2>
+<ul>
+<li>Use explicit output paths for reproducibility.</li>
+<li>Start with small representative datasets before full runs.</li>
+<li>Validate intermediate outputs for CRS, schema, and metadata.</li>
+<li>Keep task logs for long workflows and batch operations.</li>
+</ul>
+<h2 id="output-handling"><a class="header" href="#output-handling">Output Handling</a></h2>
+<p>Whitebox tools may produce:</p>
+<ul>
+<li>raster outputs,</li>
+<li>vector outputs,</li>
+<li>lidar outputs,</li>
+<li>text/report sidecar artifacts.</li>
+</ul>
+<p>Confirm output type and format before chaining into downstream steps.</p>
+<h2 id="progress-and-messaging"><a class="header" href="#progress-and-messaging">Progress and Messaging</a></h2>
+<p>Execution status and warnings should be treated as part of result validation.
+If a tool completes with warnings, inspect outputs before continuing.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="licensing-and-tiers"><a class="header" href="#licensing-and-tiers">Licensing and Tiers</a></h1>
+<p>WbW-QGIS is a frontend layer. Licensing authority lives in the backend runtime.</p>
+<h2 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h2>
+<p>The plugin reflects backend capabilities; it does not define licensing rules.</p>
+<h2 id="practical-behavior"><a class="header" href="#practical-behavior">Practical Behavior</a></h2>
+<ul>
+<li>Open-tier tools are expected to run in standard public builds.</li>
+<li>Pro-tier tools may be visible but locked without eligible runtime capability.</li>
+<li>Requested tier and effective tier can differ based on environment and
+entitlement state.</li>
+</ul>
+<h2 id="why-this-matters"><a class="header" href="#why-this-matters">Why This Matters</a></h2>
+<ul>
+<li>One plugin surface can adapt to multiple capability tiers.</li>
+<li>Discovery remains consistent across Python, R, and QGIS frontends.</li>
+<li>Execution decisions remain centralized in backend runtime logic.</li>
+</ul>
+<h2 id="expected-local-dev-outcome"><a class="header" href="#expected-local-dev-outcome">Expected Local-Dev Outcome</a></h2>
+<p>For most source-based setups, assume open-tier behavior unless your runtime
+environment is explicitly configured for Pro-enabled integration testing.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="supported-data-formats"><a class="header" href="#supported-data-formats">Supported Data Formats</a></h1>
+<p>This chapter documents format support exposed through WbW-QGIS.</p>
+<p>Authoritative backend support comes from Whitebox core crates:</p>
+<ul>
+<li>Raster I/O: <code>wbraster</code></li>
+<li>Vector I/O: <code>wbvector</code></li>
+<li>LiDAR I/O: <code>wblidar</code></li>
+</ul>
+<p>The format tables below are aligned with those backend crates' README
+"Supported Formats" sections.</p>
+<hr />
+<h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
+<p>Raster support in Whitebox is provided by <code>wbraster</code>.</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Extension(s)</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
+<tr><td>ENVI HDR Labelled</td><td><code>.hdr</code> + sidecar data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band (<code>BSQ</code> / <code>BIL</code> / <code>BIP</code>)</td></tr>
+<tr><td>ER Mapper</td><td><code>.ers</code> + data</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Hierarchical header</td></tr>
+<tr><td>Esri ASCII Grid</td><td><code>.asc</code>, <code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Handles <code>xllcorner</code> and <code>xllcenter</code></td></tr>
+<tr><td>Esri Binary Grid</td><td>workspace dir / <code>.adf</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Single-band float32, big-endian</td></tr>
+<tr><td>GeoTIFF / BigTIFF / COG</td><td><code>.tif</code>, <code>.tiff</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Stripped/tiled GeoTIFF, BigTIFF, COG</td></tr>
+<tr><td>GeoPackage Raster (Phase 4)</td><td><code>.gpkg</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Multi-band tiled raster</td></tr>
+<tr><td>GRASS ASCII Raster</td><td><code>.asc</code>, <code>.txt</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td><code>north/south/east/west</code>, <code>rows/cols</code> headers</td></tr>
+<tr><td>Idrisi/TerrSet Raster</td><td><code>.rdc</code>, <code>.rst</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td><code>byte</code>, <code>integer</code>, <code>real</code>, <code>RGB24</code></td></tr>
+<tr><td>JPEG2000 / GeoJP2</td><td><code>.jp2</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Pure-Rust reader and writer</td></tr>
+<tr><td>PCRaster</td><td><code>.map</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Value-scale aware writer</td></tr>
+<tr><td>SAGA GIS Binary</td><td><code>.sgrd</code>, <code>.sdat</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SAGA data types supported</td></tr>
+<tr><td>Surfer GRD</td><td><code>.grd</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>DSAA and DSRB</td></tr>
+<tr><td>Zarr v2/v3</td><td><code>.zarr</code></td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>2D and 3D (<code>band,y,x</code>) chunked arrays</td></tr>
+</tbody></table>
+</div>
+<p>Notes:</p>
+<ul>
+<li>Whitebox avoids runtime dependence on GDAL.</li>
+<li>In QGIS workflows, GeoTIFF remains the safest default interchange raster.</li>
+</ul>
+<hr />
+<h2 id="vector-formats"><a class="header" href="#vector-formats">Vector Formats</a></h2>
+<p>Vector support in Whitebox is provided by <code>wbvector</code>.</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
+<tr><td>FlatGeobuf (<code>.fgb</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>High-performance binary interchange</td></tr>
+<tr><td>GeoJSON (<code>.geojson</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Web-friendly text format</td></tr>
+<tr><td>GeoPackage (<code>.gpkg</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>SQLite container; multi-layer workflows</td></tr>
+<tr><td>GML (<code>.gml</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Standards-based XML exchange</td></tr>
+<tr><td>GPX (<code>.gpx</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>GPS tracks/routes/waypoints</td></tr>
+<tr><td>KML (<code>.kml</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Google Earth-style visualization</td></tr>
+<tr><td>MapInfo Interchange (<code>.mif</code> + <code>.mid</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Legacy MapInfo interoperability</td></tr>
+<tr><td>ESRI Shapefile (<code>.shp</code> + sidecars)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Broad legacy compatibility</td></tr>
+<tr><td>GeoParquet (<code>.parquet</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Optional <code>geoparquet</code> feature</td></tr>
+<tr><td>KMZ (<code>.kmz</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Optional <code>kmz</code> feature</td></tr>
+<tr><td>OSM PBF (<code>.osm.pbf</code>)</td><td style="text-align: center">Yes</td><td style="text-align: center">No</td><td>Read-only; optional <code>osmpbf</code> feature</td></tr>
+</tbody></table>
+</div>
+<p>Feature-gated formats in <code>wbvector</code>:</p>
+<ul>
+<li><code>geoparquet</code> for GeoParquet support</li>
+<li><code>kmz</code> for KMZ support</li>
+<li><code>osmpbf</code> for OSM PBF read support</li>
+</ul>
+<p>In QGIS workflows, GeoPackage and FlatGeobuf are good modern interchange
+choices; Shapefile remains a compatibility fallback.</p>
+<hr />
+<h2 id="lidar--point-cloud-formats"><a class="header" href="#lidar--point-cloud-formats">LiDAR / Point Cloud Formats</a></h2>
+<p>LiDAR support in Whitebox is provided by <code>wblidar</code>.</p>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th style="text-align: center">Read</th><th style="text-align: center">Write</th><th>Notes</th></tr></thead><tbody>
+<tr><td>LAS</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>LAS 1.1-1.5, PDRF 0-15</td></tr>
+<tr><td>LAZ</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>Standards-compliant LASzip v2/v3 Point10/Point14 codecs</td></tr>
+<tr><td>COPC</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>COPC 1.0 hierarchy with Point14-family payloads</td></tr>
+<tr><td>PLY</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>ASCII, binary little-endian, binary big-endian</td></tr>
+<tr><td>E57</td><td style="text-align: center">Yes</td><td style="text-align: center">Yes</td><td>ASTM E2807 with CRC-32 page validation</td></tr>
+</tbody></table>
+</div>
+<p>Optional features in <code>wblidar</code>:</p>
+<ul>
+<li><code>copc-http</code> for HTTP range fetching of remote COPC</li>
+<li><code>copc-parallel</code> for parallel COPC writing paths</li>
+<li><code>laz-parallel</code> for optional parallel LAZ decode paths</li>
+<li><code>parallel</code> umbrella feature (enables both parallel paths)</li>
+</ul>
+<p>In QGIS workflows, <code>.copc.laz</code> is a strong default for large point-cloud
+delivery and archive.</p>
+<hr />
+<h2 id="qgis-practical-defaults"><a class="header" href="#qgis-practical-defaults">QGIS Practical Defaults</a></h2>
+<p>For most WbW-QGIS production workflows:</p>
+<ul>
+<li>Raster default: GeoTIFF (<code>.tif</code>)</li>
+<li>Vector default: GeoPackage (<code>.gpkg</code>) or FlatGeobuf (<code>.fgb</code>)</li>
+<li>LiDAR default: COPC LAZ (<code>.copc.laz</code>) or LAZ (<code>.laz</code>)</li>
+</ul>
+<p>These defaults balance compatibility, file size, and performance.</p>
+<hr />
+<h2 id="important-distinction"><a class="header" href="#important-distinction">Important Distinction</a></h2>
+<p>Backend format support means the Whitebox runtime can read/write those formats.
+Specific QGIS tool dialogs may still constrain certain outputs or defaults
+depending on parameter wiring and the tool category.</p>
+<p>When in doubt:</p>
+<ol>
+<li>Use the tool's default output extension in QGIS.</li>
+<li>Re-open output and validate metadata.</li>
+<li>Use QGIS conversion tools only when you need a different interchange format.</li>
+</ol>
+<hr />
+<h2 id="common-format-problems"><a class="header" href="#common-format-problems">Common Format Problems</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Output opens but schema is unexpected</td><td>Format-specific field/type constraints</td><td>Use GeoPackage or FlatGeobuf for richer schema</td></tr>
+<tr><td>Shapefile field names truncated</td><td>10-character DBF limit</td><td>Switch output to GeoPackage</td></tr>
+<tr><td>Large cloud is slow to browse</td><td>Non-indexed point-cloud format</td><td>Use COPC LAZ for tiled access</td></tr>
+<tr><td>Optional format not available</td><td>Feature not enabled in build</td><td>Use a non-optional format (for example GeoPackage/GeoJSON/Shapefile)</td></tr>
+<tr><td>CRS appears missing in output</td><td>Sidecar or metadata issue</td><td>Confirm CRS in layer properties and re-export if needed</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="reprojection-and-crs"><a class="header" href="#reprojection-and-crs">Reprojection and CRS</a></h1>
+<p>A Coordinate Reference System (CRS) defines how coordinates in a dataset
+map to real-world locations. CRS mismatches are one of the most common sources
+of silent errors in GIS workflows: two layers may display correctly on screen
+(because QGIS reprojects them on-the-fly for display) while producing wrong
+results when passed to an analysis tool that expects matching CRS inputs.</p>
+<p>This chapter explains how to identify, verify, and correct CRS issues in
+WbW-QGIS workflows.</p>
+<hr />
+<h2 id="key-concepts"><a class="header" href="#key-concepts">Key Concepts</a></h2>
+<ul>
+<li><strong>Geographic CRS (GCS)</strong>: Coordinates in angular units (degrees of latitude
+and longitude). Common examples: WGS84 (EPSG:4326), NAD83 (EPSG:4269).
+<strong>Not suitable as a working CRS for distance/area calculations.</strong></li>
+<li><strong>Projected CRS (PCS)</strong>: Coordinates in linear units (metres or feet) on a
+flat map projection. Examples: UTM zones, Lambert Conformal Conic, Albers
+Equal Area.</li>
+<li><strong>EPSG code</strong>: A numeric registry identifier for a CRS. EPSG:4326 = WGS84;
+EPSG:32617 = UTM Zone 17N (WGS84); EPSG:3978 = Canada Atlas Lambert.</li>
+<li><strong>On-the-fly reprojection</strong>: QGIS displays all layers in the project CRS
+regardless of their native CRS. This is for <strong>display only</strong> — it does not
+change the file on disk.</li>
+<li><strong>Reproject (warp)</strong>: Permanently transform raster or vector data to a new
+CRS, writing a new file. Required before passing data to analysis tools.</li>
+<li><strong>Z factor</strong>: A unit-conversion factor applied when DEM horizontal units
+(metres) differ from vertical units (feet), or vice versa.</li>
+</ul>
+<hr />
+<h2 id="choosing-a-working-crs"><a class="header" href="#choosing-a-working-crs">Choosing a Working CRS</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Scenario</th><th>Recommended CRS type</th></tr></thead><tbody>
+<tr><td>Global or continental analysis</td><td>Geographic (WGS84 / EPSG:4326) for data exchange; Equal-Area projection for area measurements</td></tr>
+<tr><td>Regional / national analysis</td><td>National projected CRS (e.g. Canada Atlas Lambert / EPSG:3978)</td></tr>
+<tr><td>Local analysis (&lt; 500 km extent)</td><td>UTM zone covering the study area</td></tr>
+<tr><td>Terrain analysis, hydrology, LiDAR</td><td>Projected CRS in metres (UTM recommended)</td></tr>
+<tr><td>Slope / distance calculations</td><td><strong>Always</strong> use a projected CRS</td></tr>
+</tbody></table>
+</div>
+<p><strong>Finding your UTM zone</strong>: The UTM zone number equals ⌊(longitude + 180) / 6⌋ + 1.
+For Ottawa, Canada (longitude ≈ –75.7°): zone 18, northern hemisphere →
+EPSG:32618.</p>
+<hr />
+<h2 id="checking-the-crs-of-a-layer"><a class="header" href="#checking-the-crs-of-a-layer">Checking the CRS of a Layer</a></h2>
+<ol>
+<li>Right-click a layer in the Layers panel → <strong>Properties</strong>.</li>
+<li>Select the <strong>Information</strong> tab.</li>
+<li>Read the <strong>CRS</strong> field. Confirm:
+<ul>
+<li>Authority and code (e.g. <code>EPSG:32618</code>)</li>
+<li>Unit (metres vs degrees)</li>
+<li>Datum (WGS84, NAD83, etc.)</li>
+</ul>
+</li>
+</ol>
+<p>Or in the Python Console:</p>
+<pre><code class="language-python">from qgis.core import QgsProject
+
+layer = QgsProject.instance().mapLayersByName('dem')[0]
+crs = layer.crs()
+print(crs.authid())        # e.g. "EPSG:32618"
+print(crs.mapUnits())      # 0 = metres, 6 = degrees
+print(crs.isGeographic())  # True if GCS
+</code></pre>
+<hr />
+<h2 id="setting-the-project-crs"><a class="header" href="#setting-the-project-crs">Setting the Project CRS</a></h2>
+<p>The <strong>project CRS</strong> controls the display and the default output CRS for tools
+that do not inherit CRS from their inputs.</p>
+<p><strong>Project → Properties → CRS tab</strong> → search by EPSG code or name → click OK.</p>
+<p>Or use <strong>View → Panels → CRS Status</strong> at the bottom-right of the QGIS window
+to set the project CRS from any loaded layer.</p>
+<hr />
+<h2 id="reprojecting-a-raster"><a class="header" href="#reprojecting-a-raster">Reprojecting a Raster</a></h2>
+<p>Use <strong>Reproject Raster</strong> to permanently transform a raster to a new CRS.
+This is required before any terrain analysis on a DEM stored in geographic
+(degree) coordinates.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster → <code>Reproject Raster</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>dem_wgs84.tif</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Resampling method</td><td><code>bilinear</code> (elevation surfaces)</td></tr>
+<tr><td>Output</td><td><code>dem_utm18n.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>The <strong>Resampling method</strong> parameter accepts any of the methods supported by
+WbW's raster engine:</p>
+<div class="table-wrapper"><table><thead><tr><th>Method</th><th>Best for</th></tr></thead><tbody>
+<tr><td><code>nearest</code></td><td>Categorical / integer rasters (classification maps, stream grids)</td></tr>
+<tr><td><code>bilinear</code></td><td>Continuous surfaces (DEMs, slope, TWI, reflectance)</td></tr>
+<tr><td><code>cubic</code></td><td>High-quality continuous-surface resampling</td></tr>
+<tr><td><code>lanczos</code></td><td>High-quality sinc-window resampling</td></tr>
+<tr><td><code>average</code></td><td>3×3 mean statistic</td></tr>
+<tr><td><code>min</code> / <code>max</code></td><td>3×3 extremum statistics</td></tr>
+<tr><td><code>mode</code></td><td>3×3 majority-class (smoothed categorical)</td></tr>
+<tr><td><code>median</code></td><td>3×3 median statistic</td></tr>
+<tr><td><code>stddev</code></td><td>3×3 standard deviation</td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_raster', {
+    'input': '/data/dem_wgs84.tif',
+    'epsg': 32618,
+    'resample': 'bilinear',
+    'output': '/data/dem_utm18n.tif',
+})
+</code></pre>
+<p>After running, load the output and confirm in Layer Properties → Information:
+CRS shows <code>EPSG:32618</code> and the extent is in metres.</p>
+<hr />
+<h2 id="reprojecting-a-vector-layer"><a class="header" href="#reprojecting-a-vector-layer">Reprojecting a Vector Layer</a></h2>
+<p>Use <strong>Reproject Vector</strong> to transform a vector dataset to a new CRS.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector → <code>Reproject Vector</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>roads_wgs84.shp</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Output</td><td><code>roads_utm18n.shp</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_vector', {
+    'input': '/data/roads_wgs84.shp',
+    'epsg': 32618,
+    'output': '/data/roads_utm18n.shp',
+})
+</code></pre>
+<hr />
+<h2 id="reprojecting-a-lidar-dataset"><a class="header" href="#reprojecting-a-lidar-dataset">Reprojecting a LiDAR Dataset</a></h2>
+<p>Use <strong>Reproject LiDAR</strong> to transform a point cloud to a new CRS.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR → <code>Reproject LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_wgs84.laz</code></td></tr>
+<tr><td>Target EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Output</td><td><code>cloud_utm18n.laz</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:reproject_lidar', {
+    'input': '/data/cloud_wgs84.laz',
+    'epsg': 32618,
+    'output': '/data/cloud_utm18n.laz',
+})
+</code></pre>
+<hr />
+<h2 id="assigning-a-missing-crs"><a class="header" href="#assigning-a-missing-crs">Assigning a Missing CRS</a></h2>
+<p>If a file has correct coordinates but missing or wrong CRS metadata (shown
+as "Unknown CRS" in Layer Properties), use one of the three <strong>Assign
+Projection</strong> tools to write the correct EPSG code into the file without
+moving any coordinates.</p>
+<blockquote>
+<p><strong>Assign vs. Reproject:</strong> Assigning a CRS only updates the metadata label.
+Use it when coordinates are already in the target system but the file has
+no CRS tag. If the coordinate values themselves need to change, use the
+Reproject tools above instead.</p>
+</blockquote>
+<h3 id="assign-projection-to-a-raster"><a class="header" href="#assign-projection-to-a-raster">Assign Projection to a Raster</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster → <code>Assign Projection Raster</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>dem_no_crs.tif</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_raster', {
+    'input': '/data/dem_no_crs.tif',
+    'epsg': 32618,
+})
+</code></pre>
+<h3 id="assign-projection-to-a-vector"><a class="header" href="#assign-projection-to-a-vector">Assign Projection to a Vector</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector → <code>Assign Projection Vector</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>roads_no_crs.shp</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_vector', {
+    'input': '/data/roads_no_crs.shp',
+    'epsg': 32618,
+})
+</code></pre>
+<h3 id="assign-projection-to-a-lidar-file"><a class="header" href="#assign-projection-to-a-lidar-file">Assign Projection to a LiDAR File</a></h3>
+<p><strong>Processing Toolbox -&gt; Whitebox Workflows -&gt; LiDAR -&gt; <code>Assign Projection LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_no_crs.laz</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_lidar', {
+  'input': '/data/cloud_no_crs.laz',
+  'epsg': 32618,
+})
+</code></pre>
+<hr />
+<h2 id="georeferencing-from-control-points"><a class="header" href="#georeferencing-from-control-points">Georeferencing from Control Points</a></h2>
+<p>Use <strong>Georeference Raster From Control Points</strong> when the raster has no valid
+georeferencing and you have control points that relate pixel coordinates to map
+coordinates.</p>
+<p><strong>Processing Toolbox -&gt; Whitebox Workflows -&gt; Raster -&gt; <code>Georeference Raster From Control Points</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input raster</td><td><code>historical_scan.tif</code></td></tr>
+<tr><td>Control points CSV</td><td><code>historical_scan_gcps.csv</code></td></tr>
+<tr><td>Destination EPSG code</td><td><code>32618</code></td></tr>
+<tr><td>Resampling method</td><td><code>bilinear</code> (continuous) or <code>nearest</code> (categorical)</td></tr>
+<tr><td>Georeferenced raster output</td><td><code>historical_scan_georef.tif</code></td></tr>
+<tr><td>Diagnostics report output</td><td><code>historical_scan_georef_report.json</code> (optional)</td></tr>
+</tbody></table>
+</div>
+<p>Control-points CSV fields must include source image coordinates and target map
+coordinates:</p>
+<ul>
+<li><code>source_col</code></li>
+<li><code>source_row</code></li>
+<li><code>target_x</code></li>
+<li><code>target_y</code></li>
+</ul>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:georeference_raster_from_control_points', {
+  'input': '/data/historical_scan.tif',
+  'control_points': '/data/historical_scan_gcps.csv',
+  'epsg': 32618,
+  'resample': 'bilinear',
+  'output': '/data/historical_scan_georef.tif',
+  'report': '/data/historical_scan_georef_report.json',
+})
+</code></pre>
+<h3 id="assign-projection-to-a-lidar-dataset"><a class="header" href="#assign-projection-to-a-lidar-dataset">Assign Projection to a LiDAR Dataset</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR → <code>Assign Projection LiDAR</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_no_crs.laz</code></td></tr>
+<tr><td>EPSG code to assign</td><td><code>32618</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">import processing
+
+processing.run('whitebox_workflows:assign_projection_lidar', {
+    'input': '/data/cloud_no_crs.laz',
+    'epsg': 32618,
+})
+</code></pre>
+<hr />
+<h2 id="the-z-factor-for-terrain-tools"><a class="header" href="#the-z-factor-for-terrain-tools">The Z Factor for Terrain Tools</a></h2>
+<p>When a DEM's horizontal units differ from its vertical units, slope and
+curvature calculations are incorrect unless a Z factor is applied.</p>
+<div class="table-wrapper"><table><thead><tr><th>Horizontal unit</th><th>Vertical unit</th><th>Z factor</th></tr></thead><tbody>
+<tr><td>Metres</td><td>Metres</td><td><code>1.0</code> (no conversion needed)</td></tr>
+<tr><td>Metres</td><td>Feet</td><td><code>0.3048</code></td></tr>
+<tr><td>Feet</td><td>Feet</td><td><code>1.0</code></td></tr>
+<tr><td>Degrees (geographic)</td><td>Metres</td><td>Do <strong>not</strong> use — reproject first</td></tr>
+</tbody></table>
+</div>
+<p>All WbW terrain tools that accept a Z factor parameter apply the conversion
+as: <code>slope = atan(rise × z_factor / run)</code>.</p>
+<blockquote>
+<p><strong>Best practice</strong>: Reproject the DEM to a projected CRS in metres before
+running any terrain analysis. Set Z factor to <code>1.0</code> after reprojection if
+vertical units are also metres.</p>
+</blockquote>
+<hr />
+<h2 id="batch-reprojection-via-python-console"><a class="header" href="#batch-reprojection-via-python-console">Batch Reprojection via Python Console</a></h2>
+<p>Reproject all GeoPackages in a folder to EPSG:32618 using the Whitebox
+vector reprojection tool:</p>
+<pre><code class="language-python">import processing
+from pathlib import Path
+
+src_dir = Path('/data/raw_vectors')
+out_dir = Path('/data/projected')
+out_dir.mkdir(exist_ok=True)
+
+for gpkg in src_dir.glob('*.gpkg'):
+    out = out_dir / gpkg.name
+    processing.run('whitebox_workflows:reproject_vector', {
+        'input': str(gpkg),
+        'epsg': 32618,
+        'output': str(out),
+    })
+    print(f"Reprojected: {gpkg.name}")
+
+print("Batch reprojection complete.")
+</code></pre>
+<p>Reproject a folder of LiDAR files in the same pattern:</p>
+<pre><code class="language-python">import processing
+from pathlib import Path
+
+src_dir = Path('/data/raw_lidar')
+out_dir = Path('/data/projected_lidar')
+out_dir.mkdir(exist_ok=True)
+
+for las in src_dir.glob('*.laz'):
+    out = out_dir / las.name
+    processing.run('whitebox_workflows:reproject_lidar', {
+        'input': str(las),
+        'epsg': 32618,
+        'output': str(out),
+    })
+    print(f"Reprojected: {las.name}")
+
+print("Batch LiDAR reprojection complete.")
+</code></pre>
+<hr />
+<h2 id="common-crs-problems"><a class="header" href="#common-crs-problems">Common CRS Problems</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Layers display in wrong location</td><td>Layer has incorrect assigned CRS</td><td>Assign correct CRS (do not reproject)</td></tr>
+<tr><td>Slope values in hundreds of degrees</td><td>DEM in geographic CRS (degrees) — cell size &lt;&lt; 1°</td><td>Reproject DEM to metres before running slope</td></tr>
+<tr><td>Area calculations wildly wrong</td><td>Layer CRS is geographic (degrees)</td><td>Reproject to equal-area projected CRS</td></tr>
+<tr><td>Watershed does not close properly</td><td>Raster and vector inputs in different CRS</td><td>Reproject all inputs to same CRS before processing</td></tr>
+<tr><td>WbW tool silently returns NoData everywhere</td><td>CRS mismatch causes spatial extents not to overlap</td><td>Verify all inputs share the same CRS and extent</td></tr>
+<tr><td>"Datum transform not found" warning in QGIS</td><td>Datum shift grid file not installed</td><td>Install <code>proj-data</code> package, or accept approximate transform</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist"><a class="header" href="#validation-checklist">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Project CRS is set to the intended working CRS before analysis.</li>
+<li><input disabled="" type="checkbox"/>
+All raster inputs share the same CRS, extent, and cell size.</li>
+<li><input disabled="" type="checkbox"/>
+All vector inputs share the same CRS as the raster grid.</li>
+<li><input disabled="" type="checkbox"/>
+DEM CRS is projected (linear units — metres or feet), not geographic.</li>
+<li><input disabled="" type="checkbox"/>
+Z factor is set to <code>1.0</code> when both horizontal and vertical units are metres.</li>
+<li><input disabled="" type="checkbox"/>
+Reprojected outputs have been inspected (extent in metres, CRS code confirmed).</li>
+<li><input disabled="" type="checkbox"/>
+No layers show "Unknown CRS" in the Layers panel.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="terrain-analysis-and-geomorphometry"><a class="header" href="#terrain-analysis-and-geomorphometry">Terrain Analysis and Geomorphometry</a></h1>
+<p>Terrain analysis — or geomorphometry — is the quantitative characterisation of
+land-surface form from digital elevation models (DEMs). It is one of the
+original strengths of the Whitebox platform and covers first-order derivatives
+(slope, aspect), curvature families, terrain position, roughness, multiscale
+analysis, and visibility.</p>
+<p>This chapter walks through a complete primary-derivative workflow in the QGIS
+Processing Toolbox, followed by a Python console version for batch scripting.</p>
+<hr />
+<h2 id="key-concepts-1"><a class="header" href="#key-concepts-1">Key Concepts</a></h2>
+<ul>
+<li><strong>DEM</strong>: Raster where each cell stores surface elevation. All terrain
+derivatives begin here. Common sources: LiDAR bare-earth, drone
+photogrammetry, SRTM, Copernicus DEM.</li>
+<li><strong>Slope</strong>: Maximum rate of elevation change per unit distance (degrees or
+percent). Core input for erosion, landslide, and routing models.</li>
+<li><strong>Aspect</strong>: Compass direction a slope faces (0–360°, clockwise from north).
+Flat cells are assigned –1. Controls solar insolation and moisture.</li>
+<li><strong>Curvature</strong>: Rate of change of slope. Profile curvature describes flow
+acceleration/deceleration; plan curvature describes flow convergence/divergence.</li>
+<li><strong>TPI / geomorphons</strong>: Terrain position indices and landform classification
+assign cells to ridge, slope, valley, etc., without manual thresholds.</li>
+<li><strong>TWI</strong>: Topographic Wetness Index — ln(upslope area / tan(slope)) —
+predicts persistent soil moisture and runoff zones.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-primary-terrain-derivatives"><a class="header" href="#end-to-end-workflow-primary-terrain-derivatives">End-to-End Workflow: Primary Terrain Derivatives</a></h2>
+<p>This workflow takes a raw DEM through sink filling, then derives the most
+commonly used terrain surfaces.</p>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>dem.tif</code></td><td>GeoTIFF raster</td><td>Projected CRS (e.g. UTM) strongly recommended</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--fill-depressions"><a class="header" href="#step-1--fill-depressions">Step 1 — Fill Depressions</a></h3>
+<p>Sinks (isolated low cells) in a DEM cause flow-routing artifacts in all
+downstream terrain derivatives. Fill them first.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Fill Depressions</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem.tif</code></td></tr>
+<tr><td>Fix flats</td><td>✓ enabled</td></tr>
+<tr><td>Flat increment</td><td><code>0.001</code> (one thousandth of the DEM z unit)</td></tr>
+<tr><td>Output</td><td><code>dem_filled.tif</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p><strong>Why fix flats?</strong> Perfectly flat areas produce ambiguous flow directions.
+Adding a tiny gradient across flats ensures a routable surface.</p>
+</blockquote>
+<hr />
+<h3 id="step-2--slope"><a class="header" href="#step-2--slope">Step 2 — Slope</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Slope</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_filled.tif</code></td></tr>
+<tr><td>Output units</td><td><code>Degrees</code></td></tr>
+<tr><td>Z conversion factor</td><td><code>1.0</code> (set to <code>0.3048</code> if DEM z is in feet but CRS is metres)</td></tr>
+<tr><td>Output</td><td><code>slope.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Expected output range: 0° (flat) to ~85° (near-vertical cliff). Values above
+70° often indicate interpolation artefacts — inspect those cells.</p>
+<hr />
+<h3 id="step-3--aspect"><a class="header" href="#step-3--aspect">Step 3 — Aspect</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Aspect</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_filled.tif</code></td></tr>
+<tr><td>Output</td><td><code>aspect.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Flat cells receive –1. Apply a pseudocolor ramp (circular HSV) to aspect for
+intuitive visualisation of slope direction.</p>
+<hr />
+<h3 id="step-4--hillshade"><a class="header" href="#step-4--hillshade">Step 4 — Hillshade</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Hillshade</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_filled.tif</code></td></tr>
+<tr><td>Azimuth (°)</td><td><code>315</code> (NW sun — standard cartographic convention)</td></tr>
+<tr><td>Altitude (°)</td><td><code>45</code></td></tr>
+<tr><td>Z factor</td><td><code>1.0</code></td></tr>
+<tr><td>Output</td><td><code>hillshade.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Set the hillshade layer to <strong>Multiply</strong> blend mode in QGIS and overlay it on a
+coloured DEM for a publication-quality relief map.</p>
+<hr />
+<h3 id="step-5--profile-and-plan-curvature"><a class="header" href="#step-5--profile-and-plan-curvature">Step 5 — Profile and Plan Curvature</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Profile Curvature</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_filled.tif</code></td></tr>
+<tr><td>Output</td><td><code>profile_curv.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Repeat for <strong><code>Plan Curvature</code></strong> → <code>plan_curv.tif</code>.</p>
+<p>Style both outputs with a diverging colour ramp centred on 0. Negative profile
+curvature (blue) marks deceleration zones (valley bottoms); positive (red)
+marks acceleration zones (ridge crests). Plan curvature negatives mark
+convergent hollows; positives mark divergent noses.</p>
+<hr />
+<h3 id="step-6--topographic-wetness-index"><a class="header" href="#step-6--topographic-wetness-index">Step 6 — Topographic Wetness Index</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Wetness Index</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Slope raster</td><td><code>slope.tif</code></td></tr>
+<tr><td>Specific contributing area raster</td><td><em>(run <code>D8 Flow Accumulation</code> first — see Spatial Hydrology chapter)</em></td></tr>
+<tr><td>Output</td><td><code>twi.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>High TWI values (&gt; 8–10) indicate persistent moisture zones. Use as a
+predictor variable in soil, flood, and habitat models.</p>
+<hr />
+<h2 id="python-console-equivalent"><a class="header" href="#python-console-equivalent">Python Console Equivalent</a></h2>
+<p>Paste the following into the QGIS Python Console
+(<strong>Plugins → Python Console</strong>) or save as a Processing script to batch
+multiple DEMs.</p>
+<pre><code class="language-python">import processing
+
+dem = '/data/dem.tif'
+
+# Step 1: fill depressions
+processing.run('whitebox_workflows:fill_depressions', {
+    'dem': dem,
+    'fix_flats': True,
+    'flat_increment': 0.001,
+    'output': '/data/dem_filled.tif',
+})
+
+# Step 2: slope
+processing.run('whitebox_workflows:slope', {
+    'dem': '/data/dem_filled.tif',
+    'units': 'Degrees',
+    'zfactor': 1.0,
+    'output': '/data/slope.tif',
+})
+
+# Step 3: aspect
+processing.run('whitebox_workflows:aspect', {
+    'dem': '/data/dem_filled.tif',
+    'output': '/data/aspect.tif',
+})
+
+# Step 4: hillshade
+processing.run('whitebox_workflows:hillshade', {
+    'dem': '/data/dem_filled.tif',
+    'azimuth': 315.0,
+    'altitude': 45.0,
+    'zfactor': 1.0,
+    'output': '/data/hillshade.tif',
+})
+
+# Step 5: curvature
+processing.run('whitebox_workflows:profile_curvature', {
+    'dem': '/data/dem_filled.tif',
+    'output': '/data/profile_curv.tif',
+})
+processing.run('whitebox_workflows:plan_curvature', {
+    'dem': '/data/dem_filled.tif',
+    'output': '/data/plan_curv.tif',
+})
+
+print("Terrain derivatives complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-geomorphons-landform-classification"><a class="header" href="#advanced-geomorphons-landform-classification">Advanced: Geomorphons Landform Classification</a></h2>
+<p>Geomorphons classify each cell into one of ten landform elements (peak, ridge,
+shoulder, spur, slope, hollow, footslope, valley, pit, flat) by analysing
+horizon profiles in eight compass directions.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Terrain Analysis →
+<code>Geomorphons</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_filled.tif</code></td></tr>
+<tr><td>Search distance (cells)</td><td><code>50</code> (adjust to DEM resolution and landscape scale)</td></tr>
+<tr><td>Skip radius (cells)</td><td><code>0</code></td></tr>
+<tr><td>Flatness threshold (°)</td><td><code>1.0</code></td></tr>
+<tr><td>Output</td><td><code>geomorphons.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>The output is a categorical raster (1–10). Apply a predefined categorical
+colour map — the Geomorphons palette is available in many QGIS style
+repositories.</p>
+<pre><code class="language-python">processing.run('whitebox_workflows:geomorphons', {
+    'dem': '/data/dem_filled.tif',
+    'search': 50,
+    'skip': 0,
+    'threshold': 1.0,
+    'output': '/data/geomorphons.tif',
+})
+</code></pre>
+<hr />
+<h2 id="common-pitfalls"><a class="header" href="#common-pitfalls">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Slope values are unrealistically high (&gt; 85°)</td><td>DEM has interpolation artefacts or NoData spikes</td><td>Run <code>Remove Off-terrain Objects</code> or inspect raw DEM</td></tr>
+<tr><td>Flat areas produce zero slope everywhere</td><td>Depressions not filled before slope derivation</td><td>Run <code>Fill Depressions</code> first</td></tr>
+<tr><td>Aspect shows –1 across large areas</td><td>Large flat regions in DEM</td><td>Expected for flat input; check DEM resolution</td></tr>
+<tr><td>Curvature is noisy on fine-resolution DEMs</td><td>Sensor noise dominates at small spatial scales</td><td>Apply <code>Gaussian Filter</code> (σ ≈ 1–2 cells) before curvature</td></tr>
+<tr><td>Units mismatch — Z factor warning</td><td>Horizontal CRS in metres but DEM z in feet</td><td>Set Z conversion factor to <code>0.3048</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-1"><a class="header" href="#validation-checklist-1">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+DEM uses a projected CRS (not geographic degrees).</li>
+<li><input disabled="" type="checkbox"/>
+No unexpected flat artefacts introduced by depression filling.</li>
+<li><input disabled="" type="checkbox"/>
+Slope range plausible for local relief (inspect histogram).</li>
+<li><input disabled="" type="checkbox"/>
+Aspect –1 cells are spatially limited to genuine flats.</li>
+<li><input disabled="" type="checkbox"/>
+Curvature raster has a near-symmetric distribution centred on 0.</li>
+<li><input disabled="" type="checkbox"/>
+Hillshade visually matches known ridgelines and valley geometry.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="spatial-hydrology"><a class="header" href="#spatial-hydrology">Spatial Hydrology</a></h1>
+<p>Spatial hydrology workflows extract hydrographic structure — flow directions,
+stream networks, watersheds, and hydrologic indices — from a terrain model.
+All hydrologic processing begins with a hydrologically conditioned DEM.
+This chapter demonstrates a complete watershed delineation workflow from raw
+DEM to labelled catchments.</p>
+<hr />
+<h2 id="key-concepts-2"><a class="header" href="#key-concepts-2">Key Concepts</a></h2>
+<ul>
+<li><strong>Hydrologic conditioning</strong>: Removing or breaching depressions so that flow
+can route from every cell to a basin outlet without interruption.</li>
+<li><strong>Flow direction</strong>: Per-cell pointer indicating which of the eight cardinal
+and diagonal neighbours receives runoff (D8 model) or a fractional
+multi-direction model (D-infinity, MD8).</li>
+<li><strong>Flow accumulation</strong>: Upslope contributing area (in cells or area units).
+High values mark channels; low values mark ridges.</li>
+<li><strong>Stream extraction threshold</strong>: Minimum contributing area that defines a
+first-order channel. Smaller thresholds produce denser networks.</li>
+<li><strong>Watershed / catchment</strong>: All cells draining to a common outlet.
+Delineated by tracing flow direction upstream from outlet points.</li>
+<li><strong>Strahler order</strong>: Hierarchical stream ordering from headwaters (order 1)
+to main channel (highest order). Used to characterise drainage network
+complexity.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-watershed-delineation"><a class="header" href="#end-to-end-workflow-watershed-delineation">End-to-End Workflow: Watershed Delineation</a></h2>
+<h3 id="inputs-1"><a class="header" href="#inputs-1">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>dem.tif</code></td><td>GeoTIFF raster</td><td>Projected CRS, metres</td></tr>
+<tr><td><code>outlets.shp</code></td><td>Point vector</td><td>One or more pour points</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--breach-depressions-preferred-conditioning-method"><a class="header" href="#step-1--breach-depressions-preferred-conditioning-method">Step 1 — Breach Depressions (Preferred Conditioning Method)</a></h3>
+<p>Breaching cuts a narrow channel through depression rims rather than filling
+them, preserving more of the original topography.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Breach Depressions (Least Cost)</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem.tif</code></td></tr>
+<tr><td>Maximum search distance (cells)</td><td><code>10</code></td></tr>
+<tr><td>Maximum breach depth</td><td><code>2.0</code> (metres)</td></tr>
+<tr><td>Flat increment</td><td><code>0.001</code></td></tr>
+<tr><td>Fill remaining depressions</td><td>✓ enabled</td></tr>
+<tr><td>Output</td><td><code>dem_conditioned.tif</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>If the DEM has large lake or wetland depressions that should not be breached,
+use <strong><code>Fill Depressions</code></strong> instead.</p>
+</blockquote>
+<hr />
+<h3 id="step-2--d8-flow-direction"><a class="header" href="#step-2--d8-flow-direction">Step 2 — D8 Flow Direction</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>D8 Pointer</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input DEM</td><td><code>dem_conditioned.tif</code></td></tr>
+<tr><td>Output</td><td><code>d8_pointer.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>The output is an integer raster (powers of 2: 1, 2, 4, 8, 16, 32, 64, 128)
+encoding the direction to the steepest downslope neighbour.</p>
+<hr />
+<h3 id="step-3--d8-flow-accumulation"><a class="header" href="#step-3--d8-flow-accumulation">Step 3 — D8 Flow Accumulation</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>D8 Flow Accumulation</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Output type</td><td><code>Cells</code></td></tr>
+<tr><td>Log-transform output</td><td>☐ (disable for threshold-based channel extraction)</td></tr>
+<tr><td>Output</td><td><code>d8_accum.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Visualise with a logarithmic stretch. The highest values form the main channel
+network.</p>
+<hr />
+<h3 id="step-4--extract-stream-network"><a class="header" href="#step-4--extract-stream-network">Step 4 — Extract Stream Network</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Extract Streams</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Flow accumulation raster</td><td><code>d8_accum.tif</code></td></tr>
+<tr><td>Threshold</td><td><code>500</code> (cells — adjust for DEM resolution and drainage density)</td></tr>
+<tr><td>Zero background</td><td>✓ enabled</td></tr>
+<tr><td>Output</td><td><code>streams.tif</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>Rule of thumb: for a 10 m DEM, a threshold of 500 cells ≈ 0.05 km²
+contributing area, producing a moderately dense first-order network.
+Halve or double the threshold to adjust density.</p>
+</blockquote>
+<p>Convert to vector for display: <strong>Processing → <code>Raster Streams to Vector</code></strong>
+→ <code>streams.shp</code>.</p>
+<hr />
+<h3 id="step-5--snap-pour-points"><a class="header" href="#step-5--snap-pour-points">Step 5 — Snap Pour Points</a></h3>
+<p>Pour points must sit on the channel raster. Snap them to the nearest
+high-accumulation cell to avoid off-channel watershed boundaries.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Snap Pour Points</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Pour points</td><td><code>outlets.shp</code></td></tr>
+<tr><td>Flow accumulation</td><td><code>d8_accum.tif</code></td></tr>
+<tr><td>Snap distance (map units)</td><td><code>200</code> (metres — adjust to point accuracy)</td></tr>
+<tr><td>Output</td><td><code>outlets_snapped.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-6--watershed-delineation"><a class="header" href="#step-6--watershed-delineation">Step 6 — Watershed Delineation</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Watershed</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Pour points</td><td><code>outlets_snapped.shp</code></td></tr>
+<tr><td>Output</td><td><code>watersheds.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Each outlet receives a unique integer ID; cells are assigned that ID. Use
+<strong><code>Raster to Vector (Polygons)</code></strong> in QGIS to produce watershed boundary
+polygons, then dissolve by ID if multiple raster cells share an outlet.</p>
+<hr />
+<h3 id="step-7--strahler-stream-order-optional"><a class="header" href="#step-7--strahler-stream-order-optional">Step 7 — Strahler Stream Order (Optional)</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Strahler Stream Order</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>strahler.tif</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent-1"><a class="header" href="#python-console-equivalent-1">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+dem = '/data/dem.tif'
+outlets = '/data/outlets.shp'
+
+# Step 1: condition DEM
+processing.run('whitebox_workflows:breach_depressions_least_cost', {
+    'dem': dem,
+    'max_dist': 10,
+    'max_depth': 2.0,
+    'flat_increment': 0.001,
+    'fill': True,
+    'output': '/data/dem_conditioned.tif',
+})
+
+# Step 2: flow direction
+processing.run('whitebox_workflows:d8_pointer', {
+    'dem': '/data/dem_conditioned.tif',
+    'output': '/data/d8_pointer.tif',
+})
+
+# Step 3: flow accumulation
+processing.run('whitebox_workflows:d8_flow_accumulation', {
+    'input': '/data/d8_pointer.tif',
+    'output_type': 'Cells',
+    'log': False,
+    'output': '/data/d8_accum.tif',
+})
+
+# Step 4: extract streams
+processing.run('whitebox_workflows:extract_streams', {
+    'flow_accum': '/data/d8_accum.tif',
+    'threshold': 500.0,
+    'zero_background': True,
+    'output': '/data/streams.tif',
+})
+
+# Step 5: snap pour points
+processing.run('whitebox_workflows:snap_pour_points', {
+    'pour_pts': outlets,
+    'flow_accum': '/data/d8_accum.tif',
+    'snap_dist': 200.0,
+    'output': '/data/outlets_snapped.shp',
+})
+
+# Step 6: watershed
+processing.run('whitebox_workflows:watershed', {
+    'd8_pntr': '/data/d8_pointer.tif',
+    'pour_pts': '/data/outlets_snapped.shp',
+    'output': '/data/watersheds.tif',
+})
+
+print("Watershed delineation complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-topographic-wetness-index"><a class="header" href="#advanced-topographic-wetness-index">Advanced: Topographic Wetness Index</a></h2>
+<p>TWI requires the specific catchment area (flow accumulation in area units per
+unit contour width) rather than the raw cell count.</p>
+<pre><code class="language-python"># SCA-based flow accumulation
+processing.run('whitebox_workflows:d8_flow_accumulation', {
+    'input': '/data/d8_pointer.tif',
+    'output_type': 'Specific Contributing Area',
+    'log': False,
+    'output': '/data/sca.tif',
+})
+
+# Slope in radians (required for TWI)
+processing.run('whitebox_workflows:slope', {
+    'dem': '/data/dem_conditioned.tif',
+    'units': 'Radians',
+    'output': '/data/slope_rad.tif',
+})
+
+# TWI
+processing.run('whitebox_workflows:wetness_index', {
+    'sca': '/data/sca.tif',
+    'slope': '/data/slope_rad.tif',
+    'output': '/data/twi.tif',
+})
+</code></pre>
+<hr />
+<h2 id="common-pitfalls-1"><a class="header" href="#common-pitfalls-1">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Watershed does not extend to expected ridgeline</td><td>Pour point not on channel raster</td><td>Run Snap Pour Points before Watershed</td></tr>
+<tr><td>Parallel flow stripes in accumulation raster</td><td>Flat areas in conditioned DEM</td><td>Enable fix-flats during conditioning</td></tr>
+<tr><td>Stream network is too sparse / too dense</td><td>Threshold too high / too low</td><td>Halve or double threshold and re-inspect</td></tr>
+<tr><td>Watershed covers entire DEM</td><td>Pour point is at or near the DEM outlet cell</td><td>Check that outlet coordinates fall inside the DEM extent</td></tr>
+<tr><td>TWI has very high values in flat areas</td><td>Slope is near-zero, causing division by tan(0)</td><td>Mask flat areas or apply a minimum slope floor (e.g. 0.001 rad)</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-2"><a class="header" href="#validation-checklist-2">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Conditioned DEM has no isolated flat areas (check flow direction raster for NoData).</li>
+<li><input disabled="" type="checkbox"/>
+Flow accumulation values increase monotonically toward basin outlet.</li>
+<li><input disabled="" type="checkbox"/>
+Extracted channels follow expected valley geometry in the DEM.</li>
+<li><input disabled="" type="checkbox"/>
+Snapped pour points lie on the highest-accumulation cells within snap distance.</li>
+<li><input disabled="" type="checkbox"/>
+Watershed boundary is a closed polygon that contains the pour point.</li>
+<li><input disabled="" type="checkbox"/>
+Strahler orders are consistent with tributary junctions.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="lidar-processing"><a class="header" href="#lidar-processing">LiDAR Processing</a></h1>
+<p>LiDAR point clouds are the highest-resolution elevation data source available
+for most practitioners. WbW-QGIS exposes the full Whitebox LiDAR pipeline —
+from quality assurance through ground classification, surface modelling, and
+height normalisation — directly in the QGIS Processing Toolbox.</p>
+<p>This chapter walks through a complete bare-earth and canopy-height workflow
+starting from a raw LAS/LAZ file.</p>
+<hr />
+<h2 id="key-concepts-3"><a class="header" href="#key-concepts-3">Key Concepts</a></h2>
+<ul>
+<li><strong>Point cloud</strong>: A set of 3-D coordinates (X, Y, Z) plus attributes
+(intensity, return number, classification, scan angle, etc.) acquired by
+laser scanning from airborne or terrestrial platforms.</li>
+<li><strong>LAS/LAZ</strong>: The industry-standard binary format for point clouds. LAZ is
+a losslessly compressed variant. COPC (Cloud-Optimised Point Cloud) is a
+tiled LAZ variant for efficient streaming.</li>
+<li><strong>Classification codes</strong>: Numeric labels assigned to points indicating
+surface type (1 = unclassified, 2 = ground, 3–5 = vegetation, 6 = building,
+etc. per ASPRS convention).</li>
+<li><strong>DTM</strong>: Digital Terrain Model — a raster surface interpolated from
+ground-classified points only.</li>
+<li><strong>DSM</strong>: Digital Surface Model — a raster surface from first returns,
+representing the tops of all objects (vegetation, buildings).</li>
+<li><strong>CHM</strong>: Canopy Height Model — DSM minus DTM, representing object height
+above ground.</li>
+<li><strong>Height above ground (HAG)</strong>: Per-point elevation relative to the
+interpolated ground surface. Enables classification of vegetation returns by
+height tier.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-dtm-dsm-and-canopy-height-model"><a class="header" href="#end-to-end-workflow-dtm-dsm-and-canopy-height-model">End-to-End Workflow: DTM, DSM, and Canopy Height Model</a></h2>
+<h3 id="inputs-2"><a class="header" href="#inputs-2">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>cloud.laz</code></td><td>LAZ point cloud</td><td>Any ASPRS LAS version 1.0–1.4</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--point-cloud-quality-check"><a class="header" href="#step-1--point-cloud-quality-check">Step 1 — Point Cloud Quality Check</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>LiDAR Point Stats</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud.laz</code></td></tr>
+<tr><td>Output</td><td><code>cloud_stats.html</code> (HTML report)</td></tr>
+</tbody></table>
+</div>
+<p>Review the report for:</p>
+<ul>
+<li>Point density (pts/m²)</li>
+<li>Classification distribution (% ground, vegetation, unclassified)</li>
+<li>Z range and intensity histogram</li>
+<li>Scan angle range (should be ±20° for most airborne missions)</li>
+</ul>
+<hr />
+<h3 id="step-2--thin-high-density-files-optional"><a class="header" href="#step-2--thin-high-density-files-optional">Step 2 — Thin High-Density Files (Optional)</a></h3>
+<p>For files &gt; 50 pts/m², thinning reduces processing time with minimal accuracy
+loss.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>LiDAR Thin</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud.laz</code></td></tr>
+<tr><td>Resolution</td><td><code>0.5</code> (metres)</td></tr>
+<tr><td>Retain ground points</td><td>✓ enabled</td></tr>
+<tr><td>Output</td><td><code>cloud_thin.laz</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-3--classify-ground-points"><a class="header" href="#step-3--classify-ground-points">Step 3 — Classify Ground Points</a></h3>
+<p>If the input file has all points as unclassified (class 1), classify ground
+returns before surface modelling.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>LiDAR Ground Point Filter</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud.laz</code> (or <code>cloud_thin.laz</code>)</td></tr>
+<tr><td>Radius (m)</td><td><code>2.0</code></td></tr>
+<tr><td>Minimum slope (°)</td><td><code>5.0</code></td></tr>
+<tr><td>Maximum slope (°)</td><td><code>85.0</code></td></tr>
+<tr><td>Terrain type</td><td><code>Normal</code></td></tr>
+<tr><td>Output</td><td><code>cloud_classified.laz</code></td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>For complex terrain (steep slopes, dense vegetation), increase radius to
+<code>4.0</code> and reduce minimum slope to <code>2.0</code>.</p>
+</blockquote>
+<hr />
+<h3 id="step-4--build-dtm-from-ground-points"><a class="header" href="#step-4--build-dtm-from-ground-points">Step 4 — Build DTM from Ground Points</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>LiDAR IDW Interpolation</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_classified.laz</code></td></tr>
+<tr><td>IDW weight</td><td><code>2.0</code></td></tr>
+<tr><td>Search radius (m)</td><td><code>2.5</code></td></tr>
+<tr><td>Minimum number of points</td><td><code>3</code></td></tr>
+<tr><td>Exclusion classes</td><td><em>(leave empty to use ground points only)</em></td></tr>
+<tr><td>Returns</td><td><code>Last</code></td></tr>
+<tr><td>Point classes included</td><td><code>2</code> (ground)</td></tr>
+<tr><td>Grid resolution</td><td><code>0.5</code></td></tr>
+<tr><td>Output</td><td><code>dtm.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Alternatively, use <strong><code>LiDAR TIN Gridding</code></strong> for faster interpolation on
+uniformly distributed clouds.</p>
+<hr />
+<h3 id="step-5--build-dsm-from-first-returns"><a class="header" href="#step-5--build-dsm-from-first-returns">Step 5 — Build DSM from First Returns</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>LiDAR IDW Interpolation</code></strong> (second pass)</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_classified.laz</code></td></tr>
+<tr><td>Returns</td><td><code>First</code></td></tr>
+<tr><td>Point classes included</td><td><em>(all — leave blank)</em></td></tr>
+<tr><td>Grid resolution</td><td><code>0.5</code></td></tr>
+<tr><td>Output</td><td><code>dsm.tif</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-6--canopy-height-model"><a class="header" href="#step-6--canopy-height-model">Step 6 — Canopy Height Model</a></h3>
+<p>Subtract DTM from DSM using the QGIS Raster Calculator, or use the dedicated
+CHM tool.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>Canopy Height Model</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_classified.laz</code></td></tr>
+<tr><td>DTM raster</td><td><code>dtm.tif</code></td></tr>
+<tr><td>Grid resolution</td><td><code>0.5</code></td></tr>
+<tr><td>Output</td><td><code>chm.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Apply a stretch from 0 to the 98th percentile height value. Negative cells
+(&lt; 0) indicate DTM–DSM interpolation artefacts; clamp to 0 in post-processing.</p>
+<hr />
+<h3 id="step-7--height-above-ground-normalisation"><a class="header" href="#step-7--height-above-ground-normalisation">Step 7 — Height Above Ground Normalisation</a></h3>
+<p>Assign a HAG value to every point for per-return vertical stratification
+analysis.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → LiDAR →
+<code>Height Above Ground</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input LiDAR file</td><td><code>cloud_classified.laz</code></td></tr>
+<tr><td>Output</td><td><code>cloud_hag.laz</code></td></tr>
+</tbody></table>
+</div>
+<p>The tool sets the Z coordinate of each point to its height above the
+interpolated ground surface. Ground points are set to 0.</p>
+<hr />
+<h2 id="python-console-equivalent-2"><a class="header" href="#python-console-equivalent-2">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+cloud = '/data/cloud.laz'
+
+# Step 1: stats / QA
+processing.run('whitebox_workflows:lidar_point_stats', {
+    'input': cloud,
+    'output': '/data/cloud_stats.html',
+})
+
+# Step 3: ground classification
+processing.run('whitebox_workflows:lidar_ground_point_filter', {
+    'input': cloud,
+    'radius': 2.0,
+    'min_slope': 5.0,
+    'max_slope': 85.0,
+    'terrain_type': 'Normal',
+    'output': '/data/cloud_classified.laz',
+})
+
+# Step 4: DTM
+processing.run('whitebox_workflows:lidar_idw_interpolation', {
+    'input': '/data/cloud_classified.laz',
+    'parameter': 'elevation',
+    'returns': 'Last',
+    'classes_included': '2',
+    'weight': 2.0,
+    'radius': 2.5,
+    'min_points': 3,
+    'resolution': 0.5,
+    'output': '/data/dtm.tif',
+})
+
+# Step 5: DSM
+processing.run('whitebox_workflows:lidar_idw_interpolation', {
+    'input': '/data/cloud_classified.laz',
+    'parameter': 'elevation',
+    'returns': 'First',
+    'classes_included': '',
+    'weight': 2.0,
+    'radius': 2.5,
+    'min_points': 3,
+    'resolution': 0.5,
+    'output': '/data/dsm.tif',
+})
+
+# Step 6: CHM
+processing.run('whitebox_workflows:canopy_height_model', {
+    'input': '/data/cloud_classified.laz',
+    'dtm': '/data/dtm.tif',
+    'resolution': 0.5,
+    'output': '/data/chm.tif',
+})
+
+# Step 7: HAG
+processing.run('whitebox_workflows:height_above_ground', {
+    'input': '/data/cloud_classified.laz',
+    'output': '/data/cloud_hag.laz',
+})
+
+print("LiDAR pipeline complete.")
+</code></pre>
+<hr />
+<h2 id="common-pitfalls-2"><a class="header" href="#common-pitfalls-2">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>DTM has large NoData holes</td><td>Ground point density too low</td><td>Increase IDW search radius or use TIN gridding</td></tr>
+<tr><td>CHM has negative values</td><td>DTM higher than DSM in flat/water areas</td><td>Clamp CHM ≥ 0 with Raster Calculator after generation</td></tr>
+<tr><td>Classification codes all zero after processing</td><td>Input was LAS point format 6–10 and legacy writer bug (see known issues)</td><td>Use WbW Next Gen pipeline — classification is preserved correctly</td></tr>
+<tr><td>Ground filter over-segments in steep terrain</td><td>Slope parameters too restrictive</td><td>Increase max slope to 85° and radius to 4 m</td></tr>
+<tr><td>LiDAR stats report extreme Z values</td><td>Outlier high/low points present</td><td>Run <code>LiDAR Remove Outliers</code> before classification</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-3"><a class="header" href="#validation-checklist-3">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Point stats report shows expected classification distribution (&gt; 5 % ground points).</li>
+<li><input disabled="" type="checkbox"/>
+DTM has no large NoData holes in vegetated areas.</li>
+<li><input disabled="" type="checkbox"/>
+DTM is smooth with no pits deeper than 1–2 m.</li>
+<li><input disabled="" type="checkbox"/>
+DSM ≥ DTM across the entire overlap extent.</li>
+<li><input disabled="" type="checkbox"/>
+CHM values are 0 on roads and bare ground.</li>
+<li><input disabled="" type="checkbox"/>
+HAG-normalised cloud has all ground points at Z ≈ 0 (±0.1 m).</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="remote-sensing-analysis"><a class="header" href="#remote-sensing-analysis">Remote Sensing Analysis</a></h1>
+<p>Remote sensing workflows transform multispectral and hyperspectral imagery
+into interpretable thematic products: spectral indices, vegetation and soil
+maps, change detection results, and classified land-cover rasters.
+WbW-QGIS surfaces these tools in the Processing Toolbox alongside standard
+QGIS raster operations.</p>
+<p>This chapter demonstrates a complete vegetation-mapping workflow using
+multispectral imagery.</p>
+<hr />
+<h2 id="key-concepts-4"><a class="header" href="#key-concepts-4">Key Concepts</a></h2>
+<ul>
+<li><strong>Band</strong>: A single-wavelength image channel. Common bands: Blue (B), Green
+(G), Red (R), Red-Edge (RE), Near Infrared (NIR), Short-Wave Infrared (SWIR).</li>
+<li><strong>Spectral index</strong>: A band ratio or combination designed to highlight a
+target surface type. Examples: NDVI (vegetation), NDWI (water), NDSI (snow),
+SAVI (soil-adjusted vegetation).</li>
+<li><strong>Atmosphericaly corrected reflectance</strong>: Raw DN values converted to
+surface reflectance. Required for reliable index thresholding and
+multi-date comparisons.</li>
+<li><strong>Image segmentation</strong>: Partitioning an image into homogeneous regions.
+Segments can be used as classification units or for object-based analysis.</li>
+<li><strong>Change detection</strong>: Comparing two images acquired at different times to
+identify areas of changed land cover.</li>
+<li><strong>Principal Component Analysis (PCA)</strong>: Linear transform that concentrates
+variance into uncorrelated bands. Useful for compression and feature
+extraction before classification.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-ndvi-thresholding-and-change-detection"><a class="header" href="#end-to-end-workflow-ndvi-thresholding-and-change-detection">End-to-End Workflow: NDVI, Thresholding, and Change Detection</a></h2>
+<h3 id="inputs-3"><a class="header" href="#inputs-3">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>image_t1.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 1</td></tr>
+<tr><td><code>image_t2.tif</code></td><td>Multiband GeoTIFF</td><td>Surface reflectance, time 2</td></tr>
+<tr><td>Band mapping</td><td>—</td><td>NIR = band 4, Red = band 3 (Sentinel-2 / Landsat convention)</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--inspect-image-statistics"><a class="header" href="#step-1--inspect-image-statistics">Step 1 — Inspect Image Statistics</a></h3>
+<p>Before any analysis confirm that the input imagery has expected statistics.</p>
+<p><strong>Processing Toolbox → Raster Analysis → <code>Raster Layer Statistics</code></strong> (QGIS
+native)</p>
+<p>Or use the QGIS <strong>Layer Properties → Histogram</strong> to inspect per-band
+distribution. Reflectance imagery should have values in 0–1 (float) or
+0–10000 (scaled integer). DN-only imagery needs atmospheric correction before
+spectral indices.</p>
+<hr />
+<h3 id="step-2--compute-ndvi"><a class="header" href="#step-2--compute-ndvi">Step 2 — Compute NDVI</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
+<code>NDVI</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
+<tr><td>NIR band</td><td><code>4</code></td></tr>
+<tr><td>Red band</td><td><code>3</code></td></tr>
+<tr><td>Output</td><td><code>ndvi_t1.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>NDVI output range: –1 to +1. Active vegetation: &gt; 0.3. Bare soil: 0.1–0.2.
+Water: &lt; 0.</p>
+<p>Repeat for <code>image_t2.tif</code> → <code>ndvi_t2.tif</code>.</p>
+<hr />
+<h3 id="step-3--threshold-vegetation"><a class="header" href="#step-3--threshold-vegetation">Step 3 — Threshold Vegetation</a></h3>
+<p>Convert the NDVI raster into a binary vegetation mask.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
+<code>Reclass From File</code></strong> or use QGIS <strong>Raster Calculator</strong>:</p>
+<pre><code>"ndvi_t1@1" &gt;= 0.3
+</code></pre>
+<p>Output: <code>vegetation_mask_t1.tif</code> (1 = vegetated, 0 = non-vegetated).</p>
+<hr />
+<h3 id="step-4--compute-ndvi-change"><a class="header" href="#step-4--compute-ndvi-change">Step 4 — Compute NDVI Change</a></h3>
+<p>Subtract time-1 NDVI from time-2 NDVI to produce a change magnitude raster.</p>
+<p><strong>QGIS Raster Calculator:</strong></p>
+<pre><code>"ndvi_t2@1" - "ndvi_t1@1"
+</code></pre>
+<p>Output: <code>ndvi_change.tif</code>. Positive values indicate vegetation gain;
+negative values indicate vegetation loss.</p>
+<p>Apply a symmetric diverging colour ramp (red–white–green) centred on 0.</p>
+<hr />
+<h3 id="step-5--identify-significant-change-areas"><a class="header" href="#step-5--identify-significant-change-areas">Step 5 — Identify Significant Change Areas</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
+<code>Reclass</code></strong> (or Raster Calculator threshold)</p>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>NDVI change threshold</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>–2</td><td>&lt; –0.20</td><td>Significant vegetation loss</td></tr>
+<tr><td>–1</td><td>–0.20 to –0.10</td><td>Moderate vegetation loss</td></tr>
+<tr><td>0</td><td>–0.10 to +0.10</td><td>No significant change</td></tr>
+<tr><td>+1</td><td>+0.10 to +0.20</td><td>Moderate vegetation gain</td></tr>
+<tr><td>+2</td><td>&gt; +0.20</td><td>Significant vegetation gain</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent-3"><a class="header" href="#python-console-equivalent-3">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+img_t1 = '/data/image_t1.tif'
+img_t2 = '/data/image_t2.tif'
+
+# NDVI for both dates
+for label, img in [('t1', img_t1), ('t2', img_t2)]:
+    processing.run('whitebox_workflows:ndvi', {
+        'input': img,
+        'nir_band': 4,
+        'red_band': 3,
+        'output': f'/data/ndvi_{label}.tif',
+    })
+
+# NDVI change via Raster Calculator
+processing.run('qgis:rastercalculator', {
+    'EXPRESSION': '"ndvi_t2@1" - "ndvi_t1@1"',
+    'LAYERS': ['/data/ndvi_t1.tif', '/data/ndvi_t2.tif'],
+    'OUTPUT': '/data/ndvi_change.tif',
+})
+
+print("Change detection complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-pca-for-dimensionality-reduction"><a class="header" href="#advanced-pca-for-dimensionality-reduction">Advanced: PCA for Dimensionality Reduction</a></h2>
+<p>PCA is useful before unsupervised classification to reduce correlated band
+redundancy.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
+<code>Principal Component Analysis</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input image</td><td><code>image_t1.tif</code></td></tr>
+<tr><td>Number of components</td><td><code>4</code> (captures &gt; 95 % variance in most 8-band images)</td></tr>
+<tr><td>Output</td><td><code>pca_t1.tif</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">processing.run('whitebox_workflows:principal_component_analysis', {
+    'input': '/data/image_t1.tif',
+    'num_comp': 4,
+    'output': '/data/pca_t1.tif',
+})
+</code></pre>
+<p>Inspect the eigenvalue table in the tool output log to confirm how many
+components are needed to explain &gt; 95 % of the variance.</p>
+<hr />
+<h2 id="advanced-image-segmentation"><a class="header" href="#advanced-image-segmentation">Advanced: Image Segmentation</a></h2>
+<p>Object-based analysis begins with segmentation into spectrally homogeneous
+regions.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Remote Sensing →
+<code>Image Segmentation</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input image</td><td><code>image_t1.tif</code> (or PCA output)</td></tr>
+<tr><td>Threshold</td><td><code>25.0</code> (lower = smaller segments)</td></tr>
+<tr><td>Minimum segment size (px)</td><td><code>50</code></td></tr>
+<tr><td>Output</td><td><code>segments_t1.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Use QGIS <strong>Polygonize</strong> to convert the integer segment raster to vector
+polygons for attribute extraction and classification.</p>
+<hr />
+<h2 id="common-pitfalls-3"><a class="header" href="#common-pitfalls-3">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>NDVI values outside –1 to +1</td><td>DN imagery rather than reflectance</td><td>Convert DN to reflectance before computing index</td></tr>
+<tr><td>Change map shows artefacts at swath edges</td><td>Different acquisition geometries or BRDF</td><td>Normalise images before differencing</td></tr>
+<tr><td>PCA produces striped output</td><td>No-data mixed into statistics</td><td>Mask NoData before running PCA</td></tr>
+<tr><td>Segmentation produces single giant segment</td><td>Threshold too high</td><td>Halve threshold and rerun</td></tr>
+<tr><td>Band order mismatch</td><td>Tool expects specific band numbering</td><td>Verify band order in Layer Properties → Source</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-4"><a class="header" href="#validation-checklist-4">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Input imagery is atmospherically corrected (reflectance, not DN).</li>
+<li><input disabled="" type="checkbox"/>
+Band assignments match sensor band order (confirm in metadata).</li>
+<li><input disabled="" type="checkbox"/>
+NDVI histogram peaks in expected range for land cover type.</li>
+<li><input disabled="" type="checkbox"/>
+Change map artefacts are not co-located with cloud/shadow masks.</li>
+<li><input disabled="" type="checkbox"/>
+Segment boundaries visually match spectral boundaries in original image.</li>
+<li><input disabled="" type="checkbox"/>
+PCA output eigenvalue table confirms component count captures &gt; 95 % variance.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="raster-analysis"><a class="header" href="#raster-analysis">Raster Analysis</a></h1>
+<p>General raster analysis covers a broad set of cell-based operations: local
+algebra on single rasters, focal statistics across neighbourhoods, zonal
+summaries within polygon regions, reclassification, and suitability scoring.
+These tools form the computational backbone of many GIS modelling workflows.</p>
+<p>This chapter demonstrates an environmental suitability analysis that combines
+multiple raster datasets through reclassification and weighted overlay.</p>
+<hr />
+<h2 id="key-concepts-5"><a class="header" href="#key-concepts-5">Key Concepts</a></h2>
+<ul>
+<li><strong>Local operations</strong>: Applied to each cell independently — arithmetic, logic,
+trigonometry, conditional assignment. Result depends only on the cell's own
+value (and corresponding cells in other input rasters).</li>
+<li><strong>Focal operations</strong>: Applied to each cell using values within a spatial
+neighbourhood (kernel). Examples: focal mean, focal max, focal standard
+deviation.</li>
+<li><strong>Zonal statistics</strong>: Aggregate raster values by zone boundaries defined by
+a second raster or vector polygon layer.</li>
+<li><strong>Reclassification</strong>: Map old cell values to new values via a lookup table or
+range intervals. Core step in suitability and habitat modelling.</li>
+<li><strong>Weighted overlay</strong>: Combine multiple reclassified factor rasters using
+factor-specific weights. The weighted sum produces a composite suitability
+score.</li>
+<li><strong>NoData / null handling</strong>: Cells with NoData propagate through most local
+operations. Ensure all input rasters share the same extent, resolution, and
+NoData mask before combining them.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-multi-criteria-habitat-suitability"><a class="header" href="#end-to-end-workflow-multi-criteria-habitat-suitability">End-to-End Workflow: Multi-Criteria Habitat Suitability</a></h2>
+<p>This workflow scores terrain for habitat suitability using slope, TWI, and
+distance from water as factors.</p>
+<h3 id="inputs-4"><a class="header" href="#inputs-4">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>slope.tif</code></td><td>GeoTIFF raster</td><td>Degrees, from terrain analysis</td></tr>
+<tr><td><code>twi.tif</code></td><td>GeoTIFF raster</td><td>Topographic Wetness Index</td></tr>
+<tr><td><code>streams.tif</code></td><td>GeoTIFF raster</td><td>Binary stream network</td></tr>
+</tbody></table>
+</div>
+<p>All rasters must share the same projected CRS, extent, and cell size before
+being combined. Use <strong><code>Snap Raster Extents</code></strong> or QGIS <strong><code>Warp (Reproject)</code></strong>
+to align if needed.</p>
+<hr />
+<h3 id="step-1--compute-distance-from-water"><a class="header" href="#step-1--compute-distance-from-water">Step 1 — Compute Distance from Water</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → GIS Analysis →
+<code>Euclidean Distance</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input feature</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>dist_water.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Cells closer to water receive smaller values. This will be reclassified
+so that proximity = higher suitability.</p>
+<hr />
+<h3 id="step-2--reclassify-slope-factor"><a class="header" href="#step-2--reclassify-slope-factor">Step 2 — Reclassify Slope Factor</a></h3>
+<p>Assign suitability scores 1–5 to slope ranges.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
+<code>Reclass</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>Slope range (°)</th><th>Suitability score</th></tr></thead><tbody>
+<tr><td>1</td><td>&gt; 30</td><td>1 (unsuitable)</td></tr>
+<tr><td>2</td><td>20–30</td><td>2</td></tr>
+<tr><td>3</td><td>10–20</td><td>3</td></tr>
+<tr><td>4</td><td>5–10</td><td>4</td></tr>
+<tr><td>5</td><td>0–5</td><td>5 (most suitable)</td></tr>
+</tbody></table>
+</div>
+<p>Use <strong><code>Reclass From File</code></strong> with a two-column table file (old value; new value)
+or set up intervals in the tool dialogue.</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input raster</td><td><code>slope.tif</code></td></tr>
+<tr><td>Reclass intervals file</td><td><code>slope_reclass.txt</code></td></tr>
+<tr><td>Output</td><td><code>slope_reclass.tif</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-3--reclassify-twi-factor"><a class="header" href="#step-3--reclassify-twi-factor">Step 3 — Reclassify TWI Factor</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>TWI range</th><th>Suitability score</th></tr></thead><tbody>
+<tr><td>1</td><td>&lt; 4</td><td>1</td></tr>
+<tr><td>2</td><td>4–6</td><td>2</td></tr>
+<tr><td>3</td><td>6–8</td><td>3</td></tr>
+<tr><td>4</td><td>8–10</td><td>4</td></tr>
+<tr><td>5</td><td>&gt; 10</td><td>5</td></tr>
+</tbody></table>
+</div>
+<pre><code>Processing Toolbox → Whitebox Workflows → Raster Analysis → Reclass
+Input: twi.tif → Output: twi_reclass.tif
+</code></pre>
+<hr />
+<h3 id="step-4--reclassify-distance-from-water"><a class="header" href="#step-4--reclassify-distance-from-water">Step 4 — Reclassify Distance from Water</a></h3>
+<p>Closer = more suitable:</p>
+<div class="table-wrapper"><table><thead><tr><th>Class</th><th>Distance range (m)</th><th>Suitability score</th></tr></thead><tbody>
+<tr><td>1</td><td>&gt; 500</td><td>1</td></tr>
+<tr><td>2</td><td>300–500</td><td>2</td></tr>
+<tr><td>3</td><td>100–300</td><td>3</td></tr>
+<tr><td>4</td><td>50–100</td><td>4</td></tr>
+<tr><td>5</td><td>0–50</td><td>5</td></tr>
+</tbody></table>
+</div>
+<pre><code>Processing Toolbox → Whitebox Workflows → Raster Analysis → Reclass
+Input: dist_water.tif → Output: dist_water_reclass.tif
+</code></pre>
+<hr />
+<h3 id="step-5--weighted-overlay-raster-calculator"><a class="header" href="#step-5--weighted-overlay-raster-calculator">Step 5 — Weighted Overlay (Raster Calculator)</a></h3>
+<p>Combine the three factors using assigned weights (must sum to 1.0).</p>
+<div class="table-wrapper"><table><thead><tr><th>Factor</th><th>Weight</th></tr></thead><tbody>
+<tr><td>Slope suitability</td><td>0.4</td></tr>
+<tr><td>TWI suitability</td><td>0.35</td></tr>
+<tr><td>Distance suitability</td><td>0.25</td></tr>
+</tbody></table>
+</div>
+<p><strong>QGIS Raster Calculator:</strong></p>
+<pre><code>("slope_reclass@1" * 0.4) + ("twi_reclass@1" * 0.35) + ("dist_water_reclass@1" * 0.25)
+</code></pre>
+<p>Output: <code>suitability.tif</code> (range 1–5, continuous).</p>
+<hr />
+<h3 id="step-6--zonal-statistics-optional"><a class="header" href="#step-6--zonal-statistics-optional">Step 6 — Zonal Statistics (Optional)</a></h3>
+<p>Summarise suitability scores by catchment polygon.</p>
+<p><strong>Processing Toolbox → QGIS → Vector Analysis →
+<code>Zonal Statistics</code></strong> (QGIS native)</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input raster</td><td><code>suitability.tif</code></td></tr>
+<tr><td>Vector layer</td><td><code>watersheds.shp</code></td></tr>
+<tr><td>Statistics</td><td>Mean, Max, Std Dev</td></tr>
+<tr><td>Output column prefix</td><td><code>suit_</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent-4"><a class="header" href="#python-console-equivalent-4">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+# Step 1: distance from water
+processing.run('whitebox_workflows:euclidean_distance', {
+    'input': '/data/streams.tif',
+    'output': '/data/dist_water.tif',
+})
+
+# Step 2–4: reclassify each factor
+for src, dst in [
+    ('slope', 'slope_reclass'),
+    ('twi', 'twi_reclass'),
+    ('dist_water', 'dist_water_reclass'),
+]:
+    processing.run('whitebox_workflows:reclass_from_file', {
+        'input': f'/data/{src}.tif',
+        'reclass_vals': f'/data/{src}_reclass.txt',
+        'output': f'/data/{dst}.tif',
+    })
+
+# Step 5: weighted overlay via Raster Calculator
+processing.run('qgis:rastercalculator', {
+    'EXPRESSION': '("slope_reclass@1" * 0.4) + ("twi_reclass@1" * 0.35) + ("dist_water_reclass@1" * 0.25)',
+    'LAYERS': [
+        '/data/slope_reclass.tif',
+        '/data/twi_reclass.tif',
+        '/data/dist_water_reclass.tif',
+    ],
+    'OUTPUT': '/data/suitability.tif',
+})
+
+print("Suitability analysis complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-focal-statistics"><a class="header" href="#advanced-focal-statistics">Advanced: Focal Statistics</a></h2>
+<p>Focal statistics smooth or enhance spatial patterns at a neighbourhood scale.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Raster Analysis →
+<code>Mean Filter</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input raster</td><td><code>suitability.tif</code></td></tr>
+<tr><td>Filter size X</td><td><code>5</code> (cells)</td></tr>
+<tr><td>Filter size Y</td><td><code>5</code></td></tr>
+<tr><td>Output</td><td><code>suitability_smooth.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Use <code>Standard Deviation Filter</code> to highlight areas of high local variability,
+or <code>Percentile Filter</code> for rank-based neighbourhood smoothing.</p>
+<hr />
+<h2 id="common-pitfalls-4"><a class="header" href="#common-pitfalls-4">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Raster Calculator outputs all NoData</td><td>Rasters have different extents or CRS</td><td>Clip/warp all inputs to common grid before combining</td></tr>
+<tr><td>Reclass produces unexpected values</td><td>Range gaps or overlaps in reclass table</td><td>Verify that intervals are contiguous with no gap or overlap</td></tr>
+<tr><td>Zonal statistics returns wrong polygon counts</td><td>Raster–vector CRS mismatch</td><td>Reproject vector to match raster CRS before running</td></tr>
+<tr><td>Weighted overlay result &gt; 5</td><td>Weights do not sum to 1.0</td><td>Recalculate weights so they sum to exactly 1.0</td></tr>
+<tr><td>Focal filter introduces edge NoData</td><td>Kernel extends beyond raster boundary</td><td>Pad raster with <code>Expand Raster</code> before filtering, or ignore edge cells</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-5"><a class="header" href="#validation-checklist-5">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+All input rasters aligned (same CRS, extent, cell size, NoData value).</li>
+<li><input disabled="" type="checkbox"/>
+Reclass table covers the full observed value range with no gaps.</li>
+<li><input disabled="" type="checkbox"/>
+Weighted overlay weights sum to 1.0.</li>
+<li><input disabled="" type="checkbox"/>
+Output suitability range matches expected 1–5 interval.</li>
+<li><input disabled="" type="checkbox"/>
+Zonal statistics polygon CRS matches raster CRS.</li>
+<li><input disabled="" type="checkbox"/>
+Focal filter kernel size is appropriate for target feature scale.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="vector-analysis"><a class="header" href="#vector-analysis">Vector Analysis</a></h1>
+<p>Vector analysis in WbW-QGIS covers geometry validation, overlay operations,
+attribute enrichment, spatial selection, proximity analysis, and spatial
+joining. Whitebox supplements the native QGIS vector toolbox with
+high-performance tools built on the wbtopology spatial index.</p>
+<p>This chapter walks through a complete parcel-attribute enrichment workflow —
+a common task in land management and environmental assessment.</p>
+<hr />
+<h2 id="key-concepts-6"><a class="header" href="#key-concepts-6">Key Concepts</a></h2>
+<ul>
+<li><strong>Geometry validity</strong>: Self-intersecting rings, duplicate vertices, and
+unclosed polygons cause silent failures in overlay tools. Always validate
+and repair geometry before any overlay operation.</li>
+<li><strong>Spatial join</strong>: Assigns attributes from one layer to features in another
+based on spatial relationship (intersects, contains, nearest). Supports
+aggregation modes (first, last, sum, mean, count, min, max).</li>
+<li><strong>Near analysis</strong>: Finds the nearest feature (or features within a distance)
+from a source layer to a target layer. Returns distance and optional target
+attributes.</li>
+<li><strong>Clip / Intersection / Difference</strong>: Standard polygon overlay operations.
+Clip retains the geometry of input A bounded by B. Intersection produces
+the geometric overlap. Difference removes the overlap.</li>
+<li><strong>Add geometry attributes</strong>: Computes and appends area, perimeter, length,
+centroid coordinates, or bounding box dimensions as new attribute fields.</li>
+<li><strong>Select by location</strong>: Spatial predicate query (intersects, within,
+contains, etc.) that produces a feature selection or a new filtered layer.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-parcel-attribute-enrichment"><a class="header" href="#end-to-end-workflow-parcel-attribute-enrichment">End-to-End Workflow: Parcel Attribute Enrichment</a></h2>
+<p>This workflow assigns catchment statistics and proximity-to-road measurements
+to a parcel layer.</p>
+<h3 id="inputs-5"><a class="header" href="#inputs-5">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>parcels.shp</code></td><td>Polygon vector</td><td>Land parcel boundaries</td></tr>
+<tr><td><code>catchments.shp</code></td><td>Polygon vector</td><td>Watershed polygons with area and slope stats</td></tr>
+<tr><td><code>roads.shp</code></td><td>Polyline vector</td><td>Road network</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--validate-and-repair-geometry"><a class="header" href="#step-1--validate-and-repair-geometry">Step 1 — Validate and Repair Geometry</a></h3>
+<p><strong>Processing Toolbox → Vector Geometry → <code>Fix Geometries</code></strong> (QGIS native)</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>parcels.shp</code></td></tr>
+<tr><td>Output</td><td><code>parcels_valid.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>Run <strong><code>Check Validity</code></strong> on both <code>catchments.shp</code> and <code>roads.shp</code> and fix any
+errors before proceeding.</p>
+<hr />
+<h3 id="step-2--add-geometry-attributes-to-parcels"><a class="header" href="#step-2--add-geometry-attributes-to-parcels">Step 2 — Add Geometry Attributes to Parcels</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Add Geometry Attributes</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>parcels_valid.shp</code></td></tr>
+<tr><td>Units</td><td><code>Metres</code></td></tr>
+<tr><td>Output</td><td><code>parcels_geom.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>This appends <code>AREA</code>, <code>PERIMETER</code>, and centroid <code>X</code>/<code>Y</code> fields to each parcel.</p>
+<hr />
+<h3 id="step-3--spatial-join-assign-catchment-attributes-to-parcels"><a class="header" href="#step-3--spatial-join-assign-catchment-attributes-to-parcels">Step 3 — Spatial Join: Assign Catchment Attributes to Parcels</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Spatial Join</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Target layer</td><td><code>parcels_geom.shp</code></td></tr>
+<tr><td>Join layer</td><td><code>catchments.shp</code></td></tr>
+<tr><td>Spatial relationship</td><td><code>Intersects</code></td></tr>
+<tr><td>Join strategy</td><td><code>First</code> (largest overlap catchment)</td></tr>
+<tr><td>Fields to join</td><td><code>catch_id</code>, <code>mean_slope</code>, <code>area_km2</code></td></tr>
+<tr><td>Output</td><td><code>parcels_joined.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>Each parcel now carries the attributes of the catchment it intersects most.</p>
+<hr />
+<h3 id="step-4--near-distance-from-each-parcel-to-nearest-road"><a class="header" href="#step-4--near-distance-from-each-parcel-to-nearest-road">Step 4 — Near: Distance from Each Parcel to Nearest Road</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Near</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector (source)</td><td><code>parcels_joined.shp</code></td></tr>
+<tr><td>Near vector (target)</td><td><code>roads.shp</code></td></tr>
+<tr><td>Max search distance (m)</td><td><code>5000</code> (0 = search all)</td></tr>
+<tr><td>Output</td><td><code>parcels_near.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>Appended fields: <code>NEAR_DIST</code> (metres to nearest road segment),
+<code>NEAR_FID</code> (FID of nearest road feature).</p>
+<hr />
+<h3 id="step-5--select-high-priority-parcels"><a class="header" href="#step-5--select-high-priority-parcels">Step 5 — Select High-Priority Parcels</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Select By Attribute</code></strong> or use QGIS <strong>Select by Expression</strong>:</p>
+<pre><code>"AREA" &gt; 10000 AND "NEAR_DIST" &lt; 500 AND "mean_slope" &lt; 10
+</code></pre>
+<p>Export the selection as <code>priority_parcels.shp</code> using
+<strong>Layer → Export → Save Selected Features As</strong>.</p>
+<hr />
+<h3 id="step-6--clip-parcels-to-study-area-optional"><a class="header" href="#step-6--clip-parcels-to-study-area-optional">Step 6 — Clip Parcels to Study Area (Optional)</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Line Polygon Clip</code></strong> (for lines) or QGIS <strong><code>Clip</code></strong> for polygon-on-polygon.</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>priority_parcels.shp</code></td></tr>
+<tr><td>Clip polygon</td><td><code>study_area.shp</code></td></tr>
+<tr><td>Output</td><td><code>priority_parcels_clipped.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent-5"><a class="header" href="#python-console-equivalent-5">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+# Step 1: fix geometry
+processing.run('native:fixgeometries', {
+    'INPUT': '/data/parcels.shp',
+    'OUTPUT': '/data/parcels_valid.shp',
+})
+
+# Step 2: add geometry attributes
+processing.run('whitebox_workflows:add_geometry_attributes', {
+    'input': '/data/parcels_valid.shp',
+    'units': 'Metres',
+    'output': '/data/parcels_geom.shp',
+})
+
+# Step 3: spatial join
+processing.run('whitebox_workflows:spatial_join', {
+    'input': '/data/parcels_geom.shp',
+    'join': '/data/catchments.shp',
+    'spatial_relation': 'Intersects',
+    'join_method': 'First',
+    'output': '/data/parcels_joined.shp',
+})
+
+# Step 4: near
+processing.run('whitebox_workflows:near', {
+    'input': '/data/parcels_joined.shp',
+    'near': '/data/roads.shp',
+    'max_dist': 5000.0,
+    'output': '/data/parcels_near.shp',
+})
+
+print("Parcel enrichment complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-simplify-features-for-cartographic-output"><a class="header" href="#advanced-simplify-features-for-cartographic-output">Advanced: Simplify Features for Cartographic Output</a></h2>
+<p>Large polygon datasets with many vertices slow down rendering and tile export.
+Simplify geometries while preserving topology.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Simplify Features</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>priority_parcels_clipped.shp</code></td></tr>
+<tr><td>Algorithm</td><td><code>Douglas-Peucker</code></td></tr>
+<tr><td>Tolerance (m)</td><td><code>5.0</code> (adjust to display scale)</td></tr>
+<tr><td>Output</td><td><code>parcels_simplified.shp</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">processing.run('whitebox_workflows:simplify_features', {
+    'input': '/data/priority_parcels_clipped.shp',
+    'algorithm': 'DouglasPeucker',
+    'tolerance': 5.0,
+    'output': '/data/parcels_simplified.shp',
+})
+</code></pre>
+<hr />
+<h2 id="common-pitfalls-5"><a class="header" href="#common-pitfalls-5">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Spatial join returns no matches</td><td>CRS mismatch between target and join layers</td><td>Reproject both to the same CRS before joining</td></tr>
+<tr><td>Near returns –1 for all distances</td><td>Search distance too small for data extent</td><td>Increase <code>max_dist</code> or set to 0 for unlimited search</td></tr>
+<tr><td>Add geometry attributes returns wrong area</td><td>Layer CRS is geographic (degrees)</td><td>Reproject to a projected CRS (metres) first</td></tr>
+<tr><td>Simplify removes valid narrow features</td><td>Tolerance too large</td><td>Use a smaller tolerance (&lt; 1 m for cadastral data)</td></tr>
+<tr><td>Select by location selects too many features</td><td>Predicate too inclusive (intersects vs. within)</td><td>Switch to <code>Within</code> or <code>Contains</code> for strict containment</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-6"><a class="header" href="#validation-checklist-6">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+All input layers pass geometry validity check.</li>
+<li><input disabled="" type="checkbox"/>
+All vector layers share the same projected CRS.</li>
+<li><input disabled="" type="checkbox"/>
+Spatial join result preserves original feature count (check attribute table row count).</li>
+<li><input disabled="" type="checkbox"/>
+NEAR_DIST values are plausible (inspect histogram).</li>
+<li><input disabled="" type="checkbox"/>
+Simplified geometry does not self-intersect at the chosen tolerance.</li>
+<li><input disabled="" type="checkbox"/>
+Attribute field names in output do not exceed shapefile 10-character limit.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="network-analysis"><a class="header" href="#network-analysis">Network Analysis</a></h1>
+<p>Network analysis models movement and connectivity through a graph of
+connected line features. It underpins routing, service-area delineation,
+travel-time catchment mapping, and infrastructure connectivity assessment.
+WbW-QGIS provides network-preparation tools, hydrologic network ordering
+tools, and connectivity metrics that complement the native QGIS network
+analysis framework.</p>
+<p>This chapter demonstrates a stream network ordering and connectivity
+workflow, and a road network service area example.</p>
+<hr />
+<h2 id="key-concepts-7"><a class="header" href="#key-concepts-7">Key Concepts</a></h2>
+<ul>
+<li><strong>Network topology</strong>: Connectivity rules for a line network. Edges (lines)
+connect at nodes (endpoints). A topologically clean network has no dangling
+ends, no undershoots, and no overshoots at intended junctions.</li>
+<li><strong>Directed network</strong>: Edges have a direction (from-node to to-node).
+Hydrologic networks are inherently directed (downstream). Road networks may
+be directed (one-way streets) or undirected.</li>
+<li><strong>Cost attribute</strong>: A numeric field on each edge representing traversal cost
+— distance, travel time, impedance, or a composite metric.</li>
+<li><strong>Shortest path</strong>: Minimum-cost route between two nodes. Dijkstra's
+algorithm is the standard solver for non-negative edge weights.</li>
+<li><strong>Service area / catchment</strong>: Set of all network locations reachable within
+a specified cost budget from an origin node.</li>
+<li><strong>Strahler / Shreve order</strong>: Integer stream ordering systems that summarise
+network hierarchy from headwaters (order 1) to main channel. Strahler
+increments only at equal-order confluences; Shreve is additive.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-stream-network-ordering-and-connectivity"><a class="header" href="#end-to-end-workflow-stream-network-ordering-and-connectivity">End-to-End Workflow: Stream Network Ordering and Connectivity</a></h2>
+<h3 id="inputs-6"><a class="header" href="#inputs-6">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>dem_conditioned.tif</code></td><td>GeoTIFF raster</td><td>Hydrologically conditioned DEM</td></tr>
+<tr><td><code>streams.tif</code></td><td>GeoTIFF raster</td><td>Binary stream raster from flow accumulation threshold</td></tr>
+<tr><td><code>d8_pointer.tif</code></td><td>GeoTIFF raster</td><td>D8 flow direction raster</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--strahler-stream-order"><a class="header" href="#step-1--strahler-stream-order">Step 1 — Strahler Stream Order</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Strahler Stream Order</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>strahler.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Visualise using a sequential colour ramp from light (order 1) to dark (highest
+order). Inspect order transitions at confluences to confirm correct topology.</p>
+<hr />
+<h3 id="step-2--shreve-stream-magnitude"><a class="header" href="#step-2--shreve-stream-magnitude">Step 2 — Shreve Stream Magnitude</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Shreve Stream Magnitude</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>shreve.tif</code></td></tr>
+</tbody></table>
+</div>
+<p>Shreve magnitude equals the count of first-order tributaries draining to each
+stream reach. High values indicate major channels.</p>
+<hr />
+<h3 id="step-3--vector-stream-network-with-order-attributes"><a class="header" href="#step-3--vector-stream-network-with-order-attributes">Step 3 — Vector Stream Network with Order Attributes</a></h3>
+<p>Convert the Strahler raster to a vector network for cartographic display and
+downstream routing analysis.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Raster Streams to Vector</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Streams raster</td><td><code>strahler.tif</code></td></tr>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Output</td><td><code>streams_vector.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>The output polyline feature class carries the Strahler order value as a
+field, enabling symbol classification by order.</p>
+<hr />
+<h3 id="step-4--hack-stream-order-optional"><a class="header" href="#step-4--hack-stream-order-optional">Step 4 — Hack Stream Order (Optional)</a></h3>
+<p>Hack ordering numbers stream reaches sequentially from outlet to headwaters —
+useful for long-profile analysis and channel numbering in reports.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Spatial Hydrology →
+<code>Hack Stream Order</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>D8 pointer</td><td><code>d8_pointer.tif</code></td></tr>
+<tr><td>Streams raster</td><td><code>streams.tif</code></td></tr>
+<tr><td>Output</td><td><code>hack.tif</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="python-console-equivalent-6"><a class="header" href="#python-console-equivalent-6">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+# Strahler order
+processing.run('whitebox_workflows:strahler_stream_order', {
+    'd8_pntr': '/data/d8_pointer.tif',
+    'streams': '/data/streams.tif',
+    'output': '/data/strahler.tif',
+})
+
+# Shreve magnitude
+processing.run('whitebox_workflows:shreve_stream_magnitude', {
+    'd8_pntr': '/data/d8_pointer.tif',
+    'streams': '/data/streams.tif',
+    'output': '/data/shreve.tif',
+})
+
+# Vector stream network
+processing.run('whitebox_workflows:raster_streams_to_vector', {
+    'streams': '/data/strahler.tif',
+    'd8_pntr': '/data/d8_pointer.tif',
+    'output': '/data/streams_vector.shp',
+})
+
+print("Stream network ordering complete.")
+</code></pre>
+<hr />
+<h2 id="road-network-service-area-in-qgis"><a class="header" href="#road-network-service-area-in-qgis">Road Network: Service Area in QGIS</a></h2>
+<p>For road network routing (shortest path, service areas, turn restrictions),
+use the <strong>QGIS Network Analysis</strong> framework, with WbW used to prepare and
+enrich the road layer first.</p>
+<h3 id="step-1--prepare-road-network"><a class="header" href="#step-1--prepare-road-network">Step 1 — Prepare Road Network</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Add Geometry Attributes</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>roads.shp</code></td></tr>
+<tr><td>Units</td><td><code>Metres</code></td></tr>
+<tr><td>Output</td><td><code>roads_length.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>This appends <code>LENGTH</code> (metres) to each road segment, which becomes the cost
+attribute for routing.</p>
+<h3 id="step-2--service-area-from-origin"><a class="header" href="#step-2--service-area-from-origin">Step 2 — Service Area from Origin</a></h3>
+<p><strong>Processing Toolbox → Network Analysis → <code>Service Area (From Layer)</code></strong>
+(QGIS native)</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Vector layer</td><td><code>roads_length.shp</code></td></tr>
+<tr><td>Path type</td><td><code>Shortest</code></td></tr>
+<tr><td>Start points</td><td><code>facility_points.shp</code></td></tr>
+<tr><td>Travel cost</td><td><code>300</code> (metres — or seconds if using speed-adjusted cost)</td></tr>
+<tr><td>Direction field</td><td><em>(leave blank for undirected)</em></td></tr>
+<tr><td>Output convex hull</td><td>☐</td></tr>
+<tr><td>Output</td><td><code>service_area.shp</code></td></tr>
+</tbody></table>
+</div>
+<pre><code class="language-python">processing.run('native:serviceareafromlayer', {
+    'INPUT': '/data/roads_length.shp',
+    'STRATEGY': 0,  # 0 = Shortest
+    'START_POINTS': '/data/facility_points.shp',
+    'TRAVEL_COST': 300,
+    'OUTPUT_LINES': '/data/service_area_lines.shp',
+    'OUTPUT': 'TEMPORARY_OUTPUT',
+})
+</code></pre>
+<hr />
+<h2 id="common-pitfalls-6"><a class="header" href="#common-pitfalls-6">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Strahler order is 1 everywhere</td><td>D8 pointer and streams raster have different extents</td><td>Clip both to the same catchment extent</td></tr>
+<tr><td>Vector stream network has gaps</td><td>Raster-to-vector conversion missed isolated stream cells</td><td>Ensure streams raster is topologically connected (no isolated pixels)</td></tr>
+<tr><td>Road service area does not extend across a known bridge</td><td>Network has a topological gap at the bridge</td><td>Run <code>Snap Geometries to Layer</code> to close undershoots before analysis</td></tr>
+<tr><td>Shortest path reports no route found</td><td>Origin or destination is not snapped to the network</td><td>Snap start/end points to nearest line vertex before routing</td></tr>
+<tr><td>Stream order jumps unexpectedly</td><td>Confluence cell is misassigned in D8 pointer</td><td>Verify conditioned DEM and recheck flow direction around problem area</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-7"><a class="header" href="#validation-checklist-7">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Strahler order transitions occur only at confirmed tributary confluences.</li>
+<li><input disabled="" type="checkbox"/>
+Vector stream network is a connected graph with no isolated segments.</li>
+<li><input disabled="" type="checkbox"/>
+Road network geometry passes validity check before routing.</li>
+<li><input disabled="" type="checkbox"/>
+Cost field is non-negative and in consistent units across all edges.</li>
+<li><input disabled="" type="checkbox"/>
+Service area boundary is closed (no dangling open polygons).</li>
+<li><input disabled="" type="checkbox"/>
+Stream order rasters match expected hierarchy from 1:50 000 reference map.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="linear-referencing"><a class="header" href="#linear-referencing">Linear Referencing</a></h1>
+<p>Linear referencing (LRS) is a data model where features are located along
+routes by a measured distance from a known origin — rather than by absolute
+X/Y coordinates. It is the foundation of road/rail inventory, pipeline
+inspection data, accident records, and pavement condition databases.</p>
+<p>WbW-QGIS provides tools for building measure fields on route networks,
+locating point and line events along routes, and exporting event geometries
+for spatial analysis.</p>
+<hr />
+<h2 id="key-concepts-8"><a class="header" href="#key-concepts-8">Key Concepts</a></h2>
+<ul>
+<li><strong>Route</strong>: A polyline feature with a unique, stable route identifier
+(<code>ROUTE_ID</code>) and a monotonically increasing measure value (M-value) along
+its length.</li>
+<li><strong>M-value</strong>: The accumulated distance (or time, or post number) from the
+route origin to each vertex. Stored as the M coordinate in an MZ geometry.</li>
+<li><strong>Event</strong>: A point or interval on a route located by one measure (point
+event) or two measures (line event: from-measure, to-measure).</li>
+<li><strong>Event table</strong>: A tabular record set with <code>ROUTE_ID</code>, <code>MEASURE</code> (point) or
+<code>FROM_M</code>/<code>TO_M</code> (line), and any associated attributes.</li>
+<li><strong>Dynamic segmentation</strong>: The process of converting event tables to geometry
+by interpolating measure positions along routes.</li>
+<li><strong>Calibration</strong>: Adjusting M-values to match real-world control points —
+for example, aligning stationing to kilometre posts.</li>
+</ul>
+<hr />
+<h2 id="end-to-end-workflow-locating-inspection-events-along-a-road-network"><a class="header" href="#end-to-end-workflow-locating-inspection-events-along-a-road-network">End-to-End Workflow: Locating Inspection Events Along a Road Network</a></h2>
+<p>This workflow builds measure fields on a road network, then locates a set of
+field inspection points as events on their respective routes.</p>
+<h3 id="inputs-7"><a class="header" href="#inputs-7">Inputs</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Layer</th><th>Format</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>roads.shp</code></td><td>Polyline vector</td><td>Road centrelines, unique <code>ROUTE_ID</code> field</td></tr>
+<tr><td><code>inspections.csv</code></td><td>CSV table</td><td>Columns: <code>ROUTE_ID</code>, <code>CHAINAGE_M</code>, <code>CONDITION</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-1--add-cumulative-distance-measure-field"><a class="header" href="#step-1--add-cumulative-distance-measure-field">Step 1 — Add Cumulative Distance (Measure) Field</a></h3>
+<p>WbW computes the cumulative distance from each route's start vertex to every
+subsequent vertex and writes it as the M coordinate.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Vector Analysis →
+<code>Add Geometry Attributes</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input vector</td><td><code>roads.shp</code></td></tr>
+<tr><td>Units</td><td><code>Metres</code></td></tr>
+<tr><td>Output</td><td><code>roads_geom.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>This step appends <code>LENGTH</code> to each segment. For building full route M-values
+use the QGIS <strong><code>Set M Value</code></strong> tool (from Geometry group) after merging
+segments by <code>ROUTE_ID</code>.</p>
+<p><strong>Alternative — set M values from a field:</strong></p>
+<p><strong>Processing Toolbox → Vector Geometry → <code>Set M Value</code></strong> (QGIS native)</p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input layer</td><td><code>roads.shp</code> (merged per route)</td></tr>
+<tr><td>M value</td><td>Expression: <code>$length</code> (QGIS expression — cumulative along merged route)</td></tr>
+<tr><td>Output</td><td><code>routes_m.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-2--validate-route-identifiers"><a class="header" href="#step-2--validate-route-identifiers">Step 2 — Validate Route Identifiers</a></h3>
+<p>Route IDs must be unique per route and stable across updates. Check for
+duplicates.</p>
+<p><strong>QGIS → Open Attribute Table → Field Calculator</strong> or via the Python Console:</p>
+<pre><code class="language-python">from qgis.core import QgsVectorLayer
+
+layer = QgsVectorLayer('/data/routes_m.shp', 'routes', 'ogr')
+ids = [f['ROUTE_ID'] for f in layer.getFeatures()]
+duplicates = [x for x in ids if ids.count(x) &gt; 1]
+if duplicates:
+    print(f"Duplicate route IDs found: {set(duplicates)}")
+else:
+    print("All route IDs are unique.")
+</code></pre>
+<hr />
+<h3 id="step-3--locate-point-events-dynamic-segmentation"><a class="header" href="#step-3--locate-point-events-dynamic-segmentation">Step 3 — Locate Point Events (Dynamic Segmentation)</a></h3>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Locate Point Events</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input routes</td><td><code>routes_m.shp</code></td></tr>
+<tr><td>Event table</td><td><code>inspections.csv</code></td></tr>
+<tr><td>Route ID field (routes)</td><td><code>ROUTE_ID</code></td></tr>
+<tr><td>Route ID field (events)</td><td><code>ROUTE_ID</code></td></tr>
+<tr><td>Measure field</td><td><code>CHAINAGE_M</code></td></tr>
+<tr><td>Output</td><td><code>inspection_points.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>Each CSV row becomes a point geometry placed at the corresponding measure
+position on its route. Rows with unmatched route IDs or out-of-range measures
+are written to an error table.</p>
+<hr />
+<h3 id="step-4--locate-line-events-optional"><a class="header" href="#step-4--locate-line-events-optional">Step 4 — Locate Line Events (Optional)</a></h3>
+<p>If the inspection table records intervals (e.g. pavement condition rated over
+100 m segments):</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Locate Line Events</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input routes</td><td><code>routes_m.shp</code></td></tr>
+<tr><td>Event table</td><td><code>pavement.csv</code></td></tr>
+<tr><td>Route ID field (routes)</td><td><code>ROUTE_ID</code></td></tr>
+<tr><td>Route ID field (events)</td><td><code>ROUTE_ID</code></td></tr>
+<tr><td>From-measure field</td><td><code>FROM_M</code></td></tr>
+<tr><td>To-measure field</td><td><code>TO_M</code></td></tr>
+<tr><td>Output</td><td><code>pavement_segments.shp</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h3 id="step-5--inspect-and-validate-event-geometry"><a class="header" href="#step-5--inspect-and-validate-event-geometry">Step 5 — Inspect and Validate Event Geometry</a></h3>
+<p>Load <code>inspection_points.shp</code> in QGIS. Pan to several known inspection records
+and confirm point positions against the road centreline.</p>
+<p>Use <strong>QGIS Identify tool</strong> to click a point and verify that <code>CHAINAGE_M</code>
+matches the M-value of the nearest route vertex within acceptable tolerance
+(typically ± half the route vertex spacing).</p>
+<hr />
+<h2 id="python-console-equivalent-7"><a class="header" href="#python-console-equivalent-7">Python Console Equivalent</a></h2>
+<pre><code class="language-python">import processing
+
+# Step 3: locate point events
+processing.run('whitebox_workflows:locate_point_events', {
+    'routes': '/data/routes_m.shp',
+    'events': '/data/inspections.csv',
+    'route_id_field': 'ROUTE_ID',
+    'event_route_id_field': 'ROUTE_ID',
+    'measure_field': 'CHAINAGE_M',
+    'output': '/data/inspection_points.shp',
+})
+
+# Step 4: locate line events
+processing.run('whitebox_workflows:locate_line_events', {
+    'routes': '/data/routes_m.shp',
+    'events': '/data/pavement.csv',
+    'route_id_field': 'ROUTE_ID',
+    'event_route_id_field': 'ROUTE_ID',
+    'from_measure_field': 'FROM_M',
+    'to_measure_field': 'TO_M',
+    'output': '/data/pavement_segments.shp',
+})
+
+print("Linear referencing complete.")
+</code></pre>
+<hr />
+<h2 id="advanced-calibrate-routes-against-control-points"><a class="header" href="#advanced-calibrate-routes-against-control-points">Advanced: Calibrate Routes Against Control Points</a></h2>
+<p>If field-collected kilometre posts differ from computed cumulative distance,
+calibrate M-values by interpolating between control points.</p>
+<p><strong>Processing Toolbox → Whitebox Workflows → Linear Referencing →
+<code>Calibrate Route</code></strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Recommended value</th></tr></thead><tbody>
+<tr><td>Input routes</td><td><code>routes_m.shp</code></td></tr>
+<tr><td>Calibration points</td><td><code>km_posts.shp</code> (with <code>ROUTE_ID</code> and <code>KNOWN_M</code> fields)</td></tr>
+<tr><td>Route ID field</td><td><code>ROUTE_ID</code></td></tr>
+<tr><td>Measure field</td><td><code>KNOWN_M</code></td></tr>
+<tr><td>Search tolerance (m)</td><td><code>50</code></td></tr>
+<tr><td>Output</td><td><code>routes_calibrated.shp</code></td></tr>
+</tbody></table>
+</div>
+<p>After calibration, re-run <code>Locate Point Events</code> on <code>routes_calibrated.shp</code> to
+position events against field-verified measures.</p>
+<hr />
+<h2 id="common-pitfalls-7"><a class="header" href="#common-pitfalls-7">Common Pitfalls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Problem</th><th>Likely cause</th><th>Fix</th></tr></thead><tbody>
+<tr><td>Events do not locate (0 features output)</td><td>Route ID field names do not match</td><td>Check both <code>ROUTE_ID</code> parameter values match the actual field names</td></tr>
+<tr><td>Events placed far from expected position</td><td>M-values in event table use different units</td><td>Confirm both routes and events use the same unit (metres vs km)</td></tr>
+<tr><td>Out-of-range events produce no error output</td><td>Measure &gt; route end measure</td><td>Check that <code>FROM_M</code>/<code>TO_M</code> do not exceed the route total length</td></tr>
+<tr><td>Calibration shifts all events uniformly</td><td>Only one control point per route</td><td>Add at least two control points per route for interpolation</td></tr>
+<tr><td>Duplicate route IDs cause incorrect event assignment</td><td>Merged route has repeated IDs</td><td>Dissolve route features by <code>ROUTE_ID</code> before building M-values</td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="validation-checklist-8"><a class="header" href="#validation-checklist-8">Validation Checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Route IDs are unique per route with no duplicates.</li>
+<li><input disabled="" type="checkbox"/>
+M-values are monotonically increasing along each route (no reversals).</li>
+<li><input disabled="" type="checkbox"/>
+Event table measures fall within the range [0, route total length].</li>
+<li><input disabled="" type="checkbox"/>
+Located point events visually snap to the correct road centreline.</li>
+<li><input disabled="" type="checkbox"/>
+Line event segment lengths match <code>TO_M - FROM_M</code> within 0.1 m.</li>
+<li><input disabled="" type="checkbox"/>
+Error table from <code>Locate Events</code> contains zero unmatched records.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="workflow-index"><a class="header" href="#workflow-index">Workflow Index</a></h1>
+<p>This index provides task-first entry points for WbW-QGIS workflows.
+Each entry links to the chapter section where the complete step-by-step
+example can be found, and lists the key Processing Toolbox tool IDs needed
+for the task.</p>
+<hr />
+<h2 id="terrain-analysis"><a class="header" href="#terrain-analysis">Terrain Analysis</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Compute slope from DEM</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 2</a></td><td><code>whitebox_workflows:slope</code></td></tr>
+<tr><td>Compute aspect from DEM</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 3</a></td><td><code>whitebox_workflows:aspect</code></td></tr>
+<tr><td>Generate hillshade for visualisation</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 4</a></td><td><code>whitebox_workflows:hillshade</code></td></tr>
+<tr><td>Compute profile and plan curvature</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 5</a></td><td><code>whitebox_workflows:profile_curvature</code>, <code>whitebox_workflows:plan_curvature</code></td></tr>
+<tr><td>Classify terrain into landform elements</td><td><a href="terrain-analysis.html">Terrain Analysis — Geomorphons</a></td><td><code>whitebox_workflows:geomorphons</code></td></tr>
+<tr><td>Compute topographic wetness index</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 6</a></td><td><code>whitebox_workflows:wetness_index</code></td></tr>
+<tr><td>Fill depressions before terrain derivatives</td><td><a href="terrain-analysis.html">Terrain Analysis — Step 1</a></td><td><code>whitebox_workflows:fill_depressions</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="spatial-hydrology-1"><a class="header" href="#spatial-hydrology-1">Spatial Hydrology</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Condition DEM for hydrologic routing</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 1</a></td><td><code>whitebox_workflows:breach_depressions_least_cost</code></td></tr>
+<tr><td>Derive D8 flow direction</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 2</a></td><td><code>whitebox_workflows:d8_pointer</code></td></tr>
+<tr><td>Compute flow accumulation</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 3</a></td><td><code>whitebox_workflows:d8_flow_accumulation</code></td></tr>
+<tr><td>Extract stream network from accumulation</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 4</a></td><td><code>whitebox_workflows:extract_streams</code></td></tr>
+<tr><td>Snap pour points to channel raster</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 5</a></td><td><code>whitebox_workflows:snap_pour_points</code></td></tr>
+<tr><td>Delineate watershed / catchment</td><td><a href="spatial-hydrology.html">Spatial Hydrology — Step 6</a></td><td><code>whitebox_workflows:watershed</code></td></tr>
+<tr><td>Compute Topographic Wetness Index</td><td><a href="spatial-hydrology.html">Spatial Hydrology — TWI</a></td><td><code>whitebox_workflows:wetness_index</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="lidar-processing-1"><a class="header" href="#lidar-processing-1">LiDAR Processing</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>QA — inspect point cloud statistics</td><td><a href="lidar-processing.html">LiDAR Processing — Step 1</a></td><td><code>whitebox_workflows:lidar_point_stats</code></td></tr>
+<tr><td>Thin high-density point cloud</td><td><a href="lidar-processing.html">LiDAR Processing — Step 2</a></td><td><code>whitebox_workflows:lidar_thin</code></td></tr>
+<tr><td>Classify ground returns</td><td><a href="lidar-processing.html">LiDAR Processing — Step 3</a></td><td><code>whitebox_workflows:lidar_ground_point_filter</code></td></tr>
+<tr><td>Build DTM from ground-classified cloud</td><td><a href="lidar-processing.html">LiDAR Processing — Step 4</a></td><td><code>whitebox_workflows:lidar_idw_interpolation</code></td></tr>
+<tr><td>Build DSM from first returns</td><td><a href="lidar-processing.html">LiDAR Processing — Step 5</a></td><td><code>whitebox_workflows:lidar_idw_interpolation</code></td></tr>
+<tr><td>Derive canopy height model (CHM)</td><td><a href="lidar-processing.html">LiDAR Processing — Step 6</a></td><td><code>whitebox_workflows:canopy_height_model</code></td></tr>
+<tr><td>Normalise heights above ground</td><td><a href="lidar-processing.html">LiDAR Processing — Step 7</a></td><td><code>whitebox_workflows:height_above_ground</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="remote-sensing"><a class="header" href="#remote-sensing">Remote Sensing</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Compute NDVI from multispectral image</td><td><a href="remote-sensing.html">Remote Sensing — Step 2</a></td><td><code>whitebox_workflows:ndvi</code></td></tr>
+<tr><td>Threshold vegetation from NDVI</td><td><a href="remote-sensing.html">Remote Sensing — Step 3</a></td><td>QGIS Raster Calculator</td></tr>
+<tr><td>NDVI-based change detection</td><td><a href="remote-sensing.html">Remote Sensing — Steps 4–5</a></td><td>QGIS Raster Calculator</td></tr>
+<tr><td>Reduce bands with PCA</td><td><a href="remote-sensing.html">Remote Sensing — PCA</a></td><td><code>whitebox_workflows:principal_component_analysis</code></td></tr>
+<tr><td>Segment image into homogeneous objects</td><td><a href="remote-sensing.html">Remote Sensing — Segmentation</a></td><td><code>whitebox_workflows:image_segmentation</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="raster-analysis-1"><a class="header" href="#raster-analysis-1">Raster Analysis</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Compute distance from a binary feature raster</td><td><a href="raster-analysis.html">Raster Analysis — Step 1</a></td><td><code>whitebox_workflows:euclidean_distance</code></td></tr>
+<tr><td>Reclassify raster into suitability scores</td><td><a href="raster-analysis.html">Raster Analysis — Steps 2–4</a></td><td><code>whitebox_workflows:reclass_from_file</code></td></tr>
+<tr><td>Combine reclassified factors by weight</td><td><a href="raster-analysis.html">Raster Analysis — Step 5</a></td><td>QGIS Raster Calculator</td></tr>
+<tr><td>Summarise raster values within polygons</td><td><a href="raster-analysis.html">Raster Analysis — Step 6</a></td><td>QGIS Zonal Statistics</td></tr>
+<tr><td>Smooth raster with focal mean</td><td><a href="raster-analysis.html">Raster Analysis — Focal Statistics</a></td><td><code>whitebox_workflows:mean_filter</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="vector-analysis-1"><a class="header" href="#vector-analysis-1">Vector Analysis</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Validate and repair polygon geometry</td><td><a href="vector-analysis.html">Vector Analysis — Step 1</a></td><td>QGIS <code>native:fixgeometries</code></td></tr>
+<tr><td>Add area, perimeter, centroid attributes</td><td><a href="vector-analysis.html">Vector Analysis — Step 2</a></td><td><code>whitebox_workflows:add_geometry_attributes</code></td></tr>
+<tr><td>Join attributes from overlapping polygons</td><td><a href="vector-analysis.html">Vector Analysis — Step 3</a></td><td><code>whitebox_workflows:spatial_join</code></td></tr>
+<tr><td>Compute distance to nearest feature</td><td><a href="vector-analysis.html">Vector Analysis — Step 4</a></td><td><code>whitebox_workflows:near</code></td></tr>
+<tr><td>Select features by spatial predicate</td><td><a href="vector-analysis.html">Vector Analysis — Step 5</a></td><td>QGIS Select by Expression</td></tr>
+<tr><td>Simplify polygon boundaries</td><td><a href="vector-analysis.html">Vector Analysis — Simplify</a></td><td><code>whitebox_workflows:simplify_features</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="network-analysis-1"><a class="header" href="#network-analysis-1">Network Analysis</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Compute Strahler stream order</td><td><a href="network-analysis.html">Network Analysis — Step 1</a></td><td><code>whitebox_workflows:strahler_stream_order</code></td></tr>
+<tr><td>Compute Shreve stream magnitude</td><td><a href="network-analysis.html">Network Analysis — Step 2</a></td><td><code>whitebox_workflows:shreve_stream_magnitude</code></td></tr>
+<tr><td>Convert raster stream network to vector</td><td><a href="network-analysis.html">Network Analysis — Step 3</a></td><td><code>whitebox_workflows:raster_streams_to_vector</code></td></tr>
+<tr><td>Compute road segment lengths for routing</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td><code>whitebox_workflows:add_geometry_attributes</code></td></tr>
+<tr><td>Delineate road service area</td><td><a href="network-analysis.html">Network Analysis — Road Service Area</a></td><td>QGIS <code>native:serviceareafromlayer</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="linear-referencing-1"><a class="header" href="#linear-referencing-1">Linear Referencing</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Task</th><th>Chapter section</th><th>Key tools</th></tr></thead><tbody>
+<tr><td>Add measure (M) values to route network</td><td><a href="linear-referencing.html">Linear Referencing — Step 1</a></td><td>QGIS <code>native:setmvalue</code></td></tr>
+<tr><td>Validate unique route IDs</td><td><a href="linear-referencing.html">Linear Referencing — Step 2</a></td><td>QGIS Python Console check</td></tr>
+<tr><td>Locate point events along routes</td><td><a href="linear-referencing.html">Linear Referencing — Step 3</a></td><td><code>whitebox_workflows:locate_point_events</code></td></tr>
+<tr><td>Locate line events along routes</td><td><a href="linear-referencing.html">Linear Referencing — Step 4</a></td><td><code>whitebox_workflows:locate_line_events</code></td></tr>
+<tr><td>Calibrate M-values against control points</td><td><a href="linear-referencing.html">Linear Referencing — Calibrate</a></td><td><code>whitebox_workflows:calibrate_route</code></td></tr>
+</tbody></table>
+</div>
+<hr />
+<h2 id="by-data-type"><a class="header" href="#by-data-type">By Data Type</a></h2>
+<h3 id="raster-input-tasks"><a class="header" href="#raster-input-tasks">Raster input tasks</a></h3>
+<ul>
+<li>Fill depressions → see <a href="terrain-analysis.html">Terrain Analysis</a> / <a href="spatial-hydrology.html">Spatial Hydrology</a></li>
+<li>Slope, aspect, curvature → see <a href="terrain-analysis.html">Terrain Analysis</a></li>
+<li>Flow direction, accumulation → see <a href="spatial-hydrology.html">Spatial Hydrology</a></li>
+<li>Reclassification, suitability → see <a href="raster-analysis.html">Raster Analysis</a></li>
+<li>Spectral indices, PCA, change → see <a href="remote-sensing.html">Remote Sensing</a></li>
+</ul>
+<h3 id="point-cloud-input-tasks"><a class="header" href="#point-cloud-input-tasks">Point cloud input tasks</a></h3>
+<ul>
+<li>Ground classification, DTM/DSM/CHM → see <a href="lidar-processing.html">LiDAR Processing</a></li>
+<li>Height normalisation → see <a href="lidar-processing.html">LiDAR Processing</a></li>
+</ul>
+<h3 id="vector-input-tasks"><a class="header" href="#vector-input-tasks">Vector input tasks</a></h3>
+<ul>
+<li>Geometry validation, overlay, joins → see <a href="vector-analysis.html">Vector Analysis</a></li>
+<li>Network ordering, service areas → see <a href="network-analysis.html">Network Analysis</a></li>
+<li>Route events, calibration → see <a href="linear-referencing.html">Linear Referencing</a></li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
+<h2 id="plugin-does-not-appear-in-qgis"><a class="header" href="#plugin-does-not-appear-in-qgis">Plugin Does Not Appear in QGIS</a></h2>
+<p>Checks:</p>
+<ul>
+<li>Confirm plugin directory path is correct for active QGIS profile.</li>
+<li>Confirm plugin folder name is whitebox_workflows_qgis.</li>
+<li>Restart QGIS after install/symlink changes.</li>
+</ul>
+<h2 id="whitebox-provider-missing-from-processing"><a class="header" href="#whitebox-provider-missing-from-processing">Whitebox Provider Missing from Processing</a></h2>
+<p>Checks:</p>
+<ul>
+<li>Confirm plugin is enabled.</li>
+<li>Trigger discovery refresh.</li>
+<li>Confirm whitebox_workflows imports in QGIS Python environment.</li>
+</ul>
+<h2 id="tools-are-missing-or-unexpectedly-locked"><a class="header" href="#tools-are-missing-or-unexpectedly-locked">Tools Are Missing or Unexpectedly Locked</a></h2>
+<p>Checks:</p>
+<ul>
+<li>Rebuild/reinstall whitebox_workflows.</li>
+<li>Refresh discovery.</li>
+<li>Confirm runtime capability metadata matches expected tier.</li>
+<li>Confirm tool taxonomy and generated provider state are synchronized.</li>
+</ul>
+<h2 id="tool-runs-but-output-is-missing"><a class="header" href="#tool-runs-but-output-is-missing">Tool Runs but Output Is Missing</a></h2>
+<p>Checks:</p>
+<ul>
+<li>Verify output path exists and is writable.</li>
+<li>Verify input paths and formats are valid.</li>
+<li>Re-run on a small dataset to isolate data-specific failures.</li>
+<li>Check Processing logs for warnings/errors.</li>
+</ul>
+<h2 id="environment-mismatch-problems"><a class="header" href="#environment-mismatch-problems">Environment Mismatch Problems</a></h2>
+<p>Symptoms:</p>
+<ul>
+<li>import failures in plugin startup,</li>
+<li>inconsistent behavior between terminal and QGIS,</li>
+<li>discovery succeeds in one environment but not another.</li>
+</ul>
+<p>Resolution:</p>
+<ul>
+<li>Ensure QGIS and your install command use the same Python environment.</li>
+<li>Re-run runtime install in that exact environment.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

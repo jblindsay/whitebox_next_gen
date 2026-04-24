@@ -224,6 +224,42 @@ for (row in seq_len(nr)) {
   }
 }
 </code></pre>
+<h2 id="fast-random-cell-access-with-pinning"><a class="header" href="#fast-random-cell-access-with-pinning">Fast Random Cell Access with Pinning</a></h2>
+<p>For neighbourhood logic or flow-path traversal that performs frequent random
+cell reads/writes, use pinned raster views. Pinning loads the raster values
+once and avoids repeated conversion overhead inside tight loops.</p>
+<p>Single-raster pinning:</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+r &lt;- wbw_read_raster("dem.tif")
+p &lt;- wbw_pinned_raster(r)
+
+v &lt;- p$get_value(100, 200)
+p$set_value(100, 200, v + 1)
+p$close()
+</code></pre>
+<p>Two-raster read/write scan loop:</p>
+<pre><code class="language-r">library(whiteboxworkflows)
+
+src &lt;- wbw_read_raster("D8Pointer.tif")
+dst &lt;- wbw_read_raster("output_template.tif")
+
+wbw_with_pinned_rasters(src, dst, .f = function(srcp, dstp) {
+  meta &lt;- src$metadata()
+  for (row in seq_len(meta$rows)) {
+    for (col in seq_len(meta$columns)) {
+      value &lt;- srcp$get_value(row, col)
+      dstp$set_value(row, col, value)
+    }
+  }
+})
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li><code>wbw_with_pinned_rasters()</code> closes all pins automatically.</li>
+<li><code>wbw_pin_rasters(...)</code> is available when manual close control is preferred.</li>
+<li>Pinned write-back currently targets file-backed rasters in wbw_r.</li>
+</ul>
 <h2 id="writing-modified-data-back"><a class="header" href="#writing-modified-data-back">Writing Modified Data Back</a></h2>
 <p>This demonstrates creating a derived raster while preserving base geospatial
 context.</p>
@@ -291,9 +327,11 @@ slope$write('slope_out.tif', overwrite = TRUE)
 <tr><td><code>file_path</code></td><td>Return the backing raster path.</td></tr>
 <tr><td><code>band_count</code></td><td>Return raster band count.</td></tr>
 <tr><td><code>active_band</code></td><td>Return active band index.</td></tr>
+<tr><td><code>get_value</code>, <code>set_value</code></td><td>Read/write single cell values using 1-based row/column/band indices.</td></tr>
 <tr><td><code>crs_epsg</code>, <code>crs_wkt</code></td><td>Inspect CRS metadata.</td></tr>
 <tr><td><code>to_array</code></td><td>Convert raster to in-memory array for custom processing.</td></tr>
 <tr><td><code>to_stars</code></td><td>Convert raster to a <code>stars</code> object (requires <code>terra</code> support path).</td></tr>
+<tr><td><code>pin</code></td><td>Create a pinned view for low-overhead random cell access in tight loops.</td></tr>
 </tbody></table>
 </div>
 <h3 id="arithmetic-and-unary-transform-methods"><a class="header" href="#arithmetic-and-unary-transform-methods">Arithmetic and Unary Transform Methods</a></h3>

@@ -276,7 +276,7 @@ pub fn open_sensor_bundle(bundle_root: impl AsRef<Path>) -> Result<SensorBundle>
         }
         SensorBundleFamily::Rcm => Ok(SensorBundle::Rcm(RcmBundle::open(bundle_root)?)),
         SensorBundleFamily::Unknown => Err(RasterError::Other(format!(
-            "unable to determine sensor bundle family for '{}'",
+            "unable to determine sensor bundle family for directory '{}'",
             bundle_root.display()
         ))),
     }
@@ -298,7 +298,7 @@ pub fn detect_sensor_bundle_family_path(path: impl AsRef<Path>) -> Result<Sensor
 
     if !is_supported_archive(path) {
         return Err(RasterError::Other(format!(
-            "unsupported bundle file type '{}'; expected .zip, .tar, .tar.gz, or .tgz",
+            "unsupported bundle file type '{}'; expected sensor directory or archive (.zip, .tar, .tar.gz, .tgz)",
             path.display()
         )));
     }
@@ -330,7 +330,7 @@ pub fn open_sensor_bundle_path(path: impl AsRef<Path>) -> Result<OpenedSensorBun
     }
     if !is_supported_archive(path) {
         return Err(RasterError::Other(format!(
-            "unsupported bundle file type '{}'; expected .zip, .tar, .tar.gz, or .tgz",
+            "unsupported bundle file type '{}'; expected sensor directory or archive (.zip, .tar, .tar.gz, .tgz)",
             path.display()
         )));
     }

@@ -238,12 +238,21 @@ if missing:
 <li><code>wbe.vector</code></li>
 <li><code>wbe.lidar</code></li>
 <li><code>wbe.remote_sensing</code></li>
+<li><code>wbe.conversion</code></li>
+<li><code>wbe.streams</code></li>
+<li><code>wbe.precision_agriculture</code></li>
+<li><code>wbe.other</code></li>
 </ul>
 <p>Use generic accessors for dynamic workflows:</p>
 <ul>
 <li><code>wbe.category(name)</code></li>
 <li><code>wbe.domain(name)</code></li>
 </ul>
+<p>Projection/georeferencing tools are cataloged under the canonical category key
+<code>projection_georeferencing</code> and can be queried with:</p>
+<pre><code class="language-python">proj_tools = wbe.category('projection_georeferencing').list_tools()
+print(proj_tools[:10])
+</code></pre>
 <h2 id="wbenvironment-method-reference"><a class="header" href="#wbenvironment-method-reference">WbEnvironment Method Reference</a></h2>
 <p>This reference lists callable <code>WbEnvironment</code> methods with brief descriptions.
 Special Python dunder methods are intentionally omitted.</p>
@@ -329,8 +338,9 @@ Special Python dunder methods are intentionally omitted.</p>
 <tr><td><code>max_procs</code></td><td>Maximum process count used by eligible parallel operations.</td></tr>
 <tr><td><code>projection</code></td><td>Namespace for CRS and coordinate transformation helper methods.</td></tr>
 <tr><td><code>topology</code></td><td>Namespace for geometry-topology helper methods.</td></tr>
-<tr><td><code>hydrology</code>, <code>terrain</code>, <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>remote_sensing</code>, <code>conversion</code>, <code>topology_tools</code></td><td>Typed category namespaces for tool discovery and execution.</td></tr>
-<tr><td><code>other</code>, <code>precision_agriculture</code>, <code>streams</code></td><td>Additional category/domain namespaces available in the environment.</td></tr>
+<tr><td><code>hydrology</code>, <code>terrain</code>, <code>raster</code>, <code>vector</code>, <code>lidar</code>, <code>remote_sensing</code></td><td>Primary category namespaces for tool discovery and execution.</td></tr>
+<tr><td><code>precision_agriculture</code></td><td>Pro-tier precision agriculture tools (yield zoning, irrigation, crop stress, trafficability).</td></tr>
+<tr><td><code>conversion</code>, <code>streams</code>, <code>other</code></td><td>Additional category namespaces available in the environment.</td></tr>
 </tbody></table>
 </div>
                     </main>

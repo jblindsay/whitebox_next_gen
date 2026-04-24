@@ -200,13 +200,43 @@ library(whiteboxworkflows)
 
 s <- wbw_session()
 wbw_run_tool(
-  'lidar_reproject',
+  'reproject_lidar',
   args = list(input = 'survey.las', output = 'survey_utm.laz', epsg = 32618),
   session = s
 )
 
 survey_utm <- wbw_read_lidar('survey_utm.laz')
 print(survey_utm$crs_epsg())
+```
+
+## Georeference Raster from Control Points
+
+Use this when a raster/image lacks reliable georeferencing and you have control
+points mapping pixel coordinates to map coordinates.
+
+Required CSV fields:
+
+- `source_col`
+- `source_row`
+- `target_x`
+- `target_y`
+
+```r
+library(whiteboxworkflows)
+
+s <- wbw_session()
+wbw_run_tool(
+  'georeference_raster_from_control_points',
+  args = list(
+    input = 'historical_scan.tif',
+    control_points = 'historical_scan_gcps.csv',
+    epsg = 32618,
+    resample = 'bilinear',
+    output = 'historical_scan_georef.tif',
+    report = 'historical_scan_georef_report.json'
+  ),
+  session = s
+)
 ```
 
 ## Best Practices

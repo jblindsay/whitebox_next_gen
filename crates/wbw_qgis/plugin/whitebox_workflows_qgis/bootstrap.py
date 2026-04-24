@@ -115,8 +115,9 @@ class ExternalRuntimeSession:
             "    in_path = str(args.get('input', ''))\n"
             "    out_path = str(args.get('output', ''))\n"
             "    if tool_id == 'reproject_raster':\n"
+            "        resample = str(args.get('resample', 'bilinear')).strip() or 'bilinear'\n"
             "        src = wbe.read_raster(in_path)\n"
-            "        out_obj = wbe.reproject_raster(src, dst_epsg=epsg)\n"
+            "        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)\n"
             "        wbe.write_raster(out_obj, out_path)\n"
             "    elif tool_id == 'reproject_lidar':\n"
             "        src = wbe.read_lidar(in_path)\n"
@@ -418,8 +419,9 @@ def run_projection_wrapper(
     out_path = str(args.get("output", ""))
 
     if tool_id == "reproject_raster":
+        resample = str(args.get("resample", "bilinear")).strip() or "bilinear"
         src = wbe.read_raster(in_path)
-        out_obj = wbe.reproject_raster(src, dst_epsg=epsg)
+        out_obj = wbe.reproject_raster(src, dst_epsg=epsg, resample=resample)
         wbe.write_raster(out_obj, out_path)
     elif tool_id == "reproject_lidar":
         src = wbe.read_lidar(in_path)

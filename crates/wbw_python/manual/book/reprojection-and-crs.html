@@ -371,6 +371,33 @@ las_utm = wbe.reproject_lidar(
 
 wbe.write_lidar(las_utm, 'survey_utm.copc.laz')
 </code></pre>
+<h2 id="georeference-raster-from-control-points"><a class="header" href="#georeference-raster-from-control-points">Georeference Raster from Control Points</a></h2>
+<p>Use this tool when an image/raster has no reliable georeferencing and you have
+ground-control points (GCPs) linking image pixel coordinates to map coordinates.</p>
+<p>Required CSV fields:</p>
+<ul>
+<li><code>source_col</code></li>
+<li><code>source_row</code></li>
+<li><code>target_x</code></li>
+<li><code>target_y</code></li>
+</ul>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+result = wbe.georeference_raster_from_control_points(
+    input_raster='historical_scan.tif',
+    control_points_csv='historical_scan_gcps.csv',
+    epsg=32618,
+    resample='bilinear',
+    output='historical_scan_georef.tif',
+    report='historical_scan_georef_report.json',  # optional diagnostics JSON
+)
+
+print(result)
+</code></pre>
+<p>If you need raw runtime invocation style, the equivalent tool ID is
+<code>georeference_raster_from_control_points</code>.</p>
 <h2 id="projection-utility-namespace"><a class="header" href="#projection-utility-namespace">Projection Utility Namespace</a></h2>
 <p>This namespace is useful for CRS diagnostics and point-level coordinate
 transform tasks outside full dataset reprojection.</p>

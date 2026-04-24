@@ -67,6 +67,9 @@ print(cats)
 
 raster_tools <- wbw_tools_in_category('Raster')
 print(head(raster_tools, 20))
+
+proj_tools <- wbw_tools_in_category('projection_georeferencing')
+print(head(proj_tools, 20))
 ```
 
 ## Session API Reference

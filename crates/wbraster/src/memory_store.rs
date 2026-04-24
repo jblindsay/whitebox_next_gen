@@ -65,6 +65,22 @@ pub fn get_raster_by_id(id: &str) -> Option<Raster> {
     get_raster_arc_by_id(id).map(|r| (*r).clone())
 }
 
+/// Replaces the raster associated with `id`, returning `true` if an entry existed.
+pub fn replace_raster_by_id(id: &str, raster: Raster) -> bool {
+    store()
+        .lock()
+        .map(|mut map| map.insert(id.to_string(), Arc::new(raster)).is_some())
+        .unwrap_or(false)
+}
+
+/// Replaces the raster identified by a `memory://raster/<id>` path, returning
+/// `true` if an entry existed.
+pub fn replace_raster_by_path(path: &str, raster: Raster) -> bool {
+    raster_path_to_id(path)
+        .map(|id| replace_raster_by_id(id, raster))
+        .unwrap_or(false)
+}
+
 /// Removes and returns the raster associated with `id`, or `None` if absent.
 pub fn remove_raster_by_id(id: &str) -> Option<Raster> {
     store()

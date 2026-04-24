@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "whitebox-workflows"
-version = "0.1.0"
+version = "2.0.0"
 description = "Python bindings for Whitebox backend tool runtime"
 readme = "README.md"
 requires-python = ">=3.9"

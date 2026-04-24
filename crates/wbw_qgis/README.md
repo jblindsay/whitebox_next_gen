@@ -7,6 +7,7 @@ The plugin is currently in active development and is installed locally from sour
 ## Table of Contents
 
 - [Mission](#mission)
+- [User Manual](#user-manual)
 - [The Whitebox Project](#the-whitebox-project)
 - [Is wbw_qgis Only for Whitebox?](#is-wbw_qgis-only-for-whitebox)
 - [What wbw_qgis Is Not](#what-wbw_qgis-is-not)
@@ -19,6 +20,28 @@ The plugin is currently in active development and is installed locally from sour
 - [Discovery Refresh Flow](#discovery-refresh-flow)
 - [Known Limitations](#known-limitations)
 - [License](#license)
+
+## User Manual
+
+WbW-QGIS now has a dedicated mdBook user manual, aligned with the WbW-Python
+and WbW-R manuals:
+
+- Manual source: `crates/wbw_qgis/manual/src/`
+- mdBook config: `crates/wbw_qgis/manual/book.toml`
+
+Build locally:
+
+```bash
+cd crates/wbw_qgis/manual
+mdbook build
+```
+
+Preview locally:
+
+```bash
+cd crates/wbw_qgis/manual
+mdbook serve --open
+```
 
 ## Mission
 

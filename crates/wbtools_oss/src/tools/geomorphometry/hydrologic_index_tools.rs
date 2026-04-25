@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::Arc;
 use wbcore::{PercentCoalescer, 
     parse_optional_output_path, parse_raster_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
@@ -17,7 +18,7 @@ pub struct ElevRelativeToWatershedMinMaxTool;
 struct HydrologicIndexCore;
 
 impl HydrologicIndexCore {
-    fn load_named_raster(args: &ToolArgs, key: &str) -> Result<Raster, ToolError> {
+    fn load_named_raster(args: &ToolArgs, key: &str) -> Result<Arc<Raster>, ToolError> {
         let path = parse_raster_path_arg(args, key)?;
         if memory_store::raster_is_memory_path(&path) {
             let id = memory_store::raster_path_to_id(&path).ok_or_else(|| {
@@ -26,7 +27,7 @@ impl HydrologicIndexCore {
                     key
                 ))
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter '{}' references unknown in-memory raster id '{}'",
                     key, id
@@ -34,6 +35,7 @@ impl HydrologicIndexCore {
             });
         }
         Raster::read(&path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading '{}' raster: {}", key, e)))
     }
 
@@ -241,7 +243,7 @@ impl HydrologicIndexCore {
         Self::validate_same_dimensions(&sca, &slope)?;
 
         ctx.progress.info("running relative_stream_power_index");
-        let mut output = sca.clone();
+        let mut output = sca.as_ref().clone();
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;
@@ -288,7 +290,7 @@ impl HydrologicIndexCore {
         Self::validate_same_dimensions(&sca, &slope)?;
 
         ctx.progress.info("running sediment_transport_index");
-        let mut output = sca.clone();
+        let mut output = sca.as_ref().clone();
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;
@@ -348,7 +350,7 @@ impl HydrologicIndexCore {
         let coalescer = PercentCoalescer::new(1, 99);
         let dem_nodata = dem.nodata;
         let ws_nodata = watersheds.nodata;
-        let mut output = dem.clone();
+        let mut output = dem.as_ref().clone();
 
         for band_idx in 0..bands {
             let band = band_idx as isize;

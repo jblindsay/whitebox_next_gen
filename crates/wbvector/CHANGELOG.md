@@ -6,6 +6,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- Introduced a new in-process vector memory store module at `wbvector::memory_store` for zero-disk vector handoff between components.
+- Added memory-path API for vectors with `memory://vector/<id>` handles, including:
+	`VECTOR_MEMORY_PREFIX`, `vector_is_memory_path`, `vector_path_to_id`, and `make_vector_memory_path`.
+- Added vector store lifecycle API:
+	`put_vector`, `put_vector_arc`, `get_vector_arc_by_id`, `get_vector_arc_by_path`, `get_vector_by_id`,
+	`replace_vector_by_id`, `replace_vector_by_path`, `remove_vector_by_id`, `remove_vector_by_path`,
+	`clear_vectors`, and `vector_count`.
+- Added unit tests covering vector memory-store put/get/remove/clear behavior.
+
 ### Fixed
 - GeoPackage writer now treats `fid`/`FID` as reserved and ignores user-added schema fields with that name when creating table columns.
 - Prevents malformed GeoPackage outputs caused by duplicate `fid` columns, so tools that auto-add a `FID` attribute can write valid `.gpkg` layers without per-tool changes.

@@ -1385,6 +1385,30 @@ fn default_las_config(cloud: &PointCloud) -> WriterConfig {
     } else {
         PointDataFormat::Pdrf6
     };
+
+    // Auto-compute offsets so quantised i32 values never overflow.
+    // LAS stores each coordinate as: i32 = round((value - offset) / scale).
+    // With scale = 0.001, the representable range is ±2 147 483.647 m from
+    // the offset.  Any dataset whose bounding box exceeds ~2 M units from the
+    // origin (e.g. UTM northings > 2 147 483 m) will silently saturate to
+    // i32::MAX/MIN, collapsing all affected coordinates to the same value and
+    // breaking downstream triangulation.  Using floor(min) as the offset
+    // keeps every stored integer within a single tile's extent (~few km),
+    // well inside the i32 range.
+    if !cloud.points.is_empty() {
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut min_z = f64::INFINITY;
+        for p in &cloud.points {
+            if p.x < min_x { min_x = p.x; }
+            if p.y < min_y { min_y = p.y; }
+            if p.z < min_z { min_z = p.z; }
+        }
+        cfg.x_offset = min_x.floor();
+        cfg.y_offset = min_y.floor();
+        cfg.z_offset = min_z.floor();
+    }
+
     cfg
 }
 

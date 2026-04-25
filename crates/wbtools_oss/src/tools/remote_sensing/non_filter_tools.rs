@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::Arc;
 
 use image::{ImageBuffer, Rgba};
 use kdtree::distance::squared_euclidean;
@@ -510,12 +511,12 @@ impl FlipImageTool {
             / 100.0
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'input' has malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -524,6 +525,7 @@ impl FlipImageTool {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -2437,7 +2439,7 @@ impl FlipImageTool {
                     &red,
                     &green,
                     &blue,
-                    opacity.as_ref(),
+                    opacity.as_deref(),
                     enhance,
                     treat_zeros_as_nodata,
                 )?
@@ -3080,10 +3082,10 @@ impl Tool for ChangeVectorAnalysisTool {
         let mut date1 = Vec::with_capacity(date1_paths.len());
         let mut date2 = Vec::with_capacity(date2_paths.len());
         for p in &date1_paths {
-            date1.push(FlipImageTool::load_raster(p)?);
+            date1.push((*FlipImageTool::load_raster(p)?).clone());
         }
         for p in &date2_paths {
-            date2.push(FlipImageTool::load_raster(p)?);
+            date2.push((*FlipImageTool::load_raster(p)?).clone());
         }
 
         let magnitude_output = parse_optional_output_path(args, "magnitude_output")?;
@@ -3354,7 +3356,7 @@ impl Tool for PanchromaticSharpeningTool {
             let composite_path = parse_raster_path_arg(args, "composite")?;
             let comp = FlipImageTool::load_raster(&composite_path)?;
             FlipImageTool::validate_packed_rgb(&comp, "panchromatic_sharpening")?;
-            comp
+            (*comp).clone()
         } else {
             let red_path = parse_raster_path_arg(args, "red")?;
             let green_path = parse_raster_path_arg(args, "green")?;
@@ -3480,7 +3482,7 @@ impl Tool for MosaicTool {
 
         let mut inputs = Vec::with_capacity(input_paths.len());
         for p in &input_paths {
-            inputs.push(FlipImageTool::load_raster(p)?);
+            inputs.push((*FlipImageTool::load_raster(p)?).clone());
         }
 
         let output = run_mosaic(&inputs, method)?;
@@ -3748,10 +3750,10 @@ impl Tool for ResampleTool {
 
         let mut inputs = Vec::with_capacity(input_paths.len());
         for p in &input_paths {
-            inputs.push(FlipImageTool::load_raster(p)?);
+            inputs.push((*FlipImageTool::load_raster(p)?).clone());
         }
 
-        let output = run_resample(&inputs, base.as_ref(), cell_size, method)?;
+        let output = run_resample(&inputs, base.as_deref(), cell_size, method)?;
         ctx.progress.progress(1.0);
         let output_locator = FlipImageTool::write_or_store_output(output, output_path)?;
         let mut outputs = BTreeMap::new();
@@ -4109,7 +4111,7 @@ impl Tool for ModifiedKMeansClusteringTool {
         let input_paths = parse_raster_list_arg(args, "inputs")?;
         let mut inputs = Vec::with_capacity(input_paths.len());
         for p in &input_paths {
-            inputs.push(FlipImageTool::load_raster(p)?);
+            inputs.push((*FlipImageTool::load_raster(p)?).clone());
         }
 
         let start_clusters = args
@@ -4385,7 +4387,7 @@ impl Tool for ImageStackProfileTool {
         let input_paths = parse_raster_list_arg(args, "inputs")?;
         let mut inputs = Vec::with_capacity(input_paths.len());
         for p in &input_paths {
-            inputs.push(FlipImageTool::load_raster(p)?);
+            inputs.push((*FlipImageTool::load_raster(p)?).clone());
         }
         let point_coords = parse_vector_points_arg(args, "points")?;
         let points = map_points_to_rows_cols(&inputs[0], &point_coords);
@@ -6516,15 +6518,36 @@ fn write_cluster_html_report(
 
 fn parse_principal_point_from_vector(args: &ToolArgs) -> Result<(f64, f64), ToolError> {
     let pp_path = parse_vector_path_arg(args, "pp")?;
-    let layer = wbvector::read(&pp_path).map_err(|e| {
-        ToolError::Validation(format!(
-            "failed reading principal-point vector '{}': {}",
-            pp_path, e
-        ))
-    })?;
+    let layer = load_vector_layer(&pp_path, "pp")?;
     let points = extract_vector_points(&layer, "pp")?;
     points.first().copied().ok_or_else(|| {
         ToolError::Validation("parameter 'pp' vector must contain at least one point".to_string())
+    })
+}
+
+fn load_vector_layer(path: &str, param: &str) -> Result<wbvector::Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!(
+                "failed reading vector '{}' from parameter '{}': malformed in-memory vector path",
+                path, param
+            ))
+        })?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "failed reading vector '{}' from parameter '{}': unknown in-memory vector id '{}'",
+                    path, param, id
+                ))
+            });
+    }
+
+    wbvector::read(path).map_err(|e| {
+        ToolError::Validation(format!(
+            "failed reading vector '{}' from parameter '{}': {}",
+            path, param, e
+        ))
     })
 }
 
@@ -6638,12 +6661,7 @@ fn run_correct_vignetting(
 
 fn parse_vector_points_arg(args: &ToolArgs, param: &str) -> Result<Vec<(f64, f64)>, ToolError> {
     let points_path = parse_vector_path_arg(args, param)?;
-    let layer = wbvector::read(&points_path).map_err(|e| {
-        ToolError::Validation(format!(
-            "failed reading vector '{}' from parameter '{}': {}",
-            points_path, param, e
-        ))
-    })?;
+    let layer = load_vector_layer(&points_path, param)?;
     extract_vector_points(&layer, param)
 }
 
@@ -7725,9 +7743,7 @@ impl Tool for MinDistClassificationTool {
         let rows = bands[0].rows as isize;
         let cols_count = bands[0].cols as isize;
 
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
 
         coalescer.emit_unit_fraction(ctx.progress, 0.05);
 
@@ -7956,9 +7972,7 @@ impl Tool for ParallelepipedClassificationTool {
         let rows = bands[0].rows as isize;
         let cols_count = bands[0].cols as isize;
 
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
 
         coalescer.emit_unit_fraction(ctx.progress, 0.05);
 
@@ -8554,7 +8568,7 @@ impl Tool for EvaluateTrainingSitesTool {
 
         let bands: Vec<Raster> = band_paths
             .iter()
-            .map(|p| FlipImageTool::load_raster(p))
+            .map(|p| FlipImageTool::load_raster(p).map(|r| (*r).clone()))
             .collect::<Result<_, _>>()?;
         let rows = bands[0].rows;
         let cols = bands[0].cols;
@@ -8567,9 +8581,7 @@ impl Tool for EvaluateTrainingSitesTool {
             }
         }
 
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
 
         coalescer.emit_unit_fraction(ctx.progress, 0.15);
         let (class_names, class_pixels) = extract_training_polygon_pixels(&bands, &layer, &class_field)?;
@@ -8692,7 +8704,10 @@ impl Tool for GeneralizeWithSimilarityTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let input = FlipImageTool::load_raster(&input_path)?;
-        let sims: Vec<Raster> = sim_paths.iter().map(|p| FlipImageTool::load_raster(p)).collect::<Result<_, _>>()?;
+        let sims: Vec<Raster> = sim_paths
+            .iter()
+            .map(|p| FlipImageTool::load_raster(p).map(|r| (*r).clone()))
+            .collect::<Result<_, _>>()?;
         let rows = input.rows as isize;
         let cols = input.cols as isize;
         let n = input.rows * input.cols;
@@ -9000,7 +9015,7 @@ impl Tool for ImageSegmentationTool {
 
         let mut rasters: Vec<Raster> = input_paths
             .iter()
-            .map(|p| FlipImageTool::load_raster(p))
+            .map(|p| FlipImageTool::load_raster(p).map(|r| (*r).clone()))
             .collect::<Result<_, _>>()?;
         let stack_config = RasterStackConfig {
             auto_reproject,
@@ -9366,7 +9381,7 @@ fn load_aligned_raster_stack_arg(
 
     let mut rasters: Vec<Raster> = paths
         .iter()
-        .map(|p| FlipImageTool::load_raster(p))
+        .map(|p| FlipImageTool::load_raster(p).map(|r| (*r).clone()))
         .collect::<Result<_, _>>()?;
 
     let stack_config = RasterStackConfig {
@@ -9766,7 +9781,7 @@ impl Tool for KnnClassificationTool {
 
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (_class_names, mut x_train, mut y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
         if x_train.is_empty() {
             return Err(ToolError::Validation("no training samples extracted".to_string()));
@@ -9980,7 +9995,7 @@ impl Tool for KnnRegressionTool {
 
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (x_train, y_train) = extract_training_regression_samples(&rasters, mode, &scalers, &layer, field)?;
         k = k.min(x_train.len());
 
@@ -10170,7 +10185,7 @@ impl Tool for FuzzyKnnClassificationTool {
 
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (class_names, x_train, y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
         k = k.min(x_train.len());
 
@@ -10384,9 +10399,7 @@ impl Tool for RandomForestClassificationTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (_class_names, x_train, y_train_raw) =
             extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
 
@@ -10558,9 +10571,7 @@ impl Tool for RandomForestRegressionTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (x_train, y_train) = extract_training_regression_samples(&rasters, mode, &scalers, &layer, field)?;
 
         if x_train.is_empty() {
@@ -10675,9 +10686,7 @@ impl Tool for RandomForestClassificationFitTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (_class_names, x_train, y_train_raw) =
             extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
 
@@ -10904,9 +10913,7 @@ impl Tool for RandomForestRegressionFitTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e))
-        })?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (x_train, y_train) = extract_training_regression_samples(&rasters, mode, &scalers, &layer, field)?;
         if x_train.is_empty() {
             return Err(ToolError::Validation("no training samples extracted".to_string()));
@@ -11178,8 +11185,7 @@ impl Tool for LogisticRegressionTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (_class_names, x_train, y_train_raw) =
             extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
         if x_train.is_empty() {
@@ -11336,8 +11342,7 @@ impl Tool for SvmClassificationTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (class_names, x_train, y_train_raw) =
             extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
         if x_train.is_empty() {
@@ -11551,8 +11556,7 @@ impl Tool for SvmRegressionTool {
         let rasters = load_aligned_raster_stack_arg(args, "inputs", None)?;
 
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (x_train, y_train) = extract_training_regression_samples(&rasters, mode, &scalers, &layer, field)?;
         if x_train.is_empty() {
             return Err(ToolError::Validation("no training samples extracted".to_string()));
@@ -11711,7 +11715,7 @@ impl Tool for NndClassificationTool {
 
         let rasters = load_aligned_raster_stack_arg(args, "inputs", Some(ctx))?;
         let scalers = build_scalers(&rasters, mode);
-        let layer = wbvector::read(&training_path).map_err(|e| ToolError::Execution(format!("failed reading training data '{}': {}", training_path, e)))?;
+        let layer = load_vector_layer(&training_path, "training_data")?;
         let (class_names, x_train, y_train) = extract_training_class_samples(&rasters, mode, &scalers, &layer, class_field)?;
 
         let num_classes = class_names.len();

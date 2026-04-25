@@ -129,8 +129,7 @@ impl SkyVisibilityCore {
     }
 
     fn parse_station_points(points_path: &str) -> Result<Vec<VCoord>, ToolError> {
-        let layer = wbvector::read(points_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading points vector: {e}")))?;
+        let layer = Self::load_vector(points_path, "points")?;
         let mut stations = Vec::new();
         for feature in layer.iter() {
             match feature.geometry.as_ref() {
@@ -145,6 +144,18 @@ impl SkyVisibilityCore {
             ));
         }
         Ok(stations)
+    }
+
+    fn load_vector(path: &str, label: &str) -> Result<Layer, ToolError> {
+        if wbvector::memory_store::vector_is_memory_path(path) {
+            let id = wbvector::memory_store::vector_path_to_id(path)
+                .ok_or_else(|| ToolError::Validation(format!("malformed in-memory vector path for '{}'", label)))?;
+            return wbvector::memory_store::get_vector_arc_by_id(id)
+                .map(|layer| layer.as_ref().clone())
+                .ok_or_else(|| ToolError::Validation(format!("unknown in-memory vector id '{}' for '{}'", id, label)));
+        }
+        wbvector::read(path)
+            .map_err(|e| ToolError::Execution(format!("failed reading {} vector: {}", label, e)))
     }
 
     fn radial_svg(width: f64, height: f64, values: &[f64], title: &str, stroke: &str) -> String {
@@ -188,19 +199,21 @@ impl SkyVisibilityCore {
         parse_raster_path_arg(args, "dem").or_else(|_| parse_raster_path_arg(args, "input"))
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'dem' has malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'dem' references unknown in-memory raster id '{}'",
                     id
                 ))
             });
         }
-        Raster::read(path).map_err(|e| ToolError::Execution(format!("Failed to read DEM: {}", e)))
+        Raster::read(path)
+            .map(Arc::new)
+            .map_err(|e| ToolError::Execution(format!("Failed to read DEM: {}", e)))
     }
 
     fn write_or_store_output(output: Raster, output_path: Option<std::path::PathBuf>) -> Result<String, ToolError> {
@@ -530,7 +543,6 @@ impl SkyVisibilityCore {
             cell_size_y,
             false,
         ));
-        let dem = Arc::new(dem);
 
         let num_threads = Self::num_threads();
         let (tx, rx) = mpsc::channel();
@@ -562,7 +574,7 @@ impl SkyVisibilityCore {
         }
         drop(tx);
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for _ in 0..rows {
             let (row, data) = rx
                 .recv()
@@ -680,7 +692,6 @@ impl SkyVisibilityCore {
         let cell_size_y = dem.cell_size_y as f32;
         max_dist = Self::clamp_max_dist(max_dist, &dem, cell_size_x)?;
 
-        let dem = Arc::new(dem);
         let mut sum = vec![0.0_f64; (rows * cols) as usize];
         let mut count = vec![0_u16; (rows * cols) as usize];
 
@@ -741,7 +752,7 @@ impl SkyVisibilityCore {
             azimuth += az_fraction;
         }
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for row in 0..rows {
             let mut row_data = vec![nodata; cols as usize];
             for col in 0..cols {
@@ -877,7 +888,6 @@ impl SkyVisibilityCore {
         max_dist = Self::clamp_max_dist(max_dist, &dem, cell_size_x)?;
         let max_dist_sq = max_dist * max_dist;
 
-        let dem = Arc::new(dem);
         let num_cells_tested = (rows as f64 / res_factor as f64).ceil()
             * (cols as f64 / res_factor as f64).ceil();
 
@@ -1290,7 +1300,7 @@ impl SkyVisibilityCore {
             }
         }
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for row in 0..rows {
             let mut row_data = vec![nodata; cols as usize];
             for col in 0..cols {
@@ -1404,7 +1414,6 @@ impl SkyVisibilityCore {
         let cell_size_y = dem.cell_size_y as f32;
         max_dist = Self::clamp_max_dist(max_dist, &dem, cell_size_x)?;
 
-        let dem = Arc::new(dem);
         let mut area_sum = vec![nodata; (rows * cols) as usize];
         let mut prev_x = vec![nodata_f32; (rows * cols) as usize];
         let mut prev_y = vec![nodata_f32; (rows * cols) as usize];
@@ -1486,7 +1495,7 @@ impl SkyVisibilityCore {
             azimuth += az_fraction;
         }
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for row in 0..rows {
             let mut row_data = vec![nodata; cols as usize];
             for col in 0..cols {
@@ -1971,7 +1980,6 @@ impl SkyVisibilityCore {
             false,
         ));
 
-        let dem = Arc::new(dem);
         let resx = cell_size_x.max(f32::EPSILON) as f64;
         let resy = cell_size_y.max(f32::EPSILON) as f64;
         let sin_theta = altitude.to_radians().sin() as f64;
@@ -2079,7 +2087,7 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         if no_hyspo_tint {
             output.data_type = DataType::F32;
         } else {
@@ -2293,7 +2301,7 @@ impl SkyVisibilityCore {
             .ok_or_else(|| ToolError::Execution("invalid GIF output path".to_string()))?
             .to_string();
 
-        let dem = Arc::new(Self::load_raster(&dem_path)?);
+        let dem = Self::load_raster(&dem_path)?;
         let rows = dem.rows as isize;
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
@@ -2882,7 +2890,7 @@ impl SkyVisibilityCore {
             .collect();
         let p_last = (palette_vals.len().saturating_sub(1)).max(1) as f64;
 
-        let dem = Arc::new(Self::load_raster(&dem_path)?);
+        let dem = Self::load_raster(&dem_path)?;
         let rows = dem.rows as isize;
         let coalescer = PercentCoalescer::new(1, 99);
         let cols = dem.cols as isize;
@@ -3156,7 +3164,7 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         output.data_type = DataType::U32;
         output.nodata = 0.0;
         for (r, row) in row_data.iter().enumerate() {
@@ -3528,7 +3536,7 @@ impl SkyVisibilityCore {
         let prepared_polys = Arc::new(prepared_polys);
         let use_clipping_polygon = !prepared_polys.is_empty();
 
-        let mut dem = Self::load_raster(&dem_path)?;
+        let mut dem = Self::load_raster(&dem_path)?.as_ref().clone();
         let rows = dem.rows as isize;
         let coalescer = PercentCoalescer::new(1, 99);
         let cols = dem.cols as isize;
@@ -3653,7 +3661,6 @@ impl SkyVisibilityCore {
         };
 
         let background_hgt = min_z - background_hgt_offset;
-        let dem = Arc::new(dem);
         let resx = cell_size_x.max(f32::EPSILON) as f64;
         let resy = cell_size_y.max(f32::EPSILON) as f64;
 
@@ -3783,7 +3790,7 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = (*dem).clone();
+        let mut output = dem.clone();
         output.data_type = DataType::U32;
         output.nodata = 0.0;
         for (r, row) in row_data.iter().enumerate() {
@@ -3980,7 +3987,6 @@ impl SkyVisibilityCore {
         let cell_size_y = dem.cell_size_y as f32;
         max_dist = Self::clamp_max_dist(max_dist, &dem, cell_size_x)?;
 
-        let dem = Arc::new(dem);
         let mut sum = vec![0.0_f64; (rows * cols) as usize];
         let mut count = vec![0_u16; (rows * cols) as usize];
 
@@ -4047,7 +4053,7 @@ impl SkyVisibilityCore {
             azimuth += az_fraction;
         }
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for row in 0..rows {
             let mut row_data = vec![nodata; cols as usize];
             for col in 0..cols {
@@ -4184,7 +4190,6 @@ impl SkyVisibilityCore {
         let almanac = generate_almanac(latitude, longitude, utc_offset, az_fraction as f64, 10)?;
         let num_bins = ((360.0_f64 / az_fraction as f64).ceil() as usize).max(1);
 
-        let dem = Arc::new(dem);
         let mut shadow_seconds = vec![0.0_f64; (rows * cols) as usize];
         let mut total_daylight = 0.0_f64;
         let coalescer = PercentCoalescer::new(1, 99);
@@ -4284,7 +4289,7 @@ impl SkyVisibilityCore {
             }
         }
 
-        let mut output = (*dem).clone();
+        let mut output = dem.as_ref().clone();
         for row in 0..rows {
             let mut row_data = vec![nodata; cols as usize];
             for col in 0..cols {

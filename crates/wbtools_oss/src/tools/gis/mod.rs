@@ -455,7 +455,9 @@ impl GisOverlayCore {
                     param_name
                 ))
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id)
+                .map(|r| r.as_ref().clone())
+                .ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter '{}' references unknown in-memory raster id '{}': store entry is missing",
                     param_name, id
@@ -2680,13 +2682,34 @@ fn load_optional_raster_arg(args: &ToolArgs, key: &str) -> Result<Option<Raster>
     Ok(Some(GisOverlayCore::load_raster(path.trim(), key)?))
 }
 
+fn load_vector(path: &str, key: &str) -> Result<wbvector::Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!(
+                "parameter '{}' has malformed in-memory vector path",
+                key
+            ))
+        })?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "parameter '{}' references unknown in-memory vector id '{}': store entry is missing",
+                    key, id
+                ))
+            });
+    }
+
+    wbvector::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading {} vector: {}", key, e)))
+}
+
 fn load_vector_arg(args: &ToolArgs, key: &str) -> Result<wbvector::Layer, ToolError> {
     let path = args
         .get(key)
         .and_then(|v| v.as_str())
         .ok_or_else(|| ToolError::Validation(format!("parameter '{}' is required", key)))?;
-    wbvector::read(path.trim())
-        .map_err(|e| ToolError::Execution(format!("failed reading {} vector: {}", key, e)))
+    load_vector(path.trim(), key)
 }
 
 fn read_vector_layer_aligned_to_raster(
@@ -2694,7 +2717,7 @@ fn read_vector_layer_aligned_to_raster(
     path: &str,
     input_name: &str,
 ) -> Result<wbvector::Layer, ToolError> {
-    let layer = wbvector::read(path).map_err(|e| {
+    let layer = load_vector(path, input_name).map_err(|e| {
         ToolError::Validation(format!(
             "failed reading {} vector '{}': {}",
             input_name, path, e
@@ -9978,7 +10001,7 @@ fn validate_overlay_common_args(args: &ToolArgs) -> Result<(), ToolError> {
 }
 
 fn read_vector_layer_from_path(path: &str, input_name: &str) -> Result<wbvector::Layer, ToolError> {
-    wbvector::read(path).map_err(|e| {
+    load_vector(path, input_name).map_err(|e| {
         ToolError::Validation(format!(
             "failed reading {} vector '{}': {}",
             input_name, path, e

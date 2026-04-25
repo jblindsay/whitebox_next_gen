@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -153,19 +154,21 @@ impl MultiscaleCurvaturesTool {
         }
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'input' has malformed in-memory path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}'",
                     id
                 ))
             });
         }
-        Raster::read(path).map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))
+        Raster::read(path)
+            .map(Arc::new)
+            .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))
     }
 
     fn log_multiplier(res: f64) -> f64 {
@@ -720,7 +723,7 @@ impl MultiscaleCurvaturesTool {
                     .to_string(),
             ));
         }
-        let mut output_mag = input.clone();
+        let mut output_mag = input.as_ref().clone();
         let mut output_scale = Raster::new(RasterConfig {
             rows: input.rows,
             cols: input.cols,

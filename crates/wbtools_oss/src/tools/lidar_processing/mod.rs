@@ -36,7 +36,7 @@ use wbcore::{
     ToolParamSpec,
     ToolRunResult,
 };
-use wblidar::{Crs as LidarCrs, PointCloud, PointRecord, Rgb16};
+use wblidar::{memory_store as lidar_memory_store, Crs as LidarCrs, LidarFormat, PointCloud, PointReader, PointRecord, Rgb16};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbtopology::{delaunay_triangulation, delaunay_triangulation_fast, Coord as TopoCoord, DistanceMetric, FixedRadiusSearch2D, PreparedSibsonInterpolator};
 
@@ -340,9 +340,20 @@ fn collect_polygons_from_geometry(geom: &wbvector::Geometry, out: &mut Vec<Prepa
     }
 }
 
+fn load_vector(path: &str, label: &str) -> Result<wbvector::Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path)
+            .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| ToolError::Execution(format!("memory vector not found for '{label}'")));
+    }
+    wbvector::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading '{label}' vector: {e}")))
+}
+
 fn read_prepared_polygons(path: &str) -> Result<Vec<PreparedPolygon>, ToolError> {
-    let layer = wbvector::read(path)
-        .map_err(|e| ToolError::Execution(format!("failed reading polygon vector '{}': {e}", path)))?;
+    let layer = load_vector(path, "polygons")?;
     let mut polys = Vec::new();
     for feature in &layer.features {
         if let Some(geom) = feature.geometry.as_ref() {
@@ -1246,6 +1257,20 @@ fn parse_required_raster_path_alias(args: &ToolArgs, names: &[&str], label: &str
         }
     }
     Err(ToolError::Validation(format!("{label} is required")))
+}
+
+fn load_raster_path_or_memory(path: &str, label: &str) -> Result<Raster, ToolError> {
+    if memory_store::raster_is_memory_path(path) {
+        let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!("invalid in-memory raster path for '{}': {}", label, path))
+        })?;
+        return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            ToolError::Validation(format!("unknown in-memory raster id for '{}': {}", label, id))
+        });
+    }
+    Raster::read(Path::new(path)).map_err(|e| {
+        ToolError::Execution(format!("failed reading {} '{}': {e}", label, path))
+    })
 }
 
 fn parse_lidar_inputs_arg(args: &ToolArgs) -> Result<Vec<String>, ToolError> {
@@ -2862,6 +2887,81 @@ fn extract_raster_path_from_result(result: ToolRunResult, tool_id: &str) -> Resu
         .ok_or_else(|| ToolError::Execution(format!("{} missing output path", tool_id)))
 }
 
+fn load_lidar_cloud(path: &Path, label: &str) -> Result<PointCloud, ToolError> {
+    let path_str = path.to_string_lossy();
+    if lidar_memory_store::lidar_is_memory_path(&path_str) {
+        let id = lidar_memory_store::lidar_path_to_id(&path_str)
+            .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
+        return lidar_memory_store::get_lidar_arc_by_id(id)
+            .map(|cloud| cloud.as_ref().clone())
+            .ok_or_else(|| ToolError::Execution(format!("memory lidar not found for '{label}'")));
+    }
+
+    PointCloud::read(path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed reading '{label}' lidar '{}': {e}",
+            path.display()
+        ))
+    })
+}
+
+fn stream_disk_lidar_points<F>(path: &Path, label: &str, mut visit: F) -> Result<Option<LidarCrs>, ToolError>
+where
+    F: FnMut(&PointRecord),
+{
+    let format = LidarFormat::detect(path).map_err(|e| {
+        ToolError::Execution(format!(
+            "failed detecting '{label}' lidar format for '{}': {e}",
+            path.display()
+        ))
+    })?;
+
+    match format {
+        LidarFormat::Las => {
+            let file = File::open(path).map_err(|e| {
+                ToolError::Execution(format!("failed opening '{label}' lidar '{}': {e}", path.display()))
+            })?;
+            let mut reader = wblidar::las::LasReader::new(BufReader::new(file)).map_err(|e| {
+                ToolError::Execution(format!("failed reading '{label}' lidar '{}': {e}", path.display()))
+            })?;
+            let crs = reader.crs().cloned();
+            let mut point = PointRecord::default();
+            while reader.read_point(&mut point).map_err(|e| {
+                ToolError::Execution(format!("failed streaming '{label}' lidar '{}': {e}", path.display()))
+            })? {
+                visit(&point);
+            }
+            Ok(crs)
+        }
+        LidarFormat::Laz => {
+            let file = File::open(path).map_err(|e| {
+                ToolError::Execution(format!("failed opening '{label}' lidar '{}': {e}", path.display()))
+            })?;
+            let mut reader = wblidar::laz::LazReader::new(BufReader::new(file)).map_err(|e| {
+                ToolError::Execution(format!("failed reading '{label}' lidar '{}': {e}", path.display()))
+            })?;
+            let crs = reader.crs().cloned();
+            let mut point = PointRecord::default();
+            while reader.read_point(&mut point).map_err(|e| {
+                ToolError::Execution(format!("failed streaming '{label}' lidar '{}': {e}", path.display()))
+            })? {
+                visit(&point);
+            }
+            Ok(crs)
+        }
+        _ => {
+            let cloud = PointCloud::read(path).map_err(|e| {
+                ToolError::Execution(format!("failed reading '{label}' lidar '{}': {e}", path.display()))
+            })?;
+            let crs = cloud.crs.clone();
+            for point in &cloud.points {
+                visit(point);
+            }
+            Ok(crs)
+        }
+    }
+}
+
 fn run_block_extrema_tile(
     input_path: &Path,
     output_path: Option<&Path>,
@@ -2873,12 +2973,7 @@ fn run_block_extrema_tile(
     max_z: f64,
     use_max: bool,
 ) -> Result<String, ToolError> {
-    let cloud = PointCloud::read(input_path).map_err(|e| {
-        ToolError::Execution(format!(
-            "failed reading input lidar '{}': {e}",
-            input_path.to_string_lossy()
-        ))
-    })?;
+    let cloud = load_lidar_cloud(input_path, "input")?;
 
     let samples = collect_lidar_samples(&cloud.points, parameter, returns_mode, include_classes, min_z, max_z)?;
     let mut output = build_lidar_output(
@@ -2927,12 +3022,7 @@ fn run_point_density_tile(
     min_z: f64,
     max_z: f64,
 ) -> Result<String, ToolError> {
-    let cloud = PointCloud::read(input_path).map_err(|e| {
-        ToolError::Execution(format!(
-            "failed reading input lidar '{}': {e}",
-            input_path.to_string_lossy()
-        ))
-    })?;
+    let cloud = load_lidar_cloud(input_path, "input")?;
 
     let samples = collect_lidar_samples(&cloud.points, "elevation", returns_mode, include_classes, min_z, max_z)?;
     let mut output = build_lidar_output(
@@ -2985,12 +3075,7 @@ fn run_dsm_tile(
     max_z: f64,
     max_triangle_edge_length: f64,
 ) -> Result<String, ToolError> {
-    let cloud = PointCloud::read(input_path).map_err(|e| {
-        ToolError::Execution(format!(
-            "failed reading input lidar '{}': {e}",
-            input_path.to_string_lossy()
-        ))
-    })?;
+    let cloud = load_lidar_cloud(input_path, "input")?;
 
     let mut include_classes = [true; 256];
     include_classes[7] = false;
@@ -3536,8 +3621,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.crs.is_none() {
             ctx.progress.info(
                 "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
@@ -3554,8 +3638,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         )?;
         let mut samples = target_samples.clone();
         for neighbor_path in neighbor_paths {
-            let n_cloud = PointCloud::read(&neighbor_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+            let n_cloud = load_lidar_cloud(Path::new(&neighbor_path), "batch-neighbor")?;
             let mut n_samples = collect_lidar_samples(
                 &n_cloud.points,
                 &parameter,
@@ -3790,14 +3873,14 @@ impl Tool for LidarIdwInterpolationTool {
 
         ctx.progress.info("reading input lidar");
         let t_read = Instant::now();
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let input_lidar_path = Path::new(&input_path);
+        let input_format = if lidar_memory_store::lidar_is_memory_path(&input_path) {
+            None
+        } else {
+            LidarFormat::detect(input_lidar_path).ok()
+        };
         let read_s = t_read.elapsed().as_secs_f64();
-        if cloud.crs.is_none() {
-            ctx.progress.info(
-                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
-            );
-        }
+        let primary_crs: Option<LidarCrs>;
 
         // Single pass over primary points: apply filters, track output-grid bounds, and populate
         // the spatial index directly — no intermediate Vec allocation, no separate insert loop.
@@ -3810,43 +3893,38 @@ impl Tool for LidarIdwInterpolationTool {
             if radius > 0.0 {
                 let mut index = FixedRadiusSearch2D::new(radius, DistanceMetric::Euclidean);
                 let mut n_primary = 0usize;
-                for p in &cloud.points {
-                    if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
-                        continue;
-                    }
-                    if p.z < min_z || p.z > max_z {
-                        continue;
-                    }
-                    if is_withheld(p) {
-                        continue;
-                    }
-                    if !return_filter_match(p, returns_mode) {
-                        continue;
-                    }
-                    if !include_classes[p.classification as usize] {
-                        continue;
-                    }
-                    if let Some(value) = select_point_value(p, &parameter) {
-                        if value.is_finite() {
-                            min_x = min_x.min(p.x);
-                            max_x = max_x.max(p.x);
-                            min_y = min_y.min(p.y);
-                            max_y = max_y.max(p.y);
-                            index.insert(p.x, p.y, value);
-                            n_primary += 1;
+                if matches!(input_format, Some(LidarFormat::Las | LidarFormat::Laz)) {
+                    primary_crs = stream_disk_lidar_points(input_lidar_path, "input", |p| {
+                        if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
+                            return;
                         }
-                    }
-                }
-                if n_primary == 0 {
-                    return Err(ToolError::Validation(
-                        "input lidar contains no valid points after filtering".to_string(),
-                    ));
-                }
-                // Neighbour tiles: insert into FRS only — output grid is sized to primary tile.
-                for neighbor_path in &neighbor_paths {
-                    let n_cloud = PointCloud::read(neighbor_path)
-                        .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
-                    for p in &n_cloud.points {
+                        if p.z < min_z || p.z > max_z {
+                            return;
+                        }
+                        if is_withheld(p) {
+                            return;
+                        }
+                        if !return_filter_match(p, returns_mode) {
+                            return;
+                        }
+                        if !include_classes[p.classification as usize] {
+                            return;
+                        }
+                        if let Some(value) = select_point_value(p, &parameter) {
+                            if value.is_finite() {
+                                min_x = min_x.min(p.x);
+                                max_x = max_x.max(p.x);
+                                min_y = min_y.min(p.y);
+                                max_y = max_y.max(p.y);
+                                index.insert(p.x, p.y, value);
+                                n_primary += 1;
+                            }
+                        }
+                    })?;
+                } else {
+                    let cloud = load_lidar_cloud(input_lidar_path, "input")?;
+                    primary_crs = cloud.crs.clone();
+                    for p in &cloud.points {
                         if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
                             continue;
                         }
@@ -3864,7 +3942,76 @@ impl Tool for LidarIdwInterpolationTool {
                         }
                         if let Some(value) = select_point_value(p, &parameter) {
                             if value.is_finite() {
+                                min_x = min_x.min(p.x);
+                                max_x = max_x.max(p.x);
+                                min_y = min_y.min(p.y);
+                                max_y = max_y.max(p.y);
                                 index.insert(p.x, p.y, value);
+                                n_primary += 1;
+                            }
+                        }
+                    }
+                }
+                if n_primary == 0 {
+                    return Err(ToolError::Validation(
+                        "input lidar contains no valid points after filtering".to_string(),
+                    ));
+                }
+                // Neighbour tiles: insert into FRS only — output grid is sized to primary tile.
+                for neighbor_path in &neighbor_paths {
+                    let neighbor_bounds = (min_x - radius, max_x + radius, min_y - radius, max_y + radius);
+                    let neighbor_path = Path::new(neighbor_path);
+                    if matches!(LidarFormat::detect(neighbor_path), Ok(LidarFormat::Las | LidarFormat::Laz)) {
+                        let _ = stream_disk_lidar_points(neighbor_path, "batch-neighbor", |p| {
+                            if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
+                                return;
+                            }
+                            if p.x < neighbor_bounds.0 || p.x > neighbor_bounds.1 || p.y < neighbor_bounds.2 || p.y > neighbor_bounds.3 {
+                                return;
+                            }
+                            if p.z < min_z || p.z > max_z {
+                                return;
+                            }
+                            if is_withheld(p) {
+                                return;
+                            }
+                            if !return_filter_match(p, returns_mode) {
+                                return;
+                            }
+                            if !include_classes[p.classification as usize] {
+                                return;
+                            }
+                            if let Some(value) = select_point_value(p, &parameter) {
+                                if value.is_finite() {
+                                    index.insert(p.x, p.y, value);
+                                }
+                            }
+                        })?;
+                    } else {
+                        let n_cloud = load_lidar_cloud(neighbor_path, "batch-neighbor")?;
+                        for p in &n_cloud.points {
+                            if !p.x.is_finite() || !p.y.is_finite() || !p.z.is_finite() {
+                                continue;
+                            }
+                            if p.x < neighbor_bounds.0 || p.x > neighbor_bounds.1 || p.y < neighbor_bounds.2 || p.y > neighbor_bounds.3 {
+                                continue;
+                            }
+                            if p.z < min_z || p.z > max_z {
+                                continue;
+                            }
+                            if is_withheld(p) {
+                                continue;
+                            }
+                            if !return_filter_match(p, returns_mode) {
+                                continue;
+                            }
+                            if !include_classes[p.classification as usize] {
+                                continue;
+                            }
+                            if let Some(value) = select_point_value(p, &parameter) {
+                                if value.is_finite() {
+                                    index.insert(p.x, p.y, value);
+                                }
                             }
                         }
                     }
@@ -3872,6 +4019,8 @@ impl Tool for LidarIdwInterpolationTool {
                 (Some(index), None)
             } else {
                 // k-nearest fallback: collect primary samples for bounds, then append neighbours.
+                let cloud = load_lidar_cloud(input_lidar_path, "input")?;
+                primary_crs = cloud.crs.clone();
                 let mut primary_samples = collect_lidar_samples(
                     &cloud.points,
                     &parameter,
@@ -3887,8 +4036,7 @@ impl Tool for LidarIdwInterpolationTool {
                     max_y = max_y.max(*y);
                 }
                 for neighbor_path in &neighbor_paths {
-                    let n_cloud = PointCloud::read(neighbor_path)
-                        .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+                    let n_cloud = load_lidar_cloud(Path::new(neighbor_path), "batch-neighbor")?;
                     let mut n_samples = collect_lidar_samples(
                         &n_cloud.points,
                         &parameter,
@@ -3909,6 +4057,12 @@ impl Tool for LidarIdwInterpolationTool {
             };
         let filter_index_s = t_filter.elapsed().as_secs_f64();
 
+        if primary_crs.is_none() {
+            ctx.progress.info(
+                "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
+            );
+        }
+
         let t_output = Instant::now();
         let mut output = build_lidar_output_from_bounds(
             min_x,
@@ -3916,7 +4070,7 @@ impl Tool for LidarIdwInterpolationTool {
             min_y,
             max_y,
             resolution,
-            lidar_crs_to_raster_crs(cloud.crs.as_ref()),
+            lidar_crs_to_raster_crs(primary_crs.as_ref()),
             DataType::F64,
         )?;
         let output_s = t_output.elapsed().as_secs_f64();
@@ -4236,8 +4390,7 @@ impl Tool for LidarTinGriddingTool {
         let run_start = Instant::now();
         ctx.progress.info("reading input lidar");
         let read_start = Instant::now();
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let read_elapsed = read_start.elapsed();
         if cloud.crs.is_none() {
             ctx.progress.info(
@@ -4256,8 +4409,7 @@ impl Tool for LidarTinGriddingTool {
         )?;
         let mut samples = target_samples.clone();
         for neighbor_path in &neighbor_paths {
-            let n_cloud = PointCloud::read(&neighbor_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+            let n_cloud = load_lidar_cloud(Path::new(&neighbor_path), "batch-neighbor")?;
             let mut n_samples = collect_lidar_samples(
                 &n_cloud.points,
                 &parameter,
@@ -4776,8 +4928,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.crs.is_none() {
             ctx.progress.info(
                 "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
@@ -4794,8 +4945,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         )?;
         let mut samples = target_samples.clone();
         for neighbor_path in neighbor_paths {
-            let n_cloud = PointCloud::read(&neighbor_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+            let n_cloud = load_lidar_cloud(Path::new(&neighbor_path), "batch-neighbor")?;
             let mut n_samples = collect_lidar_samples(
                 &n_cloud.points,
                 &parameter,
@@ -5039,8 +5189,7 @@ impl Tool for LidarSibsonInterpolationTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.crs.is_none() {
             ctx.progress.info(
                 "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
@@ -5057,8 +5206,7 @@ impl Tool for LidarSibsonInterpolationTool {
         )?;
         let mut samples = target_samples.clone();
         for neighbor_path in neighbor_paths {
-            let n_cloud = PointCloud::read(&neighbor_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading batch-neighbor lidar '{}': {e}", neighbor_path)))?;
+            let n_cloud = load_lidar_cloud(Path::new(&neighbor_path), "batch-neighbor")?;
             let mut n_samples = collect_lidar_samples(
                 &n_cloud.points,
                 &parameter,
@@ -5606,8 +5754,7 @@ impl Tool for LidarHillshadeTool {
         let (azimuth, altitude) = parse_azimuth_altitude(args);
 
         let run_single = |input_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(input_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(input_path, "input")?;
             if cloud.crs.is_none() {
                 ctx.progress.info(
                     "input LiDAR has no CRS metadata; output raster will be written without CRS assignment",
@@ -5695,8 +5842,7 @@ impl Tool for FilterLidarClassesTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
                 .iter()
@@ -5766,8 +5912,7 @@ impl Tool for LidarShiftTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
                 .iter()
@@ -5833,8 +5978,7 @@ impl Tool for RemoveDuplicatesTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let mut seen_xy: HashSet<(u64, u64)> = HashSet::with_capacity(cloud.points.len());
             let mut seen_xyz: HashSet<(u64, u64, u64)> = HashSet::with_capacity(cloud.points.len());
             let mut points = Vec::with_capacity(cloud.points.len());
@@ -5912,8 +6056,7 @@ impl Tool for FilterLidarScanAnglesTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
                 .iter()
@@ -5971,8 +6114,7 @@ impl Tool for FilterLidarNoiseTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
                 .iter()
@@ -6055,8 +6197,7 @@ impl Tool for LidarThinTool {
         let filtered_output_path = parse_optional_output_path(args, "filtered_output")?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>, filtered_out_path: Option<PathBuf>| -> Result<(String, Option<String>), ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let n = cloud.points.len();
             if n == 0 {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
@@ -6250,8 +6391,7 @@ impl Tool for LidarElevationSliceTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = if !classify {
                 // Filter mode: keep only points inside slice
                 cloud
@@ -6330,8 +6470,7 @@ impl Tool for LidarJoinTool {
         let mut out_points: Vec<PointRecord> = Vec::new();
         let mut out_crs: Option<LidarCrs> = None;
         for input in &inputs {
-            let cloud = PointCloud::read(input)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input)))?;
+            let cloud = load_lidar_cloud(Path::new(input), "input")?;
             if out_crs.is_none() {
                 out_crs = cloud.crs.clone();
             }
@@ -6392,8 +6531,7 @@ impl Tool for LidarThinHighDensityTool {
         let filtered_output_path = parse_optional_output_path(args, "filtered_output")?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>, filtered_out_path: Option<PathBuf>| -> Result<(String, Option<String>), ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let n_points = cloud.points.len();
             if n_points == 0 {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
@@ -6610,8 +6748,7 @@ impl Tool for LidarTileTool {
         }
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             return Err(ToolError::Execution("input lidar contains no points".to_string()));
         }
@@ -6773,8 +6910,7 @@ impl Tool for SortLidarTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let mut order: Vec<usize> = (0..cloud.points.len()).collect();
             order.par_sort_unstable_by(|a, b| {
                 let pa = &cloud.points[*a];
@@ -6868,8 +7004,7 @@ impl Tool for FilterLidarByPercentileTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
                 return store_or_write_lidar_output(&out_cloud, out_path, "filter_lidar_by_percentile");
@@ -6985,8 +7120,7 @@ impl Tool for SplitLidarTool {
         let output_dir_override = parse_optional_output_path(args, "output_directory")?;
 
         let run_single = |in_path: &Path| -> Result<Vec<String>, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 return Ok(Vec::new());
             }
@@ -7140,8 +7274,7 @@ impl Tool for LidarRemoveOutliersTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
                 return store_or_write_lidar_output(&out_cloud, out_path, "lidar_remove_outliers");
@@ -7271,8 +7404,7 @@ impl Tool for NormalizeLidarTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         ctx.progress.info("reading DTM raster");
         let dtm = Raster::read(Path::new(&dtm_path))
             .map_err(|e| ToolError::Execution(format!("failed reading dtm raster '{}': {e}", dtm_path)))?;
@@ -7331,8 +7463,7 @@ impl Tool for HeightAboveGroundTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
 
         let mut tree: KdTree<f64, f64, [f64; 2]> = KdTree::new(2);
         for p in &cloud.points {
@@ -7429,8 +7560,7 @@ impl Tool for LidarGroundPointFilterTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
                 return store_or_write_lidar_output(&out_cloud, out_path, "lidar_ground_point_filter");
@@ -7591,8 +7721,7 @@ impl Tool for FilterLidarTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
                 return store_or_write_lidar_output(&out_cloud, out_path, "filter_lidar");
@@ -7709,12 +7838,7 @@ impl Tool for ModifyLidarTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!(
-                    "failed reading input lidar '{}': {e}",
-                    in_path.to_string_lossy()
-                ))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
 
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
@@ -7955,11 +8079,9 @@ impl Tool for FilterLidarByReferenceSurfaceTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         ctx.progress.info("reading reference surface");
-        let surface = Raster::read(Path::new(&ref_surface_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading reference surface '{}': {e}", ref_surface_path)))?;
+        let surface = load_raster_path_or_memory(&ref_surface_path, "reference surface")?;
 
         let mut matches = vec![false; cloud.points.len()];
         for (i, p) in cloud.points.iter().enumerate() {
@@ -8067,8 +8189,7 @@ impl Tool for ClassifyLidarTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
                 return store_or_write_lidar_output(&out_cloud, out_path, "classify_lidar");
@@ -8509,10 +8630,8 @@ impl Tool for LidarClassifySubsetTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading base and subset lidar");
-        let base = PointCloud::read(Path::new(&base_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading base lidar '{}': {e}", base_path)))?;
-        let subset = PointCloud::read(Path::new(&subset_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading subset lidar '{}': {e}", subset_path)))?;
+        let base = load_lidar_cloud(Path::new(&base_path), "base")?;
+        let subset = load_lidar_cloud(Path::new(&subset_path), "subset")?;
 
         let mut tree = KdTree::new(3);
         for (i, p) in subset.points.iter().enumerate() {
@@ -8577,8 +8696,7 @@ impl Tool for ClipLidarToPolygonTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar and polygons");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let polys = read_prepared_polygons(&poly_path)?;
 
         let points: Vec<PointRecord> = cloud
@@ -8627,8 +8745,7 @@ impl Tool for ErasePolygonFromLidarTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar and polygons");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let polys = read_prepared_polygons(&poly_path)?;
 
         let points: Vec<PointRecord> = cloud
@@ -8689,8 +8806,7 @@ impl Tool for ClassifyOverlapPointsTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "classify_overlap_points")?;
             return Ok(build_lidar_result(locator));
@@ -8851,8 +8967,7 @@ impl Tool for LidarSegmentationTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
 
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "lidar_segmentation")?;
@@ -9138,9 +9253,7 @@ impl Tool for IndividualTreeSegmentationTool {
         let use_point_source_id = output_id_mode.contains("point_source_id");
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path)).map_err(|e| {
-            ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-        })?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "individual_tree_segmentation")?;
             return Ok(build_lidar_result(locator));
@@ -9525,8 +9638,7 @@ impl Tool for IndividualTreeDetectionTool {
 
         // Read input LiDAR
         ctx.progress.info("Reading input LiDAR");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("Failed to read input LiDAR: {}", e)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
 
         let n_points = cloud.points.len();
         let coalescer = PercentCoalescer::new(1, 99);
@@ -9671,8 +9783,7 @@ impl Tool for LidarSegmentationBasedFilterTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
 
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "lidar_segmentation_based_filter")?;
@@ -9777,8 +9888,7 @@ impl Tool for LidarColourizeTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar and image raster");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let image = Raster::read(Path::new(&image_path))
             .map_err(|e| ToolError::Execution(format!("failed reading input image '{}': {e}", image_path)))?;
 
@@ -9852,8 +9962,7 @@ impl Tool for ColourizeBasedOnClassTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
 
             let mut palette = default_class_palette();
             if !clr_str.trim().is_empty() {
@@ -10013,8 +10122,7 @@ impl Tool for ColourizeBasedOnPointReturnsTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path)
-                .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy())))?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
 
             let mut points = cloud.points.clone();
             for p in &mut points {
@@ -10089,8 +10197,7 @@ impl Tool for ClassifyBuildingsInLidarTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         ctx.progress.info("reading input lidar and building polygons");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let polys = read_prepared_polygons(&buildings_path)?;
 
         let mut points = cloud.points.clone();
@@ -10295,12 +10402,7 @@ impl Tool for LasToAsciiTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!(
-                    "failed reading input lidar '{}': {e}",
-                    in_path.to_string_lossy()
-                ))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let out = out_path.unwrap_or_else(|| derived_ascii_output_from_lidar(in_path));
             write_point_cloud_as_csv(&cloud, &out)?;
             Ok(out.to_string_lossy().to_string())
@@ -10422,12 +10524,7 @@ impl Tool for SelectTilesByPolygonTool {
         let copied = tile_paths
             .par_iter()
             .map(|tile| -> Result<Option<PathBuf>, ToolError> {
-                let cloud = PointCloud::read(tile).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed reading lidar tile '{}': {e}",
-                        tile.to_string_lossy()
-                    ))
-                })?;
+                let cloud = load_lidar_cloud(tile, "tile")?;
                 let Some(samples) = lidar_bbox_sample_points(&cloud) else {
                     return Ok(None);
                 };
@@ -10504,8 +10601,7 @@ impl Tool for LidarInfoTool {
         let show_density = parse_bool_alias(args, &["show_point_density"], true);
 
         ctx.progress.info("reading lidar and building info report");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let n = cloud.points.len();
         let mut min_x = f64::INFINITY;
         let mut max_x = f64::NEG_INFINITY;
@@ -10628,8 +10724,7 @@ impl Tool for LidarHistogramTool {
         let clip_percent = parse_f64_alias(args, &["clip_percent", "clip"], 1.0);
 
         ctx.progress.info("reading lidar and computing histogram bins");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             return Err(ToolError::Execution("input LiDAR has no points".to_string()));
         }
@@ -10757,9 +10852,7 @@ impl Tool for LidarPointStatsTool {
         }
 
         let run_single = |in_path: &Path, out_dir_override: Option<&Path>| -> Result<Vec<String>, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy()))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 return Ok(Vec::new());
             }
@@ -10998,9 +11091,7 @@ impl Tool for LidarContourTool {
         let max_edge_sq = if max_edge.is_finite() { max_edge * max_edge } else { f64::INFINITY };
 
         let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy()))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let samples = collect_lidar_samples(
                 &cloud.points,
                 &parameter,
@@ -11158,9 +11249,7 @@ impl Tool for LidarTileFootprintTool {
 
         let mut fid = 1i64;
         for file in &files {
-            let cloud = PointCloud::read(file).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", file.to_string_lossy()))
-            })?;
+            let cloud = load_lidar_cloud(file, "input")?;
             if layer.crs.is_none() {
                 layer.crs = lidar_crs_to_vector_crs(cloud.crs.as_ref());
             }
@@ -11293,9 +11382,7 @@ impl Tool for LidarConstructVectorTinTool {
                 };
 
                 let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
-                    let cloud = PointCloud::read(in_path).map_err(|e| {
-                        ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy()))
-                    })?;
+                    let cloud = load_lidar_cloud(in_path, "input")?;
                     let samples = collect_lidar_samples(
                         &cloud.points,
                         "elevation",
@@ -11427,9 +11514,7 @@ impl Tool for LidarConstructVectorTinTool {
                 let is_vertical = orientation.starts_with('v');
 
                 ctx.progress.info("building hexagonal bins from lidar points");
-                let cloud = PointCloud::read(Path::new(&input_path)).map_err(|e| {
-                    ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-                })?;
+                let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
                 if cloud.points.is_empty() {
                     return Err(ToolError::Execution("input lidar has no points".to_string()));
                 }
@@ -11588,9 +11673,7 @@ impl Tool for LidarConstructVectorTinTool {
                 let report_path = parse_optional_output_path(args, "report")?;
 
                 ctx.progress.info("analyzing lidar return sequence quality");
-                let cloud = PointCloud::read(Path::new(&input_path)).map_err(|e| {
-                    ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-                })?;
+                let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
                 if cloud.points.is_empty() {
                     return Err(ToolError::Execution("input lidar has no points".to_string()));
                 }
@@ -11764,9 +11847,7 @@ impl Tool for LasToShapefileTool {
         let output_multipoint = parse_bool_alias(args, &["output_multipoint"], false);
 
         let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy()))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
 
             let mut layer = if output_multipoint {
                 wbvector::Layer::new("las_to_multipoint").with_geom_type(wbvector::GeometryType::MultiPoint)
@@ -11885,12 +11966,7 @@ impl Tool for FlightlineOverlapTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!(
-                    "failed reading input lidar '{}': {e}",
-                    in_path.to_string_lossy()
-                ))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
 
             let active_points: Vec<&PointRecord> = cloud
                 .points
@@ -12028,9 +12104,7 @@ impl Tool for RecoverFlightlineInfoTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("recovering flightline identifiers from gps time");
-        let cloud = PointCloud::read(Path::new(&input_path)).map_err(|e| {
-            ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-        })?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "recover_flightline_info")?;
             ctx.progress.progress(1.0);
@@ -12131,9 +12205,7 @@ impl Tool for FindFlightlineEdgePointsTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("extracting flightline edge points");
-        let cloud = PointCloud::read(Path::new(&input_path)).map_err(|e| {
-            ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-        })?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let out_cloud = PointCloud {
             points: cloud
                 .points
@@ -12182,8 +12254,7 @@ impl Tool for LidarTophatTransformTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("performing lidar tophat transform");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
 
         let mut tree = KdTree::new(2);
         for (i, p) in cloud.points.iter().enumerate() {
@@ -12253,8 +12324,7 @@ impl Tool for NormalVectorsTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("calculating lidar normal vectors");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let mut search_radius = parse_f64_alias(args, &["search_radius", "radius"], -1.0);
         if search_radius <= 0.0 {
             search_radius = estimate_nominal_spacing(&cloud) * 3.0;
@@ -12330,10 +12400,8 @@ impl Tool for LidarKappaTool {
         let resolution = parse_f64_alias(args, &["resolution", "cell_size"], 1.0);
 
         ctx.progress.info("computing lidar kappa agreement");
-        let classification = PointCloud::read(Path::new(&input1_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input1 '{}': {e}", input1_path)))?;
-        let reference = PointCloud::read(Path::new(&input2_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input2 '{}': {e}", input2_path)))?;
+        let classification = load_lidar_cloud(Path::new(&input1_path), "input1")?;
+        let reference = load_lidar_cloud(Path::new(&input2_path), "input2")?;
 
         let mut tree = KdTree::new(3);
         for (i, p) in reference.points.iter().enumerate() {
@@ -12505,9 +12573,7 @@ impl Tool for LidarEigenvalueFeaturesTool {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
-            let cloud = PointCloud::read(in_path).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", in_path.to_string_lossy()))
-            })?;
+            let cloud = load_lidar_cloud(in_path, "input")?;
             let mut tree = KdTree::new(3);
             for (i, p) in cloud.points.iter().enumerate() {
                 tree.add([p.x, p.y, p.z], i)
@@ -12666,8 +12732,7 @@ impl Tool for LidarRansacPlanesTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("identifying planar lidar points with ransac");
-        let cloud = PointCloud::read(Path::new(&input_path))
-            .map_err(|e| ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path)))?;
+        let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         if cloud.points.is_empty() {
             let locator = store_or_write_lidar_output(&cloud, output_path, "lidar_ransac_planes")?;
             return Ok(build_lidar_result(locator));
@@ -12802,8 +12867,7 @@ impl Tool for LidarRooftopAnalysisTool {
         let altitude = parse_f64_alias(args, &["altitude"], 30.0).to_radians();
 
         ctx.progress.info("analyzing rooftop facets within building footprints");
-        let buildings = wbvector::read(&buildings_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading building footprints '{}': {e}", buildings_path)))?;
+        let buildings = load_vector(&buildings_path, "building_footprints")?;
 
         let mut feature_polys: Vec<Vec<PreparedPolygon>> = Vec::new();
         for feature in &buildings.features {
@@ -12818,9 +12882,7 @@ impl Tool for LidarRooftopAnalysisTool {
         let mut building_ids: Vec<usize> = Vec::new();
         let mut crs = None;
         for input_path in &input_paths {
-            let cloud = PointCloud::read(Path::new(input_path)).map_err(|e| {
-                ToolError::Execution(format!("failed reading input lidar '{}': {e}", input_path))
-            })?;
+            let cloud = load_lidar_cloud(Path::new(input_path), "input")?;
             if crs.is_none() {
                 crs = cloud.crs.clone();
             }
@@ -12974,6 +13036,40 @@ impl Tool for LidarRooftopAnalysisTool {
 mod tests {
     use super::*;
     use serde_json::json;
+    use wbcore::{AllowAllCapabilities, ProgressSink, ToolContext};
+
+    struct NoopProgress;
+    impl ProgressSink for NoopProgress {}
+
+    fn make_ctx() -> ToolContext<'static> {
+        static PROGRESS: NoopProgress = NoopProgress;
+        static CAPS: AllowAllCapabilities = AllowAllCapabilities;
+        ToolContext {
+            progress: &PROGRESS,
+            capabilities: &CAPS,
+        }
+    }
+
+    fn make_test_point_cloud() -> PointCloud {
+        let mut cloud = PointCloud::default();
+        cloud.assign_crs_epsg(32617);
+
+        for y in 0..6 {
+            for x in 0..6 {
+                let mut p = PointRecord::default();
+                p.x = x as f64;
+                p.y = y as f64;
+                p.z = 100.0 + (x as f64 * 0.2) + (y as f64 * 0.1);
+                p.intensity = 120;
+                p.return_number = 1;
+                p.number_of_returns = 1;
+                p.classification = if (x + y) % 5 == 0 { 5 } else { 1 };
+                cloud.points.push(p);
+            }
+        }
+
+        cloud
+    }
 
     #[test]
     fn lidar_crs_prefers_epsg_when_available() {
@@ -13007,6 +13103,64 @@ mod tests {
 
         args.insert("returns_included".to_string(), json!(0));
         assert!(matches!(parse_returns_mode(&args), ReturnsMode::All));
+    }
+
+    #[test]
+    fn lidar_nearest_neighbour_gridding_accepts_memory_input() {
+        let cloud = make_test_point_cloud();
+        let in_id = lidar_memory_store::put_lidar(cloud);
+        let in_path = lidar_memory_store::make_lidar_memory_path(&in_id);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(in_path));
+        args.insert("resolution".to_string(), json!(1.0));
+        args.insert("search_radius".to_string(), json!(3.0));
+        args.insert("interpolation_parameter".to_string(), json!("elevation"));
+
+        let result = LidarNearestNeighbourGriddingTool
+            .run(&args, &make_ctx())
+            .expect("lidar_nearest_neighbour_gridding should run from memory input");
+
+        let out_path = result
+            .outputs
+            .get("path")
+            .and_then(|v| v.as_str())
+            .expect("result missing path output");
+        assert!(
+            memory_store::raster_is_memory_path(out_path),
+            "expected memory raster output path, got {out_path}"
+        );
+        let out_id = memory_store::raster_path_to_id(out_path).expect("invalid memory raster path");
+        let out = memory_store::get_raster_by_id(out_id).expect("missing raster in memory store");
+        assert!(out.rows > 0 && out.cols > 0, "expected non-empty output raster");
+    }
+
+    #[test]
+    fn filter_lidar_classes_accepts_memory_input() {
+        let cloud = make_test_point_cloud();
+        let original_len = cloud.points.len();
+        let in_id = lidar_memory_store::put_lidar(cloud);
+        let in_path = lidar_memory_store::make_lidar_memory_path(&in_id);
+
+        let mut args = ToolArgs::new();
+        args.insert("input".to_string(), json!(in_path));
+        args.insert("excluded_classes".to_string(), json!([5]));
+
+        let result = FilterLidarClassesTool
+            .run(&args, &make_ctx())
+            .expect("filter_lidar_classes should run from memory input");
+
+        let out_path = result
+            .outputs
+            .get("path")
+            .and_then(|v| v.as_str())
+            .expect("result missing path output");
+        let out = PointCloud::read(Path::new(out_path)).expect("failed reading filtered lidar output");
+        assert!(out.points.len() < original_len, "expected filtered cloud to remove points");
+        assert!(
+            out.points.iter().all(|p| p.classification != 5),
+            "filtered output still contains excluded class 5"
+        );
     }
 
 }

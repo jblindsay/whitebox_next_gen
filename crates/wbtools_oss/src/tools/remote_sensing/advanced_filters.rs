@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -103,12 +104,12 @@ impl AdvancedFilters {
         parse_raster_path_arg(args, "input")
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'input' has malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -117,6 +118,7 @@ impl AdvancedFilters {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 

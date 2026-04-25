@@ -121,9 +121,21 @@ fn write_vector_output(layer: &Layer, output_path: &Path) -> Result<ToolRunResul
 }
 
 fn read_vector_layer(path: &str, label: &str) -> Result<Layer, ToolError> {
-    wbvector::read(path).map_err(|e| {
-        ToolError::Validation(format!("failed reading {label} vector '{path}': {e}"))
-    })
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!("failed reading {label} vector '{path}': malformed in-memory vector path"))
+        })?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "failed reading {label} vector '{path}': unknown in-memory vector id '{id}'"
+                ))
+            });
+    }
+
+    wbvector::read(path)
+        .map_err(|e| ToolError::Validation(format!("failed reading {label} vector '{path}': {e}")))
 }
 
 fn write_string_output(key: &str, value: String) -> ToolRunResult {

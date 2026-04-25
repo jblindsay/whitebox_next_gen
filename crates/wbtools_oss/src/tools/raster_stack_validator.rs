@@ -408,17 +408,17 @@ mod tests {
     #[test]
     fn test_crs_compatible() {
         // Same EPSG
-        let crs1 = CrsInfo { epsg: Some(4326), wkt: None };
-        let crs2 = CrsInfo { epsg: Some(4326), wkt: None };
+        let crs1 = CrsInfo { epsg: Some(4326), wkt: None, proj4: None };
+        let crs2 = CrsInfo { epsg: Some(4326), wkt: None, proj4: None };
         assert!(crs_compatible(&crs1, &crs2));
         
         // Different EPSG
-        let crs3 = CrsInfo { epsg: Some(3857), wkt: None };
+        let crs3 = CrsInfo { epsg: Some(3857), wkt: None, proj4: None };
         assert!(!crs_compatible(&crs1, &crs3));
         
         // Both default (empty)
-        let crs4 = CrsInfo { epsg: None, wkt: None };
-        let crs5 = CrsInfo { epsg: None, wkt: None };
+        let crs4 = CrsInfo { epsg: None, wkt: None, proj4: None };
+        let crs5 = CrsInfo { epsg: None, wkt: None, proj4: None };
         assert!(crs_compatible(&crs4, &crs5));
     }
 }

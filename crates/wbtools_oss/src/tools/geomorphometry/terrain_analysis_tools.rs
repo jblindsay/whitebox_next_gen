@@ -1,6 +1,8 @@
 //! Terrain analysis tools: ruggedness index, surface area ratio,
 //! elevation relative to min/max, and wetness index.
 
+use std::sync::Arc;
+
 use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
@@ -71,14 +73,14 @@ impl TerrainAnalysisCore {
         parse_raster_path_arg(args, "input")
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation(
                     "parameter 'input' has malformed in-memory raster path".to_string(),
                 )
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}'",
                     id
@@ -86,10 +88,11 @@ impl TerrainAnalysisCore {
             });
         }
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
-    fn load_named_raster(args: &ToolArgs, key: &str) -> Result<Raster, ToolError> {
+    fn load_named_raster(args: &ToolArgs, key: &str) -> Result<Arc<Raster>, ToolError> {
         let path = parse_raster_path_arg(args, key)?;
         if memory_store::raster_is_memory_path(&path) {
             let id = memory_store::raster_path_to_id(&path).ok_or_else(|| {
@@ -98,7 +101,7 @@ impl TerrainAnalysisCore {
                     key
                 ))
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter '{}' references unknown in-memory raster id '{}'",
                     key, id
@@ -106,7 +109,31 @@ impl TerrainAnalysisCore {
             });
         }
         Raster::read(&path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading '{}' raster: {}", key, e)))
+    }
+
+    fn load_vector(path: &str, label: &str) -> Result<wbvector::Layer, ToolError> {
+        if wbvector::memory_store::vector_is_memory_path(path) {
+            let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "parameter '{}' has malformed in-memory vector path",
+                    label
+                ))
+            })?;
+            return wbvector::memory_store::get_vector_arc_by_id(id)
+                .map(|layer| layer.as_ref().clone())
+                .ok_or_else(|| {
+                    ToolError::Validation(format!(
+                        "parameter '{}' references unknown in-memory vector id '{}'",
+                        label, id
+                    ))
+                });
+        }
+
+        wbvector::read(path).map_err(|e| {
+            ToolError::Execution(format!("failed reading {} vector '{}': {}", label, path, e))
+        })
     }
 
     fn raster_is_geographic(input: &Raster) -> bool {
@@ -1377,9 +1404,7 @@ impl TerrainAnalysisCore {
             }
         }
 
-        let lines = wbvector::read(&lines_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading lines vector '{}': {}", lines_path, e))
-        })?;
+        let lines = Self::load_vector(&lines_path, "lines")?;
         let surface = Self::load_raster(&surface_path)?;
         let nodata = surface.nodata;
 
@@ -2164,7 +2189,7 @@ impl TerrainAnalysisCore {
         let mid = filter_size / 2;
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -2323,7 +2348,7 @@ impl TerrainAnalysisCore {
         let hgt_inc = args.get("hgt_inc").and_then(|v| v.as_f64()).unwrap_or(0.05);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -2432,7 +2457,7 @@ impl TerrainAnalysisCore {
         let line_thin = args.get("line_thin").and_then(|v| v.as_bool()).unwrap_or(true);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -2924,9 +2949,7 @@ impl TerrainAnalysisCore {
             .max(4) as isize;
 
         ctx.progress.info("running assess_route");
-        let routes = wbvector::read(&routes_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading routes vector '{}': {}", routes_path, e))
-        })?;
+        let routes = Self::load_vector(&routes_path, "routes")?;
         let dem = Self::load_raster(&dem_path)?;
 
         if Self::raster_is_geographic(&dem) {
@@ -3880,10 +3903,10 @@ impl TerrainAnalysisCore {
             flatness_distance = 0;
         }
 
-        let source = std::sync::Arc::new(Self::load_raster(&input_path)?);
+        let source = Self::load_raster(&input_path)?;
         let analysis_input = if analyze_residuals {
             ctx.progress.info("calculating residuals");
-            std::sync::Arc::new(Self::detrend_raster_to_residuals(&source))
+            std::sync::Arc::new(Self::detrend_raster_to_residuals(source.as_ref()))
         } else {
             source.clone()
         };
@@ -4118,14 +4141,12 @@ impl TerrainAnalysisCore {
         let height = args.get("height").and_then(|v| v.as_f64()).unwrap_or(2.0).max(0.0);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let nodata = input.nodata;
 
-        let stations_layer = wbvector::read(&stations_path).map_err(|e| {
-            ToolError::Validation(format!("failed reading stations vector '{}': {}", stations_path, e))
-        })?;
+        let stations_layer = Self::load_vector(&stations_path, "stations")?;
         let station_points = Self::parse_vector_points(&stations_layer)?;
 
         let mut station_pixels: Vec<(usize, usize, f64)> = Vec::new();
@@ -4621,7 +4642,7 @@ impl TerrainAnalysisCore {
         let mid_y = filter_size_y / 2;
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -4715,7 +4736,7 @@ impl TerrainAnalysisCore {
         let mid_y = filter_size_y / 2;
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -4816,7 +4837,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -4891,7 +4912,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -4966,7 +4987,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5049,7 +5070,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5132,7 +5153,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5231,7 +5252,7 @@ impl TerrainAnalysisCore {
         let multiplier = 10f64.powi(sig_digits);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5341,7 +5362,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(false);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         output.data_type = DataType::F32;
         let rows = input.rows;
         let cols = input.cols;
@@ -5587,7 +5608,7 @@ impl TerrainAnalysisCore {
             .to_ascii_lowercase();
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5729,7 +5750,7 @@ impl TerrainAnalysisCore {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -5895,7 +5916,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(f64::INFINITY);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6041,7 +6062,7 @@ impl TerrainAnalysisCore {
         };
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6317,7 +6338,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(1.0);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6454,7 +6475,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(1.0);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6650,7 +6671,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(1.0);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6784,7 +6805,7 @@ impl TerrainAnalysisCore {
             .unwrap_or(1.0);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -6947,7 +6968,7 @@ impl TerrainAnalysisCore {
         ctx.progress.info("running ruggedness_index");
         ctx.progress.info("reading input raster");
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -7112,7 +7133,7 @@ impl TerrainAnalysisCore {
         ctx.progress.info("running surface_area_ratio");
         ctx.progress.info("reading input raster");
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -7300,7 +7321,7 @@ impl TerrainAnalysisCore {
         ctx.progress.info("running elev_relative_to_min_max");
         ctx.progress.info("reading input raster");
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -7465,7 +7486,7 @@ impl TerrainAnalysisCore {
             ));
         }
 
-        let mut output = sca.clone();
+        let mut output = sca.as_ref().clone();
         let rows = sca.rows;
         let cols = sca.cols;
         let bands = sca.bands;

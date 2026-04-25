@@ -124,6 +124,8 @@ pub mod flatgeobuf;
 pub mod geojson;
 pub mod geometry;
 pub mod geopackage;
+/// In-process vector memory store for passing vectors between tools without disk I/O.
+pub mod memory_store;
 #[cfg(feature = "geoparquet")]
 pub mod geoparquet;
 pub mod gml;

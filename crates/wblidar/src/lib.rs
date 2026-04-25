@@ -30,6 +30,8 @@ pub mod frontend;
 pub mod io;
 pub mod las;
 pub mod laz;
+/// In-process LiDAR memory-store utilities and `memory://lidar/<id>` path helpers.
+pub mod memory_store;
 pub mod ply;
 pub mod point;
 pub mod reproject;

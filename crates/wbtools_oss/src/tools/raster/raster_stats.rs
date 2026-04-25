@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Arc;
 
 use evalexpr::{build_operator_tree, ContextWithMutableVariables, DefaultNumericTypes, HashMapContext, Value as EvalValue};
 use nalgebra::{DMatrix, DVector};
@@ -72,6 +73,51 @@ fn load_raster(path: &str, param_name: &str) -> Result<Raster, ToolError> {
     Raster::read(path).map_err(|e| {
         ToolError::Execution(format!("failed reading {} raster: {}", param_name, e))
     })
+}
+
+fn load_raster_arc(path: &str, param_name: &str) -> Result<Arc<Raster>, ToolError> {
+    if memory_store::raster_is_memory_path(path) {
+        let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!(
+                "parameter '{}' has malformed in-memory raster path",
+                param_name
+            ))
+        })?;
+        return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
+            ToolError::Validation(format!(
+                "parameter '{}' references unknown in-memory raster id '{}': store entry is missing",
+                param_name, id
+            ))
+        });
+    }
+
+    Raster::read(path)
+        .map(Arc::new)
+        .map_err(|e| {
+            ToolError::Execution(format!("failed reading {} raster: {}", param_name, e))
+        })
+}
+
+fn load_vector(path: &str, param_name: &str) -> Result<wbvector::Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+            ToolError::Validation(format!(
+                "parameter '{}' has malformed in-memory vector path",
+                param_name
+            ))
+        })?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "parameter '{}' references unknown in-memory vector id '{}': store entry is missing",
+                    param_name, id
+                ))
+            });
+    }
+
+    wbvector::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading {} vector: {}", param_name, e)))
 }
 
 fn write_or_store_output(output: Raster, output_path: Option<std::path::PathBuf>) -> Result<String, ToolError> {
@@ -421,7 +467,7 @@ where
 {
     let input1_path = parse_raster_path_arg(args, "input1")?;
     let input2 = parse_raster_or_constant_arg(args, "input2")?;
-    let mut in1 = load_raster(&input1_path, "input1")?;
+    let mut in1 = (*load_raster_arc(&input1_path, "input1")?).clone();
 
     match input2 {
         RasterOrConstant::Constant(c) => {
@@ -2263,8 +2309,7 @@ impl Tool for AttributeHistogramTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
 
-        let layer = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading vector '{}': {}", input_path, e)))?;
+        let layer = load_vector(&input_path, "input")?;
         let values = collect_numeric_field_values(&layer, field)?;
         if values.is_empty() {
             return Err(ToolError::Validation("field contains no numeric values".to_string()));
@@ -2361,8 +2406,7 @@ impl Tool for AttributeScattergramTool {
         let fieldy = args.get("fieldy").and_then(|v| v.as_str()).ok_or_else(|| ToolError::Validation("parameter 'fieldy' is required".to_string()))?;
         let trendline = args.get("trendline").and_then(|v| v.as_bool()).unwrap_or(false);
 
-        let layer = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading vector '{}': {}", input_path, e)))?;
+        let layer = load_vector(&input_path, "input")?;
         let ix = layer
             .schema
             .field_index(fieldx)
@@ -2491,8 +2535,7 @@ impl Tool for AttributeCorrelationTool {
 
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
-        let layer = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading vector '{}': {}", input_path, e)))?;
+        let layer = load_vector(&input_path, "input")?;
 
         let mut numeric_indices = Vec::<usize>::new();
         let mut field_names = Vec::<String>::new();
@@ -3018,9 +3061,9 @@ impl Tool for ImageCorrelationTool {
             ));
         }
 
-        let mut rasters = Vec::<Raster>::new();
+        let mut rasters = Vec::<Arc<Raster>>::new();
         for p in &input_paths {
-            rasters.push(load_raster(p, "inputs")?);
+            rasters.push(load_raster_arc(p, "inputs")?);
         }
 
         let rows = rasters[0].rows;
@@ -3192,9 +3235,9 @@ impl Tool for ImageAutocorrelationTool {
             (vec![1, 0, -1, 0], vec![0, 1, 0, -1])
         };
 
-        let mut rasters = Vec::<Raster>::new();
+        let mut rasters = Vec::<Arc<Raster>>::new();
         for p in &input_paths {
-            rasters.push(load_raster(p, "inputs")?);
+            rasters.push(load_raster_arc(p, "inputs")?);
         }
 
         if rasters.is_empty() {
@@ -5277,8 +5320,7 @@ impl Tool for ListUniqueValuesTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Validation("parameter 'field' is required".to_string()))?;
 
-        let layer = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading vector '{}': {}", input_path, e)))?;
+        let layer = load_vector(&input_path, "input")?;
         let idx = layer
             .schema
             .field_index(field)
@@ -6015,8 +6057,7 @@ impl Tool for TrendSurfaceVectorPointsTool {
         let order = args.get("polynomial_order").and_then(|v| v.as_u64()).map(|v| (v as usize).clamp(1, 10)).unwrap_or(1);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let layer = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading vector file: {e}")))?;
+        let layer = load_vector(&input_path, "input")?;
 
         let field_idx = layer.schema.field_index(&field_name)
             .ok_or_else(|| ToolError::Validation(format!("field '{}' not found in vector layer", field_name)))?;

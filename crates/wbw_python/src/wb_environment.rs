@@ -32,7 +32,7 @@ use wblidar::reproject::{
     LidarReprojectOptions,
     TransformFailurePolicy as LidarTransformFailurePolicy,
 };
-use wblidar::{LidarFormat, PointCloud, PointColumnChunkReader, PointField};
+use wblidar::{memory_store as lidar_memory_store, LidarFormat, PointCloud, PointColumnChunkReader, PointField};
 use wbprojection::{
     epsg_from_srs_reference,
     identify_epsg_from_wkt_with_policy,
@@ -47,7 +47,7 @@ use wbvector::reproject::{
     TransformFailurePolicy as VectorTransformFailurePolicy,
     VectorReprojectOptions,
 };
-use wbvector::{FieldDef, FieldType, FieldValue, Layer as WbLayer, VectorFormat};
+use wbvector::{memory_store as vector_memory_store, FieldDef, FieldType, FieldValue, Layer as WbLayer, VectorFormat};
 
 use crate::{map_tool_error, parse_tier, PyCallbackSink, PythonToolRuntime};
 
@@ -744,7 +744,7 @@ fn write_raster_with_controls_for_env(
             ))
         })?;
 
-        let stored = memory_store::get_raster_by_id(id).ok_or_else(|| {
+        let stored = memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
             PyErr::new::<pyo3::exceptions::PyKeyError, _>(format!(
                 "Raster not found in memory store: {}",
                 raster.file_path.display()
@@ -857,6 +857,24 @@ fn detect_vector_output_format(path: &Path) -> PyResult<VectorFormat> {
 }
 
 fn read_vector_layer_for_python(vector: &Vector) -> PyResult<WbLayer> {
+    let vector_path = vector.file_path.to_string_lossy();
+    if vector_memory_store::vector_is_memory_path(&vector_path) {
+        let id = vector_memory_store::vector_path_to_id(&vector_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid in-memory vector path '{}'",
+                vector.file_path.display()
+            ))
+        })?;
+        return vector_memory_store::get_vector_arc_by_id(id)
+            .map(|v| v.as_ref().clone())
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory vector '{}' no longer exists",
+                    vector.file_path.display()
+                ))
+            });
+    }
+
     wbvector::read(&vector.file_path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
             "failed to read vector '{}': {e}",
@@ -866,11 +884,81 @@ fn read_vector_layer_for_python(vector: &Vector) -> PyResult<WbLayer> {
 }
 
 fn write_vector_layer_for_python(vector: &Vector, layer: &WbLayer) -> PyResult<()> {
+    let vector_path = vector.file_path.to_string_lossy();
+    if vector_memory_store::vector_is_memory_path(&vector_path) {
+        let id = vector_memory_store::vector_path_to_id(&vector_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid in-memory vector path '{}'",
+                vector.file_path.display()
+            ))
+        })?;
+        if vector_memory_store::replace_vector_by_id(id, layer.clone()) {
+            return Ok(());
+        }
+        return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+            "in-memory vector '{}' no longer exists",
+            vector.file_path.display()
+        )));
+    }
+
     let format = detect_vector_output_format(&vector.file_path)?;
     wbvector::write(layer, &vector.file_path, format).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
             "failed to write vector '{}': {e}",
             vector.file_path.display()
+        ))
+    })
+}
+
+fn read_lidar_cloud_for_python(lidar: &Lidar) -> PyResult<PointCloud> {
+    let lidar_path = lidar.file_path.to_string_lossy();
+    if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+        let id = lidar_memory_store::lidar_path_to_id(&lidar_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid in-memory lidar path '{}'",
+                lidar.file_path.display()
+            ))
+        })?;
+        return lidar_memory_store::get_lidar_arc_by_id(id)
+            .map(|pc| pc.as_ref().clone())
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+                    "in-memory lidar '{}' no longer exists",
+                    lidar.file_path.display()
+                ))
+            });
+    }
+
+    PointCloud::read(&lidar.file_path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to read lidar '{}': {e}",
+            lidar.file_path.display()
+        ))
+    })
+}
+
+fn write_lidar_cloud_for_python(lidar: &Lidar, cloud: &PointCloud) -> PyResult<()> {
+    let lidar_path = lidar.file_path.to_string_lossy();
+    if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+        let id = lidar_memory_store::lidar_path_to_id(&lidar_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "invalid in-memory lidar path '{}'",
+                lidar.file_path.display()
+            ))
+        })?;
+        if lidar_memory_store::replace_lidar_by_id(id, cloud.clone()) {
+            return Ok(());
+        }
+        return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
+            "in-memory lidar '{}' no longer exists",
+            lidar.file_path.display()
+        )));
+    }
+
+    cloud.write(&lidar.file_path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to write lidar '{}': {e}",
+            lidar.file_path.display()
         ))
     })
 }
@@ -4819,7 +4907,9 @@ impl Raster {
     fn pin(&self) -> PyResult<PinnedRasterView> {
         let raster_path = self.file_path.to_string_lossy().to_string();
         if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
-            let r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+            let r = memory_store::get_raster_arc_by_id(id)
+                .map(|r| r.as_ref().clone())
+                .ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
                     "in-memory raster '{}' no longer exists",
                     self.file_path.display()
@@ -6227,7 +6317,7 @@ impl Raster {
         let raster_path = self.file_path.to_string_lossy();
 
         if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
-            let r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+            let r = memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
                     "in-memory raster '{}' no longer exists",
                     self.file_path.display()
@@ -6248,7 +6338,9 @@ impl Raster {
         let raster_path = self.file_path.to_string_lossy();
 
         if let Some(id) = memory_store::raster_path_to_id(&raster_path) {
-            let mut r = memory_store::get_raster_by_id(id).ok_or_else(|| {
+            let mut r = memory_store::get_raster_arc_by_id(id)
+                .map(|r| r.as_ref().clone())
+                .ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
                     "in-memory raster '{}' no longer exists",
                     self.file_path.display()
@@ -6613,6 +6705,12 @@ impl Vector {
     }
 
     fn exists(&self) -> bool {
+        let vector_path = self.file_path.to_string_lossy();
+        if vector_memory_store::vector_is_memory_path(&vector_path) {
+            return vector_memory_store::vector_path_to_id(&vector_path)
+                .and_then(vector_memory_store::get_vector_arc_by_id)
+                .is_some();
+        }
         self.file_path.exists()
     }
 
@@ -6866,12 +6964,7 @@ impl Vector {
             json!({"type":"message","message":format!("Reprojecting vector to EPSG:{}", dst_epsg)}),
         )?;
 
-        let layer = wbvector::read(&self.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read vector '{}': {e}",
-                self.file_path.display()
-            ))
-        })?;
+        let layer = read_vector_layer_for_python(self)?;
 
         let mut options = VectorReprojectOptions::new()
             .with_failure_policy(parse_vector_failure_policy(failure_policy)?)
@@ -6907,13 +7000,10 @@ impl Vector {
         })?;
 
         let out_path = resolve_unary_output_path(&self.file_path, "reproject", output_path, None);
-        let format = detect_vector_output_format(&out_path)?;
-        wbvector::write(&out_layer, &out_path, format).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to write reprojected vector '{}': {e}",
-                out_path.display()
-            ))
-        })?;
+        let out_vector = Vector {
+            file_path: out_path.clone(),
+        };
+        write_vector_layer_for_python(&out_vector, &out_layer)?;
 
         emit_callback_event(&callback, json!({"type":"progress","percent":1.0}))?;
 
@@ -6965,13 +7055,10 @@ impl Vector {
         }
 
         let layer = read_vector_layer_for_python(self)?;
-        let format = detect_vector_output_format(&out_path)?;
-        wbvector::write(&layer, &out_path, format).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to write copied vector '{}': {e}",
-                out_path.display()
-            ))
-        })?;
+        let out_vector = Vector {
+            file_path: out_path.clone(),
+        };
+        write_vector_layer_for_python(&out_vector, &layer)?;
 
         Ok(Vector { file_path: out_path })
     }
@@ -7022,6 +7109,10 @@ impl Lidar {
     }
 
     fn exists(&self) -> bool {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            return lidar_memory_store::get_lidar_arc_by_path(&lidar_path).is_some();
+        }
         self.file_path.exists()
     }
 
@@ -7066,6 +7157,12 @@ impl Lidar {
 
     #[getter]
     fn point_count(&self) -> PyResult<u64> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let cloud = read_lidar_cloud_for_python(self)?;
+            return Ok(cloud.points.len() as u64);
+        }
+
         wblidar::read_point_count(&self.file_path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                 "failed to read lidar point count '{}': {e}",
@@ -7081,12 +7178,7 @@ impl Lidar {
         cols: Option<Vec<String>>,
         dtype: Option<&str>,
     ) -> PyResult<Py<PyAny>> {
-        let cloud = PointCloud::read(&self.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read lidar '{}': {e}",
-                self.file_path.display()
-            ))
-        })?;
+        let cloud = read_lidar_cloud_for_python(self)?;
 
         let fields = parse_lidar_point_fields(cols.as_deref())?;
         let columns = cloud.extract_columns(&fields).map_err(|e| {
@@ -7124,13 +7216,6 @@ impl Lidar {
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let fields = parse_lidar_point_fields(cols.as_deref())?;
-        let mut reader = PointColumnChunkReader::open(&self.file_path, &fields, chunk_size)
-            .map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "failed to stream lidar columns '{}': {e}",
-                    self.file_path.display()
-                ))
-            })?;
 
         let np = py.import("numpy").map_err(|_| {
             PyErr::new::<pyo3::exceptions::PyImportError, _>(
@@ -7139,27 +7224,68 @@ impl Lidar {
         })?;
 
         let out_chunks = PyList::empty(py);
-        while let Some(columns) = reader.next_chunk().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed while reading lidar chunk '{}': {e}",
-                self.file_path.display()
-            ))
-        })? {
-            let mut arr_cols: Vec<Py<PyAny>> = Vec::with_capacity(columns.len());
-            for col in columns {
-                let a = np.call_method1("array", (col,))?;
-                arr_cols.push(a.unbind().into_any());
-            }
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let cloud = read_lidar_cloud_for_python(self)?;
+            let columns = cloud.extract_columns(&fields).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "failed to extract lidar columns: {e}"
+                ))
+            })?;
+            let total_rows = columns.first().map_or(0usize, Vec::len);
+            let step = chunk_size.max(1);
+            let mut row_start = 0usize;
+            while row_start < total_rows {
+                let row_end = (row_start + step).min(total_rows);
+                let mut arr_cols: Vec<Py<PyAny>> = Vec::with_capacity(columns.len());
+                for col in &columns {
+                    let a = np.call_method1("array", (&col[row_start..row_end],))?;
+                    arr_cols.push(a.unbind().into_any());
+                }
+                let mut chunk = np.call_method1("column_stack", (arr_cols,))?;
+                if let Some(dt) = dtype {
+                    chunk = chunk.call_method1("astype", (dt,))?;
+                }
 
-            let mut chunk = np.call_method1("column_stack", (arr_cols,))?;
-            if let Some(dt) = dtype {
-                chunk = chunk.call_method1("astype", (dt,))?;
-            }
+                if let Some(cb) = callback.as_ref() {
+                    cb.bind(py).call1((chunk.clone(),))?;
+                } else {
+                    out_chunks.append(chunk)?;
+                }
 
-            if let Some(cb) = callback.as_ref() {
-                cb.bind(py).call1((chunk.clone(),))?;
-            } else {
-                out_chunks.append(chunk)?;
+                row_start = row_end;
+            }
+        } else {
+            let mut reader = PointColumnChunkReader::open(&self.file_path, &fields, chunk_size)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "failed to stream lidar columns '{}': {e}",
+                        self.file_path.display()
+                    ))
+                })?;
+
+            while let Some(columns) = reader.next_chunk().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed while reading lidar chunk '{}': {e}",
+                    self.file_path.display()
+                ))
+            })? {
+                let mut arr_cols: Vec<Py<PyAny>> = Vec::with_capacity(columns.len());
+                for col in columns {
+                    let a = np.call_method1("array", (col,))?;
+                    arr_cols.push(a.unbind().into_any());
+                }
+
+                let mut chunk = np.call_method1("column_stack", (arr_cols,))?;
+                if let Some(dt) = dtype {
+                    chunk = chunk.call_method1("astype", (dt,))?;
+                }
+
+                if let Some(cb) = callback.as_ref() {
+                    cb.bind(py).call1((chunk.clone(),))?;
+                } else {
+                    out_chunks.append(chunk)?;
+                }
             }
         }
 
@@ -7178,12 +7304,7 @@ impl Lidar {
         output_path: Option<&str>,
         cols: Option<Vec<String>>,
     ) -> PyResult<Lidar> {
-        let mut cloud = PointCloud::read(&base.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read lidar '{}': {e}",
-                base.file_path.display()
-            ))
-        })?;
+        let mut cloud = read_lidar_cloud_for_python(base)?;
 
         let fields = parse_lidar_point_fields(cols.as_deref())?;
 
@@ -7290,7 +7411,12 @@ impl Lidar {
         })?;
 
         // True streaming path for LAS/LAZ avoids full-cloud materialization.
-        if matches!(out_format, LidarFormat::Las | LidarFormat::Laz) {
+        let base_is_memory = {
+            let p = base.file_path.to_string_lossy();
+            lidar_memory_store::lidar_is_memory_path(&p)
+        };
+
+        if matches!(out_format, LidarFormat::Las | LidarFormat::Laz) && !base_is_memory {
             let mut rewriter = wblidar::PointColumnChunkRewriter::open(
                 &base.file_path,
                 &out_path,
@@ -7376,12 +7502,7 @@ impl Lidar {
         }
 
         // Fallback path for formats not yet supported by streaming chunk write.
-        let mut cloud = PointCloud::read(&base.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read lidar '{}': {e}",
-                base.file_path.display()
-            ))
-        })?;
+        let mut cloud = read_lidar_cloud_for_python(base)?;
 
         let mut row_offset: usize = 0;
 
@@ -7499,12 +7620,7 @@ impl Lidar {
             json!({"type":"message","message":format!("Reprojecting lidar to EPSG:{}", dst_epsg)}),
         )?;
 
-        let cloud = PointCloud::read(&self.file_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read lidar '{}': {e}",
-                self.file_path.display()
-            ))
-        })?;
+        let cloud = read_lidar_cloud_for_python(self)?;
 
         let options = LidarReprojectOptions::new()
             .with_3d_transform(use_3d_transform)
@@ -7543,11 +7659,31 @@ impl Lidar {
     }
 
     fn crs_wkt(&self) -> PyResult<Option<String>> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let cloud = read_lidar_cloud_for_python(self)?;
+            return Ok(cloud.crs.and_then(|c| c.wkt));
+        }
         read_prj_sidecar(&self.file_path)
     }
 
     #[pyo3(signature = (strict=false))]
     fn crs_epsg(&self, strict: bool) -> PyResult<Option<u32>> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let cloud = read_lidar_cloud_for_python(self)?;
+            if let Some(crs) = cloud.crs {
+                if crs.epsg.is_some() {
+                    return Ok(crs.epsg);
+                }
+                return Ok(crs
+                    .wkt
+                    .as_deref()
+                    .and_then(|text| infer_epsg_from_crs_text(text, strict)));
+            }
+            return Ok(None);
+        }
+
         let wkt = read_prj_sidecar(&self.file_path)?;
         Ok(wkt
             .as_deref()
@@ -7555,10 +7691,28 @@ impl Lidar {
     }
 
     fn set_crs_wkt(&self, wkt: &str) -> PyResult<()> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let mut cloud = read_lidar_cloud_for_python(self)?;
+            let mut crs = cloud.crs.unwrap_or_default();
+            crs.wkt = Some(wkt.to_string());
+            if crs.epsg.is_none() {
+                crs.epsg = infer_epsg_from_crs_text(wkt, false);
+            }
+            cloud.crs = Some(crs);
+            return write_lidar_cloud_for_python(self, &cloud);
+        }
         write_prj_sidecar(&self.file_path, wkt)
     }
 
     fn set_crs_epsg(&self, epsg: u32) -> PyResult<()> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let mut cloud = read_lidar_cloud_for_python(self)?;
+            cloud.crs = Some(wblidar::Crs::from_epsg(epsg));
+            return write_lidar_cloud_for_python(self, &cloud);
+        }
+
         let wkt = to_ogc_wkt(epsg).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "failed to resolve EPSG:{epsg} to WKT: {e}"
@@ -7568,6 +7722,12 @@ impl Lidar {
     }
 
     fn clear_crs(&self) -> PyResult<()> {
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let mut cloud = read_lidar_cloud_for_python(self)?;
+            cloud.crs = None;
+            return write_lidar_cloud_for_python(self, &cloud);
+        }
         clear_prj_sidecar(&self.file_path)
     }
 
@@ -7586,12 +7746,23 @@ impl Lidar {
             })?;
         }
 
-        std::fs::copy(&self.file_path, &out_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to copy lidar '{}': {e}",
-                self.file_path.display()
-            ))
-        })?;
+        let lidar_path = self.file_path.to_string_lossy();
+        if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            let cloud = read_lidar_cloud_for_python(self)?;
+            cloud.write(&out_path).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to write copied lidar '{}': {e}",
+                    out_path.display()
+                ))
+            })?;
+        } else {
+            std::fs::copy(&self.file_path, &out_path).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to copy lidar '{}': {e}",
+                    self.file_path.display()
+                ))
+            })?;
+        }
 
         Ok(Lidar { file_path: out_path })
     }
@@ -7601,8 +7772,33 @@ impl Lidar {
         use wbw_r;
         
         let opts_json = options_json.unwrap_or("{}");
+        let mut staged_input: Option<PathBuf> = None;
+        let source_path = {
+            let lidar_path = self.file_path.to_string_lossy();
+            if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+                let cloud = read_lidar_cloud_for_python(self)?;
+                let temp_path = std::env::temp_dir().join(format!(
+                    "wbw_lidar_stage_{}_{}.laz",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0)
+                ));
+                cloud.write(&temp_path).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "failed to stage in-memory lidar for write: {e}"
+                    ))
+                })?;
+                staged_input = Some(temp_path.clone());
+                temp_path
+            } else {
+                self.file_path.clone()
+            }
+        };
+
         let result_path = wbw_r::lidar_write_with_options_json(
-            self.file_path.to_string_lossy().as_ref(),
+            source_path.to_string_lossy().as_ref(),
             dst,
             opts_json,
         ).map_err(|e| {
@@ -7612,14 +7808,43 @@ impl Lidar {
             ))
         })?;
 
+        if let Some(staged) = staged_input {
+            let _ = std::fs::remove_file(staged);
+        }
+
         Ok(Lidar { file_path: PathBuf::from(result_path) })
     }
 
     fn copy_to_path(&self, dst: &str) -> PyResult<Lidar> {
         use wbw_r;
         
+        let mut staged_input: Option<PathBuf> = None;
+        let source_path = {
+            let lidar_path = self.file_path.to_string_lossy();
+            if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+                let cloud = read_lidar_cloud_for_python(self)?;
+                let temp_path = std::env::temp_dir().join(format!(
+                    "wbw_lidar_stage_{}_{}.laz",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0)
+                ));
+                cloud.write(&temp_path).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "failed to stage in-memory lidar for copy: {e}"
+                    ))
+                })?;
+                staged_input = Some(temp_path.clone());
+                temp_path
+            } else {
+                self.file_path.clone()
+            }
+        };
+
         let result_path = wbw_r::lidar_copy_to_path(
-            self.file_path.to_string_lossy().as_ref(),
+            source_path.to_string_lossy().as_ref(),
             dst,
         ).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
@@ -7627,6 +7852,10 @@ impl Lidar {
                 dst
             ))
         })?;
+
+        if let Some(staged) = staged_input {
+            let _ = std::fs::remove_file(staged);
+        }
 
         Ok(Lidar { file_path: PathBuf::from(result_path) })
     }
@@ -7698,7 +7927,9 @@ impl Raster {
                 ))
             })?;
 
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id)
+                .map(|r| r.as_ref().clone())
+                .ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(format!(
                     "in-memory raster '{}' no longer exists",
                     self.file_path.display()
@@ -9211,18 +9442,34 @@ impl WbEnvironment {
                 ))
             })?;
 
+            let layer = wbvector::read(&written).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to read vector '{}' after option processing: {e}",
+                    written
+                ))
+            })?;
+            let id = vector_memory_store::put_vector(layer);
             return Ok(Vector {
-                file_path: PathBuf::from(written),
+                file_path: PathBuf::from(vector_memory_store::make_vector_memory_path(&id)),
             });
         }
 
-        Ok(Vector { file_path: path })
+        let layer = wbvector::read(&path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to read vector '{}': {e}",
+                path.display()
+            ))
+        })?;
+
+        let id = vector_memory_store::put_vector(layer);
+        Ok(Vector {
+            file_path: PathBuf::from(vector_memory_store::make_vector_memory_path(&id)),
+        })
     }
 
     /// Read a single LiDAR file.
     #[pyo3(signature = (file_name, file_mode="r"))]
     fn read_lidar(&self, file_name: &str, file_mode: &str) -> PyResult<Lidar> {
-        let _ = file_mode;
         let path = if Path::new(file_name).is_absolute() {
             PathBuf::from(file_name)
         } else {
@@ -9233,6 +9480,19 @@ impl WbEnvironment {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
                 format!("LiDAR file not found: {}", path.display()),
             ));
+        }
+
+        if file_mode.to_ascii_lowercase().contains('m') {
+            let cloud = PointCloud::read(&path).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "failed to read lidar '{}': {e}",
+                    path.display()
+                ))
+            })?;
+            let id = lidar_memory_store::put_lidar(cloud);
+            return Ok(Lidar {
+                file_path: PathBuf::from(lidar_memory_store::make_lidar_memory_path(&id)),
+            });
         }
 
         Ok(Lidar { file_path: path })
@@ -9862,6 +10122,46 @@ impl WbEnvironment {
         memory_store::raster_store_bytes()
     }
 
+    /// Remove a memory-backed vector from the global in-process vector store.
+    fn remove_vector_from_memory(&self, vector: &Vector) -> PyResult<bool> {
+        let vector_path = vector.file_path.to_string_lossy();
+        if !vector_memory_store::vector_is_memory_path(&vector_path) {
+            return Ok(false);
+        }
+
+        Ok(vector_memory_store::remove_vector_by_path(&vector_path).is_some())
+    }
+
+    /// Clear all vectors from the global in-process vector store.
+    fn clear_vector_memory(&self) -> usize {
+        vector_memory_store::clear_vectors()
+    }
+
+    /// Return the number of vectors currently held in the global in-process vector store.
+    fn vector_memory_count(&self) -> usize {
+        vector_memory_store::vector_count()
+    }
+
+    /// Remove a memory-backed LiDAR object from the global in-process LiDAR store.
+    fn remove_lidar_from_memory(&self, lidar: &Lidar) -> PyResult<bool> {
+        let lidar_path = lidar.file_path.to_string_lossy();
+        if !lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+            return Ok(false);
+        }
+
+        Ok(lidar_memory_store::remove_lidar_by_path(&lidar_path).is_some())
+    }
+
+    /// Clear all LiDAR objects from the global in-process LiDAR store.
+    fn clear_lidar_memory(&self) -> usize {
+        lidar_memory_store::clear_lidars()
+    }
+
+    /// Return the number of LiDAR objects currently held in the global in-process LiDAR store.
+    fn lidar_memory_count(&self) -> usize {
+        lidar_memory_store::lidar_count()
+    }
+
     /// Write a vector object to file.
     ///
     /// `options` may include:
@@ -9897,6 +10197,47 @@ impl WbEnvironment {
         } else {
             "{}".to_string()
         };
+
+        let vector_path = vector.file_path.to_string_lossy().to_string();
+        if vector_memory_store::vector_is_memory_path(&vector_path) {
+            let layer = read_vector_layer_for_python(vector)?;
+            let millis = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let temp_input = self
+                .working_directory
+                .join(format!("wbw_vector_mem_export_{millis}.gpkg"));
+
+            if let Some(parent) = temp_input.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "Failed to create temporary directory: {e}"
+                    ))
+                })?;
+            }
+
+            wbvector::write(&layer, &temp_input, VectorFormat::GeoPackage).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "Failed to stage in-memory vector for writing: {e}"
+                ))
+            })?;
+
+            let write_result = wbw_r::vector_copy_with_options_json(
+                temp_input.to_string_lossy().as_ref(),
+                out_path.to_string_lossy().as_ref(),
+                &options_json,
+            );
+
+            let _ = std::fs::remove_file(&temp_input);
+
+            return write_result.map(|_| ()).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "Failed to write vector '{}': {e}",
+                    out_path.display()
+                ))
+            });
+        }
 
         wbw_r::vector_copy_with_options_json(
             vector.file_path.to_string_lossy().as_ref(),
@@ -9951,8 +10292,33 @@ impl WbEnvironment {
         };
 
         if lidar.file_path != out_path {
+            let mut staged_input: Option<PathBuf> = None;
+            let source_path = {
+                let lidar_path = lidar.file_path.to_string_lossy();
+                if lidar_memory_store::lidar_is_memory_path(&lidar_path) {
+                    let cloud = read_lidar_cloud_for_python(lidar)?;
+                    let temp_path = std::env::temp_dir().join(format!(
+                        "wbw_lidar_stage_{}_{}.laz",
+                        std::process::id(),
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0)
+                    ));
+                    cloud.write(&temp_path).map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                            "Failed to stage in-memory lidar for writing: {e}"
+                        ))
+                    })?;
+                    staged_input = Some(temp_path.clone());
+                    temp_path
+                } else {
+                    lidar.file_path.clone()
+                }
+            };
+
             wbw_r::lidar_write_with_options_json(
-                lidar.file_path.to_string_lossy().as_ref(),
+                source_path.to_string_lossy().as_ref(),
                 out_path.to_string_lossy().as_ref(),
                 &options_json,
             )
@@ -9962,6 +10328,10 @@ impl WbEnvironment {
                     out_path.display()
                 ))
             })?;
+
+            if let Some(staged) = staged_input {
+                let _ = std::fs::remove_file(staged);
+            }
         }
 
         Ok(())

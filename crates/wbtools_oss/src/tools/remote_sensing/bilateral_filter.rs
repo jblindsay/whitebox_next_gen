@@ -18,14 +18,14 @@ pub struct BilateralFilterTool;
 pub struct HighPassBilateralFilterTool;
 
 impl BilateralFilterTool {
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation(
                     "parameter 'input' has malformed in-memory raster path".to_string(),
                 )
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -34,6 +34,7 @@ impl BilateralFilterTool {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -280,7 +281,6 @@ impl Tool for BilateralFilterTool {
         // Build spatial kernel lookup tables.
         let (dx, dy, weights_d, num_filter) = Self::build_kernel(sigma_dist);
 
-        let input = Arc::new(input);
         let dx = Arc::new(dx);
         let dy = Arc::new(dy);
         let weights_d = Arc::new(weights_d);
@@ -569,7 +569,6 @@ impl Tool for HighPassBilateralFilterTool {
 
         let (dx, dy, weights_d, num_filter) = BilateralFilterTool::build_kernel(sigma_dist);
 
-        let input = Arc::new(input);
         let dx = Arc::new(dx);
         let dy = Arc::new(dy);
         let weights_d = Arc::new(weights_d);

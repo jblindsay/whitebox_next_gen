@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
+use std::sync::Arc;
 
 use serde_json::json;
 use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
@@ -37,14 +38,16 @@ fn idx(r: usize, c: usize, cols: usize) -> usize {
     r * cols + c
 }
 
-fn load_raster(path: &str) -> Result<Raster, ToolError> {
+fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path)
             .ok_or_else(|| ToolError::Validation("malformed in-memory raster path".to_string()))?;
-        return memory_store::get_raster_by_id(id)
+        return memory_store::get_raster_arc_by_id(id)
             .ok_or_else(|| ToolError::Validation(format!("unknown in-memory raster id '{}'", id)));
     }
-    Raster::read(path).map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
+    Raster::read(path)
+        .map(Arc::new)
+        .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
 }
 
 fn write_or_store_output(output: Raster, output_path: Option<std::path::PathBuf>) -> Result<String, ToolError> {
@@ -95,7 +98,7 @@ fn build_dual_raster_result(flow_dir_path: String, flow_accum_path: String) -> T
     }
 }
 
-fn parse_input_and_output(args: &ToolArgs) -> Result<(Raster, Option<std::path::PathBuf>), ToolError> {
+fn parse_input_and_output(args: &ToolArgs) -> Result<(Arc<Raster>, Option<std::path::PathBuf>), ToolError> {
     let input_path = parse_raster_path_arg(args, "dem")
         .or_else(|_| parse_raster_path_arg(args, "raster"))
         .or_else(|_| parse_raster_path_arg(args, "input"))?;
@@ -2171,7 +2174,7 @@ impl Tool for D8PointerTool {
             }
         }
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::I16;
         out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -2310,7 +2313,7 @@ impl Tool for D8FlowAccumTool {
             log_transform,
         );
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -2367,7 +2370,7 @@ impl Tool for DInfPointerTool {
     fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let (input, output_path) = parse_input_and_output(args)?;
         let values = dinf_pointer_from_dem(&input);
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2476,7 +2479,7 @@ impl Tool for DInfFlowAccumTool {
         let mut accum = dinf_flow_accum_core(&flow_dir, input.rows, input.cols, input.nodata, convergence_threshold);
         apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2575,7 +2578,7 @@ impl Tool for MDInfFlowAccumTool {
         let mut accum = mdinf_flow_accum_core(&input, exponent, convergence_threshold);
         apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2678,7 +2681,7 @@ impl Tool for QinFlowAccumulationTool {
         let mut accum = qin_flow_accum_core(&input, exponent, max_slope, convergence_threshold);
         apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2771,7 +2774,7 @@ impl Tool for QuinnFlowAccumulationTool {
         let mut accum = quinn_flow_accum_core(&input, exponent, convergence_threshold);
         apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2881,7 +2884,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
             minimal_dispersion_core(&input, p, out_type, esri);
         apply_mdfa_output_type(&mut accum, &pntr_modified, &input, p, out_type, log_transform);
 
-        let mut dir_out = input.clone();
+        let mut dir_out = input.as_ref().clone();
         dir_out.data_type = DataType::I16;
         dir_out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -2913,7 +2916,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
             }
         }
 
-        let mut accum_out = input.clone();
+        let mut accum_out = input.as_ref().clone();
         accum_out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {
@@ -2972,7 +2975,7 @@ impl Tool for FD8PointerTool {
         let (input, output_path) = parse_input_and_output(args)?;
         let values = fd8_pointer_from_dem(&input);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::I16;
         out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -3037,7 +3040,7 @@ impl Tool for Rho8PointerTool {
             .unwrap_or(false);
         let dirs = rho8_dir_from_dem(&input);
         let ptr_vals = d8_pointer_values_from_dir(&dirs, input.rows, input.cols, -32768.0, esri);
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::I16;
         out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -3148,7 +3151,7 @@ impl Tool for Rho8FlowAccumTool {
             log_transform,
         );
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         out.nodata = -32768.0;
         for r in 0..input.rows {
@@ -3243,7 +3246,7 @@ impl Tool for FD8FlowAccumTool {
         let mut accum = fd8_flow_accum_core(&input, exponent, convergence_threshold);
         apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
-        let mut out = input.clone();
+        let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         for r in 0..input.rows {
             for c in 0..input.cols {

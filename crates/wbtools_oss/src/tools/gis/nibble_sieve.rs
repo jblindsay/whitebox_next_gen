@@ -1,5 +1,6 @@
 use serde_json::json;
 use rayon::prelude::*;
+use std::sync::Arc;
 use wbcore::{
     parse_optional_output_path, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
@@ -23,14 +24,15 @@ fn get_path(result: &ToolRunResult) -> Result<String, ToolError> {
         .ok_or_else(|| ToolError::Execution("sub-tool returned no path".to_string()))
 }
 
-fn load_raster(path: &str, label: &str) -> Result<Raster, ToolError> {
+fn load_raster(path: &str, label: &str) -> Result<Arc<Raster>, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path)
             .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
-        memory_store::get_raster_by_id(id)
+        memory_store::get_raster_arc_by_id(id)
             .ok_or_else(|| ToolError::Execution(format!("memory raster not found for '{label}'")))
     } else {
         Raster::read(std::path::Path::new(path))
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading '{label}': {e}")))
     }
 }
@@ -178,7 +180,7 @@ impl Tool for NibbleTool {
             if m == f64::NEG_INFINITY { 0.0 } else { m }
         };
 
-        let mut source = input.clone();
+        let mut source = input.as_ref().clone();
         let nodata_replacement = if use_nodata { max_class + 1.0 } else { 0.0 };
         let source_values: Vec<f64> = (0..band_stride)
             .into_par_iter()
@@ -203,7 +205,7 @@ impl Tool for NibbleTool {
         ea_args.insert("input".to_string(), json!(source_mem));
         let ea_result = EuclideanAllocationTool.run(&ea_args, ctx)?;
         let ea_path = get_path(&ea_result)?;
-        let mut nibbled = load_raster(&ea_path, "euclidean_allocation")?;
+        let mut nibbled = load_raster(&ea_path, "euclidean_allocation")?.as_ref().clone();
         nibbled.nodata = input_nodata;
 
         if use_nodata {
@@ -339,7 +341,7 @@ impl Tool for SieveTool {
         let cols = area_raster.cols;
         let band_stride = rows * cols;
 
-        let mut mask_raster = area_raster.clone();
+        let mut mask_raster = area_raster.as_ref().clone();
         mask_raster.nodata = -999.0;
         let mask_values: Vec<f64> = (0..band_stride)
             .into_par_iter()
@@ -367,7 +369,7 @@ impl Tool for SieveTool {
         let nibble_path = get_path(&nibble_result)?;
 
         ctx.progress.info("sieve: finalizing output");
-        let mut sieved = load_raster(&nibble_path, "nibbled")?;
+        let mut sieved = load_raster(&nibble_path, "nibbled")?.as_ref().clone();
         if zero_background {
             let original = load_raster(input_path, "input")?;
             let zero_mask: Vec<bool> = (0..band_stride)

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use serde_json::json;
 use rayon::prelude::*;
@@ -77,14 +78,16 @@ fn idx(r: usize, c: usize, cols: usize) -> usize {
 	r * cols + c
 }
 
-fn load_raster(path: &str) -> Result<Raster, ToolError> {
+fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
 	if memory_store::raster_is_memory_path(path) {
 		let id = memory_store::raster_path_to_id(path)
 			.ok_or_else(|| ToolError::Validation("malformed in-memory raster path".to_string()))?;
-		return memory_store::get_raster_by_id(id)
+		return memory_store::get_raster_arc_by_id(id)
 			.ok_or_else(|| ToolError::Validation(format!("unknown in-memory raster id '{}'", id)));
 	}
-	Raster::read(path).map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
+	Raster::read(path)
+		.map(Arc::new)
+		.map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
 }
 
 fn write_or_store_output(output: Raster, output_path: Option<std::path::PathBuf>) -> Result<String, ToolError> {
@@ -1102,7 +1105,7 @@ fn breach_depressions_least_cost_core(
 	}
 }
 
-fn parse_dem_and_output(args: &ToolArgs) -> Result<(Raster, Option<std::path::PathBuf>), ToolError> {
+fn parse_dem_and_output(args: &ToolArgs) -> Result<(Arc<Raster>, Option<std::path::PathBuf>), ToolError> {
 	let dem_path = parse_raster_path_arg(args, "dem")
 		.or_else(|_| parse_raster_path_arg(args, "input"))
 		.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
@@ -1254,7 +1257,7 @@ fn decode_d8_pointer_dir_checked(value: f64, esri_style: bool) -> Result<i8, Too
 	Ok(dir)
 }
 
-fn parse_pointer_input(args: &ToolArgs) -> Result<(Raster, Option<std::path::PathBuf>), ToolError> {
+fn parse_pointer_input(args: &ToolArgs) -> Result<(Arc<Raster>, Option<std::path::PathBuf>), ToolError> {
 	let path = parse_raster_path_arg(args, "d8_pntr")
 		.or_else(|_| parse_raster_path_arg(args, "d8_pointer"))
 		.or_else(|_| parse_raster_path_arg(args, "input"))?;
@@ -1603,9 +1606,26 @@ fn rasterize_polygon_boundaries(mask: &mut [u8], rows: usize, cols: usize, dem: 
 }
 
 fn read_vector_layer_aligned_to_dem(dem: &Raster, path: &str, input_name: &str) -> Result<wbvector::Layer, ToolError> {
-	let layer = wbvector::read(path).map_err(|e| {
-		ToolError::Validation(format!("failed reading {} vector '{}': {}", input_name, path, e))
-	})?;
+	let layer = if wbvector::memory_store::vector_is_memory_path(path) {
+		let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+			ToolError::Validation(format!(
+				"failed reading {} vector '{}': malformed in-memory vector path",
+				input_name, path
+			))
+		})?;
+		wbvector::memory_store::get_vector_arc_by_id(id)
+			.map(|layer| layer.as_ref().clone())
+			.ok_or_else(|| {
+				ToolError::Validation(format!(
+					"failed reading {} vector '{}': unknown in-memory vector id '{}'",
+					input_name, path, id
+				))
+			})?
+	} else {
+		wbvector::read(path).map_err(|e| {
+			ToolError::Validation(format!("failed reading {} vector '{}': {}", input_name, path, e))
+		})?
+	};
 
 	let dem_epsg = dem.crs.epsg;
 	let dem_wkt = dem.crs.wkt.as_deref().map(str::trim).filter(|s| !s.is_empty());
@@ -5557,9 +5577,11 @@ impl Tool for TopologicalBreachBurnTool {
 		let vsa_tool = VectorStreamNetworkAnalysisTool;
 		vsa_tool.run(&analysis_args, ctx)?;
 
-		let analyzed = wbvector::read(&analysis_path).map_err(|e| {
-			ToolError::Execution(format!("failed reading vector_stream_network_analysis output: {}", e))
-		})?;
+		let analyzed = read_vector_layer_aligned_to_dem(
+			&dem,
+			analysis_path.to_string_lossy().as_ref(),
+			"vector_stream_network_analysis output",
+		)?;
 		let tucl_idx = analyzed.schema.field_index("TUCL");
 		let trib_idx = analyzed.schema.field_index("TRIB_ID");
 

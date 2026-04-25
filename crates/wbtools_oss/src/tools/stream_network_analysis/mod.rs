@@ -8,6 +8,7 @@
 /// - Valley extraction
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -106,16 +107,17 @@ impl D8Core {
     }
 
     /// Load a raster, handling memory store paths
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!("unknown in-memory raster id '{}'", id))
             });
         }
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -274,7 +276,7 @@ impl Tool for StrahlerStreamOrderTool {
         let pntr_nodata = pntr.nodata;
         let background_val = if zero_background { 0.0 } else { nodata };
 
-        let mut output = streams.clone();
+        let mut output = streams.as_ref().clone();
         output.data_type = DataType::I32;
 
         // Initialize: count inflowing cells for each stream cell
@@ -365,6 +367,14 @@ fn detect_vector_format(path: &str) -> Result<VectorFormat, ToolError> {
 }
 
 fn load_vector(path: &str) -> Result<Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path)
+            .ok_or_else(|| ToolError::Validation("malformed in-memory vector path".to_string()))?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| ToolError::Validation(format!("unknown in-memory vector id '{}'", id)));
+    }
+
     wbvector::read(path)
         .map_err(|e| ToolError::Execution(format!("failed reading vector input: {}", e)))
 }
@@ -1020,7 +1030,7 @@ fn line_length(line: &[Coord]) -> f64 {
 
 fn parse_d8_stream_inputs(
     args: &ToolArgs,
-) -> Result<(Raster, Raster, Option<std::path::PathBuf>, bool, bool), ToolError> {
+) -> Result<(Arc<Raster>, Arc<Raster>, Option<std::path::PathBuf>, bool, bool), ToolError> {
     let d8_pntr_path = parse_raster_path_arg(args, "d8_pntr")?;
     let streams_path = parse_raster_path_arg(args, "streams_raster")?;
     let output_path = parse_optional_output_path(args, "output")?;
@@ -1163,7 +1173,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
 
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::I16;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1207,7 +1217,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                 .unwrap_or(false);
 
             let pntr = D8Core::load_raster(&d8_pntr_path)?;
-            let mut streams = D8Core::load_raster(&streams_path)?;
+            let mut streams = D8Core::load_raster(&streams_path)?.as_ref().clone();
             if streams.rows != pntr.rows || streams.cols != pntr.cols {
                 return Err(ToolError::Validation("Input rasters must have the same dimensions".to_string()));
             }
@@ -1304,7 +1314,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                 }
             }
 
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::F32;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1352,7 +1362,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     }
                 }
             }
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::F32;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1400,7 +1410,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     }
                 }
             }
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::F32;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1449,7 +1459,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                 }
             }
 
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::I16;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1508,7 +1518,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let lengths = grid_lengths(&pntr);
 
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::I32;
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut trib_len = vec![vec![nodata; cols]; rows];
@@ -1576,7 +1586,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                     }
                 }
             }
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::I16;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1600,7 +1610,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let inflowing = D8Core::inflowing_vals(esri_style);
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
 
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::I16;
             let mut num_inflowing = vec![vec![-1i8; cols]; rows];
             let mut stack = Vec::new();
@@ -1652,7 +1662,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let nodata = streams.nodata;
             let pntr_matches = D8Core::build_pntr_matches(esri_style);
             let lengths = grid_lengths(&pntr);
-            let mut out = streams.clone();
+            let mut out = streams.as_ref().clone();
             out.data_type = DataType::F32;
             for row in 0..rows {
                 for col in 0..cols {
@@ -1691,7 +1701,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
             let pntr = D8Core::load_raster(&d8_pntr_path)?;
-            let mut streams = D8Core::load_raster(&streams_path)?;
+            let mut streams = D8Core::load_raster(&streams_path)?.as_ref().clone();
             if streams.rows != pntr.rows || streams.cols != pntr.cols {
                 return Err(ToolError::Validation("Input rasters must have the same dimensions".to_string()));
             }
@@ -1763,7 +1773,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
                 .unwrap_or(1000.0);
             let output_path = parse_optional_output_path(args, "output")?;
             let fa = D8Core::load_raster(&input)?;
-            let mut out = fa.clone();
+            let mut out = fa.as_ref().clone();
             out.data_type = DataType::I16;
             for row in 0..fa.rows {
                 for col in 0..fa.cols {
@@ -1807,7 +1817,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             }
             let output_path = parse_optional_output_path(args, "output")?;
             let dem = D8Core::load_raster(&input)?;
-            let mut out = dem.clone();
+            let mut out = dem.as_ref().clone();
             out.data_type = DataType::I16;
 
             match variant {
@@ -2074,7 +2084,7 @@ fn run_stream_tool_fallback(id: &str, args: &ToolArgs, ctx: &ToolContext) -> Res
             let zero_background = args.get("zero_background").and_then(|v| v.as_bool()).unwrap_or(false);
             let use_feature_id = args.get("use_feature_id").and_then(|v| v.as_bool()).unwrap_or(false);
             let layer = load_vector(&input_vector)?;
-            let mut out = D8Core::load_raster(&reference)?;
+            let mut out = D8Core::load_raster(&reference)?.as_ref().clone();
             out.data_type = DataType::I16;
             let background = if zero_background { 0.0 } else { out.nodata };
             for row in 0..out.rows {
@@ -2599,7 +2609,7 @@ impl Tool for HortonStreamOrderTool {
             .get("path")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Execution("missing strahler output path".to_string()))?;
-        let mut out = D8Core::load_raster(strahler_path)?;
+        let mut out = D8Core::load_raster(strahler_path)?.as_ref().clone();
 
         let rows = pntr.rows;
         let cols = pntr.cols;
@@ -2760,7 +2770,7 @@ impl Tool for HackStreamOrderTool {
             }
         }
 
-        let mut out = streams.clone();
+        let mut out = streams.as_ref().clone();
         out.data_type = DataType::I16;
         for row in 0..rows {
             for col in 0..cols {
@@ -2870,7 +2880,7 @@ impl Tool for ShreveStreamMagnitudeTool {
         let inflowing = D8Core::inflowing_vals(esri_style);
         let pntr_matches = D8Core::build_pntr_matches(esri_style);
 
-        let mut out = streams.clone();
+        let mut out = streams.as_ref().clone();
         out.data_type = DataType::I32;
         let mut num_inflowing = vec![vec![-1i8; cols]; rows];
         let mut stack = Vec::new();
@@ -3066,7 +3076,7 @@ impl Tool for BurnStreamsTool {
         let streams_raster = D8Core::load_raster(streams_raster_path)?;
 
         // ── burn ─────────────────────────────────────────────────────────────
-        let mut output = dem.clone();
+        let mut output = dem.as_ref().clone();
         if grad_dist <= 0 {
             ctx.progress.info("applying flat elevation decrement");
             for row in 0..rows {
@@ -3217,10 +3227,10 @@ impl Tool for HortonRatiosTool {
             let mut a = ToolArgs::new();
             a.insert("d8_pntr".to_string(), json!(dem_path)); // will be overridden
             // Serialize pntr to memory store
-            let mid = memory_store::put_raster(pntr.clone());
+            let mid = memory_store::put_raster(pntr.as_ref().clone());
             let mp = memory_store::make_raster_memory_path(&mid);
             a.insert("d8_pntr".to_string(), json!(mp));
-            let sid = memory_store::put_raster(streams.clone());
+            let sid = memory_store::put_raster(streams.as_ref().clone());
             let sp = memory_store::make_raster_memory_path(&sid);
             a.insert("streams_raster".to_string(), json!(sp));
             a.insert("esri_pntr".to_string(), json!(false));
@@ -3297,7 +3307,7 @@ impl Tool for HortonRatiosTool {
         // ── D8 flow accumulation (cells) ──────────────────────────────────────
         ctx.progress.info("computing D8 flow accumulation");
         let d8_accum = {
-            let pntr_mid = memory_store::put_raster(pntr.clone());
+            let pntr_mid = memory_store::put_raster(pntr.as_ref().clone());
             let pntr_mem = memory_store::make_raster_memory_path(&pntr_mid);
             let mut a = ToolArgs::new();
             a.insert("input".to_string(), json!(pntr_mem));
@@ -3314,10 +3324,10 @@ impl Tool for HortonRatiosTool {
         // ── Stream link slope ─────────────────────────────────────────────────
         ctx.progress.info("computing stream link slope");
         let link_slope_raster = {
-            let pntr_mid = memory_store::put_raster(pntr.clone());
+            let pntr_mid = memory_store::put_raster(pntr.as_ref().clone());
             let pntr_mem = memory_store::make_raster_memory_path(&pntr_mid);
             let link_mid = {
-                let mut link_raster = dem.clone();
+                let mut link_raster = dem.as_ref().clone();
                 link_raster.data_type = wbraster::DataType::F64;
                 for r in 0..rows {
                     for c in 0..cols {
@@ -3343,10 +3353,10 @@ impl Tool for HortonRatiosTool {
         // ── Stream link length ────────────────────────────────────────────────
         ctx.progress.info("computing stream link length");
         let link_length_raster = {
-            let pntr_mid = memory_store::put_raster(pntr.clone());
+            let pntr_mid = memory_store::put_raster(pntr.as_ref().clone());
             let pntr_mem = memory_store::make_raster_memory_path(&pntr_mid);
             let link_mid = {
-                let mut link_raster = dem.clone();
+                let mut link_raster = dem.as_ref().clone();
                 link_raster.data_type = wbraster::DataType::F64;
                 for r in 0..rows {
                     for c in 0..cols {

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -87,14 +88,14 @@ impl PlanCurvatureTool {
             .unwrap_or(false)
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation(
                     "parameter 'input' has malformed in-memory raster path".to_string(),
                 )
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -103,6 +104,7 @@ impl PlanCurvatureTool {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -780,7 +782,7 @@ impl PlanCurvatureTool {
         ctx.progress.info("reading input raster");
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
 
         let rows = input.rows;
         let cols = input.cols;

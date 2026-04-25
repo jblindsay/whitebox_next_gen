@@ -40,6 +40,18 @@ fn load_raster(path: &str) -> Result<Raster, ToolError> {
         .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
 }
 
+fn load_vector(path: &str, label: &str) -> Result<Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path)
+            .ok_or_else(|| ToolError::Validation(format!("malformed in-memory vector path for '{}'", label)))?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| ToolError::Validation(format!("unknown in-memory vector id '{}' for '{}'", id, label)));
+    }
+    wbvector::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading {} vector: {}", label, e)))
+}
+
 fn detect_vector_format(path: &str) -> Result<VectorFormat, ToolError> {
     match VectorFormat::detect(path) {
         Ok(fmt) => Ok(fmt),
@@ -1732,8 +1744,7 @@ impl Tool for ContoursFromPointsTool {
             return Err(ToolError::Validation("parameter 'interval' must be > 0".to_string()));
         }
 
-        let input = wbvector::read(&input_path)
-            .map_err(|e| ToolError::Execution(format!("failed reading input vector: {}", e)))?;
+        let input = load_vector(&input_path, "input")?;
         let layer = points_contour_layer(
             &input,
             field_name,

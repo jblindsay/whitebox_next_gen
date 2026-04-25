@@ -5,6 +5,7 @@
 
 use serde_json::json;
 use rayon::prelude::*;
+use std::sync::Arc;
 
 /// Minimum cell count before Rayon thread dispatch pays off.
 /// Below this threshold, `with_min_len` collapses the parallel iterator
@@ -38,14 +39,15 @@ fn raster_mem(r: wbraster::Raster) -> String {
     memory_store::make_raster_memory_path(&id)
 }
 
-fn load_raster(path: &str, label: &str) -> Result<wbraster::Raster, ToolError> {
+fn load_raster(path: &str, label: &str) -> Result<Arc<wbraster::Raster>, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path)
             .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
-        memory_store::get_raster_by_id(id)
+        memory_store::get_raster_arc_by_id(id)
             .ok_or_else(|| ToolError::Execution(format!("memory raster not found for '{label}'")))
     } else {
         wbraster::Raster::read(std::path::Path::new(path))
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading '{label}': {e}")))
     }
 }
@@ -167,7 +169,7 @@ impl Tool for ImprovedGroundPointFilterTool {
         let cols = tin.cols;
         let band_stride = rows * cols;
         let double_thresh = elev_threshold * 2.0;
-        let mut blended = tin.clone();
+        let mut blended = tin.as_ref().clone();
         let blended_values: Vec<Option<f64>> = (0..band_stride)
             .into_par_iter()
             .with_min_len(RAYON_MIN_CHUNK)

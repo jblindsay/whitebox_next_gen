@@ -14,6 +14,7 @@ use wbcore::{PercentCoalescer,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
+use wbtopology::{DistanceMetric, FixedRadiusSearch2D};
 
 use crate::memory_store;
 use crate::palettes::LegacyPalette;
@@ -147,6 +148,28 @@ impl TerrainWindowCore {
         }
         Raster::read(path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
+    }
+
+    fn load_vector(path: &str, label: &str) -> Result<wbvector::Layer, ToolError> {
+        if wbvector::memory_store::vector_is_memory_path(path) {
+            let id = wbvector::memory_store::vector_path_to_id(path).ok_or_else(|| {
+                ToolError::Validation(format!(
+                    "parameter '{}' has malformed in-memory vector path",
+                    label
+                ))
+            })?;
+            return wbvector::memory_store::get_vector_arc_by_id(id)
+                .map(|layer| layer.as_ref().clone())
+                .ok_or_else(|| {
+                    ToolError::Validation(format!(
+                        "parameter '{}' references unknown in-memory vector id '{}'",
+                        label, id
+                    ))
+                });
+        }
+        wbvector::read(path).map_err(|e| {
+            ToolError::Validation(format!("failed reading {} vector '{}': {}", label, path, e))
+        })
     }
 
     fn write_or_store_output(
@@ -1651,9 +1674,7 @@ impl TerrainWindowCore {
         max_width *= 0.5;
 
         let dem = Self::load_raster(&dem_path)?;
-        let roads_layer = wbvector::read(&roads_path).map_err(|e| {
-            ToolError::Execution(format!("failed reading roads vector '{}': {}", roads_path, e))
-        })?;
+        let roads_layer = Self::load_vector(&roads_path, "roads")?;
         let rows = dem.rows;
         let cols = dem.cols;
         let nodata = dem.nodata;
@@ -2279,64 +2300,149 @@ impl TerrainWindowCore {
             }
 
             // White top-hat transform = original - opening(opening = dilation(erosion(original))).
-            let mut erosion = vec![nodata; rows * cols];
-            for r in 0..rows {
-                let r_i = r as isize;
-                for c in 0..cols {
-                    let c_i = c as isize;
-                    let z = vals[Self::idx(r, c, cols)];
-                    if z == nodata {
-                        continue;
-                    }
-                    let mut min_val = f64::INFINITY;
-                    for rr in (r_i - midpoint).max(0)..=(r_i + midpoint).min(rows as isize - 1) {
-                        for cc in (c_i - midpoint).max(0)..=(c_i + midpoint).min(cols as isize - 1)
-                        {
-                            let zv = vals[Self::idx(rr as usize, cc as usize, cols)];
-                            if zv != nodata && zv < min_val {
-                                min_val = zv;
+            let erosion_rows: Vec<Vec<f64>> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let r_i = r as isize;
+                    let start_row = r_i - midpoint;
+                    let end_row = r_i + midpoint;
+                    let mut row_erosion = vec![nodata; cols];
+                    let mut filter_vals: VecDeque<f64> = VecDeque::with_capacity(filter_size);
+                    for c in 0..cols {
+                        let c_i = c as isize;
+                        let z = vals[Self::idx(r, c, cols)];
+                        if z == nodata {
+                            continue;
+                        }
+                        if c > 0 {
+                            filter_vals.pop_front();
+                            let new_col = c_i + midpoint;
+                            let mut min_val = f64::INFINITY;
+                            if new_col >= 0 && new_col < cols as isize {
+                                for rr in start_row..=end_row {
+                                    if rr < 0 || rr >= rows as isize {
+                                        continue;
+                                    }
+                                    let zv = vals[Self::idx(rr as usize, new_col as usize, cols)];
+                                    if zv != nodata && zv < min_val {
+                                        min_val = zv;
+                                    }
+                                }
+                            }
+                            filter_vals.push_back(min_val);
+                        } else {
+                            let start_col = c_i - midpoint;
+                            let end_col = c_i + midpoint;
+                            for cc in start_col..=end_col {
+                                let mut min_val = f64::INFINITY;
+                                if cc >= 0 && cc < cols as isize {
+                                    for rr in start_row..=end_row {
+                                        if rr < 0 || rr >= rows as isize {
+                                            continue;
+                                        }
+                                        let zv = vals[Self::idx(rr as usize, cc as usize, cols)];
+                                        if zv != nodata && zv < min_val {
+                                            min_val = zv;
+                                        }
+                                    }
+                                }
+                                filter_vals.push_back(min_val);
                             }
                         }
-                    }
-                    if min_val.is_finite() {
-                        erosion[Self::idx(r, c, cols)] = min_val;
-                    }
-                }
-                coalescer.emit_unit_fraction(ctx.progress, 
-                    (band_idx as f64 + ((r + 1) as f64 / rows as f64) * 0.2) / bands as f64,
-                );
-            }
 
+                        let mut row_min = f64::INFINITY;
+                        for &v in &filter_vals {
+                            if v < row_min {
+                                row_min = v;
+                            }
+                        }
+                        if row_min.is_finite() {
+                            row_erosion[c] = row_min;
+                        }
+                    }
+                    row_erosion
+                })
+                .collect();
+            let mut erosion = vec![nodata; rows * cols];
+            for (r, row_vals) in erosion_rows.into_iter().enumerate() {
+                let start = r * cols;
+                erosion[start..start + cols].copy_from_slice(&row_vals);
+            }
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx as f64 + 0.2) / bands as f64);
+
+            let opening_tophat_rows: Vec<(Vec<f64>, Vec<f64>)> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let r_i = r as isize;
+                    let start_row = r_i - midpoint;
+                    let end_row = r_i + midpoint;
+                    let mut opening_row = vec![nodata; cols];
+                    let mut tophat_row = vec![nodata; cols];
+                    let mut filter_vals: VecDeque<f64> = VecDeque::with_capacity(filter_size);
+                    for c in 0..cols {
+                        let c_i = c as isize;
+                        let z = vals[Self::idx(r, c, cols)];
+                        if z == nodata {
+                            continue;
+                        }
+                        if c > 0 {
+                            filter_vals.pop_front();
+                            let new_col = c_i + midpoint;
+                            let mut max_val = f64::NEG_INFINITY;
+                            if new_col >= 0 && new_col < cols as isize {
+                                for rr in start_row..=end_row {
+                                    if rr < 0 || rr >= rows as isize {
+                                        continue;
+                                    }
+                                    let ev = erosion[Self::idx(rr as usize, new_col as usize, cols)];
+                                    if ev != nodata && ev > max_val {
+                                        max_val = ev;
+                                    }
+                                }
+                            }
+                            filter_vals.push_back(max_val);
+                        } else {
+                            let start_col = c_i - midpoint;
+                            let end_col = c_i + midpoint;
+                            for cc in start_col..=end_col {
+                                let mut max_val = f64::NEG_INFINITY;
+                                if cc >= 0 && cc < cols as isize {
+                                    for rr in start_row..=end_row {
+                                        if rr < 0 || rr >= rows as isize {
+                                            continue;
+                                        }
+                                        let ev = erosion[Self::idx(rr as usize, cc as usize, cols)];
+                                        if ev != nodata && ev > max_val {
+                                            max_val = ev;
+                                        }
+                                    }
+                                }
+                                filter_vals.push_back(max_val);
+                            }
+                        }
+
+                        let mut row_max = f64::NEG_INFINITY;
+                        for &v in &filter_vals {
+                            if v > row_max {
+                                row_max = v;
+                            }
+                        }
+                        if row_max > f64::NEG_INFINITY {
+                            opening_row[c] = row_max;
+                            tophat_row[c] = z - row_max;
+                        }
+                    }
+                    (opening_row, tophat_row)
+                })
+                .collect();
             let mut opening = vec![nodata; rows * cols];
             let mut tophat = vec![nodata; rows * cols];
-            for r in 0..rows {
-                let r_i = r as isize;
-                for c in 0..cols {
-                    let c_i = c as isize;
-                    let z = vals[Self::idx(r, c, cols)];
-                    if z == nodata {
-                        continue;
-                    }
-                    let mut max_val = f64::NEG_INFINITY;
-                    for rr in (r_i - midpoint).max(0)..=(r_i + midpoint).min(rows as isize - 1) {
-                        for cc in (c_i - midpoint).max(0)..=(c_i + midpoint).min(cols as isize - 1)
-                        {
-                            let ev = erosion[Self::idx(rr as usize, cc as usize, cols)];
-                            if ev != nodata && ev > max_val {
-                                max_val = ev;
-                            }
-                        }
-                    }
-                    if max_val > f64::NEG_INFINITY {
-                        opening[Self::idx(r, c, cols)] = max_val;
-                        tophat[Self::idx(r, c, cols)] = z - max_val;
-                    }
-                }
-                coalescer.emit_unit_fraction(ctx.progress, 
-                    (band_idx as f64 + 0.2 + ((r + 1) as f64 / rows as f64) * 0.2)
-                        / bands as f64,
-                );
+            for (r, (opening_row, tophat_row)) in opening_tophat_rows.into_iter().enumerate() {
+                let start = r * cols;
+                opening[start..start + cols].copy_from_slice(&opening_row);
+                tophat[start..start + cols].copy_from_slice(&tophat_row);
             }
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx as f64 + 0.4) / bands as f64);
 
             // Back-fill shallow hills using slope-limited region growing on tophat values.
             let mut out = vec![initial; rows * cols];
@@ -2377,7 +2483,9 @@ impl TerrainWindowCore {
             }
 
             // Identify edge cells bordering masked OTO zones for interpolation seeds.
-            let mut seeds: Vec<(usize, usize, f64)> = Vec::new();
+            let radius = filter_size as f64 / 1.5;
+            let mut frs: FixedRadiusSearch2D<f64> =
+                FixedRadiusSearch2D::new(radius, DistanceMetric::SquaredEuclidean);
             for r in 0..rows {
                 for c in 0..cols {
                     let i = Self::idx(r, c, cols);
@@ -2398,7 +2506,7 @@ impl TerrainWindowCore {
                         }
                     }
                     if is_edge {
-                        seeds.push((r, c, opening[i] + tophat[i]));
+                        frs.insert(c as f64, r as f64, opening[i] + tophat[i]);
                     }
                 }
                 coalescer.emit_unit_fraction(ctx.progress, 
@@ -2407,54 +2515,38 @@ impl TerrainWindowCore {
                 );
             }
 
-            let radius = filter_size as f64 / 1.5;
-            let radius2 = radius * radius;
-            let r_cells = radius.ceil() as isize;
-
-            for r in 0..rows {
-                for c in 0..cols {
-                    let i = Self::idx(r, c, cols);
-                    if tophat[i] == nodata {
-                        out[i] = nodata;
-                        continue;
+            out = (0..rows * cols)
+                .into_par_iter()
+                .map(|i| {
+                    let t = tophat[i];
+                    if t == nodata {
+                        return nodata;
                     }
                     if out[i] == initial {
-                        let r0 = (r as isize - r_cells).max(0) as usize;
-                        let r1 = (r as isize + r_cells).min(rows as isize - 1) as usize;
-                        let c0 = (c as isize - r_cells).max(0) as usize;
-                        let c1 = (c as isize + r_cells).min(cols as isize - 1) as usize;
-
+                        let r = i / cols;
+                        let c = i % cols;
                         let mut sum_w = 0.0;
                         let mut sum_z = 0.0;
-                        for &(sr, sc, sz) in &seeds {
-                            if sr < r0 || sr > r1 || sc < c0 || sc > c1 {
-                                continue;
-                            }
-                            let dr = sr as isize - r as isize;
-                            let dc = sc as isize - c as isize;
-                            let dist2 = (dr * dr + dc * dc) as f64;
-                            if dist2 <= 0.0 || dist2 > radius2 {
+                        let ret = frs.search(c as f64, r as f64);
+                        for &(sz, dist2) in &ret {
+                            if dist2 <= 0.0 {
                                 continue;
                             }
                             let w = 1.0 / dist2;
                             sum_w += w;
                             sum_z += sz * w;
                         }
-
                         if sum_w > 0.0 {
-                            out[i] = sum_z / sum_w;
+                            sum_z / sum_w
                         } else {
-                            out[i] = nodata;
+                            nodata
                         }
                     } else {
-                        out[i] = opening[i] + tophat[i];
+                        opening[i] + t
                     }
-                }
-                coalescer.emit_unit_fraction(ctx.progress, 
-                    (band_idx as f64 + 0.6 + ((r + 1) as f64 / rows as f64) * 0.4)
-                        / bands as f64,
-                );
-            }
+                })
+                .collect();
+            coalescer.emit_unit_fraction(ctx.progress, (band_idx as f64 + 1.0) / bands as f64);
 
             for r in 0..rows {
                 let mut row_out = vec![nodata; cols];
@@ -7188,9 +7280,7 @@ impl TerrainWindowCore {
             .max(1);
 
         let input = Self::load_raster(&input_path)?;
-        let points_layer = wbvector::read(&points_path).map_err(|e| {
-            ToolError::Validation(format!("failed reading points vector '{}': {}", points_path, e))
-        })?;
+        let points_layer = Self::load_vector(&points_path, "points")?;
         let point_coords = Self::parse_vector_points(&points_layer)?;
 
         let mut sites = Vec::new();
@@ -7375,9 +7465,7 @@ impl TerrainWindowCore {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let input = Self::load_raster(&input_path)?;
-        let points_layer = wbvector::read(&points_path).map_err(|e| {
-            ToolError::Validation(format!("failed reading points vector '{}': {}", points_path, e))
-        })?;
+        let points_layer = Self::load_vector(&points_path, "points")?;
         let point_coords = Self::parse_vector_points(&points_layer)?;
 
         let mut sites = Vec::new();
@@ -7558,9 +7646,7 @@ impl TerrainWindowCore {
         let output_path = parse_optional_output_path(args, "output")?;
 
         let input = Self::load_raster(&input_path)?;
-        let points_layer = wbvector::read(&points_path).map_err(|e| {
-            ToolError::Validation(format!("failed reading points vector '{}': {}", points_path, e))
-        })?;
+        let points_layer = Self::load_vector(&points_path, "points")?;
         let point_coords = Self::parse_vector_points(&points_layer)?;
 
         let mut sites = Vec::new();
@@ -7912,9 +7998,7 @@ impl TerrainWindowCore {
         let z_factor = args.get("z_factor").and_then(|v| v.as_f64()).unwrap_or(1.0);
 
         let input = Self::load_raster(&input_path)?;
-        let points_layer = wbvector::read(&points_path).map_err(|e| {
-            ToolError::Validation(format!("failed reading points vector '{}': {}", points_path, e))
-        })?;
+        let points_layer = Self::load_vector(&points_path, "points")?;
         let point_coords = Self::parse_vector_points(&points_layer)?;
 
         let mut sites = Vec::new();

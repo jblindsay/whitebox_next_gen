@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -114,12 +115,12 @@ impl FastAlmostGaussianFilterTool {
         parse_raster_path_arg(args, "input")
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'input' has malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -128,6 +129,7 @@ impl FastAlmostGaussianFilterTool {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -760,7 +762,7 @@ impl FastAlmostGaussianFilterTool {
                 let nodata = input.nodata;
                 let radius = (filter_size / 2) as isize;
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 let vals: Vec<Vec<f64>> = (0..bands)
                     .into_par_iter()
                     .map(|band_idx| {
@@ -852,7 +854,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -901,7 +903,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -970,7 +972,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -1062,7 +1064,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -1129,7 +1131,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -1184,7 +1186,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -1244,7 +1246,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 Self::write_values_into_output(&input, &mut out, &out_vals, packed_rgb)?;
                 out
             }
@@ -1315,7 +1317,7 @@ impl FastAlmostGaussianFilterTool {
                 if packed_rgb {
                     let rows = input.rows;
                     let cols = input.cols;
-                    let mut out = input.clone();
+                    let mut out = input.as_ref().clone();
                     for band_idx in 0..input.bands {
                         let band = band_idx as isize;
                         let mut rows_buf = vec![vec![nodata; cols]; rows];
@@ -1347,7 +1349,7 @@ impl FastAlmostGaussianFilterTool {
                     }
                     out
                 } else {
-                    let mut out = input.clone();
+                    let mut out = input.as_ref().clone();
                     Self::write_values_into_output(&input, &mut out, &out_vals, false)?;
                     out
                 }
@@ -1434,7 +1436,7 @@ impl FastAlmostGaussianFilterTool {
                     })
                     .collect();
 
-                let mut out = input.clone();
+                let mut out = input.as_ref().clone();
                 if packed_rgb {
                     // Legacy behavior computes LoG on intensity and writes scalar results.
                     Self::write_values_into_output(&input, &mut out, &out_vals, false)?;

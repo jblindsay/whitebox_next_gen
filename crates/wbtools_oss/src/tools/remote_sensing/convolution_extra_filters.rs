@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -171,12 +172,12 @@ impl ScharrFilterTool {
             .unwrap_or(false)
     }
 
-    fn load_raster(path: &str) -> Result<Raster, ToolError> {
+    fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
         if memory_store::raster_is_memory_path(path) {
             let id = memory_store::raster_path_to_id(path).ok_or_else(|| {
                 ToolError::Validation("parameter 'input' has malformed in-memory raster path".to_string())
             })?;
-            return memory_store::get_raster_by_id(id).ok_or_else(|| {
+            return memory_store::get_raster_arc_by_id(id).ok_or_else(|| {
                 ToolError::Validation(format!(
                     "parameter 'input' references unknown in-memory raster id '{}': store entry is missing",
                     id
@@ -185,6 +186,7 @@ impl ScharrFilterTool {
         }
 
         Raster::read(path)
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {}", e)))
     }
 
@@ -379,7 +381,7 @@ impl ScharrFilterTool {
         let output_path = parse_optional_output_path(args, "output")?;
         ctx.progress.info(&format!("running {}", op.id()));
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = input.as_ref().clone();
 
         match op {
             ExtraOp::Scharr => {

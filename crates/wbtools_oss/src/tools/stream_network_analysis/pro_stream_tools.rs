@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::sync::Arc;
 use wbcore::{
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
@@ -38,6 +39,18 @@ fn build_result(path: String) -> ToolRunResult {
 fn detect_vector_format(path: &str) -> Result<VectorFormat, ToolError> {
     VectorFormat::detect(path)
         .map_err(|e| ToolError::Validation(format!("could not determine vector format for '{}': {}", path, e)))
+}
+
+fn load_vector_mem(path: &str, label: &str) -> Result<Layer, ToolError> {
+    if wbvector::memory_store::vector_is_memory_path(path) {
+        let id = wbvector::memory_store::vector_path_to_id(path)
+            .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
+        return wbvector::memory_store::get_vector_arc_by_id(id)
+            .map(|layer| layer.as_ref().clone())
+            .ok_or_else(|| ToolError::Execution(format!("memory vector not found for '{label}'")));
+    }
+    wbvector::read(path)
+        .map_err(|e| ToolError::Execution(format!("failed reading '{label}' vector: {e}")))
 }
 
 fn coord_distance(a: &Coord, b: &Coord) -> f64 {
@@ -408,8 +421,7 @@ impl Tool for PruneVectorStreamsTool {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| format!("{}_pruned.geojson", input));
 
-        let src = wbvector::read(&input)
-            .map_err(|e| ToolError::Execution(format!("failed reading input vector: {}", e)))?;
+        let src = load_vector_mem(&input, "input")?;
         let dem = Raster::read(&dem_path)
             .map_err(|e| ToolError::Execution(format!("failed reading DEM: {}", e)))?;
 
@@ -1414,14 +1426,15 @@ fn raster_mem(r: Raster) -> String {
     memory_store::make_raster_memory_path(&id)
 }
 
-fn load_raster_mem(path: &str, label: &str) -> Result<Raster, ToolError> {
+fn load_raster_mem(path: &str, label: &str) -> Result<Arc<Raster>, ToolError> {
     if memory_store::raster_is_memory_path(path) {
         let id = memory_store::raster_path_to_id(path)
             .ok_or_else(|| ToolError::Execution(format!("invalid memory path for '{label}'")))?;
-        memory_store::get_raster_by_id(id)
+        memory_store::get_raster_arc_by_id(id)
             .ok_or_else(|| ToolError::Execution(format!("memory raster not found for '{label}'")))
     } else {
         Raster::read(std::path::Path::new(path))
+            .map(Arc::new)
             .map_err(|e| ToolError::Execution(format!("failed reading '{label}': {e}")))
     }
 }
@@ -1531,8 +1544,8 @@ impl Tool for RidgeAndValleyVectorsTool {
         let band_stride = rows * cols;
 
         let ridge_threshold = 100.0 - ep_threshold;
-        let mut ridge_raster = ep.clone();
-        let mut valley_raster = ep.clone();
+        let mut ridge_raster = ep.as_ref().clone();
+        let mut valley_raster = ep.as_ref().clone();
         ridge_raster.nodata = -1.0;
         valley_raster.nodata = -1.0;
 

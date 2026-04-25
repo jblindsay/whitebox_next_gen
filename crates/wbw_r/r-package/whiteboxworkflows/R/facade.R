@@ -115,13 +115,62 @@ wbw_build_session <- function(floating_license_id = NULL,
     )
   }
 
-  session$read_vector <- function(path, options = NULL, strict_format_options = FALSE) {
+  session$read_vector <- function(path, options = NULL, strict_format_options = FALSE, file_mode = "r") {
     wbw_read_vector(
       path = path,
       options = options,
       strict_format_options = strict_format_options,
+      file_mode = file_mode,
       session = session
     )
+  }
+
+  session$read_lidar <- function(path, file_mode = "r") {
+    wbw_read_lidar(
+      path = path,
+      file_mode = file_mode,
+      session = session
+    )
+  }
+
+  session$remove_raster_from_memory <- function(raster) {
+    wbw_remove_raster_from_memory(raster)
+  }
+
+  session$clear_raster_memory <- function() {
+    wbw_clear_raster_memory()
+  }
+
+  session$raster_memory_count <- function() {
+    wbw_raster_memory_count()
+  }
+
+  session$raster_memory_bytes <- function() {
+    wbw_raster_memory_bytes()
+  }
+
+  session$remove_vector_from_memory <- function(vector) {
+    wbw_remove_vector_from_memory(vector)
+  }
+
+  session$clear_vector_memory <- function() {
+    wbw_clear_vector_memory()
+  }
+
+  session$vector_memory_count <- function() {
+    wbw_vector_memory_count()
+  }
+
+  session$remove_lidar_from_memory <- function(lidar) {
+    wbw_remove_lidar_from_memory(lidar)
+  }
+
+  session$clear_lidar_memory <- function() {
+    wbw_clear_lidar_memory()
+  }
+
+  session$lidar_memory_count <- function() {
+    wbw_lidar_memory_count()
   }
 
   session$projection_to_ogc_wkt <- function(epsg) {
@@ -1040,6 +1089,10 @@ wbw_apply_default_output_extension <- function(path, kind = c("raster", "vector"
     stop("path must be a non-empty string.", call. = FALSE)
   }
 
+  if (startsWith(path, "memory://")) {
+    return(list(path = path, extension_was_missing = FALSE))
+  }
+
   if (wbw_path_has_extension(path)) {
     return(list(path = path, extension_was_missing = FALSE))
   }
@@ -1068,6 +1121,121 @@ wbw_raster_source_path <- function(raster) {
   }
 
   stop("Unable to resolve source path for raster object.", call. = FALSE)
+}
+
+wbw_vector_source_path <- function(vector) {
+  if (!inherits(vector, "wbw_vector")) {
+    stop("vector must be a wbw_vector object.", call. = FALSE)
+  }
+
+  if (!is.null(vector$path) && is.character(vector$path) && length(vector$path) == 1L) {
+    return(vector$path)
+  }
+
+  stop("Unable to resolve source path for vector object.", call. = FALSE)
+}
+
+wbw_lidar_source_path <- function(lidar) {
+  if (!inherits(lidar, "wbw_lidar")) {
+    stop("lidar must be a wbw_lidar object.", call. = FALSE)
+  }
+
+  if (!is.null(lidar$file_path) && is.function(lidar$file_path)) {
+    return(lidar$file_path())
+  }
+
+  if (!is.null(lidar$path) && is.character(lidar$path) && length(lidar$path) == 1L) {
+    return(lidar$path)
+  }
+
+  stop("Unable to resolve source path for lidar object.", call. = FALSE)
+}
+
+wbw_memory_object_path <- function(x, kind) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+    return(x)
+  }
+
+  switch(
+    kind,
+    raster = wbw_raster_source_path(x),
+    vector = wbw_vector_source_path(x),
+    lidar = wbw_lidar_source_path(x),
+    stop(sprintf("Unsupported memory object kind: %s", kind), call. = FALSE)
+  )
+}
+
+#' Remove a memory-backed raster from the in-process store.
+#'
+#' @export
+wbw_remove_raster_from_memory <- function(raster) {
+  path <- wbw_memory_object_path(raster, "raster")
+  isTRUE(remove_raster_from_memory_path(path))
+}
+
+#' Clear all memory-backed rasters from the in-process store.
+#'
+#' @export
+wbw_clear_raster_memory <- function() {
+  as.integer(clear_raster_memory())
+}
+
+#' Return the number of memory-backed rasters in the in-process store.
+#'
+#' @export
+wbw_raster_memory_count <- function() {
+  as.integer(raster_memory_count())
+}
+
+#' Return approximate heap bytes held by memory-backed rasters.
+#'
+#' @export
+wbw_raster_memory_bytes <- function() {
+  as.numeric(raster_memory_bytes())
+}
+
+#' Remove a memory-backed vector from the in-process store.
+#'
+#' @export
+wbw_remove_vector_from_memory <- function(vector) {
+  path <- wbw_memory_object_path(vector, "vector")
+  isTRUE(remove_vector_from_memory_path(path))
+}
+
+#' Clear all memory-backed vectors from the in-process store.
+#'
+#' @export
+wbw_clear_vector_memory <- function() {
+  as.integer(clear_vector_memory())
+}
+
+#' Return the number of memory-backed vectors in the in-process store.
+#'
+#' @export
+wbw_vector_memory_count <- function() {
+  as.integer(vector_memory_count())
+}
+
+#' Remove a memory-backed lidar object from the in-process store.
+#'
+#' @export
+wbw_remove_lidar_from_memory <- function(lidar) {
+  path <- wbw_memory_object_path(lidar, "lidar")
+  isTRUE(remove_lidar_from_memory_path(path))
+}
+
+#' Clear all memory-backed lidar objects from the in-process store.
+#'
+#' @export
+wbw_clear_lidar_memory <- function() {
+  as.integer(clear_lidar_memory())
+}
+
+#' Return the number of memory-backed lidar objects in the in-process store.
+#'
+#' @export
+wbw_lidar_memory_count <- function() {
+  as.integer(lidar_memory_count())
 }
 
 #' Write a raster to disk with optional GeoTIFF/COG controls.
@@ -1262,6 +1430,9 @@ wbw_raster_from_path <- function(path, session = NULL, proxy = FALSE) {
       return(other$file_path())
     }
     if (is.character(other) && length(other) == 1L && nzchar(other)) {
+      if (startsWith(other, "memory://raster/")) {
+        return(other)
+      }
       if (!file.exists(other)) {
         stop(sprintf("Raster operand path does not exist: %s", other), call. = FALSE)
       }
@@ -1493,12 +1664,22 @@ wbw_raster_from_path <- function(path, session = NULL, proxy = FALSE) {
 wbw_vector_from_path <- function(path,
                                  session = NULL,
                                  read_options = NULL,
-                                 strict_format_options = FALSE) {
-  if (!file.exists(path)) {
+                                 strict_format_options = FALSE,
+                                 file_mode = "r") {
+  is_memory_path <- startsWith(path, "memory://vector/")
+  if (!is_memory_path && !file.exists(path)) {
     stop(sprintf("Vector file does not exist: %s", path), call. = FALSE)
   }
 
-  vector_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (!is.character(file_mode) || length(file_mode) != 1L || !nzchar(file_mode)) {
+    stop("file_mode must be a non-empty string.", call. = FALSE)
+  }
+
+  vector_path <- if (is_memory_path) {
+    path
+  } else {
+    normalizePath(path, winslash = "/", mustWork = TRUE)
+  }
 
   if (!is.null(read_options)) {
     opts <- wbw_merge_vector_options(
@@ -1508,6 +1689,10 @@ wbw_vector_from_path <- function(path,
     opts_json <- jsonlite::toJSON(opts, auto_unbox = TRUE, null = "null")
     tmp_out <- tempfile(pattern = "wbw_vector_read_", fileext = ".gpkg")
     vector_path <- vector_copy_with_options_json(vector_path, tmp_out, opts_json)
+  }
+
+  if (!startsWith(vector_path, "memory://vector/") && grepl("m", tolower(file_mode), fixed = TRUE)) {
+    vector_path <- vector_read_to_memory_path(vector_path)
   }
 
   .meta_cache <- NULL
@@ -1663,14 +1848,26 @@ wbw_vector_from_path <- function(path,
 
   to_terra <- function() {
     wbw_require_terra("wbw_vector$to_terra()")
-    terra::vect(vector_path)
+    resolved_path <- vector_path
+    if (startsWith(vector_path, "memory://vector/")) {
+      staged_path <- tempfile(pattern = "wbw_v_mem_", fileext = ".gpkg")
+      vector_copy_with_options_json(vector_path, staged_path, "{}")
+      resolved_path <- staged_path
+    }
+    terra::vect(resolved_path)
   }
 
   to_sf <- function() {
     if (!requireNamespace("sf", quietly = TRUE)) {
       stop("wbw_vector$to_sf() requires the 'sf' package.", call. = FALSE)
     }
-    sf::st_read(vector_path, quiet = TRUE)
+    resolved_path <- vector_path
+    if (startsWith(vector_path, "memory://vector/")) {
+      staged_path <- tempfile(pattern = "wbw_v_mem_", fileext = ".gpkg")
+      vector_copy_with_options_json(vector_path, staged_path, "{}")
+      resolved_path <- staged_path
+    }
+    sf::st_read(resolved_path, quiet = TRUE)
   }
 
   deep_copy <- function(output_path,
@@ -2059,11 +2256,16 @@ wbw_bundle_write_colour_composite <- function(bundle,
 }
 
 wbw_lidar_from_path <- function(path, session = NULL) {
-  if (!file.exists(path)) {
+  is_memory_path <- startsWith(path, "memory://lidar/")
+  if (!is_memory_path && !file.exists(path)) {
     stop(sprintf("Lidar file does not exist: %s", path), call. = FALSE)
   }
 
-  lidar_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  lidar_path <- if (is_memory_path) {
+    path
+  } else {
+    normalizePath(path, winslash = "/", mustWork = TRUE)
+  }
 
   metadata <- function() {
     wbw_lidar_metadata(lidar_path)
@@ -2249,7 +2451,7 @@ wbw_lidar_from_path <- function(path, session = NULL) {
 
     ext <- tolower(tools::file_ext(resolved_path))
     # Streaming chunk rewrite is currently available for LAS/LAZ outputs.
-    if (identical(ext, "las") || identical(ext, "laz")) {
+    if ((identical(ext, "las") || identical(ext, "laz")) && !startsWith(lidar_path, "memory://lidar/")) {
       chunk_columns <- lapply(normalized, function(chunk) {
         lapply(seq_len(ncol(chunk)), function(i) as.numeric(chunk[, i]))
       })
@@ -2670,26 +2872,63 @@ wbw_search_tools <- function(query,
 }
 
 #' @export
-wbw_read_raster <- function(path, session = NULL, proxy = FALSE) {
-  wbw_raster_from_path(path, session = session, proxy = proxy)
+wbw_read_raster <- function(path, session = NULL, proxy = FALSE, file_mode = "r") {
+  if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
+    stop("path must be a non-empty string.", call. = FALSE)
+  }
+
+  if (!is.character(file_mode) || length(file_mode) != 1L || !nzchar(file_mode)) {
+    stop("file_mode must be a non-empty string.", call. = FALSE)
+  }
+
+  if (startsWith(path, "memory://raster/")) {
+    return(wbw_raster_from_path(path, session = session, proxy = proxy))
+  }
+
+  normalized <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (grepl("m", tolower(file_mode), fixed = TRUE)) {
+    mem_path <- raster_read_to_memory_path(normalized)
+    return(wbw_raster_from_path(mem_path, session = session, proxy = proxy))
+  }
+
+  wbw_raster_from_path(normalized, session = session, proxy = proxy)
 }
 
 #' @export
 wbw_read_vector <- function(path,
                             options = NULL,
                             strict_format_options = FALSE,
-                            session = NULL) {
+                            session = NULL,
+                            file_mode = "r") {
   wbw_vector_from_path(
     path,
     session = session,
     read_options = options,
-    strict_format_options = strict_format_options
+    strict_format_options = strict_format_options,
+    file_mode = file_mode
   )
 }
 
 #' @export
-wbw_read_lidar <- function(path, session = NULL) {
-  wbw_lidar_from_path(path, session = session)
+wbw_read_lidar <- function(path, session = NULL, file_mode = "r") {
+  if (!is.character(path) || length(path) != 1L || !nzchar(path)) {
+    stop("path must be a non-empty string.", call. = FALSE)
+  }
+  if (!is.character(file_mode) || length(file_mode) != 1L || !nzchar(file_mode)) {
+    stop("file_mode must be a non-empty string.", call. = FALSE)
+  }
+
+  if (startsWith(path, "memory://lidar/")) {
+    return(wbw_lidar_from_path(path, session = session))
+  }
+
+  normalized <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  if (grepl("m", tolower(file_mode), fixed = TRUE)) {
+    mem_path <- lidar_read_to_memory_path(normalized)
+    return(wbw_lidar_from_path(mem_path, session = session))
+  }
+
+  wbw_lidar_from_path(normalized, session = session)
 }
 
 #' @export
@@ -2998,7 +3237,14 @@ wbw_raster_to_array <- function(path, simplify_single_band = TRUE) {
     stop("wbw_raster_to_array() requires the 'terra' package.", call. = FALSE)
   }
 
-  r <- terra::rast(path)
+  resolved_path <- path
+  if (startsWith(path, "memory://raster/")) {
+    staged_path <- tempfile(pattern = "wbw_r_mem_", fileext = ".tif")
+    raster_write_with_options_json(path, staged_path, "{}")
+    resolved_path <- staged_path
+  }
+
+  r <- terra::rast(resolved_path)
   rows <- terra::nrow(r)
   cols <- terra::ncol(r)
   bands <- terra::nlyr(r)
@@ -3020,7 +3266,15 @@ wbw_raster_to_stars <- function(path, proxy = FALSE) {
   if (!requireNamespace("stars", quietly = TRUE)) {
     stop("wbw_raster_to_stars() requires the 'stars' package.", call. = FALSE)
   }
-  stars::read_stars(path, proxy = proxy)
+
+  resolved_path <- path
+  if (startsWith(path, "memory://raster/")) {
+    staged_path <- tempfile(pattern = "wbw_r_mem_", fileext = ".tif")
+    raster_write_with_options_json(path, staged_path, "{}")
+    resolved_path <- staged_path
+  }
+
+  stars::read_stars(resolved_path, proxy = proxy)
 }
 
 #' Convert an R matrix/array into a geospatial raster file.

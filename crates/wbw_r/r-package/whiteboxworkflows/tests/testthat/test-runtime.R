@@ -297,6 +297,29 @@ test_that("wbw_read_raster returns typed raster wrapper", {
   expect_equal(dim(arr), c(2, 3))
 })
 
+test_that("wbw_read_raster supports memory-backed mode", {
+  skip_if_not_installed("terra")
+
+  path <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 3, xmin = 0, xmax = 3, ymin = 0, ymax = 2)
+  terra::values(r) <- 1:6
+  terra::crs(r) <- "EPSG:4326"
+  terra::writeRaster(r, path, overwrite = TRUE)
+
+  x <- wbw_read_raster(path, file_mode = "m")
+  expect_true(inherits(x, "wbw_raster"))
+  expect_true(startsWith(x$file_path(), "memory://raster/"))
+
+  arr <- x$to_array()
+  expect_true(is.matrix(arr))
+  expect_equal(arr[1, 1], 1)
+
+  out <- tempfile(fileext = ".tif")
+  y <- x$write(out)
+  expect_true(file.exists(out))
+  expect_true(inherits(y, "wbw_raster"))
+})
+
 test_that("wbw_read_vector returns typed vector wrapper", {
   skip_if_not_installed("terra")
 
@@ -324,6 +347,38 @@ test_that("wbw_read_vector returns typed vector wrapper", {
   tv <- x$to_terra()
   expect_true(inherits(tv, "SpatVector"))
   expect_equal(nrow(tv), 1)
+})
+
+test_that("wbw_read_vector supports memory-backed mode", {
+  skip_if_not_installed("terra")
+
+  path <- tempfile(fileext = ".gpkg")
+  coords <- rbind(
+    c(0, 0),
+    c(1, 0),
+    c(1, 1),
+    c(0, 1),
+    c(0, 0)
+  )
+  v <- terra::vect(coords, type = "polygons")
+  terra::values(v) <- data.frame(id = 1L, name = "a")
+  terra::crs(v) <- "EPSG:4326"
+  terra::writeVector(v, path, overwrite = TRUE)
+
+  x <- wbw_read_vector(path, file_mode = "m")
+  expect_true(inherits(x, "wbw_vector"))
+  expect_true(startsWith(x$path, "memory://vector/"))
+
+  meta <- x$metadata()
+  expect_equal(meta$feature_count, 1)
+
+  terra_vec <- x$to_terra()
+  expect_equal(nrow(terra_vec), 1)
+
+  out <- tempfile(fileext = ".gpkg")
+  y <- x$write(out)
+  expect_true(file.exists(out))
+  expect_true(inherits(y, "wbw_vector"))
 })
 
 test_that("wbw_raster convenience accessors and write methods work", {
@@ -673,6 +728,91 @@ test_that("wbw_read_lidar returns typed lidar wrapper", {
   expect_true(file.exists(copied_path))
   expect_true(inherits(copied, "wbw_lidar"))
   expect_equal(copied$metadata()$point_count, 2)
+})
+
+test_that("memory store helpers manage raster vector and lidar objects", {
+  skip_if_not_installed("terra")
+
+  session <- wbw_build_session()
+
+  wbw_clear_raster_memory()
+  wbw_clear_vector_memory()
+  wbw_clear_lidar_memory()
+
+  raster_path <- tempfile(fileext = ".tif")
+  r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+  terra::values(r) <- c(1, 2, 3, 4)
+  terra::crs(r) <- "EPSG:4326"
+  terra::writeRaster(r, raster_path, overwrite = TRUE)
+
+  vector_path <- tempfile(fileext = ".gpkg")
+  coords <- rbind(
+    c(0, 0),
+    c(1, 0),
+    c(1, 1),
+    c(0, 1),
+    c(0, 0)
+  )
+  v <- terra::vect(coords, type = "polygons")
+  terra::values(v) <- data.frame(id = 1L)
+  terra::crs(v) <- "EPSG:4326"
+  terra::writeVector(v, vector_path, overwrite = TRUE)
+
+  csv_path <- tempfile(pattern = "points_", fileext = ".csv")
+  out_dir <- tempfile(pattern = "lidar_out_")
+  dir.create(out_dir, recursive = TRUE)
+  writeLines(
+    c(
+      "x,y,z,i,c,rn,nr,sa,time,r,g,b",
+      "0.0,0.0,10.0,100,2,1,1,0,1.25,1000,2000,3000",
+      "1.0,1.0,12.0,150,6,1,2,3,2.50,1200,2200,3200"
+    ),
+    csv_path
+  )
+  wbw_run_tool(
+    "ascii_to_las",
+    list(
+      inputs = list(csv_path),
+      pattern = "x,y,z,i,c,rn,nr,sa,time,r,g,b",
+      epsg_code = 4326,
+      output_directory = out_dir
+    )
+  )
+  las_path <- file.path(out_dir, paste0(tools::file_path_sans_ext(basename(csv_path)), ".las"))
+
+  raster_mem <- wbw_read_raster(raster_path, file_mode = "m")
+  vector_mem <- wbw_read_vector(vector_path, file_mode = "m")
+  lidar_mem <- wbw_read_lidar(las_path, file_mode = "m")
+
+  expect_true(session$raster_memory_count() >= 1L)
+  expect_true(session$raster_memory_bytes() > 0)
+  expect_true(session$vector_memory_count() >= 1L)
+  expect_true(session$lidar_memory_count() >= 1L)
+
+  expect_true(session$remove_raster_from_memory(raster_mem))
+  expect_false(session$remove_raster_from_memory(raster_mem))
+
+  expect_true(wbw_remove_vector_from_memory(vector_mem))
+  expect_false(wbw_remove_vector_from_memory(vector_mem))
+
+  expect_true(session$remove_lidar_from_memory(lidar_mem))
+  expect_false(session$remove_lidar_from_memory(lidar_mem))
+
+  raster_mem <- wbw_read_raster(raster_path, file_mode = "m")
+  vector_mem <- wbw_read_vector(vector_path, file_mode = "m")
+  lidar_mem <- wbw_read_lidar(las_path, file_mode = "m")
+
+  expect_true(wbw_raster_memory_count() >= 1L)
+  expect_true(wbw_vector_memory_count() >= 1L)
+  expect_true(wbw_lidar_memory_count() >= 1L)
+
+  expect_true(session$clear_raster_memory() >= 1L)
+  expect_true(session$clear_vector_memory() >= 1L)
+  expect_true(session$clear_lidar_memory() >= 1L)
+
+  expect_equal(wbw_raster_memory_count(), 0L)
+  expect_equal(wbw_vector_memory_count(), 0L)
+  expect_equal(wbw_lidar_memory_count(), 0L)
 })
 
 test_that("wbw_read_bundle returns typed sensor bundle wrapper", {

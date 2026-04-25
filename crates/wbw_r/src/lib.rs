@@ -17,6 +17,16 @@ use wblicense_core::{
 };
 use wblidar::e57::E57Reader;
 use wblidar::las::LasReader;
+use wblidar::memory_store::{
+    clear_lidars,
+    get_lidar_arc_by_path,
+    lidar_is_memory_path,
+    lidar_count,
+    make_lidar_memory_path,
+    put_lidar,
+    remove_lidar_by_path,
+    replace_lidar_by_path,
+};
 use wblidar::ply::PlyReader;
 use wblidar::{
     read_point_count,
@@ -31,6 +41,19 @@ use wblidar::{
 };
 use wbprojection::{epsg_from_srs_reference, identify_epsg_from_wkt, to_ogc_wkt, Crs};
 use wbraster::{open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
+use wbraster::memory_store::{
+    clear_rasters,
+    get_raster_arc_by_path,
+    get_raster_by_id,
+    make_raster_memory_path,
+    put_raster,
+    raster_count,
+    raster_is_memory_path,
+    raster_path_to_id,
+    raster_store_bytes,
+    remove_raster_by_path,
+    replace_raster_by_id,
+};
 use wbraster::{GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions, Raster, RasterFormat};
 use wbtopology::{
     buffer_linestring,
@@ -56,6 +79,16 @@ use wbtopology::{
     Geometry,
 };
 use wbvector::VectorFormat;
+use wbvector::memory_store::{
+    clear_vectors,
+    get_vector_arc_by_path,
+    make_vector_memory_path,
+    put_vector,
+    remove_vector_by_path,
+    replace_vector_by_path,
+    vector_count,
+    vector_is_memory_path,
+};
 use wbvector::feature::FieldType;
 use wbtools_oss::{register_default_tools as register_default_oss_tools, ToolRegistry as OssRegistry};
 #[cfg(feature = "pro")]
@@ -368,6 +401,71 @@ fn read_vector_with_controls(
     }
 
     wbvector::read(src_path).map_err(to_invalid_request)
+}
+
+fn load_vector_path_with_controls(
+    src: &str,
+    controls: &VectorReadControls,
+) -> Result<wbvector::Layer, ToolError> {
+    if vector_is_memory_path(src) {
+        if controls.has_osmpbf_controls() {
+            if controls.strict_format_options {
+                return Err(ToolError::InvalidRequest(
+                    "OSM PBF-specific read options were provided for an in-memory vector source"
+                        .to_string(),
+                ));
+            }
+        }
+
+        return get_vector_arc_by_path(src)
+            .map(|layer| (*layer).clone())
+            .ok_or_else(|| ToolError::InvalidRequest(format!("memory vector not found: {src}")));
+    }
+
+    let src_path = Path::new(src);
+    let src_fmt = VectorFormat::detect(src_path).map_err(to_invalid_request)?;
+    read_vector_with_controls(src_path, src_fmt, controls)
+}
+
+fn load_lidar_path(path: &str) -> Result<PointCloud, ToolError> {
+    if lidar_is_memory_path(path) {
+        return get_lidar_arc_by_path(path)
+            .map(|cloud| (*cloud).clone())
+            .ok_or_else(|| ToolError::InvalidRequest(format!("memory lidar not found: {path}")));
+    }
+
+    PointCloud::read(Path::new(path)).map_err(to_invalid_request)
+}
+
+fn lidar_bounds_json(cloud: &PointCloud) -> Value {
+    if cloud.points.is_empty() {
+        return Value::Null;
+    }
+
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut min_z = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    let mut max_z = f64::NEG_INFINITY;
+
+    for p in &cloud.points {
+        min_x = min_x.min(p.x);
+        min_y = min_y.min(p.y);
+        min_z = min_z.min(p.z);
+        max_x = max_x.max(p.x);
+        max_y = max_y.max(p.y);
+        max_z = max_z.max(p.z);
+    }
+
+    json!({
+        "min_x": min_x,
+        "max_x": max_x,
+        "min_y": min_y,
+        "max_y": max_y,
+        "min_z": min_z,
+        "max_z": max_z,
+    })
 }
 
 fn write_vector_with_controls(
@@ -916,8 +1014,82 @@ pub fn sensor_bundle_resolve_raster_path(
 /// Return raster metadata as a JSON string (header-only, no pixel data loaded).
 /// Fields: path, cols, rows, bands, x_min, y_min, x_max, y_max,
 ///         cell_size_x, cell_size_y, nodata, data_type, crs_wkt, crs_epsg.
-pub fn raster_metadata_json(path: &str) -> Result<String, ToolError> {
+pub fn raster_read_to_memory_path(path: &str) -> Result<String, ToolError> {
     let raster = Raster::read(path).map_err(to_invalid_request)?;
+    let id = put_raster(raster);
+    Ok(make_raster_memory_path(&id))
+}
+
+pub fn vector_read_to_memory_path(path: &str) -> Result<String, ToolError> {
+    let layer = wbvector::read(path).map_err(to_invalid_request)?;
+    let id = put_vector(layer);
+    Ok(make_vector_memory_path(&id))
+}
+
+pub fn lidar_read_to_memory_path(path: &str) -> Result<String, ToolError> {
+    let cloud = PointCloud::read(path).map_err(to_invalid_request)?;
+    let id = put_lidar(cloud);
+    Ok(make_lidar_memory_path(&id))
+}
+
+pub fn remove_raster_from_memory_path(path: &str) -> Result<bool, ToolError> {
+    if !raster_is_memory_path(path) {
+        return Ok(false);
+    }
+    Ok(remove_raster_by_path(path).is_some())
+}
+
+pub fn clear_raster_memory() -> Result<usize, ToolError> {
+    Ok(clear_rasters())
+}
+
+pub fn raster_memory_count() -> Result<usize, ToolError> {
+    Ok(raster_count())
+}
+
+pub fn raster_memory_bytes() -> Result<usize, ToolError> {
+    Ok(raster_store_bytes())
+}
+
+pub fn remove_vector_from_memory_path(path: &str) -> Result<bool, ToolError> {
+    if !vector_is_memory_path(path) {
+        return Ok(false);
+    }
+    Ok(remove_vector_by_path(path).is_some())
+}
+
+pub fn clear_vector_memory() -> Result<usize, ToolError> {
+    Ok(clear_vectors())
+}
+
+pub fn vector_memory_count() -> Result<usize, ToolError> {
+    Ok(vector_count())
+}
+
+pub fn remove_lidar_from_memory_path(path: &str) -> Result<bool, ToolError> {
+    if !lidar_is_memory_path(path) {
+        return Ok(false);
+    }
+    Ok(remove_lidar_by_path(path).is_some())
+}
+
+pub fn clear_lidar_memory() -> Result<usize, ToolError> {
+    Ok(clear_lidars())
+}
+
+pub fn lidar_memory_count() -> Result<usize, ToolError> {
+    Ok(lidar_count())
+}
+
+/// Return raster metadata as JSON, supporting both disk and memory-backed paths.
+pub fn raster_metadata_json(path: &str) -> Result<String, ToolError> {
+    let raster = if raster_is_memory_path(path) {
+        get_raster_arc_by_path(path)
+            .ok_or_else(|| ToolError::InvalidRequest(format!("memory raster not found: {path}")))?
+    } else {
+        Arc::new(Raster::read(path).map_err(to_invalid_request)?)
+    };
+
     let meta = json!({
         "path": path,
         "cols": raster.cols,
@@ -945,6 +1117,19 @@ pub fn raster_get_value(path: &str, row: i32, col: i32, band: i32) -> Result<f64
         ));
     }
 
+    if raster_is_memory_path(path) {
+        let raster = get_raster_arc_by_path(path)
+            .ok_or_else(|| ToolError::InvalidRequest(format!("memory raster not found: {path}")))?;
+        if row as usize >= raster.rows || col as usize >= raster.cols || band as usize >= raster.bands {
+            return Err(ToolError::InvalidRequest(format!(
+                "cell index out of bounds: row={}, col={}, band={} for raster dims rows={}, cols={}, bands={}",
+                row, col, band, raster.rows, raster.cols, raster.bands
+            )));
+        }
+
+        return Ok(raster.get(band as isize, row as isize, col as isize));
+    }
+
     let raster_path = Path::new(path);
     let handle = get_or_load_disk_raster_handle(raster_path)?;
     let cached = handle
@@ -969,6 +1154,30 @@ pub fn raster_set_value(path: &str, row: i32, col: i32, band: i32, value: f64) -
         return Ok(()); // Silently ignore negative indices
     }
 
+    if raster_is_memory_path(path) {
+        let Some(id) = raster_path_to_id(path) else {
+            return Ok(());
+        };
+
+        let Some(mut raster) = get_raster_by_id(id) else {
+            return Err(ToolError::InvalidRequest(format!("memory raster not found: {path}")));
+        };
+
+        if row as usize >= raster.rows || col as usize >= raster.cols || band as usize >= raster.bands {
+            return Ok(()); // Silently ignore out-of-bounds writes
+        }
+
+        raster
+            .set(band as isize, row as isize, col as isize, value)
+            .map_err(to_invalid_request)?;
+        if !replace_raster_by_id(id, raster) {
+            return Err(ToolError::Execution(format!(
+                "failed to update memory raster entry for path: {path}"
+            )));
+        }
+        return Ok(());
+    }
+
     let raster_path = Path::new(path);
     let handle = get_or_load_disk_raster_handle(raster_path)?;
     let mut cached = handle
@@ -990,7 +1199,7 @@ pub fn raster_set_value(path: &str, row: i32, col: i32, band: i32, value: f64) -
 /// Fields: path, geometry_type, feature_count, crs_wkt, crs_epsg,
 ///         fields (array of {name, field_type}).
 pub fn vector_metadata_json(path: &str) -> Result<String, ToolError> {
-    let layer = wbvector::read(path).map_err(to_invalid_request)?;
+    let layer = load_vector_path_with_controls(path, &VectorReadControls::default())?;
     let fields: Vec<Value> = layer.schema.fields().iter().map(|f| {
         json!({
             "name": f.name,
@@ -1169,7 +1378,7 @@ pub fn topology_distance_wkt(a_wkt: &str, b_wkt: &str) -> Result<f64, ToolError>
 }
 
 fn topology_read_feature_geometry_as_wkt(path: &str, feature_index: usize) -> Result<String, ToolError> {
-    let layer = wbvector::read(path).map_err(to_invalid_request)?;
+    let layer = load_vector_path_with_controls(path, &VectorReadControls::default())?;
     let feature = layer.features.get(feature_index).ok_or_else(|| {
         ToolError::InvalidRequest(format!(
             "feature_index {feature_index} out of range for '{}'(feature_count={})",
@@ -1300,8 +1509,17 @@ pub fn vector_copy_with_options_json(src: &str, dst: &str, options_json: &str) -
         .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
     let read_controls = parse_vector_read_controls(&options_value)?;
     let write_controls = parse_vector_write_controls(&options_value)?;
+    let layer = load_vector_path_with_controls(src, &read_controls)?;
 
-    let src_path = Path::new(src);
+    if vector_is_memory_path(dst) {
+        if !replace_vector_by_path(dst, layer) {
+            return Err(ToolError::InvalidRequest(format!(
+                "memory vector destination not found: {dst}"
+            )));
+        }
+        return Ok(dst.to_string());
+    }
+
     let mut dst_path = PathBuf::from(dst);
     let missing_ext = dst_path
         .extension()
@@ -1317,11 +1535,7 @@ pub fn vector_copy_with_options_json(src: &str, dst: &str, options_json: &str) -
             std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
         }
     }
-
-    let src_fmt = VectorFormat::detect(src_path).map_err(to_invalid_request)?;
     let dst_fmt = VectorFormat::detect(&dst_path).map_err(to_invalid_request)?;
-
-    let layer = read_vector_with_controls(src_path, src_fmt, &read_controls)?;
     write_vector_with_controls(&layer, &dst_path, dst_fmt, &write_controls)?;
 
     Ok(dst_path.display().to_string())
@@ -1332,7 +1546,7 @@ pub fn vector_copy_with_options_json(src: &str, dst: &str, options_json: &str) -
 /// When `dst` has no extension, `.copc.laz` is appended and output is written
 /// as COPC.
 pub fn lidar_copy_to_path(src: &str, dst: &str) -> Result<String, ToolError> {
-    let src_path = Path::new(src);
+    let cloud = load_lidar_path(src)?;
     let mut dst_path = PathBuf::from(dst);
     let missing_ext = dst_path
         .extension()
@@ -1350,17 +1564,27 @@ pub fn lidar_copy_to_path(src: &str, dst: &str) -> Result<String, ToolError> {
         }
     }
 
+    if lidar_is_memory_path(dst) {
+        if !replace_lidar_by_path(dst, cloud) {
+            return Err(ToolError::InvalidRequest(format!(
+                "memory lidar destination not found: {dst}"
+            )));
+        }
+        return Ok(dst.to_string());
+    }
+
+    let src_path = Path::new(src);
+
     if src_path == dst_path {
         return Ok(dst_path.display().to_string());
     }
 
     if missing_ext {
-        let cloud = PointCloud::read(src_path).map_err(to_invalid_request)?;
         cloud
             .write_as(&dst_path, LidarFormat::Copc)
             .map_err(to_invalid_request)?;
     } else {
-        std::fs::copy(src_path, &dst_path).map_err(to_invalid_request)?;
+        cloud.write(&dst_path).map_err(to_invalid_request)?;
     }
 
     Ok(dst_path.display().to_string())
@@ -1377,7 +1601,6 @@ pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -
         .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
     let controls = parse_lidar_write_controls(&options_value)?;
 
-    let src_path = Path::new(src);
     let mut dst_path = PathBuf::from(dst);
     let missing_ext = dst_path
         .extension()
@@ -1395,7 +1618,16 @@ pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -
         }
     }
 
-    let cloud = PointCloud::read(src_path).map_err(to_invalid_request)?;
+    let cloud = load_lidar_path(src)?;
+    if lidar_is_memory_path(dst) {
+        if !replace_lidar_by_path(dst, cloud) {
+            return Err(ToolError::InvalidRequest(format!(
+                "memory lidar destination not found: {dst}"
+            )));
+        }
+        return Ok(dst.to_string());
+    }
+
     let output_format = LidarFormat::detect(&dst_path).map_err(to_invalid_request)?;
     let write_options = controls.to_wblidar_options();
     wblidar::write_with_options(&cloud, &dst_path, output_format, &write_options)
@@ -1420,8 +1652,6 @@ pub fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) 
         .map_err(|e| ToolError::InvalidRequest(format!("invalid options JSON: {e}")))?;
     let controls = parse_raster_write_controls(&options_value)?;
 
-    let src_path = Path::new(src);
-    flush_cached_disk_raster(src_path)?;
     let dst_path = Path::new(dst);
     if let Some(parent) = dst_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
@@ -1432,6 +1662,14 @@ pub fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) 
     let output_format = RasterFormat::for_output_path(dst)
         .map_err(to_invalid_request)?;
 
+    if raster_is_memory_path(src) {
+        let raster = get_raster_arc_by_path(src)
+            .ok_or_else(|| ToolError::InvalidRequest(format!("memory raster not found: {src}")))?;
+        return write_raster_with_controls(raster.as_ref(), dst_path, output_format, &controls);
+    }
+
+    let src_path = Path::new(src);
+    flush_cached_disk_raster(src_path)?;
     let raster = Raster::read(src_path).map_err(to_invalid_request)?;
     write_raster_with_controls(&raster, dst_path, output_format, &controls)
 }
@@ -1444,6 +1682,20 @@ pub fn sensor_bundle_metadata_json(path: &str) -> Result<String, ToolError> {
 }
 
 pub fn lidar_metadata_json(path: &str) -> Result<String, ToolError> {
+    if lidar_is_memory_path(path) {
+        let cloud = load_lidar_path(path)?;
+        let meta = json!({
+            "path": path,
+            "format": "memory",
+            "file_size_bytes": Value::Null,
+            "point_count": cloud.point_count(),
+            "crs_epsg": cloud.crs.as_ref().and_then(|c| c.epsg),
+            "crs_wkt": cloud.crs.as_ref().and_then(|c| c.wkt.clone()),
+            "bounds": lidar_bounds_json(&cloud)
+        });
+        return serde_json::to_string(&meta).map_err(|err| ToolError::Execution(err.to_string()));
+    }
+
     let lidar_path = Path::new(path);
     let file_size_bytes = std::fs::metadata(lidar_path)
         .map_err(to_invalid_request)?
@@ -1522,6 +1774,10 @@ pub fn lidar_metadata_json(path: &str) -> Result<String, ToolError> {
 }
 
 pub fn lidar_point_count(path: &str) -> Result<f64, ToolError> {
+    if lidar_is_memory_path(path) {
+        return Ok(load_lidar_path(path)?.point_count() as f64);
+    }
+
     let n = read_point_count(Path::new(path)).map_err(to_invalid_request)?;
     Ok(n as f64)
 }
@@ -1546,7 +1802,7 @@ pub fn lidar_columns_json(path: &str, fields_json: &str) -> Result<String, ToolE
         fields.push(field);
     }
 
-    let cloud = PointCloud::read(Path::new(path)).map_err(to_invalid_request)?;
+    let cloud = load_lidar_path(path)?;
     let columns = cloud.extract_columns(&fields).map_err(to_invalid_request)?;
 
     let payload = json!({
@@ -1585,10 +1841,19 @@ pub fn lidar_from_columns_json(
         fields.push(field);
     }
 
-    let mut cloud = PointCloud::read(Path::new(base_path)).map_err(to_invalid_request)?;
+    let mut cloud = load_lidar_path(base_path)?;
     cloud
         .apply_columns(&fields, &columns)
         .map_err(to_invalid_request)?;
+
+    if lidar_is_memory_path(output_path) {
+        if !replace_lidar_by_path(output_path, cloud) {
+            return Err(ToolError::InvalidRequest(format!(
+                "memory lidar destination not found: {output_path}"
+            )));
+        }
+        return Ok(output_path.to_string());
+    }
 
     let mut dst_path = PathBuf::from(output_path);
     let missing_ext = dst_path
@@ -1636,6 +1901,60 @@ pub fn lidar_from_column_chunks_json(
             ))
         })?;
         fields.push(field);
+    }
+
+    if lidar_is_memory_path(base_path) {
+        let mut cloud = load_lidar_path(base_path)?;
+        let mut start = 0usize;
+        for chunk in &chunks {
+            if chunk.len() != fields.len() {
+                return Err(ToolError::InvalidRequest(format!(
+                    "chunk field count ({}) does not match requested field count ({})",
+                    chunk.len(),
+                    fields.len()
+                )));
+            }
+
+            let row_count = chunk.first().map(|col| col.len()).unwrap_or(0);
+            if chunk.iter().any(|col| col.len() != row_count) {
+                return Err(ToolError::InvalidRequest(
+                    "all columns within a chunk must have the same length".to_string(),
+                ));
+            }
+
+            cloud
+                .apply_columns_range(start, &fields, chunk)
+                .map_err(to_invalid_request)?;
+            start += row_count;
+        }
+
+        if lidar_is_memory_path(output_path) {
+            if !replace_lidar_by_path(output_path, cloud) {
+                return Err(ToolError::InvalidRequest(format!(
+                    "memory lidar destination not found: {output_path}"
+                )));
+            }
+            return Ok(output_path.to_string());
+        }
+
+        let mut dst_path = PathBuf::from(output_path);
+        let missing_ext = dst_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.trim().is_empty())
+            .unwrap_or(true);
+        if missing_ext {
+            dst_path = PathBuf::from(format!("{}.laz", dst_path.to_string_lossy()));
+        }
+
+        if let Some(parent) = dst_path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(to_invalid_request)?;
+            }
+        }
+
+        cloud.write(&dst_path).map_err(to_invalid_request)?;
+        return Ok(dst_path.display().to_string());
     }
 
     let mut dst_path = PathBuf::from(output_path);
@@ -2883,6 +3202,80 @@ mod native_exports {
     }
 
     #[extendr]
+    fn vector_read_to_memory_path(path: &str) -> extendr_api::Result<String> {
+        super::vector_read_to_memory_path(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn remove_raster_from_memory_path(path: &str) -> extendr_api::Result<bool> {
+        super::remove_raster_from_memory_path(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn clear_raster_memory() -> extendr_api::Result<i32> {
+        super::clear_raster_memory()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_memory_count() -> extendr_api::Result<i32> {
+        super::raster_memory_count()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_memory_bytes() -> extendr_api::Result<f64> {
+        super::raster_memory_bytes()
+            .map(|value| value as f64)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn remove_vector_from_memory_path(path: &str) -> extendr_api::Result<bool> {
+        super::remove_vector_from_memory_path(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn clear_vector_memory() -> extendr_api::Result<i32> {
+        super::clear_vector_memory()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn vector_memory_count() -> extendr_api::Result<i32> {
+        super::vector_memory_count()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_read_to_memory_path(path: &str) -> extendr_api::Result<String> {
+        super::lidar_read_to_memory_path(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn remove_lidar_from_memory_path(path: &str) -> extendr_api::Result<bool> {
+        super::remove_lidar_from_memory_path(path).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn clear_lidar_memory() -> extendr_api::Result<i32> {
+        super::clear_lidar_memory()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn lidar_memory_count() -> extendr_api::Result<i32> {
+        super::lidar_memory_count()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn lidar_copy_to_path(src: &str, dst: &str) -> extendr_api::Result<String> {
         super::lidar_copy_to_path(src, dst).map_err(map_extendr_err)
     }
@@ -2895,6 +3288,11 @@ mod native_exports {
     #[extendr]
     fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) -> extendr_api::Result<()> {
         super::raster_write_with_options_json(src, dst, options_json).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn raster_read_to_memory_path(path: &str) -> extendr_api::Result<String> {
+        super::raster_read_to_memory_path(path).map_err(map_extendr_err)
     }
 
     #[extendr]
@@ -3077,9 +3475,22 @@ mod native_exports {
         fn sensor_bundle_resolve_raster_path;
         fn vector_copy_to_path;
         fn vector_copy_with_options_json;
+        fn vector_read_to_memory_path;
+        fn remove_raster_from_memory_path;
+        fn clear_raster_memory;
+        fn raster_memory_count;
+        fn raster_memory_bytes;
+        fn remove_vector_from_memory_path;
+        fn clear_vector_memory;
+        fn vector_memory_count;
+        fn lidar_read_to_memory_path;
+        fn remove_lidar_from_memory_path;
+        fn clear_lidar_memory;
+        fn lidar_memory_count;
         fn lidar_copy_to_path;
         fn lidar_write_with_options_json;
         fn raster_write_with_options_json;
+        fn raster_read_to_memory_path;
         fn raster_metadata_json;
         fn raster_get_value;
         fn raster_set_value;

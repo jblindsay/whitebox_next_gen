@@ -303,8 +303,56 @@ vector_copy_with_options_json <- function(src, dst, options_json) {
   )
 }
 
+vector_read_to_memory_path <- function(path) {
+  .Call("wrap__vector_read_to_memory_path", path, PACKAGE = "whiteboxworkflows")
+}
+
+remove_raster_from_memory_path <- function(path) {
+  .Call("wrap__remove_raster_from_memory_path", path, PACKAGE = "whiteboxworkflows")
+}
+
+clear_raster_memory <- function() {
+  .Call("wrap__clear_raster_memory", PACKAGE = "whiteboxworkflows")
+}
+
+raster_memory_count <- function() {
+  .Call("wrap__raster_memory_count", PACKAGE = "whiteboxworkflows")
+}
+
+raster_memory_bytes <- function() {
+  .Call("wrap__raster_memory_bytes", PACKAGE = "whiteboxworkflows")
+}
+
+remove_vector_from_memory_path <- function(path) {
+  .Call("wrap__remove_vector_from_memory_path", path, PACKAGE = "whiteboxworkflows")
+}
+
+clear_vector_memory <- function() {
+  .Call("wrap__clear_vector_memory", PACKAGE = "whiteboxworkflows")
+}
+
+vector_memory_count <- function() {
+  .Call("wrap__vector_memory_count", PACKAGE = "whiteboxworkflows")
+}
+
 lidar_copy_to_path <- function(src, dst) {
   .Call("wrap__lidar_copy_to_path", src, dst, PACKAGE = "whiteboxworkflows")
+}
+
+lidar_read_to_memory_path <- function(path) {
+  .Call("wrap__lidar_read_to_memory_path", path, PACKAGE = "whiteboxworkflows")
+}
+
+remove_lidar_from_memory_path <- function(path) {
+  .Call("wrap__remove_lidar_from_memory_path", path, PACKAGE = "whiteboxworkflows")
+}
+
+clear_lidar_memory <- function() {
+  .Call("wrap__clear_lidar_memory", PACKAGE = "whiteboxworkflows")
+}
+
+lidar_memory_count <- function() {
+  .Call("wrap__lidar_memory_count", PACKAGE = "whiteboxworkflows")
 }
 
 lidar_write_with_options_json <- function(src, dst, options_json) {
@@ -325,6 +373,10 @@ raster_write_with_options_json <- function(src, dst, options_json) {
     options_json,
     PACKAGE = "whiteboxworkflows"
   )
+}
+
+raster_read_to_memory_path <- function(path) {
+  .Call("wrap__raster_read_to_memory_path", path, PACKAGE = "whiteboxworkflows")
 }
 
 raster_metadata_json <- function(path) {

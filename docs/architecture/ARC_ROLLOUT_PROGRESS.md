@@ -201,22 +201,37 @@ Stage 10 closeout status: complete. Remaining LiDAR changes beyond this point ar
 
 ---
 
-## R API Parity (Planning Only, Deferred)
+## R API Parity (Sprint Active)
 
-This section is planning-only. **Do not start implementation yet**.
+R parity implementation is now active.
 
 Current state in `wbw_r`:
-- Raster access uses a disk cache in `wbw_r/src/lib.rs` (`DISK_RASTER_CACHE`, `get_or_load_disk_raster_handle`, `flush_cached_disk_raster`).
-- `wbw_r` currently does **not** use `memory_store` / `memory://raster/...` handles.
+- Raster access still includes the existing disk cache path in `wbw_r/src/lib.rs` (`DISK_RASTER_CACHE`, `get_or_load_disk_raster_handle`, `flush_cached_disk_raster`).
+- Raster parity Slice 1 is now implemented:
+   - Added `raster_read_to_memory_path(...)` in `wbw_r` native layer.
+   - `raster_metadata_json`, `raster_get_value`, `raster_set_value`, and `raster_write_with_options_json` now accept `memory://raster/...` paths.
+   - R facade `wbw_read_raster(..., file_mode = "m")` now stages rasters into memory store and returns memory-backed raster objects.
+   - R raster conversion helpers now stage memory-backed rasters to temp GeoTIFF when `terra`/`stars` require a filesystem path.
 
-Implication:
-- The Arc rollout in `wbtools_oss` still helps R indirectly for internal tool-path cloning reductions.
-- But R does not yet get the same API-level in-memory-handle chaining model used by Python.
-
-Deferred future parity tasks (after Arc rollout completion priorities):
-1. Add an R-side typed raster-handle path model equivalent to Python memory-backed paths.
-2. Wire R read/write entry points to the same in-process raster memory store strategy (or equivalent abstraction).
-3. Validate end-to-end chaining and benchmark representative raster pipelines in R.
+Remaining parity tasks (in-progress backlog):
+1. Vector parity Slice 2 is now implemented:
+   - Added `vector_read_to_memory_path(...)` in the `wbw_r` native layer.
+   - `vector_metadata_json`, topology feature reads, and vector copy/write paths now accept `memory://vector/...` sources.
+   - In-memory vector overwrite/update paths are supported through memory-aware destination handling in `vector_copy_with_options_json(...)`.
+   - R facade `wbw_read_vector(..., file_mode = "m")` now returns memory-backed vector objects.
+   - R vector conversion helpers now stage memory-backed vectors to temp GeoPackage when `terra`/`sf` require filesystem paths.
+2. LiDAR parity Slice 3 is now implemented:
+   - Added `lidar_read_to_memory_path(...)` in the `wbw_r` native layer.
+   - `lidar_metadata_json`, `lidar_point_count`, `lidar_columns_json`, `lidar_from_columns_json`, `lidar_from_column_chunks_json`, `lidar_copy_to_path`, and `lidar_write_with_options_json` now accept `memory://lidar/...` sources.
+   - R facade `wbw_read_lidar(..., file_mode = "m")` now returns memory-backed lidar objects.
+   - Session facade now exposes `read_lidar(..., file_mode = "r"|"m")`.
+   - Memory-backed lidar objects continue to support matrix extraction and disk writes; chunk rewrite falls back to in-memory application when the source is memory-backed.
+3. R memory management helpers are now implemented:
+   - Added explicit WbW-R helpers for raster/vector/lidar memory-store remove/count/clear operations.
+   - Added raster memory byte accounting in the R facade to mirror Python's approximate raster-store heap reporting.
+   - Session facade now exposes `remove_*_from_memory(...)`, `clear_*_memory()`, `*_memory_count()`, and `raster_memory_bytes()` helpers.
+   - Added focused runtime coverage for remove/count/clear behavior across raster, vector, and lidar memory stores.
+4. Validate end-to-end chaining and benchmark representative raster/vector/lidar pipelines in R.
 
 ---
 

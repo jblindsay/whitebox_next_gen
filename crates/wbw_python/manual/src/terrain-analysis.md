@@ -304,8 +304,9 @@ local noise.
 mep = wbe.multiscale_elevation_percentile(
     dem,
     min_scale=1,
-    max_scale=100,
-    step=2,
+    num_steps=10,
+    step_size=2,
+    step_nonlinearity=1.0,
     sig_digits=3
 )
 wbe.write_raster(mep, 'multiscale_elevation_percentile.tif')

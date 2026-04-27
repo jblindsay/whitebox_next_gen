@@ -3580,9 +3580,10 @@ impl TerrainWindowCore {
             params: vec![
                 ToolParamSpec { name: "input", description: "Input DEM raster path or typed raster object.", required: true },
                 ToolParamSpec { name: "min_scale", description: "Minimum half-window radius in cells (default 4).", required: false },
-                ToolParamSpec { name: "max_scale", description: "Maximum half-window radius in cells (default 100).", required: false },
+                ToolParamSpec { name: "num_steps", description: "Number of scales to evaluate (default 10).", required: false },
                 ToolParamSpec { name: "step_size", description: "Scale increment in cells (default 1). Alias: step.", required: false },
-                ToolParamSpec { name: "sig_digits", description: "Significant decimal digits used during percentile binning (default 2).", required: false },
+                ToolParamSpec { name: "step_nonlinearity", description: "Nonlinear scaling exponent; >1.0 clusters scales toward finer resolutions (default 1.0).", required: false },
+                ToolParamSpec { name: "sig_digits", description: "Significant decimal digits used during percentile binning (default 3).", required: false },
                 ToolParamSpec { name: "output", description: "Optional output path for percentile magnitude raster.", required: false },
                 ToolParamSpec { name: "output_scale", description: "Optional output path for raster storing scale of most extreme percentile response.", required: false },
             ],
@@ -3593,16 +3594,18 @@ impl TerrainWindowCore {
         let mut defaults = ToolArgs::new();
         defaults.insert("input".to_string(), json!("dem.tif"));
         defaults.insert("min_scale".to_string(), json!(4));
-        defaults.insert("max_scale".to_string(), json!(100));
+        defaults.insert("num_steps".to_string(), json!(10));
         defaults.insert("step_size".to_string(), json!(1));
-        defaults.insert("sig_digits".to_string(), json!(2));
+        defaults.insert("step_nonlinearity".to_string(), json!(1.0));
+        defaults.insert("sig_digits".to_string(), json!(3));
 
         let mut example_args = ToolArgs::new();
         example_args.insert("input".to_string(), json!("dem.tif"));
         example_args.insert("min_scale".to_string(), json!(4));
-        example_args.insert("max_scale".to_string(), json!(100));
-        example_args.insert("step_size".to_string(), json!(2));
-        example_args.insert("sig_digits".to_string(), json!(2));
+        example_args.insert("num_steps".to_string(), json!(10));
+        example_args.insert("step_size".to_string(), json!(1));
+        example_args.insert("step_nonlinearity".to_string(), json!(1.0));
+        example_args.insert("sig_digits".to_string(), json!(3));
         example_args.insert("output".to_string(), json!("multiscale_elevation_percentile.tif"));
         example_args.insert("output_scale".to_string(), json!("multiscale_elevation_percentile_scale.tif"));
 
@@ -3615,9 +3618,10 @@ impl TerrainWindowCore {
             params: vec![
                 ToolParamDescriptor { name: "input".to_string(), description: "Input DEM raster path or typed raster object.".to_string(), required: true },
                 ToolParamDescriptor { name: "min_scale".to_string(), description: "Minimum half-window radius in cells (default 4).".to_string(), required: false },
-                ToolParamDescriptor { name: "max_scale".to_string(), description: "Maximum half-window radius in cells (default 100).".to_string(), required: false },
+                ToolParamDescriptor { name: "num_steps".to_string(), description: "Number of scales to evaluate (default 10).".to_string(), required: false },
                 ToolParamDescriptor { name: "step_size".to_string(), description: "Scale increment in cells (default 1). Alias: step.".to_string(), required: false },
-                ToolParamDescriptor { name: "sig_digits".to_string(), description: "Significant decimal digits used during percentile binning (default 2).".to_string(), required: false },
+                ToolParamDescriptor { name: "step_nonlinearity".to_string(), description: "Nonlinear scaling exponent; >1.0 clusters scales toward finer resolutions (default 1.0).".to_string(), required: false },
+                ToolParamDescriptor { name: "sig_digits".to_string(), description: "Significant decimal digits used during percentile binning (default 3).".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Optional output path for percentile magnitude raster.".to_string(), required: false },
                 ToolParamDescriptor { name: "output_scale".to_string(), description: "Optional output path for raster storing scale of most extreme percentile response.".to_string(), required: false },
             ],
@@ -5782,18 +5786,18 @@ impl TerrainWindowCore {
         let output_path = parse_optional_output_path(args, "output")?;
         let output_scale_path = parse_optional_output_path(args, "output_scale")?;
 
-        let mut min_scale = args
+        let min_scale = args
             .get("min_scale")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
             .unwrap_or(4)
             .max(1);
-        let max_scale = args
-            .get("max_scale")
+        let num_steps = args
+            .get("num_steps")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
-            .unwrap_or(100)
-            .max(min_scale);
+            .unwrap_or(10)
+            .max(1);
         let step_size = args
             .get("step_size")
             .or_else(|| args.get("step"))
@@ -5801,15 +5805,18 @@ impl TerrainWindowCore {
             .map(|v| v as usize)
             .unwrap_or(1)
             .max(1);
+        let step_nonlinearity = args
+            .get("step_nonlinearity")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0)
+            .max(1.0)
+            .min(4.0) as f32;
         let sig_digits = args
             .get("sig_digits")
             .and_then(|v| v.as_i64())
-            .unwrap_or(2)
+            .unwrap_or(3)
             .clamp(0, 9) as i32;
         let multiplier = 10f64.powi(sig_digits);
-        if min_scale == 0 {
-            min_scale = 1;
-        }
 
         let input = Self::load_raster(&input_path)?;
         let mut output_mag = input.clone();
@@ -5823,6 +5830,61 @@ impl TerrainWindowCore {
             let band = band_idx as isize;
             ctx.progress.info("running multiscale_elevation_percentile");
 
+            let mut band_min = f64::INFINITY;
+            let mut band_max = f64::NEG_INFINITY;
+            for r in 0..rows {
+                for c in 0..cols {
+                    let z = input.get(band, r as isize, c as isize);
+                    if input.is_nodata(z) {
+                        continue;
+                    }
+                    if z < band_min {
+                        band_min = z;
+                    }
+                    if z > band_max {
+                        band_max = z;
+                    }
+                }
+            }
+
+            if !band_min.is_finite() || !band_max.is_finite() {
+                continue;
+            }
+
+            let min_bin = (band_min * multiplier).floor() as i64;
+            let max_bin = (band_max * multiplier).floor() as i64;
+            let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+            let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                ToolError::Execution(
+                    "multiscale_elevation_percentile histogram bin count exceeds platform limits"
+                        .to_string(),
+                )
+            })?;
+
+            let bin_nodata = i64::MIN;
+            let mut binned = vec![bin_nodata; rows * cols];
+            binned
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_bins)| {
+                    for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        *cell_bin = (z * multiplier).floor() as i64 - min_bin;
+                    }
+                });
+
+            let rows_isize = rows as isize;
+            let cols_isize = cols as isize;
+            let get_bin = |rr: isize, cc: isize| -> i64 {
+                if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                    return bin_nodata;
+                }
+                binned[rr as usize * cols + cc as usize]
+            };
+
             for r in 0..rows {
                 let fill = vec![nodata; cols];
                 output_mag.set_row_slice(band, r as isize, &fill).map_err(|e| {
@@ -5834,14 +5896,10 @@ impl TerrainWindowCore {
             }
 
             let mut scales = Vec::new();
-            let mut s = min_scale;
-            while s <= max_scale {
-                scales.push(s);
-                if let Some(next) = s.checked_add(step_size) {
-                    s = next;
-                } else {
-                    break;
-                }
+            for step_idx in 0..num_steps {
+                let scale = min_scale
+                    + (((step_size * step_idx) as f32).powf(step_nonlinearity)).floor() as usize;
+                scales.push(scale);
             }
 
             for (loop_idx, midpoint) in scales.iter().enumerate() {
@@ -5850,32 +5908,87 @@ impl TerrainWindowCore {
                     .into_par_iter()
                     .map(|r| {
                         let mut row_out = vec![nodata; cols];
+                        let row = r as isize;
+                        let half = midpoint as isize;
+                        let mut histo = vec![0i64; num_bins];
+                        let mut old_center = bin_nodata;
+                        let mut n = 0i64;
+                        let mut n_less = 0i64;
+                        let start_row = row - half;
+                        let end_row = row + half;
+
                         for c in 0..cols {
-                            let z = input.get(band, r as isize, c as isize);
-                            if input.is_nodata(z) {
+                            let col = c as isize;
+                            let center_bin = get_bin(row, col);
+                            if center_bin == bin_nodata {
+                                old_center = bin_nodata;
                                 continue;
                             }
-                            let z_bin = (z * multiplier).floor();
-                            let y1 = r.saturating_sub(midpoint);
-                            let x1 = c.saturating_sub(midpoint);
-                            let y2 = (r + midpoint).min(rows - 1);
-                            let x2 = (c + midpoint).min(cols - 1);
-                            let mut n = 0.0;
-                            let mut n_less = 0.0;
-                            for rr in y1..=y2 {
-                                for cc in x1..=x2 {
-                                    let v = input.get(band, rr as isize, cc as isize);
-                                    if !input.is_nodata(v) {
-                                        n += 1.0;
-                                        if (v * multiplier).floor() < z_bin {
-                                            n_less += 1.0;
+
+                            if old_center != bin_nodata {
+                                let trailing_col = col - half - 1;
+                                let leading_col = col + half;
+
+                                for rr in start_row..=end_row {
+                                    let bv = get_bin(rr, trailing_col);
+                                    if bv != bin_nodata {
+                                        histo[bv as usize] -= 1;
+                                        n -= 1;
+                                        if bv < old_center {
+                                            n_less -= 1;
+                                        }
+                                    }
+                                }
+
+                                for rr in start_row..=end_row {
+                                    let bv = get_bin(rr, leading_col);
+                                    if bv != bin_nodata {
+                                        histo[bv as usize] += 1;
+                                        n += 1;
+                                        if bv < old_center {
+                                            n_less += 1;
+                                        }
+                                    }
+                                }
+
+                                if old_center < center_bin {
+                                    let mut m = 0i64;
+                                    for v in old_center..center_bin {
+                                        m += histo[v as usize];
+                                    }
+                                    n_less += m;
+                                } else if old_center > center_bin {
+                                    let mut m = 0i64;
+                                    for v in center_bin..old_center {
+                                        m += histo[v as usize];
+                                    }
+                                    n_less -= m;
+                                }
+                            } else {
+                                histo.fill(0);
+                                n = 0;
+                                n_less = 0;
+                                let start_col = col - half;
+                                let end_col = col + half;
+
+                                for cc in start_col..=end_col {
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, cc);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] += 1;
+                                            n += 1;
+                                            if bv < center_bin {
+                                                n_less += 1;
+                                            }
                                         }
                                     }
                                 }
                             }
-                            if n > 0.0 {
-                                row_out[c] = n_less / n * 100.0;
+
+                            if n > 0 {
+                                row_out[c] = n_less as f64 / n as f64 * 100.0;
                             }
+                            old_center = center_bin;
                         }
                         row_out
                     })

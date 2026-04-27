@@ -9369,8 +9369,14 @@ impl WbEnvironment {
         self.max_procs = max_procs;
     }
 
-    /// Read a single raster file
-    fn read_raster(&self, file_name: &str) -> PyResult<Raster> {
+    /// Read a single raster file.
+    ///
+    /// `file_mode` controls how the file is staged:
+    /// - `"r"` (default): disk-path mode — the raster is not eagerly loaded into memory.
+    /// - `"m"`: memory mode — the raster is read and stored in the in-process memory store
+    ///   for fast repeated access without re-reading from disk.
+    #[pyo3(signature = (file_name, file_mode="r"))]
+    fn read_raster(&self, file_name: &str, file_mode: &str) -> PyResult<Raster> {
         let path = if Path::new(file_name).is_absolute() {
             PathBuf::from(file_name)
         } else {
@@ -9383,27 +9389,34 @@ impl WbEnvironment {
             ));
         }
 
-        // Load the raster data into memory_store to enable efficient reuse across tool calls
-        let raster = WbRaster::read(&path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(
-                format!("failed to read raster '{}': {e}", path.display())
-            )
-        })?;
+        if file_mode.to_ascii_lowercase().contains('m') {
+            // Load the raster data into memory_store to enable efficient reuse across tool calls
+            let raster = WbRaster::read(&path).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(
+                    format!("failed to read raster '{}': {e}", path.display())
+                )
+            })?;
+            let id = memory_store::put_raster(raster);
+            return Ok(Raster {
+                file_path: PathBuf::from(memory_store::make_raster_memory_path(&id)),
+                active_band: 0,
+            });
+        }
 
-        let id = memory_store::put_raster(raster);
-        Ok(Raster {
-            file_path: PathBuf::from(memory_store::make_raster_memory_path(&id)),
-            active_band: 0,
-        })
+        Ok(Raster { file_path: path, active_band: 0 })
     }
 
     /// Read a single vector file.
     ///
+    /// `file_mode` controls how the file is staged:
+    /// - `"r"` (default): disk-path mode — returns a path-backed vector object.
+    /// - `"m"`: memory mode — reads and stores the vector in the in-process memory store.
+    ///
     /// `options` may include:
     /// - `osmpbf`: {`highways_only`, `named_ways_only`, `polygons_only`, `include_tag_keys`}
     /// - `strict_format_options`: bool
-    #[pyo3(signature = (file_name, options=None))]
-    fn read_vector(&self, file_name: &str, options: Option<&Bound<'_, PyAny>>) -> PyResult<Vector> {
+    #[pyo3(signature = (file_name, options=None, file_mode="r"))]
+    fn read_vector(&self, file_name: &str, options: Option<&Bound<'_, PyAny>>, file_mode: &str) -> PyResult<Vector> {
         let path = if Path::new(file_name).is_absolute() {
             PathBuf::from(file_name)
         } else {
@@ -9415,6 +9428,8 @@ impl WbEnvironment {
                 format!("Vector file not found: {}", path.display()),
             ));
         }
+
+        let memory_mode = file_mode.to_ascii_lowercase().contains('m');
 
         if let Some(opts) = options {
             let options_json = py_any_to_json_value(opts)?.to_string();
@@ -9442,28 +9457,40 @@ impl WbEnvironment {
                 ))
             })?;
 
-            let layer = wbvector::read(&written).map_err(|e| {
+            if memory_mode {
+                let layer = wbvector::read(&written).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "failed to read vector '{}' after option processing: {e}",
+                        written
+                    ))
+                })?;
+                let id = vector_memory_store::put_vector(layer);
+                return Ok(Vector {
+                    file_path: PathBuf::from(vector_memory_store::make_vector_memory_path(&id)),
+                });
+            }
+
+            return Ok(Vector {
+                file_path: PathBuf::from(written),
+            });
+        }
+
+        if memory_mode {
+            let layer = wbvector::read(&path).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "failed to read vector '{}' after option processing: {e}",
-                    written
+                    "failed to read vector '{}': {e}",
+                    path.display()
                 ))
             })?;
+
             let id = vector_memory_store::put_vector(layer);
             return Ok(Vector {
                 file_path: PathBuf::from(vector_memory_store::make_vector_memory_path(&id)),
             });
         }
 
-        let layer = wbvector::read(&path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to read vector '{}': {e}",
-                path.display()
-            ))
-        })?;
-
-        let id = vector_memory_store::put_vector(layer);
         Ok(Vector {
-            file_path: PathBuf::from(vector_memory_store::make_vector_memory_path(&id)),
+            file_path: path,
         })
     }
 
@@ -9501,27 +9528,29 @@ impl WbEnvironment {
     /// Read multiple raster files at once.
     ///
     /// The `parallel` flag is currently accepted for API compatibility.
-    #[pyo3(signature = (file_names, parallel=true))]
-    fn read_rasters(&self, file_names: Vec<String>, parallel: bool) -> PyResult<Vec<Raster>> {
+    /// `file_mode` is forwarded to each `read_raster` call (`"r"` = disk-path, `"m"` = memory).
+    #[pyo3(signature = (file_names, parallel=true, file_mode="r"))]
+    fn read_rasters(&self, file_names: Vec<String>, parallel: bool, file_mode: &str) -> PyResult<Vec<Raster>> {
         let _ = parallel;
         file_names
             .into_iter()
-            .map(|name| self.read_raster(&name))
+            .map(|name| self.read_raster(&name, file_mode))
             .collect()
     }
 
     /// Read multiple vector files at once.
-    #[pyo3(signature = (file_names, parallel=true, options=None))]
+    #[pyo3(signature = (file_names, parallel=true, options=None, file_mode="r"))]
     fn read_vectors(
         &self,
         file_names: Vec<String>,
         parallel: bool,
         options: Option<&Bound<'_, PyAny>>,
+        file_mode: &str,
     ) -> PyResult<Vec<Vector>> {
         let _ = parallel;
         file_names
             .into_iter()
-            .map(|name| self.read_vector(&name, options))
+            .map(|name| self.read_vector(&name, options, file_mode))
             .collect()
     }
 
@@ -21657,13 +21686,14 @@ impl WbEnvironment {
         })
     }
 
-    #[pyo3(signature = (input, min_scale=4, max_scale=100, step_size=1, sig_digits=2, output_path=None, output_scale_path=None, callback=None))]
+    #[pyo3(signature = (input, min_scale=4, num_steps=10, step_size=1, step_nonlinearity=1.0, sig_digits=3, output_path=None, output_scale_path=None, callback=None))]
     fn multiscale_elevation_percentile(
         &self,
         input: &Raster,
         min_scale: usize,
-        max_scale: usize,
+        num_steps: usize,
         step_size: usize,
+        step_nonlinearity: f64,
         sig_digits: i32,
         output_path: Option<&str>,
         output_scale_path: Option<&str>,
@@ -21677,8 +21707,9 @@ impl WbEnvironment {
             json!(input.file_path.to_string_lossy().to_string()),
         );
         args.insert("min_scale".to_string(), json!(min_scale));
-        args.insert("max_scale".to_string(), json!(max_scale));
+        args.insert("num_steps".to_string(), json!(num_steps));
         args.insert("step_size".to_string(), json!(step_size));
+        args.insert("step_nonlinearity".to_string(), json!(step_nonlinearity));
         args.insert("sig_digits".to_string(), json!(sig_digits));
         if let Some(ref out) = resolved_output {
             args.insert("output".to_string(), json!(out));

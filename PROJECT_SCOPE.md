@@ -26,9 +26,16 @@ Update this file whenever priorities, architecture, or non-negotiables change.
 - Taxonomy sync should regenerate both QGIS and R resolved JSON exports.
 
 ## Active Priorities
-- Priority 1: Continue targeted Python stub typing cleanup to reduce unresolved `*args/**kwargs -> Any` placeholders in `crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi` while preserving conservative safety rules.
-- Priority 2: Keep signature-rollout automation centralized in `scripts/rollout_stub_literals.py` (Literal rollout + placeholder fill modes) and prefer unambiguous-only replacement paths.
-- Priority 3: Maintain taxonomy/runtime/frontend alignment checks after stub updates so Python/R/QGIS discovery/catalog behavior remains coherent.
+- Priority 1: Recover legacy-parity performance for raster overlay operations in `crates/wbtools_oss/src/tools/gis/mod.rs`, starting with `sum_overlay` and then the broader overlay family (`average_overlay`, `max_overlay`, `min_overlay`, `multiply_overlay`, `standard_deviation_overlay`, `weighted_sum`, `weighted_overlay`).
+- Priority 2: Study legacy `whitebox_workflows` implementations before optimizing Whitebox Next Gen raster tools, especially where algorithm structure affects both correctness and speed.
+- Priority 3: Continue targeted Python stub typing cleanup to reduce unresolved `*args/**kwargs -> Any` placeholders in `crates/wbw_python/whitebox_workflows/whitebox_workflows.pyi` while preserving conservative safety rules.
+- Priority 4: Keep signature-rollout automation centralized in `scripts/rollout_stub_literals.py` (Literal rollout + placeholder fill modes) and prefer unambiguous-only replacement paths.
+- Priority 5: Maintain taxonomy/runtime/frontend alignment checks after stub updates so Python/R/QGIS discovery/catalog behavior remains coherent.
+
+## Immediate Working Scope
+- In scope now: raster overlay performance recovery in `wbtools_oss`, with legacy behavior in `whitebox_workflows/src/tools/gis` treated as the correctness and structure reference.
+- In scope now: profiling-by-reasoning around raster access patterns, nodata propagation, output write strategy, and avoidable full-grid buffer copies.
+- Out of scope for this recovery slice: unrelated GIS/network feature expansion, taxonomy reshaping, and public-release workflow changes.
 
 ## Out Of Scope (For Now)
 - 
@@ -63,6 +70,9 @@ Before coding, restate:
 4. Validation plan
 
 ## Session Notes (Optional)
+- Scope refresh completed on 2026-04-28 for raster overlay parity/performance recovery.
+- Current hot path under active investigation: raster overlay operations in `crates/wbtools_oss/src/tools/gis/mod.rs` remain slower than legacy `whitebox_workflows/src/tools/gis` despite recent direct-fill optimization changes.
+- Working rule for current slice: prefer legacy-structure parity and measurable hot-path simplification over speculative buffering or abstraction-heavy rewrites.
 - Scope refresh completed on 2026-04-23 after targeted stub-typing follow-up.
 - Latest checkpoint commit: `d4836d77da4587e4d27a161fe4eeefd8ded74201`.
 - `whitebox_workflows.pyi` placeholder count reduced from 88 to 63 using runtime-signature-derived fills.

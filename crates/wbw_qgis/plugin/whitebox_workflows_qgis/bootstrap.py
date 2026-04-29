@@ -9,6 +9,9 @@ import subprocess
 from pathlib import Path
 
 
+_EXTERNAL_SESSION_CACHE: dict[tuple[str, bool, str], "ExternalRuntimeSession"] = {}
+
+
 class RuntimeBootstrapError(RuntimeError):
     pass
 
@@ -80,6 +83,103 @@ class ExternalRuntimeSession:
         self._python_executable = python_executable
         self._include_pro = include_pro
         self._tier = tier
+        self._stream_worker_process: subprocess.Popen | None = None
+
+    def _build_clean_env(self) -> dict[str, str]:
+        clean_env = dict(os.environ)
+        clean_env.pop("PYTHONHOME", None)
+        clean_env.pop("PYTHONPATH", None)
+        return clean_env
+
+    def _build_stream_worker_runner(self) -> str:
+        return (
+            "import base64, json, sys\\n"
+            "import whitebox_workflows as wbw\\n"
+            "include_pro = bool(json.loads(sys.argv[1]))\\n"
+            "tier = str(sys.argv[2])\\n"
+            "session = wbw.RuntimeSession(include_pro=include_pro, tier=tier)\\n"
+            "def _emit(prefix, text):\\n"
+            "    enc = base64.b64encode(text.encode('utf-8')).decode('ascii')\\n"
+            "    sys.stdout.write(prefix + enc + '\\n')\\n"
+            "    sys.stdout.flush()\\n"
+            "def _emit_event(evt):\\n"
+            "    try:\\n"
+            "        if isinstance(evt, str):\\n"
+            "            payload = evt\\n"
+            "        else:\\n"
+            "            payload = json.dumps(evt)\\n"
+            "    except Exception as exc:\\n"
+            "        payload = json.dumps({'type': 'message', 'message': str(exc)})\\n"
+            "    _emit('__WBW_WORKER_EVENT__', payload)\\n"
+            "for raw in sys.stdin:\\n"
+            "    line = raw.strip()\\n"
+            "    if not line:\\n"
+            "        continue\\n"
+            "    try:\\n"
+            "        cmd = json.loads(line)\\n"
+            "    except Exception as exc:\\n"
+            "        _emit('__WBW_WORKER_ERROR__', f'invalid command json: {exc}')\\n"
+            "        continue\\n"
+            "    action = str(cmd.get('action', ''))\\n"
+            "    if action == 'shutdown':\\n"
+            "        _emit('__WBW_WORKER_OK__', 'shutdown')\\n"
+            "        break\\n"
+            "    if action != 'run_tool_json_stream':\\n"
+            "        _emit('__WBW_WORKER_ERROR__', f'unsupported action: {action}')\\n"
+            "        continue\\n"
+            "    tool_id = str(cmd.get('tool_id', ''))\\n"
+            "    args_json = str(cmd.get('args_json', '{}'))\\n"
+            "    try:\\n"
+            "        try:\\n"
+            "            out = session.run_tool_json_stream(tool_id, args_json, _emit_event)\\n"
+            "        except TypeError:\\n"
+            "            out = session.run_tool_json_stream(tool_id, args_json)\\n"
+            "        out_text = out if isinstance(out, str) else json.dumps(out)\\n"
+            "        _emit('__WBW_WORKER_RESULT__', out_text)\\n"
+            "    except Exception as exc:\\n"
+            "        _emit('__WBW_WORKER_ERROR__', str(exc))\\n"
+        )
+
+    def _start_stream_worker(self) -> None:
+        if self._stream_worker_process is not None and self._stream_worker_process.poll() is None:
+            return
+
+        runner = self._build_stream_worker_runner()
+        self._stream_worker_process = subprocess.Popen(
+            [self._python_executable, "-c", runner, json.dumps(self._include_pro), self._tier],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=self._build_clean_env(),
+            bufsize=1,
+        )
+
+    def _stop_stream_worker(self) -> None:
+        process = self._stream_worker_process
+        self._stream_worker_process = None
+        if process is None:
+            return
+
+        try:
+            if process.poll() is None and process.stdin is not None:
+                process.stdin.write(json.dumps({"action": "shutdown"}) + "\n")
+                process.stdin.flush()
+        except Exception:
+            pass
+
+        try:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=2.0)
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+    def __del__(self):
+        self._stop_stream_worker()
 
     def _invoke(self, method: str, **kwargs) -> str:
         payload = {
@@ -152,16 +252,12 @@ class ExternalRuntimeSession:
             "    sys.stdout.write(json.dumps(out))\n"
         )
 
-        clean_env = dict(os.environ)
-        clean_env.pop("PYTHONHOME", None)
-        clean_env.pop("PYTHONPATH", None)
-
         completed = subprocess.run(
             [self._python_executable, "-c", runner, json.dumps(payload)],
             check=False,
             capture_output=True,
             text=True,
-            env=clean_env,
+            env=self._build_clean_env(),
         )
         if completed.returncode != 0:
             stderr = completed.stderr.strip() or completed.stdout.strip() or "unknown external runtime error"
@@ -181,6 +277,79 @@ class ExternalRuntimeSession:
         return self._invoke("get_tool_metadata_json", tool_id=tool_id)
 
     def run_tool_json_stream(self, tool_id: str, args_json: str, _callback=None):
+        try:
+            return self._run_tool_json_stream_persistent(tool_id, args_json, _callback)
+        except Exception:
+            self._stop_stream_worker()
+            return self._run_tool_json_stream_oneoff(tool_id, args_json, _callback)
+
+    def _run_tool_json_stream_persistent(self, tool_id: str, args_json: str, _callback=None) -> str:
+        self._start_stream_worker()
+        process = self._stream_worker_process
+        if process is None or process.stdin is None or process.stdout is None:
+            raise RuntimeBootstrapError("External runtime worker failed to start.")
+
+        command = {
+            "action": "run_tool_json_stream",
+            "tool_id": tool_id,
+            "args_json": args_json,
+        }
+        process.stdin.write(json.dumps(command) + "\n")
+        process.stdin.flush()
+
+        loose_stdout_lines: list[str] = []
+
+        while True:
+            raw_line = process.stdout.readline()
+            if raw_line == "":
+                break
+            line = raw_line.rstrip("\r\n")
+            if line.startswith("__WBW_WORKER_EVENT__"):
+                enc = line[len("__WBW_WORKER_EVENT__") :]
+                try:
+                    evt = base64.b64decode(enc).decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                if callable(_callback):
+                    try:
+                        _callback(evt)
+                    except Exception:
+                        pass
+                continue
+            if line.startswith("__WBW_WORKER_RESULT__"):
+                enc = line[len("__WBW_WORKER_RESULT__") :]
+                try:
+                    return base64.b64decode(enc).decode("utf-8", errors="replace")
+                except Exception:
+                    return "{}"
+            if line.startswith("__WBW_WORKER_ERROR__"):
+                enc = line[len("__WBW_WORKER_ERROR__") :]
+                try:
+                    message = base64.b64decode(enc).decode("utf-8", errors="replace")
+                except Exception:
+                    message = "unknown external runtime worker error"
+                raise RuntimeBootstrapError(
+                    "External whitebox_workflows runtime failed via "
+                    f"{self._python_executable}: {message}"
+                )
+            if line.startswith("__WBW_WORKER_OK__"):
+                continue
+            if line.strip():
+                loose_stdout_lines.append(line)
+
+        returncode = process.poll()
+        if returncode is None:
+            raise RuntimeBootstrapError(
+                "External runtime worker terminated unexpectedly before emitting a result."
+            )
+
+        detail = "\n".join(loose_stdout_lines).strip() or "unknown external runtime worker error"
+        raise RuntimeBootstrapError(
+            "External whitebox_workflows runtime failed via "
+            f"{self._python_executable}: {detail}"
+        )
+
+    def _run_tool_json_stream_oneoff(self, tool_id: str, args_json: str, _callback=None) -> str:
         payload = {
             "include_pro": self._include_pro,
             "tier": self._tier,
@@ -221,10 +390,6 @@ class ExternalRuntimeSession:
             "sys.stdout.flush()\n"
         )
 
-        clean_env = dict(os.environ)
-        clean_env.pop("PYTHONHOME", None)
-        clean_env.pop("PYTHONPATH", None)
-
         completed_result: str | None = None
         loose_stdout_lines: list[str] = []
 
@@ -233,7 +398,7 @@ class ExternalRuntimeSession:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env=clean_env,
+            env=self._build_clean_env(),
             bufsize=1,
         )
 
@@ -324,16 +489,24 @@ def create_runtime_session(include_pro: bool = True, tier: str = "open"):
                 "No external Python interpreter was found for whitebox_workflows fallback."
             )
 
+        cache_key = (external_python, bool(prefer_pro), str(tier))
+        cached = _EXTERNAL_SESSION_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
         session = ExternalRuntimeSession(external_python, include_pro=prefer_pro, tier=tier)
         try:
             raw_caps = session.get_runtime_capabilities_json()
             _parse_next_gen_capabilities(raw_caps, f"external runtime ({external_python})")
+            _EXTERNAL_SESSION_CACHE[cache_key] = session
             return session
         except RuntimeBootstrapError as exc:
             if allow_downgrade and prefer_pro and _is_pro_unavailable_error(str(exc)):
                 downgraded = ExternalRuntimeSession(external_python, include_pro=False, tier=tier)
                 raw_caps = downgraded.get_runtime_capabilities_json()
                 _parse_next_gen_capabilities(raw_caps, f"external runtime ({external_python})")
+                downgraded_key = (external_python, False, str(tier))
+                _EXTERNAL_SESSION_CACHE[downgraded_key] = downgraded
                 return downgraded
             raise
 

@@ -285,6 +285,20 @@ class WhiteboxDockPanel(QDockWidget):
         self._recent_label = QLabel("Recent Tools")
         self._recent_list = QListWidget()
         self._recent_clear_button = QPushButton("Clear Recents")
+
+        self._recipes_label = QLabel("Workflow Recipes")
+        self._recipes_show_locked_checkbox = QCheckBox("Include locked recipes")
+        self._recipes_show_locked_checkbox.setChecked(True)
+        self._recipes_list = QListWidget()
+        self._recipes_open_button = QPushButton("Open Recipe")
+        self._recipes_copy_steps_button = QPushButton("Copy Recipe Steps")
+        self._recipes_upgrade_button = QPushButton("Why Is This Locked?")
+        self._recipes_open_file_button = QPushButton("Open Recipe File")
+        self._recipes_reload_button = QPushButton("Reload Recipe File")
+        self._recipes_validate_button = QPushButton("Validate Recipe File")
+        self._recipe_preview_label = QLabel("Recipe details: select a recipe to preview steps.")
+        if hasattr(self._recipe_preview_label, "setWordWrap"):
+            self._recipe_preview_label.setWordWrap(True)
         self._shortcut_hint_label = QLabel(
             "Shortcuts: /=focus search, Esc=clear search, Up/Down=jump to results, Enter=open result, Ctrl/Cmd+D=toggle favorite, Delete/Backspace=remove favorite, Ctrl/Cmd+Shift+D=diagnostics"
         )
@@ -325,6 +339,16 @@ class WhiteboxDockPanel(QDockWidget):
         layout.addWidget(self._recent_label)
         layout.addWidget(self._recent_list)
         layout.addWidget(self._recent_clear_button)
+        layout.addWidget(self._recipes_label)
+        layout.addWidget(self._recipes_show_locked_checkbox)
+        layout.addWidget(self._recipes_list)
+        layout.addWidget(self._recipes_open_button)
+        layout.addWidget(self._recipes_copy_steps_button)
+        layout.addWidget(self._recipes_upgrade_button)
+        layout.addWidget(self._recipes_open_file_button)
+        layout.addWidget(self._recipes_reload_button)
+        layout.addWidget(self._recipes_validate_button)
+        layout.addWidget(self._recipe_preview_label)
         layout.addWidget(self._shortcut_hint_label)
         layout.addWidget(self._refresh_button)
         layout.addWidget(self._diagnostics_button)
@@ -343,10 +367,22 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorite_tool_ids: list[str] = []
         self._favorite_display_ids: list[str] = []
         self._recent_tool_ids: list[str] = []
+        self._recipes: list[dict[str, Any]] = []
+        self._recipe_ids: list[str] = []
         self._search_box.textChanged.connect(self._on_search_text_changed)
         self._search_box.returnPressed.connect(self._open_quick_match)
         self._show_available_checkbox.stateChanged.connect(self._on_filter_changed)
         self._show_locked_checkbox.stateChanged.connect(self._on_filter_changed)
+        self._recipes_show_locked_checkbox.stateChanged.connect(self._on_recipe_discovery_changed)
+        self._recipes_open_button.clicked.connect(self._open_selected_recipe)
+        self._recipes_copy_steps_button.clicked.connect(self._copy_selected_recipe_steps)
+        self._recipes_upgrade_button.clicked.connect(self._show_selected_recipe_upgrade)
+        self._recipes_open_file_button.clicked.connect(self._open_recipe_file)
+        self._recipes_reload_button.clicked.connect(self._reload_recipe_file)
+        self._recipes_validate_button.clicked.connect(self._validate_recipe_file)
+        row_changed = getattr(self._recipes_list, "currentRowChanged", None)
+        if row_changed is not None:
+            row_changed.connect(self._on_recipe_selection_changed)
 
         self._search_box.installEventFilter(self)
         self._results_list.installEventFilter(self)
@@ -360,6 +396,12 @@ class WhiteboxDockPanel(QDockWidget):
         self._favorites_list.customContextMenuRequested.connect(self._on_favorites_context_menu)
 
         self._open_tool_callback = None
+        self._open_recipe_callback = None
+        self._copy_recipe_steps_callback = None
+        self._show_recipe_upgrade_callback = None
+        self._open_recipe_file_callback = None
+        self._reload_recipe_file_callback = None
+        self._validate_recipe_file_callback = None
         self._tool_context_menu_callback = None
 
         # Keyboard accelerators for high-frequency workflows.
@@ -402,6 +444,7 @@ class WhiteboxDockPanel(QDockWidget):
         self._remove_favorite_shortcut_callback = None
         self._filter_state_callback = None
         self._search_state_callback = None
+        self._recipe_discovery_state_callback = None
         self._focus_area_callback = None
         self._focus_area = "search"
         self._session_banner_click_callback = None
@@ -443,6 +486,31 @@ class WhiteboxDockPanel(QDockWidget):
 
         self._favorites_list.itemDoubleClicked.connect(_open_favorite)
 
+    def on_open_recipe(self, callback):
+        self._open_recipe_callback = callback
+
+        def _open_recipe(_item):
+            recipe_id = self.selected_recipe_id()
+            if recipe_id:
+                callback(recipe_id)
+
+        self._recipes_list.itemDoubleClicked.connect(_open_recipe)
+
+    def on_show_recipe_upgrade(self, callback):
+        self._show_recipe_upgrade_callback = callback
+
+    def on_copy_recipe_steps(self, callback):
+        self._copy_recipe_steps_callback = callback
+
+    def on_open_recipe_file(self, callback):
+        self._open_recipe_file_callback = callback
+
+    def on_reload_recipe_file(self, callback):
+        self._reload_recipe_file_callback = callback
+
+    def on_validate_recipe_file(self, callback):
+        self._validate_recipe_file_callback = callback
+
     def on_add_favorite(self, callback):
         self._favorite_add_button.clicked.connect(callback)
 
@@ -475,6 +543,9 @@ class WhiteboxDockPanel(QDockWidget):
 
     def on_search_state_changed(self, callback):
         self._search_state_callback = callback
+
+    def on_recipe_discovery_state_changed(self, callback):
+        self._recipe_discovery_state_callback = callback
 
     def on_focus_area_changed(self, callback):
         self._focus_area_callback = callback
@@ -591,6 +662,12 @@ class WhiteboxDockPanel(QDockWidget):
     def set_show_locked_enabled(self, enabled: bool) -> None:
         self._show_locked_checkbox.setChecked(bool(enabled))
 
+    def show_locked_recipes_enabled(self) -> bool:
+        return bool(self._recipes_show_locked_checkbox.isChecked())
+
+    def set_show_locked_recipes_enabled(self, enabled: bool) -> None:
+        self._recipes_show_locked_checkbox.setChecked(bool(enabled))
+
     def search_text(self) -> str:
         return str(self._search_box.text())
 
@@ -683,6 +760,121 @@ class WhiteboxDockPanel(QDockWidget):
         for tool_id in self._recent_tool_ids:
             self._recent_list.addItem(QListWidgetItem(tool_id))
 
+    def set_recipes(self, recipes: list[dict[str, Any]]) -> None:
+        self._recipes = [dict(r) for r in recipes]
+        self._recipe_ids = []
+        self._recipes_list.clear()
+
+        for recipe in self._recipes:
+            recipe_id = str(recipe.get("id", "")).strip()
+            if not recipe_id:
+                continue
+            title = str(recipe.get("title", recipe_id)).strip() or recipe_id
+            tier = str(recipe.get("tier", "open")).strip().upper()
+            summary = str(recipe.get("summary", "")).strip()
+            is_locked = bool(recipe.get("locked", False))
+            lock_prefix = "[LOCKED] " if is_locked else ""
+            label = f"{lock_prefix}[{tier}] {title}"
+            item = QListWidgetItem(label)
+            lock_reason = str(recipe.get("locked_reason", "")).strip()
+            tooltip_parts = []
+            if summary:
+                tooltip_parts.append(summary)
+            if lock_reason:
+                tooltip_parts.append(lock_reason)
+            if tooltip_parts and hasattr(item, "setToolTip"):
+                item.setToolTip("\n".join(tooltip_parts))
+            if is_locked:
+                try:
+                    from qgis.PyQt.QtGui import QColor
+                    item.setForeground(QColor("#F57F17"))
+                except Exception:
+                    pass
+            self._recipes_list.addItem(item)
+            self._recipe_ids.append(recipe_id)
+
+        if self._recipe_ids:
+            self._recipes_list.setCurrentRow(0)
+            self._update_recipe_preview_by_row(0)
+        else:
+            self._recipe_preview_label.setText("Recipe details: no recipes available for this catalog.")
+            if hasattr(self._recipes_upgrade_button, "setEnabled"):
+                self._recipes_upgrade_button.setEnabled(False)
+
+    def selected_recipe_id(self) -> str:
+        row = self._recipes_list.currentRow()
+        if row < 0 or row >= len(self._recipe_ids):
+            return ""
+        return self._recipe_ids[row]
+
+    def _open_selected_recipe(self) -> None:
+        if self._open_recipe_callback is None:
+            return
+        recipe_id = self.selected_recipe_id()
+        if recipe_id:
+            self._open_recipe_callback(recipe_id)
+
+    def _show_selected_recipe_upgrade(self) -> None:
+        if self._show_recipe_upgrade_callback is None:
+            return
+        recipe_id = self.selected_recipe_id()
+        if recipe_id:
+            self._show_recipe_upgrade_callback(recipe_id)
+
+    def _copy_selected_recipe_steps(self) -> None:
+        if self._copy_recipe_steps_callback is None:
+            return
+        recipe_id = self.selected_recipe_id()
+        if recipe_id:
+            self._copy_recipe_steps_callback(recipe_id)
+
+    def _open_recipe_file(self) -> None:
+        if self._open_recipe_file_callback is None:
+            return
+        self._open_recipe_file_callback()
+
+    def _reload_recipe_file(self) -> None:
+        if self._reload_recipe_file_callback is None:
+            return
+        self._reload_recipe_file_callback()
+
+    def _validate_recipe_file(self) -> None:
+        if self._validate_recipe_file_callback is None:
+            return
+        self._validate_recipe_file_callback()
+
+    def _on_recipe_selection_changed(self, row: int) -> None:
+        self._update_recipe_preview_by_row(int(row))
+
+    def _update_recipe_preview_by_row(self, row: int) -> None:
+        if row < 0 or row >= len(self._recipes):
+            self._recipe_preview_label.setText("Recipe details: select a recipe to preview steps.")
+            if hasattr(self._recipes_upgrade_button, "setEnabled"):
+                self._recipes_upgrade_button.setEnabled(False)
+            return
+
+        recipe = self._recipes[row]
+        title = str(recipe.get("title", recipe.get("id", "Recipe"))).strip() or "Recipe"
+        summary = str(recipe.get("summary", "")).strip()
+        input_hint = str(recipe.get("input_hint", "")).strip()
+        output_hint = str(recipe.get("output_hint", "")).strip()
+        tools = [str(t) for t in recipe.get("tools", []) if str(t).strip()]
+        lock_reason = str(recipe.get("locked_reason", "")).strip()
+
+        steps = ", ".join(tools) if tools else "(no steps)"
+        parts = [f"{title}: {summary}" if summary else title, f"Steps: {steps}"]
+        if input_hint:
+            parts.append(f"Input hint: {input_hint}")
+        if output_hint:
+            parts.append(f"Output hint: {output_hint}")
+        if lock_reason:
+            parts.append(f"Status: {lock_reason}")
+        self._recipe_preview_label.setText("\n".join(parts))
+
+        is_locked = bool(recipe.get("locked", False))
+        if hasattr(self._recipes_upgrade_button, "setEnabled"):
+            self._recipes_upgrade_button.setEnabled(is_locked)
+
     def _refresh_favorites_list(self) -> None:
         self._favorites_list.clear()
         self._favorite_display_ids = []
@@ -709,6 +901,10 @@ class WhiteboxDockPanel(QDockWidget):
         self._refresh_results(self._search_box.text())
         if self._filter_state_callback is not None:
             self._filter_state_callback()
+
+    def _on_recipe_discovery_changed(self, _value: int) -> None:
+        if self._recipe_discovery_state_callback is not None:
+            self._recipe_discovery_state_callback()
 
     def _open_selected_result(self) -> None:
         callback = getattr(self, "_open_tool_callback", None)

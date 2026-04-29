@@ -18,6 +18,13 @@ from .host_api import (
 )
 from .panel import WhiteboxDockPanel, summarize_catalog
 from .provider import WhiteboxProcessingProvider
+from .recipes import (
+    ensure_user_recipe_file,
+    load_all_recipe_definitions,
+    recipe_steps_text,
+    user_recipe_file_path,
+    visible_recipes,
+)
 from .settings import WhiteboxPluginSettings, WhiteboxSettingsDialog
 
 try:
@@ -89,6 +96,7 @@ class WhiteboxWorkflowsPlugin:
         self._refresh_action = None
         self._panel_action = None
         self._dock_panel = None
+        self._recipe_index: dict[str, dict] = {}
         self._recent_tool_ids: list[str] = []
         self._favorite_tool_ids: list[str] = []
         self._favorite_defaults_applied = False
@@ -104,6 +112,7 @@ class WhiteboxWorkflowsPlugin:
         self._settings_key_panel_width = "whitebox_workflows/panel_width"
         self._settings_key_show_available = "whitebox_workflows/show_available"
         self._settings_key_show_locked = "whitebox_workflows/show_locked"
+        self._settings_key_show_locked_recipes = "whitebox_workflows/show_locked_recipes"
         self._settings_key_search_text = "whitebox_workflows/search_text"
         self._settings_key_focus_area = "whitebox_workflows/focus_area"
         self._settings_key_last_tool = "whitebox_workflows/last_tool_id"
@@ -111,6 +120,7 @@ class WhiteboxWorkflowsPlugin:
         self._panel_width = 320
         self._panel_show_available = True
         self._panel_show_locked = True
+        self._panel_show_locked_recipes = True
         self._panel_search_text = ""
         self._panel_focus_area = "search"
         self._last_tool_id = ""
@@ -221,6 +231,12 @@ class WhiteboxWorkflowsPlugin:
         panel.on_open_tool(self._open_tool_from_panel)
         panel.on_open_recent_tool(self._open_tool_from_recent)
         panel.on_open_favorite_tool(self._open_tool_from_favorite)
+        panel.on_open_recipe(self._open_recipe_from_panel)
+        panel.on_copy_recipe_steps(self._copy_recipe_steps_from_panel)
+        panel.on_show_recipe_upgrade(self._show_recipe_upgrade_from_panel)
+        panel.on_open_recipe_file(self._open_recipe_file_from_panel)
+        panel.on_reload_recipe_file(self._reload_recipe_file_from_panel)
+        panel.on_validate_recipe_file(self._validate_recipe_file_from_panel)
         panel.on_add_favorite(self._add_selected_favorite)
         panel.on_remove_favorite(self._remove_selected_favorite)
         panel.on_toggle_selected_favorite(self._toggle_selected_result_favorite)
@@ -232,6 +248,7 @@ class WhiteboxWorkflowsPlugin:
         panel.on_quick_open_toggled(self._on_quick_open_toggled)
         panel.on_filter_state_changed(self._on_filter_state_changed)
         panel.on_search_state_changed(self._on_search_state_changed)
+        panel.on_recipe_discovery_state_changed(self._on_recipe_discovery_state_changed)
         panel.on_focus_area_changed(self._on_focus_area_changed)
         panel.on_session_banner_clicked(self._show_diagnostics)
         panel.on_tool_context_menu(self._show_tool_context_menu)
@@ -240,6 +257,7 @@ class WhiteboxWorkflowsPlugin:
             panel.set_quick_open_enabled(self._quick_open_top_match)
             panel.set_show_available_enabled(self._panel_show_available)
             panel.set_show_locked_enabled(self._panel_show_locked)
+            panel.set_show_locked_recipes_enabled(self._panel_show_locked_recipes)
             panel.set_search_text(self._panel_search_text)
             panel.set_focus_area(self._panel_focus_area)
             resize = getattr(panel, "resize", None)
@@ -269,6 +287,156 @@ class WhiteboxWorkflowsPlugin:
 
     def _open_tool_from_favorite(self, tool_id: str):
         self._open_tool_from_panel(tool_id)
+
+    def _open_recipe_from_panel(self, recipe_id: str):
+        recipe = self._recipe_index.get(str(recipe_id), {})
+        launch_tool = str(recipe.get("launch_tool", "")).strip()
+        if not launch_tool:
+            self._notify_warning(f"Recipe is not launchable: {recipe_id}")
+            return
+
+        if bool(recipe.get("locked", False)):
+            self._show_recipe_upgrade_from_panel(recipe_id)
+            return
+
+        provider_id = self.provider.id()
+        opened = open_processing_algorithm_dialog(self.iface, provider_id, launch_tool)
+        if not opened:
+            self._notify_warning(
+                f"Unable to open launch tool '{launch_tool}' for recipe '{recipe_id}'."
+            )
+            return
+
+        self._record_last_tool(launch_tool)
+        self._record_recent_tool(launch_tool)
+        summary = str(recipe.get("summary", "")).strip()
+        if summary:
+            self._notify_info(f"Recipe '{recipe.get('title', recipe_id)}': {summary}")
+        else:
+            self._notify_info(f"Opened recipe launch tool: {launch_tool}")
+
+    def _show_recipe_upgrade_from_panel(self, recipe_id: str):
+        recipe = self._recipe_index.get(str(recipe_id), {})
+        if not recipe:
+            self._notify_warning(f"Recipe not found: {recipe_id}")
+            return
+
+        title = str(recipe.get("title", recipe_id)).strip() or recipe_id
+        tier = str(recipe.get("tier", "open")).strip().upper() or "OPEN"
+        reason = str(recipe.get("locked_reason", "This recipe is currently unavailable.")).strip()
+        tools = [str(t) for t in recipe.get("tools", []) if str(t).strip()]
+        steps = " -> ".join(tools) if tools else "(no defined steps)"
+
+        if not bool(recipe.get("locked", False)):
+            self._notify_info(f"Recipe '{title}' is available in the current runtime tier.")
+            return
+
+        message = (
+            f"Recipe: {title}\n"
+            f"Required tier: {tier}\n"
+            f"Reason: {reason}\n\n"
+            f"Workflow steps: {steps}\n\n"
+            "Activate a runtime with the required tier and refresh the catalog."
+        )
+
+        try:
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                "Whitebox Workflows Recipe Access",
+                message,
+            )
+            return
+        except Exception:
+            pass
+
+        self._notify_warning(message)
+
+    def _copy_recipe_steps_from_panel(self, recipe_id: str):
+        recipe = self._recipe_index.get(str(recipe_id), {})
+        if not recipe:
+            self._notify_warning(f"Recipe not found: {recipe_id}")
+            return
+
+        text = recipe_steps_text(recipe)
+        try:
+            QApplication.clipboard().setText(text)
+            self._notify_info(f"Copied recipe steps: {recipe.get('title', recipe_id)}")
+            return
+        except Exception:
+            pass
+
+        self._notify_warning("Unable to copy recipe steps to clipboard in this host.")
+
+    def _open_recipe_file_from_panel(self):
+        path = ensure_user_recipe_file()
+        path_str = str(path)
+
+        # Best-effort host/system open.
+        opened = False
+        try:
+            from qgis.PyQt.QtGui import QDesktopServices  # type: ignore[import]
+            from qgis.PyQt.QtCore import QUrl  # type: ignore[import]
+            opened = bool(QDesktopServices.openUrl(QUrl.fromLocalFile(path_str)))
+        except Exception:
+            opened = False
+
+        if not opened:
+            try:
+                QApplication.clipboard().setText(path_str)
+            except Exception:
+                pass
+            self._notify_info(f"Recipe file: {path_str}")
+            return
+
+        self._notify_info(f"Opened recipe file: {path_str}")
+
+    def _reload_recipe_file_from_panel(self):
+        path = ensure_user_recipe_file()
+        self._refresh_catalog(silent=True)
+        self._notify_info(f"Reloaded recipes from: {path}")
+
+    def _validate_recipe_file_from_panel(self):
+        path = ensure_user_recipe_file()
+        recipe_catalog, warnings = load_all_recipe_definitions()
+
+        built_in_count = len([r for r in recipe_catalog if str(r.get("id", "")).strip()])
+        if warnings:
+            lines = [
+                f"Recipe file: {path}",
+                f"Validation status: {len(warnings)} warning(s)",
+                f"Usable recipes loaded: {built_in_count}",
+                "",
+                "Warnings:",
+            ]
+            lines.extend([f"- {w}" for w in warnings])
+            message = "\n".join(lines)
+            try:
+                QMessageBox.information(
+                    self.iface.mainWindow(),
+                    "Whitebox Workflows Recipe Validation",
+                    message,
+                )
+                return
+            except Exception:
+                pass
+            self._notify_warning(message)
+            return
+
+        message = (
+            f"Recipe file: {path}\n"
+            f"Validation status: OK\n"
+            f"Usable recipes loaded: {built_in_count}"
+        )
+        try:
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                "Whitebox Workflows Recipe Validation",
+                message,
+            )
+            return
+        except Exception:
+            pass
+        self._notify_info(message)
 
     def _record_recent_tool(self, tool_id: str):
         if tool_id in self._recent_tool_ids:
@@ -374,6 +542,10 @@ class WhiteboxWorkflowsPlugin:
 
     def _on_search_state_changed(self, *_args):
         self._save_panel_ui_state()
+
+    def _on_recipe_discovery_state_changed(self, *_args):
+        self._save_panel_ui_state()
+        self._refresh_catalog(silent=True)
 
     def _on_focus_area_changed(self, *_args):
         self._save_panel_ui_state()
@@ -522,6 +694,10 @@ class WhiteboxWorkflowsPlugin:
                 settings.value(self._settings_key_show_locked, True),
                 True,
             )
+            self._panel_show_locked_recipes = self._coerce_bool(
+                settings.value(self._settings_key_show_locked_recipes, True),
+                True,
+            )
             self._panel_search_text = str(settings.value(self._settings_key_search_text, ""))
             self._panel_focus_area = str(settings.value(self._settings_key_focus_area, "search")).strip().lower() or "search"
         except Exception:
@@ -529,6 +705,7 @@ class WhiteboxWorkflowsPlugin:
             self._panel_width = 320
             self._panel_show_available = True
             self._panel_show_locked = True
+            self._panel_show_locked_recipes = True
             self._panel_search_text = ""
             self._panel_focus_area = "search"
 
@@ -600,6 +777,7 @@ class WhiteboxWorkflowsPlugin:
                     self._panel_width = min(520, max(220, int(width())))
                 self._panel_show_available = panel.show_available_enabled()
                 self._panel_show_locked = panel.show_locked_enabled()
+                self._panel_show_locked_recipes = panel.show_locked_recipes_enabled()
                 self._panel_search_text = panel.search_text()
                 self._panel_focus_area = panel.focus_area()
             settings = QSettings()
@@ -607,6 +785,7 @@ class WhiteboxWorkflowsPlugin:
             settings.setValue(self._settings_key_panel_width, self._panel_width)
             settings.setValue(self._settings_key_show_available, self._panel_show_available)
             settings.setValue(self._settings_key_show_locked, self._panel_show_locked)
+            settings.setValue(self._settings_key_show_locked_recipes, self._panel_show_locked_recipes)
             settings.setValue(self._settings_key_search_text, self._panel_search_text)
             settings.setValue(self._settings_key_focus_area, self._panel_focus_area)
         except Exception:
@@ -629,6 +808,7 @@ class WhiteboxWorkflowsPlugin:
             quick_open_top_match=self._quick_open_top_match,
             panel_show_available=self._panel_show_available,
             panel_show_locked=self._panel_show_locked,
+            panel_show_locked_recipes=self._panel_show_locked_recipes,
             panel_width=self._panel_width,
         )
         try:
@@ -645,11 +825,13 @@ class WhiteboxWorkflowsPlugin:
         self._quick_open_top_match = updated.quick_open_top_match
         self._panel_show_available = updated.panel_show_available
         self._panel_show_locked = updated.panel_show_locked
+        self._panel_show_locked_recipes = updated.panel_show_locked_recipes
         self._panel_width = updated.panel_width
         if self._dock_panel is not None:
             self._dock_panel.set_quick_open_enabled(updated.quick_open_top_match)
             self._dock_panel.set_show_available_enabled(updated.panel_show_available)
             self._dock_panel.set_show_locked_enabled(updated.panel_show_locked)
+            self._dock_panel.set_show_locked_recipes_enabled(updated.panel_show_locked_recipes)
             resize = getattr(self._dock_panel, "resize", None)
             if callable(resize):
                 height_fn = getattr(self._dock_panel, "height", None)
@@ -726,6 +908,27 @@ class WhiteboxWorkflowsPlugin:
             self._dock_panel.set_catalog(catalog)
             self._dock_panel.set_favorites(self._favorite_tool_ids)
             self._dock_panel.set_recent_tools(self._recent_tool_ids)
+
+            recipe_catalog, recipe_warnings = load_all_recipe_definitions()
+
+            recipes = visible_recipes(
+                effective_tier=effective_tier,
+                catalog=catalog,
+                include_locked_discovery=self._panel_show_locked_recipes,
+                recipe_catalog=recipe_catalog,
+            )
+            self._recipe_index = {
+                str(item.get("id", "")): item
+                for item in recipes
+                if str(item.get("id", "")).strip()
+            }
+            self._dock_panel.set_recipes(recipes)
+
+            if recipe_warnings:
+                self._notify_warning(
+                    f"Recipe file issues ({user_recipe_file_path()}): {recipe_warnings[0]}"
+                )
+
             if self._last_tool_id:
                 self._dock_panel.select_result_by_tool_id(self._last_tool_id)
                 self._dock_panel.select_favorite_by_tool_id(self._last_tool_id)

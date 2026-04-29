@@ -89,7 +89,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">7.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">8.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">9.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">10.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">11.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">12.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">13.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">14.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">15.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">16.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">17.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">18.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">19.</strong> Troubleshooting</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="installation-and-setup.html"><strong aria-hidden="true">2.</strong> Installation and Setup</a></li><li class="chapter-item expanded "><a href="build-and-preview.html"><strong aria-hidden="true">3.</strong> Build and Preview</a></li><li class="chapter-item expanded "><a href="quick-start.html"><strong aria-hidden="true">4.</strong> Quick Start</a></li><li class="chapter-item expanded "><a href="runtime-and-discovery.html"><strong aria-hidden="true">5.</strong> Runtime and Discovery</a></li><li class="chapter-item expanded "><a href="tool-execution-in-qgis.html"><strong aria-hidden="true">6.</strong> Tool Execution in QGIS</a></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">7.</strong> Recipes</a></li><li class="chapter-item expanded "><a href="licensing-and-tiers.html"><strong aria-hidden="true">8.</strong> Licensing and Tiers</a></li><li class="chapter-item expanded "><a href="data-formats.html"><strong aria-hidden="true">9.</strong> Supported Data Formats</a></li><li class="chapter-item expanded "><a href="reprojection-crs.html"><strong aria-hidden="true">10.</strong> Reprojection and CRS</a></li><li class="chapter-item expanded "><a href="terrain-analysis.html"><strong aria-hidden="true">11.</strong> Terrain Analysis and Geomorphometry</a></li><li class="chapter-item expanded "><a href="spatial-hydrology.html"><strong aria-hidden="true">12.</strong> Spatial Hydrology</a></li><li class="chapter-item expanded "><a href="lidar-processing.html"><strong aria-hidden="true">13.</strong> LiDAR Processing</a></li><li class="chapter-item expanded "><a href="remote-sensing.html"><strong aria-hidden="true">14.</strong> Remote Sensing Analysis</a></li><li class="chapter-item expanded "><a href="raster-analysis.html"><strong aria-hidden="true">15.</strong> Raster Analysis</a></li><li class="chapter-item expanded "><a href="vector-analysis.html"><strong aria-hidden="true">16.</strong> Vector Analysis</a></li><li class="chapter-item expanded "><a href="network-analysis.html"><strong aria-hidden="true">17.</strong> Network Analysis</a></li><li class="chapter-item expanded "><a href="linear-referencing.html"><strong aria-hidden="true">18.</strong> Linear Referencing</a></li><li class="chapter-item expanded "><a href="script-index.html"><strong aria-hidden="true">19.</strong> Workflow Index</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">20.</strong> Troubleshooting</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -369,6 +369,108 @@ whitebox_workflows environment.</p>
 <h2 id="progress-and-messaging"><a class="header" href="#progress-and-messaging">Progress and Messaging</a></h2>
 <p>Execution status and warnings should be treated as part of result validation.
 If a tool completes with warnings, inspect outputs before continuing.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="recipes"><a class="header" href="#recipes">Recipes</a></h1>
+<p>Recipes in WbW-QGIS are guided workflow entries that help users launch common multi-tool patterns faster.</p>
+<p>A recipe is not a new backend algorithm. It is a curated sequence of existing tools with summary guidance, launch defaults, and tier-aware visibility.</p>
+<h2 id="what-recipes-provide"><a class="header" href="#what-recipes-provide">What Recipes Provide</a></h2>
+<p>Recipes provide:</p>
+<ul>
+<li>A short purpose statement.</li>
+<li>A launch tool (the first tool dialog opened when you run the recipe).</li>
+<li>A step list (ordered tool IDs for the workflow).</li>
+<li>Optional input and output hints.</li>
+<li>Tier gating (Open, Pro, or Enterprise).</li>
+</ul>
+<h2 id="where-recipes-appear-in-qgis"><a class="header" href="#where-recipes-appear-in-qgis">Where Recipes Appear in QGIS</a></h2>
+<p>Recipes are available in the Whitebox Workflows dock panel under Workflow Recipes.</p>
+<p>The panel includes:</p>
+<ul>
+<li>Open Recipe</li>
+<li>Copy Recipe Steps</li>
+<li>Why Is This Locked?</li>
+<li>Open Recipe File</li>
+<li>Reload Recipe File</li>
+<li>Validate Recipe File</li>
+<li>Include locked recipes toggle</li>
+</ul>
+<h2 id="built-in-and-user-recipes"><a class="header" href="#built-in-and-user-recipes">Built-in and User Recipes</a></h2>
+<p>WbW-QGIS merges two sources:</p>
+<ol>
+<li>Built-in recipes shipped with the plugin.</li>
+<li>User-defined recipes loaded from a local JSON file.</li>
+</ol>
+<p>If a user recipe has the same id as a built-in recipe, the user recipe overrides the built-in entry.</p>
+<h2 id="user-recipe-file-location"><a class="header" href="#user-recipe-file-location">User Recipe File Location</a></h2>
+<p>Default file path:</p>
+<ul>
+<li>~/.whitebox_workflows_qgis/recipes.json</li>
+</ul>
+<p>Override path with environment variable:</p>
+<ul>
+<li>WBW_QGIS_USER_RECIPES</li>
+</ul>
+<p>When you press Open Recipe File, the plugin creates the file from a template if it does not exist.</p>
+<h2 id="user-recipe-file-format"><a class="header" href="#user-recipe-file-format">User Recipe File Format</a></h2>
+<p>The file may be either:</p>
+<ol>
+<li>An object with a recipes array.</li>
+<li>A direct array of recipes.</li>
+</ol>
+<p>Each recipe should include:</p>
+<ul>
+<li>id (required)</li>
+<li>tools array (required)</li>
+</ul>
+<p>Optional fields:</p>
+<ul>
+<li>title</li>
+<li>summary</li>
+<li>tier (open, pro, enterprise)</li>
+<li>launch_tool</li>
+<li>input_hint</li>
+<li>output_hint</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-json">{
+  "recipes": [
+    {
+      "id": "my_custom_terrain_recipe",
+      "title": "My Custom Terrain Recipe",
+      "summary": "User-defined recipe example.",
+      "tier": "open",
+      "launch_tool": "slope",
+      "tools": ["slope", "aspect", "hillshade"],
+      "input_hint": "Set a DEM raster as the primary input.",
+      "output_hint": "Write outputs to a dedicated project output folder."
+    }
+  ]
+}
+</code></pre>
+<h2 id="validation-and-error-reporting"><a class="header" href="#validation-and-error-reporting">Validation and Error Reporting</a></h2>
+<p>Use Validate Recipe File in the panel to run validation and see a full report.</p>
+<p>Validation checks include:</p>
+<ul>
+<li>Entry structure is a JSON object.</li>
+<li>id exists and is non-empty.</li>
+<li>tools exists and is a non-empty array.</li>
+<li>tier value is valid when supplied.</li>
+</ul>
+<p>Invalid entries are skipped, while valid entries continue to load.</p>
+<p>Warnings include recipe index and, when available, recipe id to speed up fixes.</p>
+<h2 id="recipe-visibility-and-tier-behavior"><a class="header" href="#recipe-visibility-and-tier-behavior">Recipe Visibility and Tier Behavior</a></h2>
+<p>Recipes are filtered by:</p>
+<ul>
+<li>Runtime tier entitlement.</li>
+<li>Tool availability in the current runtime catalog.</li>
+<li>Include locked recipes panel setting.</li>
+</ul>
+<p>When Include locked recipes is enabled, recipes that are not runnable in the current runtime remain visible with lock messaging for discovery.</p>
+<h2 id="discovery-and-sorting"><a class="header" href="#discovery-and-sorting">Discovery and Sorting</a></h2>
+<p>Recipes are shown alphabetically in the panel for easier scanning.</p>
+<p>Sorting applies to both built-in and user-defined recipes.</p>
+<h2 id="recommended-team-practice"><a class="header" href="#recommended-team-practice">Recommended Team Practice</a></h2>
+<p>For teams, keep a shared recipe JSON under version control and point WBW_QGIS_USER_RECIPES to that path in your local environment setup.</p>
+<p>This gives you repeatable, reviewable workflow definitions without modifying plugin source files.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="licensing-and-tiers"><a class="header" href="#licensing-and-tiers">Licensing and Tiers</a></h1>
 <p>WbW-QGIS is a frontend layer. Licensing authority lives in the backend runtime.</p>
 <h2 id="core-principle"><a class="header" href="#core-principle">Core Principle</a></h2>

@@ -6,6 +6,7 @@
 - [Quick Start](./quick-start.md)
 - [Runtime and Discovery](./runtime-and-discovery.md)
 - [Tool Execution in QGIS](./tool-execution-in-qgis.md)
+- [Recipes](./recipes.md)
 - [Licensing and Tiers](./licensing-and-tiers.md)
 - [Supported Data Formats](./data-formats.md)
 - [Reprojection and CRS](./reprojection-crs.md)

@@ -768,6 +768,12 @@ def _load_taxonomy_index() -> dict[str, tuple[str, str]]:
     return idx
 
 
+def clear_taxonomy_cache() -> None:
+    """Clear cached taxonomy index so the next discovery reloads JSON from disk."""
+    global _TAXONOMY_INDEX
+    _TAXONOMY_INDEX = None
+
+
 def _apply_taxonomy_override(catalog: list[dict]) -> list[dict]:
     """Stamp each catalog item with canonical taxonomy category/subcategory.
 
@@ -1013,6 +1019,9 @@ def discover_runtime(include_pro: bool = True, tier: str = "open") -> dict:
 
 
 def discover_tool_catalog(include_pro: bool = True, tier: str = "open") -> list[dict]:
+    # Refresh taxonomy source on each catalog rebuild so Refresh Catalog picks
+    # up tool_taxonomy.resolved.json updates without requiring QGIS restart.
+    clear_taxonomy_cache()
     catalog = get_tool_catalog(include_pro=include_pro, tier=tier)
     catalog = _ensure_feature_preserving_smoothing(catalog)
     catalog = _inject_multiscale_topographic_position_class_render_hints(catalog)

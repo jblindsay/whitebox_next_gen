@@ -119,6 +119,7 @@ class WhiteboxPluginSettings:
         quick_open_top_match: bool = True,
         panel_show_available: bool = True,
         panel_show_locked: bool = True,
+        panel_show_locked_recipes: bool = True,
         panel_width: int = 320,
     ):
         self.include_pro = bool(include_pro)
@@ -126,6 +127,7 @@ class WhiteboxPluginSettings:
         self.quick_open_top_match = bool(quick_open_top_match)
         self.panel_show_available = bool(panel_show_available)
         self.panel_show_locked = bool(panel_show_locked)
+        self.panel_show_locked_recipes = bool(panel_show_locked_recipes)
         self.panel_width = max(220, min(520, int(panel_width)))
 
     def to_dict(self) -> dict[str, Any]:
@@ -135,6 +137,7 @@ class WhiteboxPluginSettings:
             "quick_open_top_match": self.quick_open_top_match,
             "panel_show_available": self.panel_show_available,
             "panel_show_locked": self.panel_show_locked,
+            "panel_show_locked_recipes": self.panel_show_locked_recipes,
             "panel_width": self.panel_width,
         }
 
@@ -196,6 +199,9 @@ class WhiteboxSettingsDialog(QDialog):
         self._show_locked_check = QCheckBox()
         self._show_locked_check.setChecked(s.panel_show_locked)
 
+        self._show_locked_recipes_check = QCheckBox()
+        self._show_locked_recipes_check.setChecked(s.panel_show_locked_recipes)
+
         self._panel_width_spin = QSpinBox()
         if hasattr(self._panel_width_spin, "setRange"):
             self._panel_width_spin.setRange(220, 520)
@@ -205,6 +211,7 @@ class WhiteboxSettingsDialog(QDialog):
             panel_form.addRow("Quick-open top match on Enter", self._quick_open_check)
             panel_form.addRow("Show available tools", self._show_available_check)
             panel_form.addRow("Show locked tools", self._show_locked_check)
+            panel_form.addRow("Include locked recipes", self._show_locked_recipes_check)
             panel_form.addRow("Panel width (px)", self._panel_width_spin)
 
         # --- Entitlement notice ---
@@ -270,5 +277,6 @@ class WhiteboxSettingsDialog(QDialog):
             quick_open_top_match=bool(self._quick_open_check.isChecked()),
             panel_show_available=bool(self._show_available_check.isChecked()),
             panel_show_locked=bool(self._show_locked_check.isChecked()),
+            panel_show_locked_recipes=bool(self._show_locked_recipes_check.isChecked()),
             panel_width=int(self._panel_width_spin.value()),
         )

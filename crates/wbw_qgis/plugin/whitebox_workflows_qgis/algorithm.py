@@ -13,7 +13,7 @@ try:
 except Exception:  # pragma: no cover
     gdal = None
 
-from .bootstrap import create_runtime_session, run_projection_wrapper
+from .bootstrap import RuntimeBootstrapError, create_runtime_session, run_projection_wrapper
 from .help import get_help_url
 from .help_provider import get_help_provider
 from .descriptions_provider import get_descriptions_provider
@@ -1043,6 +1043,69 @@ def _normalize_vector_input_source(source: Any) -> str:
     if not value:
         return ""
 
+
+    def _actionable_runtime_error_message(raw_message: str) -> str:
+        message = str(raw_message or "").strip() or "Unknown runtime error."
+        lower = message.lower()
+        recommendations: list[str] = []
+
+        def _add(rec: str) -> None:
+            if rec not in recommendations:
+                recommendations.append(rec)
+
+        if "include_pro=true requested" in lower and "does not include pro support" in lower:
+            _add("Rebuild/install whitebox_workflows with Pro support (for example: ./scripts/dev_python_install.sh --pro) or disable Include Pro in plugin settings.")
+
+        if (
+            "legacy whitebox_workflows runtime" in lower
+            or "requires whitebox_workflows next gen" in lower
+            or "unexpected keyword argument 'include_pro'" in lower
+            or "unexpected keyword argument 'tier'" in lower
+            or "has no attribute 'runtimesession'" in lower
+        ):
+            _add("Activate a whitebox_workflows Next Gen (v2.x) runtime and refresh the catalog.")
+
+        if "no external python interpreter was found" in lower:
+            _add("Set WBW_EXTERNAL_PYTHON to a valid interpreter that can import whitebox_workflows.")
+
+        if (
+            "no module named 'whitebox_workflows'" in lower
+            or "package is not available in this python environment" in lower
+        ):
+            _add("Install/activate whitebox_workflows in the runtime interpreter used by QGIS, then refresh catalog.")
+
+        if "permission denied" in lower or "read-only file system" in lower:
+            _add("Choose writable output paths and verify directory permissions.")
+
+        if "no such file or directory" in lower:
+            _add("Verify all input paths exist and output directories have been created.")
+
+        if "gpkg" in lower and ("schema" in lower or "malformed" in lower or "no such table" in lower):
+            _add("Use explicit non-temporary outputs when possible and validate GeoPackage schema before rerunning.")
+
+        _add("Open Whitebox panel -> Runtime Diagnostics for interpreter and tier details.")
+
+        if not recommendations:
+            return message
+
+        return message + "\n\nRecommended actions:\n- " + "\n- ".join(recommendations)
+
+
+    def _extract_backend_error_message(response: dict[str, Any]) -> str:
+        error_value = response.get("error")
+        if isinstance(error_value, str) and error_value.strip():
+            return error_value.strip()
+
+        status = str(response.get("status", "")).strip().lower()
+        if status in {"error", "failed", "failure"}:
+            for key in ("message", "detail", "details", "reason"):
+                value = response.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            return f"Runtime reported failure status: {status}."
+
+        return ""
+
     # File-based OGR layers often include provider options such as
     # "|layername=..." that the backend vector reader does not accept.
     if "|" in value:
@@ -1913,13 +1976,17 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                     json.dumps(args),
                     stream_adapter,
                 )
-        except Exception:
+        except Exception as exc:
             for tmp_path in temp_raster_inputs:
                 try:
                     os.remove(tmp_path)
                 except Exception:
                     pass
-            raise
+            if isinstance(exc, QgsProcessingException):
+                raise
+            if isinstance(exc, RuntimeBootstrapError):
+                raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
+            raise QgsProcessingException(_actionable_runtime_error_message(str(exc))) from exc
 
         if stream_adapter.cancelled:
             for tmp_path in temp_raster_inputs:
@@ -1941,6 +2008,15 @@ class WhiteboxCatalogAlgorithm(QgsProcessingAlgorithm):
                 except Exception:
                     pass
             return {}
+
+        backend_error_message = _extract_backend_error_message(response)
+        if backend_error_message:
+            for tmp_path in temp_raster_inputs:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            raise QgsProcessingException(_actionable_runtime_error_message(backend_error_message))
 
         _record_recent_tool_execution(self.name())
 

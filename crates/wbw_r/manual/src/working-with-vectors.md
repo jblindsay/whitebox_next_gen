@@ -22,6 +22,78 @@ print(schema)
 print(v$metadata())
 ```
 
+## Memory-Backed Vectors for Pipeline Efficiency
+
+For workflows that chain multiple vector operations, memory-backed vectors eliminate
+disk I/O between steps. This is valuable for complex pipelines where intermediate
+results are passed between spatial operations.
+
+Load a vector into memory with `file_mode = "m"`:
+
+```r
+library(whiteboxworkflows)
+
+# Read directly into memory
+roads <- wbw_read_vector('roads.gpkg', file_mode = "m")
+rivers <- wbw_read_vector('rivers.gpkg', file_mode = "m")
+
+print(roads$path)  # prints: memory://vector/...
+```
+
+Memory-backed vectors are compatible with all downstream operations:
+
+```r
+library(whiteboxworkflows)
+
+v <- wbw_read_vector('polygons.gpkg', file_mode = "m")
+
+# Inspect schema and metadata
+schema <- v$schema()
+meta <- v$metadata()
+
+# Pass to spatial tools
+buffered_path <- wbw_run_tool(
+  'buffer_vector',
+  args = list(input = v$path, output = 'buffered', distance = 10.0)
+)
+
+# Export to disk when ready
+result <- wbw_read_vector(buffered_path)
+result$write('buffered_final.gpkg')
+```
+
+### Vector Memory Lifecycle
+
+Memory-backed vectors persist until explicitly removed or cleared. For long-running
+vector pipelines, manage memory explicitly:
+
+```r
+library(whiteboxworkflows)
+
+# Check current memory
+cat('Vectors in memory:', wbw_vector_memory_count(), '\n')
+
+# Read vectors
+v1 <- wbw_read_vector('large1.gpkg', file_mode = "m")
+v2 <- wbw_read_vector('large2.gpkg', file_mode = "m")
+
+cat('After reads:', wbw_vector_memory_count(), '\n')
+
+# Remove when done
+wbw_remove_vector_from_memory(v1)
+cat('After remove:', wbw_vector_memory_count(), '\n')
+
+# Or clear all
+wbw_clear_vector_memory()
+cat('After clear:', wbw_vector_memory_count(), '\n')
+```
+
+Best practices:
+- Use `file_mode = "m"` for intermediate spatial analysis results.
+- Export memory-backed vectors to disk with `write()` when persisting final outputs.
+- Call `remove_vector_from_memory()` after a vector is no longer needed.
+- Use `clear_vector_memory()` between independent analysis phases.
+
 ## Iterate Through Features
 
 Use this for quality checks, custom filters, and record-level diagnostics.

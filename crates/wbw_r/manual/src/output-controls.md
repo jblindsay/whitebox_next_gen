@@ -45,6 +45,71 @@ r$write(
 )
 ```
 
+## Memory Lifecycle and Cleanup
+
+For workflows that use memory-backed rasters, vectors, and lidar objects
+(`file_mode = "m"`), explicit lifecycle management prevents unbounded memory
+growth in long-running jobs.
+
+### When to use memory mode
+
+Memory mode is most valuable when:
+- Chaining multiple operations on the same data without disk I/O.
+- Processing intermediate results that are never persisted to disk.
+- Running batched analysis where you load, process, and clear per batch.
+- Working with smaller datasets where memory is not a constraint.
+
+Avoid memory mode when:
+- Working with data larger than available RAM.
+- Processing single operations on large files.
+- Running unattended long-running jobs without explicit cleanup.
+
+### Explicit cleanup in long-running pipelines
+
+```r
+library(whiteboxworkflows)
+
+# Long-running batch analysis
+for (tile_id in 1:1000) {
+  cat('Processing tile', tile_id, '\n')
+  
+  # Read data into memory for this tile
+  r <- wbw_read_raster(sprintf('tile_%d.tif', tile_id), file_mode = "m")
+  v <- wbw_read_vector(sprintf('bounds_%d.gpkg', tile_id), file_mode = "m")
+  
+  # Process
+  result <- wbw_run_tool('clip_raster_by_polygon',
+    args = list(input = r$file_path(), polygon = v$file_path(), 
+                output = sprintf('clipped_%d.tif', tile_id))
+  )
+  
+  # Explicit cleanup before next iteration
+  wbw_remove_raster_from_memory(r)
+  wbw_remove_vector_from_memory(v)
+}
+```
+
+### Monitoring memory usage
+
+For production scripts, track memory explicitly:
+
+```r
+library(whiteboxworkflows)
+
+cat('Initial raster memory:', wbw_raster_memory_bytes() / 1e6, 'MB\n')
+cat('Initial vector memory:', wbw_vector_memory_bytes() / 1e6, 'MB\n')
+
+# ... run operations ...
+
+# Before returning or starting new phase
+cat('Final raster count:', wbw_raster_memory_count(), '\n')
+cat('Final raster memory:', wbw_raster_memory_bytes() / 1e6, 'MB\n')
+
+# Explicit reset if needed
+wbw_clear_raster_memory()
+cat('After clear:', wbw_raster_memory_count(), '\n')
+```
+
 ## Lidar Output Controls
 
 Lidar objects expose `write(...)` and `deep_copy(...)` with optional `options`.

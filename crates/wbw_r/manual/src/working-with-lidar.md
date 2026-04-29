@@ -23,6 +23,82 @@ copy <- l$deep_copy('survey_copy.las', overwrite = TRUE)
 print(copy$metadata())
 ```
 
+## Memory-Backed Lidar for Pipeline Efficiency
+
+For workflows that chain multiple lidar operations, memory-backed lidar objects
+eliminate disk I/O between steps. This is valuable when processing large point
+clouds through sequential filtering or classification steps.
+
+Load a point cloud into memory with `file_mode = "m"`:
+
+```r
+library(whiteboxworkflows)
+
+# Read directly into memory
+survey <- wbw_read_lidar('survey.las', file_mode = "m")
+print(survey$file_path())  # prints: memory://lidar/...
+```
+
+Memory-backed lidar objects support the full matrix/data-frame API and all
+downstream operations:
+
+```r
+library(whiteboxworkflows)
+
+# Read into memory
+survey <- wbw_read_lidar('survey.las', file_mode = "m")
+
+# Inspect and process
+meta <- survey$metadata()
+cat('Points:', meta$point_count, '\n')
+
+# Extract and edit points
+pts <- survey$to_matrix(fields = c('x', 'y', 'z', 'classification'))
+high <- pts[, 3] > 250
+pts[high, 4] <- 6
+
+# Write edits back to disk
+edited <- survey$from_matrix(
+  pts,
+  output_path = 'survey_filtered.laz',
+  overwrite = TRUE,
+  fields = c('x', 'y', 'z', 'classification')
+)
+```
+
+### Lidar Memory Lifecycle
+
+Memory-backed lidar objects persist until explicitly removed or cleared. For
+long-running lidar pipelines, manage memory explicitly:
+
+```r
+library(whiteboxworkflows)
+
+# Check current memory
+cat('Lidar objects in memory:', wbw_lidar_memory_count(), '\n')
+
+# Read point clouds
+survey1 <- wbw_read_lidar('large1.las', file_mode = "m")
+survey2 <- wbw_read_lidar('large2.las', file_mode = "m")
+
+cat('After reads:', wbw_lidar_memory_count(), '\n')
+
+# Remove when done
+wbw_remove_lidar_from_memory(survey1)
+cat('After remove:', wbw_lidar_memory_count(), '\n')
+
+# Or clear all
+wbw_clear_lidar_memory()
+cat('After clear:', wbw_lidar_memory_count(), '\n')
+```
+
+Best practices:
+- Use `file_mode = "m"` for intermediate point cloud processing.
+- Export memory-backed lidar to disk with `write()` when persisting final outputs.
+- Call `remove_lidar_from_memory()` after a point cloud is no longer needed.
+- Use `clear_lidar_memory()` between independent analysis phases.
+- Monitor `lidar_memory_count()` for large processing jobs.
+
 ## Iterating Through Lidar Points
 
 Stable WbW-R lidar objects are file-backed and tool-oriented, with explicit

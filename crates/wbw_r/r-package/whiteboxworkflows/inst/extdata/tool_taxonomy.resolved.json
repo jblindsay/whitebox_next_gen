@@ -377,7 +377,6 @@
         "minimum_bounding_envelope",
         "minimum_convex_hull",
         "polygonize",
-        "reproject_vector",
         "simplify_features",
         "smooth_vectors",
         "snap_endnodes",
@@ -389,7 +388,6 @@
       "category": "vector",
       "subcategory": "shape_metrics",
       "tools": [
-        "add_geometry_attributes",
         "compactness_ratio",
         "deviation_from_regional_direction",
         "elongation_ratio",
@@ -433,6 +431,7 @@
       "subcategory": "attribute_analysis",
       "tools": [
         "add_field",
+        "add_geometry_attributes",
         "attribute_correlation",
         "attribute_histogram",
         "attribute_scattergram",
@@ -452,6 +451,19 @@
         "parcel_and_land_fabric_topology_compliance_workflow",
         "emergency_scenario_routing_and_accessibility_simulator",
         "market_access_and_site_intelligence_workflow"
+      ]
+    },
+    {
+      "category": "projection_georeferencing",
+      "subcategory": "general",
+      "tools": [
+        "assign_projection_lidar",
+        "assign_projection_raster",
+        "assign_projection_vector",
+        "georeference_raster_from_control_points",
+        "reproject_lidar",
+        "reproject_raster",
+        "reproject_vector"
       ]
     },
     {
@@ -1055,6 +1067,18 @@
     "assess_route": {
       "license_tier": "pro",
       "source_crate": "wbtools_oss"
+    },
+    "assign_projection_lidar": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "assign_projection_raster": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "assign_projection_vector": {
+      "license_tier": "open",
+      "source_crate": "unknown"
     },
     "atan2": {
       "license_tier": "open",
@@ -1835,6 +1859,10 @@
     "geomorphons": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
+    },
+    "georeference_raster_from_control_points": {
+      "license_tier": "open",
+      "source_crate": "unknown"
     },
     "glcm_texture": {
       "license_tier": "open",
@@ -3137,6 +3165,14 @@
       "source_crate": "wbtools_oss"
     },
     "repair_stream_vector_topology": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "reproject_lidar": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "reproject_raster": {
       "license_tier": "open",
       "source_crate": "unknown"
     },

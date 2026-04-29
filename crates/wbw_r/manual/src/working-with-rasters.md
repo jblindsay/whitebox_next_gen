@@ -31,6 +31,78 @@ print(meta$columns)
 print(meta$nodata)
 ```
 
+## Memory-Backed Rasters for Pipeline Efficiency
+
+For workflows that chain multiple tool operations, memory-backed rasters eliminate
+disk I/O between steps. This is especially valuable when processing large rasters
+in complex pipelines. Rasters remain in process memory, accessible to subsequent
+tools without writing to disk.
+
+Load a raster into memory with `file_mode = "m"`:
+
+```r
+library(whiteboxworkflows)
+
+# Read directly into memory; no disk path required for subsequent ops
+r1 <- wbw_read_raster('dem.tif', file_mode = "m")
+r2 <- wbw_read_raster('slope.tif', file_mode = "m")
+
+# Both rasters are now memory-backed. Chain operations without disk:
+result <- r1 + r2
+print(result$file_path())  # prints: memory://raster/...
+```
+
+Memory-backed paths are compatible with all downstream raster operations:
+
+```r
+library(whiteboxworkflows)
+
+r <- wbw_read_raster('dem.tif', file_mode = "m")
+
+# Inspect and transform
+meta <- r$metadata()
+scaled <- wbw_run_tool('multiply', list(input = r$file_path(), multiplier = 1.5))
+
+# Export to disk when ready
+wbw_write_raster(scaled, 'dem_scaled_1p5x.tif')
+```
+
+### Memory Lifecycle and Cleanup
+
+Memory-backed rasters persist in the process store until explicitly removed or
+cleared. For long-running jobs, manage memory explicitly to avoid accumulation:
+
+```r
+library(whiteboxworkflows)
+
+# Check current memory usage
+count_before <- wbw_raster_memory_count()
+bytes_before <- wbw_raster_memory_bytes()
+cat('Rasters in memory:', count_before, '\n')
+cat('Bytes used:', bytes_before, '\n')
+
+# Read two rasters
+r1 <- wbw_read_raster('large1.tif', file_mode = "m")
+r2 <- wbw_read_raster('large2.tif', file_mode = "m")
+
+cat('After reads:', wbw_raster_memory_count(), '\n')
+
+# Remove one raster when done
+wbw_remove_raster_from_memory(r1)
+cat('After remove:', wbw_raster_memory_count(), '\n')
+
+# Or clear all rasters at once
+wbw_clear_raster_memory()
+cat('After clear:', wbw_raster_memory_count(), '\n')
+```
+
+Best practices:
+- Use `file_mode = "m"` for intermediate results in tool chains.
+- Export memory-backed rasters to disk with `write()` when persisting results.
+- Call `remove_raster_from_memory()` after a raster is no longer needed.
+- Use `clear_raster_memory()` between independent job phases.
+- Monitor `raster_memory_count()` and `raster_memory_bytes()` in large pipelines.
+
 ## Iterating Through Grid Cells
 
 Use this only for logic that cannot be expressed through existing tools or

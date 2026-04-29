@@ -17,6 +17,18 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   single-file HDF5/NetCDF products are no longer accepted by
   `detect_sensor_bundle_family_path` or `open_sensor_bundle_path`.
 
+### Fixed
+- GeoTIFF/COG writes now correctly unpack packed-RGB rasters (`bands=1`,
+  `data_type=U32`, `color_interpretation=packed_rgb`) to 3-band U8 with
+  `PhotometricInterpretation=RGB` before writing, so QGIS and other GIS clients
+  recognise the output as a colour image. Previously the data was written as a
+  single-band U32 with the RGB photometric tag, which is not a valid TIFF RGB
+  encoding.
+- JPEG2000/GeoJP2 writes now support packed-RGB rasters: the `0xAABBGGRR`
+  U32 buffer is unpacked to 3-band chunky U8 with `sRGB` colour space set
+  automatically, enabling colour-image tools to write `.jp2` / `.j2k`
+  outputs alongside GeoTIFF/COG.
+
 ## [0.1.3] - 2026-04-21
 
 ### Added

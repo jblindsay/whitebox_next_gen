@@ -33,3 +33,12 @@ panic = "abort"
 
 [profile.dev]
 opt-level = 1
+
+# Faster iterative profile for local Python binding development.
+# Use with: maturin develop --profile release-dev
+[profile.release-dev]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+debug = 1

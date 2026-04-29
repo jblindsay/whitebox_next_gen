@@ -28,6 +28,49 @@ fn color_interpretation_from_jpeg2000(
     }
 }
 
+fn metadata_value_case_insensitive<'a>(
+    metadata: &'a [(String, String)],
+    key: &str,
+) -> Option<&'a str> {
+    metadata
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        .map(|(_, v)| v.as_str())
+}
+
+fn raster_is_packed_rgb(raster: &Raster) -> bool {
+    if raster.bands != 1 || raster.data_type != DataType::U32 {
+        return false;
+    }
+    let color_interp =
+        metadata_value_case_insensitive(&raster.metadata, "color_interpretation").unwrap_or("");
+    color_interp.eq_ignore_ascii_case("packed_rgb")
+}
+
+/// Unpack a packed-RGB (`0xAABBGGRR`) single-band U32 raster into 3-band chunky U8 (R, G, B).
+fn raster_to_chunky_u8_from_packed_rgb(r: &Raster) -> Vec<u8> {
+    let npix = r.rows * r.cols;
+    let mut out = Vec::with_capacity(npix * 3);
+    if let Some(buf) = r.data_u32() {
+        for &packed in buf.iter().take(npix) {
+            out.push( (packed        & 0xFF) as u8);  // R
+            out.push(((packed >>  8) & 0xFF) as u8);  // G
+            out.push(((packed >> 16) & 0xFF) as u8);  // B
+        }
+    } else {
+        // Fallback: raster backed by a non-native store (memory://f64 etc.)
+        for p in 0..npix {
+            let row = p / r.cols;
+            let col = p % r.cols;
+            let packed = r.get_raw(0, row as isize, col as isize).unwrap_or(0.0) as u32;
+            out.push( (packed        & 0xFF) as u8);
+            out.push(((packed >>  8) & 0xFF) as u8);
+            out.push(((packed >> 16) & 0xFF) as u8);
+        }
+    }
+    out
+}
+
 /// Typed compression choices for JPEG2000 writes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Jpeg2000Compression {
@@ -178,7 +221,8 @@ pub fn write(raster: &Raster, path: &str) -> Result<()> {
 pub fn write_with_options(raster: &Raster, path: &str, opts: &Jpeg2000WriteOptions) -> Result<()> {
     let width = raster.cols as u32;
     let height = raster.rows as u32;
-    let bands = raster.bands as u16;
+    let is_packed_rgb = raster_is_packed_rgb(raster);
+    let bands = if is_packed_rgb { 3u16 } else { raster.bands as u16 };
 
     let compression = opts
         .compression
@@ -203,6 +247,9 @@ pub fn write_with_options(raster: &Raster, path: &str, opts: &Jpeg2000WriteOptio
     if let Some(levels) = opts.decomp_levels {
         writer = writer.decomp_levels(levels);
     }
+    if is_packed_rgb && opts.color_space.is_none() {
+        writer = writer.color_space(jp2::ColorSpace::Srgb);
+    }
     if let Some(color_space) = opts.color_space {
         writer = writer.color_space(color_space);
     }
@@ -224,8 +271,24 @@ fn map_data_type(pixel_type: jp2::PixelType) -> Result<DataType> {
     }
 }
 
+fn interleave_band_major<T: Copy>(data: &[T], npix: usize, bands: usize) -> Vec<T> {
+    if bands <= 1 {
+        return data.to_vec();
+    }
+    let mut out = Vec::with_capacity(data.len());
+    for p in 0..npix {
+        for b in 0..bands {
+            out.push(data[b * npix + p]);
+        }
+    }
+    out
+}
+
 fn raster_to_chunky_u8(r: &Raster) -> Vec<u8> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_u8() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -242,6 +305,9 @@ fn raster_to_chunky_u8(r: &Raster) -> Vec<u8> {
 
 fn raster_to_chunky_u16(r: &Raster) -> Vec<u16> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_u16() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -258,6 +324,9 @@ fn raster_to_chunky_u16(r: &Raster) -> Vec<u16> {
 
 fn raster_to_chunky_i16(r: &Raster) -> Vec<i16> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_i16() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -274,6 +343,9 @@ fn raster_to_chunky_i16(r: &Raster) -> Vec<i16> {
 
 fn raster_to_chunky_f32(r: &Raster) -> Vec<f32> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_f32() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -290,6 +362,9 @@ fn raster_to_chunky_f32(r: &Raster) -> Vec<f32> {
 
 fn raster_to_chunky_f64(r: &Raster) -> Vec<f64> {
     let npix = r.rows * r.cols;
+    if let Some(data) = r.data_f64() {
+        return interleave_band_major(data, npix, r.bands);
+    }
     let mut out = Vec::with_capacity(npix * r.bands);
     for p in 0..npix {
         let row = p / r.cols;
@@ -321,6 +396,18 @@ fn write_with_writer(writer: jp2::GeoJp2Writer, path: &str, raster: &Raster) -> 
         DataType::F64 => writer
             .write_f64(path, &raster_to_chunky_f64(raster))
             .map_err(|e| RasterError::Other(format!("JPEG2000 write error: {e}"))),
+        DataType::U32 => {
+            if raster_is_packed_rgb(raster) {
+                writer
+                    .write_u8(path, &raster_to_chunky_u8_from_packed_rgb(raster))
+                    .map_err(|e| RasterError::Other(format!("JPEG2000 write error: {e}")))
+            } else {
+                Err(RasterError::UnsupportedDataType(format!(
+                    "JPEG2000 writer does not currently support {} output",
+                    raster.data_type
+                )))
+            }
+        }
         _ => Err(RasterError::UnsupportedDataType(format!(
             "JPEG2000 writer does not currently support {} output",
             raster.data_type

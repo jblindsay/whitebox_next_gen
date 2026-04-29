@@ -5,6 +5,26 @@ use crate::error::{RasterError, Result};
 use crate::raster::{DataType, Raster, RasterConfig, RasterData};
 use crate::crs_info::CrsInfo;
 
+fn metadata_value_case_insensitive<'a>(
+    metadata: &'a [(String, String)],
+    key: &str,
+) -> Option<&'a str> {
+    metadata
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(key))
+        .map(|(_, v)| v.as_str())
+}
+
+fn raster_is_packed_rgb(raster: &Raster) -> bool {
+    if raster.bands != 1 || raster.data_type != DataType::U32 {
+        return false;
+    }
+
+    let color_interp = metadata_value_case_insensitive(&raster.metadata, "color_interpretation")
+        .unwrap_or("");
+    color_interp.eq_ignore_ascii_case("packed_rgb")
+}
+
 fn geotiff_photometric_name(p: gt::PhotometricInterpretation) -> &'static str {
     match p {
         gt::PhotometricInterpretation::MinIsWhite => "min_is_white",
@@ -239,7 +259,8 @@ pub fn write(raster: &Raster, path: &str) -> Result<()> {
 pub fn write_with_options(raster: &Raster, path: &str, opts: &GeoTiffWriteOptions) -> Result<()> {
     let width = raster.cols as u32;
     let height = raster.rows as u32;
-    let bands = raster.bands as u16;
+    let packed_rgb_write = raster_is_packed_rgb(raster);
+    let bands = if packed_rgb_write { 3u16 } else { raster.bands as u16 };
 
     let compression = opts
         .compression
@@ -249,6 +270,7 @@ pub fn write_with_options(raster: &Raster, path: &str, opts: &GeoTiffWriteOption
     let layout = opts.layout.unwrap_or(GeoTiffLayout::Standard);
 
     let epsg = raster.crs.epsg.and_then(|v| u16::try_from(v).ok());
+    let packed_rgb = packed_rgb_write;
     let gt_xform = gt::GeoTransform::north_up(
         raster.x_min,
         raster.cell_size_x,
@@ -262,6 +284,9 @@ pub fn write_with_options(raster: &Raster, path: &str, opts: &GeoTiffWriteOption
             .bigtiff(bigtiff)
             .geo_transform(gt_xform)
             .no_data(raster.nodata);
+        if packed_rgb {
+            writer = writer.photometric(gt::PhotometricInterpretation::Rgb);
+        }
         writer = writer.tile_size(tile_size);
         if let Some(e) = epsg {
             writer = writer.epsg(e);
@@ -274,6 +299,9 @@ pub fn write_with_options(raster: &Raster, path: &str, opts: &GeoTiffWriteOption
         .bigtiff(bigtiff)
         .geo_transform(gt_xform)
         .no_data(raster.nodata);
+    if packed_rgb {
+        writer = writer.photometric(gt::PhotometricInterpretation::Rgb);
+    }
 
     if let Some(e) = epsg {
         writer = writer.epsg(e);
@@ -475,6 +503,30 @@ fn interleave_band_major<T: Copy>(data: &[T], npix: usize, bands: usize) -> Vec<
     for p in 0..npix {
         for b in 0..bands {
             out.push(data[b * npix + p]);
+        }
+    }
+    out
+}
+
+/// Unpack a packed-RGB (`0xAABBGGRR`) single-band U32 raster into 3-band chunky U8 (R, G, B).
+fn raster_to_chunky_u8_from_packed_rgb(r: &Raster) -> Vec<u8> {
+    let npix = r.rows * r.cols;
+    let mut out = Vec::with_capacity(npix * 3);
+    if let Some(buf) = r.data_u32() {
+        for &packed in buf.iter().take(npix) {
+            out.push( (packed        & 0xFF) as u8);  // R
+            out.push(((packed >>  8) & 0xFF) as u8);  // G
+            out.push(((packed >> 16) & 0xFF) as u8);  // B
+        }
+    } else {
+        // Fallback: raster backed by a non-native store (memory://f64 etc.)
+        for p in 0..npix {
+            let row = p / r.cols;
+            let col = p % r.cols;
+            let packed = r.get_raw(0, row as isize, col as isize).unwrap_or(0.0) as u32;
+            out.push( (packed        & 0xFF) as u8);
+            out.push(((packed >>  8) & 0xFF) as u8);
+            out.push(((packed >> 16) & 0xFF) as u8);
         }
     }
     out
@@ -683,9 +735,17 @@ fn write_with_writer(writer: gt::GeoTiffWriter, path: &str, raster: &Raster) -> 
         DataType::U16 => writer
             .write_u16(path, &raster_to_chunky_u16(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
-        DataType::U32 => writer
-            .write_u32(path, &raster_to_chunky_u32(raster))
-            .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
+        DataType::U32 => {
+            if raster_is_packed_rgb(raster) {
+                writer
+                    .write_u8(path, &raster_to_chunky_u8_from_packed_rgb(raster))
+                    .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}")))
+            } else {
+                writer
+                    .write_u32(path, &raster_to_chunky_u32(raster))
+                    .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}")))
+            }
+        }
         DataType::I16 => writer
             .write_i16(path, &raster_to_chunky_i16(raster))
             .map_err(|e| RasterError::Other(format!("GeoTIFF write error: {e}"))),
@@ -718,9 +778,17 @@ fn write_with_cog(writer: gt::CogWriter, path: &str, raster: &Raster) -> Result<
         DataType::U16 => writer
             .write_u16(path, &raster_to_chunky_u16(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
-        DataType::U32 => writer
-            .write_u32(path, &raster_to_chunky_u32(raster))
-            .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),
+        DataType::U32 => {
+            if raster_is_packed_rgb(raster) {
+                writer
+                    .write_u8(path, &raster_to_chunky_u8_from_packed_rgb(raster))
+                    .map_err(|e| RasterError::Other(format!("COG write error: {e}")))
+            } else {
+                writer
+                    .write_u32(path, &raster_to_chunky_u32(raster))
+                    .map_err(|e| RasterError::Other(format!("COG write error: {e}")))
+            }
+        }
         DataType::I16 => writer
             .write_i16(path, &raster_to_chunky_i16(raster))
             .map_err(|e| RasterError::Other(format!("COG write error: {e}"))),

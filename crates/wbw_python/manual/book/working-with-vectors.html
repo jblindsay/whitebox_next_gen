@@ -192,6 +192,68 @@ schema = roads.schema()
 print(schema)
 print('features:', roads.feature_count())
 </code></pre>
+<h2 id="memory-backed-vectors-for-pipeline-efficiency"><a class="header" href="#memory-backed-vectors-for-pipeline-efficiency">Memory-Backed Vectors for Pipeline Efficiency</a></h2>
+<p>For workflows that chain multiple vector operations, memory-backed vectors eliminate
+disk I/O between steps. This is valuable for complex pipelines where intermediate
+results are passed between spatial operations.</p>
+<p>Load a vector into memory with <code>file_mode='m'</code>:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory
+roads = wbe.read_vector('roads.gpkg', file_mode='m')
+rivers = wbe.read_vector('rivers.gpkg', file_mode='m')
+
+print(roads.file_path)  # prints: memory://vector/...
+</code></pre>
+<p>Memory-backed vectors are compatible with all downstream operations:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('polygons.gpkg', file_mode='m')
+
+# Inspect schema and metadata
+schema = v.schema()
+meta = v.metadata()
+
+# Pass to spatial tools
+buffered = wbe.vector.buffer_vector(v, distance=10.0)
+
+# Export to disk when ready
+wbe.write_vector(buffered, 'buffered_final.gpkg')
+</code></pre>
+<h3 id="vector-memory-lifecycle"><a class="header" href="#vector-memory-lifecycle">Vector Memory Lifecycle</a></h3>
+<p>Memory-backed vectors persist until explicitly removed or cleared. For long-running
+vector pipelines, manage memory explicitly:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory
+print(f"Vectors in memory: {wbe.vector_memory_count()}")
+
+# Read vectors
+v1 = wbe.read_vector('large1.gpkg', file_mode='m')
+v2 = wbe.read_vector('large2.gpkg', file_mode='m')
+
+print(f"After reads: {wbe.vector_memory_count()}")
+
+# Remove when done
+wbe.remove_vector_from_memory(v1)
+print(f"After remove: {wbe.vector_memory_count()}")
+
+# Or clear all
+wbe.clear_vector_memory()
+print(f"After clear: {wbe.vector_memory_count()}")
+</code></pre>
+<p>Best practices:</p>
+<ul>
+<li>Use <code>file_mode='m'</code> for intermediate spatial analysis results.</li>
+<li>Export memory-backed vectors to disk with <code>write_vector()</code> when persisting final outputs.</li>
+<li>Call <code>remove_vector_from_memory()</code> after a vector is no longer needed.</li>
+<li>Use <code>clear_vector_memory()</code> between independent analysis phases.</li>
+</ul>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
 <p>Use feature iteration for inspections, QA checks, or bespoke attribute rules.</p>
 <pre><code class="language-python">import whitebox_workflows as wb

@@ -274,6 +274,67 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
     },
 })
 </code></pre>
+<h2 id="memory-lifecycle-and-cleanup"><a class="header" href="#memory-lifecycle-and-cleanup">Memory Lifecycle and Cleanup</a></h2>
+<p>For workflows that use memory-backed rasters, vectors, and lidar objects
+(<code>file_mode='m'</code>), explicit lifecycle management prevents unbounded memory
+growth in long-running jobs.</p>
+<h3 id="when-to-use-memory-mode"><a class="header" href="#when-to-use-memory-mode">When to use memory mode</a></h3>
+<p>Memory mode is most valuable when:</p>
+<ul>
+<li>Chaining multiple operations on the same data without disk I/O.</li>
+<li>Processing intermediate results that are never persisted to disk.</li>
+<li>Running batched analysis where you load, process, and clear per batch.</li>
+<li>Working with smaller datasets where memory is not a constraint.</li>
+</ul>
+<p>Avoid memory mode when:</p>
+<ul>
+<li>Working with data larger than available RAM.</li>
+<li>Processing single operations on large files.</li>
+<li>Running unattended long-running jobs without explicit cleanup.</li>
+</ul>
+<h3 id="explicit-cleanup-in-long-running-pipelines"><a class="header" href="#explicit-cleanup-in-long-running-pipelines">Explicit cleanup in long-running pipelines</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Long-running batch analysis
+for tile_id in range(1, 1001):
+    print(f'Processing tile {tile_id}')
+    
+    # Read data into memory for this tile
+    dem = wbe.read_raster(f'tile_{tile_id}.tif', file_mode='m')
+    bounds = wbe.read_vector(f'bounds_{tile_id}.gpkg', file_mode='m')
+    
+    # Process
+    result = wbe.run_tool('clip_raster_by_polygon', {
+        'input': dem.file_path,
+        'polygon': bounds.file_path,
+        'output': f'clipped_{tile_id}.tif'
+    })
+    
+    # Explicit cleanup before next iteration
+    wbe.remove_raster_from_memory(dem)
+    wbe.remove_vector_from_memory(bounds)
+</code></pre>
+<h3 id="monitoring-memory-usage"><a class="header" href="#monitoring-memory-usage">Monitoring memory usage</a></h3>
+<p>For production scripts, track memory explicitly:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+print(f"Initial raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+print(f"Initial vector memory: {wbe.vector_memory_bytes() / 1e6:.1f} MB")
+
+# ... run operations ...
+
+# Before returning or starting new phase
+print(f"Final raster count: {wbe.raster_memory_count()}")
+print(f"Final raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+
+# Explicit reset if needed
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
+</code></pre>
 <h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
 <p>Extensionless writes are useful in prototyping, but pin extensions in production
 for deterministic artifact naming.</p>

@@ -24,6 +24,79 @@ print(schema)
 print('features:', roads.feature_count())
 ```
 
+## Memory-Backed Vectors for Pipeline Efficiency
+
+For workflows that chain multiple vector operations, memory-backed vectors eliminate
+disk I/O between steps. This is valuable for complex pipelines where intermediate
+results are passed between spatial operations.
+
+Load a vector into memory with `file_mode='m'`:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory
+roads = wbe.read_vector('roads.gpkg', file_mode='m')
+rivers = wbe.read_vector('rivers.gpkg', file_mode='m')
+
+print(roads.file_path)  # prints: memory://vector/...
+```
+
+Memory-backed vectors are compatible with all downstream operations:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('polygons.gpkg', file_mode='m')
+
+# Inspect schema and metadata
+schema = v.schema()
+meta = v.metadata()
+
+# Pass to spatial tools
+buffered = wbe.vector.buffer_vector(v, distance=10.0)
+
+# Export to disk when ready
+wbe.write_vector(buffered, 'buffered_final.gpkg')
+```
+
+### Vector Memory Lifecycle
+
+Memory-backed vectors persist until explicitly removed or cleared. For long-running
+vector pipelines, manage memory explicitly:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory
+print(f"Vectors in memory: {wbe.vector_memory_count()}")
+
+# Read vectors
+v1 = wbe.read_vector('large1.gpkg', file_mode='m')
+v2 = wbe.read_vector('large2.gpkg', file_mode='m')
+
+print(f"After reads: {wbe.vector_memory_count()}")
+
+# Remove when done
+wbe.remove_vector_from_memory(v1)
+print(f"After remove: {wbe.vector_memory_count()}")
+
+# Or clear all
+wbe.clear_vector_memory()
+print(f"After clear: {wbe.vector_memory_count()}")
+```
+
+Best practices:
+- Use `file_mode='m'` for intermediate spatial analysis results.
+- Export memory-backed vectors to disk with `write_vector()` when persisting final outputs.
+- Call `remove_vector_from_memory()` after a vector is no longer needed.
+- Use `clear_vector_memory()` between independent analysis phases.
+
 ## Iterate Through Features
 
 Use feature iteration for inspections, QA checks, or bespoke attribute rules.

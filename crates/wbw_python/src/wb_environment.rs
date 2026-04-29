@@ -3603,25 +3603,43 @@ fn maybe_extract_data_object_output(
 }
 
 fn output_key_is_metadata(key: &str) -> bool {
-    matches!(key, "__wbw_type__" | "active_band" | "band" | "cells_processed" | "path")
+    matches!(key, "__wbw_type__" | "active_band" | "band" | "cells_processed")
+}
+
+fn looks_like_output_locator_key(key: &str) -> bool {
+    key == "path"
+        || key == "output"
+        || key == "scale_path"
+        || key == "confidence_path"
+        || key.ends_with("_path")
+        || key.contains("output")
 }
 
 fn sort_output_key(a: &str, b: &str) -> std::cmp::Ordering {
     fn rank(key: &str) -> (u8, usize, &str) {
-        if key == "output" {
+        if key == "path" {
             return (0, 0, key);
+        }
+        if key == "output" {
+            return (1, 0, key);
         }
         if let Some(rest) = key.strip_prefix("output") {
             if let Ok(idx) = rest.parse::<usize>() {
-                return (1, idx, key);
+                return (2, idx, key);
             }
+        }
+        if key == "scale_path" {
+            return (3, 0, key);
+        }
+        if let Some(prefix) = key.strip_suffix("_path") {
+            return (4, 0, prefix);
         }
         if let Some((prefix, tail)) = key.rsplit_once('_') {
             if tail == "output" {
-                return (2, 0, prefix);
+                return (5, 0, prefix);
             }
         }
-        (3, 0, key)
+        (6, 0, key)
     }
 
     rank(a).cmp(&rank(b))
@@ -3653,8 +3671,8 @@ fn maybe_extract_data_object_outputs(
             }
         }
 
-        if key.contains("output") {
-            // Non-data-path output value — can't safely extract a tuple.
+        if looks_like_output_locator_key(key) {
+            // Non-data-path locator value — can't safely extract a tuple.
             return None;
         }
     }
@@ -14465,12 +14483,13 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("breach_single_cell_pits", args, dem.active_band, callback)
     }
 
-    #[pyo3(signature = (dem, fix_flats=true, flat_increment=None, max_depth=None, output_path=None, callback=None))]
+    #[pyo3(signature = (dem, fix_flats=true, flat_increment=None, flat_resolution="garbrecht_martz", max_depth=None, output_path=None, callback=None))]
     fn fill_depressions(
         &self,
         dem: &Raster,
         fix_flats: bool,
         flat_increment: Option<f64>,
+        flat_resolution: &str,
         max_depth: Option<f64>,
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
@@ -14478,6 +14497,7 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
         args.insert("fix_flats".to_string(), json!(fix_flats));
+        args.insert("flat_resolution".to_string(), json!(flat_resolution));
         if let Some(value) = flat_increment {
             args.insert("flat_increment".to_string(), json!(value));
         }

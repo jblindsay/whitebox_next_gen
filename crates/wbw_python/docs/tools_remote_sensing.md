@@ -2662,8 +2662,8 @@ Applies histogram equalization to improve image contrast.
 **Examples**
 
 ```python
-eq = wbe.histogram_equalization(image)
-eq1024 = wbe.histogram_equalization(image, num_tones=1024)
+eq = wbe.histogram_equalization(input=image)
+eq1024 = wbe.histogram_equalization(input=image, num_tones=1024)
 ```
 
 ---
@@ -2726,7 +2726,7 @@ Matches an input image histogram to the histogram of a reference image.
 **Examples**
 
 ```python
-matched = wbe.histogram_matching_two_images(source_image, reference_image)
+matched = wbe.histogram_matching_two_images(input=source_image, reference=reference_image)
 ```
 
 ---

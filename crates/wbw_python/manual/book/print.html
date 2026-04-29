@@ -367,6 +367,42 @@ for m in matches[:5]:
 desc = wbe.describe_tool('slope')
 print(desc)
 </code></pre>
+<h2 id="discovering-parameter-values-with-describe_tool"><a class="header" href="#discovering-parameter-values-with-describe_tool">Discovering Parameter Values with describe_tool</a></h2>
+<p><code>describe_tool</code> returns a dictionary containing structured parameter metadata.
+Each entry in the <code>params</code> list includes:</p>
+<div class="table-wrapper"><table><thead><tr><th>Key</th><th>Always present</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>name</code></td><td>yes</td><td>Parameter name as used in tool calls</td></tr>
+<tr><td><code>description</code></td><td>yes</td><td>Human-readable description</td></tr>
+<tr><td><code>required</code></td><td>yes</td><td><code>True</code> if the parameter must be supplied</td></tr>
+<tr><td><code>type</code></td><td>when set</td><td>Semantic type hint: <code>"string"</code>, <code>"float"</code>, <code>"int"</code>, <code>"bool"</code>, <code>"path"</code>, <code>"array[int]"</code></td></tr>
+<tr><td><code>choices</code></td><td>when set</td><td>List of valid string values for constrained parameters</td></tr>
+<tr><td><code>default_value</code></td><td>when set</td><td>Default value as a string, for display purposes</td></tr>
+</tbody></table>
+</div>
+<p>Use this to enumerate valid values before calling a tool:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+desc = wbe.describe_tool('lidar_tin_gridding')
+for p in desc['params']:
+    name = p['name']
+    choices = p.get('choices')
+    default = p.get('default_value')
+    if choices:
+        print(f"{name}: choices={choices}, default={default!r}")
+    else:
+        print(f"{name}: type={p.get('type', 'any')}, default={default!r}")
+</code></pre>
+<p>Example output (selected parameters):</p>
+<pre><code>interpolation_parameter: choices=['elevation', 'intensity', 'class', 'return_number', 'number_of_returns', 'scan_angle', 'time', 'rgb', 'user_data'], default='elevation'
+returns_included: choices=['all', 'first', 'last'], default='all'
+triangulation_backend: choices=['auto', 'delaunator', 'wbtopology'], default='auto'
+triangulation_thin_method: choices=['nearest_center', 'min_value', 'max_value'], default='nearest_center'
+triangulation_thin_cell_size: type=float, default='0.0'
+</code></pre>
+<p>This is especially useful for building dynamic UIs, generating documentation,
+or writing validation helpers that do not hard-code allowed values.</p>
 <h2 id="validate-tool-availability"><a class="header" href="#validate-tool-availability">Validate Tool Availability</a></h2>
 <p>Use hard checks like this in batch scripts so failures occur immediately, before
 expensive processing begins.</p>
@@ -602,6 +638,78 @@ print(meta.rows, meta.columns)
 print('EPSG:', meta.epsg_code)
 print('NoData:', meta.nodata)
 </code></pre>
+<h2 id="memory-backed-rasters-for-pipeline-efficiency"><a class="header" href="#memory-backed-rasters-for-pipeline-efficiency">Memory-Backed Rasters for Pipeline Efficiency</a></h2>
+<p>For workflows that chain multiple tool operations, memory-backed rasters eliminate
+disk I/O between steps. This is especially valuable when processing large rasters
+in complex pipelines. Rasters remain in process memory, accessible to subsequent
+tools without writing intermediate results to disk.</p>
+<p>Load a raster into memory with <code>file_mode="m"</code>:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory; no disk I/O for subsequent operations
+dem = wbe.read_raster('dem.tif', file_mode='m')
+slope = wbe.read_raster('slope.tif', file_mode='m')
+
+# Both rasters are now memory-backed. Chain operations without disk:
+result = dem.add(slope)
+print(result.file_path)  # prints: memory://raster/...
+</code></pre>
+<p>Memory-backed paths are compatible with all downstream raster operations:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif', file_mode='m')
+
+# Inspect metadata
+meta = dem.metadata()
+print(f"Rows: {meta.rows}, Cols: {meta.columns}")
+
+# Chain tool operations
+scaled = wbe.run_tool('multiply', {
+    'input': dem.file_path,
+    'multiplier': 1.5
+})
+
+# Export to disk when ready
+wbe.write_raster(scaled, 'dem_scaled_1p5x.tif')
+</code></pre>
+<h3 id="memory-lifecycle-and-cleanup"><a class="header" href="#memory-lifecycle-and-cleanup">Memory Lifecycle and Cleanup</a></h3>
+<p>Memory-backed rasters persist in the process store until explicitly removed or
+cleared. For long-running jobs, manage memory explicitly to avoid accumulation:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory usage
+count_before = wbe.raster_memory_count()
+bytes_before = wbe.raster_memory_bytes()
+print(f"Rasters in memory: {count_before}")
+print(f"Bytes used: {bytes_before}")
+
+# Read two rasters
+dem1 = wbe.read_raster('large_dem1.tif', file_mode='m')
+dem2 = wbe.read_raster('large_dem2.tif', file_mode='m')
+
+print(f"After reads: {wbe.raster_memory_count()}")
+
+# Remove one raster when done
+wbe.remove_raster_from_memory(dem1)
+print(f"After remove: {wbe.raster_memory_count()}")
+
+# Or clear all rasters at once
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
+</code></pre>
+<p>Best practices:</p>
+<ul>
+<li>Use <code>file_mode='m'</code> for intermediate results in tool chains.</li>
+<li>Export memory-backed rasters to disk with <code>write_raster()</code> when persisting results.</li>
+<li>Call <code>remove_raster_from_memory()</code> after a raster is no longer needed.</li>
+<li>Use <code>clear_raster_memory()</code> between independent job phases.</li>
+<li>Monitor <code>raster_memory_count()</code> and <code>raster_memory_bytes()</code> in large pipelines.</li>
+</ul>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
 <p>Use this pattern only when tool methods or vectorized operations cannot express
 your custom rule directly.</p>
@@ -834,6 +942,68 @@ schema = roads.schema()
 print(schema)
 print('features:', roads.feature_count())
 </code></pre>
+<h2 id="memory-backed-vectors-for-pipeline-efficiency"><a class="header" href="#memory-backed-vectors-for-pipeline-efficiency">Memory-Backed Vectors for Pipeline Efficiency</a></h2>
+<p>For workflows that chain multiple vector operations, memory-backed vectors eliminate
+disk I/O between steps. This is valuable for complex pipelines where intermediate
+results are passed between spatial operations.</p>
+<p>Load a vector into memory with <code>file_mode='m'</code>:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory
+roads = wbe.read_vector('roads.gpkg', file_mode='m')
+rivers = wbe.read_vector('rivers.gpkg', file_mode='m')
+
+print(roads.file_path)  # prints: memory://vector/...
+</code></pre>
+<p>Memory-backed vectors are compatible with all downstream operations:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+v = wbe.read_vector('polygons.gpkg', file_mode='m')
+
+# Inspect schema and metadata
+schema = v.schema()
+meta = v.metadata()
+
+# Pass to spatial tools
+buffered = wbe.vector.buffer_vector(v, distance=10.0)
+
+# Export to disk when ready
+wbe.write_vector(buffered, 'buffered_final.gpkg')
+</code></pre>
+<h3 id="vector-memory-lifecycle"><a class="header" href="#vector-memory-lifecycle">Vector Memory Lifecycle</a></h3>
+<p>Memory-backed vectors persist until explicitly removed or cleared. For long-running
+vector pipelines, manage memory explicitly:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory
+print(f"Vectors in memory: {wbe.vector_memory_count()}")
+
+# Read vectors
+v1 = wbe.read_vector('large1.gpkg', file_mode='m')
+v2 = wbe.read_vector('large2.gpkg', file_mode='m')
+
+print(f"After reads: {wbe.vector_memory_count()}")
+
+# Remove when done
+wbe.remove_vector_from_memory(v1)
+print(f"After remove: {wbe.vector_memory_count()}")
+
+# Or clear all
+wbe.clear_vector_memory()
+print(f"After clear: {wbe.vector_memory_count()}")
+</code></pre>
+<p>Best practices:</p>
+<ul>
+<li>Use <code>file_mode='m'</code> for intermediate spatial analysis results.</li>
+<li>Export memory-backed vectors to disk with <code>write_vector()</code> when persisting final outputs.</li>
+<li>Call <code>remove_vector_from_memory()</code> after a vector is no longer needed.</li>
+<li>Use <code>clear_vector_memory()</code> between independent analysis phases.</li>
+</ul>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
 <p>Use feature iteration for inspections, QA checks, or bespoke attribute rules.</p>
 <pre><code class="language-python">import whitebox_workflows as wb
@@ -948,6 +1118,78 @@ print('epsg:', meta.crs_epsg)
 normals = wbe.lidar.calculate_point_normals(las)
 wbe.write_lidar(normals, 'survey_normals.copc.laz')
 </code></pre>
+<h2 id="memory-backed-lidar-for-pipeline-efficiency"><a class="header" href="#memory-backed-lidar-for-pipeline-efficiency">Memory-Backed Lidar for Pipeline Efficiency</a></h2>
+<p>For workflows that chain multiple lidar operations, memory-backed lidar objects
+eliminate disk I/O between steps. This is valuable when processing large point
+clouds through sequential filtering or classification steps.</p>
+<p>Load a point cloud into memory with <code>file_mode='m'</code>:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory
+survey = wbe.read_lidar('survey.las', file_mode='m')
+print(survey.file_path)  # prints: memory://lidar/...
+</code></pre>
+<p>Memory-backed lidar objects support the full NumPy API and all downstream
+operations:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+import numpy as np
+
+wbe = wb.WbEnvironment()
+
+# Read into memory
+survey = wbe.read_lidar('survey.las', file_mode='m')
+
+# Inspect and process
+meta = survey.metadata()
+print(f'Points: {meta.point_count}')
+
+# Extract and edit points
+arr = survey.to_numpy(cols=['x', 'y', 'z', 'classification'])
+high_mask = arr[:, 2] &gt; 250
+arr[high_mask, 3] = 6
+
+# Write edits back to disk
+edited = wb.Lidar.from_numpy(
+    arr,
+    base=survey,
+    cols=['x', 'y', 'z', 'classification'],
+    output_path='survey_filtered.laz',
+)
+</code></pre>
+<h3 id="lidar-memory-lifecycle"><a class="header" href="#lidar-memory-lifecycle">Lidar Memory Lifecycle</a></h3>
+<p>Memory-backed lidar objects persist until explicitly removed or cleared. For
+long-running lidar pipelines, manage memory explicitly:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory
+print(f"Lidar objects in memory: {wbe.lidar_memory_count()}")
+
+# Read point clouds
+survey1 = wbe.read_lidar('large1.las', file_mode='m')
+survey2 = wbe.read_lidar('large2.las', file_mode='m')
+
+print(f"After reads: {wbe.lidar_memory_count()}")
+
+# Remove when done
+wbe.remove_lidar_from_memory(survey1)
+print(f"After remove: {wbe.lidar_memory_count()}")
+
+# Or clear all
+wbe.clear_lidar_memory()
+print(f"After clear: {wbe.lidar_memory_count()}")
+</code></pre>
+<p>Best practices:</p>
+<ul>
+<li>Use <code>file_mode='m'</code> for intermediate point cloud processing.</li>
+<li>Export memory-backed lidar to disk with <code>write_lidar()</code> when persisting final outputs.</li>
+<li>Call <code>remove_lidar_from_memory()</code> after a point cloud is no longer needed.</li>
+<li>Use <code>clear_lidar_memory()</code> between independent analysis phases.</li>
+<li>Monitor <code>lidar_memory_count()</code> for large processing jobs.</li>
+</ul>
 <h2 id="iterating-through-lidar-points"><a class="header" href="#iterating-through-lidar-points">Iterating Through Lidar Points</a></h2>
 <p>Stable WbW-Py lidar objects are file-backed and tool-oriented, with explicit
 columnar point access through NumPy. Direct point-by-point Python iterators are
@@ -1296,6 +1538,67 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
         'node_point_ordering': 'hilbert',
     },
 })
+</code></pre>
+<h2 id="memory-lifecycle-and-cleanup-1"><a class="header" href="#memory-lifecycle-and-cleanup-1">Memory Lifecycle and Cleanup</a></h2>
+<p>For workflows that use memory-backed rasters, vectors, and lidar objects
+(<code>file_mode='m'</code>), explicit lifecycle management prevents unbounded memory
+growth in long-running jobs.</p>
+<h3 id="when-to-use-memory-mode"><a class="header" href="#when-to-use-memory-mode">When to use memory mode</a></h3>
+<p>Memory mode is most valuable when:</p>
+<ul>
+<li>Chaining multiple operations on the same data without disk I/O.</li>
+<li>Processing intermediate results that are never persisted to disk.</li>
+<li>Running batched analysis where you load, process, and clear per batch.</li>
+<li>Working with smaller datasets where memory is not a constraint.</li>
+</ul>
+<p>Avoid memory mode when:</p>
+<ul>
+<li>Working with data larger than available RAM.</li>
+<li>Processing single operations on large files.</li>
+<li>Running unattended long-running jobs without explicit cleanup.</li>
+</ul>
+<h3 id="explicit-cleanup-in-long-running-pipelines"><a class="header" href="#explicit-cleanup-in-long-running-pipelines">Explicit cleanup in long-running pipelines</a></h3>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Long-running batch analysis
+for tile_id in range(1, 1001):
+    print(f'Processing tile {tile_id}')
+    
+    # Read data into memory for this tile
+    dem = wbe.read_raster(f'tile_{tile_id}.tif', file_mode='m')
+    bounds = wbe.read_vector(f'bounds_{tile_id}.gpkg', file_mode='m')
+    
+    # Process
+    result = wbe.run_tool('clip_raster_by_polygon', {
+        'input': dem.file_path,
+        'polygon': bounds.file_path,
+        'output': f'clipped_{tile_id}.tif'
+    })
+    
+    # Explicit cleanup before next iteration
+    wbe.remove_raster_from_memory(dem)
+    wbe.remove_vector_from_memory(bounds)
+</code></pre>
+<h3 id="monitoring-memory-usage"><a class="header" href="#monitoring-memory-usage">Monitoring memory usage</a></h3>
+<p>For production scripts, track memory explicitly:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+print(f"Initial raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+print(f"Initial vector memory: {wbe.vector_memory_bytes() / 1e6:.1f} MB")
+
+# ... run operations ...
+
+# Before returning or starting new phase
+print(f"Final raster count: {wbe.raster_memory_count()}")
+print(f"Final raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+
+# Explicit reset if needed
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
 </code></pre>
 <h2 id="extensionless-defaults"><a class="header" href="#extensionless-defaults">Extensionless Defaults</a></h2>
 <p>Extensionless writes are useful in prototyping, but pin extensions in production

@@ -3,19 +3,19 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRATE_DIR="$ROOT_DIR/crates/wbw_python"
-ENABLE_PRO="${WBW_PYTHON_ENABLE_PRO:-0}"
+ENABLE_PRO="${WBW_PYTHON_ENABLE_PRO:-1}"
 
 usage() {
   cat <<'EOF'
 Usage: ./scripts/dev_python_install.sh [--pro|--open|--help]
 
 Options:
-  --pro     Build wbw_python with Cargo feature 'pro' enabled.
-  --open    Build the default open-only wbw_python extension.
+  --pro     Build wbw_python with Cargo feature 'pro' enabled (default).
+  --open    Build the open-only wbw_python extension (no Pro tools).
   --help    Show this help message.
 
 Environment:
-  WBW_PYTHON_ENABLE_PRO=1  Equivalent to --pro.
+  WBW_PYTHON_ENABLE_PRO=0  Equivalent to --open.
 EOF
 }
 

@@ -121,6 +121,75 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
 })
 ```
 
+## Memory Lifecycle and Cleanup
+
+For workflows that use memory-backed rasters, vectors, and lidar objects
+(`file_mode='m'`), explicit lifecycle management prevents unbounded memory
+growth in long-running jobs.
+
+### When to use memory mode
+
+Memory mode is most valuable when:
+- Chaining multiple operations on the same data without disk I/O.
+- Processing intermediate results that are never persisted to disk.
+- Running batched analysis where you load, process, and clear per batch.
+- Working with smaller datasets where memory is not a constraint.
+
+Avoid memory mode when:
+- Working with data larger than available RAM.
+- Processing single operations on large files.
+- Running unattended long-running jobs without explicit cleanup.
+
+### Explicit cleanup in long-running pipelines
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Long-running batch analysis
+for tile_id in range(1, 1001):
+    print(f'Processing tile {tile_id}')
+    
+    # Read data into memory for this tile
+    dem = wbe.read_raster(f'tile_{tile_id}.tif', file_mode='m')
+    bounds = wbe.read_vector(f'bounds_{tile_id}.gpkg', file_mode='m')
+    
+    # Process
+    result = wbe.run_tool('clip_raster_by_polygon', {
+        'input': dem.file_path,
+        'polygon': bounds.file_path,
+        'output': f'clipped_{tile_id}.tif'
+    })
+    
+    # Explicit cleanup before next iteration
+    wbe.remove_raster_from_memory(dem)
+    wbe.remove_vector_from_memory(bounds)
+```
+
+### Monitoring memory usage
+
+For production scripts, track memory explicitly:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+print(f"Initial raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+print(f"Initial vector memory: {wbe.vector_memory_bytes() / 1e6:.1f} MB")
+
+# ... run operations ...
+
+# Before returning or starting new phase
+print(f"Final raster count: {wbe.raster_memory_count()}")
+print(f"Final raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
+
+# Explicit reset if needed
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
+```
+
 ## Extensionless Defaults
 
 Extensionless writes are useful in prototyping, but pin extensions in production

@@ -1016,7 +1016,7 @@ When to use:
 ### fill_depressions
 
 ```
-fill_depressions(dem, fix_flats=True, flat_increment=None, max_depth=inf, output=None)
+fill_depressions(dem, fix_flats=True, flat_increment=None, flat_resolution="garbrecht_martz", max_depth=inf, output=None)
 ```
 
 Fills depressions using a priority-flood strategy with optional flat resolution and optional maximum fill depth.
@@ -1024,6 +1024,7 @@ Fills depressions using a priority-flood strategy with optional flat resolution 
 Algorithm notes:
 - Identifies depressions, raises them to spill elevation, and optionally imposes a very small gradient across resulting flats.
 - `fix_flats=True` applies a small downstream gradient so later flow-routing tools do not stall on large flat surfaces.
+- `flat_resolution="garbrecht_martz"` is the default and produces a more structured, less meandering flat-resolution pattern for D8-style routing. Use `"natural"` to recover the older natural-path behaviour that follows original within-flat topography more closely.
 - `max_depth` can limit how much vertical filling is allowed, which is useful when deep excavations or reservoirs should not be completely removed.
 - More aggressive than breaching because every enclosed depression is raised rather than selectively cut.
 
@@ -1031,6 +1032,7 @@ Parameters:
 - `dem`: Input DEM raster.
 - `fix_flats`: If true, impose a small gradient across filled flats.
 - `flat_increment`: Optional flat increment; omitting it is usually preferable.
+- `flat_resolution`: Flat-resolution mode. One of `"garbrecht_martz"` or `"natural"`.
 - `max_depth`: Maximum allowed fill depth.
 - `output`: Optional output path.
 

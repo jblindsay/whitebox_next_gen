@@ -201,6 +201,78 @@ print(meta.rows, meta.columns)
 print('EPSG:', meta.epsg_code)
 print('NoData:', meta.nodata)
 </code></pre>
+<h2 id="memory-backed-rasters-for-pipeline-efficiency"><a class="header" href="#memory-backed-rasters-for-pipeline-efficiency">Memory-Backed Rasters for Pipeline Efficiency</a></h2>
+<p>For workflows that chain multiple tool operations, memory-backed rasters eliminate
+disk I/O between steps. This is especially valuable when processing large rasters
+in complex pipelines. Rasters remain in process memory, accessible to subsequent
+tools without writing intermediate results to disk.</p>
+<p>Load a raster into memory with <code>file_mode="m"</code>:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory; no disk I/O for subsequent operations
+dem = wbe.read_raster('dem.tif', file_mode='m')
+slope = wbe.read_raster('slope.tif', file_mode='m')
+
+# Both rasters are now memory-backed. Chain operations without disk:
+result = dem.add(slope)
+print(result.file_path)  # prints: memory://raster/...
+</code></pre>
+<p>Memory-backed paths are compatible with all downstream raster operations:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif', file_mode='m')
+
+# Inspect metadata
+meta = dem.metadata()
+print(f"Rows: {meta.rows}, Cols: {meta.columns}")
+
+# Chain tool operations
+scaled = wbe.run_tool('multiply', {
+    'input': dem.file_path,
+    'multiplier': 1.5
+})
+
+# Export to disk when ready
+wbe.write_raster(scaled, 'dem_scaled_1p5x.tif')
+</code></pre>
+<h3 id="memory-lifecycle-and-cleanup"><a class="header" href="#memory-lifecycle-and-cleanup">Memory Lifecycle and Cleanup</a></h3>
+<p>Memory-backed rasters persist in the process store until explicitly removed or
+cleared. For long-running jobs, manage memory explicitly to avoid accumulation:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory usage
+count_before = wbe.raster_memory_count()
+bytes_before = wbe.raster_memory_bytes()
+print(f"Rasters in memory: {count_before}")
+print(f"Bytes used: {bytes_before}")
+
+# Read two rasters
+dem1 = wbe.read_raster('large_dem1.tif', file_mode='m')
+dem2 = wbe.read_raster('large_dem2.tif', file_mode='m')
+
+print(f"After reads: {wbe.raster_memory_count()}")
+
+# Remove one raster when done
+wbe.remove_raster_from_memory(dem1)
+print(f"After remove: {wbe.raster_memory_count()}")
+
+# Or clear all rasters at once
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
+</code></pre>
+<p>Best practices:</p>
+<ul>
+<li>Use <code>file_mode='m'</code> for intermediate results in tool chains.</li>
+<li>Export memory-backed rasters to disk with <code>write_raster()</code> when persisting results.</li>
+<li>Call <code>remove_raster_from_memory()</code> after a raster is no longer needed.</li>
+<li>Use <code>clear_raster_memory()</code> between independent job phases.</li>
+<li>Monitor <code>raster_memory_count()</code> and <code>raster_memory_bytes()</code> in large pipelines.</li>
+</ul>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
 <p>Use this pattern only when tool methods or vectorized operations cannot express
 your custom rule directly.</p>

@@ -164,10 +164,10 @@ Unary and binary raster tools accept an optional `band_mode` parameter:
 ### `wbe.read_raster`
 
 ```
-read_raster(file_name: str) -> Raster
+read_raster(file_name: str, file_mode: str = 'r') -> Raster
 ```
 
-Reads a raster from disk.  The path is resolved against
+Reads a raster from disk. The path is resolved against
 `wbe.working_directory`.
 
 **Parameters**
@@ -175,11 +175,16 @@ Reads a raster from disk.  The path is resolved against
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `file_name` | `str` | required | Relative or absolute path to the raster file |
+| `file_mode` | `str` | `'r'` | `'r'` = disk-path mode (no eager load); `'m'` = memory mode (reads into in-process memory store for fast repeated access) |
 
 **Example**
 
 ```python
+# Disk-path mode (default)
 dem = wbe.read_raster('dem.tif')
+
+# Memory mode — efficient for rasters used repeatedly across many tool calls
+dem = wbe.read_raster('dem.tif', file_mode='m')
 ```
 
 ---
@@ -187,15 +192,18 @@ dem = wbe.read_raster('dem.tif')
 ### `wbe.read_rasters`
 
 ```
-read_rasters(file_names: list[str], parallel: bool = True) -> list[Raster]
+read_rasters(file_names: list[str], parallel: bool = True, file_mode: str = 'r') -> list[Raster]
 ```
 
-Reads multiple rasters, optionally in parallel.
+Reads multiple rasters, optionally in parallel. `file_mode` is forwarded to each `read_raster` call.
 
 **Example**
 
 ```python
 rasters = wbe.read_rasters(['dem.tif', 'slope.tif'], parallel=True)
+
+# Memory-backed
+rasters = wbe.read_rasters(['dem.tif', 'slope.tif'], file_mode='m')
 ```
 
 ---
@@ -636,16 +644,20 @@ Convenience shortcuts:
 ### `wbe.read_vector`
 
 ```
-read_vector(file_name: str) -> Vector
+read_vector(file_name: str, options: dict | None = None, file_mode: str = 'r') -> Vector
 ```
 
 Reads a vector dataset (Shapefile, GeoPackage, etc.) from disk.
 The path is resolved against `wbe.working_directory`.
 
+`file_mode='r'` returns a disk-path-backed vector object.
+`file_mode='m'` loads the vector into the in-process memory store.
+
 **Example**
 
 ```python
 roads = wbe.read_vector('roads.gpkg')
+roads_mem = wbe.read_vector('roads.gpkg', file_mode='m')
 ```
 
 ---
@@ -653,15 +665,16 @@ roads = wbe.read_vector('roads.gpkg')
 ### `wbe.read_vectors`
 
 ```
-read_vectors(file_names: list[str], parallel: bool = True) -> list[Vector]
+read_vectors(file_names: list[str], parallel: bool = True, options: dict | None = None, file_mode: str = 'r') -> list[Vector]
 ```
 
-Reads multiple vector files.
+Reads multiple vector files. `file_mode` is forwarded to each `read_vector` call.
 
 **Example**
 
 ```python
 layers = wbe.read_vectors(['roads.gpkg', 'buildings.shp'])
+layers_mem = wbe.read_vectors(['roads.gpkg', 'buildings.shp'], file_mode='m')
 ```
 
 ---

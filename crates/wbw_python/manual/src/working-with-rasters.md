@@ -32,6 +32,89 @@ print('EPSG:', meta.epsg_code)
 print('NoData:', meta.nodata)
 ```
 
+## Memory-Backed Rasters for Pipeline Efficiency
+
+For workflows that chain multiple tool operations, memory-backed rasters eliminate
+disk I/O between steps. This is especially valuable when processing large rasters
+in complex pipelines. Rasters remain in process memory, accessible to subsequent
+tools without writing intermediate results to disk.
+
+Load a raster into memory with `file_mode="m"`:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory; no disk I/O for subsequent operations
+dem = wbe.read_raster('dem.tif', file_mode='m')
+slope = wbe.read_raster('slope.tif', file_mode='m')
+
+# Both rasters are now memory-backed. Chain operations without disk:
+result = dem.add(slope)
+print(result.file_path)  # prints: memory://raster/...
+```
+
+Memory-backed paths are compatible with all downstream raster operations:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif', file_mode='m')
+
+# Inspect metadata
+meta = dem.metadata()
+print(f"Rows: {meta.rows}, Cols: {meta.columns}")
+
+# Chain tool operations
+scaled = wbe.run_tool('multiply', {
+    'input': dem.file_path,
+    'multiplier': 1.5
+})
+
+# Export to disk when ready
+wbe.write_raster(scaled, 'dem_scaled_1p5x.tif')
+```
+
+### Memory Lifecycle and Cleanup
+
+Memory-backed rasters persist in the process store until explicitly removed or
+cleared. For long-running jobs, manage memory explicitly to avoid accumulation:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory usage
+count_before = wbe.raster_memory_count()
+bytes_before = wbe.raster_memory_bytes()
+print(f"Rasters in memory: {count_before}")
+print(f"Bytes used: {bytes_before}")
+
+# Read two rasters
+dem1 = wbe.read_raster('large_dem1.tif', file_mode='m')
+dem2 = wbe.read_raster('large_dem2.tif', file_mode='m')
+
+print(f"After reads: {wbe.raster_memory_count()}")
+
+# Remove one raster when done
+wbe.remove_raster_from_memory(dem1)
+print(f"After remove: {wbe.raster_memory_count()}")
+
+# Or clear all rasters at once
+wbe.clear_raster_memory()
+print(f"After clear: {wbe.raster_memory_count()}")
+```
+
+Best practices:
+- Use `file_mode='m'` for intermediate results in tool chains.
+- Export memory-backed rasters to disk with `write_raster()` when persisting results.
+- Call `remove_raster_from_memory()` after a raster is no longer needed.
+- Use `clear_raster_memory()` between independent job phases.
+- Monitor `raster_memory_count()` and `raster_memory_bytes()` in large pipelines.
+
 ## Iterating Through Grid Cells
 
 Use this pattern only when tool methods or vectorized operations cannot express

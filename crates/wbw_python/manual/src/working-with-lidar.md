@@ -28,6 +28,89 @@ normals = wbe.lidar.calculate_point_normals(las)
 wbe.write_lidar(normals, 'survey_normals.copc.laz')
 ```
 
+## Memory-Backed Lidar for Pipeline Efficiency
+
+For workflows that chain multiple lidar operations, memory-backed lidar objects
+eliminate disk I/O between steps. This is valuable when processing large point
+clouds through sequential filtering or classification steps.
+
+Load a point cloud into memory with `file_mode='m'`:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Read directly into memory
+survey = wbe.read_lidar('survey.las', file_mode='m')
+print(survey.file_path)  # prints: memory://lidar/...
+```
+
+Memory-backed lidar objects support the full NumPy API and all downstream
+operations:
+
+```python
+import whitebox_workflows as wb
+import numpy as np
+
+wbe = wb.WbEnvironment()
+
+# Read into memory
+survey = wbe.read_lidar('survey.las', file_mode='m')
+
+# Inspect and process
+meta = survey.metadata()
+print(f'Points: {meta.point_count}')
+
+# Extract and edit points
+arr = survey.to_numpy(cols=['x', 'y', 'z', 'classification'])
+high_mask = arr[:, 2] > 250
+arr[high_mask, 3] = 6
+
+# Write edits back to disk
+edited = wb.Lidar.from_numpy(
+    arr,
+    base=survey,
+    cols=['x', 'y', 'z', 'classification'],
+    output_path='survey_filtered.laz',
+)
+```
+
+### Lidar Memory Lifecycle
+
+Memory-backed lidar objects persist until explicitly removed or cleared. For
+long-running lidar pipelines, manage memory explicitly:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+# Check current memory
+print(f"Lidar objects in memory: {wbe.lidar_memory_count()}")
+
+# Read point clouds
+survey1 = wbe.read_lidar('large1.las', file_mode='m')
+survey2 = wbe.read_lidar('large2.las', file_mode='m')
+
+print(f"After reads: {wbe.lidar_memory_count()}")
+
+# Remove when done
+wbe.remove_lidar_from_memory(survey1)
+print(f"After remove: {wbe.lidar_memory_count()}")
+
+# Or clear all
+wbe.clear_lidar_memory()
+print(f"After clear: {wbe.lidar_memory_count()}")
+```
+
+Best practices:
+- Use `file_mode='m'` for intermediate point cloud processing.
+- Export memory-backed lidar to disk with `write_lidar()` when persisting final outputs.
+- Call `remove_lidar_from_memory()` after a point cloud is no longer needed.
+- Use `clear_lidar_memory()` between independent analysis phases.
+- Monitor `lidar_memory_count()` for large processing jobs.
+
 ## Iterating Through Lidar Points
 
 Stable WbW-Py lidar objects are file-backed and tool-oriented, with explicit

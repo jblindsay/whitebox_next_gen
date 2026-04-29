@@ -171,6 +171,7 @@ impl PlanCurvatureTool {
         Some(z)
     }
 
+    #[allow(dead_code)]
     fn derivatives_projected(
         input: &Raster,
         band: isize,
@@ -796,72 +797,178 @@ impl PlanCurvatureTool {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
+            let row_data: Vec<Vec<f64>> = if is_geographic {
+                (0..rows)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        for c in 0..cols {
+                            let row = r as isize;
+                            let col = c as isize;
+                            let Some((p, q, r2, s, t)) =
+                                Self::derivatives_geographic(&input, band, row, col, z_factor)
+                            else {
+                                continue;
+                            };
 
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let row = r as isize;
-                        let col = c as isize;
-                        let derivs = if is_geographic {
-                            Self::derivatives_geographic(&input, band, row, col, z_factor)
-                        } else {
-                            Self::derivatives_projected(&input, band, row, col, z_factor, dx, dy)
-                        };
-                        let Some((p, q, r2, s, t)) = derivs else {
-                            continue;
-                        };
+                            let g2 = p * p + q * q;
+                            let w = 1.0 + g2;
+                            let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s + (1.0 + p * p) * t)
+                                / (2.0 * w.powf(1.5));
+                            let gaussian_curv = (r2 * t - s * s) / w.powi(2);
+                            let mut curv = match op {
+                                CurvatureOp::Plan => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2.powf(1.5);
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Profile => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2 * w.powf(1.5);
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Tangential => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2.sqrt() * w.sqrt();
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Total => r2 + t,
+                                CurvatureOp::Mean => mean_curv,
+                                CurvatureOp::Gaussian => gaussian_curv,
+                            };
 
-                        let g2 = p * p + q * q;
-                        let w = 1.0 + g2; // 1 + p² + q²
-                        let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s + (1.0 + p * p) * t)
-                            / (2.0 * w.powf(1.5));
-                        let gaussian_curv = (r2 * t - s * s) / w.powi(2);
-                        let mut curv = match op {
-                            CurvatureOp::Plan => {
-                                if g2 <= f64::EPSILON {
-                                    0.0
-                                } else {
-                                    let denom = g2.powf(1.5);
-                                    if denom <= f64::EPSILON { 0.0 }
-                                    else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
-                                }
+                            if log_transform {
+                                curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
                             }
-                            CurvatureOp::Profile => {
-                                if g2 <= f64::EPSILON {
-                                    0.0
-                                } else {
-                                    let denom = g2 * w.powf(1.5);
-                                    if denom <= f64::EPSILON { 0.0 }
-                                    else { -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom }
-                                }
-                            }
-                            CurvatureOp::Tangential => {
-                                if g2 <= f64::EPSILON {
-                                    0.0
-                                } else {
-                                    let denom = g2.sqrt() * w.sqrt();
-                                    if denom <= f64::EPSILON { 0.0 }
-                                    else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
-                                }
-                            }
-                            CurvatureOp::Total => r2 + t,
-                            // Florinsky (2016) Ch. 2 p. 19 — denominator always ≥ 2, no guard needed.
-                            CurvatureOp::Mean => mean_curv,
-                            // Florinsky (2016) Ch. 2 p. 18 — denominator always ≥ 1.
-                            CurvatureOp::Gaussian => gaussian_curv,
-                        };
 
-                        if log_transform {
-                            curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+                            row_out[c] = curv;
                         }
+                        row_out
+                    })
+                    .collect()
+            } else {
+                let mut band_buf = vec![nodata; rows * cols];
+                band_buf
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_buf)| {
+                        for (c, cell) in row_buf.iter_mut().enumerate() {
+                            *cell = input.get(band, r as isize, c as isize);
+                        }
+                    });
+                let res = (dx + dy) / 2.0;
 
-                        row_out[c] = curv;
-                    }
-                    row_out
-                })
-                .collect();
+                (0..rows)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        let row = r as isize;
+                        for c in 0..cols {
+                            let idx = r * cols + c;
+                            let z5_raw = band_buf[idx];
+                            if z5_raw == nodata {
+                                continue;
+                            }
+                            let z_center = z5_raw * z_factor;
+                            let read_scaled = |rr: isize, cc: isize| -> f64 {
+                                if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                    return z_center;
+                                }
+                                let v = band_buf[rr as usize * cols + cc as usize];
+                                if v == nodata { z_center } else { v * z_factor }
+                            };
+
+                            let col = c as isize;
+                            let z = [
+                                read_scaled(row - 2, col - 2),
+                                read_scaled(row - 2, col - 1),
+                                read_scaled(row - 2, col),
+                                read_scaled(row - 2, col + 1),
+                                read_scaled(row - 2, col + 2),
+                                read_scaled(row - 1, col - 2),
+                                read_scaled(row - 1, col - 1),
+                                read_scaled(row - 1, col),
+                                read_scaled(row - 1, col + 1),
+                                read_scaled(row - 1, col + 2),
+                                read_scaled(row, col - 2),
+                                read_scaled(row, col - 1),
+                                read_scaled(row, col),
+                                read_scaled(row, col + 1),
+                                read_scaled(row, col + 2),
+                                read_scaled(row + 1, col - 2),
+                                read_scaled(row + 1, col - 1),
+                                read_scaled(row + 1, col),
+                                read_scaled(row + 1, col + 1),
+                                read_scaled(row + 1, col + 2),
+                                read_scaled(row + 2, col - 2),
+                                read_scaled(row + 2, col - 1),
+                                read_scaled(row + 2, col),
+                                read_scaled(row + 2, col + 1),
+                                read_scaled(row + 2, col + 2),
+                            ];
+
+                            let (p, q, r2, s, t, _, _, _, _) = Self::projected_5x5_derivs(&z, res);
+
+                            let g2 = p * p + q * q;
+                            let w = 1.0 + g2;
+                            let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s + (1.0 + p * p) * t)
+                                / (2.0 * w.powf(1.5));
+                            let gaussian_curv = (r2 * t - s * s) / w.powi(2);
+                            let mut curv = match op {
+                                CurvatureOp::Plan => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2.powf(1.5);
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Profile => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2 * w.powf(1.5);
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Tangential => {
+                                    if g2 <= f64::EPSILON {
+                                        0.0
+                                    } else {
+                                        let denom = g2.sqrt() * w.sqrt();
+                                        if denom <= f64::EPSILON { 0.0 }
+                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
+                                    }
+                                }
+                                CurvatureOp::Total => r2 + t,
+                                CurvatureOp::Mean => mean_curv,
+                                CurvatureOp::Gaussian => gaussian_curv,
+                            };
+
+                            if log_transform {
+                                curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+                            }
+
+                            row_out[c] = curv;
+                        }
+                        row_out
+                    })
+                    .collect()
+            };
 
             for (r, row) in row_data.iter().enumerate() {
                 output

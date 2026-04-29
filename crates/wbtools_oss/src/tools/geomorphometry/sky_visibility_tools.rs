@@ -18,7 +18,7 @@ use wbcore::{PercentCoalescer,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{DataType, Raster, RasterFormat};
+use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord as VCoord, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, VectorFormat};
 
 use crate::memory_store;
@@ -75,6 +75,39 @@ impl SkyVisibilityCore {
         output
             .write(output_path, output_format)
             .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))
+    }
+
+    fn new_output_like(
+        input: &Raster,
+        data_type: DataType,
+        nodata: f64,
+        color_interpretation: Option<&str>,
+    ) -> Raster {
+        let mut metadata = input.metadata.clone();
+        if let Some(interp) = color_interpretation {
+            if let Some((_, value)) = metadata
+                .iter_mut()
+                .find(|(k, _)| k.eq_ignore_ascii_case("color_interpretation"))
+            {
+                *value = interp.to_string();
+            } else {
+                metadata.push(("color_interpretation".to_string(), interp.to_string()));
+            }
+        }
+
+        Raster::new(RasterConfig {
+            cols: input.cols,
+            rows: input.rows,
+            bands: input.bands,
+            x_min: input.x_min,
+            y_min: input.y_min,
+            cell_size: input.cell_size_x,
+            cell_size_y: Some(input.cell_size_y),
+            nodata,
+            data_type,
+            crs: input.crs.clone(),
+            metadata,
+        })
     }
 
     fn write_vector_output(layer: &Layer, output_path: &str) -> Result<(), ToolError> {
@@ -2087,13 +2120,23 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = dem.as_ref().clone();
-        if no_hyspo_tint {
-            output.data_type = DataType::F32;
+        let output_data_type = if no_hyspo_tint {
+            DataType::F32
         } else {
-            output.data_type = DataType::U32;
-            output.nodata = 0.0;
-        }
+            DataType::U32
+        };
+        let output_nodata = if no_hyspo_tint { nodata_f32 as f64 } else { 0.0 };
+        let output_color_interp = if no_hyspo_tint {
+            None
+        } else {
+            Some("packed_rgb")
+        };
+        let mut output = Self::new_output_like(
+            dem.as_ref(),
+            output_data_type,
+            output_nodata,
+            output_color_interp,
+        );
         for (r, row) in row_data.iter().enumerate() {
             output
                 .set_row_slice(0, r as isize, row)
@@ -3164,9 +3207,12 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = dem.as_ref().clone();
-        output.data_type = DataType::U32;
-        output.nodata = 0.0;
+        let mut output = Self::new_output_like(
+            dem.as_ref(),
+            DataType::U32,
+            0.0,
+            Some("packed_rgb"),
+        );
         for (r, row) in row_data.iter().enumerate() {
             output
                 .set_row_slice(0, r as isize, row)
@@ -3790,9 +3836,7 @@ impl SkyVisibilityCore {
             })
             .collect();
 
-        let mut output = dem.clone();
-        output.data_type = DataType::U32;
-        output.nodata = 0.0;
+        let mut output = Self::new_output_like(&dem, DataType::U32, 0.0, Some("packed_rgb"));
         for (r, row) in row_data.iter().enumerate() {
             output
                 .set_row_slice(0, r as isize, row)
@@ -5114,6 +5158,7 @@ mod tests {
                 .unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         assert_eq!(out.data_type, DataType::U32);
+        assert!(out.data_u32().is_some());
         let v = out.get(0, 3, 3);
         assert!(v.is_finite());
         assert!(v >= 0.0);
@@ -5138,6 +5183,7 @@ mod tests {
                 .unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         assert_eq!(out.data_type, DataType::U32);
+        assert!(out.data_u32().is_some());
         let v = out.get(0, 4, 4);
         assert!(v.is_finite());
         assert!(v > 0.0);
@@ -5191,6 +5237,7 @@ mod tests {
                 .unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         assert_eq!(out.data_type, DataType::U32);
+        assert!(out.data_u32().is_some());
         let v = out.get(0, 5, 5);
         assert!(v.is_finite());
         assert!(v > 0.0);
@@ -5218,6 +5265,7 @@ mod tests {
                 .unwrap();
         let out = memory_store::get_raster_by_id(out_id).unwrap();
         assert_eq!(out.data_type, DataType::U32);
+        assert!(out.data_u32().is_some());
         let center = out.get(0, 5, 5);
         let corner = out.get(0, 1, 1);
         assert!(center.is_finite() && center > 0.0);

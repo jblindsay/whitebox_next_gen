@@ -8,7 +8,7 @@ use wbcore::{PercentCoalescer,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{Raster, RasterFormat};
+use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 
 use crate::memory_store;
 
@@ -171,6 +171,7 @@ impl TerrainCore {
     }
 
     /// Get a 5x5 neighbourhood for Florinsky-based gradient calculations (projected coords).
+    #[inline(always)]
     fn neighbourhood_5x5(
         input: &Raster,
         band: isize,
@@ -182,26 +183,87 @@ impl TerrainCore {
         if input.is_nodata(zcenter) {
             return None;
         }
+        let nodata = input.nodata;
         let zcenter_scaled = zcenter * z_factor;
-        let offsets = [
-            (-2, -2), (-1, -2), (0, -2), (1, -2), (2, -2),
-            (-2, -1), (-1, -1), (0, -1), (1, -1), (2, -1),
-            (-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0),
-            (-2, 1), (-1, 1), (0, 1), (1, 1), (2, 1),
-            (-2, 2), (-1, 2), (0, 2), (1, 2), (2, 2),
-        ];
-        let mut z = [0.0f64; 25];
-        for (i, (ox, oy)) in offsets.iter().enumerate() {
-            let v = input.get(band, row + *oy, col + *ox);
-            z[i] = if input.is_nodata(v) {
+        #[inline(always)]
+        fn read_scaled(
+            input: &Raster,
+            band: isize,
+            row: isize,
+            col: isize,
+            z_factor: f64,
+            nodata: f64,
+            zcenter_scaled: f64,
+        ) -> f64 {
+            let v = input.get(band, row, col);
+            if v == nodata {
                 zcenter_scaled
             } else {
                 v * z_factor
-            };
+            }
         }
+
+        let mut z = [0.0f64; 25];
+        z[0] = read_scaled(input, band, row - 2, col - 2, z_factor, nodata, zcenter_scaled);
+        z[1] = read_scaled(input, band, row - 2, col - 1, z_factor, nodata, zcenter_scaled);
+        z[2] = read_scaled(input, band, row - 2, col, z_factor, nodata, zcenter_scaled);
+        z[3] = read_scaled(input, band, row - 2, col + 1, z_factor, nodata, zcenter_scaled);
+        z[4] = read_scaled(input, band, row - 2, col + 2, z_factor, nodata, zcenter_scaled);
+        z[5] = read_scaled(input, band, row - 1, col - 2, z_factor, nodata, zcenter_scaled);
+        z[6] = read_scaled(input, band, row - 1, col - 1, z_factor, nodata, zcenter_scaled);
+        z[7] = read_scaled(input, band, row - 1, col, z_factor, nodata, zcenter_scaled);
+        z[8] = read_scaled(input, band, row - 1, col + 1, z_factor, nodata, zcenter_scaled);
+        z[9] = read_scaled(input, band, row - 1, col + 2, z_factor, nodata, zcenter_scaled);
+        z[10] = read_scaled(input, band, row, col - 2, z_factor, nodata, zcenter_scaled);
+        z[11] = read_scaled(input, band, row, col - 1, z_factor, nodata, zcenter_scaled);
+        z[12] = read_scaled(input, band, row, col, z_factor, nodata, zcenter_scaled);
+        z[13] = read_scaled(input, band, row, col + 1, z_factor, nodata, zcenter_scaled);
+        z[14] = read_scaled(input, band, row, col + 2, z_factor, nodata, zcenter_scaled);
+        z[15] = read_scaled(input, band, row + 1, col - 2, z_factor, nodata, zcenter_scaled);
+        z[16] = read_scaled(input, band, row + 1, col - 1, z_factor, nodata, zcenter_scaled);
+        z[17] = read_scaled(input, band, row + 1, col, z_factor, nodata, zcenter_scaled);
+        z[18] = read_scaled(input, band, row + 1, col + 1, z_factor, nodata, zcenter_scaled);
+        z[19] = read_scaled(input, band, row + 1, col + 2, z_factor, nodata, zcenter_scaled);
+        z[20] = read_scaled(input, band, row + 2, col - 2, z_factor, nodata, zcenter_scaled);
+        z[21] = read_scaled(input, band, row + 2, col - 1, z_factor, nodata, zcenter_scaled);
+        z[22] = read_scaled(input, band, row + 2, col, z_factor, nodata, zcenter_scaled);
+        z[23] = read_scaled(input, band, row + 2, col + 1, z_factor, nodata, zcenter_scaled);
+        z[24] = read_scaled(input, band, row + 2, col + 2, z_factor, nodata, zcenter_scaled);
         Some(z)
     }
 
+    #[inline(always)]
+    #[allow(dead_code)]
+    fn pq_projected_precomputed_scale(
+        input: &Raster,
+        band: isize,
+        row: isize,
+        col: isize,
+        z_factor: f64,
+        projected_scale: f64,
+    ) -> Option<(f64, f64)> {
+        let z = Self::neighbourhood_5x5(input, band, row, col, z_factor)?;
+
+        let p = projected_scale
+            * (44.0 * (z[3] + z[23] - z[1] - z[21])
+                + 31.0
+                    * (z[0] + z[20] - z[4] - z[24]
+                        + 2.0 * (z[8] + z[18] - z[6] - z[16]))
+                + 17.0 * (z[14] - z[10] + 4.0 * (z[13] - z[11]))
+                + 5.0 * (z[9] + z[19] - z[5] - z[15]));
+
+        let q = projected_scale
+            * (44.0 * (z[5] + z[9] - z[15] - z[19])
+                + 31.0
+                    * (z[20] + z[24] - z[0] - z[4]
+                        + 2.0 * (z[6] + z[8] - z[16] - z[18]))
+                + 17.0 * (z[2] - z[22] + 4.0 * (z[7] - z[17]))
+                + 5.0 * (z[1] + z[3] - z[21] - z[23]));
+
+        Some((p, q))
+    }
+
+    #[inline(always)]
     fn pq_projected(
         input: &Raster,
         band: isize,
@@ -235,6 +297,7 @@ impl TerrainCore {
         Some((p, q))
     }
 
+    #[inline(always)]
     fn pq_geographic(
         input: &Raster,
         band: isize,
@@ -386,7 +449,19 @@ impl TerrainCore {
         }
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = Raster::new_like(&input);
+        let mut output = Raster::new(RasterConfig {
+            cols: input.cols,
+            rows: input.rows,
+            bands: input.bands,
+            x_min: input.x_min,
+            y_min: input.y_min,
+            cell_size: input.cell_size_x,
+            cell_size_y: Some(input.cell_size_y),
+            nodata: input.nodata,
+            data_type: DataType::F32,
+            crs: input.crs.clone(),
+            metadata: input.metadata.clone(),
+        });
         let rows = input.rows;
         let cols = input.cols;
         let nodata = input.nodata;
@@ -766,7 +841,7 @@ impl TerrainCore {
         };
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = Raster::new_like(&input);
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -774,44 +849,136 @@ impl TerrainCore {
         let nodata = input.nodata;
         let dx = input.cell_size_x.abs().max(f64::EPSILON);
         let dy = input.cell_size_y.abs().max(f64::EPSILON);
+        let projected_scale = 1.0 / (420.0 * ((dx + dy) / 2.0));
         let is_geographic = Self::raster_is_geographic(&input);
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let row = r as isize;
-                        let col = c as isize;
-                        let Some((p, q)) = (if is_geographic {
-                            Self::pq_geographic(&input, band, row, col, z_factor)
-                        } else {
-                            Self::pq_projected(&input, band, row, col, z_factor, dx, dy)
-                        }) else {
-                            continue;
-                        };
-                        let tan_slope = p.mul_add(p, q * q).sqrt().max(0.00017);
-                        let aspect = if p != 0.0 {
-                            std::f64::consts::PI
-                                - (q / p).atan()
-                                + std::f64::consts::FRAC_PI_2 * p.signum()
-                        } else {
-                            std::f64::consts::PI
-                        };
-                        let term1 = tan_slope / (1.0 + tan_slope * tan_slope).sqrt();
-                        let term2 = sin_alt / tan_slope;
-                        let mut val = 0.0;
-                        for i in 0..azimuths.len() {
-                            let term3 = cos_alt * (azimuths[i] - aspect).sin();
-                            val += term1 * (term2 - term3) * weights[i];
+            let row_data: Vec<Vec<f64>> = if is_geographic {
+                (0..rows)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        for c in 0..cols {
+                            let row = r as isize;
+                            let col = c as isize;
+                            let Some((p, q)) = Self::pq_geographic(&input, band, row, col, z_factor) else {
+                                continue;
+                            };
+                            let tan_slope = p.mul_add(p, q * q).sqrt().max(0.00017);
+                            let aspect = if p != 0.0 {
+                                std::f64::consts::PI
+                                    - (q / p).atan()
+                                    + std::f64::consts::FRAC_PI_2 * p.signum()
+                            } else {
+                                std::f64::consts::PI
+                            };
+                            let term1 = tan_slope / (1.0 + tan_slope * tan_slope).sqrt();
+                            let term2 = sin_alt / tan_slope;
+                            let mut val = 0.0;
+                            for i in 0..azimuths.len() {
+                                let term3 = cos_alt * (azimuths[i] - aspect).sin();
+                                val += term1 * (term2 - term3) * weights[i];
+                            }
+                            row_out[c] = (val * 32767.0).max(0.0).round();
                         }
-                        row_out[c] = (val * 32767.0).max(0.0).round();
-                    }
-                    row_out
-                })
-                .collect();
+                        row_out
+                    })
+                    .collect()
+            } else {
+                let mut band_buf = vec![nodata; rows * cols];
+                band_buf
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_buf)| {
+                        for (c, cell) in row_buf.iter_mut().enumerate() {
+                            *cell = input.get(band, r as isize, c as isize);
+                        }
+                    });
+
+                (0..rows)
+                    .into_par_iter()
+                    .map(|r| {
+                        let mut row_out = vec![nodata; cols];
+                        let row = r as isize;
+                        for c in 0..cols {
+                            let idx = r * cols + c;
+                            let z_center = band_buf[idx];
+                            if z_center == nodata {
+                                continue;
+                            }
+                            let z_center_scaled = z_center * z_factor;
+                            let read_scaled = |rr: isize, cc: isize| -> f64 {
+                                if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                    return z_center_scaled;
+                                }
+                                let v = band_buf[rr as usize * cols + cc as usize];
+                                if v == nodata { z_center_scaled } else { v * z_factor }
+                            };
+
+                            let col = c as isize;
+                            let z0 = read_scaled(row - 2, col - 2);
+                            let z1 = read_scaled(row - 2, col - 1);
+                            let z2 = read_scaled(row - 2, col);
+                            let z3 = read_scaled(row - 2, col + 1);
+                            let z4 = read_scaled(row - 2, col + 2);
+                            let z5 = read_scaled(row - 1, col - 2);
+                            let z6 = read_scaled(row - 1, col - 1);
+                            let z7 = read_scaled(row - 1, col);
+                            let z8 = read_scaled(row - 1, col + 1);
+                            let z9 = read_scaled(row - 1, col + 2);
+                            let z10 = read_scaled(row, col - 2);
+                            let z11 = read_scaled(row, col - 1);
+                            let z13 = read_scaled(row, col + 1);
+                            let z14 = read_scaled(row, col + 2);
+                            let z15 = read_scaled(row + 1, col - 2);
+                            let z16 = read_scaled(row + 1, col - 1);
+                            let z17 = read_scaled(row + 1, col);
+                            let z18 = read_scaled(row + 1, col + 1);
+                            let z19 = read_scaled(row + 1, col + 2);
+                            let z20 = read_scaled(row + 2, col - 2);
+                            let z21 = read_scaled(row + 2, col - 1);
+                            let z22 = read_scaled(row + 2, col);
+                            let z23 = read_scaled(row + 2, col + 1);
+                            let z24 = read_scaled(row + 2, col + 2);
+
+                            let p = projected_scale
+                                * (44.0 * (z3 + z23 - z1 - z21)
+                                    + 31.0
+                                        * (z0 + z20 - z4 - z24
+                                            + 2.0 * (z8 + z18 - z6 - z16))
+                                    + 17.0 * (z14 - z10 + 4.0 * (z13 - z11))
+                                    + 5.0 * (z9 + z19 - z5 - z15));
+
+                            let q = projected_scale
+                                * (44.0 * (z5 + z9 - z15 - z19)
+                                    + 31.0
+                                        * (z20 + z24 - z0 - z4
+                                            + 2.0 * (z6 + z8 - z16 - z18))
+                                    + 17.0 * (z2 - z22 + 4.0 * (z7 - z17))
+                                    + 5.0 * (z1 + z3 - z21 - z23));
+
+                            let tan_slope = p.mul_add(p, q * q).sqrt().max(0.00017);
+                            let aspect = if p != 0.0 {
+                                std::f64::consts::PI
+                                    - (q / p).atan()
+                                    + std::f64::consts::FRAC_PI_2 * p.signum()
+                            } else {
+                                std::f64::consts::PI
+                            };
+                            let term1 = tan_slope / (1.0 + tan_slope * tan_slope).sqrt();
+                            let term2 = sin_alt / tan_slope;
+                            let mut val = 0.0;
+                            for i in 0..azimuths.len() {
+                                let term3 = cos_alt * (azimuths[i] - aspect).sin();
+                                val += term1 * (term2 - term3) * weights[i];
+                            }
+                            row_out[c] = (val * 32767.0).max(0.0).round();
+                        }
+                        row_out
+                    })
+                    .collect()
+            };
 
             for (r, row) in row_data.iter().enumerate() {
                 output

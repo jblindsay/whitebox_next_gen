@@ -5262,37 +5262,148 @@ impl TerrainAnalysisCore {
             let band = band_idx as isize;
             ctx.progress.info("running elevation_percentile");
             let coalescer = PercentCoalescer::new(1, 99);
-            let row_data: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
+
+            let mut band_min = f64::INFINITY;
+            let mut band_max = f64::NEG_INFINITY;
+            for r in 0..rows {
+                for c in 0..cols {
+                    let z = input.get(band, r as isize, c as isize);
+                    if input.is_nodata(z) {
+                        continue;
+                    }
+                    if z < band_min {
+                        band_min = z;
+                    }
+                    if z > band_max {
+                        band_max = z;
+                    }
+                }
+            }
+
+            if !band_min.is_finite() || !band_max.is_finite() {
+                coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);
+                continue;
+            }
+
+            let min_bin = (band_min * multiplier).floor() as i64;
+            let max_bin = (band_max * multiplier).floor() as i64;
+            let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+            let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                ToolError::Execution(
+                    "elevation_percentile histogram bin count exceeds platform limits".to_string(),
+                )
+            })?;
+
+            let bin_nodata = i64::MIN;
+            let mut binned = vec![bin_nodata; rows * cols];
+            binned
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_bins)| {
+                    for (c, cell_bin) in row_bins.iter_mut().enumerate() {
                         let z = input.get(band, r as isize, c as isize);
                         if input.is_nodata(z) {
                             continue;
                         }
-                        let z_bin = (z * multiplier).floor();
-                        let y1 = r.saturating_sub(mid_y);
-                        let x1 = c.saturating_sub(mid_x);
-                        let y2 = (r + mid_y).min(rows - 1);
-                        let x2 = (c + mid_x).min(cols - 1);
-                        let mut n = 0.0;
-                        let mut n_less = 0.0;
-                        for rr in y1..=y2 {
-                            for cc in x1..=x2 {
-                                let v = input.get(band, rr as isize, cc as isize);
-                                if !input.is_nodata(v) {
-                                    n += 1.0;
-                                    if (v * multiplier).floor() < z_bin {
-                                        n_less += 1.0;
+                        *cell_bin = (z * multiplier).floor() as i64 - min_bin;
+                    }
+                });
+
+            let rows_isize = rows as isize;
+            let cols_isize = cols as isize;
+            let get_bin = |rr: isize, cc: isize| -> i64 {
+                if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                    return bin_nodata;
+                }
+                binned[rr as usize * cols + cc as usize]
+            };
+
+            let row_data: Vec<Vec<f64>> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let row = r as isize;
+                    let mut row_out = vec![nodata; cols];
+                    let mut histo = vec![0i64; num_bins];
+                    let mut old_center = bin_nodata;
+                    let mut n = 0i64;
+                    let mut n_less = 0i64;
+                    let start_row = row - mid_y as isize;
+                    let end_row = row + mid_y as isize;
+
+                    for c in 0..cols {
+                        let col = c as isize;
+                        let center_bin = get_bin(row, col);
+                        if center_bin == bin_nodata {
+                            old_center = bin_nodata;
+                            continue;
+                        }
+
+                        if old_center != bin_nodata {
+                            let trailing_col = col - mid_x as isize - 1;
+                            let leading_col = col + mid_x as isize;
+
+                            for rr in start_row..=end_row {
+                                let bv = get_bin(rr, trailing_col);
+                                if bv != bin_nodata {
+                                    histo[bv as usize] -= 1;
+                                    n -= 1;
+                                    if bv < old_center {
+                                        n_less -= 1;
+                                    }
+                                }
+                            }
+
+                            for rr in start_row..=end_row {
+                                let bv = get_bin(rr, leading_col);
+                                if bv != bin_nodata {
+                                    histo[bv as usize] += 1;
+                                    n += 1;
+                                    if bv < old_center {
+                                        n_less += 1;
+                                    }
+                                }
+                            }
+
+                            if old_center < center_bin {
+                                let mut m = 0i64;
+                                for v in old_center..center_bin {
+                                    m += histo[v as usize];
+                                }
+                                n_less += m;
+                            } else if old_center > center_bin {
+                                let mut m = 0i64;
+                                for v in center_bin..old_center {
+                                    m += histo[v as usize];
+                                }
+                                n_less -= m;
+                            }
+                        } else {
+                            histo.fill(0);
+                            n = 0;
+                            n_less = 0;
+                            let start_col = col - mid_x as isize;
+                            let end_col = col + mid_x as isize;
+
+                            for cc in start_col..=end_col {
+                                for rr in start_row..=end_row {
+                                    let bv = get_bin(rr, cc);
+                                    if bv != bin_nodata {
+                                        histo[bv as usize] += 1;
+                                        n += 1;
+                                        if bv < center_bin {
+                                            n_less += 1;
+                                        }
                                     }
                                 }
                             }
                         }
-                        if n > 0.0 {
-                            row_out[c] = n_less / n * 100.0;
+
+                        if n > 0 {
+                            row_out[c] = n_less as f64 / n as f64 * 100.0;
                         }
+                        old_center = center_bin;
                     }
+
                     row_out
                 })
                 .collect();

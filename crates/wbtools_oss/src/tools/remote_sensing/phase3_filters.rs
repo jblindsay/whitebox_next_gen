@@ -202,7 +202,7 @@ impl FastAlmostGaussianFilterTool {
             }
             Phase3Op::DiffOfGaussians => {
                 params.push(ToolParamSpec {
-                    name: "sigma1",
+                    name: "filter_size_x",
                     description: "Smaller Gaussian sigma (0.25-20.0, default 2.0).",
                     required: false,
                 });
@@ -767,23 +767,44 @@ impl FastAlmostGaussianFilterTool {
                     .into_par_iter()
                     .map(|band_idx| {
                         let band = band_idx as isize;
+                        let mut band_buf = vec![nodata; rows * cols];
+                        band_buf
+                            .par_chunks_mut(cols)
+                            .enumerate()
+                            .for_each(|(r, row_buf)| {
+                                for (c, cell) in row_buf.iter_mut().enumerate() {
+                                    let z_raw = input.get(band, r as isize, c as isize);
+                                    if input.is_nodata(z_raw) {
+                                        continue;
+                                    }
+                                    *cell = if packed_rgb { value2i(z_raw) } else { z_raw };
+                                }
+                            });
+
                         let mut v = vec![nodata; rows * cols];
                         v.par_chunks_mut(cols).enumerate().for_each(|(r, row_out)| {
+                            let row = r as isize;
+                            let row_offset = r * cols;
                             for c in 0..cols {
-                                let z0_raw = input.get(band, r as isize, c as isize);
-                                if input.is_nodata(z0_raw) {
+                                let z0 = band_buf[row_offset + c];
+                                if z0 == nodata {
                                     continue;
                                 }
-                                let z0 = if packed_rgb { value2i(z0_raw) } else { z0_raw };
                                 let mut sum = 0.0;
                                 let mut cnt = 0.0;
-                                for ny in (r as isize - radius)..=(r as isize + radius) {
+                                for ny in (row - radius)..=(row + radius) {
+                                    if ny < 0 || ny >= rows as isize {
+                                        continue;
+                                    }
+                                    let ny_offset = ny as usize * cols;
                                     for nx in (c as isize - radius)..=(c as isize + radius) {
-                                        let zn_raw = input.get(band, ny, nx);
-                                        if input.is_nodata(zn_raw) {
+                                        if nx < 0 || nx >= cols as isize {
                                             continue;
                                         }
-                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
+                                        let zn = band_buf[ny_offset + nx as usize];
+                                        if zn == nodata {
+                                            continue;
+                                        }
                                         if (zn - z0).abs() <= threshold {
                                             sum += zn;
                                             cnt += 1.0;
@@ -1079,40 +1100,120 @@ impl FastAlmostGaussianFilterTool {
                     .into_par_iter()
                     .map(|band_idx| {
                         let band = band_idx as isize;
+                        let filter_width = 2 * mx as usize + 1;
+                        let use_staged = filter_width > 3;
+                        let band_buf = if use_staged {
+                            let mut buf = vec![nodata; rows * cols];
+                            buf.par_chunks_mut(cols)
+                                .enumerate()
+                                .for_each(|(r, row_buf)| {
+                                    for (c, cell) in row_buf.iter_mut().enumerate() {
+                                        let z_raw = input.get(band, r as isize, c as isize);
+                                        if input.is_nodata(z_raw) {
+                                            continue;
+                                        }
+                                        *cell = if packed_rgb { value2i(z_raw) } else { z_raw };
+                                    }
+                                });
+                            Some(buf)
+                        } else {
+                            None
+                        };
+
+                        let fetch_value = |rr: usize, cc: usize, band_buf: &Option<Vec<f64>>| -> f64 {
+                            if let Some(buf) = band_buf {
+                                return buf[rr * cols + cc];
+                            }
+                            let z_raw = input.get(band, rr as isize, cc as isize);
+                            if input.is_nodata(z_raw) {
+                                nodata
+                            } else if packed_rgb {
+                                value2i(z_raw)
+                            } else {
+                                z_raw
+                            }
+                        };
+
                         let mut out = vec![nodata; rows * cols];
                         out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
                             let row = r as isize;
+                            let start_row = (row - my).max(0) as usize;
+                            let end_row = (row + my).min(rows as isize - 1) as usize;
+                            let mut filter_min_vals = vec![f64::INFINITY; filter_width];
+                            let mut filter_max_vals = vec![f64::NEG_INFINITY; filter_width];
+                            let mut head = 0usize;
+
                             for c in 0..cols {
-                                let col = c as isize;
-                                let z_raw = input.get(band, row, col);
-                                if input.is_nodata(z_raw) {
+                                let z = fetch_value(r, c, &band_buf);
+                                if z == nodata {
                                     continue;
                                 }
-                                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+
+                                if c > 0 {
+                                    let mut col_min = f64::INFINITY;
+                                    let mut col_max = f64::NEG_INFINITY;
+                                    let new_col = c as isize + mx;
+                                    if new_col >= 0 && new_col < cols as isize {
+                                        let new_col = new_col as usize;
+                                        for rr in start_row..=end_row {
+                                            let zn = fetch_value(rr, new_col, &band_buf);
+                                            if zn == nodata {
+                                                continue;
+                                            }
+                                            if zn < col_min {
+                                                col_min = zn;
+                                            }
+                                            if zn > col_max {
+                                                col_max = zn;
+                                            }
+                                        }
+                                    }
+                                    filter_min_vals[head] = col_min;
+                                    filter_max_vals[head] = col_max;
+                                    head = (head + 1) % filter_width;
+                                } else {
+                                    for i in 0..filter_width {
+                                        let cc = i as isize - mx;
+                                        let mut col_min = f64::INFINITY;
+                                        let mut col_max = f64::NEG_INFINITY;
+                                        if cc >= 0 && cc < cols as isize {
+                                            let cc = cc as usize;
+                                            for rr in start_row..=end_row {
+                                                let zn = fetch_value(rr, cc, &band_buf);
+                                                if zn == nodata {
+                                                    continue;
+                                                }
+                                                if zn < col_min {
+                                                    col_min = zn;
+                                                }
+                                                if zn > col_max {
+                                                    col_max = zn;
+                                                }
+                                            }
+                                        }
+                                        filter_min_vals[i] = col_min;
+                                        filter_max_vals[i] = col_max;
+                                    }
+                                }
+
                                 let mut min_v = f64::INFINITY;
                                 let mut max_v = f64::NEG_INFINITY;
                                 let mut min2_v = f64::INFINITY;
                                 let mut max2_v = f64::NEG_INFINITY;
-
-                                for ny in (row - my)..=(row + my) {
-                                    for nx in (col - mx)..=(col + mx) {
-                                        let zn_raw = input.get(band, ny, nx);
-                                        if input.is_nodata(zn_raw) {
-                                            continue;
-                                        }
-                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
-                                        if zn < min_v {
-                                            min2_v = min_v;
-                                            min_v = zn;
-                                        } else if zn < min2_v {
-                                            min2_v = zn;
-                                        }
-                                        if zn > max_v {
-                                            max2_v = max_v;
-                                            max_v = zn;
-                                        } else if zn > max2_v {
-                                            max2_v = zn;
-                                        }
+                                for i in 0..filter_width {
+                                    let col_min = filter_min_vals[i];
+                                    let col_max = filter_max_vals[i];
+                                    if col_min < min_v {
+                                        min2_v = min_v;
+                                        min_v = col_min;
+                                    } else if col_min < min2_v {
+                                        min2_v = col_min;
+                                    }
+                                    if col_max > max_v {
+                                        max2_v = max_v;
+                                        max_v = col_max;
+                                    } else if col_max > max2_v {
+                                        max2_v = col_max;
                                     }
                                 }
 
@@ -1146,35 +1247,113 @@ impl FastAlmostGaussianFilterTool {
                     .into_par_iter()
                     .map(|band_idx| {
                         let band = band_idx as isize;
+                        let filter_width = 2 * mx as usize + 1;
+                        let mut band_buf = vec![nodata; rows * cols];
+                        band_buf
+                            .par_chunks_mut(cols)
+                            .enumerate()
+                            .for_each(|(r, row_buf)| {
+                                for (c, cell) in row_buf.iter_mut().enumerate() {
+                                    let z_raw = input.get(band, r as isize, c as isize);
+                                    if input.is_nodata(z_raw) {
+                                        continue;
+                                    }
+                                    *cell = if packed_rgb { value2i(z_raw) } else { z_raw };
+                                }
+                            });
+
                         let mut out = vec![nodata; rows * cols];
                         out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
-                            let row = r as isize;
+                            let start_row = (r as isize - my).max(0) as usize;
+                            let end_row = (r as isize + my).min(rows as isize - 1) as usize;
+                            let mut filter_min_vals = vec![f64::INFINITY; filter_width];
+                            let mut filter_max_vals = vec![f64::NEG_INFINITY; filter_width];
+                            let mut filter_totals = vec![0.0; filter_width];
+                            let mut filter_counts = vec![0usize; filter_width];
+                            let mut head = 0usize;
+
                             for c in 0..cols {
-                                let col = c as isize;
-                                let z_raw = input.get(band, row, col);
-                                if input.is_nodata(z_raw) {
+                                let z = band_buf[r * cols + c];
+                                if z == nodata {
                                     continue;
                                 }
-                                let mut sum = 0.0;
-                                let mut n = 0usize;
-                                let mut min_v = f64::INFINITY;
-                                let mut max_v = f64::NEG_INFINITY;
-                                for ny in (row - my)..=(row + my) {
-                                    for nx in (col - mx)..=(col + mx) {
-                                        let zn_raw = input.get(band, ny, nx);
-                                        if input.is_nodata(zn_raw) {
-                                            continue;
+
+                                if c > 0 {
+                                    let mut col_min = f64::INFINITY;
+                                    let mut col_max = f64::NEG_INFINITY;
+                                    let mut col_total = 0.0;
+                                    let mut col_count = 0usize;
+                                    let new_col = c as isize + mx;
+                                    if new_col >= 0 && new_col < cols as isize {
+                                        let new_col = new_col as usize;
+                                        for rr in start_row..=end_row {
+                                            let zn = band_buf[rr * cols + new_col];
+                                            if zn == nodata {
+                                                continue;
+                                            }
+                                            if zn < col_min {
+                                                col_min = zn;
+                                            }
+                                            if zn > col_max {
+                                                col_max = zn;
+                                            }
+                                            col_total += zn;
+                                            col_count += 1;
                                         }
-                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
-                                        sum += zn;
-                                        n += 1;
-                                        min_v = min_v.min(zn);
-                                        max_v = max_v.max(zn);
+                                    }
+                                    filter_min_vals[head] = col_min;
+                                    filter_max_vals[head] = col_max;
+                                    filter_totals[head] = col_total;
+                                    filter_counts[head] = col_count;
+                                    head = (head + 1) % filter_width;
+                                } else {
+                                    for i in 0..filter_width {
+                                        let cc = i as isize - mx;
+                                        let mut col_min = f64::INFINITY;
+                                        let mut col_max = f64::NEG_INFINITY;
+                                        let mut col_total = 0.0;
+                                        let mut col_count = 0usize;
+                                        if cc >= 0 && cc < cols as isize {
+                                            let cc = cc as usize;
+                                            for rr in start_row..=end_row {
+                                                let zn = band_buf[rr * cols + cc];
+                                                if zn == nodata {
+                                                    continue;
+                                                }
+                                                if zn < col_min {
+                                                    col_min = zn;
+                                                }
+                                                if zn > col_max {
+                                                    col_max = zn;
+                                                }
+                                                col_total += zn;
+                                                col_count += 1;
+                                            }
+                                        }
+                                        filter_min_vals[i] = col_min;
+                                        filter_max_vals[i] = col_max;
+                                        filter_totals[i] = col_total;
+                                        filter_counts[i] = col_count;
                                     }
                                 }
-                                if n == 0 {
-                                    continue;
+
+                                let mut min_v = f64::INFINITY;
+                                let mut max_v = f64::NEG_INFINITY;
+                                let mut sum = 0.0;
+                                let mut n = 0usize;
+                                for i in 0..filter_width {
+                                    let col_min = filter_min_vals[i];
+                                    let col_max = filter_max_vals[i];
+                                    if col_min < min_v {
+                                        min_v = col_min;
+                                    }
+                                    if col_max > max_v {
+                                        max_v = col_max;
+                                    }
+                                    sum += filter_totals[i];
+                                    n += filter_counts[i];
                                 }
+
                                 out_row[c] = if n > 2 {
                                     (sum - min_v - max_v) / (n - 2) as f64
                                 } else {
@@ -1211,6 +1390,8 @@ impl FastAlmostGaussianFilterTool {
                         let mut out = vec![nodata; rows * cols];
                         out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
                             let row = r as isize;
+                            let mut best_vals = vec![0.0; k];
+                            let mut best_dists = vec![0.0; k];
                             for c in 0..cols {
                                 let col = c as isize;
                                 let z_raw = input.get(band, row, col);
@@ -1218,28 +1399,77 @@ impl FastAlmostGaussianFilterTool {
                                     continue;
                                 }
                                 let z = if packed_rgb { value2i(z_raw) } else { z_raw };
-                                let mut neighbours = Vec::with_capacity(max_cells);
-                                for ny in (row - my)..=(row + my) {
-                                    for nx in (col - mx)..=(col + mx) {
-                                        let zn_raw = input.get(band, ny, nx);
-                                        if input.is_nodata(zn_raw) {
-                                            continue;
+                                let mut best_len = 0usize;
+
+                                if packed_rgb {
+                                    for ny in (row - my)..=(row + my) {
+                                        for nx in (col - mx)..=(col + mx) {
+                                            let zn_raw = input.get(band, ny, nx);
+                                            if input.is_nodata(zn_raw) {
+                                                continue;
+                                            }
+                                            let zn = value2i(zn_raw);
+                                            let diff2 = (zn - z) * (zn - z);
+                                            if best_len < k {
+                                                let mut insert_at = best_len;
+                                                while insert_at > 0 && diff2 < best_dists[insert_at - 1] {
+                                                    best_dists[insert_at] = best_dists[insert_at - 1];
+                                                    best_vals[insert_at] = best_vals[insert_at - 1];
+                                                    insert_at -= 1;
+                                                }
+                                                best_dists[insert_at] = diff2;
+                                                best_vals[insert_at] = zn;
+                                                best_len += 1;
+                                            } else if diff2 < best_dists[k - 1] {
+                                                let mut insert_at = k - 1;
+                                                while insert_at > 0 && diff2 < best_dists[insert_at - 1] {
+                                                    best_dists[insert_at] = best_dists[insert_at - 1];
+                                                    best_vals[insert_at] = best_vals[insert_at - 1];
+                                                    insert_at -= 1;
+                                                }
+                                                best_dists[insert_at] = diff2;
+                                                best_vals[insert_at] = zn;
+                                            }
                                         }
-                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
-                                        neighbours.push(zn);
+                                    }
+                                } else {
+                                    for ny in (row - my)..=(row + my) {
+                                        for nx in (col - mx)..=(col + mx) {
+                                            let zn = input.get(band, ny, nx);
+                                            if input.is_nodata(zn) {
+                                                continue;
+                                            }
+                                            let diff2 = (zn - z) * (zn - z);
+                                            if best_len < k {
+                                                let mut insert_at = best_len;
+                                                while insert_at > 0 && diff2 < best_dists[insert_at - 1] {
+                                                    best_dists[insert_at] = best_dists[insert_at - 1];
+                                                    best_vals[insert_at] = best_vals[insert_at - 1];
+                                                    insert_at -= 1;
+                                                }
+                                                best_dists[insert_at] = diff2;
+                                                best_vals[insert_at] = zn;
+                                                best_len += 1;
+                                            } else if diff2 < best_dists[k - 1] {
+                                                let mut insert_at = k - 1;
+                                                while insert_at > 0 && diff2 < best_dists[insert_at - 1] {
+                                                    best_dists[insert_at] = best_dists[insert_at - 1];
+                                                    best_vals[insert_at] = best_vals[insert_at - 1];
+                                                    insert_at -= 1;
+                                                }
+                                                best_dists[insert_at] = diff2;
+                                                best_vals[insert_at] = zn;
+                                            }
+                                        }
                                     }
                                 }
-                                neighbours.sort_by(|a, b| {
-                                    ((a - z) * (a - z))
-                                        .partial_cmp(&((b - z) * (b - z)))
-                                        .unwrap_or(std::cmp::Ordering::Less)
-                                });
-                                let lim = k.min(neighbours.len());
-                                if lim == 0 {
+
+                                if best_len == 0 {
                                     continue;
                                 }
-                                let sum = neighbours[..lim].iter().sum::<f64>();
-                                out_row[c] = sum / lim as f64;
+
+                                let sum = best_vals[..best_len].iter().sum::<f64>();
+                                out_row[c] = sum / best_len as f64;
                             }
                         });
                         out
@@ -1267,52 +1497,163 @@ impl FastAlmostGaussianFilterTool {
                 let nodata = input.nodata;
                 let minmax = Self::min_max_by_band(&input, packed_rgb);
 
-                let out_vals: Vec<Vec<f64>> = (0..bands)
+                let out_vals: Result<Vec<Vec<f64>>, ToolError> = (0..bands)
                     .into_par_iter()
-                    .map(|band_idx| {
+                    .map(|band_idx| -> Result<Vec<f64>, ToolError> {
                         let band = band_idx as isize;
-                        let (band_min, _) = if packed_rgb {
+                        let (band_min, band_max) = if packed_rgb {
                             (0.0, 1.0)
                         } else {
                             minmax[band_idx]
                         };
+                        if !band_min.is_finite() || !band_max.is_finite() {
+                            return Ok(vec![nodata; rows * cols]);
+                        }
+
                         let min_bin = (band_min * multiplier).floor() as i64;
+                        let max_bin = (band_max * multiplier).floor() as i64;
+                        let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+                        let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                            ToolError::Execution(
+                                "high-pass-median histogram bin count exceeds platform limits".to_string(),
+                            )
+                        })?;
+
+                        let bin_nodata = i64::MIN;
+                        let mut binned = vec![bin_nodata; rows * cols];
+                        binned
+                            .par_chunks_mut(cols)
+                            .enumerate()
+                            .for_each(|(r, row_bins)| {
+                                for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                                    let z_raw = input.get(band, r as isize, c as isize);
+                                    if input.is_nodata(z_raw) {
+                                        continue;
+                                    }
+                                    let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+                                    *cell_bin = (z * multiplier).floor() as i64 - min_bin;
+                                }
+                            });
+
+                        let rows_isize = rows as isize;
+                        let cols_isize = cols as isize;
+                        let get_bin = |rr: isize, cc: isize| -> i64 {
+                            if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                                return bin_nodata;
+                            }
+                            binned[rr as usize * cols + cc as usize]
+                        };
 
                         let mut out = vec![nodata; rows * cols];
                         out.par_chunks_mut(cols).enumerate().for_each(|(r, out_row)| {
                             let row = r as isize;
+                            let start_row = row - my;
+                            let end_row = row + my;
+                            let mut histo = vec![0i64; num_bins];
+                            let mut old_median = bin_nodata;
+                            let mut median = bin_nodata;
+                            let mut n = 0i64;
+                            let mut n_less = 0i64;
+
                             for c in 0..cols {
                                 let col = c as isize;
-                                let z_raw = input.get(band, row, col);
-                                if input.is_nodata(z_raw) {
+                                let center_bin = get_bin(row, col);
+                                if center_bin == bin_nodata {
+                                    old_median = bin_nodata;
                                     continue;
                                 }
-                                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
-                                let z_bin = (z * multiplier).floor() as i64 - min_bin;
 
-                                let mut bins = Vec::new();
-                                for ny in (row - my)..=(row + my) {
-                                    for nx in (col - mx)..=(col + mx) {
-                                        let zn_raw = input.get(band, ny, nx);
-                                        if input.is_nodata(zn_raw) {
-                                            continue;
+                                if old_median != bin_nodata {
+                                    let trailing_col = col - mx - 1;
+                                    let leading_col = col + mx;
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, trailing_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] -= 1;
+                                            n -= 1;
+                                            if bv < old_median {
+                                                n_less -= 1;
+                                            }
                                         }
-                                        let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
-                                        bins.push((zn * multiplier).floor() as i64 - min_bin);
+                                    }
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, leading_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] += 1;
+                                            n += 1;
+                                            if bv < old_median {
+                                                n_less += 1;
+                                            }
+                                        }
+                                    }
+
+                                    let target = n / 2;
+                                    if n_less < target {
+                                        let mut v = old_median;
+                                        while v < num_bins_i64 {
+                                            let hv = histo[v as usize];
+                                            if n_less + hv >= target {
+                                                median = v;
+                                                break;
+                                            }
+                                            n_less += hv;
+                                            v += 1;
+                                        }
+                                    } else {
+                                        let mut v = old_median - 1;
+                                        while v >= 0 {
+                                            let hv = histo[v as usize];
+                                            if n_less - hv >= target {
+                                                n_less -= hv;
+                                                v -= 1;
+                                            } else {
+                                                median = v + 1;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    histo.fill(0);
+                                    n = 0;
+                                    n_less = 0;
+                                    let start_col = col - mx;
+                                    let end_col = col + mx;
+
+                                    for cc in start_col..=end_col {
+                                        for rr in start_row..=end_row {
+                                            let bv = get_bin(rr, cc);
+                                            if bv != bin_nodata {
+                                                histo[bv as usize] += 1;
+                                                n += 1;
+                                            }
+                                        }
+                                    }
+
+                                    let target = n / 2;
+                                    let mut acc = 0i64;
+                                    for (i, hv) in histo.iter().enumerate() {
+                                        acc += *hv;
+                                        if acc >= target {
+                                            median = i as i64;
+                                            break;
+                                        }
+                                        n_less = acc;
                                     }
                                 }
-                                if bins.is_empty() {
-                                    continue;
+
+                                if n > 0 {
+                                    out_row[c] = (center_bin - median) as f64 / multiplier;
                                 }
-                                let mid = bins.len() / 2;
-                                bins.select_nth_unstable(mid);
-                                let median_bin = bins[mid];
-                                out_row[c] = (z_bin - median_bin) as f64 / multiplier;
+                                old_median = median;
                             }
                         });
-                        out
+
+                        Ok(out)
                     })
                     .collect();
+                let out_vals = out_vals?;
 
                 if packed_rgb {
                     let rows = input.rows;
@@ -1375,9 +1716,7 @@ impl FastAlmostGaussianFilterTool {
                 let radius = (filter_size as f64 / 2.0).floor() as isize;
 
                 let term1 = -1.0 / (PI * sigma.powi(4));
-                let mut k_dx = Vec::with_capacity(filter_size * filter_size);
-                let mut k_dy = Vec::with_capacity(filter_size * filter_size);
-                let mut k_w = Vec::with_capacity(filter_size * filter_size);
+                let mut kernel = Vec::with_capacity(filter_size * filter_size);
                 for ry in 0..filter_size {
                     for rx in 0..filter_size {
                         let x = rx as isize - radius;
@@ -1385,17 +1724,7 @@ impl FastAlmostGaussianFilterTool {
                         let dist2 = (x * x + y * y) as f64;
                         let term2 = 1.0 - dist2 / two_sigma_sqr;
                         let term3 = (-dist2 / two_sigma_sqr).exp();
-                        k_dx.push(x);
-                        k_dy.push(y);
-                        k_w.push(term1 * term2 * term3);
-                    }
-                }
-
-                // Enforce a zero-sum LoG kernel so uniform regions map to ~0 response.
-                if !k_w.is_empty() {
-                    let mean_w = k_w.iter().sum::<f64>() / k_w.len() as f64;
-                    for w in &mut k_w {
-                        *w -= mean_w;
+                        kernel.push((y, x, term1 * term2 * term3));
                     }
                 }
 
@@ -1416,19 +1745,30 @@ impl FastAlmostGaussianFilterTool {
                                 if input.is_nodata(z_raw) {
                                     continue;
                                 }
-                                let mut sum = 0.0;
-                                let mut n = 0usize;
-                                for i in 0..k_dx.len() {
-                                    let zn_raw = input.get(band, row + k_dy[i], col + k_dx[i]);
-                                    if input.is_nodata(zn_raw) {
-                                        continue;
+                                let mut weighted_sum = 0.0;
+                                let mut weight_sum = 0.0;
+                                if packed_rgb {
+                                    for &(dy, dx, w) in &kernel {
+                                        let zn_raw = input.get(band, row + dy, col + dx);
+                                        if input.is_nodata(zn_raw) {
+                                            continue;
+                                        }
+                                        let zn = value2i(zn_raw);
+                                        weighted_sum += w * zn;
+                                        weight_sum += w;
                                     }
-                                    let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
-                                    sum += k_w[i] * zn;
-                                    n += 1;
+                                } else {
+                                    for &(dy, dx, w) in &kernel {
+                                        let zn = input.get(band, row + dy, col + dx);
+                                        if input.is_nodata(zn) {
+                                            continue;
+                                        }
+                                        weighted_sum += w * zn;
+                                        weight_sum += w;
+                                    }
                                 }
-                                if n > 0 {
-                                    out_row[c] = sum;
+                                if weight_sum != 0.0 {
+                                    out_row[c] = weighted_sum / weight_sum;
                                 }
                             }
                         });

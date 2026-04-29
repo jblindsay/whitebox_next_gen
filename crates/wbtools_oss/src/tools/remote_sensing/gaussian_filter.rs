@@ -328,6 +328,20 @@ impl Tool for GaussianFilterTool {
             for band_idx in 0..bands {
                 let band = band_idx as isize;
                 let mut out_data = vec![nodata; rows * cols];
+                let mut band_buf = vec![nodata; rows * cols];
+
+                band_buf
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(row_idx, row_buf)| {
+                        for (col_idx, cell) in row_buf.iter_mut().enumerate() {
+                            let z_raw = input.get(band, row_idx as isize, col_idx as isize);
+                            if input.is_nodata(z_raw) {
+                                continue;
+                            }
+                            *cell = if packed_rgb { value2i(z_raw) } else { z_raw };
+                        }
+                    });
 
                 let inp = input.as_ref();
                 let dxv: &[isize] = &dx;
@@ -339,11 +353,12 @@ impl Tool for GaussianFilterTool {
                     .enumerate()
                     .for_each(|(row_idx, out_row)| {
                         let row = row_idx as isize;
+                        let row_offset = row_idx * cols;
 
                         for col_idx in 0..cols {
                             let col = col_idx as isize;
-                            let z_raw = inp.get(band, row, col);
-                            if inp.is_nodata(z_raw) {
+                            let z0 = band_buf[row_offset + col_idx];
+                            if z0 == nodata {
                                 continue;
                             }
 
@@ -353,11 +368,13 @@ impl Tool for GaussianFilterTool {
                             for a in 0..num_filter {
                                 let nx = col + dxv[a];
                                 let ny = row + dyv[a];
-                                let zn_raw = inp.get(band, ny, nx);
-                                if inp.is_nodata(zn_raw) {
+                                if nx < 0 || ny < 0 || nx >= cols as isize || ny >= rows as isize {
                                     continue;
                                 }
-                                let zn = if packed_rgb { value2i(zn_raw) } else { zn_raw };
+                                let zn = band_buf[ny as usize * cols + nx as usize];
+                                if zn == nodata {
+                                    continue;
+                                }
                                 sum += wv[a];
                                 z_final += wv[a] * zn;
                             }
@@ -365,6 +382,7 @@ impl Tool for GaussianFilterTool {
                             if sum > 0.0 {
                                 let filtered = z_final / sum;
                                 out_row[col_idx] = if packed_rgb {
+                                    let z_raw = inp.get(band, row, col);
                                     let (h, s, _) = value2hsi(z_raw);
                                     hsi2value(h, s, filtered)
                                 } else {

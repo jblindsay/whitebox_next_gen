@@ -977,35 +977,235 @@ impl GisOverlayCore {
         let mut output = Self::output_raster(&rasters[0], op);
         let nodata = output.nodata;
         let len = output.data.len();
-        let mut out_values = vec![nodata; len];
-        let chunk_size = 8192usize;
 
         ctx.progress.info(op.processing_message());
-        let coalescer = PercentCoalescer::new(1, 90);
-        for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
-            let start = chunk_index * chunk_size;
-            out_chunk
-                .par_iter_mut()
-                .enumerate()
-                .for_each(|(offset, dst)| {
-                    let cell_index = start + offset;
-                    *dst = Self::compute_value(
-                        op,
-                        cell_index,
-                        &rasters,
-                        comparison_value,
-                        comparison_raster.as_ref(),
-                        nodata,
-                    );
-                });
+        if matches!(
+            op,
+            GisOverlayOp::CountIf
+                | GisOverlayOp::HighestPosition
+                | GisOverlayOp::LowestPosition
+                | GisOverlayOp::PercentEqualTo
+                | GisOverlayOp::PercentGreaterThan
+                | GisOverlayOp::PercentLessThan
+                | GisOverlayOp::Sum
+                | GisOverlayOp::Average
+                | GisOverlayOp::MaxAbsolute
+                | GisOverlayOp::Max
+                | GisOverlayOp::MinAbsolute
+                | GisOverlayOp::Min
+                | GisOverlayOp::Multiply
+                | GisOverlayOp::StandardDeviation
+        ) {
+            output.par_fill_with(|cell_index| match op {
+                GisOverlayOp::CountIf => {
+                    let target = comparison_value.expect("count_if requires comparison value");
+                    let mut count = 0.0;
+                    let mut has_valid = false;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if !raster.is_nodata(value) {
+                            has_valid = true;
+                            if value == target {
+                                count += 1.0;
+                            }
+                        }
+                    }
+                    if has_valid { count } else { nodata }
+                }
+                GisOverlayOp::HighestPosition => {
+                    let mut best_value = f64::NEG_INFINITY;
+                    let mut best_index = nodata;
+                    for (index, raster) in rasters.iter().enumerate() {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        if value > best_value {
+                            best_value = value;
+                            best_index = index as f64;
+                        }
+                    }
+                    best_index
+                }
+                GisOverlayOp::LowestPosition => {
+                    let mut best_value = f64::INFINITY;
+                    let mut best_index = nodata;
+                    for (index, raster) in rasters.iter().enumerate() {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        if value < best_value {
+                            best_value = value;
+                            best_index = index as f64;
+                        }
+                    }
+                    best_index
+                }
+                GisOverlayOp::PercentEqualTo | GisOverlayOp::PercentGreaterThan | GisOverlayOp::PercentLessThan => {
+                    let comparison = comparison_raster
+                        .as_ref()
+                        .expect("percent tools require comparison raster");
+                    let reference = comparison.data.get_f64(cell_index);
+                    if comparison.is_nodata(reference) {
+                        return nodata;
+                    }
 
-            let done = ((chunk_index + 1) * chunk_size).min(len);
-            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
-        }
+                    let mut matches = 0.0;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        let hit = match op {
+                            GisOverlayOp::PercentEqualTo => value == reference,
+                            GisOverlayOp::PercentGreaterThan => value > reference,
+                            GisOverlayOp::PercentLessThan => value < reference,
+                            _ => unreachable!(),
+                        };
+                        if hit {
+                            matches += 1.0;
+                        }
+                    }
+                    matches / rasters.len() as f64
+                }
+                GisOverlayOp::Sum => {
+                    let mut sum = 0.0;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        sum += value;
+                    }
+                    sum
+                }
+                GisOverlayOp::Average => {
+                    let mut sum = 0.0;
+                    let mut count = 0.0;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if !raster.is_nodata(value) {
+                            sum += value;
+                            count += 1.0;
+                        }
+                    }
+                    if count > 0.0 { sum / count } else { nodata }
+                }
+                GisOverlayOp::MaxAbsolute => {
+                    let mut best = f64::NEG_INFINITY;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        let abs_value = value.abs();
+                        if abs_value > best {
+                            best = abs_value;
+                        }
+                    }
+                    best
+                }
+                GisOverlayOp::Max => {
+                    let mut best = f64::NEG_INFINITY;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        if value > best {
+                            best = value;
+                        }
+                    }
+                    best
+                }
+                GisOverlayOp::MinAbsolute => {
+                    let mut best = f64::INFINITY;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        let abs_value = value.abs();
+                        if abs_value < best {
+                            best = abs_value;
+                        }
+                    }
+                    best
+                }
+                GisOverlayOp::Min => {
+                    let mut best = f64::INFINITY;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        if value < best {
+                            best = value;
+                        }
+                    }
+                    best
+                }
+                GisOverlayOp::Multiply => {
+                    let mut product = 1.0;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        product *= value;
+                    }
+                    product
+                }
+                GisOverlayOp::StandardDeviation => {
+                    let mut sum = 0.0;
+                    let n = rasters.len() as f64;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        if raster.is_nodata(value) {
+                            return nodata;
+                        }
+                        sum += value;
+                    }
+                    let mean = sum / n;
+                    let mut variance = 0.0;
+                    for raster in &rasters {
+                        let value = raster.data.get_f64(cell_index);
+                        let delta = value - mean;
+                        variance += delta * delta;
+                    }
+                    (variance / n).sqrt()
+                }
+            });
+            ctx.progress.progress(0.9);
+        } else {
+            let mut out_values = vec![nodata; len];
+            let chunk_size = 8192usize;
+            let coalescer = PercentCoalescer::new(1, 90);
+            for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
+                let start = chunk_index * chunk_size;
+                out_chunk
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(offset, dst)| {
+                        let cell_index = start + offset;
+                        *dst = Self::compute_value(
+                            op,
+                            cell_index,
+                            &rasters,
+                            comparison_value,
+                            comparison_raster.as_ref(),
+                            nodata,
+                        );
+                    });
 
-        coalescer.finish(ctx.progress);
-        for (index, value) in out_values.iter().enumerate() {
-            output.data.set_f64(index, *value);
+                let done = ((chunk_index + 1) * chunk_size).min(len);
+                coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
+            }
+            coalescer.finish(ctx.progress);
+            for (index, value) in out_values.iter().enumerate() {
+                output.data.set_f64(index, *value);
+            }
         }
 
         let output_locator = Self::store_or_write_output(output, output_path, ctx)?;
@@ -3715,33 +3915,19 @@ impl Tool for WeightedSumTool {
 
         let mut output = build_output_like_raster(&rasters[0], DataType::F64);
         let nodata = output.nodata;
-        let len = output.data.len();
-        let mut out_values = vec![nodata; len];
-        let chunk_size = 8192usize;
         ctx.progress.info("computing weighted sum");
-        let coalescer = PercentCoalescer::new(1, 90);
-        for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
-            let start = chunk_index * chunk_size;
-            out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
-                let index = start + offset;
+        output.par_fill_with(|index| {
                 let mut sum = 0.0;
-                for (raster, weight) in rasters.iter().zip(weights.iter()) {
+                for (stack_idx, raster) in rasters.iter().enumerate() {
                     let value = raster.data.get_f64(index);
                     if raster.is_nodata(value) {
-                        *dst = nodata;
-                        return;
+                        return nodata;
                     }
-                    sum += value * *weight;
+                    sum += value * weights[stack_idx];
                 }
-                *dst = sum;
-            });
-            let done = ((chunk_index + 1) * chunk_size).min(len);
-            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
-        }
-        coalescer.finish(ctx.progress);
-        for (index, value) in out_values.iter().enumerate() {
-            output.data.set_f64(index, *value);
-        }
+                sum
+        });
+        ctx.progress.progress(0.9);
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))
@@ -3870,37 +4056,25 @@ impl Tool for WeightedOverlayTool {
 
         let mut output = build_output_like_raster(&factors[0], DataType::F64);
         let nodata = output.nodata;
-        let len = output.data.len();
-        let mut out_values = vec![nodata; len];
-        let chunk_size = 8192usize;
         ctx.progress.info("computing weighted overlay");
-        let coalescer = PercentCoalescer::new(1, 90);
-        for (chunk_index, out_chunk) in out_values.chunks_mut(chunk_size).enumerate() {
-            let start = chunk_index * chunk_size;
-            out_chunk.par_iter_mut().enumerate().for_each(|(offset, dst)| {
-                let index = start + offset;
+        output.par_fill_with(|index| {
                 let mut total = 0.0;
-                for (((raster, weight), (min_value, max_value)), is_cost) in factors
-                    .iter()
-                    .zip(weights.iter())
-                    .zip(factor_ranges.iter())
-                    .zip(cost_flags.iter())
-                {
-                    let value = raster.data.get_f64(index);
-                    if raster.is_nodata(value) {
-                        *dst = nodata;
-                        return;
+                for factor_idx in 0..factors.len() {
+                    let value = factors[factor_idx].data.get_f64(index);
+                    if factors[factor_idx].is_nodata(value) {
+                        return nodata;
                     }
+                    let (min_value, max_value) = factor_ranges[factor_idx];
                     let range = max_value - min_value;
                     let mut scaled = if range.abs() <= f64::EPSILON {
                         1.0
                     } else {
-                        (value - *min_value) / range
+                        (value - min_value) / range
                     };
-                    if *is_cost {
+                    if cost_flags[factor_idx] {
                         scaled = 1.0 - scaled;
                     }
-                    total += scaled * scale_max * *weight;
+                    total += scaled * scale_max * weights[factor_idx];
                 }
                 for constraint in &constraints {
                     let value = constraint.data.get_f64(index);
@@ -3909,15 +4083,9 @@ impl Tool for WeightedOverlayTool {
                         break;
                     }
                 }
-                *dst = total;
-            });
-            let done = ((chunk_index + 1) * chunk_size).min(len);
-            coalescer.emit_unit_fraction(ctx.progress, done as f64 / len.max(1) as f64);
-        }
-        coalescer.finish(ctx.progress);
-        for (index, value) in out_values.iter().enumerate() {
-            output.data.set_f64(index, *value);
-        }
+                total
+        });
+        ctx.progress.progress(0.9);
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
         ctx.progress.progress(1.0);
         Ok(GisOverlayCore::build_result(locator))

@@ -11,7 +11,7 @@ use wbcore::{
 	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
 	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{DataType, Raster, RasterFormat};
+use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector;
 
 use crate::memory_store;
@@ -21,6 +21,8 @@ use super::stream_network_analysis::VectorStreamNetworkAnalysisTool;
 pub struct BreachDepressionsLeastCostTool;
 pub struct BreachSingleCellPitsTool;
 pub struct FillDepressionsTool;
+pub struct FillDepressionsNextgenTool;
+pub struct FillDepressionsNextgenTiledTool;
 pub struct FillDepressionsPlanchonAndDarbouxTool;
 pub struct FillDepressionsWangAndLiuTool;
 pub struct FillPitsTool;
@@ -70,10 +72,12 @@ pub struct ImpoundmentSizeIndexTool;
 const DX: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 const DY: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
 
+#[inline]
 fn in_bounds(r: isize, c: isize, rows: usize, cols: usize) -> bool {
 	r >= 0 && c >= 0 && (r as usize) < rows && (c as usize) < cols
 }
 
+#[inline]
 fn idx(r: usize, c: usize, cols: usize) -> usize {
 	r * cols + c
 }
@@ -208,14 +212,37 @@ fn raster_to_vec(input: &Raster) -> Vec<f64> {
 }
 
 fn vec_to_raster(template: &Raster, data: &[f64], data_type: DataType) -> Raster {
-	let mut out = template.clone();
-	out.data_type = data_type;
-	for r in 0..template.rows {
-		for c in 0..template.cols {
-			out.set_unchecked(0, r as isize, c as isize, data[idx(r, c, template.cols)]);
-		}
-	}
-	out
+	let cfg = RasterConfig {
+		cols: template.cols,
+		rows: template.rows,
+		bands: template.bands,
+		x_min: template.x_min,
+		y_min: template.y_min,
+		cell_size: template.cell_size_x,
+		cell_size_y: Some(template.cell_size_y),
+		nodata: template.nodata,
+		data_type,
+		crs: template.crs.clone(),
+		metadata: template.metadata.clone(),
+	};
+	Raster::from_data(cfg, data.to_vec()).expect("vec_to_raster data length should match template dimensions")
+}
+
+fn vec_to_raster_owned(template: &Raster, data: Vec<f64>, data_type: DataType) -> Raster {
+	let cfg = RasterConfig {
+		cols: template.cols,
+		rows: template.rows,
+		bands: template.bands,
+		x_min: template.x_min,
+		y_min: template.y_min,
+		cell_size: template.cell_size_x,
+		cell_size_y: Some(template.cell_size_y),
+		nodata: template.nodata,
+		data_type,
+		crs: template.crs.clone(),
+		metadata: template.metadata.clone(),
+	};
+	Raster::from_data(cfg, data).expect("vec_to_raster_owned data length should match template dimensions")
 }
 
 fn auto_small_increment(r: &Raster, flat_increment: Option<f64>) -> f64 {
@@ -259,6 +286,7 @@ fn auto_small_increment_legacy(r: &Raster, data: &[f64], flat_increment: Option<
 	}
 }
 
+#[inline]
 fn get_oob_as_nodata(data: &[f64], r: isize, c: isize, rows: usize, cols: usize, nodata: f64) -> f64 {
 	if in_bounds(r, c, rows, cols) {
 		data[idx(r as usize, c as usize, cols)]
@@ -353,34 +381,52 @@ fn fill_pits_core(data: &mut [f64], rows: usize, cols: usize, nodata: f64, small
 }
 
 fn breach_single_cell_pits_core(data: &mut [f64], rows: usize, cols: usize, nodata: f64) {
+	let src = data.to_vec();
 	let dx2: [isize; 16] = [2, 2, 2, 2, 2, 1, 0, -1, -2, -2, -2, -2, -2, -1, 0, 1];
 	let dy2: [isize; 16] = [-2, -1, 0, 1, 2, 2, 2, 2, 2, 1, 0, -1, -2, -2, -2, -2];
 	let breach_cell: [usize; 16] = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 0];
-	let pits = detect_pits(data, rows, cols, nodata);
-	for i in pits {
-		let r = i / cols;
-		let c = i % cols;
-		let z = data[i];
-		for n in 0..16 {
-			let r2 = r as isize + dy2[n];
-			let c2 = c as isize + dx2[n];
-			if !in_bounds(r2, c2, rows, cols) {
+	for r in 0..rows {
+		for c in 0..cols {
+			let i = idx(r, c, cols);
+			let z = src[i];
+			if z == nodata {
 				continue;
 			}
-			let z2 = data[idx(r2 as usize, c2 as usize, cols)];
-			if z2 == nodata || z2 >= z {
+
+			let mut is_pit = true;
+			for k in 0..8 {
+				let rn = r as isize + DY[k];
+				let cn = c as isize + DX[k];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let zn = src[idx(rn as usize, cn as usize, cols)];
+				if zn != nodata && zn < z {
+					is_pit = false;
+					break;
+				}
+			}
+
+			if !is_pit {
 				continue;
 			}
-			let b = breach_cell[n];
-			let rb = r as isize + DY[b];
-			let cb = c as isize + DX[b];
-			if !in_bounds(rb, cb, rows, cols) {
-				continue;
-			}
-			let bi = idx(rb as usize, cb as usize, cols);
-			let candidate = 0.5 * (z + z2);
-			if data[bi] == nodata || candidate < data[bi] {
-				data[bi] = candidate;
+
+			for n in 0..16 {
+				let r2 = r as isize + dy2[n];
+				let c2 = c as isize + dx2[n];
+				if !in_bounds(r2, c2, rows, cols) {
+					continue;
+				}
+				let z2 = src[idx(r2 as usize, c2 as usize, cols)];
+				if z2 != nodata && z2 < z {
+					let b = breach_cell[n];
+					let rb = r as isize + DY[b];
+					let cb = c as isize + DX[b];
+					if in_bounds(rb, cb, rows, cols) {
+						let bi = idx(rb as usize, cb as usize, cols);
+						data[bi] = 0.5 * (z + z2);
+					}
+				}
 			}
 		}
 	}
@@ -400,7 +446,7 @@ impl PartialEq for MinNode {
 impl Eq for MinNode {}
 impl PartialOrd for MinNode {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		other.elev.partial_cmp(&self.elev)
+		Some(other.elev.total_cmp(&self.elev))
 	}
 }
 impl Ord for MinNode {
@@ -414,7 +460,6 @@ impl Ord for MinNode {
 struct FlatNode {
 	priority: f64,
 	i: usize,
-	base: f64,
 }
 
 impl PartialEq for FlatNode {
@@ -427,13 +472,431 @@ impl Eq for FlatNode {}
 
 impl PartialOrd for FlatNode {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		other.priority.partial_cmp(&self.priority)
+		Some(other.priority.total_cmp(&self.priority))
 	}
 }
 
 impl Ord for FlatNode {
 	fn cmp(&self, other: &Self) -> Ordering {
 		self.partial_cmp(other).unwrap_or(Ordering::Equal)
+	}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FlatResolutionMode {
+	GarbrechtMartz,
+	Natural,
+}
+
+fn resolve_flats_natural(
+	out: &mut [f64],
+	input: &[f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	small: f64,
+	n_off: &[isize; 8],
+	flats: &mut [u8],
+	possible_outlets: &mut Vec<usize>,
+) {
+	let mut outlet_seen = vec![0u8; rows * cols];
+	let mut outlet_heap = BinaryHeap::<MinNode>::with_capacity(possible_outlets.len().max(1));
+	while let Some(i) = possible_outlets.pop() {
+		if outlet_seen[i] == 1 {
+			continue;
+		}
+		outlet_seen[i] = 1;
+		let r = i / cols;
+		let c = i % cols;
+		let z = out[i];
+		let mut is_outlet = false;
+		if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+			let iis = i as isize;
+			for &off in n_off {
+				let ni = (iis + off) as usize;
+				let zn = out[ni];
+				if zn != nodata && zn < z {
+					is_outlet = true;
+					break;
+				}
+			}
+		} else {
+			for k in 0..8 {
+				let rn = r as isize + DY[k];
+				let cn = c as isize + DX[k];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let zn = out[idx(rn as usize, cn as usize, cols)];
+				if zn != nodata && zn < z {
+					is_outlet = true;
+					break;
+				}
+			}
+		}
+		if is_outlet {
+			outlet_heap.push(MinNode { elev: z, i });
+		}
+	}
+
+	let mut same_level = Vec::<usize>::with_capacity(256);
+	let mut flat_heap = BinaryHeap::<FlatNode>::with_capacity(4096);
+	while let Some(cell) = outlet_heap.pop() {
+		if flats[cell.i] == 3 {
+			continue;
+		}
+		let z = out[cell.i];
+		flats[cell.i] = 3;
+		same_level.clear();
+		same_level.push(cell.i);
+		while let Some(peek) = outlet_heap.peek() {
+			if peek.elev == z {
+				let p = outlet_heap.pop().expect("heap pop");
+				flats[p.i] = 3;
+				same_level.push(p.i);
+			} else {
+				break;
+			}
+		}
+
+		flat_heap.clear();
+		let flat_base = z;
+		let raised_z = z + small;
+		for &oi in &same_level {
+			let r = oi / cols;
+			let c = oi % cols;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let ois = oi as isize;
+				for &off in n_off {
+					let ni = (ois + off) as usize;
+					if flats[ni] != 3 && out[ni] == z && out[ni] != nodata {
+						out[ni] = raised_z;
+						flats[ni] = 3;
+						flat_heap.push(FlatNode {
+							priority: input[ni],
+							i: ni,
+						});
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flats[ni] != 3 && out[ni] == z && out[ni] != nodata {
+						out[ni] = raised_z;
+						flats[ni] = 3;
+						flat_heap.push(FlatNode {
+							priority: input[ni],
+							i: ni,
+						});
+					}
+				}
+			}
+		}
+
+		while let Some(nc) = flat_heap.pop() {
+			let r = nc.i / cols;
+			let c = nc.i % cols;
+			let zc = out[nc.i];
+			let zc_plus_small = zc + small;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let nis = nc.i as isize;
+				for &off in n_off {
+					let ni = (nis + off) as usize;
+					if flats[ni] == 3 {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn < zc_plus_small && zn >= flat_base {
+						out[ni] = zc_plus_small;
+						flats[ni] = 3;
+						flat_heap.push(FlatNode {
+							priority: input[ni],
+							i: ni,
+						});
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flats[ni] == 3 {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn < zc_plus_small && zn >= flat_base {
+						out[ni] = zc_plus_small;
+						flats[ni] = 3;
+						flat_heap.push(FlatNode {
+							priority: input[ni],
+							i: ni,
+						});
+					}
+				}
+			}
+		}
+	}
+}
+
+fn resolve_flats_garbrecht_martz(
+	out: &mut [f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	small: f64,
+	n_off: &[isize; 8],
+	flats: &mut [u8],
+) {
+	let mut visit_tag = vec![0u32; rows * cols];
+	let mut component = Vec::<usize>::with_capacity(256);
+	let mut queue = VecDeque::<usize>::with_capacity(256);
+	let mut dist_low = Vec::<u32>::new();
+	let mut dist_high = Vec::<u32>::new();
+
+	for start in 0..rows * cols {
+		if flats[start] != 1 {
+			continue;
+		}
+		let base_z = out[start];
+		component.clear();
+		queue.clear();
+		visit_tag[start] = 1;
+		queue.push_back(start);
+
+		while let Some(ci) = queue.pop_front() {
+			component.push(ci);
+			let r = ci / cols;
+			let c = ci % cols;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let cis = ci as isize;
+				for &off in n_off {
+					let ni = (cis + off) as usize;
+					if flats[ni] == 1 && visit_tag[ni] == 0 && out[ni] == base_z {
+						visit_tag[ni] = 1;
+						queue.push_back(ni);
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flats[ni] == 1 && visit_tag[ni] == 0 && out[ni] == base_z {
+						visit_tag[ni] = 1;
+						queue.push_back(ni);
+					}
+				}
+			}
+		}
+
+		dist_low.resize(component.len(), u32::MAX);
+		dist_low.fill(u32::MAX);
+		dist_high.resize(component.len(), u32::MAX);
+		dist_high.fill(u32::MAX);
+		for (local_idx, &ci) in component.iter().enumerate() {
+			visit_tag[ci] = local_idx as u32 + 1;
+		}
+
+		queue.clear();
+		for &ci in &component {
+			let pos = (visit_tag[ci] - 1) as usize;
+			let r = ci / cols;
+			let c = ci % cols;
+			let mut is_low_edge = false;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let cis = ci as isize;
+				for &off in n_off {
+					let ni = (cis + off) as usize;
+					if flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn < base_z {
+						is_low_edge = true;
+						break;
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn < base_z {
+						is_low_edge = true;
+						break;
+					}
+				}
+			}
+			if is_low_edge {
+				dist_low[pos] = 0;
+				queue.push_back(ci);
+			}
+		}
+
+		while let Some(ci) = queue.pop_front() {
+			let cur_pos = (visit_tag[ci] - 1) as usize;
+			let cur_dist = dist_low[cur_pos];
+			let r = ci / cols;
+			let c = ci % cols;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let cis = ci as isize;
+				for &off in n_off {
+					let ni = (cis + off) as usize;
+					if !(flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z) {
+						continue;
+					}
+					let pos = (visit_tag[ni] - 1) as usize;
+					if dist_low[pos] == u32::MAX {
+						dist_low[pos] = cur_dist + 1;
+						queue.push_back(ni);
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if !(flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z) {
+						continue;
+					}
+					let pos = (visit_tag[ni] - 1) as usize;
+					if dist_low[pos] == u32::MAX {
+						dist_low[pos] = cur_dist + 1;
+						queue.push_back(ni);
+					}
+				}
+			}
+		}
+
+		queue.clear();
+		let mut max_high = 0u32;
+		let mut has_high_edge = false;
+		for &ci in &component {
+			let pos = (visit_tag[ci] - 1) as usize;
+			let r = ci / cols;
+			let c = ci % cols;
+			let mut is_high_edge = false;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let cis = ci as isize;
+				for &off in n_off {
+					let ni = (cis + off) as usize;
+					if flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn > base_z {
+						is_high_edge = true;
+						break;
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z {
+						continue;
+					}
+					let zn = out[ni];
+					if zn != nodata && zn > base_z {
+						is_high_edge = true;
+						break;
+					}
+				}
+			}
+			if is_high_edge {
+				has_high_edge = true;
+				dist_high[pos] = 0;
+				queue.push_back(ci);
+			}
+		}
+
+		while let Some(ci) = queue.pop_front() {
+			let cur_pos = (visit_tag[ci] - 1) as usize;
+			let cur_dist = dist_high[cur_pos];
+			let r = ci / cols;
+			let c = ci % cols;
+			if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+				let cis = ci as isize;
+				for &off in n_off {
+					let ni = (cis + off) as usize;
+					if !(flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z) {
+						continue;
+					}
+					let pos = (visit_tag[ni] - 1) as usize;
+					if dist_high[pos] == u32::MAX {
+						let next_dist = cur_dist + 1;
+						dist_high[pos] = next_dist;
+						if next_dist > max_high {
+							max_high = next_dist;
+						}
+						queue.push_back(ni);
+					}
+				}
+			} else {
+				for k in 0..8 {
+					let rn = r as isize + DY[k];
+					let cn = c as isize + DX[k];
+					if !in_bounds(rn, cn, rows, cols) {
+						continue;
+					}
+					let ni = idx(rn as usize, cn as usize, cols);
+					if !(flats[ni] == 1 && visit_tag[ni] != 0 && out[ni] == base_z) {
+						continue;
+					}
+					let pos = (visit_tag[ni] - 1) as usize;
+					if dist_high[pos] == u32::MAX {
+						let next_dist = cur_dist + 1;
+						dist_high[pos] = next_dist;
+						if next_dist > max_high {
+							max_high = next_dist;
+						}
+						queue.push_back(ni);
+					}
+				}
+			}
+		}
+
+		let shell_weight = max_high + 1;
+		for &ci in &component {
+			let pos = (visit_tag[ci] - 1) as usize;
+			let low_dist = dist_low[pos];
+			if low_dist != u32::MAX && low_dist > 0 {
+				let high_term = if has_high_edge {
+					max_high.saturating_sub(dist_high[pos].min(max_high))
+				} else {
+					0
+				};
+				let rank = low_dist.saturating_mul(shell_weight).saturating_add(high_term);
+				out[ci] = base_z + small * rank as f64;
+			}
+			visit_tag[ci] = 0;
+			flats[ci] = 3;
+		}
 	}
 }
 
@@ -445,7 +908,9 @@ fn fill_depressions_core(
 	small: f64,
 	max_depth: f64,
 	fix_flats: bool,
-) -> Vec<f64> {
+	flat_mode: FlatResolutionMode,
+	) -> Vec<f64> {
+
 	let mut out = input.to_vec();
 	let mut pits = Vec::<(usize, f64)>::new();
 	for r in 1..rows.saturating_sub(1) {
@@ -473,7 +938,10 @@ fn fill_depressions_core(
 	}
 
 	pits.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
-	let mut visited = vec![0u8; rows * cols];
+	let colsi = cols as isize;
+	let n_off: [isize; 8] = [1 - colsi, 1, colsi + 1, colsi, colsi - 1, -1, -colsi - 1, -colsi];
+	let mut visit_tag = vec![0u32; rows * cols];
+	let mut cur_tag: u32 = 1;
 	let mut flats = vec![0u8; rows * cols];
 	let mut possible_outlets = Vec::<usize>::new();
 
@@ -481,10 +949,18 @@ fn fill_depressions_core(
 		if flats[pit_i] == 1 {
 			continue;
 		}
+		if cur_tag >= u32::MAX - 2 {
+			visit_tag.fill(0);
+			cur_tag = 1;
+		}
+		let active_tag = cur_tag;
+		let done_tag = cur_tag + 1;
+		cur_tag += 2;
+
 		let z_pit = out[pit_i];
 		let mut heap = BinaryHeap::<MinNode>::new();
 		heap.push(MinNode { elev: z_pit, i: pit_i });
-		visited[pit_i] = 1;
+		visit_tag[pit_i] = active_tag;
 		let mut outlet_found = false;
 		let mut outlet_z = f64::INFINITY;
 		let mut queue = VecDeque::<usize>::new();
@@ -500,52 +976,87 @@ fn fill_depressions_core(
 			let r = cell.i / cols;
 			let c = cell.i % cols;
 			if !outlet_found {
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
+				if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+					let iis = cell.i as isize;
+					for &off in &n_off {
+						let ni = (iis + off) as usize;
+						if visit_tag[ni] == active_tag || visit_tag[ni] == done_tag {
+							continue;
+						}
+						let zn = out[ni];
+						if zn >= z && zn != nodata {
+							heap.push(MinNode { elev: zn, i: ni });
+							visit_tag[ni] = active_tag;
+						} else if zn != nodata {
+							outlet_found = true;
+							outlet_z = z;
+								queue.push_back(cell.i);
+								possible_outlets.push(cell.i);
+						}
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] != 0 {
-						continue;
-					}
-					let zn = out[ni];
-					if zn >= z && zn != nodata {
-						heap.push(MinNode { elev: zn, i: ni });
-						visited[ni] = 1;
-					} else if zn != nodata {
-						outlet_found = true;
-						outlet_z = z;
-						queue.push_back(cell.i);
-						possible_outlets.push(cell.i);
+				} else {
+					for k in 0..8 {
+						let rn = r as isize + DY[k];
+						let cn = c as isize + DX[k];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if visit_tag[ni] == active_tag || visit_tag[ni] == done_tag {
+							continue;
+						}
+						let zn = out[ni];
+						if zn >= z && zn != nodata {
+							heap.push(MinNode { elev: zn, i: ni });
+							visit_tag[ni] = active_tag;
+						} else if zn != nodata {
+							outlet_found = true;
+							outlet_z = z;
+								queue.push_back(cell.i);
+								possible_outlets.push(cell.i);
+						}
 					}
 				}
 			} else if z == outlet_z {
 				let mut is_outlet = false;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
+				if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+					let iis = cell.i as isize;
+					for &off in &n_off {
+						let ni = (iis + off) as usize;
+						if visit_tag[ni] == active_tag || visit_tag[ni] == done_tag {
+							continue;
+						}
+						let zn = out[ni];
+						if zn < z {
+							is_outlet = true;
+						} else if zn == outlet_z {
+							heap.push(MinNode { elev: zn, i: ni });
+							visit_tag[ni] = active_tag;
+						}
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] != 0 {
-						continue;
-					}
-					let zn = out[ni];
-					if zn < z {
-						is_outlet = true;
-					} else if zn == outlet_z {
-						heap.push(MinNode { elev: zn, i: ni });
-						visited[ni] = 1;
+				} else {
+					for k in 0..8 {
+						let rn = r as isize + DY[k];
+						let cn = c as isize + DX[k];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if visit_tag[ni] == active_tag || visit_tag[ni] == done_tag {
+							continue;
+						}
+						let zn = out[ni];
+						if zn < z {
+							is_outlet = true;
+						} else if zn == outlet_z {
+							heap.push(MinNode { elev: zn, i: ni });
+							visit_tag[ni] = active_tag;
+						}
 					}
 				}
 				if is_outlet {
 					queue.push_back(cell.i);
 					possible_outlets.push(cell.i);
-				} else {
-					visited[cell.i] = 1;
 				}
 			}
 		}
@@ -554,41 +1065,39 @@ fn fill_depressions_core(
 			while let Some(ci) = queue.pop_front() {
 				let r = ci / cols;
 				let c = ci % cols;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] == 1 {
-						visited[ni] = 0;
-						queue.push_back(ni);
-						if out[ni] < outlet_z {
-							out[ni] = outlet_z;
-							flats[ni] = 1;
-						} else if out[ni] == outlet_z {
-							flats[ni] = 1;
+				if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+					let cis = ci as isize;
+					for &off in &n_off {
+						let ni = (cis + off) as usize;
+						if visit_tag[ni] == active_tag {
+							visit_tag[ni] = done_tag;
+							queue.push_back(ni);
+							if out[ni] < outlet_z {
+								out[ni] = outlet_z;
+								flats[ni] = 1;
+							} else if out[ni] == outlet_z {
+								flats[ni] = 1;
+							}
 						}
 					}
-				}
-			}
-		} else {
-			let mut cleanup = VecDeque::<usize>::new();
-			cleanup.push_back(pit_i);
-			while let Some(ci) = cleanup.pop_front() {
-				let r = ci / cols;
-				let c = ci % cols;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if visited[ni] == 1 {
-						visited[ni] = 0;
-						cleanup.push_back(ni);
+				} else {
+					for k in 0..8 {
+						let rn = r as isize + DY[k];
+						let cn = c as isize + DX[k];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if visit_tag[ni] == active_tag {
+							visit_tag[ni] = done_tag;
+							queue.push_back(ni);
+							if out[ni] < outlet_z {
+								out[ni] = outlet_z;
+								flats[ni] = 1;
+							} else if out[ni] == outlet_z {
+								flats[ni] = 1;
+							}
+						}
 					}
 				}
 			}
@@ -596,97 +1105,28 @@ fn fill_depressions_core(
 	}
 
 	if fix_flats && small > 0.0 {
-		let mut outlet_heap = BinaryHeap::<MinNode>::new();
-		while let Some(i) = possible_outlets.pop() {
-			let r = i / cols;
-			let c = i % cols;
-			let z = out[i];
-			let mut is_outlet = false;
-			for k in 0..8 {
-				let rn = r as isize + DY[k];
-				let cn = c as isize + DX[k];
-				if !in_bounds(rn, cn, rows, cols) {
-					continue;
-				}
-				let zn = out[idx(rn as usize, cn as usize, cols)];
-				if zn != nodata && zn < z {
-					is_outlet = true;
-					break;
-				}
-			}
-			if is_outlet {
-				outlet_heap.push(MinNode { elev: z, i });
-			}
-		}
-
-		let mut flat_heap = BinaryHeap::<FlatNode>::new();
-		while let Some(cell) = outlet_heap.pop() {
-			if flats[cell.i] == 3 {
-				continue;
-			}
-			let z = out[cell.i];
-			flats[cell.i] = 3;
-			let mut same_level = vec![cell.i];
-			while let Some(peek) = outlet_heap.peek() {
-				if peek.elev == z {
-					let p = outlet_heap.pop().expect("heap pop");
-					flats[p.i] = 3;
-					same_level.push(p.i);
-				} else {
-					break;
-				}
-			}
-
-			flat_heap.clear();
-			for oi in same_level {
-				let r = oi / cols;
-				let c = oi % cols;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if flats[ni] != 3 && out[ni] == z && out[ni] != nodata {
-						out[ni] = z + small;
-						flats[ni] = 3;
-						flat_heap.push(FlatNode {
-							priority: input[ni],
-							i: ni,
-							base: z,
-						});
-					}
-				}
-			}
-
-			while let Some(nc) = flat_heap.pop() {
-				let r = nc.i / cols;
-				let c = nc.i % cols;
-				let zc = out[nc.i];
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
-					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if flats[ni] == 3 {
-						continue;
-					}
-					let zn = out[ni];
-					if zn != nodata && zn < zc + small && zn >= nc.base {
-						out[ni] = zc + small;
-						flats[ni] = 3;
-						flat_heap.push(FlatNode {
-							priority: input[ni],
-							i: ni,
-							base: nc.base,
-						});
-					}
-				}
-			}
-		}
+		match flat_mode {
+			FlatResolutionMode::GarbrechtMartz => resolve_flats_garbrecht_martz(
+				&mut out,
+				rows,
+				cols,
+				nodata,
+				small,
+				&n_off,
+				&mut flats,
+			),
+			FlatResolutionMode::Natural => resolve_flats_natural(
+				&mut out,
+				input,
+				rows,
+				cols,
+				nodata,
+				small,
+				&n_off,
+				&mut flats,
+				&mut possible_outlets,
+		),
+	}
 	}
 
 	out
@@ -765,6 +1205,330 @@ fn fill_depressions_wang_and_liu_core(
 	for v in &mut out {
 		if *v == background {
 			*v = nodata;
+		}
+	}
+
+	out
+}
+
+#[inline]
+fn heap4_push(heap: &mut Vec<MinNode>, node: MinNode) {
+	heap.push(node);
+	let mut i = heap.len() - 1;
+	while i > 0 {
+		let p = (i - 1) / 4;
+		if heap[p].elev <= heap[i].elev {
+			break;
+		}
+		heap.swap(p, i);
+		i = p;
+	}
+}
+
+#[inline]
+fn heap4_pop(heap: &mut Vec<MinNode>) -> Option<MinNode> {
+	if heap.is_empty() {
+		return None;
+	}
+	let last = heap.pop().unwrap();
+	if heap.is_empty() {
+		return Some(last);
+	}
+	let top = std::mem::replace(&mut heap[0], last);
+	let mut i = 0usize;
+	loop {
+		let c1 = 4 * i + 1;
+		if c1 >= heap.len() {
+			break;
+		}
+		let mut best = c1;
+		let c2 = c1 + 1;
+		if c2 < heap.len() && heap[c2].elev < heap[best].elev {
+			best = c2;
+		}
+		let c3 = c1 + 2;
+		if c3 < heap.len() && heap[c3].elev < heap[best].elev {
+			best = c3;
+		}
+		let c4 = c1 + 3;
+		if c4 < heap.len() && heap[c4].elev < heap[best].elev {
+			best = c4;
+		}
+		if heap[i].elev <= heap[best].elev {
+			break;
+		}
+		heap.swap(i, best);
+		i = best;
+	}
+	Some(top)
+}
+
+fn seed_priority_flood_frontier_from_edges(
+	input: &[f64],
+	out: &mut [f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	background: f64,
+	frontier_heap: &mut Vec<MinNode>,
+) {
+	if rows == 0 || cols == 0 {
+		return;
+	}
+
+	let mut nodata_queue = VecDeque::<usize>::new();
+
+	for c in 0..cols {
+		let i_top = idx(0, c, cols);
+		if out[i_top] == background {
+			let zin = input[i_top];
+			if zin == nodata {
+				out[i_top] = nodata;
+				nodata_queue.push_back(i_top);
+			} else {
+				out[i_top] = zin;
+				heap4_push(frontier_heap, MinNode { elev: zin, i: i_top });
+			}
+		}
+		if rows > 1 {
+			let i_bottom = idx(rows - 1, c, cols);
+			if out[i_bottom] == background {
+				let zin = input[i_bottom];
+				if zin == nodata {
+					out[i_bottom] = nodata;
+					nodata_queue.push_back(i_bottom);
+				} else {
+					out[i_bottom] = zin;
+					heap4_push(frontier_heap, MinNode { elev: zin, i: i_bottom });
+				}
+			}
+		}
+	}
+	for r in 1..rows.saturating_sub(1) {
+		let i_left = idx(r, 0, cols);
+		if out[i_left] == background {
+			let zin = input[i_left];
+			if zin == nodata {
+				out[i_left] = nodata;
+				nodata_queue.push_back(i_left);
+			} else {
+				out[i_left] = zin;
+				heap4_push(frontier_heap, MinNode { elev: zin, i: i_left });
+			}
+		}
+		if cols > 1 {
+			let i_right = idx(r, cols - 1, cols);
+			if out[i_right] == background {
+				let zin = input[i_right];
+				if zin == nodata {
+					out[i_right] = nodata;
+					nodata_queue.push_back(i_right);
+				} else {
+					out[i_right] = zin;
+					heap4_push(frontier_heap, MinNode { elev: zin, i: i_right });
+				}
+			}
+		}
+	}
+
+	while let Some(ci) = nodata_queue.pop_front() {
+		let r = ci / cols;
+		let c = ci % cols;
+		for k in 0..8 {
+			let rn = r as isize + DY[k];
+			let cn = c as isize + DX[k];
+			if !in_bounds(rn, cn, rows, cols) {
+				continue;
+			}
+			let ni = idx(rn as usize, cn as usize, cols);
+			if out[ni] != background {
+				continue;
+			}
+			let zn = input[ni];
+			if zn == nodata {
+				out[ni] = nodata;
+				nodata_queue.push_back(ni);
+			} else {
+				out[ni] = zn;
+				heap4_push(frontier_heap, MinNode { elev: zn, i: ni });
+			}
+		}
+	}
+}
+
+fn fill_depressions_nextgen_core(
+	input: &[f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	small: f64,
+) -> Vec<f64> {
+	let background = (i32::MIN + 1) as f64;
+	let mut out = vec![background; rows * cols];
+	let mut frontier_heap = Vec::<MinNode>::with_capacity((rows + cols).max(1024));
+	seed_priority_flood_frontier_from_edges(
+		input,
+		&mut out,
+		rows,
+		cols,
+		nodata,
+		background,
+		&mut frontier_heap,
+	);
+
+	let colsi = cols as isize;
+	let n_off: [isize; 8] = [1 - colsi, 1, colsi + 1, colsi, colsi - 1, -1, -colsi - 1, -colsi];
+
+	let mut depression_queue = VecDeque::<usize>::new();
+	loop {
+		let (ci, z) = if let Some(i) = depression_queue.pop_front() {
+			(i, out[i])
+		} else if let Some(node) = heap4_pop(&mut frontier_heap) {
+			(node.i, node.elev)
+		} else {
+			break;
+		};
+		let r = ci / cols;
+		let c = ci % cols;
+		let raised = z + small;
+		if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
+			let cis = ci as isize;
+			for &off in &n_off {
+				let ni = (cis + off) as usize;
+				if out[ni] != background {
+					continue;
+				}
+				let zin = input[ni];
+				if zin == nodata {
+					out[ni] = nodata;
+					continue;
+				}
+				if zin <= raised {
+					out[ni] = raised;
+					depression_queue.push_back(ni);
+				} else {
+					out[ni] = zin;
+					heap4_push(&mut frontier_heap, MinNode { elev: zin, i: ni });
+				}
+			}
+		} else {
+			for k in 0..8 {
+				let rn = r as isize + DY[k];
+				let cn = c as isize + DX[k];
+				if !in_bounds(rn, cn, rows, cols) {
+					continue;
+				}
+				let ni = idx(rn as usize, cn as usize, cols);
+				if out[ni] != background {
+					continue;
+				}
+				let zin = input[ni];
+				if zin == nodata {
+					out[ni] = nodata;
+					continue;
+				}
+				if zin <= raised {
+					out[ni] = raised;
+					depression_queue.push_back(ni);
+				} else {
+					out[ni] = zin;
+					heap4_push(&mut frontier_heap, MinNode { elev: zin, i: ni });
+				}
+			}
+		}
+	}
+
+	for v in &mut out {
+		if *v == background {
+			*v = nodata;
+		}
+	}
+
+	out
+}
+
+fn fill_depressions_nextgen_tiled_parallel_core(
+	input: &[f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	small: f64,
+	tile_size: usize,
+) -> Vec<f64> {
+	if rows == 0 || cols == 0 {
+		return Vec::new();
+	}
+
+	let tile_size = tile_size.max(64);
+	if rows <= tile_size && cols <= tile_size {
+		return fill_depressions_nextgen_core(input, rows, cols, nodata, small);
+	}
+
+	#[derive(Debug)]
+	struct TilePatch {
+		r0: usize,
+		c0: usize,
+		h: usize,
+		w: usize,
+		values: Vec<f64>,
+	}
+
+	let row_starts: Vec<usize> = (0..rows).step_by(tile_size).collect();
+	let col_starts: Vec<usize> = (0..cols).step_by(tile_size).collect();
+	let mut jobs = Vec::<(usize, usize)>::with_capacity(row_starts.len() * col_starts.len());
+	for &r0 in &row_starts {
+		for &c0 in &col_starts {
+			jobs.push((r0, c0));
+		}
+	}
+
+	let patches: Vec<TilePatch> = jobs
+		.into_par_iter()
+		.map(|(r0, c0)| {
+			let r1 = (r0 + tile_size).min(rows);
+			let c1 = (c0 + tile_size).min(cols);
+
+			let hr0 = r0.saturating_sub(1);
+			let hc0 = c0.saturating_sub(1);
+			let hr1 = (r1 + 1).min(rows);
+			let hc1 = (c1 + 1).min(cols);
+
+			let hrows = hr1 - hr0;
+			let hcols = hc1 - hc0;
+			let mut tile_input = vec![nodata; hrows * hcols];
+			for tr in 0..hrows {
+				let gr = hr0 + tr;
+				let src = gr * cols + hc0;
+				let dst = tr * hcols;
+				tile_input[dst..dst + hcols].copy_from_slice(&input[src..src + hcols]);
+			}
+
+			let tile_out = fill_depressions_nextgen_core(&tile_input, hrows, hcols, nodata, small);
+
+			let h = r1 - r0;
+			let w = c1 - c0;
+			let mut values = vec![nodata; h * w];
+			for rr in 0..h {
+				let gr = r0 + rr;
+				let tr = gr - hr0;
+				for cc in 0..w {
+					let gc = c0 + cc;
+					let tc = gc - hc0;
+					values[rr * w + cc] = tile_out[tr * hcols + tc];
+				}
+			}
+
+			TilePatch { r0, c0, h, w, values }
+		})
+		.collect();
+
+	let mut out = input.to_vec();
+	for patch in patches {
+		for rr in 0..patch.h {
+			let dst_row_start = (patch.r0 + rr) * cols + patch.c0;
+			let src_row_start = rr * patch.w;
+			out[dst_row_start..dst_row_start + patch.w]
+				.copy_from_slice(&patch.values[src_row_start..src_row_start + patch.w]);
 		}
 	}
 
@@ -1114,6 +1878,20 @@ fn parse_dem_and_output(args: &ToolArgs) -> Result<(Arc<Raster>, Option<std::pat
 	Ok((dem, output_path))
 }
 
+fn parse_flat_resolution_mode(args: &ToolArgs) -> Result<FlatResolutionMode, ToolError> {
+	let mode = args
+		.get("flat_resolution")
+		.and_then(|v| v.as_str())
+		.unwrap_or("garbrecht_martz");
+	match mode {
+		"garbrecht_martz" | "garbrecht-martz" | "garbrecht" | "gm" => Ok(FlatResolutionMode::GarbrechtMartz),
+		"natural" | "legacy" => Ok(FlatResolutionMode::Natural),
+		_ => Err(ToolError::Validation(
+			"flat_resolution must be one of: garbrecht_martz, natural".to_string(),
+		)),
+	}
+}
+
 fn run_fill_like(
 	args: &ToolArgs,
 	mode: &str,
@@ -1122,11 +1900,28 @@ fn run_fill_like(
 	let mut data = raster_to_vec(&dem);
 	let flat_increment = args.get("flat_increment").and_then(|v| v.as_f64());
 	let fix_flats = args.get("fix_flats").and_then(|v| v.as_bool()).unwrap_or(true);
+	let flat_mode = parse_flat_resolution_mode(args)?;
 	let small = auto_small_increment_legacy(&dem, &data, flat_increment, fix_flats);
 	data = match mode {
 		"fill_depressions" => {
 			let max_depth = args.get("max_depth").and_then(|v| v.as_f64()).unwrap_or(f64::INFINITY);
-			fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, small, max_depth, fix_flats)
+			fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, small, max_depth, fix_flats, flat_mode)
+		}
+		"nextgen" => fill_depressions_nextgen_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
+		"nextgen_tiled" => {
+			let tile_size = args
+				.get("tile_size")
+				.and_then(|v| v.as_u64())
+				.map(|v| v as usize)
+				.unwrap_or(1024);
+			fill_depressions_nextgen_tiled_parallel_core(
+				&data,
+				dem.rows,
+				dem.cols,
+				dem.nodata,
+				if fix_flats { small } else { 0.0 },
+				tile_size,
+			)
 		}
 		"wang_liu" => fill_depressions_wang_and_liu_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
 		"planchon" => fill_depressions_planchon_and_darboux_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
@@ -1135,8 +1930,10 @@ fn run_fill_like(
 		}
 	};
 
-	let out = vec_to_raster(&dem, &data, DataType::F64);
-	Ok(build_result(write_or_store_output(out, output_path)?))
+	let out = vec_to_raster_owned(&dem, data, DataType::F64);
+	let result = build_result(write_or_store_output(out, output_path)?);
+
+	Ok(result)
 }
 
 fn d8_dir_from_dem_local(input: &Raster) -> Vec<i8> {
@@ -1872,7 +2669,7 @@ impl Tool for BreachDepressionsLeastCostTool {
 		);
 
 		if fill_deps {
-			data = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, small, f64::INFINITY, true);
+			data = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, small, f64::INFINITY, true, FlatResolutionMode::GarbrechtMartz);
 		}
 
 		let out = vec_to_raster(&dem, &data, DataType::F64);
@@ -1959,6 +2756,11 @@ impl Tool for FillDepressionsTool {
 					required: false,
 				},
 				ToolParamSpec {
+					name: "flat_resolution",
+					description: "Flat-resolution mode: garbrecht_martz (default) or natural",
+					required: false,
+				},
+				ToolParamSpec {
 					name: "max_depth",
 					description: "Optional maximum fill depth",
 					required: false,
@@ -1975,11 +2777,12 @@ impl Tool for FillDepressionsTool {
 	fn manifest(&self) -> ToolManifest {
 		let mut defaults = ToolArgs::new();
 		defaults.insert("fix_flats".to_string(), json!(true));
+		defaults.insert("flat_resolution".to_string(), json!("garbrecht_martz"));
 		defaults.insert("max_depth".to_string(), json!(f64::INFINITY));
 		ToolManifest {
 			id: "fill_depressions".to_string(),
 			display_name: "Fill Depressions".to_string(),
-			summary: "Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.".to_string(),
+			summary: "Fills depressions in a DEM using a priority-flood strategy with Garbrecht-Martz flat resolution by default and optional legacy natural-path flat resolution.".to_string(),
 			category: ToolCategory::Raster,
 			license_tier: LicenseTier::Open,
 			params: vec![],
@@ -1999,6 +2802,136 @@ impl Tool for FillDepressionsTool {
 
 	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		run_fill_like(args, "fill_depressions")
+	}
+}
+
+impl Tool for FillDepressionsNextgenTool {
+	fn metadata(&self) -> ToolMetadata {
+		ToolMetadata {
+			id: "fill_depressions_nextgen",
+			display_name: "Fill Depressions (Next Gen)",
+			summary: "Fills depressions in a DEM using an improved priority-flood with a dual frontier/depression queue.",
+			category: ToolCategory::Raster,
+			license_tier: LicenseTier::Open,
+			params: vec![
+				ToolParamSpec {
+					name: "dem",
+					description: "Input DEM raster",
+					required: true,
+				},
+				ToolParamSpec {
+					name: "fix_flats",
+					description: "Apply a small gradient over flats",
+					required: false,
+				},
+				ToolParamSpec {
+					name: "flat_increment",
+					description: "Optional flat increment",
+					required: false,
+				},
+				ToolParamSpec {
+					name: "output",
+					description: "Output raster path",
+					required: false,
+				},
+			],
+		}
+	}
+
+	fn manifest(&self) -> ToolManifest {
+		let mut defaults = ToolArgs::new();
+		defaults.insert("fix_flats".to_string(), json!(true));
+		ToolManifest {
+			id: "fill_depressions_nextgen".to_string(),
+			display_name: "Fill Depressions (Next Gen)".to_string(),
+			summary: "Fills depressions in a DEM using an improved priority-flood with a dual frontier/depression queue.".to_string(),
+			category: ToolCategory::Raster,
+			license_tier: LicenseTier::Open,
+			params: vec![],
+			defaults,
+			examples: vec![],
+			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string(), "priority_flood".to_string()],
+			stability: ToolStability::Experimental,
+		}
+	}
+
+	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+		parse_raster_path_arg(args, "dem")
+			.or_else(|_| parse_raster_path_arg(args, "input"))
+			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
+		Ok(())
+	}
+
+	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+		run_fill_like(args, "nextgen")
+	}
+}
+
+impl Tool for FillDepressionsNextgenTiledTool {
+	fn metadata(&self) -> ToolMetadata {
+		ToolMetadata {
+			id: "fill_depressions_nextgen_tiled",
+			display_name: "Fill Depressions (Next Gen Tiled)",
+			summary: "Fills depressions in a DEM using an experimental tiled-parallel nextgen strategy.",
+			category: ToolCategory::Raster,
+			license_tier: LicenseTier::Open,
+			params: vec![
+				ToolParamSpec {
+					name: "dem",
+					description: "Input DEM raster",
+					required: true,
+				},
+				ToolParamSpec {
+					name: "fix_flats",
+					description: "Apply a small gradient over flats",
+					required: false,
+				},
+				ToolParamSpec {
+					name: "flat_increment",
+					description: "Optional flat increment",
+					required: false,
+				},
+				ToolParamSpec {
+					name: "tile_size",
+					description: "Tile size in cells (default 1024)",
+					required: false,
+				},
+				ToolParamSpec {
+					name: "output",
+					description: "Output raster path",
+					required: false,
+				},
+			],
+		}
+	}
+
+	fn manifest(&self) -> ToolManifest {
+		let mut defaults = ToolArgs::new();
+		defaults.insert("fix_flats".to_string(), json!(true));
+		defaults.insert("tile_size".to_string(), json!(1024));
+		ToolManifest {
+			id: "fill_depressions_nextgen_tiled".to_string(),
+			display_name: "Fill Depressions (Next Gen Tiled)".to_string(),
+			summary: "Fills depressions in a DEM using an experimental tiled-parallel nextgen strategy.".to_string(),
+			category: ToolCategory::Raster,
+			license_tier: LicenseTier::Open,
+			params: vec![],
+			defaults,
+			examples: vec![],
+			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string(), "priority_flood".to_string(), "tiled".to_string()],
+			stability: ToolStability::Experimental,
+		}
+	}
+
+	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+		parse_raster_path_arg(args, "dem")
+			.or_else(|_| parse_raster_path_arg(args, "input"))
+			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
+		Ok(())
+	}
+
+	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+		run_fill_like(args, "nextgen_tiled")
 	}
 }
 
@@ -2229,7 +3162,7 @@ impl Tool for DepthInSinkTool {
 		let (dem, output_path) = parse_dem_and_output(args)?;
 		let zero_background = args.get("zero_background").and_then(|v| v.as_bool()).unwrap_or(false);
 		let data = raster_to_vec(&dem);
-		let filled = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, 0.0, f64::INFINITY, false);
+		let filled = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, 0.0, f64::INFINITY, false, FlatResolutionMode::GarbrechtMartz);
 		let background = if zero_background { 0.0 } else { dem.nodata };
 		let mut out = vec![background; dem.rows * dem.cols];
 		for i in 0..out.len() {
@@ -2296,7 +3229,7 @@ impl Tool for SinkTool {
 		let (dem, output_path) = parse_dem_and_output(args)?;
 		let zero_background = args.get("zero_background").and_then(|v| v.as_bool()).unwrap_or(false);
 		let data = raster_to_vec(&dem);
-		let filled = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, 0.0, f64::INFINITY, false);
+		let filled = fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, 0.0, f64::INFINITY, false, FlatResolutionMode::GarbrechtMartz);
 		let background = if zero_background { 0.0 } else { dem.nodata };
 		let mut out = vec![background; dem.rows * dem.cols];
 		for i in 0..out.len() {
@@ -8842,7 +9775,7 @@ impl Tool for IsobasinsTool {
 				}
 
 				let split_to_neighbour =
-					inla_dir.is_some() && target_fa.saturating_sub(inla_mag) < fa.saturating_sub(target_fa);
+					inla_dir.is_some() && inla_mag <= target_fa && (target_fa - inla_mag) < (fa - target_fa);
 
 				if split_to_neighbour {
 					let k = inla_dir.unwrap();
@@ -8927,6 +9860,31 @@ impl Tool for IsobasinsTool {
 						break;
 					}
 				}
+			}
+		}
+
+		// ── Step 5: compact labels to guaranteed 1..N sequential IDs ───────────
+		// Provisional outlet labels may be overwritten during split/trace logic,
+		// which can leave sparse IDs. Reindex to contiguous IDs for output.
+		let mut remap: BTreeMap<i32, i32> = BTreeMap::new();
+		let mut next_id: i32 = 1;
+		for &z in &output {
+			if z == out_nodata {
+				continue;
+			}
+			let old_id = z as i32;
+			if old_id > 0 && !remap.contains_key(&old_id) {
+				remap.insert(old_id, next_id);
+				next_id += 1;
+			}
+		}
+		for z in &mut output {
+			if *z == out_nodata {
+				continue;
+			}
+			let old_id = *z as i32;
+			if let Some(&new_id) = remap.get(&old_id) {
+				*z = new_id as f64;
 			}
 		}
 

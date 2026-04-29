@@ -369,66 +369,171 @@ impl MeanFilterTool {
         let nodata = input.nodata;
         let half_x = (filter_x / 2) as isize;
         let half_y = (filter_y / 2) as isize;
+        let nodata_is_nan = nodata.is_nan();
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let mut row_start = 0usize;
-            while row_start < rows {
-                let row_end = (row_start + WINDOW_STATS_PAR_ROW_BATCH).min(rows);
-                let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
-                        for c in 0..cols {
-                            let z_center = input.get(band, r as isize, c as isize);
-                            if input.is_nodata(z_center) {
-                                continue;
-                            }
 
-                            let mut min_val = f64::INFINITY;
-                            let mut max_val = f64::NEG_INFINITY;
-                            let mut has_data = false;
+            // Pre-load the entire band into a flat row-major buffer in parallel.
+            // Parallelising the fill means we do rows×cols input.get() calls spread
+            // across all rayon threads, vs. filter_y×cols×rows calls in the hot path —
+            // ~filter_y× fewer dispatched calls, fully parallelised.
+            let mut band_buf = vec![nodata; rows * cols];
+            band_buf
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_slice)| {
+                    for c in 0..cols {
+                        row_slice[c] = input.get(band, r as isize, c as isize);
+                    }
+                });
 
-                            for ny in (r as isize - half_y)..=(r as isize + half_y) {
-                                for nx in (c as isize - half_x)..=(c as isize + half_x) {
-                                    let zn = input.get(band, ny, nx);
-                                    if input.is_nodata(zn) {
-                                        continue;
-                                    }
-                                    has_data = true;
-                                    if zn < min_val {
-                                        min_val = zn;
-                                    }
-                                    if zn > max_val {
-                                        max_val = zn;
-                                    }
-                                }
-                            }
+            // Inline nodata test used in the hot path (avoids is_nodata() call overhead).
+            let is_nd = |z: f64| -> bool {
+                if nodata_is_nan { z.is_nan() } else { z == nodata }
+            };
 
-                            row_out[c] = if !has_data {
-                                0.0
-                            } else {
-                                match op {
-                                    WindowOp::Min => min_val,
-                                    WindowOp::Max => max_val,
-                                    WindowOp::Range => max_val - min_val,
-                                    _ => nodata,
-                                }
-                            };
+            // Clamp a column index to [0, cols) for border handling.
+            // An out-of-bounds column contributes no valid data (INFINITY / NEG_INFINITY).
+            let cols_isize = cols as isize;
+            let rows_isize = rows as isize;
+
+            let mut out_buf = vec![nodata; rows * cols];
+            out_buf
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_out)| {
+                    let r_start = ((r as isize) - half_y).max(0) as usize;
+                    let r_end   = ((r as isize) + half_y).min(rows_isize - 1) as usize;
+
+                    // Compute min (and optionally max) for a single column cx over
+                    // the clamped vertical window [r_start..=r_end].
+                    // Returns INFINITY / NEG_INFINITY for OOB columns (no valid data).
+                    let col_min = |cx: isize| -> f64 {
+                        if cx < 0 || cx >= cols_isize { return f64::INFINITY; }
+                        let cx = cx as usize;
+                        let mut mn = f64::INFINITY;
+                        let mut idx = r_start * cols + cx;
+                        for _ in r_start..=r_end {
+                            // idx is guaranteed in-bounds by clamped r_start/r_end and cx checks.
+                            let z = unsafe { *band_buf.get_unchecked(idx) };
+                            if !is_nd(z) && z < mn { mn = z; }
+                            idx += cols;
                         }
-                        (r, row_out)
-                    })
-                    .collect();
+                        mn
+                    };
+                    let col_max = |cx: isize| -> f64 {
+                        if cx < 0 || cx >= cols_isize { return f64::NEG_INFINITY; }
+                        let cx = cx as usize;
+                        let mut mx = f64::NEG_INFINITY;
+                        let mut idx = r_start * cols + cx;
+                        for _ in r_start..=r_end {
+                            // idx is guaranteed in-bounds by clamped r_start/r_end and cx checks.
+                            let z = unsafe { *band_buf.get_unchecked(idx) };
+                            if !is_nd(z) && z > mx { mx = z; }
+                            idx += cols;
+                        }
+                        mx
+                    };
+                    let col_range = |cx: isize| -> (f64, f64) {
+                        if cx < 0 || cx >= cols_isize { return (f64::INFINITY, f64::NEG_INFINITY); }
+                        let cx = cx as usize;
+                        let mut mn = f64::INFINITY;
+                        let mut mx = f64::NEG_INFINITY;
+                        let mut idx = r_start * cols + cx;
+                        for _ in r_start..=r_end {
+                            // idx is guaranteed in-bounds by clamped r_start/r_end and cx checks.
+                            let z = unsafe { *band_buf.get_unchecked(idx) };
+                            if !is_nd(z) {
+                                if z < mn { mn = z; }
+                                if z > mx { mx = z; }
+                            }
+                            idx += cols;
+                        }
+                        (mn, mx)
+                    };
 
-                for (r, row) in row_data {
-                    output
-                        .set_row_slice(band, r as isize, &row)
-                        .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
-                    *done_rows += 1;
-                    compute_progress.emit_unit_fraction(progress, *done_rows as f64 / total_rows as f64);
-                }
+                    match op {
+                        WindowOp::Min => {
+                            let mut filter_mins = vec![f64::INFINITY; filter_x];
+                            // Initialise the sliding cache for c=0: window is [-half_x..half_x].
+                            for i in 0..filter_x {
+                                filter_mins[i] = col_min(i as isize - half_x);
+                            }
+                            let mut head = 0usize;
 
-                row_start = row_end;
+                            for c in 0..cols {
+                                if c > 0 {
+                                    // Slide: evict oldest column (at head), add incoming right edge.
+                                    filter_mins[head] = col_min(c as isize + half_x);
+                                    head = (head + 1) % filter_x;
+                                }
+                                if is_nd(band_buf[r * cols + c]) { continue; }
+
+                                let mut min_val = f64::INFINITY;
+                                for v in &filter_mins { if *v < min_val { min_val = *v; } }
+                                if min_val < f64::INFINITY { row_out[c] = min_val; }
+                            }
+                        }
+                        WindowOp::Max => {
+                            let mut filter_maxs = vec![f64::NEG_INFINITY; filter_x];
+                            for i in 0..filter_x {
+                                filter_maxs[i] = col_max(i as isize - half_x);
+                            }
+                            let mut head = 0usize;
+
+                            for c in 0..cols {
+                                if c > 0 {
+                                    filter_maxs[head] = col_max(c as isize + half_x);
+                                    head = (head + 1) % filter_x;
+                                }
+                                if is_nd(band_buf[r * cols + c]) { continue; }
+
+                                let mut max_val = f64::NEG_INFINITY;
+                                for v in &filter_maxs { if *v > max_val { max_val = *v; } }
+                                if max_val > f64::NEG_INFINITY { row_out[c] = max_val; }
+                            }
+                        }
+                        WindowOp::Range => {
+                            let mut filter_mins = vec![f64::INFINITY; filter_x];
+                            let mut filter_maxs = vec![f64::NEG_INFINITY; filter_x];
+                            for i in 0..filter_x {
+                                let (mn, mx) = col_range(i as isize - half_x);
+                                filter_mins[i] = mn;
+                                filter_maxs[i] = mx;
+                            }
+                            let mut head = 0usize;
+
+                            for c in 0..cols {
+                                if c > 0 {
+                                    let (mn, mx) = col_range(c as isize + half_x);
+                                    filter_mins[head] = mn;
+                                    filter_maxs[head] = mx;
+                                    head = (head + 1) % filter_x;
+                                }
+                                if is_nd(band_buf[r * cols + c]) { continue; }
+
+                                let mut min_val = f64::INFINITY;
+                                let mut max_val = f64::NEG_INFINITY;
+                                for i in 0..filter_x {
+                                    if filter_mins[i] < min_val { min_val = filter_mins[i]; }
+                                    if filter_maxs[i] > max_val { max_val = filter_maxs[i]; }
+                                }
+                                if min_val < f64::INFINITY && max_val > f64::NEG_INFINITY {
+                                    row_out[c] = max_val - min_val;
+                                }
+                            }
+                        }
+                        _ => unreachable!("run_with_extrema_op only supports min/max/range"),
+                    }
+                });
+
+            for r in 0..rows {
+                output
+                    .set_row_slice(band, r as isize, &out_buf[r * cols..(r + 1) * cols])
+                    .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                *done_rows += 1;
+                compute_progress.emit_unit_fraction(progress, *done_rows as f64 / total_rows as f64);
             }
         }
 

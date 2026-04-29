@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use rayon::prelude::*;
@@ -285,6 +285,721 @@ impl MedianFilterTool {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
+
+            if matches!(op, RankOp::Median) {
+                // Huang-style running median: build a quantized histogram for each row and
+                // update it incrementally while sliding the window across columns.
+                let mut band_min = f64::INFINITY;
+                let mut band_max = f64::NEG_INFINITY;
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        if z < band_min {
+                            band_min = z;
+                        }
+                        if z > band_max {
+                            band_max = z;
+                        }
+                    }
+                }
+
+                if !band_min.is_finite() || !band_max.is_finite() {
+                    done_rows += rows;
+                    compute_progress.emit_unit_fraction(
+                        ctx.progress,
+                        done_rows as f64 / total_rows as f64,
+                    );
+                    continue;
+                }
+
+                let min_bin = (band_min * multiplier_rank).floor() as i64;
+                let max_bin = (band_max * multiplier_rank).floor() as i64;
+                let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+                let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                    ToolError::Execution(
+                        "median filter histogram bin count exceeds platform limits".to_string(),
+                    )
+                })?;
+
+                let bin_nodata = i64::MIN;
+                let mut binned = vec![bin_nodata; rows * cols];
+                binned
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_bins)| {
+                        for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                            let z = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z) {
+                                continue;
+                            }
+                            *cell_bin = (z * multiplier_rank).floor() as i64 - min_bin;
+                        }
+                    });
+
+                let rows_isize = rows as isize;
+                let cols_isize = cols as isize;
+                let get_bin = |rr: isize, cc: isize| -> i64 {
+                    if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                        return bin_nodata;
+                    }
+                    binned[rr as usize * cols + cc as usize]
+                };
+
+                let mut row_start = 0usize;
+                while row_start < rows {
+                    let row_end = (row_start + RANK_FILTER_PAR_ROW_BATCH).min(rows);
+                    let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                        .into_par_iter()
+                        .map(|r| {
+                            let row = r as isize;
+                            let mut row_out = vec![nodata; cols];
+                            let mut histo = vec![0i64; num_bins];
+                            let mut old_median = bin_nodata;
+                            let mut median = bin_nodata;
+                            let mut n = 0i64;
+                            let mut n_less = 0i64;
+                            let start_row = row - half_y;
+                            let end_row = row + half_y;
+
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let center_bin = get_bin(row, col);
+                                if center_bin == bin_nodata {
+                                    old_median = bin_nodata;
+                                    continue;
+                                }
+
+                                if old_median != bin_nodata {
+                                    // Remove trailing column and add leading column as the
+                                    // window slides one cell to the right.
+                                    let trailing_col = col - half_x - 1;
+                                    let leading_col = col + half_x;
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, trailing_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] -= 1;
+                                            n -= 1;
+                                            if bv < old_median {
+                                                n_less -= 1;
+                                            }
+                                        }
+                                    }
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, leading_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] += 1;
+                                            n += 1;
+                                            if bv < old_median {
+                                                n_less += 1;
+                                            }
+                                        }
+                                    }
+
+                                    let target = n / 2;
+                                    if n_less < target {
+                                        let mut v = old_median;
+                                        while v < num_bins_i64 {
+                                            let hv = histo[v as usize];
+                                            if n_less + hv >= target {
+                                                median = v;
+                                                break;
+                                            }
+                                            n_less += hv;
+                                            v += 1;
+                                        }
+                                    } else {
+                                        let mut v = old_median - 1;
+                                        while v >= 0 {
+                                            let hv = histo[v as usize];
+                                            if n_less - hv >= target {
+                                                n_less -= hv;
+                                                v -= 1;
+                                            } else {
+                                                median = v + 1;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Initialize histogram for the first valid cell in a row,
+                                    // or after nodata resets.
+                                    histo.fill(0);
+                                    n = 0;
+                                    n_less = 0;
+                                    let start_col = col - half_x;
+                                    let end_col = col + half_x;
+
+                                    for cc in start_col..=end_col {
+                                        for rr in start_row..=end_row {
+                                            let bv = get_bin(rr, cc);
+                                            if bv != bin_nodata {
+                                                histo[bv as usize] += 1;
+                                                n += 1;
+                                            }
+                                        }
+                                    }
+
+                                    let target = n / 2;
+                                    let mut acc = 0i64;
+                                    for (i, hv) in histo.iter().enumerate() {
+                                        acc += *hv;
+                                        if acc >= target {
+                                            median = i as i64;
+                                            break;
+                                        }
+                                        n_less = acc;
+                                    }
+                                }
+
+                                if n > 0 {
+                                    row_out[c] = (median + min_bin) as f64 / multiplier_rank;
+                                }
+                                old_median = median;
+                            }
+
+                            (r, row_out)
+                        })
+                        .collect();
+
+                    for (r, row) in row_data {
+                        output
+                            .set_row_slice(band, r as isize, &row)
+                            .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                        done_rows += 1;
+                        compute_progress.emit_unit_fraction(
+                            ctx.progress,
+                            done_rows as f64 / total_rows as f64,
+                        );
+                    }
+
+                    row_start = row_end;
+                }
+
+                continue;
+            }
+
+            if matches!(op, RankOp::Percentile) {
+                // Huang-style running percentile rank: maintain a quantized histogram while
+                // sliding the window and update the less-than-center count incrementally.
+                let mut band_min = f64::INFINITY;
+                let mut band_max = f64::NEG_INFINITY;
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        if z < band_min {
+                            band_min = z;
+                        }
+                        if z > band_max {
+                            band_max = z;
+                        }
+                    }
+                }
+
+                if !band_min.is_finite() || !band_max.is_finite() {
+                    done_rows += rows;
+                    compute_progress.emit_unit_fraction(
+                        ctx.progress,
+                        done_rows as f64 / total_rows as f64,
+                    );
+                    continue;
+                }
+
+                let min_bin = (band_min * multiplier_rank).floor() as i64;
+                let max_bin = (band_max * multiplier_rank).floor() as i64;
+                let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+                let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                    ToolError::Execution(
+                        "percentile filter histogram bin count exceeds platform limits".to_string(),
+                    )
+                })?;
+
+                let bin_nodata = i64::MIN;
+                let mut binned = vec![bin_nodata; rows * cols];
+                binned
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_bins)| {
+                        for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                            let z = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z) {
+                                continue;
+                            }
+                            *cell_bin = (z * multiplier_rank).floor() as i64 - min_bin;
+                        }
+                    });
+
+                let rows_isize = rows as isize;
+                let cols_isize = cols as isize;
+                let get_bin = |rr: isize, cc: isize| -> i64 {
+                    if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                        return bin_nodata;
+                    }
+                    binned[rr as usize * cols + cc as usize]
+                };
+
+                let mut row_start = 0usize;
+                while row_start < rows {
+                    let row_end = (row_start + RANK_FILTER_PAR_ROW_BATCH).min(rows);
+                    let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                        .into_par_iter()
+                        .map(|r| {
+                            let row = r as isize;
+                            let mut row_out = vec![nodata; cols];
+                            let mut histo = vec![0i64; num_bins];
+                            let mut old_center = bin_nodata;
+                            let mut n = 0i64;
+                            let mut n_less = 0i64;
+                            let start_row = row - half_y;
+                            let end_row = row + half_y;
+
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let center_bin = get_bin(row, col);
+                                if center_bin == bin_nodata {
+                                    old_center = bin_nodata;
+                                    continue;
+                                }
+
+                                if old_center != bin_nodata {
+                                    let trailing_col = col - half_x - 1;
+                                    let leading_col = col + half_x;
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, trailing_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] -= 1;
+                                            n -= 1;
+                                            if bv < old_center {
+                                                n_less -= 1;
+                                            }
+                                        }
+                                    }
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, leading_col);
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] += 1;
+                                            n += 1;
+                                            if bv < old_center {
+                                                n_less += 1;
+                                            }
+                                        }
+                                    }
+
+                                    if old_center < center_bin {
+                                        let mut m = 0i64;
+                                        for v in old_center..center_bin {
+                                            m += histo[v as usize];
+                                        }
+                                        n_less += m;
+                                    } else if old_center > center_bin {
+                                        let mut m = 0i64;
+                                        for v in center_bin..old_center {
+                                            m += histo[v as usize];
+                                        }
+                                        n_less -= m;
+                                    }
+                                } else {
+                                    histo.fill(0);
+                                    n = 0;
+                                    n_less = 0;
+                                    let start_col = col - half_x;
+                                    let end_col = col + half_x;
+
+                                    for cc in start_col..=end_col {
+                                        for rr in start_row..=end_row {
+                                            let bv = get_bin(rr, cc);
+                                            if bv != bin_nodata {
+                                                histo[bv as usize] += 1;
+                                                n += 1;
+                                                if bv < center_bin {
+                                                    n_less += 1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if n > 0 {
+                                    row_out[c] = n_less as f64 / n as f64 * 100.0;
+                                }
+                                old_center = center_bin;
+                            }
+
+                            (r, row_out)
+                        })
+                        .collect();
+
+                    for (r, row) in row_data {
+                        output
+                            .set_row_slice(band, r as isize, &row)
+                            .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                        done_rows += 1;
+                        compute_progress.emit_unit_fraction(
+                            ctx.progress,
+                            done_rows as f64 / total_rows as f64,
+                        );
+                    }
+
+                    row_start = row_end;
+                }
+
+                continue;
+            }
+
+            if matches!(op, RankOp::Diversity) {
+                // Legacy-style running diversity: maintain a quantized histogram while
+                // sliding the window left-to-right and update the unique-count incrementally.
+                let mut band_min = f64::INFINITY;
+                let mut band_max = f64::NEG_INFINITY;
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        if z < band_min {
+                            band_min = z;
+                        }
+                        if z > band_max {
+                            band_max = z;
+                        }
+                    }
+                }
+
+                if !band_min.is_finite() || !band_max.is_finite() {
+                    done_rows += rows;
+                    compute_progress.emit_unit_fraction(
+                        ctx.progress,
+                        done_rows as f64 / total_rows as f64,
+                    );
+                    continue;
+                }
+
+                let multiplier_diversity = if band_min.floor() != band_min || band_max.floor() != band_max {
+                    1000.0
+                } else {
+                    1.0
+                };
+                let min_bin = (band_min * multiplier_diversity).floor() as i64;
+                let max_bin = (band_max * multiplier_diversity).floor() as i64;
+                let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+                let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                    ToolError::Execution(
+                        "diversity filter histogram bin count exceeds platform limits".to_string(),
+                    )
+                })?;
+
+                let bin_nodata = i64::MIN;
+                let mut binned = vec![bin_nodata; rows * cols];
+                binned
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_bins)| {
+                        for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                            let z = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z) {
+                                continue;
+                            }
+                            *cell_bin = (z * multiplier_diversity).floor() as i64 - min_bin;
+                        }
+                    });
+
+                let rows_isize = rows as isize;
+                let cols_isize = cols as isize;
+                let get_bin = |rr: isize, cc: isize| -> i64 {
+                    if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                        return bin_nodata;
+                    }
+                    binned[rr as usize * cols + cc as usize]
+                };
+
+                let mut row_start = 0usize;
+                while row_start < rows {
+                    let row_end = (row_start + RANK_FILTER_PAR_ROW_BATCH).min(rows);
+                    let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                        .into_par_iter()
+                        .map(|r| {
+                            let row = r as isize;
+                            let mut row_out = vec![nodata; cols];
+                            let mut histo = vec![0i64; num_bins];
+                            let mut initialized = false;
+                            let mut diversity = 0i64;
+                            let start_row = row - half_y;
+                            let end_row = row + half_y;
+
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let center_bin = get_bin(row, col);
+                                if center_bin == bin_nodata {
+                                    initialized = false;
+                                    continue;
+                                }
+
+                                if initialized {
+                                    let trailing_col = col - half_x - 1;
+                                    let leading_col = col + half_x;
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, trailing_col);
+                                        if bv != bin_nodata {
+                                            let bin = &mut histo[bv as usize];
+                                            *bin -= 1;
+                                            if *bin == 0 {
+                                                diversity -= 1;
+                                            }
+                                        }
+                                    }
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, leading_col);
+                                        if bv != bin_nodata {
+                                            let bin = &mut histo[bv as usize];
+                                            if *bin == 0 {
+                                                diversity += 1;
+                                            }
+                                            *bin += 1;
+                                        }
+                                    }
+                                } else {
+                                    histo.fill(0);
+                                    diversity = 0;
+                                    let start_col = col - half_x;
+                                    let end_col = col + half_x;
+
+                                    for cc in start_col..=end_col {
+                                        for rr in start_row..=end_row {
+                                            let bv = get_bin(rr, cc);
+                                            if bv != bin_nodata {
+                                                let bin = &mut histo[bv as usize];
+                                                if *bin == 0 {
+                                                    diversity += 1;
+                                                }
+                                                *bin += 1;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                row_out[c] = diversity as f64;
+                                initialized = true;
+                            }
+
+                            (r, row_out)
+                        })
+                        .collect();
+
+                    for (r, row) in row_data {
+                        output
+                            .set_row_slice(band, r as isize, &row)
+                            .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                        done_rows += 1;
+                        compute_progress.emit_unit_fraction(
+                            ctx.progress,
+                            done_rows as f64 / total_rows as f64,
+                        );
+                    }
+
+                    row_start = row_end;
+                }
+
+                continue;
+            }
+
+            if matches!(op, RankOp::Majority) {
+                // Legacy-style running majority: maintain a quantized histogram while
+                // sliding the window and update mode tracking incrementally.
+                let mut band_min = f64::INFINITY;
+                let mut band_max = f64::NEG_INFINITY;
+                for r in 0..rows {
+                    for c in 0..cols {
+                        let z = input.get(band, r as isize, c as isize);
+                        if input.is_nodata(z) {
+                            continue;
+                        }
+                        if z < band_min {
+                            band_min = z;
+                        }
+                        if z > band_max {
+                            band_max = z;
+                        }
+                    }
+                }
+
+                if !band_min.is_finite() || !band_max.is_finite() {
+                    done_rows += rows;
+                    compute_progress.emit_unit_fraction(
+                        ctx.progress,
+                        done_rows as f64 / total_rows as f64,
+                    );
+                    continue;
+                }
+
+                let multiplier_majority = if band_min.floor() != band_min || band_max.floor() != band_max {
+                    100.0
+                } else {
+                    1.0
+                };
+                let min_bin = (band_min * multiplier_majority).floor() as i64;
+                let max_bin = (band_max * multiplier_majority).floor() as i64;
+                let num_bins_i64 = (max_bin - min_bin + 1).max(1);
+                let num_bins = usize::try_from(num_bins_i64).map_err(|_| {
+                    ToolError::Execution(
+                        "majority filter histogram bin count exceeds platform limits".to_string(),
+                    )
+                })?;
+
+                let bin_nodata = i64::MIN;
+                let mut binned = vec![bin_nodata; rows * cols];
+                binned
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_bins)| {
+                        for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                            let z = input.get(band, r as isize, c as isize);
+                            if input.is_nodata(z) {
+                                continue;
+                            }
+                            *cell_bin = (z * multiplier_majority).floor() as i64 - min_bin;
+                        }
+                    });
+
+                let rows_isize = rows as isize;
+                let cols_isize = cols as isize;
+                let get_bin = |rr: isize, cc: isize| -> i64 {
+                    if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
+                        return bin_nodata;
+                    }
+                    binned[rr as usize * cols + cc as usize]
+                };
+
+                let mut row_start = 0usize;
+                while row_start < rows {
+                    let row_end = (row_start + RANK_FILTER_PAR_ROW_BATCH).min(rows);
+                    let row_data: Vec<(usize, Vec<f64>)> = (row_start..row_end)
+                        .into_par_iter()
+                        .map(|r| {
+                            let row = r as isize;
+                            let mut row_out = vec![nodata; cols];
+                            let mut histo = vec![0i64; num_bins];
+                            let mut active_bins = HashSet::<usize>::new();
+                            let mut initialized = false;
+                            let mut mode_bin = 0i64;
+                            let mut mode_freq = 0i64;
+                            let start_row = row - half_y;
+                            let end_row = row + half_y;
+
+                            for c in 0..cols {
+                                let col = c as isize;
+                                let center_bin = get_bin(row, col);
+                                if center_bin == bin_nodata {
+                                    initialized = false;
+                                    continue;
+                                }
+
+                                if initialized {
+                                    let trailing_col = col - half_x - 1;
+                                    let leading_col = col + half_x;
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, trailing_col);
+                                        if bv != bin_nodata {
+                                            let idx = bv as usize;
+                                            histo[idx] -= 1;
+                                            if histo[idx] == 0 {
+                                                active_bins.remove(&idx);
+                                            }
+                                        }
+                                    }
+
+                                    for rr in start_row..=end_row {
+                                        let bv = get_bin(rr, leading_col);
+                                        if bv != bin_nodata {
+                                            let idx = bv as usize;
+                                            histo[idx] += 1;
+                                            if histo[idx] == 1 {
+                                                active_bins.insert(idx);
+                                            }
+                                            if histo[idx] > mode_freq {
+                                                mode_freq = histo[idx];
+                                                mode_bin = bv;
+                                            }
+                                        }
+                                    }
+
+                                    if mode_bin >= 0 && mode_bin < num_bins_i64 && histo[mode_bin as usize] < mode_freq {
+                                        mode_freq = if mode_bin >= 0 && mode_bin < num_bins_i64 {
+                                            histo[mode_bin as usize]
+                                        } else {
+                                            0
+                                        };
+                                        for &idx in &active_bins {
+                                            if histo[idx] > mode_freq {
+                                                mode_freq = histo[idx];
+                                                mode_bin = idx as i64;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    histo.fill(0);
+                                    active_bins.clear();
+                                    mode_bin = 0;
+                                    mode_freq = 0;
+                                    let start_col = col - half_x;
+                                    let end_col = col + half_x;
+
+                                    for cc in start_col..=end_col {
+                                        for rr in start_row..=end_row {
+                                            let bv = get_bin(rr, cc);
+                                            if bv != bin_nodata {
+                                                let idx = bv as usize;
+                                                histo[idx] += 1;
+                                                if histo[idx] == 1 {
+                                                    active_bins.insert(idx);
+                                                }
+                                                if histo[idx] > mode_freq {
+                                                    mode_freq = histo[idx];
+                                                    mode_bin = bv;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if mode_freq > 0 {
+                                    row_out[c] = (mode_bin + min_bin) as f64 / multiplier_majority;
+                                }
+                                initialized = true;
+                            }
+
+                            (r, row_out)
+                        })
+                        .collect();
+
+                    for (r, row) in row_data {
+                        output
+                            .set_row_slice(band, r as isize, &row)
+                            .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
+                        done_rows += 1;
+                        compute_progress.emit_unit_fraction(
+                            ctx.progress,
+                            done_rows as f64 / total_rows as f64,
+                        );
+                    }
+
+                    row_start = row_end;
+                }
+
+                continue;
+            }
 
             let mut row_start = 0usize;
             while row_start < rows {

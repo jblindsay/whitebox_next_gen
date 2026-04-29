@@ -1,7 +1,7 @@
 tool_name,exists_legacy,exists_next_gen,test_status,dataset_id,legacy_runtime_s,next_gen_runtime_s,delta_pct,parity_band,priority_override,notes
 abs,TRUE,TRUE,not_tested,,,,,,,
 accumulation_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
-adaptive_filter,TRUE,TRUE,not_tested,,,,,,,
+adaptive_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,8.685,8.760,+0.86,Green,,"Initial timing (2026-04-27): NG runs (s): 8.41|8.46|8.61|8.91|8.96 (median runs2-5=8.760). Legacy runs (s): 8.27|8.16|7.28|10.60|9.21 (median runs2-5=8.685). Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 add,TRUE,TRUE,tested,lkerie_10m_final_dem,1.303000,0.440698,-66.15,Green,,"BREAKTHROUGH FIX (2026-04-22): Modified read_raster() to load rasters into memory_store, enabling Arc-based zero-copy access. Legacy runs (s): 1.369|1.303|1.338|1.289|1.267 (median 1.303). NG runs (s, memory-backed): 0.463451|0.440698|0.369634|0.423589|0.408753 (median 0.440698). Previous NG disk-read runs (s): 16.969061|17.184655|17.026700|19.611183|18.413595 (median 17.184655). Arc fix + memory-backing transforms NG from 1218% slower to 66% FASTER than legacy. DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 add_field,FALSE,TRUE,not_tested,,,,,,,
 add_geometry_attributes,FALSE,TRUE,not_tested,,,,,,,
@@ -24,11 +24,11 @@ attribute_scattergram,TRUE,TRUE,not_tested,,,,,,,
 average_flowpath_slope,TRUE,TRUE,not_tested,,,,,,,
 average_horizon_distance,TRUE,TRUE,not_tested,,,,,,,
 average_normal_vector_angular_deviation,TRUE,TRUE,not_tested,,,,,,,
-average_overlay,TRUE,TRUE,not_tested,,,,,,,
+average_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.565,0.905,-64.72,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.13|1.01|0.91|0.90|0.88 (median runs2-5=0.905). Legacy runs (s): 2.68|2.29|1.94|3.22|2.84 (median runs2-5=2.565). Params: default. Timing scope: kernel_only_excludes_read_write."
 average_upslope_flowpath_length,TRUE,TRUE,not_tested,,,,,,,
 balance_contrast_enhancement,TRUE,TRUE,not_tested,,,,,,,
 basins,TRUE,TRUE,not_tested,,,,,,,
-bilateral_filter,TRUE,TRUE,not_tested,,,,,,,
+bilateral_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,9.255,8.065,-12.86,Green,,"Initial timing (2026-04-27): NG runs (s): 7.04|7.72|7.90|8.35|8.23 (median runs2-5=8.065). Legacy runs (s): 8.33|9.14|9.28|9.23|9.47 (median runs2-5=9.255). Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 block_maximum,TRUE,TRUE,not_tested,,,,,,,
 block_minimum,TRUE,TRUE,not_tested,,,,,,,
 bool_and,TRUE,TRUE,not_tested,,,,,,,
@@ -36,8 +36,8 @@ bool_not,TRUE,TRUE,not_tested,,,,,,,
 bool_or,TRUE,TRUE,not_tested,,,,,,,
 bool_xor,TRUE,TRUE,not_tested,,,,,,,
 boundary_shape_complexity,TRUE,TRUE,not_tested,,,,,,,
-breach_depressions_least_cost,TRUE,TRUE,not_tested,,,,,,,
-breach_single_cell_pits,TRUE,TRUE,not_tested,,,,,,,
+breach_depressions_least_cost,TRUE,TRUE,tested,lkerie_30m_final_dem,7.355,2.425,-67.03,Green,,"Initial timing (2026-04-28): NG runs (s): 2.42|2.52|2.44|2.41|2.41 (median runs2-5=2.425). Legacy runs (s): 8.47|7.76|6.67|7.21|7.50 (median runs2-5=7.355). Dataset: LKERIE_30m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
+breach_single_cell_pits,TRUE,TRUE,tested,lkerie_10m_final_dem,8.550,5.965,-30.23,Green,,"Updated timing (2026-04-28): NG runs (s): 7.40|6.42|6.17|5.75|5.76 (median runs2-5=5.965). Legacy runs (s): 8.82|8.77|8.56|8.54|8.53 (median runs2-5=8.550). Dataset: LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 breakline_mapping,TRUE,TRUE,not_tested,,,,,,,
 buffer_raster,TRUE,TRUE,not_tested,,,,,,,
 buffer_vector,FALSE,TRUE,not_tested,,,,,,,
@@ -70,7 +70,7 @@ colourize_based_on_point_returns,TRUE,TRUE,not_tested,,,,,,,
 compactness_ratio,TRUE,TRUE,not_tested,,,,,,,
 concave_hull,FALSE,TRUE,not_tested,,,,,,,
 conditional_evaluation,TRUE,TRUE,not_tested,,,,,,,
-conservative_smoothing_filter,TRUE,TRUE,not_tested,,,,,,,
+conservative_smoothing_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.340,2.265,-3.21,Green,,"Post-optimization retest v2 (2026-04-28): NG runs (s): 2.65|2.47|2.28|2.24|2.25 (median runs2-5=2.265). Legacy runs (s): 3.11|2.79|2.37|2.31|2.28 (median runs2-5=2.340). Params: default. Timing scope: kernel_only_excludes_read_write."
 construct_vector_tin,TRUE,TRUE,not_tested,,,,,,,
 contours_from_points,TRUE,TRUE,not_tested,,,,,,,
 contours_from_raster,TRUE,TRUE,not_tested,,,,,,,
@@ -83,7 +83,7 @@ cosh,TRUE,TRUE,not_tested,,,,,,,
 cost_allocation,TRUE,TRUE,not_tested,,,,,,,
 cost_distance,TRUE,TRUE,not_tested,,,,,,,
 cost_pathway,TRUE,TRUE,not_tested,,,,,,,
-count_if,TRUE,TRUE,not_tested,,,,,,,
+count_if,TRUE,TRUE,tested,lkerie_10m_final_dem,1.79,0.54,-69.83,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 0.81|0.55|0.54|0.54|0.54 (median runs2-5=0.54). Legacy runs (s): 2.23|1.91|1.71|1.77|1.81 (median runs2-5=1.79). Params: default. Timing scope: kernel_only_excludes_read_write."
 create_colour_composite,TRUE,TRUE,not_tested,,,,,,,
 create_plane,TRUE,TRUE,not_tested,,,,,,,
 crispness_index,TRUE,TRUE,not_tested,,,,,,,
@@ -107,7 +107,7 @@ depth_in_sink,TRUE,TRUE,not_tested,,,,,,,
 depth_to_water,TRUE,TRUE,not_tested,,,,,,,
 deviation_from_mean_elevation,TRUE,TRUE,not_tested,,,,,,,
 deviation_from_regional_direction,TRUE,TRUE,not_tested,,,,,,,
-diff_of_gaussians_filter,TRUE,TRUE,not_tested,,,,,,,
+diff_of_gaussians_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,58.550,57.705,-1.44,Green,,"Initial timing (2026-04-28): NG runs (s): 56.25|57.60|56.35|57.81|60.12 (median runs2-5=57.705). Legacy runs (s): 52.72|59.88|57.71|57.20|59.39 (median runs2-5=58.550). Params: default. Timing scope: kernel_only_excludes_read_write."
 difference,TRUE,TRUE,not_tested,,,,,,,
 difference_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 difference_from_mean_elevation,TRUE,TRUE,not_tested,,,,,,,
@@ -118,14 +118,14 @@ direct_decorrelation_stretch,TRUE,TRUE,not_tested,,,,,,,
 directional_relief,TRUE,TRUE,not_tested,,,,,,,
 dissolve,TRUE,TRUE,not_tested,,,,,,,
 distance_to_outlet,TRUE,TRUE,not_tested,,,,,,,
-diversity_filter,TRUE,TRUE,not_tested,,,,,,,
+diversity_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,4.790,4.080,-14.82,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 4.16|4.28|4.08|4.08|4.07 (median runs2-5=4.080). Legacy runs (s): 4.97|4.78|4.80|4.90|4.71 (median runs2-5=4.790). Params: default. Timing scope: kernel_only_excludes_read_write."
 divide,TRUE,TRUE,not_tested,,,,,,,
 downslope_distance_to_stream,TRUE,TRUE,not_tested,,,,,,,
 downslope_flowpath_length,TRUE,TRUE,not_tested,,,,,,,
 downslope_index,TRUE,TRUE,not_tested,,,,,,,
 edge_contamination,TRUE,TRUE,not_tested,,,,,,,
 edge_density,TRUE,TRUE,not_tested,,,,,,,
-edge_preserving_mean_filter,TRUE,TRUE,not_tested,,,,,,,
+edge_preserving_mean_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,6.160,5.525,-10.31,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 5.43|5.55|5.28|5.51|5.54 (median runs2-5=5.525). Legacy runs (s): 6.37|6.18|6.14|6.14|6.32 (median runs2-5=6.160). Params: default. Timing scope: kernel_only_excludes_read_write."
 edge_proportion,TRUE,TRUE,not_tested,,,,,,,
 eigenvalue_feature_filter,TRUE,FALSE,not_tested,,,,,,,
 elev_above_pit,FALSE,TRUE,not_tested,,,,,,,
@@ -135,11 +135,11 @@ elev_relative_to_watershed_min_max,TRUE,TRUE,not_tested,,,,,,,
 elevation_above_pit,TRUE,FALSE,not_tested,,,,,,,
 elevation_above_stream,TRUE,TRUE,not_tested,,,,,,,
 elevation_above_stream_euclidean,TRUE,TRUE,not_tested,,,,,,,
-elevation_percentile,TRUE,TRUE,not_tested,,,,,,,
+elevation_percentile,TRUE,TRUE,tested,lkerie_10m_final_dem,4.000000,3.900000,-2.50,Green,,"Post-optimization benchmark refresh (2026-04-27). NG runs (s, memory-backed): 4.16|3.90|3.96|3.88|3.86 (median 3.900000, mean 3.952000). Legacy runs (s): 4.27|4.30|4.00|3.87|3.94 (median 4.000000, mean 4.076000). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 eliminate_coincident_points,TRUE,TRUE,not_tested,,,,,,,
 elongation_ratio,TRUE,TRUE,not_tested,,,,,,,
 embankment_mapping,TRUE,TRUE,not_tested,,,,,,,
-emboss_filter,TRUE,TRUE,not_tested,,,,,,,
+emboss_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.035,1.560,-23.34,Green,,"Initial timing (2026-04-28): NG runs (s): 1.80|1.57|1.55|1.52|1.57 (median runs2-5=1.560). Legacy runs (s): 2.85|2.49|2.02|1.99|2.05 (median runs2-5=2.035). Params: default. Timing scope: kernel_only_excludes_read_write."
 ent_001,FALSE,FALSE,not_tested,,,,,,,
 ent_fixture_001,FALSE,FALSE,not_tested,,,,,,,
 equal_to,TRUE,TRUE,not_tested,,,,,,,
@@ -163,7 +163,7 @@ extract_streams,TRUE,TRUE,not_tested,,,,,,,
 extract_valleys,TRUE,TRUE,not_tested,,,,,,,
 false_colour_composite,FALSE,TRUE,not_tested,,,,,,,
 farthest_channel_head,TRUE,TRUE,not_tested,,,,,,,
-fast_almost_gaussian_filter,TRUE,TRUE,not_tested,,,,,,,
+fast_almost_gaussian_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,29.420,16.960,-42.35,Green,,"Initial timing (2026-04-28): NG runs (s): 15.17|16.19|16.23|17.69|17.70 (median runs2-5=16.960). Legacy runs (s): 30.18|29.51|29.63|29.33|29.25 (median runs2-5=29.420). Params: default. Timing scope: kernel_only_excludes_read_write."
 fd8_flow_accum,TRUE,TRUE,not_tested,,,,,,,
 fd8_pointer,TRUE,TRUE,not_tested,,,,,,,
 feature_preserving_smoothing,TRUE,TRUE,not_tested,,,,,,,
@@ -172,9 +172,9 @@ feature_preserving_smoothing_poisson,FALSE,TRUE,not_tested,,,,,,,
 fetch_analysis,TRUE,TRUE,not_tested,,,,,,,
 field_calculator,FALSE,TRUE,not_tested,,,,,,,
 fill_burn,TRUE,TRUE,not_tested,,,,,,,
-fill_depressions,TRUE,TRUE,not_tested,,,,,,,
-fill_depressions_planchon_and_darboux,TRUE,TRUE,not_tested,,,,,,,
-fill_depressions_wang_and_liu,TRUE,TRUE,not_tested,,,,,,,
+fill_depressions,TRUE,TRUE,tested,lkerie_10m_final_dem,19.970,16.26,-18.60,Green,,"Final timing (2026-04-29): Refactored into dual-mode flat-resolution strategy with user-selectable parameter. DEFAULT: garbrecht_martz mode NG runs (s): 14.96|15.43|15.87|16.64|17.20 (median runs2-5=16.26). OPTIONAL: natural mode NG runs (s): 35.54|34.29|32.41|30.29|30.57 (median runs2-5=31.49). Legacy runs (s): 17.74|21.89|21.09|18.85|18.41 (median runs2-5=19.970). Garbrecht-Martz default is 18.6% FASTER than legacy; natural mode available via flat_resolution='natural' parameter for more realistic flowpaths. Params: default (garbrecht_martz mode). Timing scope: kernel_only_excludes_read_write."
+fill_depressions_planchon_and_darboux,TRUE,TRUE,tested,lkerie_10m_final_dem,284.715,72.355,-74.59,Green,,"Initial timing (2026-04-28): NG runs (s): 74.49|72.24|72.62|72.33|72.38 (median runs2-5=72.355). Legacy runs (s): 285.93|284.37|284.95|284.48|285.24 (median runs2-5=284.715). Params: default. Timing scope: kernel_only_excludes_read_write."
+fill_depressions_wang_and_liu,TRUE,TRUE,tested,lkerie_10m_final_dem,86.620,43.965,-49.24,Green,,"Initial timing (2026-04-28): NG runs (s): 46.54|45.75|44.02|43.74|43.91 (median runs2-5=43.965). Legacy runs (s): 84.49|89.04|84.20|89.21|80.26 (median runs2-5=86.620). Params: default. Timing scope: kernel_only_excludes_read_write."
 fill_missing_data,TRUE,TRUE,not_tested,,,,,,,
 fill_pits,TRUE,TRUE,not_tested,,,,,,,
 filter_lidar,TRUE,TRUE,not_tested,,,,,,,
@@ -203,9 +203,9 @@ flow_accum_full_workflow,TRUE,TRUE,not_tested,,,,,,,
 flow_length_diff,TRUE,TRUE,not_tested,,,,,,,
 fuzzy_knn_classification,TRUE,TRUE,not_tested,,,,,,,
 gamma_correction,TRUE,TRUE,not_tested,,,,,,,
-gaussian_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
+gaussian_contrast_stretch,TRUE,TRUE,tested,lkerie_10m_final_dem,4.86,4.31,-11.32,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). Post-hotspot-fix NG runs (s, memory-backed): 4.875126|4.388258|4.190330|4.217170|4.306273 (median 4.306273, mean 4.395431). Legacy runs (s): 5.33|5.30|4.81|4.86|4.77 (median 4.860000, mean 5.014000). Prior NG regression baseline before fix (s): 15.26|15.32|15.26|15.22|15.27 (median 15.260000). Params: num_tones=256. Timing scope: kernel_only_excludes_read_write."
 gaussian_curvature,TRUE,TRUE,tested,lkerie_10m_final_dem,8.880000,2.331498,-73.74,Green,BENCHMARK_ANCHOR,"Primary benchmark: Legacy runs (s): 9.174|8.762|9.277|8.764|8.880 (median 8.880). NG runs (s): 2.433555|2.331498|2.229557|2.127403|2.554107 (median 2.331498, mean 2.335224). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default; z_factor=1.0, log_transform=false. Timing scope: kernel_only_excludes_read_write. Prior baseline record (pre-Arc loader migration in curvature_tools): 9.636592 median (8.52% slower than legacy)."
-gaussian_filter,TRUE,TRUE,not_tested,,,,,,,
+gaussian_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,4.065,3.395,-16.48,Green,,"Updated timing (2026-04-28): NG runs (s): 3.52|3.25|3.39|3.44|3.40 (median runs2-5=3.395). Legacy runs (s): 3.48|3.71|3.77|4.36|4.67 (median runs2-5=4.065). Prior NG baseline (s): 4.08|4.20|4.29|4.41|4.57 (median runs2-5=4.350). Params: default. Timing scope: kernel_only_excludes_read_write."
 generalize_classified_raster,TRUE,TRUE,not_tested,,,,,,,
 generalize_with_similarity,TRUE,TRUE,not_tested,,,,,,,
 generating_function,TRUE,TRUE,not_tested,,,,,,,
@@ -231,23 +231,23 @@ height_above_ground,TRUE,TRUE,not_tested,,,,,,,
 hexagonal_grid_from_raster_base,TRUE,TRUE,not_tested,,,,,,,
 hexagonal_grid_from_vector_base,TRUE,TRUE,not_tested,,,,,,,
 high_pass_bilateral_filter,FALSE,TRUE,not_tested,,,,,,,
-high_pass_filter,TRUE,TRUE,not_tested,,,,,,,
-high_pass_median_filter,TRUE,TRUE,not_tested,,,,,,,
-highest_position,TRUE,TRUE,not_tested,,,,,,,
-hillshade,TRUE,TRUE,not_tested,,,,,,,
+high_pass_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,7.825,3.580,-54.25,Green,,"Initial timing (2026-04-28): NG runs (s): 4.23|3.64|3.60|3.53|3.56 (median runs2-5=3.580). Legacy runs (s): 7.02|7.28|6.69|8.37|8.53 (median runs2-5=7.825). Params: default. Timing scope: kernel_only_excludes_read_write."
+high_pass_median_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,4.545,4.760,+4.73,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 4.88|4.74|4.68|4.94|4.78 (median runs2-5=4.760). Legacy runs (s): 3.99|3.90|3.81|5.29|5.19 (median runs2-5=4.545). Params: default. Timing scope: kernel_only_excludes_read_write."
+highest_position,TRUE,TRUE,tested,lkerie_10m_final_dem,1.685,0.455,-73.01,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 0.77|0.50|0.46|0.45|0.45 (median runs2-5=0.455). Legacy runs (s): 2.19|1.96|1.61|1.68|1.69 (median runs2-5=1.685). Params: default. Timing scope: kernel_only_excludes_read_write."
+hillshade,TRUE,TRUE,tested,lkerie_10m_final_dem,2.88,2.74,-4.86,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). Post-hotspot-fix NG runs (s, memory-backed): 2.91|2.74|2.76|2.74|2.72 (median 2.740000, mean 2.774000). Legacy runs (s): 3.19|2.88|2.71|2.88|2.48 (median 2.880000, mean 2.828000). Prior NG regression baseline (s): 3.16|3.30|2.95|2.95|3.09 (median 3.090000). Params: default. Timing scope: kernel_only_excludes_read_write."
 hillslopes,TRUE,TRUE,not_tested,,,,,,,
-histogram_equalization,TRUE,TRUE,not_tested,,,,,,,
-histogram_matching,TRUE,TRUE,not_tested,,,,,,,
-histogram_matching_two_images,TRUE,TRUE,not_tested,,,,,,,
+histogram_equalization,TRUE,TRUE,tested,lkerie_10m_final_dem,4.80,4.12,-14.17,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 4.22|4.26|4.12|4.09|4.05 (median 4.120000, mean 4.148000). Legacy runs (s): 4.89|4.80|4.76|4.72|4.93 (median 4.800000, mean 4.820000). Params: num_tones=256. Timing scope: kernel_only_excludes_read_write."
+histogram_matching,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_histogram_matching_two_images,
+histogram_matching_two_images,TRUE,TRUE,tested,lkerie_10m_final_dem,8.04,7.14,-11.19,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). Post-hotspot-fix NG runs (s, memory-backed): 7.14|7.04|6.94|7.32|7.14 (median 7.140000, mean 7.116000). Legacy runs (s): 8.73|8.14|7.97|7.89|8.04 (median 8.040000, mean 8.154000). Prior NG regression baseline before fix (s): 54.34|52.65|53.43|53.01|53.50 (median 53.430000). Params: default. Timing scope: kernel_only_excludes_read_write."
 hole_proportion,TRUE,TRUE,not_tested,,,,,,,
-horizon_angle,TRUE,TRUE,not_tested,,,,,,,
+horizon_angle,TRUE,TRUE,tested,lkerie_10m_final_dem,10.25,3.05,-70.24,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 3.00|2.85|3.05|3.15|3.20 (median 3.050000, mean 3.050000). Legacy runs (s): 10.25|9.43|10.04|11.38|11.39 (median 10.250000, mean 10.498000). Params: default. Timing scope: kernel_only_excludes_read_write."
 horizon_area,TRUE,TRUE,not_tested,,,,,,,
 horizontal_excess_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 horton_ratios,FALSE,TRUE,not_tested,,,,,,,
 horton_stream_order,TRUE,TRUE,not_tested,,,,,,,
 hydrologic_connectivity,TRUE,TRUE,not_tested,,,,,,,
 hypsometric_analysis,TRUE,TRUE,not_tested,,,,,,,
-hypsometrically_tinted_hillshade,TRUE,TRUE,not_tested,,,,,,,
+hypsometrically_tinted_hillshade,TRUE,TRUE,tested,lkerie_10m_final_dem,3.37,3.35,-0.59,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 3.67|3.35|3.30|3.37|3.26 (median 3.350000, mean 3.390000). Legacy runs (s): 3.94|3.65|3.37|3.27|3.30 (median 3.370000, mean 3.506000). Params: default. Timing scope: kernel_only_excludes_read_write. Note: correctness bug in NG output raster typing was fixed after this benchmark; compute kernel timings are expected to remain representative."
 idw_interpolation,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_LIDAR_IDW_INTERPOLATION,
 ihs_to_rgb,TRUE,TRUE,not_tested,,,,,,,
 image_autocorrelation,TRUE,TRUE,not_tested,,,,,,,
@@ -279,20 +279,20 @@ jenson_snap_pour_points,TRUE,TRUE,not_tested,,,,,,,
 join_tables,TRUE,TRUE,not_tested,,,,,,,
 k1,FALSE,FALSE,not_tested,,,,,,,
 k_means_clustering,TRUE,TRUE,not_tested,,,,,,,
-k_nearest_mean_filter,TRUE,TRUE,not_tested,,,,,,,
+k_nearest_mean_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,3.035,3.470,+14.33,Red,,"Updated timing (2026-04-28): NG runs (s): 4.33|3.71|3.63|3.24|3.31 (median runs2-5=3.470). Legacy runs (s): 3.09|3.00|3.00|3.07|3.17 (median runs2-5=3.035). Prior NG baselines (s): 3.94|3.75|3.63|3.76|3.43 (median runs2-5=3.690); 3.73|3.27|3.58|3.28|3.23 (median runs2-5=3.275); 3.85|3.57|3.52|3.57|3.58 (median runs2-5=3.570). Params: default. Timing scope: kernel_only_excludes_read_write."
 k_shortest_paths_network,FALSE,TRUE,not_tested,,,,,,,
 kappa_index,TRUE,TRUE,not_tested,,,,,,,
 knn_classification,TRUE,TRUE,not_tested,,,,,,,
 knn_regression,TRUE,TRUE,not_tested,,,,,,,
 ks_normality_test,TRUE,TRUE,not_tested,,,,,,,
-laplacian_filter,TRUE,TRUE,not_tested,,,,,,,
-laplacian_of_gaussians_filter,TRUE,TRUE,not_tested,,,,,,,
+laplacian_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.335,1.580,-32.33,Green,,"Initial timing (2026-04-28): NG runs (s): 1.79|1.58|1.60|1.57|1.58 (median runs2-5=1.580). Legacy runs (s): 2.96|2.76|2.06|2.08|2.61 (median runs2-5=2.335). Params: default. Timing scope: kernel_only_excludes_read_write."
+laplacian_of_gaussians_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,3.455,4.085,+18.23,Red,,"Updated timing (2026-04-28): NG runs (s): 4.79|4.68|3.90|4.27|3.90 (median runs2-5=4.085). Legacy runs (s): 3.33|3.38|3.40|3.51|3.57 (median runs2-5=3.455). Prior NG baselines (s): 4.62|4.39|4.40|4.90|5.23 (median runs2-5=4.650); 4.87|4.93|4.93|5.02|5.00 (median runs2-5=4.965). Params: default. Timing scope: kernel_only_excludes_read_write."
 las_to_ascii,TRUE,TRUE,not_tested,,,,,,,
 las_to_shapefile,TRUE,TRUE,not_tested,,,,,,,
 last_vertex,TRUE,FALSE,not_tested,,,,,,,
 layer_footprint_raster,TRUE,TRUE,not_tested,,,,,,,
 layer_footprint_vector,TRUE,TRUE,not_tested,,,,,,,
-lee_filter,TRUE,TRUE,not_tested,,,,,,,
+lee_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,7.185,7.940,+10.51,Red,,"Initial timing (2026-04-28): NG runs (s): 7.48|7.74|8.00|8.21|7.88 (median runs2-5=7.940). Legacy runs (s): 6.80|7.41|7.17|7.12|7.20 (median runs2-5=7.185). Params: default. Timing scope: kernel_only_excludes_read_write."
 length_of_upstream_channels,TRUE,TRUE,not_tested,,,,,,,
 less_than,TRUE,TRUE,not_tested,,,,,,,
 lidar_block_maximum,TRUE,TRUE,not_tested,,,,,,,
@@ -331,7 +331,7 @@ lidar_tile,TRUE,TRUE,not_tested,,,,,,,
 lidar_tile_footprint,TRUE,TRUE,not_tested,,,,,,,
 lidar_tin_gridding,TRUE,TRUE,not_tested,,,,,,,
 lidar_tophat_transform,TRUE,TRUE,not_tested,,,,,,,
-line_detection_filter,TRUE,TRUE,not_tested,,,,,,,
+line_detection_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.040,1.610,-21.08,Green,,"Initial timing (2026-04-28): NG runs (s): 2.12|1.71|1.63|1.59|1.59 (median runs2-5=1.610). Legacy runs (s): 2.47|2.37|2.00|2.07|2.01 (median runs2-5=2.040). Params: default. Timing scope: kernel_only_excludes_read_write."
 line_endpoints_must_snap_within_tolerance,FALSE,TRUE,not_tested,,,,,,,
 line_intersections,TRUE,TRUE,not_tested,,,,,,,
 line_polygon_clip,FALSE,TRUE,not_tested,,,,,,,
@@ -351,49 +351,49 @@ long_profile,TRUE,TRUE,not_tested,,,,,,,
 long_profile_from_points,TRUE,TRUE,not_tested,,,,,,,
 longest_flowpath,TRUE,TRUE,not_tested,,,,,,,
 low_points_on_headwater_divides,TRUE,TRUE,not_tested,,,,,,,
-lowest_position,TRUE,TRUE,not_tested,,,,,,,
-majority_filter,TRUE,TRUE,not_tested,,,,,,,
+lowest_position,TRUE,TRUE,tested,lkerie_10m_final_dem,1.665,0.445,-73.28,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 0.83|0.47|0.45|0.44|0.44 (median runs2-5=0.445). Legacy runs (s): 2.12|1.89|1.63|1.65|1.68 (median runs2-5=1.665). Params: default. Timing scope: kernel_only_excludes_read_write."
+majority_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,12.090,9.540,-21.09,Green,,"Updated timing (2026-04-28): NG runs (s): 9.76|9.35|9.49|9.59|9.72 (median runs2-5=9.540). Legacy runs (s): 10.77|11.87|12.36|12.31|11.82 (median runs2-5=12.090). Prior NG baseline (s): 19.40|20.88|21.21|21.64|21.93 (median runs2-5=21.425). Params: default. Timing scope: kernel_only_excludes_read_write."
 map_features,TRUE,TRUE,not_tested,,,,,,,
 map_matching_v1,FALSE,TRUE,not_tested,,,,,,,
 map_off_terrain_objects,TRUE,TRUE,not_tested,,,,,,,
-max,TRUE,TRUE,tested,lkerie_10m_final_dem,,3.428870,,,,"Stage 1 Arc rollout validation (2026-04-24). NG runs (s, memory-backed): 3.232695|3.428870|3.145920|3.837231|3.485139 (median 3.428870, mean 3.425971). Params: input1=dem,input2=dem. Timing scope: kernel_only_excludes_read_write."
-max_absolute_overlay,TRUE,TRUE,not_tested,,,,,,,
+max,TRUE,TRUE,tested,lkerie_10m_final_dem,2.80,2.70,-3.57,Green,,"Stage 1 Arc rollout validation (2026-04-24). NG runs (s, memory-backed): 3.232695|3.428870|3.145920|3.837231|3.485139 (median 3.428870, mean 3.425971). Params: input1=dem,input2=dem. Timing scope: kernel_only_excludes_read_write. Full benchmark (2026-04-26): NG 2.70s excl I/O | 18.20s incl I/O; Legacy 2.80s excl I/O | 19.63s incl I/O."
+max_absolute_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.405,0.815,-66.11,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.01|0.93|0.82|0.81|0.80 (median runs2-5=0.815). Legacy runs (s): 2.65|2.36|1.90|2.45|4.06 (median runs2-5=2.405). Params: default. Timing scope: kernel_only_excludes_read_write."
 max_anisotropy_dev,TRUE,TRUE,not_tested,,,,,,,
 max_anisotropy_dev_signature,TRUE,TRUE,not_tested,,,,,,,
 max_branch_length,TRUE,TRUE,not_tested,,,,,,,
 max_difference_from_mean,TRUE,TRUE,not_tested,,,,,,,
 max_distance_squared,TRUE,FALSE,not_tested,,,,,,,
 max_downslope_elev_change,TRUE,TRUE,not_tested,,,,,,,
-max_elev_dev_signature,FALSE,TRUE,not_tested,,,,,,,
+max_elev_dev_signature,FALSE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"Showcase signature tool. 2026-04-27 multiscale geomorphometry sweep adjusted shared max-dev response path used by related tools; run focused timing/UX parity check."
 max_elevation_dev_signature,TRUE,FALSE,not_tested,,,,,,,
-max_elevation_deviation,TRUE,TRUE,not_tested,,,,,,,
-max_overlay,TRUE,TRUE,not_tested,,,,,,,
+max_elevation_deviation,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in WbNG: replaced per-scale row_data allocation and per-cell Raster get/set merge with in-place parallel updates on flat magnitude/scale buffers plus batched row writes. Re-benchmark against legacy required."
+max_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.305,0.810,-64.86,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.02|0.86|0.81|0.81|0.81 (median runs2-5=0.810). Legacy runs (s): 2.47|2.29|1.84|2.32|2.85 (median runs2-5=2.305). Params: default. Timing scope: kernel_only_excludes_read_write."
 max_upslope_elev_change,TRUE,TRUE,not_tested,,,,,,,
 max_upslope_flowpath_length,TRUE,TRUE,not_tested,,,,,,,
 max_upslope_value,TRUE,TRUE,not_tested,,,,,,,
 maximal_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
-maximum_filter,TRUE,TRUE,not_tested,,,,,,,
+maximum_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.920,3.045,+4.28,Green,,"Post-v6 timing (2026-04-27): NG runs (s): 3.13|3.07|3.01|3.08|3.02 (median runs2-5=3.045). Legacy runs (s): 2.95|2.85|2.91|2.93|2.97 (median runs2-5=2.920). Shared extrema kernel uses row-parallel sliding cache + staged band buffer with parallel pre-load and stride-indexed vertical scans. Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 mdinf_flow_accum,TRUE,TRUE,not_tested,,,,,,,
 mean_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_PLAN_CURVATURE,
-mean_filter,TRUE,TRUE,not_tested,,,,,,,
-median_filter,TRUE,TRUE,not_tested,,,,,,,
+mean_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,5.66,4.58,-19.08,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 4.74|4.63|4.53|4.58|4.57 (median 4.580000, mean 4.610000). Legacy runs (s): 6.25|6.07|5.64|5.65|5.66 (median 5.660000, mean 5.854000). Params: default. Timing scope: kernel_only_excludes_read_write."
+median_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,3.99,4.02,0.75,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). Post-Huang-optimization NG runs (s, memory-backed): 4.08|4.13|4.01|4.02|4.02 (median 4.020000, mean 4.052000). Legacy runs (s): 4.15|4.02|3.77|3.99|3.75 (median 3.990000, mean 3.936000). Prior NG pre-optimization baseline (s): 17.17|17.78|18.34|19.01|19.22 (median 18.340000). Params: default. Timing scope: kernel_only_excludes_read_write."
 medoid,TRUE,TRUE,not_tested,,,,,,,
 merge_line_segments,TRUE,TRUE,not_tested,,,,,,,
 merge_table_with_csv,TRUE,TRUE,not_tested,,,,,,,
 merge_vectors,TRUE,TRUE,not_tested,,,,,,,
-min,TRUE,TRUE,tested,lkerie_10m_final_dem,,4.446039,,,,"Stage 1 Arc rollout validation (2026-04-24). NG runs (s, memory-backed): 3.622452|3.630582|4.561191|4.446039|5.481174 (median 4.446039, mean 4.348287). Params: input1=dem,input2=dem. Timing scope: kernel_only_excludes_read_write."
-min_absolute_overlay,TRUE,TRUE,not_tested,,,,,,,
+min,TRUE,TRUE,tested,lkerie_10m_final_dem,2.51,2.50,-0.40,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 2.80|2.53|2.49|2.50|2.48 (median 2.500000, mean 2.560000). Legacy runs (s): 2.86|2.61|2.48|2.51|2.45 (median 2.510000, mean 2.582000). Params: input1=dem,input2=dem. Timing scope: kernel_only_excludes_read_write."
+min_absolute_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.350,0.810,-65.53,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.01|0.87|0.80|0.81|0.81 (median runs2-5=0.810). Legacy runs (s): 2.59|2.33|1.89|2.37|3.99 (median runs2-5=2.350). Params: default. Timing scope: kernel_only_excludes_read_write."
 min_dist_classification,TRUE,TRUE,not_tested,,,,,,,
 min_downslope_elev_change,TRUE,TRUE,not_tested,,,,,,,
-min_max_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
-min_overlay,TRUE,TRUE,not_tested,,,,,,,
+min_max_contrast_stretch,TRUE,TRUE,tested,lkerie_10m_final_dem,1.86,1.42,-23.66,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 1.45|1.42|1.41|1.43|1.41 (median 1.420000, mean 1.424000). Legacy runs (s): 2.56|2.34|1.86|1.83|1.85 (median 1.860000, mean 2.088000). Params: min_val=0,max_val=255. Timing scope: kernel_only_excludes_read_write."
+min_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.670,0.805,-69.85,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.02|0.88|0.80|0.80|0.81 (median runs2-5=0.805). Legacy runs (s): 2.65|2.38|1.90|3.03|2.96 (median runs2-5=2.670). Params: default. Timing scope: kernel_only_excludes_read_write."
 minimal_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 minimal_dispersion_flow_algorithm,TRUE,TRUE,not_tested,,,,,,,
 minimum_bounding_box,TRUE,TRUE,not_tested,,,,,,,
 minimum_bounding_circle,TRUE,TRUE,not_tested,,,,,,,
 minimum_bounding_envelope,TRUE,TRUE,not_tested,,,,,,,
 minimum_convex_hull,TRUE,TRUE,not_tested,,,,,,,
-minimum_filter,TRUE,TRUE,not_tested,,,,,,,
+minimum_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.775,2.740,-1.26,Green,,"Post-v6 timing (2026-04-27): NG runs (s): 2.80|2.73|2.74|2.74|2.78 (median runs2-5=2.740). Legacy runs (s): 2.81|2.75|2.79|2.76|2.90 (median runs2-5=2.775). Shared extrema kernel uses row-parallel sliding cache + staged band buffer with parallel pre-load and stride-indexed vertical scans. Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 modified_k_means_clustering,TRUE,TRUE,not_tested,,,,,,,
 modified_shepard_interpolation,TRUE,TRUE,not_tested,,,,,,,
 modify_lidar,TRUE,TRUE,not_tested,,,,,,,
@@ -401,22 +401,22 @@ modify_nodata_value,TRUE,TRUE,not_tested,,,,,,,
 modulo,TRUE,TRUE,not_tested,,,,,,,
 mosaic,TRUE,TRUE,not_tested,,,,,,,
 mosaic_with_feathering,TRUE,TRUE,not_tested,,,,,,,
-multidirectional_hillshade,TRUE,TRUE,not_tested,,,,,,,
+multidirectional_hillshade,TRUE,TRUE,tested,lkerie_10m_final_dem,2.86,3.17,10.84,Red,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 3.43|3.05|3.07|3.17|3.21 (median 3.170000, mean 3.186000). Legacy runs (s): 2.86|2.75|2.79|2.89|2.90 (median 2.860000, mean 2.838000). Params: default (altitude=30, full_360_mode=False). Timing scope: kernel_only_excludes_read_write. Supplemental NG-only run (2026-04-28): full_360_mode=True runs (s): 3.60|3.26|3.07|3.05|3.07 (median runs2-5=3.070)."
 multimodal_od_cost_matrix,FALSE,TRUE,not_tested,,,,,,,
 multimodal_routes_from_od,FALSE,TRUE,not_tested,,,,,,,
 multimodal_shortest_path,FALSE,TRUE,not_tested,,,,,,,
 multipart_to_singlepart,TRUE,TRUE,not_tested,,,,,,,
 multiply,TRUE,TRUE,not_tested,,,,,,,
-multiply_overlay,TRUE,TRUE,not_tested,,,,,,,
-multiscale_curvatures,TRUE,TRUE,not_tested,,,,,,,
-multiscale_elevated_index,TRUE,TRUE,not_tested,,,,,,,
-multiscale_elevation_percentile,TRUE,TRUE,not_tested,,,,,,,
-multiscale_low_lying_index,TRUE,TRUE,not_tested,,,,,,,
-multiscale_roughness,TRUE,TRUE,not_tested,,,,,,,
-multiscale_roughness_signature,TRUE,TRUE,not_tested,,,,,,,
-multiscale_std_dev_normals,TRUE,TRUE,not_tested,,,,,,,
-multiscale_std_dev_normals_signature,TRUE,TRUE,not_tested,,,,,,,
-multiscale_topographic_position_class,FALSE,TRUE,not_tested,,,,,,,
+multiply_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.445,0.830,-66.05,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.03|0.87|0.81|0.82|0.84 (median runs2-5=0.830). Legacy runs (s): 2.70|2.34|1.86|2.55|3.28 (median runs2-5=2.445). Params: default. Timing scope: kernel_only_excludes_read_write."
+multiscale_curvatures,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"Showcase multiscale geomorphometry tool. Kernel already uses flat best_mag/best_scale buffers; benchmark still required for parity confirmation in current branch."
+multiscale_elevated_index,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in WbNG: switched EI/LLI kernel to flat mag/scale buffers and removed per-cell Raster get/set from multiscale loop. Re-benchmark required."
+multiscale_elevation_percentile,TRUE,TRUE,tested,lkerie_10m_final_dem,24.890000,22.470000,-9.72,Green,,"Parity breakthrough after latest optimization (2026-04-27). Legacy runs (s): 24.61|24.89|25.20 (median 24.890000). Latest NG runs from user test (s): 22.15|23.05|22.47 (median 22.470000). Prior NG runs (s): 25.53|25.59|26.29 (median 25.590000); 24.97|26.50|26.10 (median 26.100000); 34.88|35.26|35.35 (median 35.260000); original NG baseline (s): 35.36|37.41|36.24 (median 36.240000). Added opt-in experimental GPU backend for staged kernel experimentation: routing fallback plus phase-1 wgpu compute kernel for band binning (use_gpu=true, gpu_backend='wgpu') with deterministic CPU fallback on feature/adapter/device/readback unavailability. Added pre-test source pass for SIMD-friendly histogram range accumulation and Phase 2 shared preprocessing (single per-band value extraction reused for min/max and CPU/GPU binning). Dataset: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: min_scale=4, num_steps=40, step_size=1, step_nonlinearity=1.0, sig_digits=3. Timing scope: kernel_only_excludes_read_write."
+multiscale_low_lying_index,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in WbNG: switched EI/LLI kernel to flat mag/scale buffers and removed per-cell Raster get/set from multiscale loop. Re-benchmark required."
+multiscale_roughness,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in WbNG: removed per-cell Raster get/set writes in the max-across-scales merge by using flat magnitude/scale buffers with batched row writes. Additional source-only pass (2026-04-27): removed per-scale temporary Raster materialization for smoothed/diff surfaces by using flat buffers + integral grids directly. Re-benchmark required."
+multiscale_roughness_signature,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"Showcase signature tool. Related multiscale_roughness merge path optimized on 2026-04-27; benchmark signature runtime and output parity separately."
+multiscale_std_dev_normals,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in WbNG: removed per-scale row_data allocation/merge and now updates output candidates directly in parallel mag/scale buffers with batched row writes. Additional source-only pass (2026-04-27): removed per-scale temporary smoothed Raster construction and now computes unit-normal integral images directly from flat smoothed surfaces. Re-benchmark required."
+multiscale_std_dev_normals_signature,TRUE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"Showcase signature tool. Related multiscale_std_dev_normals raster path optimized on 2026-04-27; benchmark signature runtime and output parity separately."
+multiscale_topographic_position_class,FALSE,TRUE,not_tested,,,,,,PERF_RETEST_REQUIRED,"2026-04-27 optimization sweep applied in shared compute_max_dev_response kernel used by this tool; replaced per-scale temporary row surfaces with in-place parallel updates. Benchmark impact should be validated."
 multiscale_topographic_position_image,TRUE,TRUE,not_tested,,,,,,,
 narrowness_index,TRUE,TRUE,not_tested,,,,,,,
 natural_neighbour_interpolation,TRUE,TRUE,not_tested,,,,,,,
@@ -439,7 +439,6 @@ nnd_classification,TRUE,TRUE,not_tested,,,,,,,
 normal_vectors,TRUE,TRUE,not_tested,,,,,,,
 normalize_lidar,TRUE,TRUE,not_tested,,,,,,,
 normalized_difference_index,TRUE,TRUE,not_tested,,,,,,,
-not_equal_to,TRUE,TRUE,not_tested,,,,,,,
 num_downslope_neighbours,TRUE,TRUE,not_tested,,,,,,,
 num_inflowing_neighbours,TRUE,TRUE,not_tested,,,,,,,
 num_upslope_neighbours,FALSE,TRUE,not_tested,,,,,,,
@@ -456,7 +455,7 @@ object_uncertainty_diagnostics_pro,FALSE,TRUE,not_tested,,,,,,,
 objects_boundary_refinement_pro,FALSE,TRUE,not_tested,,,,,,,
 objects_enforce_min_mapping_unit,FALSE,TRUE,not_tested,,,,,,,
 od_sensitivity_analysis,FALSE,TRUE,not_tested,,,,,,,
-olympic_filter,TRUE,TRUE,not_tested,,,,,,,
+olympic_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,3.74,3.115,-16.71,Green,,"Updated timing (2026-04-28): NG runs (s): 3.09|2.89|3.05|3.18|3.26 (median runs2-5=3.115). Legacy runs (s): 3.78|3.70|3.74|3.75|3.71 (median runs2-5=3.740). Prior NG baselines (s): 5.09|5.01|4.43|4.43|4.66 (median 4.660000); pre-optimization 6.93|7.24|7.17|7.38|7.68 (median 7.170000). Params: default. Timing scope: kernel_only_excludes_read_write."
 opening,TRUE,TRUE,not_tested,,,,,,,
 openness,TRUE,TRUE,not_tested,,,,,,,
 otsu_thresholding,TRUE,TRUE,not_tested,,,,,,,
@@ -468,16 +467,16 @@ path_deflection,TRUE,FALSE,not_tested,,,,,,,
 path_turn,TRUE,FALSE,not_tested,,,,,,,
 pennock_landform_classification,TRUE,TRUE,not_tested,,,,,,,
 percent_elev_range,TRUE,TRUE,not_tested,,,,,,,
-percent_equal_to,TRUE,TRUE,not_tested,,,,,,,
-percent_greater_than,TRUE,TRUE,not_tested,,,,,,,
-percent_less_than,TRUE,TRUE,not_tested,,,,,,,
-percentage_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
-percentile_filter,TRUE,TRUE,not_tested,,,,,,,
+percent_equal_to,TRUE,TRUE,tested,lkerie_10m_final_dem,5.56,1.475,-73.48,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.76|2.15|1.69|1.26|1.07 (median runs2-5=1.475). Legacy runs (s): 3.04|4.28|5.22|6.32|5.90 (median runs2-5=5.56). Params: default. Timing scope: kernel_only_excludes_read_write."
+percent_greater_than,TRUE,TRUE,tested,lkerie_10m_final_dem,5.105,0.98,-80.83,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.42|1.13|0.99|0.97|0.97 (median runs2-5=0.98). Legacy runs (s): 3.03|3.85|4.81|5.89|5.40 (median runs2-5=5.105). Params: default. Timing scope: kernel_only_excludes_read_write."
+percent_less_than,TRUE,TRUE,tested,lkerie_10m_final_dem,4.63,0.97,-79.48,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.38|1.13|0.97|0.97|0.97 (median runs2-5=0.97). Legacy runs (s): 3.02|4.02|4.19|5.07|5.68 (median runs2-5=4.63). Params: default. Timing scope: kernel_only_excludes_read_write."
+percentage_contrast_stretch,TRUE,TRUE,tested,lkerie_10m_final_dem,11.92,6.87,-42.37,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 6.97|6.87|6.87|6.86|6.88 (median 6.870000, mean 6.890000). Legacy runs (s): 12.03|12.22|11.92|10.71|10.60 (median 11.920000, mean 11.496000). Params: clip=1.0,num_tones=256. Timing scope: kernel_only_excludes_read_write."
+percentile_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,5.000000,4.160000,-16.80,Green,,"Post-optimization benchmark refresh (2026-04-27). NG runs (s, memory-backed): 4.37|4.16|4.13|4.14|4.17 (median 4.160000, mean 4.194000). Legacy runs (s): 5.00|5.89|5.21|4.00|4.06 (median 5.000000, mean 4.832000). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 perimeter_area_ratio,TRUE,TRUE,not_tested,,,,,,,
 phi_coefficient,TRUE,TRUE,not_tested,,,,,,,
 pick_from_list,TRUE,TRUE,not_tested,,,,,,,
 piecewise_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
-plan_curvature,TRUE,TRUE,tested,lkerie_10m_final_dem,8.660000,9.265028,6.99,Green,BENCHMARK_ANCHOR,"Legacy runs (s): 8.570|8.878|8.579|8.730|8.660 (median 8.660). NG runs (s): 10.025602|9.944532|8.959284|9.243375|9.265028 (median 9.265028). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default; z_factor=1.0, log_transform=false. Timing scope: kernel_only_excludes_read_write."
+plan_curvature,TRUE,TRUE,tested,lkerie_10m_final_dem,8.660000,2.685000,-69.00,Green,BENCHMARK_ANCHOR,"Updated timing (2026-04-28): NG runs (s): 3.10|2.67|2.71|2.60|2.70 (median runs2-5=2.685000). Legacy runs (s): 8.570|8.878|8.579|8.730|8.660 (median 8.660000). Prior NG baseline (s): 10.025602|9.944532|8.959284|9.243375|9.265028 (median 9.265028). DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default; z_factor=1.0, log_transform=false. Timing scope: kernel_only_excludes_read_write."
 point_must_be_covered_by_line,FALSE,TRUE,not_tested,,,,,,,
 point_side,TRUE,FALSE,not_tested,,,,,,,
 points_along_lines,FALSE,TRUE,not_tested,,,,,,,
@@ -489,7 +488,7 @@ polygonize,TRUE,TRUE,not_tested,,,,,,,
 polygons_to_lines,TRUE,TRUE,not_tested,,,,,,,
 polygons_to_segments,FALSE,TRUE,not_tested,,,,,,,
 pos,TRUE,FALSE,not_tested,,,,,,,
-prewitt_filter,TRUE,TRUE,not_tested,,,,,,,
+prewitt_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.075,1.590,-23.37,Green,,"NG runs (s, memory-backed): 1.77|1.60|1.53|1.54|1.58 (median 1.590). Legacy runs (s): 2.49|2.26|1.86|1.89|1.88 (median 2.075). Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 principal_component_analysis,TRUE,TRUE,not_tested,,,,,,,
 print_geotiff_tags,TRUE,TRUE,not_tested,,,,,,,
 profile,TRUE,TRUE,not_tested,,,,,,,
@@ -511,7 +510,7 @@ random_forest_regression_fit,TRUE,TRUE,not_tested,,,,,,,
 random_forest_regression_predict,TRUE,TRUE,not_tested,,,,,,,
 random_points_in_polygon,FALSE,TRUE,not_tested,,,,,,,
 random_sample,TRUE,TRUE,not_tested,,,,,,,
-range_filter,TRUE,TRUE,not_tested,,,,,,,
+range_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,3.315,3.090,-6.79,Green,,"Post-v6 timing (2026-04-27): NG runs (s): 3.12|3.24|3.05|3.05|3.13 (median runs2-5=3.090). Legacy runs (s): 3.45|3.33|3.32|3.27|3.31 (median runs2-5=3.315). Shared extrema kernel uses row-parallel sliding cache + staged band buffer with parallel pre-load and stride-indexed vertical scans. Params: filterx=11,filtery=11. Timing scope: kernel_only_excludes_read_write."
 raster_area,TRUE,TRUE,not_tested,,,,,,,
 raster_calculator,TRUE,TRUE,not_tested,,,,,,,
 raster_cell_assignment,TRUE,TRUE,not_tested,,,,,,,
@@ -547,14 +546,14 @@ rename_field,FALSE,TRUE,not_tested,,,,,,,
 repair_stream_vector_topology,TRUE,TRUE,not_tested,,,,,,,
 reproject_vector,FALSE,TRUE,not_tested,,,,,,,
 resample,TRUE,TRUE,not_tested,,,,,,,
-rescale_value_range,TRUE,TRUE,tested,lkerie_10m_final_dem,,3.657004,,,,"Stage 1 Arc rollout validation (2026-04-24). NG runs (s, memory-backed): 3.155389|3.826396|4.031156|3.657004|3.199152 (median 3.657004, mean 3.573819). Params: out_min=0,out_max=100. Timing scope: kernel_only_excludes_read_write."
+rescale_value_range,TRUE,TRUE,tested,lkerie_10m_final_dem,2.63,1.38,-47.53,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 1.43|1.46|1.37|1.38|1.36 (median 1.380000, mean 1.400000). Legacy runs (s): 3.31|3.00|2.63|2.58|2.59 (median 2.630000, mean 2.822000). Params: out_min=0,out_max=255. Timing scope: kernel_only_excludes_read_write."
 rgb_to_ihs,TRUE,TRUE,not_tested,,,,,,,
 rho8_flow_accum,TRUE,TRUE,not_tested,,,,,,,
 rho8_pointer,TRUE,TRUE,not_tested,,,,,,,
 ridge_and_valley_vectors,FALSE,TRUE,not_tested,,,,,,,
 ring_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 river_centerlines,TRUE,TRUE,not_tested,,,,,,,
-roberts_cross_filter,TRUE,TRUE,not_tested,,,,,,,
+roberts_cross_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.405,1.320,-45.11,Green,,"NG runs (s, memory-backed): 1.62|1.37|1.27|1.25|1.25 (median 1.320). Legacy runs (s): 2.85|2.74|2.02|1.96|2.07 (median 2.405). Params: default. Timing scope: kernel_only_excludes_read_write."
 root_mean_square_error,TRUE,TRUE,not_tested,,,,,,,
 rotor,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 round,TRUE,TRUE,not_tested,,,,,,,
@@ -569,7 +568,7 @@ route_event_split,FALSE,TRUE,not_tested,,,,,,,
 route_measure_qa,FALSE,TRUE,not_tested,,,,,,,
 route_recalibrate,FALSE,TRUE,not_tested,,,,,,,
 ruggedness_index,TRUE,TRUE,not_tested,,,,,,,
-scharr_filter,TRUE,TRUE,not_tested,,,,,,,
+scharr_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.115,1.590,-24.82,Green,,"NG runs (s, memory-backed): 1.76|1.54|1.59|1.53|1.59 (median 1.590). Legacy runs (s): 2.37|2.30|1.89|1.93|1.89 (median 2.115). Params: default. Timing scope: kernel_only_excludes_read_write."
 sediment_transport_index,TRUE,TRUE,not_tested,,,,,,,
 segment_graph_felzenszwalb,FALSE,TRUE,not_tested,,,,,,,
 segment_multiresolution_hierarchical,FALSE,TRUE,not_tested,,,,,,,
@@ -590,7 +589,7 @@ shape_index,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_GAUSSIAN,
 shortest_path_network,FALSE,TRUE,not_tested,,,,,,,
 shreve_stream_magnitude,TRUE,TRUE,not_tested,,,,,,,
 sieve,FALSE,TRUE,not_tested,,,,,,,
-sigmoidal_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
+sigmoidal_contrast_stretch,TRUE,TRUE,tested,lkerie_10m_final_dem,2.63,2.56,-2.66,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). Post-hotspot-fix NG runs (s, memory-backed): 2.62|2.68|2.54|2.56|2.56 (median 2.560000, mean 2.592000). Legacy runs (s): 3.37|3.03|2.60|2.63|2.61 (median 2.630000, mean 2.848000). Prior NG regression baseline before fix (s): 2.94|2.91|2.85|2.82|2.82 (median 2.850000). Params: cutoff=0.0,gain=1.0,num_tones=256. Timing scope: kernel_only_excludes_read_write."
 simplify_features,FALSE,TRUE,not_tested,,,,,,,
 sin,TRUE,TRUE,not_tested,,,,,,,
 singlepart_to_multipart,TRUE,TRUE,not_tested,,,,,,,
@@ -605,7 +604,7 @@ smooth_vectors,TRUE,TRUE,not_tested,,,,,,,
 smooth_vegetation_residual,TRUE,TRUE,not_tested,,,,,,,
 snap_endnodes,TRUE,TRUE,not_tested,,,,,,,
 snap_pour_points,TRUE,TRUE,not_tested,,,,,,,
-sobel_filter,TRUE,TRUE,not_tested,,,,,,,
+sobel_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.120,1.600,-24.53,Green,,"NG runs (s, memory-backed): 1.80|1.58|1.59|1.56|1.61 (median 1.600). Legacy runs (s): 2.64|2.27|1.87|1.97|1.89 (median 2.120). Params: default. Timing scope: kernel_only_excludes_read_write."
 sort_by_az,TRUE,FALSE,not_tested,,,,,,,
 sort_by_time,TRUE,FALSE,not_tested,,,,,,,
 sort_lidar,TRUE,TRUE,not_tested,,,,,,,
@@ -617,10 +616,10 @@ split_vector_lines,TRUE,TRUE,not_tested,,,,,,,
 split_with_lines,TRUE,TRUE,not_tested,,,,,,,
 sqrt,TRUE,TRUE,tested,lkerie_10m_final_dem,1.290000,0.451110,-65.03,Green,,"BREAKTHROUGH FIX (2026-04-22): Modified read_raster() to load rasters into memory_store, enabling Arc-based zero-copy access. Legacy runs (s): 1.408|1.408|1.192|1.290|1.269 (median 1.290). NG runs (s, memory-backed): 0.505405|0.451110|0.396819|0.412574|0.476232 (median 0.451110). Previous NG disk-read runs (s): 9.335366|8.999789|8.998510|9.009384|9.417950 (median 9.009384). Arc fix + memory-backing transforms NG from 598% slower to 65% FASTER than legacy. DEM: /Users/johnlindsay/Documents/data/LakeErieLidar/LKERIE_10m_final_DEM.tif. Params: default. Timing scope: kernel_only_excludes_read_write."
 square,TRUE,TRUE,not_tested,,,,,,,
-standard_deviation_contrast_stretch,TRUE,TRUE,not_tested,,,,,,,
-standard_deviation_filter,TRUE,TRUE,not_tested,,,,,,,
+standard_deviation_contrast_stretch,TRUE,TRUE,tested,lkerie_10m_final_dem,97.09,3.06,-96.85,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 3.11|3.13|3.06|3.02|3.04 (median 3.060000, mean 3.072000). Legacy runs (s): 97.09|97.26|93.86|97.14|95.46 (median 97.090000, mean 96.162000). Params: clip=2.0,num_tones=256. Timing scope: kernel_only_excludes_read_write."
+standard_deviation_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,8.140,4.590,-43.61,Green,,"Initial timing (2026-04-28): NG runs (s): 5.03|4.72|4.62|4.54|4.56 (median runs2-5=4.590). Legacy runs (s): 9.61|9.62|7.35|8.45|7.83 (median runs2-5=8.140). Params: default. Timing scope: kernel_only_excludes_read_write."
 standard_deviation_of_slope,TRUE,TRUE,not_tested,,,,,,,
-standard_deviation_overlay,TRUE,TRUE,not_tested,,,,,,,
+standard_deviation_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.290,0.870,-62.01,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.01|0.90|0.85|0.88|0.86 (median runs2-5=0.870). Legacy runs (s): 2.52|2.34|1.96|2.24|3.08 (median runs2-5=2.290). Params: default. Timing scope: kernel_only_excludes_read_write."
 stochastic_depression_analysis,TRUE,TRUE,not_tested,,,,,,,
 strahler_order_basins,TRUE,TRUE,not_tested,,,,,,,
 strahler_stream_order,TRUE,TRUE,not_tested,,,,,,,
@@ -631,7 +630,7 @@ stream_link_slope,TRUE,TRUE,not_tested,,,,,,,
 stream_slope_continuous,TRUE,TRUE,not_tested,,,,,,,
 subbasins,TRUE,TRUE,not_tested,,,,,,,
 subtract,TRUE,TRUE,not_tested,,,,,,,
-sum_overlay,TRUE,TRUE,not_tested,,,,,,,
+sum_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.155,0.810,-62.41,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 1.01|0.88|0.81|0.81|0.81 (median runs2-5=0.810). Legacy runs (s): 2.50|2.29|1.87|2.02|2.53 (median runs2-5=2.155; retained from prior legacy batch). Params: default. Timing scope: kernel_only_excludes_read_write."
 surface_area_ratio,TRUE,TRUE,not_tested,,,,,,,
 svm_classification,TRUE,TRUE,not_tested,,,,,,,
 svm_regression,TRUE,TRUE,not_tested,,,,,,,
@@ -654,7 +653,7 @@ topology_rule_autofix,FALSE,TRUE,not_tested,,,,,,,
 topology_rule_validate,FALSE,TRUE,not_tested,,,,,,,
 topology_validation_report,FALSE,TRUE,not_tested,,,,,,,
 total_curvature,TRUE,TRUE,not_tested,,,,,,LOW_INFERRED_FROM_PLAN_CURVATURE,
-total_filter,TRUE,TRUE,not_tested,,,,,,,
+total_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,5.315,4.490,-15.52,Green,,"Initial timing (2026-04-28): NG runs (s): 4.69|4.56|4.48|4.48|4.50 (median runs2-5=4.490). Legacy runs (s): 5.85|5.68|5.27|5.33|5.30 (median runs2-5=5.315). Params: default. Timing scope: kernel_only_excludes_read_write."
 trace_downslope_flowpaths,TRUE,TRUE,not_tested,,,,,,,
 travelling_salesman_problem,TRUE,TRUE,not_tested,,,,,,,
 trend_surface,TRUE,TRUE,not_tested,,,,,,,
@@ -686,15 +685,15 @@ visibility_index,TRUE,TRUE,not_tested,,,,,,,
 voronoi_diagram,TRUE,TRUE,not_tested,,,,,,,
 watershed,TRUE,TRUE,not_tested,,,,,,,
 watershed_from_raster_pour_points,TRUE,TRUE,not_tested,,,,,,,
-weighted_overlay,TRUE,TRUE,not_tested,,,,,,,
-weighted_sum,TRUE,TRUE,not_tested,,,,,,,
+weighted_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,3.915,2.730,-30.27,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 2.85|2.72|2.73|2.73|2.73 (median runs2-5=2.730). Legacy runs (s): 4.06|3.82|3.45|4.90|4.01 (median runs2-5=3.915). Params: default. Timing scope: kernel_only_excludes_read_write."
+weighted_sum,TRUE,TRUE,tested,lkerie_10m_final_dem,2.475,0.755,-69.49,Green,,"Post-optimization retest (2026-04-28): NG runs (s): 0.89|0.79|0.73|0.77|0.74 (median runs2-5=0.755). Legacy runs (s): 2.50|2.37|1.90|2.58|4.25 (median runs2-5=2.475). Params: default. Timing scope: kernel_only_excludes_read_write."
 wetness_index,TRUE,TRUE,not_tested,,,,,,,
 wilcoxon_signed_rank_test,TRUE,TRUE,not_tested,,,,,,,
 write_function_memory_insertion,TRUE,TRUE,not_tested,,,,,,,
 yield_filter,TRUE,FALSE,not_tested,,,,,,,
 yield_map,TRUE,FALSE,not_tested,,,,,,,
 yield_normalization,TRUE,FALSE,not_tested,,,,,,,
-z_scores,TRUE,TRUE,tested,lkerie_10m_final_dem,,2.893135,,,,"Stage 1 Arc rollout validation (2026-04-24). NG runs (s, memory-backed): 2.866129|2.893135|2.866713|2.989770|2.986931 (median 2.893135, mean 2.920535). Params: default. Timing scope: kernel_only_excludes_read_write."
+z_scores,TRUE,TRUE,tested,lkerie_10m_final_dem,97.65,3.14,-96.78,Green,,"Stage 1 Arc rollout validation refresh (2026-04-26). NG runs (s, memory-backed): 3.18|3.14|3.17|3.13|3.12 (median 3.140000, mean 3.148000). Legacy runs (s): 95.84|100.31|96.28|97.84|97.65 (median 97.650000, mean 97.584000). Params: default. Timing scope: kernel_only_excludes_read_write."
 zlib,FALSE,FALSE,not_tested,,,,,,,
 zonal_statistics,TRUE,TRUE,not_tested,,,,,,,
 {00000000-0000-0000-0000-000000000000},FALSE,FALSE,not_tested,,,,,,,

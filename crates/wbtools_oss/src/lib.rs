@@ -660,6 +660,8 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::BreachDepressionsLeastCostTool));
     registry.register(Box::new(tools::BreachSingleCellPitsTool));
     registry.register(Box::new(tools::FillDepressionsTool));
+    registry.register(Box::new(tools::FillDepressionsNextgenTool));
+    registry.register(Box::new(tools::FillDepressionsNextgenTiledTool));
     registry.register(Box::new(tools::FillDepressionsPlanchonAndDarbouxTool));
     registry.register(Box::new(tools::FillDepressionsWangAndLiuTool));
     registry.register(Box::new(tools::FillPitsTool));

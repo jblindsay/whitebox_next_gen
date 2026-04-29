@@ -1219,18 +1219,27 @@ impl Tool for ZScoresTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let input = load_raster(&input_path, "input")?;
 
-        let mut count = 0usize;
-        let mut sum = 0.0;
-        let mut sum2 = 0.0;
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            count += 1;
-            sum += z;
-            sum2 += z * z;
-        }
+        let (count, sum, sum2) = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || (0usize, 0.0f64, 0.0f64),
+                |(mut local_count, mut local_sum, mut local_sum2), i| {
+                    let z = input.data.get_f64(i);
+                    if !input.is_nodata(z) {
+                        local_count += 1;
+                        local_sum += z;
+                        local_sum2 += z * z;
+                    }
+                    (local_count, local_sum, local_sum2)
+                },
+            )
+            .reduce(
+                || (0usize, 0.0f64, 0.0f64),
+                |(count_a, sum_a, sum2_a), (count_b, sum_b, sum2_b)| {
+                    (count_a + count_b, sum_a + sum_b, sum2_a + sum2_b)
+                },
+            );
+
         if count == 0 {
             return Err(ToolError::Validation(
                 "input raster contains no valid cells".to_string(),
@@ -1253,13 +1262,21 @@ impl Tool for ZScoresTool {
             metadata: input.metadata.clone(),
         });
 
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                output.data.set_f64(i, input.nodata);
-            } else {
-                output.data.set_f64(i, (z - mean) / stdev);
-            }
+        let nodata = input.nodata;
+        let output_values: Vec<f64> = (0..input.data.len())
+            .into_par_iter()
+            .map(|i| {
+                let z = input.data.get_f64(i);
+                if input.is_nodata(z) {
+                    nodata
+                } else {
+                    (z - mean) / stdev
+                }
+            })
+            .collect();
+
+        for (i, z) in output_values.into_iter().enumerate() {
+            output.data.set_f64(i, z);
         }
 
         let output_locator = write_or_store_output(output, output_path)?;
@@ -1405,21 +1422,35 @@ impl Tool for RescaleValueRangeTool {
 
         let input = load_raster(&input_path, "input")?;
 
-        let mut min_val = f64::INFINITY;
-        let mut max_val = f64::NEG_INFINITY;
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            let zz = z.max(clip_min.unwrap_or(z)).min(clip_max.unwrap_or(z));
-            if zz < min_val {
-                min_val = zz;
-            }
-            if zz > max_val {
-                max_val = zz;
-            }
-        }
+        let (min_val, max_val) = if clip_min.is_none() && clip_max.is_none() {
+            let stats = input.statistics();
+            (stats.min, stats.max)
+        } else {
+            let clip_floor = clip_min.unwrap_or(f64::NEG_INFINITY);
+            let clip_ceiling = clip_max.unwrap_or(f64::INFINITY);
+            (0..input.data.len())
+                .into_par_iter()
+                .fold(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |(mut local_min, mut local_max), i| {
+                        let z = input.data.get_f64(i);
+                        if !input.is_nodata(z) {
+                            let zz = z.max(clip_floor).min(clip_ceiling);
+                            if zz < local_min {
+                                local_min = zz;
+                            }
+                            if zz > local_max {
+                                local_max = zz;
+                            }
+                        }
+                        (local_min, local_max)
+                    },
+                )
+                .reduce(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |(min_a, max_a), (min_b, max_b)| (min_a.min(min_b), max_a.max(max_b)),
+                )
+        };
 
         if !min_val.is_finite() || !max_val.is_finite() {
             return Err(ToolError::Validation(
@@ -1444,15 +1475,38 @@ impl Tool for RescaleValueRangeTool {
             metadata: input.metadata.clone(),
         });
 
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                output.data.set_f64(i, input.nodata);
-            } else {
-                let zz = z.max(clip_min.unwrap_or(z)).min(clip_max.unwrap_or(z));
-                let out = out_min + (zz - min_val) * scale;
-                output.data.set_f64(i, out);
-            }
+        let nodata = input.nodata;
+        let clip_floor = clip_min.unwrap_or(f64::NEG_INFINITY);
+        let clip_ceiling = clip_max.unwrap_or(f64::INFINITY);
+        let output_values: Vec<f64> = if clip_min.is_none() && clip_max.is_none() {
+            (0..input.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = input.data.get_f64(i);
+                    if input.is_nodata(z) {
+                        nodata
+                    } else {
+                        out_min + (z - min_val) * scale
+                    }
+                })
+                .collect()
+        } else {
+            (0..input.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = input.data.get_f64(i);
+                    if input.is_nodata(z) {
+                        nodata
+                    } else {
+                        let zz = z.max(clip_floor).min(clip_ceiling);
+                        out_min + (zz - min_val) * scale
+                    }
+                })
+                .collect()
+        };
+
+        for (i, z) in output_values.into_iter().enumerate() {
+            output.data.set_f64(i, z);
         }
 
         let output_locator = write_or_store_output(output, output_path)?;

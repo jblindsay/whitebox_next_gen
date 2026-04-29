@@ -1973,32 +1973,10 @@ impl FlipImageTool {
         values[idx]
     }
 
-    fn build_input_cdf(values: &[f64], bins: usize, min_z: f64, max_z: f64) -> Vec<f64> {
-        let mut hist = vec![0usize; bins.max(2)];
-        let width = (max_z - min_z).max(1e-12);
-        for &z in values {
-            let t = ((z - min_z) / width).clamp(0.0, 1.0);
-            let idx = (t * (hist.len() - 1) as f64).round() as usize;
-            hist[idx] += 1;
-        }
-
-        let total = values.len() as f64;
-        let mut running = 0.0;
-        let mut cdf = vec![0.0; hist.len()];
-        if total > 0.0 {
-            for (i, &h) in hist.iter().enumerate() {
-                running += h as f64;
-                cdf[i] = running / total;
-            }
-        }
-        cdf
-    }
-
-    fn cdf_value_for_z(z: f64, cdf: &[f64], min_z: f64, max_z: f64) -> f64 {
+    fn cdf_index_for_z(z: f64, bins: usize, min_z: f64, max_z: f64) -> usize {
         let width = (max_z - min_z).max(1e-12);
         let t = ((z - min_z) / width).clamp(0.0, 1.0);
-        let idx = (t * (cdf.len() - 1) as f64).round() as usize;
-        cdf[idx]
+        (t * (bins.max(2) - 1) as f64).round() as usize
     }
 
     fn normalize_reference_histogram(
@@ -2040,44 +2018,69 @@ impl FlipImageTool {
         if pp <= ref_cdf[0] {
             return ref_x[0];
         }
-        for i in 1..ref_cdf.len() {
-            if pp <= ref_cdf[i] {
-                let y0 = ref_cdf[i - 1];
-                let y1 = ref_cdf[i];
-                let x0 = ref_x[i - 1];
-                let x1 = ref_x[i];
-                if (y1 - y0).abs() < 1e-12 {
-                    return x1;
-                }
-                let t = (pp - y0) / (y1 - y0);
-                return x0 + t * (x1 - x0);
-            }
+        let upper = match ref_cdf.binary_search_by(|v| v.total_cmp(&pp)) {
+            Ok(i) => i,
+            Err(i) => i,
+        };
+        if upper == 0 {
+            return ref_x[0];
         }
-        *ref_x.last().unwrap_or(&pp)
+        if upper >= ref_cdf.len() {
+            return *ref_x.last().unwrap_or(&pp);
+        }
+        let y0 = ref_cdf[upper - 1];
+        let y1 = ref_cdf[upper];
+        let x0 = ref_x[upper - 1];
+        let x1 = ref_x[upper];
+        if (y1 - y0).abs() < 1e-12 {
+            return x1;
+        }
+        let t = (pp - y0) / (y1 - y0);
+        return x0 + t * (x1 - x0);
     }
 
     fn run_histogram_equalization(input: &Raster, num_tones: usize) -> Result<Raster, ToolError> {
         let mut output = input.clone();
         let tone_max = (num_tones - 1) as f64;
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
-            let values = Self::collect_valid_values(input, b);
-            if values.is_empty() {
-                continue;
-            }
-
+            let band_values = input.band_slice(b);
             let mut min_z = f64::INFINITY;
             let mut max_z = f64::NEG_INFINITY;
-            for &z in &values {
-                min_z = min_z.min(z);
-                max_z = max_z.max(z);
+            let mut valid_count = 0usize;
+            for &z in &band_values {
+                if !input.is_nodata(z) {
+                    min_z = min_z.min(z);
+                    max_z = max_z.max(z);
+                    valid_count += 1;
+                }
+            }
+            if valid_count == 0 {
+                continue;
             }
 
             if (max_z - min_z).abs() < 1e-12 {
                 continue;
             }
 
-            let cdf = Self::build_input_cdf(&values, 1024, min_z, max_z);
+            let mut hist = vec![0usize; 1024];
+            let width = (max_z - min_z).max(1e-12);
+            for &z in &band_values {
+                if input.is_nodata(z) {
+                    continue;
+                }
+                let t = ((z - min_z) / width).clamp(0.0, 1.0);
+                let idx = (t * (hist.len() - 1) as f64).round() as usize;
+                hist[idx] += 1;
+            }
+
+            let mut cdf = vec![0.0; hist.len()];
+            let mut running = 0usize;
+            for (i, h) in hist.into_iter().enumerate() {
+                running += h;
+                cdf[i] = running as f64 / valid_count as f64;
+            }
             let cdf_min = cdf
                 .iter()
                 .copied()
@@ -2085,25 +2088,36 @@ impl FlipImageTool {
                 .unwrap_or(0.0)
                 .clamp(0.0, 1.0);
 
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
-                    let z = input.get(b, r, c);
-                    if input.is_nodata(z) {
-                        continue;
-                    }
-                    let p = Self::cdf_value_for_z(z, &cdf, min_z, max_z);
-                    let mapped = if (1.0 - cdf_min).abs() < 1e-12 {
+            let mapped_by_bin: Vec<f64> = cdf
+                .iter()
+                .map(|&p| {
+                    if (1.0 - cdf_min).abs() < 1e-12 {
                         0.0
                     } else {
                         ((p - cdf_min) / (1.0 - cdf_min)).clamp(0.0, 1.0) * tone_max
-                    };
-                    output.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing histogram equalized value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
-            }
+                    }
+                })
+                .collect();
+
+            let mapped_values: Vec<f64> = band_values
+                .par_iter()
+                .map(|&z| {
+                    if input.is_nodata(z) {
+                        nodata
+                    } else {
+                        let bin = Self::cdf_index_for_z(z, cdf.len(), min_z, max_z);
+                        mapped_by_bin[bin]
+                    }
+                })
+                .collect();
+
+            output.set_band_slice(b, &mapped_values).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing histogram equalized band {}: {}",
+                    b + 1,
+                    e
+                ))
+            })?;
         }
 
         Ok(output)
@@ -2116,40 +2130,70 @@ impl FlipImageTool {
     ) -> Result<Raster, ToolError> {
         let (ref_x, ref_cdf) = Self::normalize_reference_histogram(reference_hist, is_cumulative)?;
         let mut output = input.clone();
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
-            let values = Self::collect_valid_values(input, b);
-            if values.is_empty() {
-                continue;
-            }
-
+            let band_values = input.band_slice(b);
             let mut min_z = f64::INFINITY;
             let mut max_z = f64::NEG_INFINITY;
-            for &z in &values {
-                min_z = min_z.min(z);
-                max_z = max_z.max(z);
+            let mut valid_count = 0usize;
+            for &z in &band_values {
+                if !input.is_nodata(z) {
+                    min_z = min_z.min(z);
+                    max_z = max_z.max(z);
+                    valid_count += 1;
+                }
+            }
+            if valid_count == 0 {
+                continue;
             }
             if (max_z - min_z).abs() < 1e-12 {
                 continue;
             }
 
-            let cdf = Self::build_input_cdf(&values, 1024, min_z, max_z);
-
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
-                    let z = input.get(b, r, c);
-                    if input.is_nodata(z) {
-                        continue;
-                    }
-                    let p = Self::cdf_value_for_z(z, &cdf, min_z, max_z);
-                    let mapped = Self::map_probability_to_reference_value(p, &ref_x, &ref_cdf);
-                    output.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing histogram matched value at ({r},{c}): {e}"
-                        ))
-                    })?;
+            let mut hist = vec![0usize; 1024];
+            let width = (max_z - min_z).max(1e-12);
+            for &z in &band_values {
+                if input.is_nodata(z) {
+                    continue;
                 }
+                let t = ((z - min_z) / width).clamp(0.0, 1.0);
+                let idx = (t * (hist.len() - 1) as f64).round() as usize;
+                hist[idx] += 1;
             }
+
+            let mut cdf = vec![0.0; hist.len()];
+            let mut running = 0usize;
+            for (i, h) in hist.into_iter().enumerate() {
+                running += h;
+                cdf[i] = running as f64 / valid_count as f64;
+            }
+
+            // Pre-map each CDF bin to a reference value to avoid per-cell CDF search.
+            let mapped_by_bin: Vec<f64> = cdf
+                .iter()
+                .map(|&p| Self::map_probability_to_reference_value(p, &ref_x, &ref_cdf))
+                .collect();
+
+            let mapped_values: Vec<f64> = band_values
+                .par_iter()
+                .map(|&z| {
+                    if input.is_nodata(z) {
+                        nodata
+                    } else {
+                        let bin = Self::cdf_index_for_z(z, cdf.len(), min_z, max_z);
+                        mapped_by_bin[bin]
+                    }
+                })
+                .collect();
+
+            output.set_band_slice(b, &mapped_values).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing histogram matched band {}: {}",
+                    b + 1,
+                    e
+                ))
+            })?;
         }
 
         Ok(output)
@@ -2161,20 +2205,53 @@ impl FlipImageTool {
                 "reference raster must contain at least one band".to_string(),
             ));
         }
-        let ref_values = Self::collect_valid_values(reference, 0);
-        if ref_values.is_empty() {
+        let ref_band = reference.band_slice(0);
+        let mut min_z = f64::INFINITY;
+        let mut max_z = f64::NEG_INFINITY;
+        let mut valid_count = 0usize;
+        for &z in &ref_band {
+            if !reference.is_nodata(z) {
+                min_z = min_z.min(z);
+                max_z = max_z.max(z);
+                valid_count += 1;
+            }
+        }
+
+        if valid_count == 0 {
             return Err(ToolError::Validation(
                 "reference raster contains no valid cells".to_string(),
             ));
         }
 
-        let mut sorted = ref_values;
-        sorted.sort_by(|a, b| a.total_cmp(b));
-        let n = sorted.len();
-        let mut pairs = Vec::with_capacity(n.max(2));
-        for (i, &z) in sorted.iter().enumerate() {
-            pairs.push((z, (i + 1) as f64 / n as f64));
+        if (max_z - min_z).abs() < 1e-12 {
+            let pairs = vec![(min_z, 1.0), (min_z, 1.0)];
+            return Self::run_histogram_matching(input, pairs, true);
         }
+
+        let bins = 4096usize;
+        let width = (max_z - min_z).max(1e-12);
+        let mut hist = vec![0usize; bins];
+        for &z in &ref_band {
+            if reference.is_nodata(z) {
+                continue;
+            }
+            let t = ((z - min_z) / width).clamp(0.0, 1.0);
+            let idx = (t * (bins - 1) as f64).round() as usize;
+            hist[idx] += 1;
+        }
+
+        let mut pairs = Vec::with_capacity(bins);
+        let mut running = 0usize;
+        for (i, h) in hist.into_iter().enumerate() {
+            running += h;
+            if running == 0 {
+                continue;
+            }
+            let x = min_z + (i as f64 / (bins - 1) as f64) * width;
+            let p = running as f64 / valid_count as f64;
+            pairs.push((x, p));
+        }
+
         if pairs.len() == 1 {
             pairs.push((pairs[0].0, 1.0));
         }
@@ -2190,6 +2267,9 @@ impl FlipImageTool {
     ) -> Result<Raster, ToolError> {
         let mut output = input.clone();
         let tone_max = (num_tones - 1) as f64;
+        let cols = input.cols as usize;
+        let n = input.rows * input.cols;
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
             let mut values = Self::collect_valid_values(input, b);
@@ -2214,19 +2294,28 @@ impl FlipImageTool {
             let max_val = Self::quantile_from_sorted(&values, upper_q);
             let width = (max_val - min_val).max(1e-12);
 
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let mapped_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / cols) as isize;
+                    let c = (idx % cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        continue;
+                        nodata
+                    } else {
+                        ((z - min_val) / width).clamp(0.0, 1.0) * tone_max
                     }
-                    let mapped = ((z - min_val) / width).clamp(0.0, 1.0) * tone_max;
-                    output.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing contrast-stretched value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
+                })
+                .collect();
+
+            for (idx, mapped) in mapped_values.into_iter().enumerate() {
+                let r = (idx / cols) as isize;
+                let c = (idx % cols) as isize;
+                output.set(b, r, c, mapped).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed writing contrast-stretched value at ({r},{c}): {e}"
+                    ))
+                })?;
             }
         }
 
@@ -2247,21 +2336,33 @@ impl FlipImageTool {
             ));
         }
         let tone_max = (num_tones - 1) as f64;
+        let cols = input.cols as usize;
+        let n = input.rows * input.cols;
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let mapped_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / cols) as isize;
+                    let c = (idx % cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        continue;
+                        nodata
+                    } else {
+                        ((z - min_val) / width).clamp(0.0, 1.0) * tone_max
                     }
-                    let mapped = ((z - min_val) / width).clamp(0.0, 1.0) * tone_max;
-                    output.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing min-max stretched value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
+                })
+                .collect();
+
+            for (idx, mapped) in mapped_values.into_iter().enumerate() {
+                let r = (idx / cols) as isize;
+                let c = (idx % cols) as isize;
+                output.set(b, r, c, mapped).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed writing min-max stretched value at ({r},{c}): {e}"
+                    ))
+                })?;
             }
         }
 
@@ -2270,15 +2371,17 @@ impl FlipImageTool {
 
     fn gaussian_reference_pairs(num_tones: usize) -> Vec<(f64, f64)> {
         let n = num_tones.max(2);
+        let tone_max = (n - 1) as f64;
         let mut pairs = Vec::with_capacity(n);
         let mut running = 0.0;
         let step = 6.0 / (n - 1) as f64;
         let norm = (2.0 * std::f64::consts::PI).sqrt();
         for i in 0..n {
-            let x = -3.0 + i as f64 * step;
-            let p = (-0.5 * x * x).exp() / norm;
+            let x_std = -3.0 + i as f64 * step;
+            let p = (-0.5 * x_std * x_std).exp() / norm;
             running += p;
-            pairs.push((x, running));
+            let x_tone = ((x_std + 3.0) / 6.0).clamp(0.0, 1.0) * tone_max;
+            pairs.push((x_tone, running));
         }
         if let Some((_, end)) = pairs.last().copied() {
             if end > 0.0 {
@@ -2292,27 +2395,7 @@ impl FlipImageTool {
 
     fn run_gaussian_contrast_stretch(input: &Raster, num_tones: usize) -> Result<Raster, ToolError> {
         let reference = Self::gaussian_reference_pairs(num_tones);
-        let mut matched = Self::run_histogram_matching(input, reference, true)?;
-        let tone_max = (num_tones.max(2) - 1) as f64;
-
-        for b in 0..matched.bands as isize {
-            for r in 0..matched.rows as isize {
-                for c in 0..matched.cols as isize {
-                    let z = matched.get(b, r, c);
-                    if matched.is_nodata(z) {
-                        continue;
-                    }
-                    let mapped = ((z + 3.0) / 6.0).clamp(0.0, 1.0) * tone_max;
-                    matched.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing gaussian contrast-stretched value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
-            }
-        }
-
-        Ok(matched)
+        Self::run_histogram_matching(input, reference, true)
     }
 
     fn run_sigmoidal_contrast_stretch(
@@ -2323,17 +2406,20 @@ impl FlipImageTool {
     ) -> Result<Raster, ToolError> {
         let mut output = input.clone();
         let tone_max = (num_tones.max(2) - 1) as f64;
+        let cols = input.cols as usize;
+        let n = input.rows * input.cols;
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
             let values = Self::collect_valid_values(input, b);
-            if values.is_empty() {
-                continue;
-            }
             let mut min_z = f64::INFINITY;
             let mut max_z = f64::NEG_INFINITY;
             for &z in &values {
                 min_z = min_z.min(z);
                 max_z = max_z.max(z);
+            }
+            if values.is_empty() {
+                continue;
             }
 
             let width = (max_z - min_z).max(1e-12);
@@ -2341,22 +2427,40 @@ impl FlipImageTool {
             let bcoef = 1.0 / (1.0 + (gain * (cutoff - 1.0)).exp()) - a;
             let denom = if bcoef.abs() < 1e-12 { 1.0 } else { bcoef };
 
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            // Precompute the sigmoidal transfer curve so each cell does a cheap table lookup.
+            let lut_bins = 4096usize;
+            let mut lut = vec![0.0; lut_bins];
+            let lut_scale = (lut_bins - 1) as f64;
+            for (i, entry) in lut.iter_mut().enumerate() {
+                let zn = i as f64 / lut_scale;
+                let mut out = (1.0 / (1.0 + (gain * (cutoff - zn)).exp()) - a) / denom;
+                out = out.clamp(0.0, 1.0) * tone_max;
+                *entry = out;
+            }
+
+            let mapped_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / cols) as isize;
+                    let c = (idx % cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        continue;
+                        nodata
+                    } else {
+                        let idx = (((z - min_z) / width).clamp(0.0, 1.0) * lut_scale).round()
+                            as usize;
+                        lut[idx]
                     }
-                    let zn = ((z - min_z) / width).clamp(0.0, 1.0);
-                    let mut out = (1.0 / (1.0 + (gain * (cutoff - zn)).exp()) - a) / denom;
-                    out = out.clamp(0.0, 1.0) * tone_max;
-                    output.set(b, r, c, out).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing sigmoidal contrast-stretched value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
-            }
+                })
+                .collect();
+
+            output.set_band_slice(b, &mapped_values).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing sigmoidal contrast-stretched band {}: {}",
+                    b + 1,
+                    e
+                ))
+            })?;
         }
 
         Ok(output)
@@ -2369,6 +2473,10 @@ impl FlipImageTool {
     ) -> Result<Raster, ToolError> {
         let mut output = input.clone();
         let tone_max = (num_tones.max(2) - 1) as f64;
+        let rows = input.rows as usize;
+        let cols = input.cols as usize;
+        let n_cells = rows * cols;
+        let nodata = input.nodata;
 
         for b in 0..input.bands as isize {
             let values = Self::collect_valid_values(input, b);
@@ -2395,19 +2503,28 @@ impl FlipImageTool {
             let max_val = mean + stdev * clip;
             let width = (max_val - min_val).max(1e-12);
 
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let mapped_values: Vec<f64> = (0..n_cells)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / cols) as isize;
+                    let c = (idx % cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        continue;
+                        nodata
+                    } else {
+                        ((z - min_val) / width).clamp(0.0, 1.0) * tone_max
                     }
-                    let mapped = ((z - min_val) / width).clamp(0.0, 1.0) * tone_max;
-                    output.set(b, r, c, mapped).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing standard-deviation stretched value at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
+                })
+                .collect();
+
+            for (idx, mapped) in mapped_values.into_iter().enumerate() {
+                let r = (idx / cols) as isize;
+                let c = (idx % cols) as isize;
+                output.set(b, r, c, mapped).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed writing standard-deviation stretched value at ({r},{c}): {e}"
+                    ))
+                })?;
             }
         }
 
@@ -5073,26 +5190,35 @@ fn run_piecewise_contrast_stretch(
     num_greytones: usize,
 ) -> Result<Raster, ToolError> {
     let is_rgb = color_support::detect_rgb_mode(input, false, true) == color_support::RgbMode::Packed;
+    let n = input.rows * input.cols;
+    let nodata = input.nodata;
 
-    let mut img_min = f64::INFINITY;
-    let mut img_max = f64::NEG_INFINITY;
-    for r in 0..input.rows as isize {
-        for c in 0..input.cols as isize {
-            let z = input.get(0, r, c);
-            if input.is_nodata(z) {
-                continue;
-            }
-            let v = if is_rgb {
-                let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(z);
-                let (_, _, i) = rgb_to_hsi_norm(rv as f64 / 255.0, gv as f64 / 255.0, bv as f64 / 255.0);
-                i
-            } else {
-                z
-            };
-            img_min = img_min.min(v);
-            img_max = img_max.max(v);
-        }
-    }
+    let (img_min, img_max) = (0..n)
+        .into_par_iter()
+        .fold(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |(mut local_min, mut local_max), idx| {
+                let z = input.data.get_f64(idx);
+                if !input.is_nodata(z) {
+                    let v = if is_rgb {
+                        let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(z);
+                        let (_, _, i) =
+                            rgb_to_hsi_norm(rv as f64 / 255.0, gv as f64 / 255.0, bv as f64 / 255.0);
+                        i
+                    } else {
+                        z
+                    };
+                    local_min = local_min.min(v);
+                    local_max = local_max.max(v);
+                }
+                (local_min, local_max)
+            },
+        )
+        .reduce(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |(min_a, max_a), (min_b, max_b)| (min_a.min(min_b), max_a.max(max_b)),
+        );
+
     if !img_min.is_finite() || !img_max.is_finite() {
         return Err(ToolError::Validation(
             "input raster does not contain valid cells".to_string(),
@@ -5125,41 +5251,46 @@ fn run_piecewise_contrast_stretch(
             .push(("color_interpretation".to_string(), "packed_rgb".to_string()));
     }
 
-    for r in 0..input.rows as isize {
-        for c in 0..input.cols as isize {
-            let z = input.get(0, r, c);
-            if input.is_nodata(z) {
-                continue;
-            }
+    let output_values: Vec<f64> = if is_rgb {
+        (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let z = input.data.get_f64(idx);
+                if input.is_nodata(z) {
+                    nodata
+                } else {
+                    let (rv, gv, bv, av) = FlipImageTool::unpack_rgba(z);
+                    let rn = rv as f64 / 255.0;
+                    let gn = gv as f64 / 255.0;
+                    let bn = bv as f64 / 255.0;
+                    let (h, s, i) = rgb_to_hsi_norm(rn, gn, bn);
+                    let out_i = map_piecewise_value(i, &breakpoints).clamp(0.0, 1.0);
+                    let (r2, g2, b2) = hsi_to_rgb_norm(h, s, out_i);
+                    FlipImageTool::pack_rgba(
+                        (r2 * 255.0).round().clamp(0.0, 255.0) as u32,
+                        (g2 * 255.0).round().clamp(0.0, 255.0) as u32,
+                        (b2 * 255.0).round().clamp(0.0, 255.0) as u32,
+                        av,
+                    )
+                }
+            })
+            .collect()
+    } else {
+        (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let z = input.data.get_f64(idx);
+                if input.is_nodata(z) {
+                    nodata
+                } else {
+                    map_piecewise_value(z, &breakpoints)
+                }
+            })
+            .collect()
+    };
 
-            if is_rgb {
-                let (rv, gv, bv, av) = FlipImageTool::unpack_rgba(z);
-                let rn = rv as f64 / 255.0;
-                let gn = gv as f64 / 255.0;
-                let bn = bv as f64 / 255.0;
-                let (h, s, i) = rgb_to_hsi_norm(rn, gn, bn);
-                let out_i = map_piecewise_value(i, &breakpoints).clamp(0.0, 1.0);
-                let (r2, g2, b2) = hsi_to_rgb_norm(h, s, out_i);
-                let packed = FlipImageTool::pack_rgba(
-                    (r2 * 255.0).round().clamp(0.0, 255.0) as u32,
-                    (g2 * 255.0).round().clamp(0.0, 255.0) as u32,
-                    (b2 * 255.0).round().clamp(0.0, 255.0) as u32,
-                    av,
-                );
-                output.set(0, r, c, packed).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing piecewise RGB value at ({r},{c}): {e}"
-                    ))
-                })?;
-            } else {
-                let out_v = map_piecewise_value(z, &breakpoints);
-                output.set(0, r, c, out_v).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing piecewise value at ({r},{c}): {e}"
-                    ))
-                })?;
-            }
-        }
+    for (idx, z) in output_values.into_iter().enumerate() {
+        output.data.set_f64(idx, z);
     }
 
     Ok(output)

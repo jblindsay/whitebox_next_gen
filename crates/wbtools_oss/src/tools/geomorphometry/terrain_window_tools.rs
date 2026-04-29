@@ -5830,12 +5830,15 @@ impl TerrainWindowCore {
             let band = band_idx as isize;
             ctx.progress.info("running multiscale_elevation_percentile");
 
+            let mut band_values = vec![nodata; rows * cols];
             let mut band_min = f64::INFINITY;
             let mut band_max = f64::NEG_INFINITY;
             for r in 0..rows {
+                let row_offset = r * cols;
                 for c in 0..cols {
                     let z = input.get(band, r as isize, c as isize);
-                    if input.is_nodata(z) {
+                    band_values[row_offset + c] = z;
+                    if z == nodata {
                         continue;
                     }
                     if z < band_min {
@@ -5862,38 +5865,18 @@ impl TerrainWindowCore {
             })?;
 
             let bin_nodata = i64::MIN;
-            let mut binned = vec![bin_nodata; rows * cols];
-            binned
-                .par_chunks_mut(cols)
-                .enumerate()
-                .for_each(|(r, row_bins)| {
-                    for (c, cell_bin) in row_bins.iter_mut().enumerate() {
-                        let z = input.get(band, r as isize, c as isize);
-                        if input.is_nodata(z) {
-                            continue;
-                        }
-                        *cell_bin = (z * multiplier).floor() as i64 - min_bin;
-                    }
-                });
+            let binned = Self::build_mep_binned_cpu(
+                &band_values,
+                rows,
+                cols,
+                multiplier,
+                min_bin,
+                bin_nodata,
+                nodata,
+            );
 
             let rows_isize = rows as isize;
             let cols_isize = cols as isize;
-            let get_bin = |rr: isize, cc: isize| -> i64 {
-                if rr < 0 || rr >= rows_isize || cc < 0 || cc >= cols_isize {
-                    return bin_nodata;
-                }
-                binned[rr as usize * cols + cc as usize]
-            };
-
-            for r in 0..rows {
-                let fill = vec![nodata; cols];
-                output_mag.set_row_slice(band, r as isize, &fill).map_err(|e| {
-                    ToolError::Execution(format!("failed initializing magnitude row {}: {}", r, e))
-                })?;
-                output_scale.set_row_slice(band, r as isize, &fill).map_err(|e| {
-                    ToolError::Execution(format!("failed initializing scale row {}: {}", r, e))
-                })?;
-            }
 
             let mut scales = Vec::new();
             for step_idx in 0..num_steps {
@@ -5902,24 +5885,31 @@ impl TerrainWindowCore {
                 scales.push(scale);
             }
 
+            let mut mag_values = vec![nodata; rows * cols];
+            let mut scale_values = vec![nodata; rows * cols];
+
             for (loop_idx, midpoint) in scales.iter().enumerate() {
                 let midpoint = *midpoint;
-                let row_data: Vec<Vec<f64>> = (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
+                mag_values
+                    .par_chunks_mut(cols)
+                    .zip(scale_values.par_chunks_mut(cols))
+                    .enumerate()
+                    .fold(|| vec![0i64; num_bins], |mut histo, (r, (mag_row, scale_row))| {
                         let row = r as isize;
                         let half = midpoint as isize;
-                        let mut histo = vec![0i64; num_bins];
+                        histo.fill(0);
                         let mut old_center = bin_nodata;
                         let mut n = 0i64;
                         let mut n_less = 0i64;
                         let start_row = row - half;
                         let end_row = row + half;
+                        let rr0 = start_row.max(0) as usize;
+                        let rr1 = end_row.min(rows_isize - 1) as usize;
+                        let row_offset = r * cols;
 
                         for c in 0..cols {
                             let col = c as isize;
-                            let center_bin = get_bin(row, col);
+                            let center_bin = binned[row_offset + c];
                             if center_bin == bin_nodata {
                                 old_center = bin_nodata;
                                 continue;
@@ -5929,51 +5919,53 @@ impl TerrainWindowCore {
                                 let trailing_col = col - half - 1;
                                 let leading_col = col + half;
 
-                                for rr in start_row..=end_row {
-                                    let bv = get_bin(rr, trailing_col);
-                                    if bv != bin_nodata {
-                                        histo[bv as usize] -= 1;
-                                        n -= 1;
-                                        if bv < old_center {
-                                            n_less -= 1;
+                                if trailing_col >= 0 && trailing_col < cols_isize {
+                                    let trailing_col_u = trailing_col as usize;
+                                    for rr in rr0..=rr1 {
+                                        let bv = binned[rr * cols + trailing_col_u];
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] -= 1;
+                                            n -= 1;
+                                            if bv < old_center {
+                                                n_less -= 1;
+                                            }
                                         }
                                     }
                                 }
 
-                                for rr in start_row..=end_row {
-                                    let bv = get_bin(rr, leading_col);
-                                    if bv != bin_nodata {
-                                        histo[bv as usize] += 1;
-                                        n += 1;
-                                        if bv < old_center {
-                                            n_less += 1;
+                                if leading_col >= 0 && leading_col < cols_isize {
+                                    let leading_col_u = leading_col as usize;
+                                    for rr in rr0..=rr1 {
+                                        let bv = binned[rr * cols + leading_col_u];
+                                        if bv != bin_nodata {
+                                            histo[bv as usize] += 1;
+                                            n += 1;
+                                            if bv < old_center {
+                                                n_less += 1;
+                                            }
                                         }
                                     }
                                 }
 
                                 if old_center < center_bin {
-                                    let mut m = 0i64;
-                                    for v in old_center..center_bin {
-                                        m += histo[v as usize];
+                                    for i in old_center as usize..center_bin as usize {
+                                        n_less += histo[i];
                                     }
-                                    n_less += m;
                                 } else if old_center > center_bin {
-                                    let mut m = 0i64;
-                                    for v in center_bin..old_center {
-                                        m += histo[v as usize];
+                                    for i in center_bin as usize..old_center as usize {
+                                        n_less -= histo[i];
                                     }
-                                    n_less -= m;
                                 }
                             } else {
                                 histo.fill(0);
                                 n = 0;
                                 n_less = 0;
-                                let start_col = col - half;
-                                let end_col = col + half;
+                                let start_col = (col - half).max(0) as usize;
+                                let end_col = (col + half).min(cols_isize - 1) as usize;
 
                                 for cc in start_col..=end_col {
-                                    for rr in start_row..=end_row {
-                                        let bv = get_bin(rr, cc);
+                                    for rr in rr0..=rr1 {
+                                        let bv = binned[rr * cols + cc];
                                         if bv != bin_nodata {
                                             histo[bv as usize] += 1;
                                             n += 1;
@@ -5986,40 +5978,40 @@ impl TerrainWindowCore {
                             }
 
                             if n > 0 {
-                                row_out[c] = n_less as f64 / n as f64 * 100.0;
+                                let p2 = n_less as f64 / n as f64 * 100.0;
+                                let p1 = mag_row[c];
+                                if p1 == nodata || (p2 - 50.0).abs() > (p1 - 50.0).abs() {
+                                    mag_row[c] = p2;
+                                    scale_row[c] = midpoint as f64;
+                                }
                             }
                             old_center = center_bin;
                         }
-                        row_out
-                    })
-                    .collect();
 
-                for (r, row) in row_data.iter().enumerate() {
-                    for (c, p2) in row.iter().enumerate().take(cols) {
-                        let p2 = *p2;
-                        if p2 == nodata {
-                            continue;
-                        }
-                        let p1 = output_mag.get(band, r as isize, c as isize);
-                        if p1 == nodata || (p2 - 50.0).abs() > (p1 - 50.0).abs() {
-                            output_mag.set(band, r as isize, c as isize, p2).map_err(|e| {
-                                ToolError::Execution(format!(
-                                    "failed writing percentile value at row {} col {}: {}",
-                                    r, c, e
-                                ))
-                            })?;
-                            output_scale
-                                .set(band, r as isize, c as isize, midpoint as f64)
-                                .map_err(|e| {
-                                    ToolError::Execution(format!(
-                                        "failed writing percentile scale at row {} col {}: {}",
-                                        r, c, e
-                                    ))
-                                })?;
-                        }
-                    }
-                }
+                        histo
+                    })
+                    .for_each(|_| {});
                 coalescer.emit_unit_fraction(ctx.progress, (loop_idx + 1) as f64 / scales.len() as f64);
+            }
+
+            for r in 0..rows {
+                let row_offset = r * cols;
+                output_mag
+                    .set_row_slice(band, r as isize, &mag_values[row_offset..row_offset + cols])
+                    .map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing magnitude row {} for band {}: {}",
+                            r, band_idx, e
+                        ))
+                    })?;
+                output_scale
+                    .set_row_slice(band, r as isize, &scale_values[row_offset..row_offset + cols])
+                    .map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing scale row {} for band {}: {}",
+                            r, band_idx, e
+                        ))
+                    })?;
             }
         }
 
@@ -6027,6 +6019,32 @@ impl TerrainWindowCore {
         let scale_locator = Self::write_or_store_output(output_scale, output_scale_path)?;
         coalescer.finish(ctx.progress);
         Ok(Self::build_result_with_scale(output_locator, scale_locator))
+    }
+
+    fn build_mep_binned_cpu(
+        band_values: &[f64],
+        rows: usize,
+        cols: usize,
+        multiplier: f64,
+        min_bin: i64,
+        bin_nodata: i64,
+        nodata: f64,
+    ) -> Vec<i64> {
+        let mut binned = vec![bin_nodata; rows * cols];
+        binned
+            .par_chunks_mut(cols)
+            .enumerate()
+            .for_each(|(r, row_bins)| {
+                let row_offset = r * cols;
+                for (c, cell_bin) in row_bins.iter_mut().enumerate() {
+                    let z = band_values[row_offset + c];
+                    if z == nodata {
+                        continue;
+                    }
+                    *cell_bin = (z * multiplier).floor() as i64 - min_bin;
+                }
+            });
+        binned
     }
 
     fn panel_dev(

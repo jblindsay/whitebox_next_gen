@@ -7,6 +7,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Changed
+- Added a single-band GeoTIFF read fast path in `GeoTiff::read_band_bytes`:
+    for `samples_per_pixel == 1` with chunky layout, the decoded pixel buffer is
+    now returned directly instead of running per-pixel band extraction.
 - Removed unused direct `zstd` and `ruzstd` dependencies. Current `wbgeotiff`
     codec support covers Deflate, LZW, PackBits, JPEG, WebP, and JPEG-XL; the
     crate does not currently implement GeoTIFF Zstandard compression paths.

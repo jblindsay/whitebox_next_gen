@@ -465,6 +465,11 @@ impl GeoTiff {
         }
 
         let raw = self.decode_all_pixels()?;
+        // Fast path for the common DEM case: one-band chunky storage means
+        // decode_all_pixels already returned the requested band bytes directly.
+        if self.info.samples_per_pixel == 1 && self.info.planar_config == PlanarConfig::Chunky {
+            return Ok(raw);
+        }
         self.extract_band_bytes(&raw, band)
     }
 

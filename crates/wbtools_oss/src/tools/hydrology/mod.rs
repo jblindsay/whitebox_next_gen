@@ -11,12 +11,16 @@ use wbcore::{
 	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
 	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
+
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector;
 
 use crate::memory_store;
 use super::flow_algorithms::{D8FlowAccumTool, D8PointerTool};
 use super::stream_network_analysis::VectorStreamNetworkAnalysisTool;
+
+mod find_noflow_cells;
+pub use find_noflow_cells::FindNoflowCellsTool;
 
 pub struct BreachDepressionsLeastCostTool;
 pub struct BreachSingleCellPitsTool;
@@ -29,7 +33,6 @@ pub struct FillPitsTool;
 pub struct DepthInSinkTool;
 pub struct SinkTool;
 pub struct FlowAccumFullWorkflowTool;
-pub struct FindNoflowCellsTool;
 pub struct NumInflowingNeighboursTool;
 pub struct FindParallelFlowTool;
 pub struct BasinsTool;
@@ -1211,58 +1214,6 @@ fn fill_depressions_wang_and_liu_core(
 	out
 }
 
-#[inline]
-fn heap4_push(heap: &mut Vec<MinNode>, node: MinNode) {
-	heap.push(node);
-	let mut i = heap.len() - 1;
-	while i > 0 {
-		let p = (i - 1) / 4;
-		if heap[p].elev <= heap[i].elev {
-			break;
-		}
-		heap.swap(p, i);
-		i = p;
-	}
-}
-
-#[inline]
-fn heap4_pop(heap: &mut Vec<MinNode>) -> Option<MinNode> {
-	if heap.is_empty() {
-		return None;
-	}
-	let last = heap.pop().unwrap();
-	if heap.is_empty() {
-		return Some(last);
-	}
-	let top = std::mem::replace(&mut heap[0], last);
-	let mut i = 0usize;
-	loop {
-		let c1 = 4 * i + 1;
-		if c1 >= heap.len() {
-			break;
-		}
-		let mut best = c1;
-		let c2 = c1 + 1;
-		if c2 < heap.len() && heap[c2].elev < heap[best].elev {
-			best = c2;
-		}
-		let c3 = c1 + 2;
-		if c3 < heap.len() && heap[c3].elev < heap[best].elev {
-			best = c3;
-		}
-		let c4 = c1 + 3;
-		if c4 < heap.len() && heap[c4].elev < heap[best].elev {
-			best = c4;
-		}
-		if heap[i].elev <= heap[best].elev {
-			break;
-		}
-		heap.swap(i, best);
-		i = best;
-	}
-	Some(top)
-}
-
 fn seed_priority_flood_frontier_from_edges(
 	input: &[f64],
 	out: &mut [f64],
@@ -1270,7 +1221,7 @@ fn seed_priority_flood_frontier_from_edges(
 	cols: usize,
 	nodata: f64,
 	background: f64,
-	frontier_heap: &mut Vec<MinNode>,
+	frontier_heap: &mut BinaryHeap<MinNode>,
 ) {
 	if rows == 0 || cols == 0 {
 		return;
@@ -1287,7 +1238,7 @@ fn seed_priority_flood_frontier_from_edges(
 				nodata_queue.push_back(i_top);
 			} else {
 				out[i_top] = zin;
-				heap4_push(frontier_heap, MinNode { elev: zin, i: i_top });
+				frontier_heap.push(MinNode { elev: zin, i: i_top });
 			}
 		}
 		if rows > 1 {
@@ -1299,7 +1250,7 @@ fn seed_priority_flood_frontier_from_edges(
 					nodata_queue.push_back(i_bottom);
 				} else {
 					out[i_bottom] = zin;
-					heap4_push(frontier_heap, MinNode { elev: zin, i: i_bottom });
+					frontier_heap.push(MinNode { elev: zin, i: i_bottom });
 				}
 			}
 		}
@@ -1313,7 +1264,7 @@ fn seed_priority_flood_frontier_from_edges(
 				nodata_queue.push_back(i_left);
 			} else {
 				out[i_left] = zin;
-				heap4_push(frontier_heap, MinNode { elev: zin, i: i_left });
+				frontier_heap.push(MinNode { elev: zin, i: i_left });
 			}
 		}
 		if cols > 1 {
@@ -1325,7 +1276,7 @@ fn seed_priority_flood_frontier_from_edges(
 					nodata_queue.push_back(i_right);
 				} else {
 					out[i_right] = zin;
-					heap4_push(frontier_heap, MinNode { elev: zin, i: i_right });
+					frontier_heap.push(MinNode { elev: zin, i: i_right });
 				}
 			}
 		}
@@ -1350,7 +1301,7 @@ fn seed_priority_flood_frontier_from_edges(
 				nodata_queue.push_back(ni);
 			} else {
 				out[ni] = zn;
-				heap4_push(frontier_heap, MinNode { elev: zn, i: ni });
+				frontier_heap.push(MinNode { elev: zn, i: ni });
 			}
 		}
 	}
@@ -1365,7 +1316,7 @@ fn fill_depressions_nextgen_core(
 ) -> Vec<f64> {
 	let background = (i32::MIN + 1) as f64;
 	let mut out = vec![background; rows * cols];
-	let mut frontier_heap = Vec::<MinNode>::with_capacity((rows + cols).max(1024));
+	let mut frontier_heap = BinaryHeap::<MinNode>::with_capacity((rows + cols).max(1024));
 	seed_priority_flood_frontier_from_edges(
 		input,
 		&mut out,
@@ -1383,7 +1334,7 @@ fn fill_depressions_nextgen_core(
 	loop {
 		let (ci, z) = if let Some(i) = depression_queue.pop_front() {
 			(i, out[i])
-		} else if let Some(node) = heap4_pop(&mut frontier_heap) {
+		} else if let Some(node) = frontier_heap.pop() {
 			(node.i, node.elev)
 		} else {
 			break;
@@ -1408,7 +1359,7 @@ fn fill_depressions_nextgen_core(
 					depression_queue.push_back(ni);
 				} else {
 					out[ni] = zin;
-					heap4_push(&mut frontier_heap, MinNode { elev: zin, i: ni });
+					frontier_heap.push(MinNode { elev: zin, i: ni });
 				}
 			}
 		} else {
@@ -1432,7 +1383,7 @@ fn fill_depressions_nextgen_core(
 					depression_queue.push_back(ni);
 				} else {
 					out[ni] = zin;
-					heap4_push(&mut frontier_heap, MinNode { elev: zin, i: ni });
+					frontier_heap.push(MinNode { elev: zin, i: ni });
 				}
 			}
 		}
@@ -1447,23 +1398,20 @@ fn fill_depressions_nextgen_core(
 	out
 }
 
-fn fill_depressions_nextgen_tiled_parallel_core(
+/// Run one pass of parallel tiled depression filling.
+/// Tiles start at `row_offset` and `col_offset`, then repeat every `tile_size` rows/cols.
+/// A leading partial tile covers [0, offset) when offset > 0.
+fn tiled_fill_one_pass(
 	input: &[f64],
 	rows: usize,
 	cols: usize,
 	nodata: f64,
 	small: f64,
 	tile_size: usize,
+	halo: usize,
+	row_offset: usize,
+	col_offset: usize,
 ) -> Vec<f64> {
-	if rows == 0 || cols == 0 {
-		return Vec::new();
-	}
-
-	let tile_size = tile_size.max(64);
-	if rows <= tile_size && cols <= tile_size {
-		return fill_depressions_nextgen_core(input, rows, cols, nodata, small);
-	}
-
 	#[derive(Debug)]
 	struct TilePatch {
 		r0: usize,
@@ -1473,25 +1421,82 @@ fn fill_depressions_nextgen_tiled_parallel_core(
 		values: Vec<f64>,
 	}
 
-	let row_starts: Vec<usize> = (0..rows).step_by(tile_size).collect();
-	let col_starts: Vec<usize> = (0..cols).step_by(tile_size).collect();
+	// Build tile start lists including the leading partial tile when offset > 0.
+	let row_starts: Vec<usize> = {
+		let mut s = vec![0usize];
+		if row_offset > 0 && row_offset < rows {
+			s.push(row_offset);
+			let mut r = row_offset + tile_size;
+			while r < rows {
+				s.push(r);
+				r += tile_size;
+			}
+		} else {
+			let mut r = tile_size;
+			while r < rows {
+				s.push(r);
+				r += tile_size;
+			}
+		}
+		s
+	};
+	let col_starts: Vec<usize> = {
+		let mut s = vec![0usize];
+		if col_offset > 0 && col_offset < cols {
+			s.push(col_offset);
+			let mut c = col_offset + tile_size;
+			while c < cols {
+				s.push(c);
+				c += tile_size;
+			}
+		} else {
+			let mut c = tile_size;
+			while c < cols {
+				s.push(c);
+				c += tile_size;
+			}
+		}
+		s
+	};
+
 	let mut jobs = Vec::<(usize, usize)>::with_capacity(row_starts.len() * col_starts.len());
 	for &r0 in &row_starts {
 		for &c0 in &col_starts {
-			jobs.push((r0, c0));
+			// Determine tile height/width based on next start boundary.
+			let next_r = if row_offset > 0 && r0 == 0 {
+				row_offset.min(rows)
+			} else {
+				(r0 + tile_size).min(rows)
+			};
+			let next_c = if col_offset > 0 && c0 == 0 {
+				col_offset.min(cols)
+			} else {
+				(c0 + tile_size).min(cols)
+			};
+			if next_r > r0 && next_c > c0 {
+				jobs.push((r0, c0));
+			}
 		}
 	}
 
 	let patches: Vec<TilePatch> = jobs
 		.into_par_iter()
 		.map(|(r0, c0)| {
-			let r1 = (r0 + tile_size).min(rows);
-			let c1 = (c0 + tile_size).min(cols);
+			let r1 = if row_offset > 0 && r0 == 0 {
+				row_offset.min(rows)
+			} else {
+				(r0 + tile_size).min(rows)
+			};
+			let c1 = if col_offset > 0 && c0 == 0 {
+				col_offset.min(cols)
+			} else {
+				(c0 + tile_size).min(cols)
+			};
 
-			let hr0 = r0.saturating_sub(1);
-			let hc0 = c0.saturating_sub(1);
-			let hr1 = (r1 + 1).min(rows);
-			let hc1 = (c1 + 1).min(cols);
+			let hr0 = r0.saturating_sub(halo);
+			let hc0 = c0.saturating_sub(halo);
+			let hr1 = (r1 + halo).min(rows);
+			let hc1 = (c1 + halo).min(cols);
 
 			let hrows = hr1 - hr0;
 			let hcols = hc1 - hc0;
@@ -1525,14 +1530,39 @@ fn fill_depressions_nextgen_tiled_parallel_core(
 	let mut out = input.to_vec();
 	for patch in patches {
 		for rr in 0..patch.h {
-			let dst_row_start = (patch.r0 + rr) * cols + patch.c0;
-			let src_row_start = rr * patch.w;
-			out[dst_row_start..dst_row_start + patch.w]
-				.copy_from_slice(&patch.values[src_row_start..src_row_start + patch.w]);
+			let dst = (patch.r0 + rr) * cols + patch.c0;
+			let src = rr * patch.w;
+			out[dst..dst + patch.w].copy_from_slice(&patch.values[src..src + patch.w]);
 		}
 	}
-
 	out
+}
+
+fn fill_depressions_nextgen_tiled_parallel_core(
+	input: &[f64],
+	rows: usize,
+	cols: usize,
+	nodata: f64,
+	small: f64,
+	tile_size: usize,
+) -> Vec<f64> {
+	if rows == 0 || cols == 0 {
+		return Vec::new();
+	}
+
+	let tile_size = tile_size.max(64);
+	if rows <= tile_size && cols <= tile_size {
+		return fill_depressions_nextgen_core(input, rows, cols, nodata, small);
+	}
+	let halo = (tile_size / 8).clamp(4, 64);
+
+	// Parallel tiled pass: resolves depressions smaller than tile_size quickly.
+	let tiled = tiled_fill_one_pass(input, rows, cols, nodata, small, tile_size, halo, 0, 0);
+
+	// Global correction pass: fixes any cross-seam artifacts left by the tiled pass.
+	// Running on the already-mostly-filled 'tiled' output rather than the raw DEM
+	// keeps the depression queue small.
+	fill_depressions_nextgen_core(&tiled, rows, cols, nodata, small)
 }
 
 fn fill_depressions_planchon_and_darboux_core(
@@ -3408,71 +3438,6 @@ impl Tool for FlowAccumFullWorkflowTool {
 			.to_string();
 
 		Ok(build_triple_raster_result(filled_path, flow_ptr_path, accum_path))
-	}
-}
-
-impl Tool for FindNoflowCellsTool {
-	fn metadata(&self) -> ToolMetadata {
-		ToolMetadata {
-			id: "find_noflow_cells",
-			display_name: "Find Noflow Cells",
-			summary: "Finds DEM cells that have no lower D8 neighbour.",
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![
-				ToolParamSpec { name: "dem", description: "Input DEM raster", required: true },
-				ToolParamSpec { name: "output", description: "Output raster path", required: false },
-			],
-		}
-	}
-
-	fn manifest(&self) -> ToolManifest {
-		ToolManifest {
-			id: "find_noflow_cells".to_string(),
-			display_name: "Find Noflow Cells".to_string(),
-			summary: "Finds DEM cells that have no lower D8 neighbour.".to_string(),
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![],
-			defaults: ToolArgs::new(),
-			examples: vec![ToolExample {
-				name: "find_noflow".to_string(),
-				description: "Identify pits, flats, and edge no-flow cells in a DEM".to_string(),
-				args: ToolArgs::new(),
-			}],
-			tags: vec!["hydrology".to_string(), "diagnostics".to_string(), "dem".to_string()],
-			stability: ToolStability::Experimental,
-		}
-	}
-
-	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-		parse_raster_path_arg(args, "dem")
-			.or_else(|_| parse_raster_path_arg(args, "input"))?;
-		Ok(())
-	}
-
-	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-		let (dem, output_path) = parse_dem_and_output(args)?;
-		let rows = dem.rows;
-		let cols = dem.cols;
-		let nodata = dem.nodata;
-		let dirs = d8_dir_from_dem_local(&dem);
-		let mut data = vec![nodata; rows * cols];
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				if dem.get(0, r as isize, c as isize) == nodata {
-					continue;
-				}
-				if dirs[i] < 0 {
-					data[i] = 1.0;
-				} else {
-					data[i] = nodata;
-				}
-			}
-		}
-		let out = vec_to_raster(&dem, &data, DataType::F64);
-		Ok(build_result(write_or_store_output(out, output_path)?))
 	}
 }
 

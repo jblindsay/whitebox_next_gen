@@ -90,6 +90,62 @@ impl std::fmt::Display for DataType {
     }
 }
 
+/// A lightweight read-only view of a single raster band materialized as `f64`.
+///
+/// Provides a bounds-safe [`BandView::get`] that returns the raster's `nodata`
+/// sentinel for out-of-bounds coordinates — the same contract as the legacy
+/// `get_value` accessor, but with a single integer bounds check and a direct
+/// array index instead of per-call type-dispatch overhead.
+///
+/// Obtain via [`Raster::band_view`]. The type is `Send + Sync` and is designed
+/// to be wrapped in `Arc` for sharing across worker threads.
+///
+/// # Hot-loop pattern
+/// ```rust
+/// let view = Arc::new(dem.band_view(0));
+/// // clone the Arc into each worker thread, then in the kernel:
+/// let z  = view.get(row, col);           // center cell
+/// let zn = view.get(row + dy, col + dx); // neighbour – nodata returned for OOB
+/// ```
+#[derive(Debug, Clone)]
+pub struct BandView {
+    data:       Vec<f64>,
+    /// Number of rows in the source band.
+    pub rows:   isize,
+    /// Number of columns in the source band.
+    pub cols:   isize,
+    /// No-data sentinel value.
+    pub nodata: f64,
+}
+
+impl BandView {
+    /// Read the value at signed `(row, col)` coordinates.
+    ///
+    /// Returns `self.nodata` when coordinates are outside the band extents.
+    #[inline]
+    pub fn get(&self, row: isize, col: isize) -> f64 {
+        if row < 0 || col < 0 || row >= self.rows || col >= self.cols {
+            return self.nodata;
+        }
+        self.data[row as usize * self.cols as usize + col as usize]
+    }
+
+    /// Returns `true` if `v` equals the band's nodata sentinel.
+    #[inline]
+    pub fn is_nodata(&self, v: f64) -> bool {
+        if self.nodata.is_nan() { v.is_nan() } else { v == self.nodata }
+    }
+
+    /// Direct reference to the underlying flat buffer (`row * cols + col` indexing).
+    /// Length is `rows as usize * cols as usize`.
+    #[inline]
+    pub fn as_slice(&self) -> &[f64] { &self.data }
+}
+
+// SAFETY: BandView contains only Vec<f64>, isize, and f64 — all Send and Sync.
+unsafe impl Send for BandView {}
+unsafe impl Sync for BandView {}
+
 /// Typed in-memory pixel buffer.
 #[derive(Debug, Clone)]
 pub enum RasterData {
@@ -1023,6 +1079,75 @@ impl Raster {
     pub fn data_f64(&self) -> Option<&[f64]> { self.data.as_f64_slice() }
     /// Typed fast-path mutable access to `f64` storage.
     pub fn data_f64_mut(&mut self) -> Option<&mut [f64]> { self.data.as_f64_slice_mut() }
+
+    /// Materialize one band (zero-based) as a [`BandView`].
+    ///
+    /// This is the canonical input path for tool kernels that need per-cell read
+    /// access without explicit bounds checks or type dispatch at every call site.
+    /// Call once at tool entry, wrap in `Arc`, share across worker threads, and
+    /// call `view.get(row, col)` in the hot loop.
+    ///
+    /// For `F64` rasters the internal buffer is a direct subslice clone (one
+    /// allocation). For all other storage types each cell is converted once.
+    pub fn band_view(&self, band: usize) -> BandView {
+        BandView {
+            data:   self.band_to_vec_f64(band),
+            rows:   self.rows as isize,
+            cols:   self.cols as isize,
+            nodata: self.nodata,
+        }
+    }
+
+    /// Returns a direct reference to the raw `f64` storage for a single band (zero-based)
+    /// when the raster's native storage type is `F64`, otherwise returns `None`.
+    ///
+    /// The slice has length `rows * cols` and is indexed as `row * cols + col`.
+    ///
+    /// Use this as a zero-copy fast path before spawning worker threads on `F64` rasters
+    /// (e.g. DEMs). For non-`F64` rasters, call [`band_to_vec_f64`] instead to get a
+    /// converted, owned buffer with the same indexing convention.
+    #[inline]
+    pub fn band_as_f64_slice(&self, band: usize) -> Option<&[f64]> {
+        let stride = self.rows * self.cols;
+        let start = band * stride;
+        self.data.as_f64_slice()?.get(start..start + stride)
+    }
+
+    /// Materializes one band (zero-based) as a flat, row-major `Vec<f64>`.
+    ///
+    /// For `F64` rasters this clones the band's subslice directly (one allocation,
+    /// no per-cell conversion). For all other storage types each cell is converted
+    /// from the native type in a single pass.
+    ///
+    /// The returned buffer has length `rows * cols` and is indexed as
+    /// `row * cols + col`. Out-of-bounds values are the caller's responsibility;
+    /// respect `raster.rows` and `raster.cols`.
+    ///
+    /// **Use this once before spawning worker threads** so that hot kernels can index
+    /// a plain `Vec` directly rather than going through the generic [`get`] accessor
+    /// on every cell access.
+    ///
+    /// ```rust
+    /// let buf = raster.band_to_vec_f64(0);
+    /// let z = buf[row * cols + col];  // no per-cell dispatch overhead
+    /// ```
+    pub fn band_to_vec_f64(&self, band: usize) -> Vec<f64> {
+        let stride = self.rows * self.cols;
+        let start = band * stride;
+        let end = start + stride;
+        match &self.data {
+            RasterData::F64(v) => v[start..end].to_vec(),
+            RasterData::F32(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::U8(v)  => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::I8(v)  => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::U16(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::I16(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::U32(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::I32(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::U64(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+            RasterData::I64(v) => v[start..end].iter().map(|&x| x as f64).collect(),
+        }
+    }
 
     /// Fill all cells in-place using a parallel closure `f(index) -> f64`.
     ///

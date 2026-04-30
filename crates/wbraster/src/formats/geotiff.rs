@@ -350,6 +350,12 @@ fn map_data_type(sample_format: gt::SampleFormat, bits: u16) -> Result<DataType>
 fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands: usize) -> Result<RasterData> {
     match data_type {
         DataType::U8 => {
+            if bands == 1 {
+                return Ok(RasterData::U8(
+                    tiff.read_band_u8(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -360,6 +366,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::U8(out))
         }
         DataType::I8 => {
+            if bands == 1 {
+                return Ok(RasterData::I8(
+                    tiff.read_band_i8(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -370,6 +382,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::I8(out))
         }
         DataType::U16 => {
+            if bands == 1 {
+                return Ok(RasterData::U16(
+                    tiff.read_band_u16(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -380,6 +398,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::U16(out))
         }
         DataType::I16 => {
+            if bands == 1 {
+                return Ok(RasterData::I16(
+                    tiff.read_band_i16(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -390,6 +414,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::I16(out))
         }
         DataType::U32 => {
+            if bands == 1 {
+                return Ok(RasterData::U32(
+                    tiff.read_band_u32(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -400,6 +430,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::U32(out))
         }
         DataType::I32 => {
+            if bands == 1 {
+                return Ok(RasterData::I32(
+                    tiff.read_band_i32(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -410,6 +446,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::I32(out))
         }
         DataType::U64 => {
+            if bands == 1 {
+                return Ok(RasterData::U64(
+                    tiff.read_band_u64(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -420,6 +462,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::U64(out))
         }
         DataType::I64 => {
+            if bands == 1 {
+                return Ok(RasterData::I64(
+                    tiff.read_band_i64(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -430,6 +478,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::I64(out))
         }
         DataType::F32 => {
+            if bands == 1 {
+                return Ok(RasterData::F32(
+                    tiff.read_band_f32(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(
@@ -440,6 +494,12 @@ fn read_native_data(tiff: &gt::GeoTiff, data_type: DataType, npix: usize, bands:
             Ok(RasterData::F32(out))
         }
         DataType::F64 => {
+            if bands == 1 {
+                return Ok(RasterData::F64(
+                    tiff.read_band_f64(0)
+                        .map_err(|e| RasterError::Other(format!("GeoTIFF decode error: {e}")))?,
+                ));
+            }
             let mut out = Vec::with_capacity(npix * bands);
             for band in 0..bands {
                 out.extend(

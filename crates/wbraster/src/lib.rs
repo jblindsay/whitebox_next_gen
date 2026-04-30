@@ -116,6 +116,7 @@ pub mod packages;
 
 pub use error::{RasterError, Result};
 pub use raster::{
+	BandView,
 	Raster,
 	RasterConfig,
 	DataType,

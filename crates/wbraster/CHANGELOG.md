@@ -6,7 +6,27 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `BandView` struct: a lightweight read-only view of one raster band materialized as
+  `f64`. Provides `get(row: isize, col: isize) -> f64` which returns `nodata` for
+  out-of-bounds coordinates (same contract as legacy `get_value`, no type dispatch),
+  `is_nodata(v: f64) -> bool`, and `as_slice() -> &[f64]`. The type is `Send + Sync`
+  for `Arc`-sharing across worker threads.
+- `Raster::band_view(band: usize) -> BandView`: canonical input path for tool kernels.
+  Call once at tool entry, wrap in `Arc`, share across threads, call `view.get(row, col)`
+  in the hot loop. Eliminates explicit bounds checks and type dispatch at every call
+  site. For `F64` rasters the internal buffer is a direct subslice clone; for all other
+  storage types each cell is converted once.
+- `Raster::band_as_f64_slice(band: usize) -> Option<&[f64]>`: zero-copy reference to
+  the raw `f64` storage for a single band when the native type is `F64`.
+- `Raster::band_to_vec_f64(band: usize) -> Vec<f64>`: backing method used by
+  `band_view`; also available directly when a plain `Vec<f64>` is preferred.
+
 ### Changed
+- GeoTIFF native read aggregation now has a single-band fast path in
+  `formats/geotiff.rs::read_native_data`: when `bands == 1`, decoded typed
+  band data is returned directly as `RasterData` instead of being copied into
+  an intermediate `Vec` via per-band extend loops.
 - Replaced `wbraster`'s native `zstd` dependency with the pure-Rust `ruzstd`
   crate for Zarr and Zarr v3 zstd compression/decompression support, removing
   the crate-level zstd feature split and keeping the raster stack fully Rust.

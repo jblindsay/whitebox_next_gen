@@ -23,7 +23,8 @@ impl Tool for FindNoflowCellsTool {
                 ToolParamSpec { name: "dem", description: "Input DEM raster", required: true },
                 ToolParamSpec {
                     name: "interior_only",
-                    description: "Only flag interior cells (exclude raster border cells)",
+                    description:
+                        "Only flag true interior cells (exclude raster border and any cell with a NoData neighbour)",
                     required: false,
                 },
                 ToolParamSpec { name: "output", description: "Output raster path", required: false },
@@ -59,10 +60,7 @@ impl Tool for FindNoflowCellsTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let t_total = std::time::Instant::now();
         let (dem, output_path) = parse_dem_and_output(args)?;
-        eprintln!("[find_noflow_cells] DEM load:         {:.3}s  ({} rows × {} cols)",
-            t_total.elapsed().as_secs_f64(), dem.rows, dem.cols);
         let rows = dem.rows as isize;
         let cols = dem.cols as isize;
         let nodata = dem.nodata;
@@ -81,9 +79,7 @@ impl Tool for FindNoflowCellsTool {
         // Materialize band 0 once as a BandView: flat f64 buffer with a bounds-safe
         // get(row, col) that returns nodata for OOB — no explicit bounds checks needed
         // at any call site in the kernel.
-        let t1 = std::time::Instant::now();
         let view = std::sync::Arc::new(dem.band_view(0));
-        eprintln!("[find_noflow_cells] band_view:        {:.3}s", t1.elapsed().as_secs_f64());
 
         let out_cfg = RasterConfig {
             cols: dem.cols,
@@ -121,9 +117,15 @@ impl Tool for FindNoflowCellsTool {
                         }
 
                         let mut has_no_lower_neighbour = 1.0;
+
                         for n in 0..8 {
                             let zn = view.get(row + DY[n], col + DX[n]);
                             if zn < z && !view.is_nodata(zn) {
+                                has_no_lower_neighbour = nodata;
+                                break;
+                            } else if interior_only && view.is_nodata(zn) {
+                                // For interior-only mode, any NoData-adjacent noflow cell is treated
+                                // as an outlet (exterior), so do not flag it as noflow.
                                 has_no_lower_neighbour = nodata;
                                 break;
                             }
@@ -137,7 +139,6 @@ impl Tool for FindNoflowCellsTool {
             });
         }
         drop(tx);
-        let t2 = std::time::Instant::now();
 
         for row in 0..rows {
             let (r, row_data) = rx.recv().map_err(|e| {
@@ -154,12 +155,7 @@ impl Tool for FindNoflowCellsTool {
                 ctx.progress.progress(1.0);
             }
         }
-        eprintln!("[find_noflow_cells] kernel+recv:      {:.3}s", t2.elapsed().as_secs_f64());
-
-        let t3 = std::time::Instant::now();
         let result = build_result(write_or_store_output(out, output_path)?);
-        eprintln!("[find_noflow_cells] write output:     {:.3}s", t3.elapsed().as_secs_f64());
-        eprintln!("[find_noflow_cells] TOTAL:            {:.3}s", t_total.elapsed().as_secs_f64());
         Ok(result)
     }
 }

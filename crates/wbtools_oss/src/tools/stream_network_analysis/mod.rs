@@ -196,7 +196,7 @@ impl Tool for StrahlerStreamOrderTool {
                     required: true,
                 },
                 ToolParamSpec {
-                    name: "streams_raster",
+                    name: "streams",
                     description: "Stream raster (positive values = stream cells)",
                     required: true,
                 },
@@ -222,7 +222,7 @@ impl Tool for StrahlerStreamOrderTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("d8_pntr".to_string(), json!("d8_pointer.tif"));
-        defaults.insert("streams_raster".to_string(), json!("streams.tif"));
+        defaults.insert("streams".to_string(), json!("streams.tif"));
         defaults.insert("esri_pntr".to_string(), json!(false));
         defaults.insert("zero_background".to_string(), json!(false));
 
@@ -250,13 +250,14 @@ impl Tool for StrahlerStreamOrderTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         parse_raster_path_arg(args, "d8_pntr")?;
-        parse_raster_path_arg(args, "streams_raster")?;
+        parse_raster_path_arg(args, "streams").or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let d8_pntr_path = parse_raster_path_arg(args, "d8_pntr")?;
-        let streams_path = parse_raster_path_arg(args, "streams_raster")?;
+        let streams_path = parse_raster_path_arg(args, "streams")
+            .or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
         let output_path = parse_optional_output_path(args, "output")?;
         let esri_style = args.get("esri_pntr").and_then(|v| v.as_bool()).unwrap_or(false);
         let zero_background = args.get("zero_background").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -291,6 +292,9 @@ impl Tool for StrahlerStreamOrderTool {
                 if streams.get(0, row as isize, col as isize) > 0.0 {
                     let count = inflow_counts[row * cols + col];
                     num_inflowing[row][col] = count;
+                    // Initialize all stream cells to 0 so downstream order
+                    // propagation is driven only by computed Strahler values.
+                    output.set_unchecked(0, row as isize, col as isize, 0.0);
                     if count == 0 {
                         stack.push((row, col));
                         output.set_unchecked(0, row as isize, col as isize, 1.0);
@@ -1032,7 +1036,8 @@ fn parse_d8_stream_inputs(
     args: &ToolArgs,
 ) -> Result<(Arc<Raster>, Arc<Raster>, Option<std::path::PathBuf>, bool, bool), ToolError> {
     let d8_pntr_path = parse_raster_path_arg(args, "d8_pntr")?;
-    let streams_path = parse_raster_path_arg(args, "streams_raster")?;
+    let streams_path = parse_raster_path_arg(args, "streams")
+        .or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
     let output_path = parse_optional_output_path(args, "output")?;
     let esri_style = args.get("esri_pntr").and_then(|v| v.as_bool()).unwrap_or(false);
     let zero_background = args.get("zero_background").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -2564,7 +2569,7 @@ impl Tool for HortonStreamOrderTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "d8_pntr", description: "D8 flow pointer raster", required: true },
-                ToolParamSpec { name: "streams_raster", description: "Stream raster", required: true },
+                ToolParamSpec { name: "streams", description: "Stream raster", required: true },
                 ToolParamSpec { name: "esri_pntr", description: "Use ESRI-style pointer", required: false },
                 ToolParamSpec { name: "zero_background", description: "Assign zero to background", required: false },
                 ToolParamSpec { name: "output", description: "Output raster path", required: false },
@@ -2575,7 +2580,7 @@ impl Tool for HortonStreamOrderTool {
     fn manifest(&self) -> ToolManifest {
         let mut defaults = ToolArgs::new();
         defaults.insert("d8_pntr".to_string(), json!("d8_pointer.tif"));
-        defaults.insert("streams_raster".to_string(), json!("streams.tif"));
+        defaults.insert("streams".to_string(), json!("streams.tif"));
 
         ToolManifest {
             id: "horton_stream_order".to_string(),
@@ -2593,102 +2598,169 @@ impl Tool for HortonStreamOrderTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         parse_raster_path_arg(args, "d8_pntr")?;
-        parse_raster_path_arg(args, "streams_raster")?;
+        parse_raster_path_arg(args, "streams").or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
         Ok(())
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        // Start with Strahler and then overwrite each main-stem path by outlet order.
-        let (pntr, streams, output_path, esri_style, _zero_background) = parse_d8_stream_inputs(args)?;
-
-        let mut strahler_args = args.clone();
-        strahler_args.remove("output");
-        let strahler_res = StrahlerStreamOrderTool.run(&strahler_args, ctx)?;
-        let strahler_path = strahler_res
-            .outputs
-            .get("path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::Execution("missing strahler output path".to_string()))?;
-        let mut out = D8Core::load_raster(strahler_path)?.as_ref().clone();
-
+        let (pntr, streams, output_path, esri_style, zero_background) = parse_d8_stream_inputs(args)?;
         let rows = pntr.rows;
         let cols = pntr.cols;
+        let n = rows * cols;
+        let nodata = streams.nodata;
+        let pntr_nodata = pntr.nodata;
+        let background = if zero_background { 0.0 } else { nodata };
         let pntr_matches = D8Core::build_pntr_matches(esri_style);
-        let inflowing = D8Core::inflowing_vals(esri_style);
+        let inflowing_vals = D8Core::inflowing_vals(esri_style);
         let lengths = grid_lengths(&pntr);
 
-        let mut far = vec![vec![0.0f64; cols]; rows];
-        let mut num_inflowing = vec![vec![-1i8; cols]; rows];
-        let mut stack = Vec::new();
-        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
+        let mut out = streams.as_ref().clone();
+        out.data_type = DataType::I32;
+
+        // Parallel inflow count (same approach as Strahler — fast, uses rayon).
+        let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing_vals);
+
+        // Flat working arrays sized n but kept small per element:
+        //   downstream : u32  (4 bytes) — u32::MAX means no downstream stream cell
+        //   down_len   : f32  (4 bytes)
+        //   order_buf  : f32  (4 bytes) — working Horton order per cell
+        //   num_inf    : i8   (1 byte)  — remaining inflow count; -1 for non-stream cells
+        //   trib_length: f32  (4 bytes) — longest upstream path reaching this cell
+        //   trib_id    : i32  (4 bytes) — which tributary this cell belongs to
+        // Total ≈ 21 bytes/cell, roughly half the previous allocation.
+        let mut downstream  = vec![u32::MAX; n];
+        let mut down_len    = vec![0.0f32; n];
+        let mut order_buf   = vec![0.0f32; n];
+        let mut num_inf     = vec![-1i8; n];
+        let mut trib_length = vec![f32::NEG_INFINITY; n];
+        let mut trib_id     = vec![-1i32; n];
+
+        // Per-tributary metadata (number of entries = number of headwaters).
+        let mut channel_heads: Vec<u32> = Vec::new();
+        let mut max_order:     Vec<f32> = Vec::new();
+        let mut stack:         Vec<u32> = Vec::new();
+        let mut current_id = 0i32;   // 0-based; t_idx = trib_id[cell] as usize
+
+        // Single combined initialisation pass — mirrors Strahler's structure.
         for row in 0..rows {
             for col in 0..cols {
-                let c = inflow_counts[row * cols + col];
-                num_inflowing[row][col] = c;
-                if c == 0 {
-                    stack.push((row, col));
-                }
-            }
-        }
-        while let Some((row, col)) = stack.pop() {
-            if let Some((rn, cn, idx)) = downstream_cell(&pntr, row, col, &pntr_matches) {
-                if streams.get(0, rn as isize, cn as isize) > 0.0 {
-                    far[rn][cn] = far[rn][cn].max(far[row][col] + lengths[idx]);
-                    num_inflowing[rn][cn] -= 1;
-                    if num_inflowing[rn][cn] == 0 {
-                        stack.push((rn, cn));
-                    }
-                }
-            }
-        }
-
-        let outlet_flags: Vec<bool> = (0..rows * cols)
-            .into_par_iter()
-            .map(|idx| {
-                let row = idx / cols;
-                let col = idx % cols;
-                streams.get(0, row as isize, col as isize) > 0.0
-                    && downstream_cell(&pntr, row, col, &pntr_matches)
-                        .map(|(rn, cn, _)| streams.get(0, rn as isize, cn as isize) <= 0.0)
-                        .unwrap_or(true)
-            })
-            .collect();
-
-        for row in 0..rows {
-            for col in 0..cols {
-                if !outlet_flags[row * cols + col] {
-                    continue;
-                }
-                let outlet_order = out.get(0, row as isize, col as isize);
-                let mut y = row as isize;
-                let mut x = col as isize;
-                loop {
-                    out.set_unchecked(0, y, x, outlet_order);
-                    let mut best = None;
-                    let mut best_dist = -1.0;
-                    for i in 0..8 {
-                        let yn = y + D8Core::D_Y[i];
-                        let xn = x + D8Core::D_X[i];
-                        if yn < 0 || xn < 0 || yn >= rows as isize || xn >= cols as isize {
-                            continue;
+                let i = row * cols + col;
+                if streams.get(0, row as isize, col as isize) > 0.0 {
+                    // Build downstream link for this stream cell.
+                    let dir_val = pntr.get(0, row as isize, col as isize) as usize;
+                    if dir_val > 0 && dir_val <= 128 && pntr_matches[dir_val] != 999 {
+                        let d = pntr_matches[dir_val];
+                        let rn = row as isize + D8Core::D_Y[d];
+                        let cn = col as isize + D8Core::D_X[d];
+                        if rn >= 0 && cn >= 0 && rn < rows as isize && cn < cols as isize
+                            && streams.get(0, rn, cn) > 0.0
+                        {
+                            downstream[i] = (rn as usize * cols + cn as usize) as u32;
+                            down_len[i]   = lengths[d] as f32;
                         }
-                        if streams.get(0, yn, xn) > 0.0 && pntr.get(0, yn, xn) == inflowing[i] {
-                            let d = far[yn as usize][xn as usize];
-                            if d > best_dist {
-                                best_dist = d;
-                                best = Some((yn, xn));
+                    }
+
+                    let c = inflow_counts[i];
+                    num_inf[i] = c;
+                    if c == 0 {
+                        // Headwater: seed the traversal stack.
+                        trib_id[i]     = current_id;
+                        trib_length[i] = 0.0;
+                        order_buf[i]   = 1.0;
+                        channel_heads.push(i as u32);
+                        max_order.push(1.0);
+                        stack.push(i as u32);
+                        current_id += 1;
+                    }
+                    // Non-headwater stream cells keep order_buf[i] = 0.0 (initialised above).
+                    out.set_unchecked(0, row as isize, col as isize, if c == 0 { 1.0 } else { 0.0 });
+                } else {
+                    // Non-stream cell: set output background/nodata.
+                    let pv = pntr.get(0, row as isize, col as isize);
+                    let v = if pv != pntr_nodata { background } else { nodata };
+                    out.set_unchecked(0, row as isize, col as isize, v);
+                }
+            }
+        }
+
+        // Downstream traversal with legacy-compatible tributary propagation.
+        // When a cell's Horton order increases, walk from that tributary's channel
+        // head downstream and overwrite all cells up to the first one already at or
+        // above the new order.
+        let coalescer = PercentCoalescer::new(1, 99);
+        while let Some(cell_u32) = stack.pop() {
+            let cell    = cell_u32 as usize;
+            let trib    = trib_id[cell];
+            let order_v = order_buf[cell];
+            let dn_u32  = downstream[cell];
+
+            if dn_u32 != u32::MAX {
+                let dn = dn_u32 as usize;
+
+                // Update trib tracking on the downstream cell.
+                let new_len = trib_length[cell] + down_len[cell];
+                if trib_length[dn] < new_len {
+                    trib_length[dn] = new_len;
+                    trib_id[dn]     = trib;
+                }
+
+                // Strahler order accumulation.
+                let order_dn = order_buf[dn];
+                let updated_order = if order_v == order_dn {
+                    order_v + 1.0
+                } else if order_v > order_dn {
+                    order_v
+                } else {
+                    order_dn
+                };
+                order_buf[dn] = updated_order;
+
+                num_inf[dn] -= 1;
+                if num_inf[dn] == 0 {
+                    stack.push(dn_u32);
+                }
+
+                // Horton main-stem propagation: if the downstream cell's tributary
+                // has gained a higher order, walk from its channel head and overwrite
+                // every cell along its main stem up to the first cell already at or
+                // above the new order.
+                let trib_dn = trib_id[dn];
+                if trib_dn >= 0 {
+                    let t_idx = trib_dn as usize;
+                    if max_order[t_idx] < updated_order {
+                        max_order[t_idx] = updated_order;
+                        let mut cur = channel_heads[t_idx] as usize;
+                        loop {
+                            if order_buf[cur] >= updated_order {
+                                break;
                             }
+                            order_buf[cur] = updated_order;
+                            let nxt = downstream[cur];
+                            if nxt == u32::MAX {
+                                break;
+                            }
+                            cur = nxt as usize;
                         }
-                    }
-                    if let Some((yn, xn)) = best {
-                        y = yn;
-                        x = xn;
-                    } else {
-                        break;
                     }
                 }
             }
         }
+
+        coalescer.emit_unit_fraction(ctx.progress, 0.999);
+
+        // Write-back: nested loops avoid integer division (compiler keeps `i` as a
+        // running counter, equivalent to a cache-sequential copy).
+        // Only stream cells (num_inf[i] >= 0) need updating; non-stream cells already
+        // have the correct background/nodata value written during the init pass.
+        for row in 0..rows {
+            for col in 0..cols {
+                let i = row * cols + col;
+                if num_inf[i] >= 0 {
+                    out.set_unchecked(0, row as isize, col as isize, order_buf[i] as f64);
+                }
+            }
+        }
+
         Ok(D8Core::build_result(D8Core::write_or_store_output(out, output_path)?))
     }
 }
@@ -2703,7 +2775,7 @@ impl Tool for HackStreamOrderTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "d8_pntr", description: "D8 flow pointer raster", required: true },
-                ToolParamSpec { name: "streams_raster", description: "Stream raster", required: true },
+                ToolParamSpec { name: "streams", description: "Stream raster", required: true },
                 ToolParamSpec { name: "esri_pntr", description: "Use ESRI-style pointer", required: false },
                 ToolParamSpec { name: "zero_background", description: "Assign zero to background", required: false },
                 ToolParamSpec { name: "output", description: "Output raster path", required: false },
@@ -2728,7 +2800,7 @@ impl Tool for HackStreamOrderTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         parse_raster_path_arg(args, "d8_pntr")?;
-        parse_raster_path_arg(args, "streams_raster")?;
+        parse_raster_path_arg(args, "streams").or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
         Ok(())
     }
 
@@ -2736,37 +2808,68 @@ impl Tool for HackStreamOrderTool {
         let (pntr, streams, output_path, esri_style, zero_background) = parse_d8_stream_inputs(args)?;
         let rows = pntr.rows;
         let cols = pntr.cols;
+        let n = rows * cols;
         let nodata = streams.nodata;
         let background = if zero_background { 0.0 } else { nodata };
         let pntr_nodata = pntr.nodata;
         let inflowing = D8Core::inflowing_vals(esri_style);
         let pntr_matches = D8Core::build_pntr_matches(esri_style);
         let lengths = grid_lengths(&pntr);
+        let pntr_view = pntr.band_view(0);
+        let streams_view = streams.band_view(0);
 
-        let mut far = vec![vec![0.0f64; cols]; rows];
-        let mut num_inflowing = vec![vec![-1i8; cols]; rows];
-        let mut stack = Vec::new();
+        #[inline]
+        fn idx_flat(r: usize, c: usize, cols: usize) -> usize {
+            r * cols + c
+        }
+
+        // Legacy-compatible two-pass Hack ordering:
+        // 1) propagate longest-tributary IDs downstream
+        // 2) walk upstream from outlets assigning Hack order per tributary ID
+        let mut num_inflowing = vec![-1i8; n];
+        let mut trib_length = vec![f64::NEG_INFINITY; n];
+        let mut trib_id = vec![0i32; n];
+        let mut stack: Vec<usize> = Vec::new();
+        let mut upstream_stack: Vec<usize> = Vec::new();
+        let mut hack_order: Vec<i32> = Vec::new();
+        let mut current_id: i32 = 1;
         let inflow_counts = compute_stream_inflow_counts_parallel(&pntr, &streams, &inflowing);
+
         for row in 0..rows {
             for col in 0..cols {
-                if streams.get(0, row as isize, col as isize) > 0.0 {
-                    let c = inflow_counts[row * cols + col];
-                    num_inflowing[row][col] = c;
+                let i = idx_flat(row, col, cols);
+                if streams_view.get(row as isize, col as isize) > 0.0 {
+                    let c = inflow_counts[i];
+                    num_inflowing[i] = c;
                     if c == 0 {
-                        stack.push((row, col));
+                        stack.push(i);
+                        trib_id[i] = current_id;
+                        current_id += 1;
+                        trib_length[i] = 0.0;
+                        hack_order.push(0);
                     }
                 }
             }
         }
-        while let Some((row, col)) = stack.pop() {
+
+        while let Some(cell) = stack.pop() {
+            let row = cell / cols;
+            let col = cell % cols;
             if let Some((rn, cn, idx)) = downstream_cell(&pntr, row, col, &pntr_matches) {
-                if streams.get(0, rn as isize, cn as isize) > 0.0 {
-                    far[rn][cn] = far[rn][cn].max(far[row][col] + lengths[idx]);
-                    num_inflowing[rn][cn] -= 1;
-                    if num_inflowing[rn][cn] == 0 {
-                        stack.push((rn, cn));
+                if streams_view.get(rn as isize, cn as isize) > 0.0 {
+                    let dn = idx_flat(rn, cn, cols);
+                    let length = trib_length[cell] + lengths[idx];
+                    if trib_length[dn] < length {
+                        trib_length[dn] = length;
+                        trib_id[dn] = trib_id[cell];
+                    }
+                    num_inflowing[dn] -= 1;
+                    if num_inflowing[dn] == 0 {
+                        stack.push(dn);
                     }
                 }
+            } else {
+                upstream_stack.push(cell);
             }
         }
 
@@ -2774,9 +2877,9 @@ impl Tool for HackStreamOrderTool {
         out.data_type = DataType::I16;
         for row in 0..rows {
             for col in 0..cols {
-                if streams.get(0, row as isize, col as isize) > 0.0 {
+                if streams_view.get(row as isize, col as isize) > 0.0 {
                     out.set_unchecked(0, row as isize, col as isize, 0.0);
-                } else if pntr.get(0, row as isize, col as isize) != pntr_nodata {
+                } else if pntr_view.get(row as isize, col as isize) != pntr_nodata {
                     out.set_unchecked(0, row as isize, col as isize, background);
                 } else {
                     out.set_unchecked(0, row as isize, col as isize, nodata);
@@ -2784,46 +2887,35 @@ impl Tool for HackStreamOrderTool {
             }
         }
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let is_outlet = streams.get(0, row as isize, col as isize) > 0.0
-                    && downstream_cell(&pntr, row, col, &pntr_matches)
-                        .map(|(rn, cn, _)| streams.get(0, rn as isize, cn as isize) <= 0.0)
-                        .unwrap_or(true);
-                if !is_outlet {
+        while let Some(cell) = upstream_stack.pop() {
+            let row = cell / cols;
+            let col = cell % cols;
+            let trib_val = trib_id[cell];
+            if trib_val <= 0 {
+                continue;
+            }
+            let t_idx = (trib_val - 1) as usize;
+            let mut ho = hack_order[t_idx];
+            if ho == 0 {
+                ho = 1;
+                hack_order[t_idx] = ho;
+            }
+            out.set_unchecked(0, row as isize, col as isize, ho as f64);
+
+            for i in 0..8 {
+                let yn = row as isize + D8Core::D_Y[i];
+                let xn = col as isize + D8Core::D_X[i];
+                if yn < 0 || xn < 0 || yn >= rows as isize || xn >= cols as isize {
                     continue;
                 }
-                let mut q: Vec<(isize, isize, f64)> = vec![(row as isize, col as isize, 1.0)];
-                while let Some((y, x, ord)) = q.pop() {
-                    if out.get(0, y, x) > 0.0 && out.get(0, y, x) <= ord {
-                        continue;
+                if streams_view.get(yn, xn) > 0.0 && pntr_view.get(yn, xn) == inflowing[i] {
+                    let ni = idx_flat(yn as usize, xn as usize, cols);
+                    let tr_n = trib_id[ni];
+                    if tr_n > 0 && tr_n != trib_val {
+                        let tr_n_idx = (tr_n - 1) as usize;
+                        hack_order[tr_n_idx] = ho + 1;
                     }
-                    out.set_unchecked(0, y, x, ord);
-                    let mut best = None;
-                    let mut best_dist = -1.0;
-                    let mut ups = Vec::new();
-                    for i in 0..8 {
-                        let yn = y + D8Core::D_Y[i];
-                        let xn = x + D8Core::D_X[i];
-                        if yn < 0 || xn < 0 || yn >= rows as isize || xn >= cols as isize {
-                            continue;
-                        }
-                        if streams.get(0, yn, xn) > 0.0 && pntr.get(0, yn, xn) == inflowing[i] {
-                            let d = far[yn as usize][xn as usize];
-                            if d > best_dist {
-                                best_dist = d;
-                                best = Some((yn, xn));
-                            }
-                            ups.push((yn, xn));
-                        }
-                    }
-                    for (yn, xn) in ups {
-                        if Some((yn, xn)) == best {
-                            q.push((yn, xn, ord));
-                        } else {
-                            q.push((yn, xn, ord + 1.0));
-                        }
-                    }
+                    upstream_stack.push(ni);
                 }
             }
         }
@@ -2841,7 +2933,7 @@ impl Tool for ShreveStreamMagnitudeTool {
             license_tier: LicenseTier::Open,
             params: vec![
                 ToolParamSpec { name: "d8_pntr", description: "D8 flow pointer raster", required: true },
-                ToolParamSpec { name: "streams_raster", description: "Stream raster", required: true },
+                ToolParamSpec { name: "streams", description: "Stream raster", required: true },
                 ToolParamSpec { name: "esri_pntr", description: "Use ESRI-style pointer", required: false },
                 ToolParamSpec { name: "zero_background", description: "Assign zero to background", required: false },
                 ToolParamSpec { name: "output", description: "Output raster path", required: false },
@@ -2866,7 +2958,7 @@ impl Tool for ShreveStreamMagnitudeTool {
 
     fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
         parse_raster_path_arg(args, "d8_pntr")?;
-        parse_raster_path_arg(args, "streams_raster")?;
+        parse_raster_path_arg(args, "streams").or_else(|_| parse_raster_path_arg(args, "streams_raster"))?;
         Ok(())
     }
 

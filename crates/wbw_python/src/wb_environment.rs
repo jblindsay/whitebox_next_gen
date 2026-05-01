@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
+use rayon::prelude::*;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
@@ -1090,18 +1091,18 @@ fn emit_progress_if_advanced(
     }
 }
 
-fn apply_unary_value(tool_id: &str, v: f64) -> PyResult<f64> {
+fn resolve_unary_value_op(tool_id: &str) -> PyResult<fn(f64) -> f64> {
     match tool_id {
-        "abs" => Ok(v.abs()),
-        "ceil" => Ok(v.ceil()),
-        "floor" => Ok(v.floor()),
-        "round" => Ok(v.round()),
-        "sqrt" => Ok(v.sqrt()),
-        "square" => Ok(v * v),
-        "ln" => Ok(v.ln()),
-        "log10" => Ok(v.log10()),
-        "sin" => Ok(v.sin()),
-        "cos" => Ok(v.cos()),
+        "abs" => Ok(f64::abs),
+        "ceil" => Ok(f64::ceil),
+        "floor" => Ok(f64::floor),
+        "round" => Ok(f64::round),
+        "sqrt" => Ok(f64::sqrt),
+        "square" => Ok(|v| v * v),
+        "ln" => Ok(f64::ln),
+        "log10" => Ok(f64::log10),
+        "sin" => Ok(f64::sin),
+        "cos" => Ok(f64::cos),
         _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
             "unsupported unary tool for local multiband mode: {tool_id}"
         ))),
@@ -6277,6 +6278,91 @@ impl Raster {
         Ok(r.statistics().valid_count)
     }
 
+    #[pyo3(signature = (statement, band=None))]
+    fn con_count(
+        &self,
+        statement: &str,
+        band: Option<usize>,
+    ) -> PyResult<usize> {
+        // Fast path: parse "value <op> <literal>" directly and count in parallel
+        // without creating an intermediate raster via conditional_evaluation.
+        // This avoids: serial per-cell evalexpr evaluation, HashMapContext mutations,
+        // intermediate raster allocation, and a second scan to count.
+        let r = self.load_wbraster()?;
+        let b = self.resolve_band_index(&r, band)?;
+        let nodata = r.nodata;
+        let band_data = r.band_slice(b);
+
+        // Parse the condition: trim, normalise, split on whitespace into [lhs, op, rhs]
+        let stmt = statement.trim();
+        // Resolve "nodata" token in the rhs to the raster nodata value
+        let rhs_str = stmt
+            .split_whitespace()
+            .nth(2)
+            .unwrap_or("");
+        let rhs_val: Option<f64> = if rhs_str.eq_ignore_ascii_case("nodata") {
+            Some(nodata)
+        } else {
+            rhs_str.parse::<f64>().ok()
+        };
+
+        if let Some(rhs) = rhs_val {
+            // Determine the operator from the middle token
+            let op = stmt.split_whitespace().nth(1).unwrap_or("");
+            let count = match op {
+                "==" => band_data.par_iter().filter(|&&v| {
+                    !r.is_nodata(v) && (v - rhs).abs() < f64::EPSILON
+                }).count(),
+                "!=" => band_data.par_iter().filter(|&&v| {
+                    !r.is_nodata(v) && (v - rhs).abs() >= f64::EPSILON
+                }).count(),
+                ">"  => band_data.par_iter().filter(|&&v| !r.is_nodata(v) && v > rhs).count(),
+                ">=" => band_data.par_iter().filter(|&&v| !r.is_nodata(v) && v >= rhs).count(),
+                "<"  => band_data.par_iter().filter(|&&v| !r.is_nodata(v) && v < rhs).count(),
+                "<=" => band_data.par_iter().filter(|&&v| !r.is_nodata(v) && v <= rhs).count(),
+                _ => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        format!("con_count: unsupported operator '{}' in statement '{}'", op, statement)
+                    ));
+                }
+            };
+            return Ok(count);
+        }
+
+        // Fallback for complex expressions: route through conditional_evaluation tool.
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(self.file_path.to_string_lossy().to_string()));
+        args.insert("statement".to_string(), json!(statement));
+        args.insert("true".to_string(), json!(1.0));
+        args.insert("false".to_string(), json!(0.0));
+        let args_json = serde_json::to_string(&serde_json::Value::Object(args)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("invalid JSON arguments: {e}"))
+        })?;
+        let runtime = PythonToolRuntime::new();
+        let response = runtime
+            .run_tool_json_with_progress("conditional_evaluation", &args_json)
+            .map_err(map_tool_error)?;
+        let out_path = extract_typed_output_path("conditional_evaluation", &response)?;
+        let out_path_str = out_path.to_string_lossy().to_string();
+        let out = Raster { file_path: out_path, active_band: self.active_band };
+        let r2 = out.load_wbraster()?;
+        let b2 = out.resolve_band_index(&r2, band)?;
+        let count = r2.band_slice(b2).par_iter().filter(|&&v| !r2.is_nodata(v) && (v - 1.0).abs() < f64::EPSILON).count();
+        if memory_store::raster_is_memory_path(&out_path_str) {
+            let _ = memory_store::remove_raster_by_path(&out_path_str);
+        }
+        Ok(count)
+    }
+
+    #[pyo3(signature = (statement, band=None))]
+    fn count_where(
+        &self,
+        statement: &str,
+        band: Option<usize>,
+    ) -> PyResult<usize> {
+        self.con_count(statement, band)
+    }
+
     fn calculate_mean(&self) -> PyResult<f64> {
         let r = self.load_wbraster()?;
         Ok(r.statistics().mean)
@@ -8026,17 +8112,21 @@ impl Raster {
             }
             let mut r = self.load_wbraster()?;
             let target_bands = resolve_target_bands(r.bands, self.active_band, Some(&mode), bands)?;
+            let op = resolve_unary_value_op(tool_id)?;
             emit_callback_event(
                 &callback,
                 json!({"type":"message","message":format!("Applying {tool_id} to selected bands"),"band_count":r.bands}),
             )?;
             for (i, b) in target_bands.iter().enumerate() {
                 let mut vals = r.band_slice(*b as isize);
-                for v in &mut vals {
-                    if !r.is_nodata(*v) {
-                        *v = apply_unary_value(tool_id, *v)?;
+                let nodata = r.nodata;
+                let nodata_is_nan = nodata.is_nan();
+                vals.par_iter_mut().for_each(|v| {
+                    let is_nodata = if nodata_is_nan { v.is_nan() } else { *v == nodata };
+                    if !is_nodata {
+                        *v = op(*v);
                     }
-                }
+                });
                 r.set_band_slice(*b as isize, &vals).map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{tool_id} failed: {e}"))
                 })?;
@@ -8081,25 +8171,40 @@ impl Raster {
         f: F,
     ) -> PyResult<Raster>
     where
-        F: Fn(f64) -> f64,
+        F: Fn(f64) -> f64 + Sync,
     {
         let mut r = self.load_wbraster()?;
         let target_bands = resolve_target_bands(r.bands, self.active_band, band_mode, bands)?;
         for band in target_bands {
             let mut vals = r.band_slice(band as isize);
-            for v in &mut vals {
-                if !r.is_nodata(*v) {
+            let nodata = r.nodata;
+            let nodata_is_nan = nodata.is_nan();
+            vals.par_iter_mut().for_each(|v| {
+                let is_nodata = if nodata_is_nan { v.is_nan() } else { *v == nodata };
+                if !is_nodata {
                     *v = f(*v);
                 }
-            }
+            });
             r.set_band_slice(band as isize, &vals).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
             })?;
         }
-        let out_path = resolve_unary_output_path(&self.file_path, suffix, output_path, None);
-        r.write_auto(&out_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path.display()))
-        })?;
+        
+        // Keep intermediates in memory for memory-backed inputs unless an explicit output path is provided.
+        let file_path_str = self.file_path.to_string_lossy().to_string();
+        let out_path = if output_path.is_none() && memory_store::raster_is_memory_path(&file_path_str) {
+            // Generate a new memory path for the result
+            let id = memory_store::put_raster(r);
+            PathBuf::from(memory_store::make_raster_memory_path(&id))
+        } else {
+            // Write to disk at resolved output path
+            let out_path_resolved = resolve_unary_output_path(&self.file_path, suffix, output_path, None);
+            r.write_auto(&out_path_resolved).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path_resolved.display()))
+            })?;
+            out_path_resolved
+        };
+        
         Ok(Raster {
             file_path: out_path,
             active_band: self.active_band,
@@ -8116,7 +8221,7 @@ impl Raster {
         f: F,
     ) -> PyResult<Raster>
     where
-        F: Fn(f64, f64) -> f64,
+        F: Fn(f64, f64) -> f64 + Sync,
     {
         let mut left = self.load_wbraster()?;
         let right = other.load_wbraster()?;
@@ -8136,22 +8241,42 @@ impl Raster {
             }
             let mut vals_left = left.band_slice(band as isize);
             let vals_right = right.band_slice(band as isize);
-            for (a, b) in vals_left.iter_mut().zip(vals_right.iter()) {
-                if left.is_nodata(*a) || right.is_nodata(*b) {
-                    *a = left.nodata;
-                } else {
-                    *a = f(*a, *b);
-                }
-            }
+            let left_nodata = left.nodata;
+            let right_nodata = right.nodata;
+            let left_nodata_is_nan = left_nodata.is_nan();
+            let right_nodata_is_nan = right_nodata.is_nan();
+            vals_left
+                .par_iter_mut()
+                .zip(vals_right.par_iter())
+                .for_each(|(a, b)| {
+                    let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { *a == left_nodata };
+                    let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { *b == right_nodata };
+                    if a_is_nodata || b_is_nodata {
+                        *a = left_nodata;
+                    } else {
+                        *a = f(*a, *b);
+                    }
+                });
             left.set_band_slice(band as isize, &vals_left).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
             })?;
         }
 
-        let out_path = resolve_unary_output_path(&self.file_path, suffix, output_path, None);
-        left.write_auto(&out_path).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path.display()))
-        })?;
+        // Keep intermediates in memory for memory-backed inputs unless an explicit output path is provided.
+        let file_path_str = self.file_path.to_string_lossy().to_string();
+        let out_path = if output_path.is_none() && memory_store::raster_is_memory_path(&file_path_str) {
+            // Generate a new memory path for the result
+            let id = memory_store::put_raster(left);
+            PathBuf::from(memory_store::make_raster_memory_path(&id))
+        } else {
+            // Write to disk at resolved output path
+            let out_path_resolved = resolve_unary_output_path(&self.file_path, suffix, output_path, None);
+            left.write_auto(&out_path_resolved).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("failed to write raster '{}': {e}", out_path_resolved.display()))
+            })?;
+            out_path_resolved
+        };
+
         Ok(Raster {
             file_path: out_path,
             active_band: self.active_band,
@@ -8168,7 +8293,7 @@ impl Raster {
         f: F,
     ) -> PyResult<Raster>
     where
-        F: Fn(f64, f64) -> f64,
+        F: Fn(f64, f64) -> f64 + Sync,
     {
         let mode_all = band_mode
             .map(|m| m.eq_ignore_ascii_case("all"))
@@ -8181,7 +8306,12 @@ impl Raster {
         if let Ok(r_other) = other.extract::<PyRef<Raster>>() {
             if mode_all && bands.is_none() {
                 if let Some(tool_id) = Self::runtime_binary_tool_id(suffix) {
-                    return self.map_binary_raster_to_new_via_runtime(tool_id, &r_other, output_path);
+                    let allow_runtime_fast_path = !(
+                        output_path.is_none() && (self.is_memory_backed() || r_other.is_memory_backed())
+                    );
+                    if allow_runtime_fast_path {
+                        return self.map_binary_raster_to_new_via_runtime(tool_id, &r_other, output_path);
+                    }
                 }
             }
             return self.map_valid_pair_to_new(suffix, &r_other, output_path, band_mode, bands, f);
@@ -8202,7 +8332,7 @@ impl Raster {
         predicate: F,
     ) -> PyResult<Raster>
     where
-        F: Fn(f64, f64) -> bool,
+        F: Fn(f64, f64) -> bool + Sync,
     {
         self.map_binary_operand_to_new(suffix, other, output_path, band_mode, bands, |a, b| {
             if predicate(a, b) { 1.0 } else { 0.0 }
@@ -8218,18 +8348,21 @@ impl Raster {
         f: F,
     ) -> PyResult<()>
     where
-        F: Fn(f64, f64) -> f64,
+        F: Fn(f64, f64) -> f64 + Sync,
     {
         if let Ok(v) = other.extract::<f64>() {
             let mut r = self.load_wbraster()?;
             let target_bands = resolve_target_bands(r.bands, self.active_band, band_mode, bands)?;
             for band in target_bands {
                 let mut vals = r.band_slice(band as isize);
-                for cell in &mut vals {
-                    if !r.is_nodata(*cell) {
+                let nodata = r.nodata;
+                let nodata_is_nan = nodata.is_nan();
+                vals.par_iter_mut().for_each(|cell| {
+                    let is_nodata = if nodata_is_nan { cell.is_nan() } else { *cell == nodata };
+                    if !is_nodata {
                         *cell = f(*cell, v);
                     }
-                }
+                });
                 r.set_band_slice(band as isize, &vals).map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{op_name} failed: {e}"))
                 })?;
@@ -8256,12 +8389,20 @@ impl Raster {
                 }
                 let mut vals_left = left.band_slice(band as isize);
                 let vals_right = right.band_slice(band as isize);
-                for (a, b) in vals_left.iter_mut().zip(vals_right.iter()) {
-                    if left.is_nodata(*a) || right.is_nodata(*b) {
-                        continue;
-                    }
-                    *a = f(*a, *b);
-                }
+                let left_nodata = left.nodata;
+                let right_nodata = right.nodata;
+                let left_nodata_is_nan = left_nodata.is_nan();
+                let right_nodata_is_nan = right_nodata.is_nan();
+                vals_left
+                    .par_iter_mut()
+                    .zip(vals_right.par_iter())
+                    .for_each(|(a, b)| {
+                        let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { *a == left_nodata };
+                        let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { *b == right_nodata };
+                        if !(a_is_nodata || b_is_nodata) {
+                            *a = f(*a, *b);
+                        }
+                    });
                 left.set_band_slice(band as isize, &vals_left).map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{op_name} failed: {e}"))
                 })?;
@@ -8284,7 +8425,7 @@ impl Raster {
         predicate: F,
     ) -> PyResult<()>
     where
-        F: Fn(f64, f64) -> bool,
+        F: Fn(f64, f64) -> bool + Sync,
     {
         self.map_binary_operand_in_place(op_name, other, band_mode, bands, |a, b| {
             if predicate(a, b) { 1.0 } else { 0.0 }
@@ -9573,12 +9714,12 @@ impl WbEnvironment {
     }
 
     /// Read multiple LiDAR files at once.
-    #[pyo3(signature = (file_names, parallel=true))]
-    fn read_lidars(&self, file_names: Vec<String>, parallel: bool) -> PyResult<Vec<Lidar>> {
+    #[pyo3(signature = (file_names, parallel=true, file_mode="r"))]
+    fn read_lidars(&self, file_names: Vec<String>, parallel: bool, file_mode: &str) -> PyResult<Vec<Lidar>> {
         let _ = parallel;
         file_names
             .into_iter()
-            .map(|name| self.read_lidar(&name, "r"))
+            .map(|name| self.read_lidar(&name, file_mode))
             .collect()
     }
 
@@ -14151,17 +14292,19 @@ impl WbEnvironment {
         ))
     }
 
-    #[pyo3(signature = (dem, output_path=None, callback=None))]
+    #[pyo3(signature = (dem, output_path=None, callback=None, interior_only=false))]
     fn find_noflow_cells(
         &self,
         dem: &Raster,
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
+        interior_only: bool,
     ) -> PyResult<Raster> {
         let resolved_output = self.resolve_output_path_for_wd(output_path);
 
         let mut args = serde_json::Map::new();
         args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
+        args.insert("interior_only".to_string(), json!(interior_only));
         if let Some(ref out) = resolved_output {
             args.insert("output".to_string(), json!(out));
         }
@@ -14483,7 +14626,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("breach_single_cell_pits", args, dem.active_band, callback)
     }
 
-    #[pyo3(signature = (dem, fix_flats=true, flat_increment=None, flat_resolution="garbrecht_martz", max_depth=None, output_path=None, callback=None))]
+    #[pyo3(signature = (dem, fix_flats=true, flat_increment=0.0001, flat_resolution="garbrecht_martz", max_depth=None, output_path=None, callback=None))]
     fn fill_depressions(
         &self,
         dem: &Raster,
@@ -14510,7 +14653,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("fill_depressions", args, dem.active_band, callback)
     }
 
-    #[pyo3(signature = (dem, fix_flats=true, flat_increment=None, output_path=None, callback=None))]
+    #[pyo3(signature = (dem, fix_flats=true, flat_increment=0.0001, output_path=None, callback=None))]
     fn fill_depressions_planchon_and_darboux(
         &self,
         dem: &Raster,
@@ -14531,7 +14674,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("fill_depressions_planchon_and_darboux", args, dem.active_band, callback)
     }
 
-    #[pyo3(signature = (dem, fix_flats=true, flat_increment=None, output_path=None, callback=None))]
+    #[pyo3(signature = (dem, fix_flats=true, flat_increment=0.0001, output_path=None, callback=None))]
     fn fill_depressions_wang_and_liu(
         &self,
         dem: &Raster,
@@ -15761,7 +15904,7 @@ impl WbEnvironment {
             json!(d8_pointer.file_path.to_string_lossy().to_string()),
         );
         args.insert(
-            "streams_raster".to_string(),
+            "streams".to_string(),
             json!(streams.file_path.to_string_lossy().to_string()),
         );
         args.insert("esri_pntr".to_string(), json!(esri_pntr));
@@ -15788,7 +15931,7 @@ impl WbEnvironment {
             json!(d8_pointer.file_path.to_string_lossy().to_string()),
         );
         args.insert(
-            "streams_raster".to_string(),
+            "streams".to_string(),
             json!(streams.file_path.to_string_lossy().to_string()),
         );
         args.insert("esri_pntr".to_string(), json!(esri_pntr));
@@ -15815,7 +15958,7 @@ impl WbEnvironment {
             json!(d8_pointer.file_path.to_string_lossy().to_string()),
         );
         args.insert(
-            "streams_raster".to_string(),
+            "streams".to_string(),
             json!(streams.file_path.to_string_lossy().to_string()),
         );
         args.insert("esri_pntr".to_string(), json!(esri_pntr));
@@ -15842,7 +15985,7 @@ impl WbEnvironment {
             json!(d8_pointer.file_path.to_string_lossy().to_string()),
         );
         args.insert(
-            "streams_raster".to_string(),
+            "streams".to_string(),
             json!(streams.file_path.to_string_lossy().to_string()),
         );
         args.insert("esri_pntr".to_string(), json!(esri_pntr));
@@ -15888,7 +16031,7 @@ impl WbEnvironment {
         let mut args = serde_json::Map::new();
         args.insert("dem".to_string(), json!(dem.file_path.to_string_lossy().to_string()));
         args.insert(
-            "streams_raster".to_string(),
+            "streams".to_string(),
             json!(streams.file_path.to_string_lossy().to_string()),
         );
         if let Some(out) = self.resolve_output_path_for_wd(output_path) {
@@ -32427,17 +32570,21 @@ impl WbEnvironment {
             }
             let mut r = input.load_wbraster()?;
             let target_bands = resolve_target_bands(r.bands, input.active_band, Some(&mode), bands)?;
+            let op = resolve_unary_value_op(tool_id)?;
             emit_callback_event(
                 &callback,
                 json!({"type":"message","message":format!("Applying {tool_id} to selected bands"),"band_count":r.bands}),
             )?;
             for (i, b) in target_bands.iter().enumerate() {
                 let mut vals = r.band_slice(*b as isize);
-                for v in &mut vals {
-                    if !r.is_nodata(*v) {
-                        *v = apply_unary_value(tool_id, *v)?;
+                let nodata = r.nodata;
+                let nodata_is_nan = nodata.is_nan();
+                vals.par_iter_mut().for_each(|v| {
+                    let is_nodata = if nodata_is_nan { v.is_nan() } else { *v == nodata };
+                    if !is_nodata {
+                        *v = op(*v);
                     }
-                }
+                });
                 r.set_band_slice(*b as isize, &vals).map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{tool_id} failed: {e}"))
                 })?;

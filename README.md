@@ -81,7 +81,7 @@ The following frontend lives in `crates/` but is **not** a Cargo workspace membe
 
 ## Publication Status
 
-At initial public launch, the following six backend crates are intended to be published on crates.io:
+The following six backend crates are published on crates.io and are useful as general low-level geospatial engines:
 
 - `wbgeotiff`
 - `wbprojection`
@@ -90,15 +90,14 @@ At initial public launch, the following six backend crates are intended to be pu
 - `wbtopology`
 - `wblidar`
 
-Other workspace crates are open-source and developed in this monorepo, but are not yet targeted for initial crates.io publication:
+The following six crates, also contained within this monorepo, are the core of Whitebox's frontend, that is the collection of 650+ spatial analysis tools:
 
 - `wbcore`
 - `wblicense_core`
 - `wbtools_oss`
 - `wbw_python`
 - `wbw_r`
-
-`wbw_qgis` is a pure-Python QGIS plugin and is not published to crates.io. It is not yet published to the QGIS plugin portal either; current workflow is source-based development and local installation only.
+- `wbw_qgis`
 
 This staged publishing model keeps the foundational backend stack available first while higher-level crates continue to stabilize.
 

@@ -26,3 +26,4 @@ wbw_r = { path = "../wbw_r", optional = true }
 serde_json.workspace = true
 pyo3 = { version = "0.28.2", features = ["macros"] }
 ureq = { version = "2.12.1", features = ["json"] }
+rayon = "1"

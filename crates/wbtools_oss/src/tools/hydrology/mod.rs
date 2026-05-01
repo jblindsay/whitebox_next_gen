@@ -4,6 +4,8 @@ use std::collections::BinaryHeap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 
 use serde_json::json;
 use rayon::prelude::*;
@@ -25,8 +27,6 @@ pub use find_noflow_cells::FindNoflowCellsTool;
 pub struct BreachDepressionsLeastCostTool;
 pub struct BreachSingleCellPitsTool;
 pub struct FillDepressionsTool;
-pub struct FillDepressionsNextgenTool;
-pub struct FillDepressionsNextgenTiledTool;
 pub struct FillDepressionsPlanchonAndDarbouxTool;
 pub struct FillDepressionsWangAndLiuTool;
 pub struct FillPitsTool;
@@ -1214,357 +1214,6 @@ fn fill_depressions_wang_and_liu_core(
 	out
 }
 
-fn seed_priority_flood_frontier_from_edges(
-	input: &[f64],
-	out: &mut [f64],
-	rows: usize,
-	cols: usize,
-	nodata: f64,
-	background: f64,
-	frontier_heap: &mut BinaryHeap<MinNode>,
-) {
-	if rows == 0 || cols == 0 {
-		return;
-	}
-
-	let mut nodata_queue = VecDeque::<usize>::new();
-
-	for c in 0..cols {
-		let i_top = idx(0, c, cols);
-		if out[i_top] == background {
-			let zin = input[i_top];
-			if zin == nodata {
-				out[i_top] = nodata;
-				nodata_queue.push_back(i_top);
-			} else {
-				out[i_top] = zin;
-				frontier_heap.push(MinNode { elev: zin, i: i_top });
-			}
-		}
-		if rows > 1 {
-			let i_bottom = idx(rows - 1, c, cols);
-			if out[i_bottom] == background {
-				let zin = input[i_bottom];
-				if zin == nodata {
-					out[i_bottom] = nodata;
-					nodata_queue.push_back(i_bottom);
-				} else {
-					out[i_bottom] = zin;
-					frontier_heap.push(MinNode { elev: zin, i: i_bottom });
-				}
-			}
-		}
-	}
-	for r in 1..rows.saturating_sub(1) {
-		let i_left = idx(r, 0, cols);
-		if out[i_left] == background {
-			let zin = input[i_left];
-			if zin == nodata {
-				out[i_left] = nodata;
-				nodata_queue.push_back(i_left);
-			} else {
-				out[i_left] = zin;
-				frontier_heap.push(MinNode { elev: zin, i: i_left });
-			}
-		}
-		if cols > 1 {
-			let i_right = idx(r, cols - 1, cols);
-			if out[i_right] == background {
-				let zin = input[i_right];
-				if zin == nodata {
-					out[i_right] = nodata;
-					nodata_queue.push_back(i_right);
-				} else {
-					out[i_right] = zin;
-					frontier_heap.push(MinNode { elev: zin, i: i_right });
-				}
-			}
-		}
-	}
-
-	while let Some(ci) = nodata_queue.pop_front() {
-		let r = ci / cols;
-		let c = ci % cols;
-		for k in 0..8 {
-			let rn = r as isize + DY[k];
-			let cn = c as isize + DX[k];
-			if !in_bounds(rn, cn, rows, cols) {
-				continue;
-			}
-			let ni = idx(rn as usize, cn as usize, cols);
-			if out[ni] != background {
-				continue;
-			}
-			let zn = input[ni];
-			if zn == nodata {
-				out[ni] = nodata;
-				nodata_queue.push_back(ni);
-			} else {
-				out[ni] = zn;
-				frontier_heap.push(MinNode { elev: zn, i: ni });
-			}
-		}
-	}
-}
-
-fn fill_depressions_nextgen_core(
-	input: &[f64],
-	rows: usize,
-	cols: usize,
-	nodata: f64,
-	small: f64,
-) -> Vec<f64> {
-	let background = (i32::MIN + 1) as f64;
-	let mut out = vec![background; rows * cols];
-	let mut frontier_heap = BinaryHeap::<MinNode>::with_capacity((rows + cols).max(1024));
-	seed_priority_flood_frontier_from_edges(
-		input,
-		&mut out,
-		rows,
-		cols,
-		nodata,
-		background,
-		&mut frontier_heap,
-	);
-
-	let colsi = cols as isize;
-	let n_off: [isize; 8] = [1 - colsi, 1, colsi + 1, colsi, colsi - 1, -1, -colsi - 1, -colsi];
-
-	let mut depression_queue = VecDeque::<usize>::new();
-	loop {
-		let (ci, z) = if let Some(i) = depression_queue.pop_front() {
-			(i, out[i])
-		} else if let Some(node) = frontier_heap.pop() {
-			(node.i, node.elev)
-		} else {
-			break;
-		};
-		let r = ci / cols;
-		let c = ci % cols;
-		let raised = z + small;
-		if r > 0 && r + 1 < rows && c > 0 && c + 1 < cols {
-			let cis = ci as isize;
-			for &off in &n_off {
-				let ni = (cis + off) as usize;
-				if out[ni] != background {
-					continue;
-				}
-				let zin = input[ni];
-				if zin == nodata {
-					out[ni] = nodata;
-					continue;
-				}
-				if zin <= raised {
-					out[ni] = raised;
-					depression_queue.push_back(ni);
-				} else {
-					out[ni] = zin;
-					frontier_heap.push(MinNode { elev: zin, i: ni });
-				}
-			}
-		} else {
-			for k in 0..8 {
-				let rn = r as isize + DY[k];
-				let cn = c as isize + DX[k];
-				if !in_bounds(rn, cn, rows, cols) {
-					continue;
-				}
-				let ni = idx(rn as usize, cn as usize, cols);
-				if out[ni] != background {
-					continue;
-				}
-				let zin = input[ni];
-				if zin == nodata {
-					out[ni] = nodata;
-					continue;
-				}
-				if zin <= raised {
-					out[ni] = raised;
-					depression_queue.push_back(ni);
-				} else {
-					out[ni] = zin;
-					frontier_heap.push(MinNode { elev: zin, i: ni });
-				}
-			}
-		}
-	}
-
-	for v in &mut out {
-		if *v == background {
-			*v = nodata;
-		}
-	}
-
-	out
-}
-
-/// Run one pass of parallel tiled depression filling.
-/// Tiles start at `row_offset` and `col_offset`, then repeat every `tile_size` rows/cols.
-/// A leading partial tile covers [0, offset) when offset > 0.
-fn tiled_fill_one_pass(
-	input: &[f64],
-	rows: usize,
-	cols: usize,
-	nodata: f64,
-	small: f64,
-	tile_size: usize,
-	halo: usize,
-	row_offset: usize,
-	col_offset: usize,
-) -> Vec<f64> {
-	#[derive(Debug)]
-	struct TilePatch {
-		r0: usize,
-		c0: usize,
-		h: usize,
-		w: usize,
-		values: Vec<f64>,
-	}
-
-	// Build tile start lists including the leading partial tile when offset > 0.
-	let row_starts: Vec<usize> = {
-		let mut s = vec![0usize];
-		if row_offset > 0 && row_offset < rows {
-			s.push(row_offset);
-			let mut r = row_offset + tile_size;
-			while r < rows {
-				s.push(r);
-				r += tile_size;
-			}
-		} else {
-			let mut r = tile_size;
-			while r < rows {
-				s.push(r);
-				r += tile_size;
-			}
-		}
-		s
-	};
-	let col_starts: Vec<usize> = {
-		let mut s = vec![0usize];
-		if col_offset > 0 && col_offset < cols {
-			s.push(col_offset);
-			let mut c = col_offset + tile_size;
-			while c < cols {
-				s.push(c);
-				c += tile_size;
-			}
-		} else {
-			let mut c = tile_size;
-			while c < cols {
-				s.push(c);
-				c += tile_size;
-			}
-		}
-		s
-	};
-
-	let mut jobs = Vec::<(usize, usize)>::with_capacity(row_starts.len() * col_starts.len());
-	for &r0 in &row_starts {
-		for &c0 in &col_starts {
-			// Determine tile height/width based on next start boundary.
-			let next_r = if row_offset > 0 && r0 == 0 {
-				row_offset.min(rows)
-			} else {
-				(r0 + tile_size).min(rows)
-			};
-			let next_c = if col_offset > 0 && c0 == 0 {
-				col_offset.min(cols)
-			} else {
-				(c0 + tile_size).min(cols)
-			};
-			if next_r > r0 && next_c > c0 {
-				jobs.push((r0, c0));
-			}
-		}
-	}
-
-	let patches: Vec<TilePatch> = jobs
-		.into_par_iter()
-		.map(|(r0, c0)| {
-			let r1 = if row_offset > 0 && r0 == 0 {
-				row_offset.min(rows)
-			} else {
-				(r0 + tile_size).min(rows)
-			};
-			let c1 = if col_offset > 0 && c0 == 0 {
-				col_offset.min(cols)
-			} else {
-				(c0 + tile_size).min(cols)
-			};
-
-			let hr0 = r0.saturating_sub(halo);
-			let hc0 = c0.saturating_sub(halo);
-			let hr1 = (r1 + halo).min(rows);
-			let hc1 = (c1 + halo).min(cols);
-
-			let hrows = hr1 - hr0;
-			let hcols = hc1 - hc0;
-			let mut tile_input = vec![nodata; hrows * hcols];
-			for tr in 0..hrows {
-				let gr = hr0 + tr;
-				let src = gr * cols + hc0;
-				let dst = tr * hcols;
-				tile_input[dst..dst + hcols].copy_from_slice(&input[src..src + hcols]);
-			}
-
-			let tile_out = fill_depressions_nextgen_core(&tile_input, hrows, hcols, nodata, small);
-
-			let h = r1 - r0;
-			let w = c1 - c0;
-			let mut values = vec![nodata; h * w];
-			for rr in 0..h {
-				let gr = r0 + rr;
-				let tr = gr - hr0;
-				for cc in 0..w {
-					let gc = c0 + cc;
-					let tc = gc - hc0;
-					values[rr * w + cc] = tile_out[tr * hcols + tc];
-				}
-			}
-
-			TilePatch { r0, c0, h, w, values }
-		})
-		.collect();
-
-	let mut out = input.to_vec();
-	for patch in patches {
-		for rr in 0..patch.h {
-			let dst = (patch.r0 + rr) * cols + patch.c0;
-			let src = rr * patch.w;
-			out[dst..dst + patch.w].copy_from_slice(&patch.values[src..src + patch.w]);
-		}
-	}
-	out
-}
-
-fn fill_depressions_nextgen_tiled_parallel_core(
-	input: &[f64],
-	rows: usize,
-	cols: usize,
-	nodata: f64,
-	small: f64,
-	tile_size: usize,
-) -> Vec<f64> {
-	if rows == 0 || cols == 0 {
-		return Vec::new();
-	}
-
-	let tile_size = tile_size.max(64);
-	if rows <= tile_size && cols <= tile_size {
-		return fill_depressions_nextgen_core(input, rows, cols, nodata, small);
-	}
-	let halo = (tile_size / 8).clamp(4, 64);
-
-	// Parallel tiled pass: resolves depressions smaller than tile_size quickly.
-	let tiled = tiled_fill_one_pass(input, rows, cols, nodata, small, tile_size, halo, 0, 0);
-
-	// Global correction pass: fixes any cross-seam artifacts left by the tiled pass.
-	// Running on the already-mostly-filled 'tiled' output rather than the raw DEM
-	// keeps the depression queue small.
-	fill_depressions_nextgen_core(&tiled, rows, cols, nodata, small)
-}
-
 fn fill_depressions_planchon_and_darboux_core(
 	input: &[f64],
 	rows: usize,
@@ -1937,22 +1586,6 @@ fn run_fill_like(
 			let max_depth = args.get("max_depth").and_then(|v| v.as_f64()).unwrap_or(f64::INFINITY);
 			fill_depressions_core(&data, dem.rows, dem.cols, dem.nodata, small, max_depth, fix_flats, flat_mode)
 		}
-		"nextgen" => fill_depressions_nextgen_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
-		"nextgen_tiled" => {
-			let tile_size = args
-				.get("tile_size")
-				.and_then(|v| v.as_u64())
-				.map(|v| v as usize)
-				.unwrap_or(1024);
-			fill_depressions_nextgen_tiled_parallel_core(
-				&data,
-				dem.rows,
-				dem.cols,
-				dem.nodata,
-				if fix_flats { small } else { 0.0 },
-				tile_size,
-			)
-		}
 		"wang_liu" => fill_depressions_wang_and_liu_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
 		"planchon" => fill_depressions_planchon_and_darboux_core(&data, dem.rows, dem.cols, dem.nodata, if fix_flats { small } else { 0.0 }),
 		_ => {
@@ -1969,39 +1602,56 @@ fn run_fill_like(
 fn d8_dir_from_dem_local(input: &Raster) -> Vec<i8> {
 	let rows = input.rows;
 	let cols = input.cols;
-	let nodata = input.nodata;
-	let mut dirs = vec![-2i8; rows * cols];
 	let cell_x = input.cell_size_x;
 	let cell_y = input.cell_size_y;
 	let diag = (cell_x * cell_x + cell_y * cell_y).sqrt();
 	let lengths = [diag, cell_x, diag, cell_y, diag, cell_x, diag, cell_y];
+	let mut dirs = vec![-2i8; rows * cols];
 
-	for r in 0..rows {
-		for c in 0..cols {
-			let i = idx(r, c, cols);
-			let z = input.get(0, r as isize, c as isize);
-			if z == nodata {
-				continue;
+	let num_procs = thread::available_parallelism()
+		.map(|n| n.get())
+		.unwrap_or(1)
+		.max(1);
+	let view = Arc::new(input.band_view(0));
+	let (tx, rx) = mpsc::channel();
+
+	for tid in 0..num_procs {
+		let view = view.clone();
+		let tx = tx.clone();
+		thread::spawn(move || {
+			for r in (0..rows).filter(|row| row % num_procs == tid) {
+				let mut row_dirs = vec![-2i8; cols];
+				for c in 0..cols {
+					// BandView::get returns nodata for OOB — no explicit in_bounds needed.
+					let z = view.get(r as isize, c as isize);
+					if view.is_nodata(z) {
+						continue;
+					}
+					let mut best_dir = -1i8;
+					let mut best_slope = f64::MIN;
+					for k in 0..8 {
+						let zn = view.get(r as isize + DY[k], c as isize + DX[k]);
+						if view.is_nodata(zn) {
+							continue;
+						}
+						let slope = (z - zn) / lengths[k];
+						if slope > 0.0 && slope > best_slope {
+							best_slope = slope;
+							best_dir = k as i8;
+						}
+					}
+					row_dirs[c] = best_dir;
+				}
+				let _ = tx.send((r, row_dirs));
 			}
-			let mut best_dir = -1i8;
-			let mut best_slope = f64::MIN;
-			for k in 0..8 {
-				let rn = r as isize + DY[k];
-				let cn = c as isize + DX[k];
-				if !in_bounds(rn, cn, rows, cols) {
-					continue;
-				}
-				let zn = input.get(0, rn, cn);
-				if zn == nodata {
-					continue;
-				}
-				let slope = (z - zn) / lengths[k];
-				if slope > 0.0 && slope > best_slope {
-					best_slope = slope;
-					best_dir = k as i8;
-				}
-			}
-			dirs[i] = best_dir;
+		});
+	}
+	drop(tx);
+
+	for _ in 0..rows {
+		if let Ok((r, row_dirs)) = rx.recv() {
+			let start = r * cols;
+			dirs[start..start + cols].copy_from_slice(&row_dirs);
 		}
 	}
 
@@ -2186,17 +1836,44 @@ fn build_flow_dir_and_mark_nodata(
 	out_nodata: f64,
 	cols: usize,
 ) -> Vec<i8> {
-	let nodata = pntr.nodata;
 	let rows = pntr.rows;
 	let mut flow_dir = vec![-2i8; rows * cols];
-	for r in 0..rows {
-		for c in 0..cols {
-			let i = idx(r, c, cols);
-			let z = pntr.get(0, r as isize, c as isize);
-			if z == nodata {
-				out[i] = out_nodata;
-			} else {
-				flow_dir[i] = decode_d8_pointer_dir(z, esri_style);
+	let num_procs = thread::available_parallelism()
+		.map(|n| n.get())
+		.unwrap_or(1)
+		.max(1);
+	let view = Arc::new(pntr.band_view(0));
+	let (tx, rx) = mpsc::channel::<(usize, Vec<i8>, Vec<u8>)>();
+
+	for tid in 0..num_procs {
+		let view = view.clone();
+		let tx = tx.clone();
+		thread::spawn(move || {
+			for r in (0..rows).filter(|row| row % num_procs == tid) {
+				let mut row_flow = vec![-2i8; cols];
+				let mut row_nodata = vec![0u8; cols];
+				for c in 0..cols {
+					let z = view.get(r as isize, c as isize);
+					if view.is_nodata(z) {
+						row_nodata[c] = 1;
+					} else {
+						row_flow[c] = decode_d8_pointer_dir(z, esri_style);
+					}
+				}
+				let _ = tx.send((r, row_flow, row_nodata));
+			}
+		});
+	}
+	drop(tx);
+
+	for _ in 0..rows {
+		if let Ok((r, row_flow, row_nodata)) = rx.recv() {
+			let start = r * cols;
+			flow_dir[start..start + cols].copy_from_slice(&row_flow);
+			for c in 0..cols {
+				if row_nodata[c] == 1 {
+					out[start + c] = out_nodata;
+				}
 			}
 		}
 	}
@@ -2807,6 +2484,7 @@ impl Tool for FillDepressionsTool {
 	fn manifest(&self) -> ToolManifest {
 		let mut defaults = ToolArgs::new();
 		defaults.insert("fix_flats".to_string(), json!(true));
+		defaults.insert("flat_increment".to_string(), json!(0.0001));
 		defaults.insert("flat_resolution".to_string(), json!("garbrecht_martz"));
 		defaults.insert("max_depth".to_string(), json!(f64::INFINITY));
 		ToolManifest {
@@ -2832,136 +2510,6 @@ impl Tool for FillDepressionsTool {
 
 	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		run_fill_like(args, "fill_depressions")
-	}
-}
-
-impl Tool for FillDepressionsNextgenTool {
-	fn metadata(&self) -> ToolMetadata {
-		ToolMetadata {
-			id: "fill_depressions_nextgen",
-			display_name: "Fill Depressions (Next Gen)",
-			summary: "Fills depressions in a DEM using an improved priority-flood with a dual frontier/depression queue.",
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![
-				ToolParamSpec {
-					name: "dem",
-					description: "Input DEM raster",
-					required: true,
-				},
-				ToolParamSpec {
-					name: "fix_flats",
-					description: "Apply a small gradient over flats",
-					required: false,
-				},
-				ToolParamSpec {
-					name: "flat_increment",
-					description: "Optional flat increment",
-					required: false,
-				},
-				ToolParamSpec {
-					name: "output",
-					description: "Output raster path",
-					required: false,
-				},
-			],
-		}
-	}
-
-	fn manifest(&self) -> ToolManifest {
-		let mut defaults = ToolArgs::new();
-		defaults.insert("fix_flats".to_string(), json!(true));
-		ToolManifest {
-			id: "fill_depressions_nextgen".to_string(),
-			display_name: "Fill Depressions (Next Gen)".to_string(),
-			summary: "Fills depressions in a DEM using an improved priority-flood with a dual frontier/depression queue.".to_string(),
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![],
-			defaults,
-			examples: vec![],
-			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string(), "priority_flood".to_string()],
-			stability: ToolStability::Experimental,
-		}
-	}
-
-	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-		parse_raster_path_arg(args, "dem")
-			.or_else(|_| parse_raster_path_arg(args, "input"))
-			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
-		Ok(())
-	}
-
-	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-		run_fill_like(args, "nextgen")
-	}
-}
-
-impl Tool for FillDepressionsNextgenTiledTool {
-	fn metadata(&self) -> ToolMetadata {
-		ToolMetadata {
-			id: "fill_depressions_nextgen_tiled",
-			display_name: "Fill Depressions (Next Gen Tiled)",
-			summary: "Fills depressions in a DEM using an experimental tiled-parallel nextgen strategy.",
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![
-				ToolParamSpec {
-					name: "dem",
-					description: "Input DEM raster",
-					required: true,
-				},
-				ToolParamSpec {
-					name: "fix_flats",
-					description: "Apply a small gradient over flats",
-					required: false,
-				},
-				ToolParamSpec {
-					name: "flat_increment",
-					description: "Optional flat increment",
-					required: false,
-				},
-				ToolParamSpec {
-					name: "tile_size",
-					description: "Tile size in cells (default 1024)",
-					required: false,
-				},
-				ToolParamSpec {
-					name: "output",
-					description: "Output raster path",
-					required: false,
-				},
-			],
-		}
-	}
-
-	fn manifest(&self) -> ToolManifest {
-		let mut defaults = ToolArgs::new();
-		defaults.insert("fix_flats".to_string(), json!(true));
-		defaults.insert("tile_size".to_string(), json!(1024));
-		ToolManifest {
-			id: "fill_depressions_nextgen_tiled".to_string(),
-			display_name: "Fill Depressions (Next Gen Tiled)".to_string(),
-			summary: "Fills depressions in a DEM using an experimental tiled-parallel nextgen strategy.".to_string(),
-			category: ToolCategory::Raster,
-			license_tier: LicenseTier::Open,
-			params: vec![],
-			defaults,
-			examples: vec![],
-			tags: vec!["hydrology".to_string(), "depression".to_string(), "dem".to_string(), "priority_flood".to_string(), "tiled".to_string()],
-			stability: ToolStability::Experimental,
-		}
-	}
-
-	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
-		parse_raster_path_arg(args, "dem")
-			.or_else(|_| parse_raster_path_arg(args, "input"))
-			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
-		Ok(())
-	}
-
-	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-		run_fill_like(args, "nextgen_tiled")
 	}
 }
 
@@ -3001,6 +2549,7 @@ impl Tool for FillDepressionsPlanchonAndDarbouxTool {
 	fn manifest(&self) -> ToolManifest {
 		let mut defaults = ToolArgs::new();
 		defaults.insert("fix_flats".to_string(), json!(true));
+		defaults.insert("flat_increment".to_string(), json!(0.0001));
 		ToolManifest {
 			id: "fill_depressions_planchon_and_darboux".to_string(),
 			display_name: "Fill Depressions (Planchon and Darboux)".to_string(),
@@ -3063,6 +2612,7 @@ impl Tool for FillDepressionsWangAndLiuTool {
 	fn manifest(&self) -> ToolManifest {
 		let mut defaults = ToolArgs::new();
 		defaults.insert("fix_flats".to_string(), json!(true));
+		defaults.insert("flat_increment".to_string(), json!(0.0001));
 		ToolManifest {
 			id: "fill_depressions_wang_and_liu".to_string(),
 			display_name: "Fill Depressions (Wang and Liu)".to_string(),
@@ -3961,27 +3511,48 @@ impl Tool for D8MassFluxTool {
 		}
 		let efficiency_multiplier = if efficiency_max > 1.0 { 0.01 } else { 1.0 };
 
-		let dirs = d8_dir_from_dem_local(&dem);
+		let dirs_vec = d8_dir_from_dem_local(&dem);
+		let dirs = Arc::new(dirs_vec);
 		let mut inflow = vec![-1i32; rows * cols];
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				if dem.get(0, r as isize, c as isize) == dem.nodata {
-					continue;
-				}
-				let mut count = 0i32;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if !in_bounds(rn, cn, rows, cols) {
-						continue;
+
+		// Parallelize the inflow count — O(n × 8), dominant sequential cost.
+		{
+			let num_procs = thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
+			let (tx, rx) = mpsc::channel::<(usize, Vec<i32>)>();
+			for tid in 0..num_procs {
+				let dirs = dirs.clone();
+				let view = Arc::new(dem.band_view(0));
+				let tx = tx.clone();
+				thread::spawn(move || {
+					const INFLOWING: [i8; 8] = [4, 5, 6, 7, 0, 1, 2, 3];
+					for r in (0..rows).filter(|row| row % num_procs == tid) {
+						let mut row_inflow = vec![-1i32; cols];
+						for c in 0..cols {
+							if view.is_nodata(view.get(r as isize, c as isize)) {
+								continue;
+							}
+							let mut count = 0i32;
+							for k in 0..8 {
+								let rn = r as isize + DY[k];
+								let cn = c as isize + DX[k];
+								if rn < 0 || cn < 0 || rn as usize >= rows || cn as usize >= cols {
+									continue;
+								}
+								if dirs[rn as usize * cols + cn as usize] == INFLOWING[k] {
+									count += 1;
+								}
+							}
+							row_inflow[c] = count;
+						}
+						let _ = tx.send((r, row_inflow));
 					}
-					let ni = idx(rn as usize, cn as usize, cols);
-					if dirs[ni] == [4, 5, 6, 7, 0, 1, 2, 3][k] {
-						count += 1;
-					}
+				});
+			}
+			drop(tx);
+			for _ in 0..rows {
+				if let Ok((r, row_inflow)) = rx.recv() {
+					inflow[r * cols..(r + 1) * cols].copy_from_slice(&row_inflow);
 				}
-				inflow[i] = count;
 			}
 		}
 
@@ -8402,10 +7973,8 @@ impl Tool for BasinsTool {
 
 		let rows = pntr.rows;
 		let cols = pntr.cols;
-		let nodata = pntr.nodata;
 		let out_nodata = -32768.0;
 		let low_value = (i32::MIN + 1) as f64;
-		let mut flow_dir = vec![-2i8; rows * cols];
 		let mut out = vec![low_value; rows * cols];
 		let mut basin_id = 0.0;
 
@@ -8413,12 +7982,11 @@ impl Tool for BasinsTool {
 			for c in 0..cols {
 				let i = idx(r, c, cols);
 				let z = pntr.get(0, r as isize, c as isize);
-				if z == nodata {
+				if pntr.is_nodata(z) {
 					out[i] = out_nodata;
 					continue;
 				}
 				let dir = decode_d8_pointer_dir(z, esri_style);
-				flow_dir[i] = dir;
 				if dir < 0 {
 					basin_id += 1.0;
 					out[i] = basin_id;
@@ -8426,55 +7994,8 @@ impl Tool for BasinsTool {
 			}
 		}
 
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				if out[i] != low_value {
-					continue;
-				}
-				let (mut y, mut x) = (r as isize, c as isize);
-				let mut outlet_id = out_nodata;
-				loop {
-					let ii = idx(y as usize, x as usize, cols);
-					let dir = flow_dir[ii];
-					if dir >= 0 {
-						y += DY[dir as usize];
-						x += DX[dir as usize];
-						if !in_bounds(y, x, rows, cols) {
-							break;
-						}
-						let zn = out[idx(y as usize, x as usize, cols)];
-						if zn != low_value {
-							outlet_id = zn;
-							break;
-						}
-					} else {
-						break;
-					}
-				}
-
-				let (mut y, mut x) = (r as isize, c as isize);
-				out[i] = outlet_id;
-				loop {
-					let ii = idx(y as usize, x as usize, cols);
-					let dir = flow_dir[ii];
-					if dir >= 0 {
-						y += DY[dir as usize];
-						x += DX[dir as usize];
-						if !in_bounds(y, x, rows, cols) {
-							break;
-						}
-						let ni = idx(y as usize, x as usize, cols);
-						if out[ni] != low_value {
-							break;
-						}
-						out[ni] = outlet_id;
-					} else {
-						break;
-					}
-				}
-			}
-		}
+		let flow_dir = build_flow_dir_and_mark_nodata(&pntr, esri_style, &mut out, out_nodata, cols);
+		run_watershed_labeling(&mut out, &flow_dir, rows, cols, low_value, out_nodata);
 
 		let mut raster = vec_to_raster(&pntr, &out, DataType::I32);
 		raster.nodata = out_nodata;
@@ -8983,7 +8504,6 @@ fn stream_link_id_pass(pntr: &Raster, streams: &Raster, esri_style: bool, out_no
 	let rows = pntr.rows;
 	let cols = pntr.cols;
 	let stream_nodata = streams.nodata;
-	let pntr_nodata = pntr.nodata;
 
 	// inflowing_vals[k] = pointer value that a neighbour at direction k must
 	// carry to be flowing INTO the current cell.
@@ -9018,39 +8538,70 @@ fn stream_link_id_pass(pntr: &Raster, streams: &Raster, esri_style: bool, out_no
 	let mut num_inflowing = vec![-1i8; rows * cols];
 	let mut stack: Vec<(usize, usize)> = Vec::new();
 	let mut current_id = 1.0f64;
+	let num_procs = thread::available_parallelism()
+		.map(|n| n.get())
+		.unwrap_or(1)
+		.max(1);
+	let pntr_view = Arc::new(pntr.band_view(0));
+	let streams_view = Arc::new(streams.band_view(0));
+	let (tx, rx) = mpsc::channel::<(usize, Vec<f64>, Vec<i8>, Vec<usize>)>();
 
-	for r in 0..rows {
-		for c in 0..cols {
-			let i = idx(r, c, cols);
-			let sv = streams.get(0, r as isize, c as isize);
-			let pv = pntr.get(0, r as isize, c as isize);
-			if sv > 0.0 && sv != stream_nodata {
-				// Stream cell: count inflowing stream neighbours via the pointer
-				let mut count = 0i8;
-				for k in 0..8 {
-					let rn = r as isize + DY[k];
-					let cn = c as isize + DX[k];
-					if in_bounds(rn, cn, rows, cols) {
-						let sn = streams.get(0, rn, cn);
-						let pn = pntr.get(0, rn, cn);
-						if sn > 0.0 && sn != stream_nodata && pn == inflowing_vals[k] {
-							count += 1;
+	for tid in 0..num_procs {
+		let pntr_view = pntr_view.clone();
+		let streams_view = streams_view.clone();
+		let tx = tx.clone();
+		thread::spawn(move || {
+			for r in (0..rows).filter(|row| row % num_procs == tid) {
+				let mut row_pourpts = vec![out_nodata; cols];
+				let mut row_inflow = vec![-1i8; cols];
+				let mut row_headwaters = Vec::<usize>::new();
+				for c in 0..cols {
+					let sv = streams_view.get(r as isize, c as isize);
+					let pv = pntr_view.get(r as isize, c as isize);
+					if sv > 0.0 && !streams_view.is_nodata(sv) {
+						let mut count = 0i8;
+						for k in 0..8 {
+							let rn = r as isize + DY[k];
+							let cn = c as isize + DX[k];
+							if in_bounds(rn, cn, rows, cols) {
+								let sn = streams_view.get(rn, cn);
+								let pn = pntr_view.get(rn, cn);
+								if sn > 0.0 && !streams_view.is_nodata(sn) && pn == inflowing_vals[k] {
+									count += 1;
+								}
+							}
 						}
+						row_inflow[c] = count;
+						if count == 0 {
+							row_headwaters.push(c);
+						}
+					} else if !pntr_view.is_nodata(pv) {
+						row_pourpts[c] = 0.0;
 					}
 				}
-				num_inflowing[i] = count;
-				if count == 0 {
-					// Headwater: assign a new link ID immediately
-					pourpts[i] = current_id;
-					current_id += 1.0;
-					stack.push((r, c));
-				}
-			} else if pv != pntr_nodata {
-				// Non-stream valid cell
-				pourpts[i] = 0.0;
+				let _ = tx.send((r, row_pourpts, row_inflow, row_headwaters));
 			}
-			// pntr-nodata cells stay at out_nodata
+		});
+	}
+	drop(tx);
+
+	let mut headwaters: Vec<(usize, usize)> = Vec::new();
+	for _ in 0..rows {
+		if let Ok((r, row_pourpts, row_inflow, row_headwaters)) = rx.recv() {
+			let start = r * cols;
+			pourpts[start..start + cols].copy_from_slice(&row_pourpts);
+			num_inflowing[start..start + cols].copy_from_slice(&row_inflow);
+			for c in row_headwaters {
+				headwaters.push((r, c));
+			}
 		}
+	}
+	headwaters.sort_unstable();
+	for (r, c) in headwaters {
+		let i = idx(r, c, cols);
+		pourpts[i] = current_id;
+		current_id += 1.0;
+		stack.push((r, c));
 	}
 
 	while let Some((row, col)) = stack.pop() {
@@ -9443,38 +8994,36 @@ impl Tool for StrahlerOrderBasinsTool {
 		// pourpts[i] = 0.0 for stream cells (initial), out_nodata for non-stream.
 		// After the pass every reachable stream cell holds its Strahler order (≥ 1).
 		let mut pourpts = vec![out_nodata; rows * cols];
-		for r in 0..rows {
-			for c in 0..cols {
-				let i = idx(r, c, cols);
-				let sv = streams.get(0, r as isize, c as isize);
-				if sv > 0.0 && sv != stream_nodata {
-					pourpts[i] = 0.0;
-				}
-			}
-		}
+		let pntr_view = pntr.band_view(0);
+		let streams_view = streams.band_view(0);
+		let mut headwaters: Vec<(usize, usize)> = Vec::new();
 
 		for r in 0..rows {
 			for c in 0..cols {
-				let sv = streams.get(0, r as isize, c as isize);
-				if sv <= 0.0 || sv == stream_nodata {
+				let sv = streams_view.get(r as isize, c as isize);
+				if sv <= 0.0 || streams_view.is_nodata(sv) {
 					continue;
 				}
-				// Check if this is a headwater (no inflowing stream neighbours)
+				pourpts[idx(r, c, cols)] = 0.0;
 				let mut num_inflow = 0i8;
 				for k in 0..8 {
 					let rn = r as isize + DY[k];
 					let cn = c as isize + DX[k];
 					if in_bounds(rn, cn, rows, cols) {
-						let sn = streams.get(0, rn, cn);
-						let pn = pntr.get(0, rn, cn);
-						if sn > 0.0 && sn != stream_nodata && pn == inflowing_vals[k] {
+						let sn = streams_view.get(rn, cn);
+						let pn = pntr_view.get(rn, cn);
+						if sn > 0.0 && !streams_view.is_nodata(sn) && pn == inflowing_vals[k] {
 							num_inflow += 1;
 						}
 					}
 				}
-				if num_inflow > 0 {
-					continue; // not a headwater
+				if num_inflow == 0 {
+					headwaters.push((r, c));
 				}
+			}
+		}
+
+		for (r, c) in headwaters {
 
 				// Headwater: walk downstream assigning Strahler orders
 				let mut x = c as isize;
@@ -9483,10 +9032,10 @@ impl Tool for StrahlerOrderBasinsTool {
 				pourpts[idx(r, c, cols)] = current_order;
 
 				loop {
-					let pv = pntr.get(0, y, x);
+					let pv = pntr_view.get(y, x);
 					if pv <= 0.0 || pv == pntr_nodata {
 						// No valid downstream pointer
-						let sv2 = streams.get(0, y, x);
+						let sv2 = streams_view.get(y, x);
 						if sv2 > 0.0 && sv2 != stream_nodata {
 							// Edge cell with stream value — bump order by 1 (legacy behaviour)
 							let ii = idx(y as usize, x as usize, cols);
@@ -9504,7 +9053,7 @@ impl Tool for StrahlerOrderBasinsTool {
 					if !in_bounds(y, x, rows, cols) {
 						break;
 					}
-					let sv_next = streams.get(0, y, x);
+					let sv_next = streams_view.get(y, x);
 					if sv_next <= 0.0 || sv_next == stream_nodata {
 						break; // left the stream channel
 					}
@@ -9520,8 +9069,8 @@ impl Tool for StrahlerOrderBasinsTool {
 							let x2 = x + DX[k];
 							let y2 = y + DY[k];
 							if in_bounds(y2, x2, rows, cols) {
-								let sn2 = streams.get(0, y2, x2);
-								let pn2 = pntr.get(0, y2, x2);
+								let sn2 = streams_view.get(y2, x2);
+								let pn2 = pntr_view.get(y2, x2);
 								let ii2 = idx(y2 as usize, x2 as usize, cols);
 								if sn2 > 0.0
 									&& sn2 != stream_nodata
@@ -9543,7 +9092,6 @@ impl Tool for StrahlerOrderBasinsTool {
 					}
 				}
 			}
-		}
 
 		// Step 2: watershed labeling — seed from stream cells with Strahler order > 0
 		let mut out = vec![low_value; rows * cols];

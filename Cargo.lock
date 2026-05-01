@@ -4082,6 +4082,7 @@ name = "wbw_python"
 version = "2.0.0"
 dependencies = [
  "pyo3",
+ "rayon",
  "serde_json",
  "ureq",
  "wbcore",

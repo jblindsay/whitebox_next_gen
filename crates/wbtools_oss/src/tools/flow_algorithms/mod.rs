@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
+use std::sync::mpsc;
 use std::sync::Arc;
+use std::thread;
 
 use serde_json::json;
 use wbprojection::{identify_epsg_from_wkt_with_policy, Crs, EpsgIdentifyPolicy};
@@ -36,6 +38,10 @@ fn in_bounds(r: isize, c: isize, rows: usize, cols: usize) -> bool {
 
 fn idx(r: usize, c: usize, cols: usize) -> usize {
     r * cols + c
+}
+
+fn is_nodata_value(value: f64, nodata: f64) -> bool {
+    value == nodata || (value.is_nan() && nodata.is_nan())
 }
 
 fn load_raster(path: &str) -> Result<Arc<Raster>, ToolError> {
@@ -224,36 +230,61 @@ fn geo_distance_m(use_haversine: bool, start: (f64, f64), end: (f64, f64)) -> f6
 fn d8_dir_from_dem(input: &Raster) -> Vec<i8> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     let cell_x = input.cell_size_x;
     let cell_y = input.cell_size_y;
     let diag = (cell_x * cell_x + cell_y * cell_y).sqrt();
     let lens = [diag, cell_x, diag, cell_y, diag, cell_x, diag, cell_y];
     let mut out = vec![-2i8; rows * cols];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let mut best_dir = -1i8;
-            let mut best_slope = f64::MIN;
-            for k in 0..8 {
-                let rn = r as isize + DY[k];
-                let cn = c as isize + DX[k];
-                if !in_bounds(rn, cn, rows, cols) {
-                    continue;
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let view = Arc::new(input.band_view(0));
+    let (tx, rx) = mpsc::channel();
+
+    for tid in 0..num_procs {
+        let view = view.clone();
+        let tx = tx.clone();
+        thread::spawn(move || {
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_data = vec![-2i8; cols];
+                for c in 0..cols {
+                    let z0 = view.get(r as isize, c as isize);
+                    if view.is_nodata(z0) {
+                        continue;
+                    }
+
+                    let mut best_dir = -1i8;
+                    let mut best_slope = f64::MIN;
+                    for k in 0..8 {
+                        let rn = r as isize + DY[k];
+                        let cn = c as isize + DX[k];
+                        if !in_bounds(rn, cn, rows, cols) {
+                            continue;
+                        }
+                        let z = view.get(rn, cn);
+                        if view.is_nodata(z) {
+                            continue;
+                        }
+                        let slope = (z0 - z) / lens[k];
+                        if slope > best_slope && slope > 0.0 {
+                            best_slope = slope;
+                            best_dir = k as i8;
+                        }
+                    }
+                    row_data[c] = best_dir;
                 }
-                let z = input.get(0, rn, cn);
-                let z0 = input.get(0, r as isize, c as isize);
-                if z == nodata || z0 == nodata {
-                    continue;
-                }
-                let slope = (z0 - z) / lens[k];
-                if slope > best_slope {
-                    best_slope = slope;
-                    best_dir = k as i8;
-                }
+                let _ = tx.send((r, row_data));
             }
-            out[i] = best_dir;
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_data)) = rx.recv() {
+            let start = r * cols;
+            out[start..start + cols].copy_from_slice(&row_data);
         }
     }
 
@@ -285,7 +316,7 @@ fn dinf_pointer_from_dem(input: &Raster) -> Vec<f64> {
         for c in 0..cols {
             let i = idx(r, c, cols);
             let e0 = input.get(0, r as isize, c as isize);
-            if e0 == nodata {
+            if input.is_nodata(e0) {
                 continue;
             }
             let mut dir = 360.0;
@@ -300,7 +331,7 @@ fn dinf_pointer_from_dem(input: &Raster) -> Vec<f64> {
                 }
                 let e1 = input.get(0, rn1, cn1);
                 let e2 = input.get(0, rn2, cn2);
-                if e1 == nodata || e2 == nodata {
+                if input.is_nodata(e1) || input.is_nodata(e2) {
                     continue;
                 }
                 let ac = ac_vals[k];
@@ -375,7 +406,7 @@ fn dinf_pointer_from_dem_geographic(input: &Raster) -> Vec<f64> {
         for c in 0..cols {
             let i = idx(r, c, cols);
             let e0 = input.get(0, r as isize, c as isize);
-            if e0 == nodata {
+            if input.is_nodata(e0) {
                 continue;
             }
             let phi0 = input.row_center_y(r as isize);
@@ -393,7 +424,7 @@ fn dinf_pointer_from_dem_geographic(input: &Raster) -> Vec<f64> {
                 }
                 let e1 = input.get(0, rn1, cn1);
                 let e2 = input.get(0, rn2, cn2);
-                if e1 == nodata || e2 == nodata {
+                if input.is_nodata(e1) || input.is_nodata(e2) {
                     continue;
                 }
 
@@ -469,7 +500,7 @@ fn dinf_inflow_count(flow_dir: &[f64], rows: usize, cols: usize, nodata: f64) ->
         for c in 0..cols {
             let i = idx(r, c, cols);
             let dir = flow_dir[i];
-            if dir == nodata {
+            if is_nodata_value(dir, nodata) {
                 continue;
             }
             let mut count = 0i8;
@@ -509,7 +540,7 @@ fn dinf_flow_accum_core(
     let mut stack = Vec::<usize>::with_capacity(n);
 
     for i in 0..n {
-        if flow_dir[i] != nodata {
+        if !is_nodata_value(flow_dir[i], nodata) {
             out[i] = 1.0;
             if inflow[i] == 0 {
                 stack.push(i);
@@ -571,7 +602,7 @@ fn dinf_flow_accum_core(
 
             if p1 > 0.0 && in_bounds(b1, a1, rows, cols) {
                 let n1 = idx(b1 as usize, a1 as usize, cols);
-                if out[n1] != nodata {
+                if !is_nodata_value(out[n1], nodata) {
                     out[n1] += out[i] * p1;
                     if inflow[n1] > 0 {
                         inflow[n1] -= 1;
@@ -583,7 +614,7 @@ fn dinf_flow_accum_core(
             }
             if p2 > 0.0 && in_bounds(b2, a2, rows, cols) {
                 let n2 = idx(b2 as usize, a2 as usize, cols);
-                if out[n2] != nodata {
+                if !is_nodata_value(out[n2], nodata) {
                     out[n2] += out[i] * p2;
                     if inflow[n2] > 0 {
                         inflow[n2] -= 1;
@@ -615,7 +646,7 @@ fn apply_dinf_output_type(
             grid_size = 1.0;
         }
         for v in accum.iter_mut() {
-            if *v == input.nodata || *v == -32768.0 {
+            if input.is_nodata(*v) || *v == -32768.0 {
                 *v = input.nodata;
             } else {
                 let scaled = *v * area / grid_size;
@@ -629,7 +660,7 @@ fn apply_dinf_output_type(
     for r in 0..input.rows {
         for c in 0..input.cols {
             let i = idx(r, c, input.cols);
-            if input.get(0, r as isize, c as isize) == input.nodata || accum[i] == -32768.0 {
+            if input.is_nodata(input.get(0, r as isize, c as isize)) || accum[i] == -32768.0 {
                 accum[i] = input.nodata;
                 continue;
             }
@@ -659,25 +690,46 @@ fn apply_dinf_output_type(
 fn fd8_pointer_from_dem(input: &Raster) -> Vec<f64> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
-    let out_nodata = -32768.0;
-    let mut out = vec![out_nodata; rows * cols];
+    const OUT_NODATA: f64 = -32768.0;
+    let mut out = vec![OUT_NODATA; rows * cols];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
-                continue;
-            }
-            let mut dir = 0.0;
-            for n in 0..8 {
-                let zn = input.get(0, r as isize + DY[n], c as isize + DX[n]);
-                if zn != nodata && zn < z {
-                    dir += (1u16 << n) as f64;
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let view = Arc::new(input.band_view(0));
+    let (tx, rx) = mpsc::channel();
+
+    for tid in 0..num_procs {
+        let view = view.clone();
+        let tx = tx.clone();
+        thread::spawn(move || {
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_out = vec![OUT_NODATA; cols];
+                for c in 0..cols {
+                    let z = view.get(r as isize, c as isize);
+                    if view.is_nodata(z) {
+                        continue;
+                    }
+                    let mut dir = 0.0f64;
+                    for n in 0..8 {
+                        let zn = view.get(r as isize + DY[n], c as isize + DX[n]);
+                        if !view.is_nodata(zn) && zn < z {
+                            dir += (1u16 << n) as f64;
+                        }
+                    }
+                    row_out[c] = dir;
                 }
+                let _ = tx.send((r, row_out));
             }
-            out[i] = dir;
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_out)) = rx.recv() {
+            let start = r * cols;
+            out[start..start + cols].copy_from_slice(&row_out);
         }
     }
 
@@ -687,24 +739,45 @@ fn fd8_pointer_from_dem(input: &Raster) -> Vec<f64> {
 fn fd8_inflow_count(input: &Raster) -> Vec<i8> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     let mut inflow = vec![-1i8; rows * cols];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
-                continue;
-            }
-            let mut count = 0i8;
-            for n in 0..8 {
-                let zn = input.get(0, r as isize + DY[n], c as isize + DX[n]);
-                if zn != nodata && zn > z {
-                    count += 1;
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let view = Arc::new(input.band_view(0));
+    let (tx, rx) = mpsc::channel();
+
+    for tid in 0..num_procs {
+        let view = view.clone();
+        let tx = tx.clone();
+        thread::spawn(move || {
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_inflow = vec![-1i8; cols];
+                for c in 0..cols {
+                    let z = view.get(r as isize, c as isize);
+                    if view.is_nodata(z) {
+                        continue;
+                    }
+                    let mut count = 0i8;
+                    for n in 0..8 {
+                        let zn = view.get(r as isize + DY[n], c as isize + DX[n]);
+                        if !view.is_nodata(zn) && zn > z {
+                            count += 1;
+                        }
+                    }
+                    row_inflow[c] = count;
                 }
+                let _ = tx.send((r, row_inflow));
             }
-            inflow[i] = count;
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_inflow)) = rx.recv() {
+            let start = r * cols;
+            inflow[start..start + cols].copy_from_slice(&row_inflow);
         }
     }
 
@@ -755,7 +828,7 @@ fn fd8_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f64
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata || zn >= z {
+                if input.is_nodata(zn) || zn >= z {
                     continue;
                 }
                 let slope = if is_geo {
@@ -779,7 +852,7 @@ fn fd8_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f64
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata {
+                if input.is_nodata(zn) {
                     continue;
                 }
                 let slope = if is_geo {
@@ -830,7 +903,6 @@ fn fd8_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f64
 fn mdinf_inflow_count(input: &Raster) -> Vec<i8> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     // MDInf facet vertex order: N, NW, W, SW, S, SE, E, NE
     let xd: [isize; 8] = [0, -1, -1, -1, 0, 1, 1, 1];
     let yd: [isize; 8] = [-1, -1, 0, 1, 1, 1, 0, -1];
@@ -839,7 +911,7 @@ fn mdinf_inflow_count(input: &Raster) -> Vec<i8> {
         for c in 0..cols {
             let i = idx(r, c, cols);
             let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
+            if input.is_nodata(z) {
                 continue;
             }
             let mut count = 0i8;
@@ -848,7 +920,7 @@ fn mdinf_inflow_count(input: &Raster) -> Vec<i8> {
                 let cn = c as isize + xd[k];
                 if in_bounds(rn, cn, rows, cols) {
                     let zn = input.get(0, rn, cn);
-                    if zn != nodata && zn > z {
+                    if !input.is_nodata(zn) && zn > z {
                         count += 1;
                     }
                 }
@@ -915,11 +987,11 @@ fn mdinf_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
                 let p1 = input.get(0, r as isize + yd[fac], c as isize + xd[fac]);
                 let p2 = input.get(0, r as isize + yd[ii], c as isize + xd[ii]);
 
-                if p1 < z && p1 != nodata {
+                if p1 < z && !input.is_nodata(p1) {
                     downslope[fac] = true;
                 }
 
-                if p1 != nodata && p2 != nodata {
+                if !input.is_nodata(p1) && !input.is_nodata(p2) {
                     let z1 = p1 - z;
                     let z2 = p2 - z;
                     let nx = (yd[fac] as f64 * z2 - yd[ii] as f64 * z1) * grid_res;
@@ -954,7 +1026,7 @@ fn mdinf_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
 
                     r_facet[fac] = hr;
                     s_facet[fac] = hs;
-                } else if p1 != nodata && p1 < z {
+                } else if !input.is_nodata(p1) && p1 < z {
                     // p2 is nodata; use cardinal direction toward p1
                     r_facet[fac] = fac as f64 / 4.0 * PI;
                     s_facet[fac] = (z - p1) / (dd[ii] * grid_res);
@@ -977,11 +1049,11 @@ fn mdinf_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
                         s_facet[fac] // direction inside facet
                     } else if r_facet[fac] == r_facet[ii] {
                         s_facet[fac] // adjacent facets share direction
-                    } else if s_facet[ii] == nodata
+                    } else if is_nodata_value(s_facet[ii], nodata)
                         && r_facet[fac] == (fac + 1) as f64 * quarter_pi
                     {
                         s_facet[fac] // direction on upper boundary; neighbour facet is nodata
-                    } else if s_facet[prev] == nodata
+                    } else if is_nodata_value(s_facet[prev], nodata)
                         && r_facet[fac] == fac as f64 * quarter_pi
                     {
                         s_facet[fac] // direction on lower boundary; neighbour facet is nodata
@@ -1062,7 +1134,7 @@ fn mdinf_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata {
+                if input.is_nodata(zn) {
                     continue;
                 }
                 let slope = (z - zn) / grid_lengths[k];
@@ -1100,7 +1172,12 @@ fn mdinf_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
     out
 }
 
-fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: bool) -> (Vec<u16>, Vec<f64>, Vec<u16>) {
+fn minimal_dispersion_core(
+    input: &Raster,
+    p: f64,
+    out_type: &str,
+    esri_style: bool,
+) -> (Vec<u16>, Vec<f64>, Vec<u16>, bool) {
     let rows = input.rows;
     let cols = input.cols;
     let n = rows * cols;
@@ -1109,8 +1186,9 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
     let use_haversine = if is_geo { should_use_haversine(input) } else { false };
 
     // Step 1: calculate D8 pointer and D-infinity direction.
-    let mut d8_flow_ptr = vec![0u16; n];
-    let mut interior_pit_found = false;
+    let mut d8_flow_ptr;
+    let dinf_flow_dir;
+    let mut interior_pit_found;
     let out_vals: [u16; 8] = if esri_style {
         [128, 1, 2, 4, 8, 16, 32, 64]
     } else {
@@ -1120,58 +1198,88 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
     let cell_x = input.cell_size_x;
     let cell_y = input.cell_size_y;
     let diag = (cell_x * cell_x + cell_y * cell_y).sqrt();
-    let lens = [diag, cell_x, diag, cell_y, diag, cell_x, diag, cell_y];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
-                continue;
-            }
+    if is_geo {
+        d8_flow_ptr = vec![0u16; n];
+        interior_pit_found = false;
 
-            let mut best = -1i8;
-            let mut max_slope = f64::MIN;
-            let mut neighbouring_nodata = false;
-            for k in 0..8 {
-                let rn = r as isize + DY[k];
-                let cn = c as isize + DX[k];
-                if !in_bounds(rn, cn, rows, cols) {
-                    neighbouring_nodata = true;
-                    continue;
-                }
-                let zn = input.get(0, rn, cn);
-                if zn == nodata {
-                    neighbouring_nodata = true;
-                    continue;
-                }
-                let slope = if is_geo {
-                    let start = (input.row_center_y(r as isize), input.col_center_x(c as isize));
-                    let end = (input.row_center_y(rn), input.col_center_x(cn));
-                    let d = geo_distance_m(use_haversine, start, end);
-                    (z - zn) / d
-                } else {
-                    (z - zn) / lens[k]
-                };
-                if slope > max_slope && slope > 0.0 {
-                    max_slope = slope;
-                    best = k as i8;
-                }
-            }
+        // Parallelize per-cell D8 pointer scan + interior pit detection.
+        let num_procs = thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .max(1);
+        let view = Arc::new(input.band_view(0));
+        let y_max_val = input.y_max();
+        let x_min_val = input.x_min;
+        let (tx, rx) = mpsc::channel::<(usize, Vec<u16>, bool)>();
 
-            if best >= 0 {
-                d8_flow_ptr[i] = out_vals[best as usize];
-            } else if !neighbouring_nodata {
-                interior_pit_found = true;
+        for tid in 0..num_procs {
+            let view = view.clone();
+            let tx = tx.clone();
+            let out_vals = out_vals;
+            let y_max_val = y_max_val;
+            let x_min_val = x_min_val;
+            thread::spawn(move || {
+                for r in (0..rows).filter(|row| row % num_procs == tid) {
+                    let mut row_ptr = vec![0u16; cols];
+                    let mut row_has_pit = false;
+                    for c in 0..cols {
+                        let z = view.get(r as isize, c as isize);
+                        if view.is_nodata(z) {
+                            continue;
+                        }
+
+                        let mut best = -1i8;
+                        let mut max_slope = f64::MIN;
+                        let mut neighbouring_nodata = false;
+                        for k in 0..8 {
+                            let rn = r as isize + DY[k];
+                            let cn = c as isize + DX[k];
+                            if !in_bounds(rn, cn, rows, cols) {
+                                neighbouring_nodata = true;
+                                continue;
+                            }
+                            let zn = view.get(rn, cn);
+                            if view.is_nodata(zn) {
+                                neighbouring_nodata = true;
+                                continue;
+                            }
+                            let slope = {
+                                let start = (y_max_val - (r as f64 + 0.5) * cell_y, x_min_val + (c as f64 + 0.5) * cell_x);
+                                let end = (y_max_val - (rn as f64 + 0.5) * cell_y, x_min_val + (cn as f64 + 0.5) * cell_x);
+                                let d = geo_distance_m(use_haversine, start, end);
+                                (z - zn) / d
+                            };
+                            if slope > max_slope && slope > 0.0 {
+                                max_slope = slope;
+                                best = k as i8;
+                            }
+                        }
+
+                        if best >= 0 {
+                            row_ptr[c] = out_vals[best as usize];
+                        } else if !neighbouring_nodata {
+                            row_has_pit = true;
+                        }
+                    }
+                    let _ = tx.send((r, row_ptr, row_has_pit));
+                }
+            });
+        }
+        drop(tx);
+
+        for _ in 0..rows {
+            if let Ok((r, row_ptr, row_has_pit)) = rx.recv() {
+                let start = r * cols;
+                d8_flow_ptr[start..start + cols].copy_from_slice(&row_ptr);
+                interior_pit_found |= row_has_pit;
             }
         }
-    }
 
-    let dinf_flow_dir = if is_geo {
-        dinf_pointer_from_dem_geographic(input)
+        dinf_flow_dir = dinf_pointer_from_dem_geographic(input);
     } else {
-        dinf_pointer_from_dem(input)
-    };
+        (d8_flow_ptr, dinf_flow_dir, interior_pit_found) = mdfa_initial_dirs_projected(input, esri_style);
+    }
 
     // Step 2: find source cells and perform path-correction on D8 pointers.
     let inflowing_vals_u16: [u16; 8] = if esri_style {
@@ -1184,7 +1292,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
     let mut sources = Vec::<(isize, isize, f64)>::with_capacity(n);
     for r in 0..rows {
         for c in 0..cols {
-            if input.get(0, r as isize, c as isize) == nodata {
+            if input.is_nodata(input.get(0, r as isize, c as isize)) {
                 continue;
             }
             if d8_flow_ptr[idx(r, c, cols)] == 0 {
@@ -1273,42 +1381,34 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
                 let n_new = pntr_matches[fd_new as usize];
                 let test_r = row_n + DY[n_new];
                 let test_c = col_n + DX[n_new];
-                if in_bounds(test_r, test_c, rows, cols) {
-                    let zn = input.get(0, test_r, test_c);
-                    if zn <= z {
-                        let old_r = row_n + DY[n_dir];
-                        let old_c = col_n + DX[n_dir];
-                        if in_bounds(old_r, old_c, rows, cols) {
-                            sources.push((old_r, old_c, 0.0));
-                        }
-                        d8_flow_ptr[ii] = fd_new;
-                        n_dir = n_new;
-                        accumulated_deflection -= cell_x;
-                    }
+                let zn = input.get(0, test_r, test_c);
+                if zn <= z {
+                    let old_r = row_n + DY[n_dir];
+                    let old_c = col_n + DX[n_dir];
+                    sources.push((old_r, old_c, 0.0));
+                    d8_flow_ptr[ii] = fd_new;
+                    n_dir = n_new;
+                    accumulated_deflection -= cell_x;
                 }
             } else if accumulated_deflection <= -cell_x {
                 let fd_new = left[n_dir];
                 let n_new = pntr_matches[fd_new as usize];
                 let test_r = row_n + DY[n_new];
                 let test_c = col_n + DX[n_new];
-                if in_bounds(test_r, test_c, rows, cols) {
-                    let zn = input.get(0, test_r, test_c);
-                    if zn <= z {
-                        let old_r = row_n + DY[n_dir];
-                        let old_c = col_n + DX[n_dir];
-                        if in_bounds(old_r, old_c, rows, cols) {
-                            sources.push((old_r, old_c, 0.0));
-                        }
-                        d8_flow_ptr[ii] = fd_new;
-                        n_dir = n_new;
-                        accumulated_deflection += cell_x;
-                    }
+                let zn = input.get(0, test_r, test_c);
+                if zn <= z {
+                    let old_r = row_n + DY[n_dir];
+                    let old_c = col_n + DX[n_dir];
+                    sources.push((old_r, old_c, 0.0));
+                    d8_flow_ptr[ii] = fd_new;
+                    n_dir = n_new;
+                    accumulated_deflection += cell_x;
                 }
             }
 
             row_n += DY[n_dir];
             col_n += DX[n_dir];
-            if !in_bounds(row_n, col_n, rows, cols) || input.get(0, row_n, col_n) == nodata {
+            if !in_bounds(row_n, col_n, rows, cols) || input.is_nodata(input.get(0, row_n, col_n)) {
                 break;
             }
         }
@@ -1322,7 +1422,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
         for c in 0..cols {
             let i = idx(r, c, cols);
             let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
+            if input.is_nodata(z) {
                 continue;
             }
             let mut highest_neighbour = f64::NEG_INFINITY;
@@ -1366,7 +1466,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
         for r in 0..rows {
             for c in 0..cols {
                 let i = idx(r, c, cols);
-                if input.get(0, r as isize, c as isize) != nodata {
+                if !input.is_nodata(input.get(0, r as isize, c as isize)) {
                     accum[i] = 1.0;
                 }
             }
@@ -1376,7 +1476,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
         for r in 0..rows {
             for c in 0..cols {
                 let i = idx(r, c, cols);
-                if input.get(0, r as isize, c as isize) != nodata {
+                if !input.is_nodata(input.get(0, r as isize, c as isize)) {
                     accum[i] = cell_area;
                 }
             }
@@ -1385,7 +1485,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
         for r in 0..rows {
             for c in 0..cols {
                 let i = idx(r, c, cols);
-                if input.get(0, r as isize, c as isize) == nodata {
+                if input.is_nodata(input.get(0, r as isize, c as isize)) {
                     continue;
                 }
                 let phi0 = input.row_center_y(r as isize);
@@ -1462,10 +1562,7 @@ fn minimal_dispersion_core(input: &Raster, p: f64, out_type: &str, esri_style: b
         }
     }
 
-    if interior_pit_found {
-        // keep parity behavior by retaining flag path; currently no direct warnings in tool runtime
-    }
-    (pntr_modified, accum, d8_flow_ptr)
+    (pntr_modified, accum, d8_flow_ptr, interior_pit_found)
 }
 
 fn apply_mdfa_output_type(
@@ -1478,7 +1575,6 @@ fn apply_mdfa_output_type(
 ) {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     let flow_directions: [u16; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
     if out_type == "sca" {
@@ -1499,7 +1595,7 @@ fn apply_mdfa_output_type(
             for r in 0..rows {
                 for c in 0..cols {
                     let i = idx(r, c, cols);
-                    if input.get(0, r as isize, c as isize) == nodata {
+                    if input.is_nodata(input.get(0, r as isize, c as isize)) {
                         accum[i] = -32768.0;
                         continue;
                     }
@@ -1529,7 +1625,7 @@ fn apply_mdfa_output_type(
                 let phi0 = input.row_center_y(r as isize);
                 for c in 0..cols {
                     let i = idx(r, c, cols);
-                    if input.get(0, r as isize, c as isize) == nodata {
+                    if input.is_nodata(input.get(0, r as isize, c as isize)) {
                         accum[i] = -32768.0;
                         continue;
                     }
@@ -1578,7 +1674,7 @@ fn apply_mdfa_output_type(
         for r in 0..rows {
             for c in 0..cols {
                 let i = idx(r, c, cols);
-                if input.get(0, r as isize, c as isize) == nodata {
+                if input.is_nodata(input.get(0, r as isize, c as isize)) {
                     accum[i] = -32768.0;
                 } else {
                     let z = accum[i];
@@ -1636,7 +1732,7 @@ fn qin_flow_accum_core(input: &Raster, exponent: f64, max_slope_deg: f64, conver
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata {
+                if input.is_nodata(zn) {
                     continue;
                 }
                 let slope = (z - zn) / grid_lengths[k];
@@ -1680,7 +1776,7 @@ fn qin_flow_accum_core(input: &Raster, exponent: f64, max_slope_deg: f64, conver
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata {
+                if input.is_nodata(zn) {
                     continue;
                 }
                 let slope = (z - zn) / grid_lengths[k];
@@ -1771,7 +1867,7 @@ fn quinn_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
                         continue;
                     }
                     let zn = input.get(0, rn, cn);
-                    if zn == nodata {
+                    if input.is_nodata(zn) {
                         continue;
                     }
                     let slope = (z - zn) / grid_lengths[k];
@@ -1796,7 +1892,7 @@ fn quinn_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
                     continue;
                 }
                 let zn = input.get(0, rn, cn);
-                if zn == nodata {
+                if input.is_nodata(zn) {
                     continue;
                 }
                 let slope = (z - zn) / grid_lengths[k];
@@ -1836,76 +1932,249 @@ fn quinn_flow_accum_core(input: &Raster, exponent: f64, convergence_threshold: f
     out
 }
 
+fn mdfa_initial_dirs_projected(input: &Raster, esri_style: bool) -> (Vec<u16>, Vec<f64>, bool) {
+    let rows = input.rows;
+    let cols = input.cols;
+    let n = rows * cols;
+    let nodata = input.nodata;
+    let cell_x = input.cell_size_x;
+    let cell_y = input.cell_size_y;
+    let diag = (cell_x * cell_x + cell_y * cell_y).sqrt();
+    let grid_res = (cell_x + cell_y) / 2.0;
+    let d8_lens = [diag, cell_x, diag, cell_y, diag, cell_x, diag, cell_y];
+    let out_vals: [u16; 8] = if esri_style {
+        [128, 1, 2, 4, 8, 16, 32, 64]
+    } else {
+        [1, 2, 4, 8, 16, 32, 64, 128]
+    };
+    let ac_vals = [0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
+    let af_vals = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0];
+    let e1_col = [1, 0, 0, -1, -1, 0, 0, 1];
+    let e1_row = [0, -1, -1, 0, 0, 1, 1, 0];
+    let e2_col = [1, 1, -1, -1, -1, -1, 1, 1];
+    let e2_row = [-1, -1, -1, -1, 1, 1, 1, 1];
+    let atan_of_1 = 1.0_f64.atan();
+    const HALF_PI: f64 = PI / 2.0;
+
+    let mut d8_flow_ptr = vec![0u16; n];
+    let mut dinf_flow_dir = vec![nodata; n];
+    let mut interior_pit_found = false;
+
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let view = Arc::new(input.band_view(0));
+    let (tx, rx) = mpsc::channel::<(usize, Vec<u16>, Vec<f64>, bool)>();
+
+    for tid in 0..num_procs {
+        let view = view.clone();
+        let tx = tx.clone();
+        let out_vals = out_vals;
+        let d8_lens = d8_lens;
+        thread::spawn(move || {
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_d8 = vec![0u16; cols];
+                let mut row_dinf = vec![nodata; cols];
+                let mut row_has_pit = false;
+                for c in 0..cols {
+                    let e0 = view.get(r as isize, c as isize);
+                    if view.is_nodata(e0) {
+                        continue;
+                    }
+
+                    let mut dir = 360.0;
+                    let mut max_slope = f64::MIN;
+                    let mut neighbouring_nodata = false;
+                    for k in 0..8 {
+                        let e1 = view.get(r as isize + e1_row[k], c as isize + e1_col[k]);
+                        let e2 = view.get(r as isize + e2_row[k], c as isize + e2_col[k]);
+                        if view.is_nodata(e1) || view.is_nodata(e2) {
+                            neighbouring_nodata = true;
+                            continue;
+                        }
+                        let ac = ac_vals[k];
+                        let af = af_vals[k];
+                        let mut s;
+                        let mut r_ang;
+                        if e0 > e1 && e0 > e2 {
+                            let s1 = (e0 - e1) / grid_res;
+                            let s2 = (e1 - e2) / grid_res;
+                            r_ang = if s1 != 0.0 { (s2 / s1).atan() } else { PI / 2.0 };
+                            s = (s1 * s1 + s2 * s2).sqrt();
+                            if (s1 < 0.0 && s2 <= 0.0) || (s1 == 0.0 && s2 < 0.0) {
+                                s *= -1.0;
+                            }
+                            if r_ang < 0.0 || r_ang > atan_of_1 {
+                                if r_ang < 0.0 {
+                                    r_ang = 0.0;
+                                    s = s1;
+                                } else {
+                                    r_ang = atan_of_1;
+                                    s = (e0 - e2) / diag;
+                                }
+                            }
+                        } else if e0 > e1 || e0 > e2 {
+                            if e0 > e1 {
+                                r_ang = 0.0;
+                                s = (e0 - e1) / grid_res;
+                            } else {
+                                r_ang = atan_of_1;
+                                s = (e0 - e2) / diag;
+                            }
+                        } else {
+                            continue;
+                        }
+                        if s >= max_slope && s != 0.00001 {
+                            max_slope = s;
+                            dir = af * r_ang + ac * HALF_PI;
+                        }
+                    }
+
+                    if max_slope > 0.0 {
+                        let mut az = 360.0 - dir.to_degrees() + 90.0;
+                        if az > 360.0 {
+                            az -= 360.0;
+                        }
+                        row_dinf[c] = az;
+                    } else {
+                        row_dinf[c] = -1.0;
+                        if !neighbouring_nodata {
+                            row_has_pit = true;
+                        }
+                    }
+
+                    let mut best_dir = 0usize;
+                    let mut best_slope = f64::MIN;
+                    for k in 0..8 {
+                        let zn = view.get(r as isize + DY[k], c as isize + DX[k]);
+                        if view.is_nodata(zn) {
+                            continue;
+                        }
+                        let slope = (e0 - zn) / d8_lens[k];
+                        if slope > best_slope && slope > 0.0 {
+                            best_slope = slope;
+                            best_dir = k;
+                        }
+                    }
+                    if best_slope >= 0.0 {
+                        row_d8[c] = out_vals[best_dir];
+                    }
+                }
+                let _ = tx.send((r, row_d8, row_dinf, row_has_pit));
+            }
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_d8, row_dinf, row_has_pit)) = rx.recv() {
+            let start = r * cols;
+            d8_flow_ptr[start..start + cols].copy_from_slice(&row_d8);
+            dinf_flow_dir[start..start + cols].copy_from_slice(&row_dinf);
+            interior_pit_found |= row_has_pit;
+        }
+    }
+
+    (d8_flow_ptr, dinf_flow_dir, interior_pit_found)
+}
+
 /// Returns 0-7 direction per cell (−2 = nodata, −1 = no downslope).
 /// Uses the Rho8 stochastic perturbation: diagonal-neighbour distances are
 /// divided by (2 − U) where U ∼ Uniform[0, 1).
 fn rho8_dir_from_dem(input: &Raster) -> Vec<i8> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     let is_geo = raster_is_geographic(input);
     let use_haversine = if is_geo { should_use_haversine(input) } else { false };
-    let mut rng = rand::rng();
+    // Capture coord scalars so threads can inline row_center_y / col_center_x.
+    let y_max_val = input.y_max();
+    let x_min_val = input.x_min;
+    let cell_size_x = input.cell_size_x;
+    let cell_size_y = input.cell_size_y;
     let mut out = vec![-2i8; rows * cols];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
-                continue; // leave as -2 (nodata marker)
-            }
-            let mut best_dir = -1i8;
-            let mut best_slope = f64::MIN;
-            for k in 0..8usize {
-                let rn = r as isize + DY[k];
-                let cn = c as isize + DX[k];
-                if !in_bounds(rn, cn, rows, cols) {
-                    continue;
-                }
-                let z_n = input.get(0, rn, cn);
-                if z_n == nodata {
-                    continue;
-                }
-                let is_cardinal = matches!(k, 1 | 3 | 5 | 7);
-                let slope = if is_geo {
-                    let lat1 = input.row_center_y(r as isize);
-                    let lon1 = input.col_center_x(c as isize);
-                    let (lat2, lon2) = if is_cardinal {
-                        (input.row_center_y(rn), input.col_center_x(cn))
-                    } else {
-                        // For diagonal k, approximate distance via adjacent cardinal cell (k+1)
-                        (
-                            input.row_center_y(r as isize + DY[k + 1]),
-                            input.col_center_x(c as isize + DX[k + 1]),
-                        )
-                    };
-                    let d = geo_distance_m(use_haversine, (lat1, lon1), (lat2, lon2));
-                    if is_cardinal {
-                        (z - z_n) / d
-                    } else {
-                        (z - z_n) / (d * (2.0 - rng.random_range(0.0_f64..1.0_f64)))
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+    let view = Arc::new(input.band_view(0));
+    let (tx, rx) = mpsc::channel();
+
+    for tid in 0..num_procs {
+        let view = view.clone();
+        let tx = tx.clone();
+        thread::spawn(move || {
+            // Each thread gets its own RNG — rand::rng() is thread-local in rand 0.10.
+            let mut rng = rand::rng();
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_out = vec![-2i8; cols];
+                for c in 0..cols {
+                    let z = view.get(r as isize, c as isize);
+                    if view.is_nodata(z) {
+                        continue;
                     }
-                } else if is_cardinal {
-                    z - z_n
-                } else {
-                    (z - z_n) / (2.0 - rng.random_range(0.0_f64..1.0_f64))
-                };
-                if slope > best_slope && slope > 0.0 {
-                    best_slope = slope;
-                    best_dir = k as i8;
+                    let mut best_dir = -1i8;
+                    let mut best_slope = f64::MIN;
+                    for k in 0..8usize {
+                        let rn = r as isize + DY[k];
+                        let cn = c as isize + DX[k];
+                        // BandView::get returns nodata for OOB — no explicit in_bounds needed.
+                        let z_n = view.get(rn, cn);
+                        if view.is_nodata(z_n) {
+                            continue;
+                        }
+                        let is_cardinal = matches!(k, 1 | 3 | 5 | 7);
+                        let slope = if is_geo {
+                            let lat1 = y_max_val - (r as f64 + 0.5) * cell_size_y;
+                            let lon1 = x_min_val + (c as f64 + 0.5) * cell_size_x;
+                            let (lat2, lon2) = if is_cardinal {
+                                (y_max_val - (rn as f64 + 0.5) * cell_size_y,
+                                 x_min_val + (cn as f64 + 0.5) * cell_size_x)
+                            } else {
+                                // Diagonal: approximate distance via adjacent cardinal cell (k+1).
+                                let rk1 = r as isize + DY[k + 1];
+                                let ck1 = c as isize + DX[k + 1];
+                                (y_max_val - (rk1 as f64 + 0.5) * cell_size_y,
+                                 x_min_val + (ck1 as f64 + 0.5) * cell_size_x)
+                            };
+                            let d = geo_distance_m(use_haversine, (lat1, lon1), (lat2, lon2));
+                            if is_cardinal {
+                                (z - z_n) / d
+                            } else {
+                                (z - z_n) / (d * (2.0 - rng.random_range(0.0_f64..1.0_f64)))
+                            }
+                        } else if is_cardinal {
+                            z - z_n
+                        } else {
+                            (z - z_n) / (2.0 - rng.random_range(0.0_f64..1.0_f64))
+                        };
+                        if slope > best_slope && slope > 0.0 {
+                            best_slope = slope;
+                            best_dir = k as i8;
+                        }
+                    }
+                    row_out[c] = best_dir;
                 }
+                let _ = tx.send((r, row_out));
             }
-            out[i] = best_dir;
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_out)) = rx.recv() {
+            let start = r * cols;
+            out[start..start + cols].copy_from_slice(&row_out);
         }
     }
+
     out
 }
 
 fn d8_dir_from_pointer(input: &Raster, esri_style: bool) -> Vec<i8> {
     let rows = input.rows;
     let cols = input.cols;
-    let nodata = input.nodata;
     let mut mapping = [-2i8; 129];
     if !esri_style {
         mapping[1] = 0;
@@ -1932,7 +2201,7 @@ fn d8_dir_from_pointer(input: &Raster, esri_style: bool) -> Vec<i8> {
         for c in 0..cols {
             let i = idx(r, c, cols);
             let z = input.get(0, r as isize, c as isize);
-            if z == nodata {
+            if input.is_nodata(z) {
                 continue;
             }
             if z > 0.0 {
@@ -1950,68 +2219,81 @@ fn d8_dir_from_pointer(input: &Raster, esri_style: bool) -> Vec<i8> {
     out
 }
 
-fn d8_pointer_values_from_dir(dirs: &[i8], rows: usize, cols: usize, nodata: f64, esri_style: bool) -> Vec<f64> {
-    let out_vals = if esri_style {
-        [128.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
-    } else {
-        [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
-    };
-    let mut out = vec![nodata; rows * cols];
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            let d = dirs[i];
-            out[i] = if d >= 0 { out_vals[d as usize] } else { 0.0 };
-        }
-    }
-    out
-}
-
 fn d8_flow_accum_core(flow_dir: &[i8], rows: usize, cols: usize, nodata: f64) -> Vec<f64> {
     let n = rows * cols;
     let mut out = vec![nodata; n];
     let mut inflow = vec![-1i8; n];
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let i = idx(r, c, cols);
-            if flow_dir[i] == -2 {
-                continue;
-            }
-            out[i] = 1.0;
-            let mut count = 0i8;
-            for k in 0..8 {
-                let rn = r as isize + DY[k];
-                let cn = c as isize + DX[k];
-                if !in_bounds(rn, cn, rows, cols) {
-                    continue;
+    // Parallelize the inflow count computation — O(n × 8), the dominant cost.
+    // Clone flow_dir into Arc so threads can share it safely.
+    let num_procs = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .max(1);
+
+    let fd = Arc::new(flow_dir.to_vec());
+    let (tx, rx) = mpsc::channel();
+
+    for tid in 0..num_procs {
+        let fd = fd.clone();
+        let tx = tx.clone();
+        thread::spawn(move || {
+            for r in (0..rows).filter(|row| row % num_procs == tid) {
+                let mut row_inflow = vec![-1i8; cols];
+                for c in 0..cols {
+                    let i = r * cols + c;
+                    if fd[i] == -2 {
+                        continue; // nodata cell; leave row_inflow[c] as -1
+                    }
+                    let mut count = 0i8;
+                    for k in 0..8 {
+                        let rn = r as isize + DY[k];
+                        let cn = c as isize + DX[k];
+                        if rn < 0 || cn < 0 || rn as usize >= rows || cn as usize >= cols {
+                            continue;
+                        }
+                        let ni = rn as usize * cols + cn as usize;
+                        if fd[ni] == INFLOWING_VALS[k] {
+                            count += 1;
+                        }
+                    }
+                    row_inflow[c] = count;
                 }
-                let ni = idx(rn as usize, cn as usize, cols);
-                if flow_dir[ni] == INFLOWING_VALS[k] {
-                    count += 1;
-                }
+                let _ = tx.send((r, row_inflow));
             }
-            inflow[i] = count;
+        });
+    }
+    drop(tx);
+
+    for _ in 0..rows {
+        if let Ok((r, row_inflow)) = rx.recv() {
+            let start = r * cols;
+            inflow[start..start + cols].copy_from_slice(&row_inflow);
         }
     }
 
-    let mut stack = Vec::<usize>::with_capacity(n);
+    // Initialize out values and seed the traversal stack.
+    let mut stack = Vec::<usize>::with_capacity(n / 4);
     for i in 0..n {
-        if inflow[i] == 0 {
-            stack.push(i);
+        if inflow[i] != -1 {
+            out[i] = 1.0;
+            if inflow[i] == 0 {
+                stack.push(i);
+            }
         }
     }
 
+    // Stack-based traversal — inherently sequential.
     while let Some(i) = stack.pop() {
-        let d = flow_dir[i];
+        let d = fd[i];
         if d >= 0 {
             let r = i / cols;
             let c = i % cols;
             let rn = r as isize + DY[d as usize];
             let cn = c as isize + DX[d as usize];
-            if in_bounds(rn, cn, rows, cols) {
-                let ni = idx(rn as usize, cn as usize, cols);
-                if out[ni] != nodata {
+            if rn >= 0 && cn >= 0 && (rn as usize) < rows && (cn as usize) < cols {
+                let ni = rn as usize * cols + cn as usize;
+                if inflow[ni] != -1 {
                     out[ni] += out[i];
                     inflow[ni] -= 1;
                     if inflow[ni] == 0 {
@@ -2163,23 +2445,29 @@ impl Tool for D8PointerTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        let out_vals: [f64; 8] = if esri {
+            [128.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+        } else {
+            [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+        };
+
         let dirs = d8_dir_from_dem(&input);
-        let mut values = d8_pointer_values_from_dir(&dirs, input.rows, input.cols, -32768.0, esri);
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                let i = idx(r, c, input.cols);
-                if input.get(0, r as isize, c as isize) == input.nodata {
-                    values[i] = -32768.0;
-                }
-            }
-        }
 
         let mut out = input.as_ref().clone();
         out.data_type = DataType::I16;
         out.nodata = -32768.0;
         for r in 0..input.rows {
             for c in 0..input.cols {
-                out.set_unchecked(0, r as isize, c as isize, values[idx(r, c, input.cols)]);
+                let i = idx(r, c, input.cols);
+                let d = dirs[i];
+                let v = if d >= 0 {
+                    out_vals[d as usize]
+                } else if d == -2 {
+                    -32768.0
+                } else {
+                    0.0
+                };
+                out.set_unchecked(0, r as isize, c as isize, v);
             }
         }
 
@@ -2304,21 +2592,40 @@ impl Tool for D8FlowAccumTool {
         };
 
         let mut accum = d8_flow_accum_core(&flow_dir, input.rows, input.cols, -32768.0);
-        apply_accum_output_type(
-            &mut accum,
-            &flow_dir,
-            &input,
-            -32768.0,
-            out_type,
-            log_transform,
-        );
 
+        // Fuse post-processing + copy into output raster — eliminates one full-grid pass.
         let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         out.nodata = -32768.0;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+
+        if !raster_is_geographic(&input) {
+            let mut cell_area = input.cell_size_x * input.cell_size_y;
+            let mut flow_width = (input.cell_size_x + input.cell_size_y) / 2.0;
+            if out_type == "cells" {
+                cell_area = 1.0;
+                flow_width = 1.0;
+            } else if out_type == "ca" {
+                flow_width = 1.0;
+            }
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    let v = if flow_dir[i] == -2 {
+                        -32768.0
+                    } else {
+                        let raw = accum[i] * cell_area / flow_width;
+                        if log_transform { raw.ln() } else { raw }
+                    };
+                    out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            // Geographic: reuse existing per-cell calculation path then copy.
+            apply_accum_output_type(&mut accum, &flow_dir, &input, -32768.0, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+                }
             }
         }
 
@@ -2679,13 +2986,39 @@ impl Tool for QinFlowAccumulationTool {
             .unwrap_or(false);
 
         let mut accum = qin_flow_accum_core(&input, exponent, max_slope, convergence_threshold);
-        apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
+        // Fuse post-processing + copy — eliminates one full-grid pass for projected CRS.
         let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+
+        if !raster_is_geographic(&input) {
+            let mut cell_area = input.cell_size_x * input.cell_size_y;
+            let mut flow_width = (input.cell_size_x + input.cell_size_y) / 2.0;
+            if out_type == "cells" {
+                cell_area = 1.0;
+                flow_width = 1.0;
+            } else if out_type == "ca" {
+                flow_width = 1.0;
+            }
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    let v = accum[i];
+                    let v = if input.is_nodata(v) || v == -32768.0 {
+                        input.nodata
+                    } else {
+                        let raw = v * cell_area / flow_width;
+                        if log_transform { raw.ln() } else { raw }
+                    };
+                    out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+                }
             }
         }
 
@@ -2772,13 +3105,39 @@ impl Tool for QuinnFlowAccumulationTool {
             .unwrap_or(false);
 
         let mut accum = quinn_flow_accum_core(&input, exponent, convergence_threshold);
-        apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
+        // Fuse post-processing + copy — eliminates one full-grid pass for projected CRS.
         let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+
+        if !raster_is_geographic(&input) {
+            let mut cell_area = input.cell_size_x * input.cell_size_y;
+            let mut flow_width = (input.cell_size_x + input.cell_size_y) / 2.0;
+            if out_type == "cells" {
+                cell_area = 1.0;
+                flow_width = 1.0;
+            } else if out_type == "ca" {
+                flow_width = 1.0;
+            }
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    let v = accum[i];
+                    let v = if input.is_nodata(v) || v == -32768.0 {
+                        input.nodata
+                    } else {
+                        let raw = v * cell_area / flow_width;
+                        if log_transform { raw.ln() } else { raw }
+                    };
+                    out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+                }
             }
         }
 
@@ -2801,6 +3160,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
                 ToolParamSpec { name: "log_transform", description: "Log-transform accumulation output", required: false },
                 ToolParamSpec { name: "clip", description: "Clip display max (accepted for compatibility)", required: false },
                 ToolParamSpec { name: "esri_pntr", description: "Use ESRI pointer encoding for flow-direction output", required: false },
+                ToolParamSpec { name: "debug_stats", description: "Emit one-line MDFA diagnostics (counts and raw max)", required: false },
                 ToolParamSpec { name: "output", description: "Flow accumulation output raster path", required: false },
                 ToolParamSpec { name: "flow_dir_output", description: "Flow-direction output raster path", required: false },
             ],
@@ -2814,6 +3174,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
         defaults.insert("log_transform".to_string(), json!(false));
         defaults.insert("clip".to_string(), json!(false));
         defaults.insert("esri_pntr".to_string(), json!(false));
+        defaults.insert("debug_stats".to_string(), json!(false));
         ToolManifest {
             id: "minimal_dispersion_flow_algorithm".to_string(),
             display_name: "Minimal Dispersion Flow Algorithm".to_string(),
@@ -2843,7 +3204,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
         Ok(())
     }
 
-    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let (input, accum_output_path) = parse_input_and_output(args)?;
         let dir_output_path = parse_optional_output_path(args, "flow_dir_output")
             .or_else(|_| parse_optional_output_path(args, "pointer_output"))?;
@@ -2879,10 +3240,13 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
             .or_else(|| args.get("esri_pointer"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
+        let debug_stats = args
+            .get("debug_stats")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
-        let (pntr_modified, mut accum, _d8_primary) =
+        let (pntr_modified, mut accum, _d8_primary, interior_pit_found) =
             minimal_dispersion_core(&input, p, out_type, esri);
-        apply_mdfa_output_type(&mut accum, &pntr_modified, &input, p, out_type, log_transform);
 
         let mut dir_out = input.as_ref().clone();
         dir_out.data_type = DataType::I16;
@@ -2890,7 +3254,7 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
         for r in 0..input.rows {
             for c in 0..input.cols {
                 let i = idx(r, c, input.cols);
-                if input.get(0, r as isize, c as isize) == input.nodata {
+                if input.is_nodata(input.get(0, r as isize, c as isize)) {
                     dir_out.set_unchecked(0, r as isize, c as isize, -32768.0);
                     continue;
                 }
@@ -2898,30 +3262,116 @@ impl Tool for MinimalDispersionFlowAlgorithmTool {
             }
         }
 
-        if clip {
-            let mut vals = accum
-                .iter()
-                .copied()
-                .filter(|v| *v != input.nodata && v.is_finite())
-                .collect::<Vec<f64>>();
-            if !vals.is_empty() {
-                vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                let idx95 = ((vals.len() as f64) * 0.95).floor() as usize;
-                let clip_max = vals[idx95.min(vals.len() - 1)];
-                for v in &mut accum {
-                    if *v != input.nodata && *v > clip_max {
-                        *v = clip_max;
+        let mut accum_out = input.as_ref().clone();
+        accum_out.data_type = DataType::F32;
+
+        if debug_stats {
+            let mut valid_cells = 0usize;
+            let mut d8_outlets = 0usize;
+            let mut mdfa_outlets = 0usize;
+            let mut dispersed_cells = 0usize;
+            let mut raw_max = f64::NEG_INFINITY;
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    if input.is_nodata(input.get(0, r as isize, c as isize)) {
+                        continue;
                     }
+                    valid_cells += 1;
+                    if _d8_primary[i] == 0 {
+                        d8_outlets += 1;
+                    }
+                    let fd = pntr_modified[i];
+                    if fd == 0 {
+                        mdfa_outlets += 1;
+                    }
+                    if fd.count_ones() > 1 {
+                        dispersed_cells += 1;
+                    }
+                    if accum[i] > raw_max {
+                        raw_max = accum[i];
+                    }
+                }
+            }
+            let log_max = if raw_max > 0.0 { raw_max.ln() } else { f64::NEG_INFINITY };
+            let msg = format!(
+                "mdfa debug: valid_cells={valid_cells}, d8_outlets={d8_outlets}, mdfa_outlets={mdfa_outlets}, dispersed_cells={dispersed_cells}, raw_max_cells={raw_max:.6}, log_max={log_max:.10}\n"
+            );
+            ctx.progress.info(msg.trim());
+        }
+
+        if !raster_is_geographic(&input) {
+            const FLOW_DIRECTIONS: [u16; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+            let rows = input.rows;
+            let cols = input.cols;
+            let cell_x = input.cell_size_x;
+            let cell_y = input.cell_size_y;
+            let avg = (cell_x + cell_y) / 2.0;
+            let flow_widths = if p < 1.0 {
+                let fw = avg * (std::f64::consts::SQRT_2 - 1.0);
+                [fw, fw, fw, fw, fw, fw, fw, fw]
+            } else {
+                [avg, cell_y, avg, cell_x, avg, cell_y, avg, cell_x]
+            };
+
+            for r in 0..rows {
+                for c in 0..cols {
+                    let i = idx(r, c, cols);
+                    let mut v = accum[i];
+                    if out_type == "sca" {
+                        if input.is_nodata(input.get(0, r as isize, c as isize)) {
+                            v = -32768.0;
+                        } else {
+                            let fd = pntr_modified[i];
+                            let mut total_flow_width = 0.0;
+                            let mut num_out = 0.0;
+                            for k in 0..8 {
+                                if (fd & FLOW_DIRECTIONS[k]) > 0 {
+                                    total_flow_width += flow_widths[k];
+                                    num_out += 1.0;
+                                }
+                            }
+                            if total_flow_width > 0.0 {
+                                if num_out == 1.0 {
+                                    total_flow_width = avg;
+                                }
+                                let raw = accum[i] / total_flow_width;
+                                v = if log_transform { raw.ln() } else { raw };
+                            } else {
+                                let raw = accum[i] / flow_widths[0];
+                                v = if log_transform { raw.ln() } else { raw };
+                            }
+                        }
+                    } else if log_transform {
+                        if input.is_nodata(input.get(0, r as isize, c as isize)) {
+                            v = -32768.0;
+                        } else {
+                            v = if v > 0.0 { v.ln() } else { 0.0 };
+                        }
+                    }
+                    accum_out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            apply_mdfa_output_type(&mut accum, &pntr_modified, &input, p, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    accum_out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
                 }
             }
         }
 
-        let mut accum_out = input.as_ref().clone();
-        accum_out.data_type = DataType::F32;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                accum_out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
-            }
+        if clip {
+            // Legacy compatibility: clip modifies display behavior, not raster values.
+            accum_out
+                .metadata
+                .push(("display_clip_max_percent".to_string(), "1.0".to_string()));
+        }
+
+        if interior_pit_found {
+            ctx.progress.info(
+                "warning: interior pit cells were found in the input DEM; consider depression-filling and flat correction before running minimal_dispersion_flow_algorithm",
+            );
         }
 
         let dir_locator = write_or_store_output(dir_out, dir_output_path)?;
@@ -3039,14 +3489,27 @@ impl Tool for Rho8PointerTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         let dirs = rho8_dir_from_dem(&input);
-        let ptr_vals = d8_pointer_values_from_dir(&dirs, input.rows, input.cols, -32768.0, esri);
+        // Fuse pointer-value lookup + copy — eliminates the intermediate Vec<f64>.
+        let out_vals: [f64; 8] = if esri {
+            [128.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+        } else {
+            [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+        };
         let mut out = input.as_ref().clone();
         out.data_type = DataType::I16;
         out.nodata = -32768.0;
         for r in 0..input.rows {
             for c in 0..input.cols {
                 let i = idx(r, c, input.cols);
-                out.set_unchecked(0, r as isize, c as isize, ptr_vals[i]);
+                let d = dirs[i];
+                let v = if d >= 0 {
+                    out_vals[d as usize]
+                } else if d == -2 {
+                    -32768.0
+                } else {
+                    0.0
+                };
+                out.set_unchecked(0, r as isize, c as isize, v);
             }
         }
         Ok(build_result(write_or_store_output(out, output_path)?))
@@ -3142,24 +3605,42 @@ impl Tool for Rho8FlowAccumTool {
         };
 
         let mut accum = d8_flow_accum_core(&flow_dir, input.rows, input.cols, -32768.0);
-        apply_accum_output_type(
-            &mut accum,
-            &flow_dir,
-            &input,
-            -32768.0,
-            out_type,
-            log_transform,
-        );
 
+        // Fuse post-processing + copy — eliminates one full-grid pass for projected CRS.
         let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
         out.nodata = -32768.0;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                let i = idx(r, c, input.cols);
-                out.set_unchecked(0, r as isize, c as isize, accum[i]);
+
+        if !raster_is_geographic(&input) {
+            let mut cell_area = input.cell_size_x * input.cell_size_y;
+            let mut flow_width = (input.cell_size_x + input.cell_size_y) / 2.0;
+            if out_type == "cells" {
+                cell_area = 1.0;
+                flow_width = 1.0;
+            } else if out_type == "ca" {
+                flow_width = 1.0;
+            }
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    let v = if flow_dir[i] == -2 {
+                        -32768.0
+                    } else {
+                        let raw = accum[i] * cell_area / flow_width;
+                        if log_transform { raw.ln() } else { raw }
+                    };
+                    out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            apply_accum_output_type(&mut accum, &flow_dir, &input, -32768.0, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+                }
             }
         }
+
         Ok(build_result(write_or_store_output(out, output_path)?))
     }
 }
@@ -3244,13 +3725,36 @@ impl Tool for FD8FlowAccumTool {
             .unwrap_or(false);
 
         let mut accum = fd8_flow_accum_core(&input, exponent, convergence_threshold);
-        apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
 
         let mut out = input.as_ref().clone();
         out.data_type = DataType::F32;
-        for r in 0..input.rows {
-            for c in 0..input.cols {
-                out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+        if !raster_is_geographic(&input) {
+            let mut area = input.cell_size_x * input.cell_size_y;
+            let mut grid_size = (input.cell_size_x + input.cell_size_y) / 2.0;
+            if out_type == "cells" {
+                area = 1.0;
+                grid_size = 1.0;
+            } else if out_type == "ca" {
+                grid_size = 1.0;
+            }
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    let i = idx(r, c, input.cols);
+                    let v = if input.is_nodata(accum[i]) || accum[i] == -32768.0 {
+                        input.nodata
+                    } else {
+                        let scaled = accum[i] * area / grid_size;
+                        if log_transform { scaled.ln() } else { scaled }
+                    };
+                    out.set_unchecked(0, r as isize, c as isize, v);
+                }
+            }
+        } else {
+            apply_dinf_output_type(&mut accum, &input, out_type, log_transform);
+            for r in 0..input.rows {
+                for c in 0..input.cols {
+                    out.set_unchecked(0, r as isize, c as isize, accum[idx(r, c, input.cols)]);
+                }
             }
         }
 

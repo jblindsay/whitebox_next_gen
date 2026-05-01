@@ -25,7 +25,7 @@ Assigns stream order based on the algorithm: headwater links are order 1; when t
 
 **Parameters:**
 - `d8_pntr` (Raster): D8 flow direction pointer raster
-- `streams_raster` (Raster): Stream network raster (positive values = streams)
+- `streams` (Raster): Stream network raster (positive values = streams)
 - `esri_pntr` (bool, optional): If true, use ESRI-style pointer values; otherwise use Whitebox style (default: false)
 - `zero_background` (bool, optional): If true, assign zero to non-stream cells; otherwise use NoData (default: false)
 - `output` (str, optional): Output raster path

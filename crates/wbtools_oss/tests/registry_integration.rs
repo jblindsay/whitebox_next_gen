@@ -7429,6 +7429,76 @@ fn find_noflow_cells_identifies_terminal_cell() {
 }
 
 #[test]
+fn find_noflow_cells_interior_only_excludes_nodata_adjacent_cells() {
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+
+    let unique = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock ok")
+            .as_nanos()
+    );
+    let input_path = std::env::temp_dir().join(format!("wbtools_oss_noflow_interior_in_{unique}.asc"));
+    let output_path = std::env::temp_dir().join(format!("wbtools_oss_noflow_interior_out_{unique}.asc"));
+
+    let mut raster = Raster::new(RasterConfig {
+        cols: 5,
+        rows: 5,
+        bands: 1,
+        x_min: 0.0,
+        y_min: 0.0,
+        cell_size: 1.0,
+        cell_size_y: None,
+        nodata: -9999.0,
+        data_type: DataType::F64,
+        crs: Default::default(),
+        metadata: Vec::new(),
+    });
+
+    for row in 0..5 {
+        for col in 0..5 {
+            raster.set(0, row, col, -9999.0).expect("set");
+        }
+    }
+    for row in 1..4 {
+        for col in 1..4 {
+            raster.set(0, row, col, 10.0).expect("set");
+        }
+    }
+
+    raster
+        .write(&input_path, RasterFormat::EsriAscii)
+        .expect("write input raster");
+
+    let mut args = ToolArgs::new();
+    args.insert("dem".to_string(), json!(input_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+    args.insert("interior_only".to_string(), json!(true));
+
+    let caps = OpenOnly;
+    registry
+        .run("find_noflow_cells", &args, &context(&caps))
+        .expect("find_noflow_cells tool should run");
+
+    let out = Raster::read(&output_path).expect("read output raster");
+    let mut count = 0usize;
+    for row in 0..5 {
+        for col in 0..5 {
+            if out.get(0, row, col) == 1.0 {
+                count += 1;
+            }
+        }
+    }
+    assert_eq!(count, 1, "only the center cell should remain for interior_only");
+
+    let _ = std::fs::remove_file(input_path);
+    let _ = std::fs::remove_file(output_path);
+}
+
+#[test]
 fn num_inflowing_neighbours_counts_upstream_cells() {
     let mut registry = ToolRegistry::new();
     register_default_tools(&mut registry);
@@ -8672,6 +8742,78 @@ fn strahler_order_basins_assigns_order_2_at_confluence() {
         v_21_2 == 2.0 || v_21_2 == nodata,
         "cell (2,2) should be order 2 or nodata, got {v_21_2}"
     );
+
+    let _ = std::fs::remove_file(&pntr_path);
+    let _ = std::fs::remove_file(&streams_path);
+    let _ = std::fs::remove_file(&output_path);
+}
+
+#[test]
+fn strahler_stream_order_assigns_headwaters_order_1() {
+    let mut registry = ToolRegistry::new();
+    register_default_tools(&mut registry);
+
+    let tag = unique_tag("wbtools_oss_strahler_stream_order");
+    let pntr_path = std::env::temp_dir().join(format!("{tag}_pntr.asc"));
+    let streams_path = std::env::temp_dir().join(format!("{tag}_streams.asc"));
+    let output_path = std::env::temp_dir().join(format!("{tag}_out.asc"));
+
+    // Y-shaped stream network:
+    // (0,0) and (0,2) headwaters -> (1,1) confluence -> (2,1) outlet.
+    let mut pntr = Raster::new(RasterConfig {
+        cols: 3, rows: 3, bands: 1,
+        x_min: 0.0, y_min: 0.0, cell_size: 1.0, cell_size_y: None,
+        nodata: -9999.0, data_type: DataType::F64,
+        crs: Default::default(), metadata: Vec::new(),
+    });
+    pntr.set(0, 0, 0, 4.0).expect("set");
+    pntr.set(0, 0, 1, 8.0).expect("set");
+    pntr.set(0, 0, 2, 16.0).expect("set");
+    pntr.set(0, 1, 0, 8.0).expect("set");
+    pntr.set(0, 1, 1, 8.0).expect("set");
+    pntr.set(0, 1, 2, 8.0).expect("set");
+    pntr.set(0, 2, 0, 2.0).expect("set");
+    pntr.set(0, 2, 1, 0.0).expect("set");
+    pntr.set(0, 2, 2, 32.0).expect("set");
+    pntr.write(&pntr_path, RasterFormat::EsriAscii).expect("write pntr");
+
+    let mut streams = Raster::new(RasterConfig {
+        cols: 3, rows: 3, bands: 1,
+        x_min: 0.0, y_min: 0.0, cell_size: 1.0, cell_size_y: None,
+        nodata: -9999.0, data_type: DataType::F64,
+        crs: Default::default(), metadata: Vec::new(),
+    });
+    for r in 0..3isize {
+        for c in 0..3isize {
+            streams.set(0, r, c, 0.0).expect("set");
+        }
+    }
+    streams.set(0, 0, 0, 1.0).expect("set");
+    streams.set(0, 0, 2, 1.0).expect("set");
+    streams.set(0, 1, 1, 1.0).expect("set");
+    streams.set(0, 2, 1, 1.0).expect("set");
+    streams.write(&streams_path, RasterFormat::EsriAscii).expect("write streams");
+
+    let mut args = ToolArgs::new();
+    args.insert("d8_pntr".to_string(), json!(pntr_path.to_string_lossy().to_string()));
+    args.insert("streams".to_string(), json!(streams_path.to_string_lossy().to_string()));
+    args.insert("output".to_string(), json!(output_path.to_string_lossy().to_string()));
+
+    let caps = OpenOnly;
+    registry
+        .run("strahler_stream_order", &args, &context(&caps))
+        .expect("strahler_stream_order should run");
+
+    let out = Raster::read(&output_path).expect("read output");
+    let v_h1 = out.get(0, 0, 0);
+    let v_h2 = out.get(0, 0, 2);
+    let v_conf = out.get(0, 1, 1);
+    let v_out = out.get(0, 2, 1);
+
+    assert_eq!(v_h1, 1.0, "headwater 1 should be order 1, got {v_h1}");
+    assert_eq!(v_h2, 1.0, "headwater 2 should be order 1, got {v_h2}");
+    assert_eq!(v_conf, 2.0, "confluence should be order 2, got {v_conf}");
+    assert_eq!(v_out, 2.0, "outlet should be order 2, got {v_out}");
 
     let _ = std::fs::remove_file(&pntr_path);
     let _ = std::fs::remove_file(&streams_path);

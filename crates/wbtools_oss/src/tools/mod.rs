@@ -617,8 +617,6 @@ pub use stream_network_analysis::HortonRatiosTool;
 pub use hydrology::BreachDepressionsLeastCostTool;
 pub use hydrology::BreachSingleCellPitsTool;
 pub use hydrology::FillDepressionsTool;
-pub use hydrology::FillDepressionsNextgenTool;
-pub use hydrology::FillDepressionsNextgenTiledTool;
 pub use hydrology::FillDepressionsPlanchonAndDarbouxTool;
 pub use hydrology::FillDepressionsWangAndLiuTool;
 pub use hydrology::FillPitsTool;

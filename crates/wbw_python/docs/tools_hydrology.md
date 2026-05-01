@@ -191,7 +191,7 @@ Returns:
 ### find_noflow_cells
 
 ```
-find_noflow_cells(dem, output_path=None, callback=None)
+find_noflow_cells(dem, output_path=None, callback=None, interior_only=False)
 ```
 
 Finds DEM cells that have no lower D8 neighbour. On a fully conditioned DEM this should usually be limited to valid edge-drainage cases; interior hits often indicate remaining pits or flats.
@@ -200,6 +200,7 @@ Parameters:
 - `dem`: Input DEM raster.
 - `output_path`: Optional output path. If omitted, returns an in-memory raster.
 - `callback`: Optional progress callback receiving JSON events.
+- `interior_only`: If true, only flags true interior no-flow cells (excluding raster-border and NoData-adjacent outlets).
 
 Returns:
 - Raster containing `1` at no-flow cells and NoData elsewhere.
@@ -1016,7 +1017,7 @@ When to use:
 ### fill_depressions
 
 ```
-fill_depressions(dem, fix_flats=True, flat_increment=None, flat_resolution="garbrecht_martz", max_depth=inf, output=None)
+fill_depressions(dem, fix_flats=True, flat_increment=0.0001, flat_resolution="garbrecht_martz", max_depth=inf, output=None)
 ```
 
 Fills depressions using a priority-flood strategy with optional flat resolution and optional maximum fill depth.
@@ -1031,7 +1032,7 @@ Algorithm notes:
 Parameters:
 - `dem`: Input DEM raster.
 - `fix_flats`: If true, impose a small gradient across filled flats.
-- `flat_increment`: Optional flat increment; omitting it is usually preferable.
+- `flat_increment`: Flat increment (default `0.0001`).
 - `flat_resolution`: Flat-resolution mode. One of `"garbrecht_martz"` or `"natural"`.
 - `max_depth`: Maximum allowed fill depth.
 - `output`: Optional output path.
@@ -1043,7 +1044,7 @@ When to use:
 ### fill_depressions_planchon_and_darboux
 
 ```
-fill_depressions_planchon_and_darboux(dem, fix_flats=True, flat_increment=None, output=None)
+fill_depressions_planchon_and_darboux(dem, fix_flats=True, flat_increment=0.0001, output=None)
 ```
 
 Planchon-and-Darboux-compatible interface using the shared optimized fill backend.
@@ -1056,13 +1057,13 @@ Algorithm notes:
 Parameters:
 - `dem`: Input DEM raster.
 - `fix_flats`: If true, impose a small gradient across filled flats.
-- `flat_increment`: Optional flat increment.
+- `flat_increment`: Flat increment (default `0.0001`).
 - `output`: Optional output path.
 
 ### fill_depressions_wang_and_liu
 
 ```
-fill_depressions_wang_and_liu(dem, fix_flats=True, flat_increment=None, output=None)
+fill_depressions_wang_and_liu(dem, fix_flats=True, flat_increment=0.0001, output=None)
 ```
 
 Wang-and-Liu-compatible interface using the shared optimized fill backend.
@@ -1075,7 +1076,7 @@ Algorithm notes:
 Parameters:
 - `dem`: Input DEM raster.
 - `fix_flats`: If true, impose a small gradient across filled flats.
-- `flat_increment`: Optional flat increment.
+- `flat_increment`: Flat increment (default `0.0001`).
 - `output`: Optional output path.
 
 ### fill_pits

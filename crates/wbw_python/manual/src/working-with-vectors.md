@@ -91,6 +91,35 @@ wbe.clear_vector_memory()
 print(f"After clear: {wbe.vector_memory_count()}")
 ```
 
+### Implicit Memory Output from Tools
+
+All vector-output tools store their result in memory automatically when the
+`output` parameter is omitted. You do not need to pass `file_mode='m'` or
+choose a temporary path — simply leave `output` out and the returned `Vector`
+object is already memory-backed:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+
+# No output path — result is stored in memory automatically
+buffered = wbe.vector.buffer_vector(roads, distance=15.0)
+print(buffered.file_path)  # prints: memory://vector/...
+
+# Chain operations without any intermediate files
+clipped = wbe.vector.clip(buffered, 'boundary.gpkg')
+print(clipped.file_path)  # also memory://vector/...
+
+# Persist the final result only
+wbe.write_vector(clipped, 'result.gpkg')
+```
+
+This applies to all tool categories — GIS, hydrology, geomorphometry, and stream
+network tools all follow the same rule. Providing an explicit `output` path
+writes to disk as before.
+
 Best practices:
 - Use `file_mode='m'` for intermediate spatial analysis results.
 - Export memory-backed vectors to disk with `write_vector()` when persisting final outputs.

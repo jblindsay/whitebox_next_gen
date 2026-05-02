@@ -661,9 +661,12 @@ impl TerrainAnalysisCore {
     fn write_vector_output(
         layer: &wbvector::Layer,
         output_path: Option<std::path::PathBuf>,
-        default_name: &str,
+        _default_name: &str,
     ) -> Result<String, ToolError> {
-        let out = output_path.unwrap_or_else(|| std::env::temp_dir().join(default_name));
+        let Some(out) = output_path else {
+            let id = wbvector::memory_store::put_vector(layer.clone());
+            return Ok(wbvector::memory_store::make_vector_memory_path(&id));
+        };
         if let Some(parent) = out.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(|e| {
@@ -3507,6 +3510,11 @@ impl TerrainAnalysisCore {
 
         // Stage 4: vectorize each sufficiently long component.
         let mut layer = wbvector::Layer::new("breaklines").with_geom_type(wbvector::GeometryType::LineString);
+        layer.crs = match (input.crs.epsg, input.crs.wkt.as_deref()) {
+            (_, Some(wkt)) => Some(wbvector::Crs::new().with_wkt(wkt)),
+            (Some(epsg), None) => Some(wbvector::Crs::new().with_epsg(epsg)),
+            _ => None,
+        };
         layer.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         layer.add_field(wbvector::FieldDef::new("AVG_CURV", wbvector::FieldType::Float));
         layer.add_field(wbvector::FieldDef::new("LENGTH", wbvector::FieldType::Float));
@@ -4562,6 +4570,11 @@ impl TerrainAnalysisCore {
 
         let mut layer = wbvector::Layer::new("low_points_on_headwater_divides")
             .with_geom_type(wbvector::GeometryType::Point);
+        layer.crs = match (dem.crs.epsg, dem.crs.wkt.as_deref()) {
+            (_, Some(wkt)) => Some(wbvector::Crs::new().with_wkt(wkt)),
+            (Some(epsg), None) => Some(wbvector::Crs::new().with_epsg(epsg)),
+            _ => None,
+        };
         layer.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         layer.add_field(wbvector::FieldDef::new("HEIGHT", wbvector::FieldType::Float));
         layer.add_field(wbvector::FieldDef::new(

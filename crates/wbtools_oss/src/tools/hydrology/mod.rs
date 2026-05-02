@@ -10,12 +10,13 @@ use std::thread;
 use serde_json::json;
 use rayon::prelude::*;
 use wbcore::{
-	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
+	parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory,
 	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
 
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector;
+use wbvector::memory_store as vector_memory_store;
 
 use crate::memory_store;
 use super::flow_algorithms::{D8FlowAccumTool, D8PointerTool};
@@ -125,6 +126,24 @@ fn build_result(path: String) -> ToolRunResult {
 		outputs,
 		..Default::default()
 	}
+}
+
+fn write_or_store_vector_output(layer: &wbvector::Layer, output_path: &str) -> Result<String, ToolError> {
+	if output_path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+		let id = vector_memory_store::put_vector(layer.clone());
+		return Ok(vector_memory_store::make_vector_memory_path(&id));
+	}
+
+	if let Some(parent) = std::path::Path::new(output_path).parent() {
+		if !parent.as_os_str().is_empty() {
+			std::fs::create_dir_all(parent)
+				.map_err(|e| ToolError::Execution(format!("cannot create output directory: {}", e)))?;
+		}
+	}
+	let fmt = wbvector::VectorFormat::detect(output_path).unwrap_or(wbvector::VectorFormat::GeoJson);
+	wbvector::write(layer, output_path, fmt)
+		.map_err(|e| ToolError::Execution(format!("failed writing output vector: {}", e)))?;
+	Ok(output_path.to_string())
 }
 
 fn typed_raster_output(path: String) -> serde_json::Value {
@@ -7653,7 +7672,7 @@ impl Tool for LongestFlowpathTool {
 			params: vec![
 				ToolParamSpec { name: "dem", description: "Input DEM raster", required: true },
 				ToolParamSpec { name: "basins", description: "Input basin raster", required: true },
-				ToolParamSpec { name: "output", description: "Output vector path", required: true },
+				ToolParamSpec { name: "output", description: "Output vector path", required: false },
 			],
 		}
 	}
@@ -7683,10 +7702,7 @@ impl Tool for LongestFlowpathTool {
 			.or_else(|_| parse_raster_path_arg(args, "input_dem"))?;
 		parse_raster_path_arg(args, "basins")
 			.or_else(|_| parse_raster_path_arg(args, "watersheds"))?;
-		args.get("output")
-			.and_then(|v| v.as_str())
-			.filter(|s| !s.is_empty())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?;
+		let _ = parse_vector_path_arg(args, "output")?;
 		Ok(())
 	}
 
@@ -7695,11 +7711,7 @@ impl Tool for LongestFlowpathTool {
 		let basins_path = parse_raster_path_arg(args, "basins")
 			.or_else(|_| parse_raster_path_arg(args, "watersheds"))?;
 		let basins = load_raster(&basins_path)?;
-		let output = args
-			.get("output")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?
-			.to_string();
+		let output = parse_vector_path_arg(args, "output")?;
 
 		if dem.rows != basins.rows || dem.cols != basins.cols {
 			return Err(ToolError::Validation(
@@ -7834,6 +7846,11 @@ impl Tool for LongestFlowpathTool {
 
 		let mut out_layer = wbvector::Layer::new("longest_flowpath")
 			.with_geom_type(wbvector::GeometryType::LineString);
+		out_layer.crs = match (dem.crs.epsg, dem.crs.wkt.as_deref()) {
+			(_, Some(wkt)) => Some(wbvector::Crs::new().with_wkt(wkt)),
+			(Some(epsg), None) => Some(wbvector::Crs::new().with_epsg(epsg)),
+			_ => None,
+		};
 		out_layer.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
 		out_layer.add_field(wbvector::FieldDef::new("BASIN", wbvector::FieldType::Float));
 		out_layer.add_field(wbvector::FieldDef::new("UP_ELEV", wbvector::FieldType::Float));
@@ -7905,15 +7922,7 @@ impl Tool for LongestFlowpathTool {
 			fid += 1;
 		}
 
-		if let Some(parent) = std::path::Path::new(&output).parent() {
-			if !parent.as_os_str().is_empty() {
-				std::fs::create_dir_all(parent)
-					.map_err(|e| ToolError::Execution(format!("cannot create output directory: {}", e)))?;
-			}
-		}
-		let fmt = wbvector::VectorFormat::detect(&output).unwrap_or(wbvector::VectorFormat::GeoJson);
-		wbvector::write(&out_layer, &output, fmt)
-			.map_err(|e| ToolError::Execution(format!("failed writing output vector: {}", e)))?;
+		let output = write_or_store_vector_output(&out_layer, &output)?;
 
 		Ok(build_result(output))
 	}
@@ -8197,7 +8206,7 @@ impl Tool for JensonSnapPourPointsTool {
 				ToolParamSpec { name: "pour_pts", description: "Input vector point file of pour points", required: true },
 				ToolParamSpec { name: "streams", description: "Stream-network raster; stream cells have value > 0 and are not NoData", required: true },
 				ToolParamSpec { name: "snap_dist", description: "Maximum search radius in map units (defaults to one cell width)", required: false },
-				ToolParamSpec { name: "output", description: "Output snapped vector file path", required: true },
+				ToolParamSpec { name: "output", description: "Output snapped vector file path", required: false },
 			],
 		}
 	}
@@ -8226,21 +8235,14 @@ impl Tool for JensonSnapPourPointsTool {
 	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
 		parse_vector_path_arg(args, "pour_pts")?;
 		parse_raster_path_arg(args, "streams")?;
-		args.get("output")
-			.and_then(|v| v.as_str())
-			.filter(|s| !s.is_empty())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?;
+		let _ = parse_vector_path_arg(args, "output")?;
 		Ok(())
 	}
 
 	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		let pp_path = parse_vector_path_arg(args, "pour_pts")?;
 		let streams_path = parse_raster_path_arg(args, "streams")?;
-		let output = args
-			.get("output")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?
-			.to_string();
+		let output = parse_vector_path_arg(args, "output")?;
 		let snap_dist_arg = args.get("snap_dist").and_then(|v| v.as_f64());
 
 		let streams = load_raster(&streams_path)?;
@@ -8323,16 +8325,7 @@ impl Tool for JensonSnapPourPointsTool {
 		}
 
 		// Detect output format from extension, default to GeoJSON
-		let fmt = wbvector::VectorFormat::detect(&output).unwrap_or(wbvector::VectorFormat::GeoJson);
-		if let Some(parent) = std::path::Path::new(&output).parent() {
-			if !parent.as_os_str().is_empty() {
-				std::fs::create_dir_all(parent).map_err(|e| {
-					ToolError::Execution(format!("cannot create output directory: {e}"))
-				})?;
-			}
-		}
-		wbvector::write(&out_layer, &output, fmt)
-			.map_err(|e| ToolError::Execution(format!("failed writing output vector: {e}")))?;
+		let output = write_or_store_vector_output(&out_layer, &output)?;
 
 		Ok(build_result(output))
 	}
@@ -8350,7 +8343,7 @@ impl Tool for SnapPourPointsTool {
 				ToolParamSpec { name: "pour_pts", description: "Input vector point file of pour points", required: true },
 				ToolParamSpec { name: "flow_accum", description: "Flow-accumulation raster", required: true },
 				ToolParamSpec { name: "snap_dist", description: "Maximum search radius in map units (defaults to one cell width)", required: false },
-				ToolParamSpec { name: "output", description: "Output snapped vector file path", required: true },
+				ToolParamSpec { name: "output", description: "Output snapped vector file path", required: false },
 			],
 		}
 	}
@@ -8379,21 +8372,14 @@ impl Tool for SnapPourPointsTool {
 	fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
 		parse_vector_path_arg(args, "pour_pts").or_else(|_| parse_vector_path_arg(args, "pour_points"))?;
 		parse_raster_path_arg(args, "flow_accum").or_else(|_| parse_raster_path_arg(args, "flow_accumulation"))?;
-		args.get("output")
-			.and_then(|v| v.as_str())
-			.filter(|s| !s.is_empty())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?;
+		let _ = parse_vector_path_arg(args, "output")?;
 		Ok(())
 	}
 
 	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		let pp_path = parse_vector_path_arg(args, "pour_pts").or_else(|_| parse_vector_path_arg(args, "pour_points"))?;
 		let flow_accum_path = parse_raster_path_arg(args, "flow_accum").or_else(|_| parse_raster_path_arg(args, "flow_accumulation"))?;
-		let output = args
-			.get("output")
-			.and_then(|v| v.as_str())
-			.ok_or_else(|| ToolError::Validation("'output' path is required".into()))?
-			.to_string();
+		let output = parse_vector_path_arg(args, "output")?;
 		let snap_dist_arg = args.get("snap_dist").and_then(|v| v.as_f64());
 
 		let flow_accum = load_raster(&flow_accum_path)?;
@@ -8476,16 +8462,7 @@ impl Tool for SnapPourPointsTool {
 			out_layer.features.push(f);
 		}
 
-		let fmt = wbvector::VectorFormat::detect(&output).unwrap_or(wbvector::VectorFormat::GeoJson);
-		if let Some(parent) = std::path::Path::new(&output).parent() {
-			if !parent.as_os_str().is_empty() {
-				std::fs::create_dir_all(parent).map_err(|e| {
-					ToolError::Execution(format!("cannot create output directory: {e}"))
-				})?;
-			}
-		}
-		wbvector::write(&out_layer, &output, fmt)
-			.map_err(|e| ToolError::Execution(format!("failed writing output vector: {e}")))?;
+		let output = write_or_store_vector_output(&out_layer, &output)?;
 
 		Ok(build_result(output))
 	}

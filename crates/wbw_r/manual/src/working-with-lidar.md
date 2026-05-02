@@ -92,6 +92,34 @@ wbw_clear_lidar_memory()
 cat('After clear:', wbw_lidar_memory_count(), '\n')
 ```
 
+### Implicit Memory Output from Tools
+
+All lidar-output tools store their result in memory automatically when the
+`output` argument is omitted (`NULL`). You do not need to pass `file_mode = "m"`
+or choose a temporary path — simply leave `output` out and the returned
+`wbw_lidar` object is already memory-backed:
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbw_make_session()
+survey <- wbw_read_lidar('survey.laz')
+
+# No output path — result is stored in memory automatically
+filtered <- wbe$filter_lidar_classes(input = survey$path, excluded_classes = list(7L))
+cat(filtered$path, '\n')  # prints: memory://lidar/...
+
+# Chain operations without any intermediate files
+thinned <- wbe$lidar_thin(input = filtered$path, resolution = 0.5)
+cat(thinned$path, '\n')  # also memory://lidar/...
+
+# Persist the final result only
+wbw_write_lidar(thinned, 'survey_clean.copc.laz')
+```
+
+This applies to all lidar tools. Providing an explicit `output` argument writes
+to disk as before.
+
 Best practices:
 - Use `file_mode = "m"` for intermediate point cloud processing.
 - Export memory-backed lidar to disk with `write()` when persisting final outputs.

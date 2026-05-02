@@ -88,6 +88,35 @@ wbw_clear_vector_memory()
 cat('After clear:', wbw_vector_memory_count(), '\n')
 ```
 
+### Implicit Memory Output from Tools
+
+All vector-output tools store their result in memory automatically when the
+`output` argument is omitted (`NULL`). You do not need to pass `file_mode = "m"`
+or choose a temporary path — simply leave `output` out and the returned
+`wbw_vector` object is already memory-backed:
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbw_make_session()
+roads <- wbw_read_vector('roads.gpkg')
+
+# No output path — result is stored in memory automatically
+buffered <- wbe$buffer_vector(input = roads$path, distance = 15.0)
+cat(buffered$path, '\n')  # prints: memory://vector/...
+
+# Chain operations without any intermediate files
+clipped <- wbe$clip(input = buffered$path, clip = 'boundary.gpkg')
+cat(clipped$path, '\n')  # also memory://vector/...
+
+# Persist the final result only
+wbw_write_vector(clipped, 'result.gpkg')
+```
+
+This applies to all tool categories — GIS, hydrology, geomorphometry, and stream
+network tools all follow the same rule. Providing an explicit `output` path
+writes to disk as before.
+
 Best practices:
 - Use `file_mode = "m"` for intermediate spatial analysis results.
 - Export memory-backed vectors to disk with `write()` when persisting final outputs.

@@ -104,6 +104,34 @@ wbe.clear_lidar_memory()
 print(f"After clear: {wbe.lidar_memory_count()}")
 ```
 
+### Implicit Memory Output from Tools
+
+All lidar-output tools store their result in memory automatically when the
+`output` parameter is omitted. You do not need to pass `file_mode='m'` or
+choose a temporary path — simply leave `output` out and the returned `Lidar`
+object is already memory-backed:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+survey = wbe.read_lidar('survey.laz')
+
+# No output path — result is stored in memory automatically
+filtered = wbe.lidar.filter_lidar_classes(survey, excluded_classes=[7])
+print(filtered.file_path)  # prints: memory://lidar/...
+
+# Chain operations without any intermediate files
+thinned = wbe.lidar.lidar_thin(filtered, resolution=0.5)
+print(thinned.file_path)  # also memory://lidar/...
+
+# Persist the final result only
+wbe.write_lidar(thinned, 'survey_clean.copc.laz')
+```
+
+This applies to all lidar tools. Providing an explicit `output` path writes to
+disk as before.
+
 Best practices:
 - Use `file_mode='m'` for intermediate point cloud processing.
 - Export memory-backed lidar to disk with `write_lidar()` when persisting final outputs.

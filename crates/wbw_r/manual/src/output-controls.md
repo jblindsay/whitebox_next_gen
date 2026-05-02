@@ -113,6 +113,27 @@ cat('After clear:', wbw_raster_memory_count(), '\n')
 ## Lidar Output Controls
 
 Lidar objects expose `write(...)` and `deep_copy(...)` with optional `options`.
+The standalone `wbw_write_lidar()` function persists a `wbw_lidar` result
+returned by a tool call directly to disk.
+
+When a session method is called without an `output` argument the result is
+stored in memory automatically; pass it to `wbw_write_lidar()` to persist it:
+
+```r
+library(whiteboxworkflows)
+
+wbe <- wbw_make_session()
+survey <- wbw_read_lidar('survey.laz')
+
+# Omit output — result is memory-backed automatically
+filtered <- wbe$filter_lidar_classes(input = survey$path, excluded_classes = list(7L))
+cat(filtered$path, '\n')  # memory://lidar/...
+
+# Persist when ready
+wbw_write_lidar(filtered, 'survey_clean.copc.laz')
+```
+
+Write options for `wbw_write_lidar()` and `l$write()`:
 
 Use these options to tune archive size, cloud-read behavior, and downstream
 compatibility.
@@ -148,21 +169,27 @@ l$write(
 )
 ```
 
-## Vector Output Pattern
+## Vector Output Controls
 
-This reflects the current R facade emphasis on tool-driven vector persistence.
-
-Vector persistence is commonly tool-driven in current R workflows:
+`wbw_write_vector(...)` persists a `wbw_vector` object to disk. When a session
+method is called without an `output` argument, the result is automatically
+stored in memory and can be written to disk with `wbw_write_vector()`.
 
 ```r
 library(whiteboxworkflows)
 
-s <- wbw_session()
-wbw_run_tool(
-  'buffer_vector',
-  args = list(input = 'roads.gpkg', output = 'roads_buffer.gpkg', distance = 10.0),
-  session = s
-)
+wbe <- wbw_make_session()
+roads <- wbw_read_vector('roads.gpkg')
+
+# Omit output — result is memory-backed automatically
+buffered <- wbe$buffer_vector(input = roads$path, distance = 10.0)
+cat(buffered$path, '\n')  # memory://vector/...
+
+# Persist when ready
+wbw_write_vector(buffered, 'roads_buffer.gpkg')
+
+# Or supply output explicitly to write directly to disk
+wbe$buffer_vector(input = roads$path, distance = 10.0, output = 'roads_buffer_direct.gpkg')
 ```
 
 ## Reproducibility Checklist

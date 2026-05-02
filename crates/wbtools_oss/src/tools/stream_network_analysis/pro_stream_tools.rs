@@ -1381,7 +1381,9 @@ impl Tool for RiverCenterlinesTool {
         lines = merge_centerline_segments(lines, connect_dist);
 
         let mut layer = Layer::new("river_centerlines").with_geom_type(GeometryType::LineString);
-        if let Some(epsg) = water.crs.epsg {
+        if let Some(wkt) = water.crs.wkt.as_deref() {
+            layer = layer.with_crs_wkt(wkt);
+        } else if let Some(epsg) = water.crs.epsg {
             layer = layer.with_epsg(epsg);
         }
         let mut fid: u64 = 1;

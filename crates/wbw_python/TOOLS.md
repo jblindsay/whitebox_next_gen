@@ -150,6 +150,8 @@ Unary and binary raster tools accept an optional `band_mode` parameter:
 | `'active'` | Process only the current `active_band` |
 | `'list'` | Process the bands listed in `bands=[0, 2, ...]` |
 
+For unary raster operations (for example `wbe.raster.arccos(...)`), the return value is always a single `Raster` object; `band_mode` controls which bands are modified inside that raster, not the return shape.
+
 ---
 
 ## Raster I/O
@@ -259,6 +261,23 @@ removed.
 
 ```python
 removed = wbe.clear_raster_memory()
+```
+
+---
+
+### `wbe.clear_memory`
+
+```
+clear_memory() -> int
+```
+
+Clears the in-process raster, vector, and LiDAR memory stores and returns the
+total number of objects removed.
+
+**Example**
+
+```python
+removed_total = wbe.clear_memory()
 ```
 
 ---

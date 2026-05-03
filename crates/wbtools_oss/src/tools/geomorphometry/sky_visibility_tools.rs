@@ -14,12 +14,13 @@ use rayon::prelude::*;
 use serde_json::json;
 use wbprojection::{Crs, EpsgIdentifyPolicy, identify_epsg_from_wkt_with_policy};
 use wbcore::{PercentCoalescer, 
-    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
+    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor,
     ToolParamSpec, ToolRunResult, ToolStability,
 };
 use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord as VCoord, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, VectorFormat};
+use wbvector::memory_store as vector_memory_store;
 
 use crate::memory_store;
 use crate::palettes::LegacyPalette;
@@ -111,6 +112,11 @@ impl SkyVisibilityCore {
     }
 
     fn write_vector_output(layer: &Layer, output_path: &str) -> Result<(), ToolError> {
+        if output_path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+            vector_memory_store::put_vector(layer.clone());
+            return Ok(());
+        }
+
         let fmt = VectorFormat::detect(output_path)
             .map_err(|e| ToolError::Validation(format!("unsupported output path: {e}")))?;
         wbvector::write(layer, output_path, fmt)

@@ -25,6 +25,7 @@ use wbcore::{
     parse_optional_output_path,
     parse_raster_path_value,
     parse_vector_path_arg,
+    IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH,
     LicenseTier,
     PercentCoalescer,
     Tool,
@@ -38,6 +39,7 @@ use wbcore::{
 };
 use wblidar::{memory_store as lidar_memory_store, Crs as LidarCrs, LidarFormat, PointCloud, PointReader, PointRecord, Rgb16};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
+use wbvector::memory_store as vector_memory_store;
 use wbtopology::{delaunay_triangulation, delaunay_triangulation_fast, Coord as TopoCoord, DistanceMetric, FixedRadiusSearch2D, PreparedSibsonInterpolator};
 
 use crate::memory_store;
@@ -2282,14 +2284,6 @@ fn split_output_path(base_dir: &Path, stem: &str, suffix: &str, ext: &str) -> Pa
     base_dir.join(format!("{}_{}.{}", stem, suffix, ext))
 }
 
-fn unique_lidar_temp_output_path(tool_suffix: &str) -> PathBuf {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    std::env::temp_dir().join(format!("wbtools_oss_{}_{}.las", tool_suffix, ts))
-}
-
 fn is_withheld(point: &PointRecord) -> bool {
     (point.flags & (1 << 2)) != 0
 }
@@ -2671,9 +2665,12 @@ fn store_or_write_output(
 fn store_or_write_lidar_output(
     cloud: &PointCloud,
     output_path: Option<PathBuf>,
-    tool_suffix: &str,
+    _tool_suffix: &str,
 ) -> Result<String, ToolError> {
-    let output_path = output_path.unwrap_or_else(|| unique_lidar_temp_output_path(tool_suffix));
+    let Some(output_path) = output_path else {
+        let id = lidar_memory_store::put_lidar(cloud.clone());
+        return Ok(lidar_memory_store::make_lidar_memory_path(&id));
+    };
     if let Some(parent) = output_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -2732,6 +2729,11 @@ fn detect_vector_output_format(path: &str) -> Result<wbvector::VectorFormat, Too
 }
 
 fn write_vector_output(layer: &wbvector::Layer, path: &str) -> Result<String, ToolError> {
+    if path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+        let id = vector_memory_store::put_vector(layer.clone());
+        return Ok(vector_memory_store::make_vector_memory_path(&id));
+    }
+
     if let Some(parent) = Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)

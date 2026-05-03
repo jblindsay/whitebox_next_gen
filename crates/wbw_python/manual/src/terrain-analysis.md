@@ -64,11 +64,11 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
 # Degrees is the default units
-slope_deg = wbe.slope(dem, units='degrees')
+slope_deg = wbe.terrain.derivatives.slope(dem, units='degrees')
 wbe.write_raster(slope_deg, 'slope_degrees.tif')
 
 # Percentage slope useful for agricultural and road applications
-slope_pct = wbe.slope(dem, units='percent')
+slope_pct = wbe.terrain.derivatives.slope(dem, units='percent')
 wbe.write_raster(slope_pct, 'slope_percent.tif')
 ```
 
@@ -87,7 +87,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 
 dem = wbe.read_raster('dem.tif')
-aspect = wbe.aspect(dem)
+aspect = wbe.terrain.derivatives.aspect(dem)
 wbe.write_raster(aspect, 'aspect.tif')
 ```
 
@@ -110,15 +110,15 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
 # Single directional hillshade — azimuth and altitude in degrees
-hs = wbe.hillshade(dem, azimuth=315.0, altitude=45.0)
+hs = wbe.terrain.general.hillshade(dem, azimuth=315.0, altitude=45.0)
 wbe.write_raster(hs, 'hillshade.tif')
 
 # Multidirectional hillshade (more even illumination, no shadow artefacts)
-mdhs = wbe.multidirectional_hillshade(dem)
+mdhs = wbe.terrain.general.multidirectional_hillshade(dem)
 wbe.write_raster(mdhs, 'hillshade_multidirectional.tif')
 
 # Hypsometrically tinted hillshade blends elevation colour and shading
-hyp = wbe.hypsometrically_tinted_hillshade(dem)
+hyp = wbe.terrain.general.hypsometrically_tinted_hillshade(dem)
 wbe.write_raster(hyp, 'hillshade_hypsometric.tif')
 ```
 
@@ -145,7 +145,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
-profile_curv = wbe.profile_curvature(dem)
+profile_curv = wbe.terrain.derivatives.profile_curvature(dem)
 wbe.write_raster(profile_curv, 'profile_curvature.tif')
 ```
 
@@ -157,7 +157,7 @@ divergence (positive values) and is a useful predictor of soil moisture, run-on
 areas, and erosion.
 
 ```python
-plan_curv = wbe.plan_curvature(dem)
+plan_curv = wbe.terrain.derivatives.plan_curvature(dem)
 wbe.write_raster(plan_curv, 'plan_curvature.tif')
 ```
 
@@ -173,15 +173,15 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
 curv_types = {
-    'mean_curvature':       wbe.mean_curvature(dem),
-    'gaussian_curvature':   wbe.gaussian_curvature(dem),
-    'minimal_curvature':    wbe.minimal_curvature(dem),
-    'maximal_curvature':    wbe.maximal_curvature(dem),
-    'casorati_curvature':   wbe.casorati_curvature(dem),
-    'accumulation_curvature': wbe.accumulation_curvature(dem),
-    'difference_curvature': wbe.difference_curvature(dem),
-    'generating_function':  wbe.generating_function(dem),
-    'curvedness':           wbe.curvedness(dem),
+    'mean_curvature':       wbe.terrain.derivatives.mean_curvature(dem),
+    'gaussian_curvature':   wbe.terrain.derivatives.gaussian_curvature(dem),
+    'minimal_curvature':    wbe.terrain.derivatives.minimal_curvature(dem),
+    'maximal_curvature':    wbe.terrain.derivatives.maximal_curvature(dem),
+    'casorati_curvature':   wbe.terrain.derivatives.casorati_curvature(dem),
+    'accumulation_curvature': wbe.terrain.derivatives.accumulation_curvature(dem),
+    'difference_curvature': wbe.terrain.derivatives.difference_curvature(dem),
+    'generating_function':  wbe.terrain.derivatives.generating_function(dem),
+    'curvedness':           wbe.terrain.derivatives.curvedness(dem),
 }
 
 for name, raster in curv_types.items():
@@ -222,7 +222,7 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
 # Inner and outer radii in cells
-tpi = wbe.relative_topographic_position(dem, filterx=11, filtery=11)
+tpi = wbe.terrain.landform_indices.relative_topographic_position(dem, filterx=11, filtery=11)
 wbe.write_raster(tpi, 'tpi.tif')
 ```
 
@@ -232,7 +232,7 @@ Similar to TPI but expressed as a Z-score: how many standard deviations the
 local elevation is from the neighbourhood mean.
 
 ```python
-dev = wbe.deviation_from_mean_elevation(dem, filterx=11, filtery=11)
+dev = wbe.terrain.general.deviation_from_mean_elevation(dem, filterx=11, filtery=11)
 wbe.write_raster(dev, 'deviation_from_mean_elev.tif')
 ```
 
@@ -250,7 +250,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
-geons = wbe.geomorphons(dem, search=50, threshold=1.0, flat=1.0, forms=True)
+geons = wbe.terrain.landform_indices.geomorphons(dem, search=50, threshold=1.0, flat=1.0, forms=True)
 wbe.write_raster(geons, 'geomorphons.tif')
 ```
 
@@ -279,7 +279,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
-roughness, roughness_scale = wbe.multiscale_roughness(
+roughness, roughness_scale = wbe.terrain.multiscale_signatures.multiscale_roughness(
     dem,
     min_scale=1,
     max_scale=100,
@@ -301,7 +301,7 @@ range of scales, identifying persistent topographic prominence regardless of
 local noise.
 
 ```python
-mep = wbe.multiscale_elevation_percentile(
+mep = wbe.terrain.multiscale_signatures.multiscale_elevation_percentile(
     dem,
     min_scale=1,
     num_steps=10,
@@ -318,7 +318,7 @@ Computes a suite of curvature metrics at multiple scales and returns the value
 at the scale of maximum local curvature for each cell.
 
 ```python
-multiscale_mean_curv = wbe.multiscale_curvatures(
+multiscale_mean_curv = wbe.terrain.multiscale_signatures.multiscale_curvatures(
     dem,
     min_scale=1,
     max_scale=30,
@@ -334,7 +334,7 @@ nested scales, providing an intuitive visual summary of multi-level terrain
 structure.
 
 ```python
-mtp = wbe.multiscale_topographic_position_image(
+mtp = wbe.terrain.multiscale_signatures.multiscale_topographic_position_image(
     dem,
     local=1,
     meso=11,
@@ -362,7 +362,7 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 observer_points = wbe.read_vector('observer_locations.shp')
 
-viewshed = wbe.viewshed(dem, observer_points, height=1.8)
+viewshed = wbe.terrain.visibility.viewshed(dem, observer_points, height=1.8)
 wbe.write_raster(viewshed, 'viewshed.tif')
 ```
 
@@ -380,11 +380,11 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
 # Positive openness: how "exposed" each cell is
-openness_pos = wbe.openness(dem, dist=50, pos_openness=True)
+openness_pos = wbe.terrain.visibility.openness(dem, dist=50, pos_openness=True)
 wbe.write_raster(openness_pos, 'openness_positive.tif')
 
 # Negative openness: how "enclosed" each cell is
-openness_neg = wbe.openness(dem, dist=50, pos_openness=False)
+openness_neg = wbe.terrain.visibility.openness(dem, dist=50, pos_openness=False)
 wbe.write_raster(openness_neg, 'openness_negative.tif')
 ```
 
@@ -397,7 +397,7 @@ It is used in urban heat island modelling, long-wave radiation estimation, and
 snowmelt modelling.
 
 ```python
-svf = wbe.sky_view_factor(dem, num_directions=16, max_dist=200.0)
+svf = wbe.terrain.visibility.sky_view_factor(dem, num_directions=16, max_dist=200.0)
 wbe.write_raster(svf, 'sky_view_factor.tif')
 ```
 
@@ -501,7 +501,7 @@ dem = wbe.read_raster('dem_raw.tif')
 print(dem.metadata())
 
 # --- 2. Fill missing data (voids from nodata gaps) ---
-dem_filled = wbe.fill_missing_data(dem, filter_size=11)
+dem_filled = wbe.terrain.general.fill_missing_data(dem, filter_size=11)
 
 # --- 3. Multiscale feature-preserving smoothing ---
 dem_smooth = wbe.run_tool(
@@ -517,39 +517,39 @@ dem_smooth = wbe.run_tool(
 wbe.write_raster(dem_smooth, 'dem_smooth_multiscale.tif')
 
 # --- 4. First-order derivatives ---
-slope   = wbe.slope(dem_smooth, units='degrees')
-aspect  = wbe.aspect(dem_smooth)
-hillshade = wbe.multidirectional_hillshade(dem_smooth)
+slope   = wbe.terrain.derivatives.slope(dem_smooth, units='degrees')
+aspect  = wbe.terrain.derivatives.aspect(dem_smooth)
+hillshade = wbe.terrain.general.multidirectional_hillshade(dem_smooth)
 
 wbe.write_raster(slope,     'slope.tif')
 wbe.write_raster(aspect,    'aspect.tif')
 wbe.write_raster(hillshade, 'hillshade.tif')
 
 # --- 5. Curvatures ---
-prof_curv = wbe.profile_curvature(dem_smooth)
-plan_curv = wbe.plan_curvature(dem_smooth)
-mean_curv = wbe.mean_curvature(dem_smooth)
+prof_curv = wbe.terrain.derivatives.profile_curvature(dem_smooth)
+plan_curv = wbe.terrain.derivatives.plan_curvature(dem_smooth)
+mean_curv = wbe.terrain.derivatives.mean_curvature(dem_smooth)
 
 wbe.write_raster(prof_curv, 'curvature_profile.tif')
 wbe.write_raster(plan_curv, 'curvature_plan.tif')
 wbe.write_raster(mean_curv, 'curvature_mean.tif')
 
 # --- 6. Terrain position ---
-dev = wbe.deviation_from_mean_elevation(dem_smooth, filterx=11, filtery=11)
+dev = wbe.terrain.general.deviation_from_mean_elevation(dem_smooth, filterx=11, filtery=11)
 wbe.write_raster(dev, 'deviation_from_mean_elev.tif')
 
 # --- 7. Landform classification ---
-geomorphons = wbe.geomorphons(dem_smooth, search=50, threshold=1.0, flat=1.0)
+geomorphons = wbe.terrain.landform_indices.geomorphons(dem_smooth, search=50, threshold=1.0, flat=1.0)
 wbe.write_raster(geomorphons, 'geomorphons.tif')
 
 # --- 8. Multiscale roughness ---
-roughness, roughness_scale = wbe.multiscale_roughness(
+roughness, roughness_scale = wbe.terrain.multiscale_signatures.multiscale_roughness(
     dem_smooth, min_scale=1, max_scale=50, step=1
 )
 wbe.write_raster(roughness, 'multiscale_roughness.tif')
 
 # --- 9. Visibility ---
-svf = wbe.sky_view_factor(dem_smooth, num_directions=16, max_dist=200.0)
+svf = wbe.terrain.visibility.sky_view_factor(dem_smooth, num_directions=16, max_dist=200.0)
 wbe.write_raster(svf, 'sky_view_factor.tif')
 
 print("Terrain analysis complete.")
@@ -569,11 +569,11 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem_smooth.tif')
 
 # Extract ridges
-ridges = wbe.find_ridges(dem, line_thin=True)
+ridges = wbe.terrain.general.find_ridges(dem, line_thin=True)
 wbe.write_raster(ridges, 'ridges.tif')
 
 # Extract ridge and valley lines as vectors
-ridge_lines = wbe.ridge_and_valley_vectors(dem)
+ridge_lines = wbe.terrain.general.ridge_and_valley_vectors(dem)
 wbe.write_vector(ridge_lines, 'ridge_valley_lines.gpkg')
 ```
 
@@ -597,7 +597,7 @@ wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem_lidar.tif')
 
 # Map elevated linear features such as road embankments and dykes
-embankments = wbe.embankment_mapping(
+embankments = wbe.terrain.general.embankment_mapping(
     dem,
     road_vec='roads.shp',
     search_dist=2.5,

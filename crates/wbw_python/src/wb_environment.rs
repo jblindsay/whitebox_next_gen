@@ -1103,6 +1103,26 @@ fn resolve_unary_value_op(tool_id: &str) -> PyResult<fn(f64) -> f64> {
         "log10" => Ok(f64::log10),
         "sin" => Ok(f64::sin),
         "cos" => Ok(f64::cos),
+        "tan" => Ok(f64::tan),
+        "arcsin" => Ok(f64::asin),
+        "arccos" => Ok(f64::acos),
+        "arctan" => Ok(f64::atan),
+        "sinh" => Ok(f64::sinh),
+        "cosh" => Ok(f64::cosh),
+        "tanh" => Ok(f64::tanh),
+        "arsinh" => Ok(f64::asinh),
+        "arcosh" => Ok(f64::acosh),
+        "artanh" => Ok(f64::atanh),
+        "exp" => Ok(f64::exp),
+        "exp2" => Ok(f64::exp2),
+        "log2" => Ok(f64::log2),
+        "negate" => Ok(|v| -v),
+        "reciprocal" => Ok(|v| 1.0 / v),
+        "truncate" => Ok(f64::trunc),
+        "increment" => Ok(|v| v + 1.0),
+        "decrement" => Ok(|v| v - 1.0),
+        "to_degrees" => Ok(f64::to_degrees),
+        "to_radians" => Ok(f64::to_radians),
         _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
             "unsupported unary tool for local multiband mode: {tool_id}"
         ))),
@@ -3604,7 +3624,9 @@ fn maybe_extract_data_object_output(
 }
 
 fn output_key_is_metadata(key: &str) -> bool {
-    matches!(key, "__wbw_type__" | "active_band" | "band" | "cells_processed")
+    // "path" is always a legacy compat alias duplicating the primary typed "output" entry;
+    // treat it as metadata so multi-output extraction doesn't count it as a second output.
+    matches!(key, "__wbw_type__" | "active_band" | "band" | "cells_processed" | "path")
 }
 
 fn looks_like_output_locator_key(key: &str) -> bool {
@@ -3988,6 +4010,20 @@ impl WbCategoryToolCallable {
                 .run_tool_json_with_progress(&self.tool_id, &args_json)
                 .map_err(map_tool_error)?
         };
+
+        // Handle tools that explicitly declare a scalar tuple return type
+        // (e.g. horton_ratios returns floats, not raster/vector/lidar).
+        // Must be checked BEFORE the data-object extraction paths, which
+        // would otherwise mis-classify the string value "tuple" as a path.
+        let check_outputs = response.get("outputs").unwrap_or(&response);
+        if check_outputs
+            .get("__wbw_type__")
+            .and_then(|v| v.as_str())
+            == Some("tuple")
+        {
+            let items = check_outputs.get("items").unwrap_or(check_outputs);
+            return json_value_to_pyobject(py, items);
+        }
 
         if let Some(data_objects) = maybe_extract_data_object_outputs(
             &self.category,
@@ -8171,24 +8207,14 @@ impl Raster {
         f: F,
     ) -> PyResult<Raster>
     where
-        F: Fn(f64) -> f64 + Sync,
+        F: Fn(f64) -> f64 + Sync + Send,
     {
         let mut r = self.load_wbraster()?;
         let target_bands = resolve_target_bands(r.bands, self.active_band, band_mode, bands)?;
-        for band in target_bands {
-            let mut vals = r.band_slice(band as isize);
-            let nodata = r.nodata;
-            let nodata_is_nan = nodata.is_nan();
-            vals.par_iter_mut().for_each(|v| {
-                let is_nodata = if nodata_is_nan { v.is_nan() } else { *v == nodata };
-                if !is_nodata {
-                    *v = f(*v);
-                }
-            });
-            r.set_band_slice(band as isize, &vals).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
-            })?;
-        }
+        
+        r.apply_unary_math(f, Some(target_bands)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
+        })?;
         
         // Keep intermediates in memory for memory-backed inputs unless an explicit output path is provided.
         let file_path_str = self.file_path.to_string_lossy().to_string();
@@ -10345,6 +10371,11 @@ impl WbEnvironment {
         lidar_memory_store::clear_lidars()
     }
 
+    /// Clear all rasters, vectors, and LiDAR objects from in-process memory stores.
+    fn clear_memory(&self) -> usize {
+        self.clear_raster_memory() + self.clear_vector_memory() + self.clear_lidar_memory()
+    }
+
     /// Return the number of LiDAR objects currently held in the global in-process LiDAR store.
     fn lidar_memory_count(&self) -> usize {
         lidar_memory_store::lidar_count()
@@ -10387,7 +10418,48 @@ impl WbEnvironment {
         };
 
         let vector_path = vector.file_path.to_string_lossy().to_string();
+
+        // If the output format is natively supported by wbvector, write directly
+        // without going through wbw_r (which requires the r-interop feature).
+        if let Ok(out_fmt) = VectorFormat::detect(&out_path) {
+            let layer = if vector_memory_store::vector_is_memory_path(&vector_path) {
+                read_vector_layer_for_python(vector)?
+            } else {
+                match VectorFormat::detect(&vector.file_path) {
+                    Ok(src_fmt) => src_fmt.read(&vector.file_path).map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                            "Failed to read vector '{}': {e}",
+                            vector.file_path.display()
+                        ))
+                    })?,
+                    Err(_) => {
+                        // Source format not natively readable; delegate to wbw_r.
+                        return wbw_r::vector_copy_with_options_json(
+                            &vector_path,
+                            out_path.to_string_lossy().as_ref(),
+                            &options_json,
+                        )
+                        .map(|_| ())
+                        .map_err(|e| {
+                            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                                "Failed to write vector '{}': {e}",
+                                out_path.display()
+                            ))
+                        });
+                    }
+                }
+            };
+            return out_fmt.write(&layer, &out_path).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "Failed to write vector '{}': {e}",
+                    out_path.display()
+                ))
+            });
+        }
+
+        // Output format not natively supported — delegate to wbw_r (GDAL).
         if vector_memory_store::vector_is_memory_path(&vector_path) {
+            // Stage memory vector to a temp gpkg first, then convert via wbw_r.
             let layer = read_vector_layer_for_python(vector)?;
             let millis = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -10428,18 +10500,17 @@ impl WbEnvironment {
         }
 
         wbw_r::vector_copy_with_options_json(
-            vector.file_path.to_string_lossy().as_ref(),
+            &vector_path,
             out_path.to_string_lossy().as_ref(),
             &options_json,
         )
+        .map(|_| ())
         .map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                 "Failed to write vector '{}': {e}",
                 out_path.display()
             ))
-        })?;
-
-        Ok(())
+        })
     }
 
     /// Write a LiDAR object to file.
@@ -32536,6 +32607,8 @@ impl WbEnvironment {
         bands: Option<Vec<usize>>,
     ) -> PyResult<Raster> {
         let mode = band_mode.unwrap_or("all").to_ascii_lowercase();
+        let local_op = resolve_unary_value_op(tool_id).ok();
+
         let out_path = if mode == "all" {
             let requested_output = output_path.map(|p| {
                 resolve_unary_output_path(
@@ -32570,7 +32643,7 @@ impl WbEnvironment {
             }
             let mut r = input.load_wbraster()?;
             let target_bands = resolve_target_bands(r.bands, input.active_band, Some(&mode), bands)?;
-            let op = resolve_unary_value_op(tool_id)?;
+            let op = if let Some(op) = local_op { op } else { resolve_unary_value_op(tool_id)? };
             emit_callback_event(
                 &callback,
                 json!({"type":"message","message":format!("Applying {tool_id} to selected bands"),"band_count":r.bands}),

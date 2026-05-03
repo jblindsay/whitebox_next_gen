@@ -125,6 +125,7 @@ Best practices:
 - Export memory-backed lidar to disk with `write()` when persisting final outputs.
 - Call `remove_lidar_from_memory()` after a point cloud is no longer needed.
 - Use `clear_lidar_memory()` between independent analysis phases.
+- Use `wbw_clear_memory()` when resetting all in-process raster/vector/lidar stores together.
 - Monitor `lidar_memory_count()` for large processing jobs.
 
 ## Iterating Through Lidar Points
@@ -169,11 +170,7 @@ datasets.
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'lidar_info',
-  args = list(input = 'survey.las', output = 'survey_info.html'),
-  session = s
-)
+wbw_lidar_info(input = 'survey.las', output = 'survey_info.html')
 ```
 
 ## Chunked Matrix Streaming

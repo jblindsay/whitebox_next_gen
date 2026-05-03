@@ -51,12 +51,10 @@ cat('NoData:', meta$nodata, '\n')
 
 ```r
 # Slope in degrees
-slope_deg <- wbw_run_tool('slope', args = list(
-  dem   = dem$file_path(),
+slope_deg <- wbw_slope(dem   = dem$file_path(),
   output = 'slope_deg.tif',
   units  = 'degrees',
-  z_factor = 1.0
-), session = s)
+  z_factor = 1.0)
 
 slope <- wbw_read_raster('slope_deg.tif')
 ```
@@ -64,39 +62,35 @@ slope <- wbw_read_raster('slope_deg.tif')
 ### Aspect
 
 ```r
-wbw_run_tool('aspect', args = list(
-  dem    = dem$file_path(),
+wbw_aspect(dem    = dem$file_path(),
   output = 'aspect.tif',
-  zero_aspect = FALSE
-), session = s)
+  zero_aspect = FALSE)
 ```
 
 ### Hillshade
 
 ```r
-wbw_run_tool('hillshade', args = list(
-  dem     = dem$file_path(),
+wbw_hillshade(dem     = dem$file_path(),
   output  = 'hillshade.tif',
   azimuth = 315.0,
-  altitude = 30.0
-), session = s)
+  altitude = 30.0)
 ```
 
 ### Profile Curvature, Plan Curvature, Tangential Curvature
 
 ```r
-wbw_run_tool('profile_curvature', args = list(dem = dem$file_path(), output = 'profc.tif'), session = s)
-wbw_run_tool('plan_curvature',    args = list(dem = dem$file_path(), output = 'planc.tif'), session = s)
-wbw_run_tool('tangential_curvature', args = list(dem = dem$file_path(), output = 'tangc.tif'), session = s)
+wbw_profile_curvature(dem = dem$file_path(), output = 'profc.tif')
+wbw_plan_curvature(dem = dem$file_path(), output = 'planc.tif')
+wbw_tangential_curvature(dem = dem$file_path(), output = 'tangc.tif')
 ```
 
 ### Mean Curvature and Other Modes
 
 ```r
-wbw_run_tool('mean_curvature',     args = list(dem = dem$file_path(), output = 'meanc.tif'), session = s)
-wbw_run_tool('minimal_curvature',  args = list(dem = dem$file_path(), output = 'minc.tif'),  session = s)
-wbw_run_tool('maximal_curvature',  args = list(dem = dem$file_path(), output = 'maxc.tif'),  session = s)
-wbw_run_tool('gaussian_curvature', args = list(dem = dem$file_path(), output = 'gaussc.tif'), session = s)
+wbw_mean_curvature(dem = dem$file_path(), output = 'meanc.tif')
+wbw_minimal_curvature(dem = dem$file_path(), output = 'minc.tif')
+wbw_maximal_curvature(dem = dem$file_path(), output = 'maxc.tif')
+wbw_gaussian_curvature(dem = dem$file_path(), output = 'gaussc.tif')
 ```
 
 ---
@@ -104,24 +98,20 @@ wbw_run_tool('gaussian_curvature', args = list(dem = dem$file_path(), output = '
 ## Topographic Wetness and Flow Accumulation
 
 ```r
-wbw_run_tool('wetness_index', args = list(
-  sca    = 'sca.tif',
+wbw_wetness_index(sca    = 'sca.tif',
   slope  = 'slope_deg.tif',
-  output = 'twi.tif'
-), session = s)
+  output = 'twi.tif')
 ```
 
 Computing the specific contributing area (SCA) first:
 
 ```r
-wbw_run_tool('d_inf_flow_accum', args = list(
-  dem     = dem$file_path(),
+wbw_d_inf_flow_accum(dem     = dem$file_path(),
   output  = 'sca.tif',
   out_type = 'sca',
   threshold = 0.0,
   log      = FALSE,
-  clip     = FALSE
-), session = s)
+  clip     = FALSE)
 ```
 
 ---
@@ -131,37 +121,29 @@ wbw_run_tool('d_inf_flow_accum', args = list(
 ### Relative Topographic Position
 
 ```r
-wbw_run_tool('relative_topographic_position', args = list(
-  dem    = dem$file_path(),
+wbw_relative_topographic_position(dem    = dem$file_path(),
   output = 'rtp.tif',
   filterx = 101,
-  filtery = 101
-), session = s)
+  filtery = 101)
 ```
 
 ### TPI, Deviation from Mean, Scale Standardised Elevation
 
 ```r
-wbw_run_tool('topographic_position_index', args = list(
-  dem    = dem$file_path(),
+wbw_topographic_position_index(dem    = dem$file_path(),
   output = 'tpi.tif',
   minrad = 1.0,
   maxrad = 25.0,
   steps  = 10,
-  num_sig_digits = 3
-), session = s)
+  num_sig_digits = 3)
 
-wbw_run_tool('deviation_from_mean_elevation', args = list(
-  dem    = dem$file_path(),
+wbw_deviation_from_mean_elevation(dem    = dem$file_path(),
   output = 'dev_mean.tif',
   filterx = 11,
-  filtery = 11
-), session = s)
+  filtery = 11)
 
-wbw_run_tool('elev_above_pit', args = list(
-  dem    = dem$file_path(),
-  output = 'elev_above_pit.tif'
-), session = s)
+wbw_elev_above_pit(dem    = dem$file_path(),
+  output = 'elev_above_pit.tif')
 ```
 
 ---
@@ -169,26 +151,20 @@ wbw_run_tool('elev_above_pit', args = list(
 ## Multi-Scale Roughness and Complexity
 
 ```r
-wbw_run_tool('multiscale_roughness', args = list(
-  dem    = dem$file_path(),
+wbw_multiscale_roughness(dem    = dem$file_path(),
   out_mag  = 'ms_rough_mag.tif',
   out_scale = 'ms_rough_scale.tif',
   min_scale = 1,
   max_scale = 100,
-  step = 1
-), session = s)
+  step = 1)
 
-wbw_run_tool('vector_ruggedness_measure', args = list(
-  dem    = dem$file_path(),
+wbw_vector_ruggedness_measure(dem    = dem$file_path(),
   output = 'vrm.tif',
   filterx = 11,
-  filtery = 11
-), session = s)
+  filtery = 11)
 
-wbw_run_tool('ruggedness_index', args = list(
-  dem    = dem$file_path(),
-  output = 'tri.tif'
-), session = s)
+wbw_ruggedness_index(dem    = dem$file_path(),
+  output = 'tri.tif')
 ```
 
 ---
@@ -201,15 +177,13 @@ multiscale feature-preserving smoother that is better aligned with modern
 terrain-analysis workflows than relying only on the older single-scale tool.
 
 ```r
-wbw_run_tool('feature_preserving_smoothing_multiscale', args = list(
-  input = dem$file_path(),
+wbw_feature_preserving_smoothing_multiscale(input = dem$file_path(),
   output = 'dem_smooth_multiscale.tif',
   smoothing_amount = 0.65,
   edge_preservation = 0.80,
   scale_levels = 4,
   fidelity = 0.45,
-  z_factor = 1.0
-), session = s)
+  z_factor = 1.0)
 
 dem_smooth <- wbw_read_raster('dem_smooth_multiscale.tif')
 ```
@@ -224,16 +198,14 @@ terrain-position workflows.
 ## Geomorphons — Landform Classification
 
 ```r
-wbw_run_tool('geomorphons', args = list(
-  dem              = dem$file_path(),
+wbw_geomorphons(dem              = dem$file_path(),
   output           = 'geomorphons.tif',
   search           = 50,
   threshold        = 1.0,
   fdist            = 0,
   skip             = 0,
   forms            = TRUE,
-  residuals        = FALSE
-), session = s)
+  residuals        = FALSE)
 ```
 
 Geomorphon class codes: 1=flat, 2=peak, 3=ridge, 4=shoulder, 5=spur, 6=slope, 7=hollow, 8=footslope, 9=valley, 10=pit.
@@ -243,13 +215,11 @@ Geomorphon class codes: 1=flat, 2=peak, 3=ridge, 4=shoulder, 5=spur, 6=slope, 7=
 ## Multi-Scale Topographic Position
 
 ```r
-wbw_run_tool('multiscale_topographic_position_image', args = list(
-  local  = 'tpi_local.tif',
+wbw_multiscale_topographic_position_image(local  = 'tpi_local.tif',
   meso   = 'tpi_meso.tif',
   broad  = 'tpi_broad.tif',
   output = 'mstpi_rgb.tif',
-  hillshade = 'hillshade.tif'
-), session = s)
+  hillshade = 'hillshade.tif')
 ```
 
 ---
@@ -257,8 +227,7 @@ wbw_run_tool('multiscale_topographic_position_image', args = list(
 ## Solar and Horizon Analysis
 
 ```r
-wbw_run_tool('time_in_daylight', args = list(
-  dem        = dem$file_path(),
+wbw_time_in_daylight(dem        = dem$file_path(),
   output     = 'daylight_hrs.tif',
   lat        = 43.5,
   long       = -80.5,
@@ -268,8 +237,7 @@ wbw_run_tool('time_in_daylight', args = list(
   start_day   = 172,
   end_day     = 172,
   start_time  = '06:00:00',
-  end_time    = '20:00:00'
-), session = s)
+  end_time    = '20:00:00')
 ```
 
 ---
@@ -313,14 +281,12 @@ setwd('/data/terrain_workflow')
 dem <- wbw_read_raster('dem.tif')
 
 # Smooth the DEM before derivative-heavy work.
-wbw_run_tool('feature_preserving_smoothing_multiscale', args = list(
-  input = dem$file_path(),
+wbw_feature_preserving_smoothing_multiscale(input = dem$file_path(),
   output = 'dem_smooth_multiscale.tif',
   smoothing_amount = 0.65,
   edge_preservation = 0.80,
   scale_levels = 4,
-  fidelity = 0.45
-), session = s)
+  fidelity = 0.45)
 
 dem_smooth <- wbw_read_raster('dem_smooth_multiscale.tif')
 
@@ -330,25 +296,23 @@ for (tool in c('slope', 'aspect')) {
     output = paste0(tool, '.tif')), session = s)
 }
 
-wbw_run_tool('profile_curvature', args = list(dem = dem_smooth$file_path(), output = 'profc.tif'), session = s)
-wbw_run_tool('plan_curvature',    args = list(dem = dem_smooth$file_path(), output = 'planc.tif'), session = s)
+wbw_profile_curvature(dem = dem_smooth$file_path(), output = 'profc.tif')
+wbw_plan_curvature(dem = dem_smooth$file_path(), output = 'planc.tif')
 
 # Hillshade for visualisation
-wbw_run_tool('hillshade', args = list(dem = dem_smooth$file_path(), output = 'hillshade.tif',
-  azimuth = 315.0, altitude = 30.0), session = s)
+wbw_hillshade(dem = dem_smooth$file_path(), output = 'hillshade.tif',
+  azimuth = 315.0, altitude = 30.0)
 
 # TWI
-wbw_run_tool('d_inf_flow_accum', args = list(dem = dem_smooth$file_path(), output = 'sca.tif',
-  out_type = 'sca'), session = s)
-wbw_run_tool('wetness_index', args = list(sca = 'sca.tif', slope = 'slope.tif',
-  output = 'twi.tif'), session = s)
+wbw_d_inf_flow_accum(dem = dem_smooth$file_path(), output = 'sca.tif',
+  out_type = 'sca')
+wbw_wetness_index(sca = 'sca.tif', slope = 'slope.tif',
+  output = 'twi.tif')
 
 # Roughness and classification
-wbw_run_tool('vector_ruggedness_measure', args = list(
-  dem = dem_smooth$file_path(), output = 'vrm.tif', filterx = 11, filtery = 11), session = s)
-wbw_run_tool('geomorphons', args = list(
-  dem = dem_smooth$file_path(), output = 'geomorphons.tif', search = 50, threshold = 1.0,
-  fdist = 0, skip = 0, forms = TRUE, residuals = FALSE), session = s)
+wbw_vector_ruggedness_measure(dem = dem_smooth$file_path(), output = 'vrm.tif', filterx = 11, filtery = 11)
+wbw_geomorphons(dem = dem_smooth$file_path(), output = 'geomorphons.tif', search = 50, threshold = 1.0,
+  fdist = 0, skip = 0, forms = TRUE, residuals = FALSE)
 
 cat('Terrain analysis complete.\n')
 ```

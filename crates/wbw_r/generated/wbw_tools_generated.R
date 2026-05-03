@@ -2858,7 +2858,19 @@ abs <- function(...) {
   session$abs(...)
 }
 
+wbw_abs <- function(...) {
+  # Calculates the absolute value of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$abs(...)
+}
+
 accumulation_curvature <- function(...) {
+  # Calculates accumulation curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$accumulation_curvature(...)
+}
+
+wbw_accumulation_curvature <- function(...) {
   # Calculates accumulation curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$accumulation_curvature(...)
@@ -2870,7 +2882,19 @@ adaptive_filter <- function(...) {
   session$adaptive_filter(...)
 }
 
+wbw_adaptive_filter <- function(...) {
+  # Performs adaptive thresholded mean replacement based on local z-scores.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$adaptive_filter(...)
+}
+
 add <- function(...) {
+  # Adds two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add(...)
+}
+
+wbw_add <- function(...) {
   # Adds two rasters on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$add(...)
@@ -2882,7 +2906,19 @@ add_field <- function(...) {
   session$add_field(...)
 }
 
+wbw_add_field <- function(...) {
+  # Adds a new attribute field with an optional default value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add_field(...)
+}
+
 add_geometry_attributes <- function(...) {
+  # Adds area, length, perimeter, and centroid attributes to vector features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add_geometry_attributes(...)
+}
+
+wbw_add_geometry_attributes <- function(...) {
   # Adds area, length, perimeter, and centroid attributes to vector features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$add_geometry_attributes(...)
@@ -2894,7 +2930,19 @@ add_point_coordinates_to_table <- function(...) {
   session$add_point_coordinates_to_table(...)
 }
 
+wbw_add_point_coordinates_to_table <- function(...) {
+  # Copies a point layer and appends XCOORD and YCOORD attribute fields.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$add_point_coordinates_to_table(...)
+}
+
 aggregate_raster <- function(...) {
+  # Reduces raster resolution by aggregating blocks using mean, sum, min, max, or range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$aggregate_raster(...)
+}
+
+wbw_aggregate_raster <- function(...) {
   # Reduces raster resolution by aggregating blocks using mean, sum, min, max, or range.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$aggregate_raster(...)
@@ -2906,7 +2954,19 @@ anisotropic_diffusion_filter <- function(...) {
   session$anisotropic_diffusion_filter(...)
 }
 
+wbw_anisotropic_diffusion_filter <- function(...) {
+  # Performs Perona-Malik edge-preserving anisotropic diffusion smoothing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$anisotropic_diffusion_filter(...)
+}
+
 anova <- function(...) {
+  # Performs one-way ANOVA on raster values grouped by class raster categories.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$anova(...)
+}
+
+wbw_anova <- function(...) {
   # Performs one-way ANOVA on raster values grouped by class raster categories.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$anova(...)
@@ -2918,7 +2978,19 @@ arccos <- function(...) {
   session$arccos(...)
 }
 
+wbw_arccos <- function(...) {
+  # Computes the inverse cosine (arccos) of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$arccos(...)
+}
+
 arcosh <- function(...) {
+  # Computes the inverse hyperbolic cosine of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$arcosh(...)
+}
+
+wbw_arcosh <- function(...) {
   # Computes the inverse hyperbolic cosine of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$arcosh(...)
@@ -2930,7 +3002,19 @@ arcsin <- function(...) {
   session$arcsin(...)
 }
 
+wbw_arcsin <- function(...) {
+  # Computes the inverse sine (arcsin) of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$arcsin(...)
+}
+
 arctan <- function(...) {
+  # Computes the inverse tangent (arctan) of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$arctan(...)
+}
+
+wbw_arctan <- function(...) {
   # Computes the inverse tangent (arctan) of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$arctan(...)
@@ -2942,7 +3026,19 @@ arsinh <- function(...) {
   session$arsinh(...)
 }
 
+wbw_arsinh <- function(...) {
+  # Computes the inverse hyperbolic sine of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$arsinh(...)
+}
+
 artanh <- function(...) {
+  # Computes the inverse hyperbolic tangent of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$artanh(...)
+}
+
+wbw_artanh <- function(...) {
   # Computes the inverse hyperbolic tangent of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$artanh(...)
@@ -2954,7 +3050,19 @@ ascii_to_las <- function(...) {
   session$ascii_to_las(...)
 }
 
+wbw_ascii_to_las <- function(...) {
+  # Converts one or more ASCII LiDAR point files to LAS.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ascii_to_las(...)
+}
+
 aspect <- function(...) {
+  # Calculates slope aspect in degrees clockwise from north.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$aspect(...)
+}
+
+wbw_aspect <- function(...) {
   # Calculates slope aspect in degrees clockwise from north.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$aspect(...)
@@ -2966,7 +3074,19 @@ assess_route <- function(...) {
   session$assess_route(...)
 }
 
+wbw_assess_route <- function(...) {
+  # Segments route lines and evaluates per-segment terrain metrics from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$assess_route(...)
+}
+
 atan2 <- function(...) {
+  # Computes the four-quadrant inverse tangent using two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$atan2(...)
+}
+
+wbw_atan2 <- function(...) {
   # Computes the four-quadrant inverse tangent using two rasters on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$atan2(...)
@@ -2978,7 +3098,19 @@ attribute_correlation <- function(...) {
   session$attribute_correlation(...)
 }
 
+wbw_attribute_correlation <- function(...) {
+  # Performs Pearson correlation analysis on numeric vector attribute fields.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$attribute_correlation(...)
+}
+
 attribute_histogram <- function(...) {
+  # Creates a histogram for numeric field values in a vector attribute table.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$attribute_histogram(...)
+}
+
+wbw_attribute_histogram <- function(...) {
   # Creates a histogram for numeric field values in a vector attribute table.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$attribute_histogram(...)
@@ -2990,7 +3122,19 @@ attribute_scattergram <- function(...) {
   session$attribute_scattergram(...)
 }
 
+wbw_attribute_scattergram <- function(...) {
+  # Computes scatterplot summary statistics between two numeric vector fields.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$attribute_scattergram(...)
+}
+
 average_flowpath_slope <- function(...) {
+  # Calculates average slope gradient of flowpaths passing through each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$average_flowpath_slope(...)
+}
+
+wbw_average_flowpath_slope <- function(...) {
   # Calculates average slope gradient of flowpaths passing through each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$average_flowpath_slope(...)
@@ -3002,7 +3146,19 @@ average_horizon_distance <- function(...) {
   session$average_horizon_distance(...)
 }
 
+wbw_average_horizon_distance <- function(...) {
+  # Calculates average distance to horizon across azimuth directions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$average_horizon_distance(...)
+}
+
 average_normal_vector_angular_deviation <- function(...) {
+  # Calculates local mean angular deviation between original and smoothed surface normals.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$average_normal_vector_angular_deviation(...)
+}
+
+wbw_average_normal_vector_angular_deviation <- function(...) {
   # Calculates local mean angular deviation between original and smoothed surface normals.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$average_normal_vector_angular_deviation(...)
@@ -3014,7 +3170,19 @@ average_overlay <- function(...) {
   session$average_overlay(...)
 }
 
+wbw_average_overlay <- function(...) {
+  # Computes the per-cell average across a raster stack, ignoring NoData unless all inputs are NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$average_overlay(...)
+}
+
 average_upslope_flowpath_length <- function(...) {
+  # Computes the average upslope flowpath length passing through each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$average_upslope_flowpath_length(...)
+}
+
+wbw_average_upslope_flowpath_length <- function(...) {
   # Computes the average upslope flowpath length passing through each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$average_upslope_flowpath_length(...)
@@ -3026,7 +3194,19 @@ balance_contrast_enhancement <- function(...) {
   session$balance_contrast_enhancement(...)
 }
 
+wbw_balance_contrast_enhancement <- function(...) {
+  # Reduces colour bias in a packed RGB image using per-channel parabolic stretches.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$balance_contrast_enhancement(...)
+}
+
 basins <- function(...) {
+  # Delineates all D8 drainage basins that drain to valid-data edges.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$basins(...)
+}
+
+wbw_basins <- function(...) {
   # Delineates all D8 drainage basins that drain to valid-data edges.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$basins(...)
@@ -3038,7 +3218,19 @@ bilateral_filter <- function(...) {
   session$bilateral_filter(...)
 }
 
+wbw_bilateral_filter <- function(...) {
+  # Performs an edge-preserving bilateral smoothing filter on a raster image.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$bilateral_filter(...)
+}
+
 block_maximum <- function(...) {
+  # Rasterizes point features by assigning the maximum value observed within each output cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$block_maximum(...)
+}
+
+wbw_block_maximum <- function(...) {
   # Rasterizes point features by assigning the maximum value observed within each output cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$block_maximum(...)
@@ -3050,7 +3242,19 @@ block_minimum <- function(...) {
   session$block_minimum(...)
 }
 
+wbw_block_minimum <- function(...) {
+  # Rasterizes point features by assigning the minimum value observed within each output cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$block_minimum(...)
+}
+
 bool_and <- function(...) {
+  # Computes a logical AND of two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$bool_and(...)
+}
+
+wbw_bool_and <- function(...) {
   # Computes a logical AND of two rasters on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$bool_and(...)
@@ -3062,7 +3266,19 @@ bool_not <- function(...) {
   session$bool_not(...)
 }
 
+wbw_bool_not <- function(...) {
+  # Computes a logical NOT of each raster cell, outputting 1 for zero-valued cells and 0 otherwise.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$bool_not(...)
+}
+
 bool_or <- function(...) {
+  # Computes a logical OR of two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$bool_or(...)
+}
+
+wbw_bool_or <- function(...) {
   # Computes a logical OR of two rasters on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$bool_or(...)
@@ -3074,7 +3290,19 @@ bool_xor <- function(...) {
   session$bool_xor(...)
 }
 
+wbw_bool_xor <- function(...) {
+  # Computes a logical XOR of two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$bool_xor(...)
+}
+
 boundary_shape_complexity <- function(...) {
+  # Calculates raster patch boundary-shape complexity using a line-thinned skeleton branch metric.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$boundary_shape_complexity(...)
+}
+
+wbw_boundary_shape_complexity <- function(...) {
   # Calculates raster patch boundary-shape complexity using a line-thinned skeleton branch metric.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$boundary_shape_complexity(...)
@@ -3086,7 +3314,19 @@ breach_depressions_least_cost <- function(...) {
   session$breach_depressions_least_cost(...)
 }
 
+wbw_breach_depressions_least_cost <- function(...) {
+  # Breaches depressions in a DEM using a constrained least-cost pathway search.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$breach_depressions_least_cost(...)
+}
+
 breach_single_cell_pits <- function(...) {
+  # Breaches single-cell pits in a DEM by carving one-cell channels.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$breach_single_cell_pits(...)
+}
+
+wbw_breach_single_cell_pits <- function(...) {
   # Breaches single-cell pits in a DEM by carving one-cell channels.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$breach_single_cell_pits(...)
@@ -3098,7 +3338,19 @@ breakline_mapping <- function(...) {
   session$breakline_mapping(...)
 }
 
+wbw_breakline_mapping <- function(...) {
+  # Maps breaklines by thresholding log-transformed curvedness and vectorizing thinned linear features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$breakline_mapping(...)
+}
+
 buffer_raster <- function(...) {
+  # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$buffer_raster(...)
+}
+
+wbw_buffer_raster <- function(...) {
   # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$buffer_raster(...)
@@ -3110,7 +3362,19 @@ buffer_vector <- function(...) {
   session$buffer_vector(...)
 }
 
+wbw_buffer_vector <- function(...) {
+  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$buffer_vector(...)
+}
+
 burn_streams <- function(...) {
+  # Burns a stream network into a DEM by decreasing stream-cell elevations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$burn_streams(...)
+}
+
+wbw_burn_streams <- function(...) {
   # Burns a stream network into a DEM by decreasing stream-cell elevations.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$burn_streams(...)
@@ -3122,7 +3386,19 @@ burn_streams_at_roads <- function(...) {
   session$burn_streams_at_roads(...)
 }
 
+wbw_burn_streams_at_roads <- function(...) {
+  # Lowers stream elevations near stream-road crossings to breach road embankments in a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$burn_streams_at_roads(...)
+}
+
 canny_edge_detection <- function(...) {
+  # Applies Canny multi-stage edge detection (Gaussian blur → Sobel gradient → non-maximum suppression → double threshold → hysteresis).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$canny_edge_detection(...)
+}
+
+wbw_canny_edge_detection <- function(...) {
   # Applies Canny multi-stage edge detection (Gaussian blur → Sobel gradient → non-maximum suppression → double threshold → hysteresis).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$canny_edge_detection(...)
@@ -3134,7 +3410,19 @@ casorati_curvature <- function(...) {
   session$casorati_curvature(...)
 }
 
+wbw_casorati_curvature <- function(...) {
+  # Calculates Casorati curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$casorati_curvature(...)
+}
+
 ceil <- function(...) {
+  # Rounds each raster cell upward to the nearest integer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ceil(...)
+}
+
+wbw_ceil <- function(...) {
   # Rounds each raster cell upward to the nearest integer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ceil(...)
@@ -3146,7 +3434,19 @@ centroid_raster <- function(...) {
   session$centroid_raster(...)
 }
 
+wbw_centroid_raster <- function(...) {
+  # Calculates the centroid cell for each positive-valued patch ID in a raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$centroid_raster(...)
+}
+
 centroid_vector <- function(...) {
+  # Computes centroid points from vector features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$centroid_vector(...)
+}
+
+wbw_centroid_vector <- function(...) {
   # Computes centroid points from vector features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$centroid_vector(...)
@@ -3158,7 +3458,19 @@ change_vector_analysis <- function(...) {
   session$change_vector_analysis(...)
 }
 
+wbw_change_vector_analysis <- function(...) {
+  # Performs change vector analysis on two-date multispectral datasets and returns magnitude and direction rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$change_vector_analysis(...)
+}
+
 circular_variance_of_aspect <- function(...) {
+  # Calculates local circular variance of aspect within a moving neighbourhood.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$circular_variance_of_aspect(...)
+}
+
+wbw_circular_variance_of_aspect <- function(...) {
   # Calculates local circular variance of aspect within a moving neighbourhood.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$circular_variance_of_aspect(...)
@@ -3170,7 +3482,19 @@ classify_buildings_in_lidar <- function(...) {
   session$classify_buildings_in_lidar(...)
 }
 
+wbw_classify_buildings_in_lidar <- function(...) {
+  # Assigns classification 6 to LiDAR points falling inside building footprint polygons.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_buildings_in_lidar(...)
+}
+
 classify_lidar <- function(...) {
+  # Performs LiDAR classification into ground, building, and vegetation using neighborhood geometry and segmentation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_lidar(...)
+}
+
+wbw_classify_lidar <- function(...) {
   # Performs LiDAR classification into ground, building, and vegetation using neighborhood geometry and segmentation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$classify_lidar(...)
@@ -3182,7 +3506,19 @@ classify_overlap_points <- function(...) {
   session$classify_overlap_points(...)
 }
 
+wbw_classify_overlap_points <- function(...) {
+  # Flags or filters LiDAR points in grid cells containing multiple point source IDs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_overlap_points(...)
+}
+
 clean_vector <- function(...) {
+  # Removes null and invalid vector geometries (e.g., undersized lines/polygons) while preserving valid features and attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$clean_vector(...)
+}
+
+wbw_clean_vector <- function(...) {
   # Removes null and invalid vector geometries (e.g., undersized lines/polygons) while preserving valid features and attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$clean_vector(...)
@@ -3194,7 +3530,19 @@ clip <- function(...) {
   session$clip(...)
 }
 
+wbw_clip <- function(...) {
+  # Clips input polygons to overlay polygon boundaries using topology-based intersection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$clip(...)
+}
+
 clip_lidar_to_polygon <- function(...) {
+  # Retains only LiDAR points that fall within polygon geometry.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$clip_lidar_to_polygon(...)
+}
+
+wbw_clip_lidar_to_polygon <- function(...) {
   # Retains only LiDAR points that fall within polygon geometry.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$clip_lidar_to_polygon(...)
@@ -3206,7 +3554,19 @@ clip_raster_to_polygon <- function(...) {
   session$clip_raster_to_polygon(...)
 }
 
+wbw_clip_raster_to_polygon <- function(...) {
+  # Clips a raster to polygon extents; outside polygon cells are set to NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$clip_raster_to_polygon(...)
+}
+
 closest_facility_network <- function(...) {
+  # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$closest_facility_network(...)
+}
+
+wbw_closest_facility_network <- function(...) {
   # Finds the minimum-cost network route from each incident point to its nearest reachable facility point.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$closest_facility_network(...)
@@ -3218,7 +3578,19 @@ closing <- function(...) {
   session$closing(...)
 }
 
+wbw_closing <- function(...) {
+  # Performs a morphological closing operation using a rectangular structuring element.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$closing(...)
+}
+
 clump <- function(...) {
+  # Groups contiguous equal-valued raster cells into unique patch identifiers.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$clump(...)
+}
+
+wbw_clump <- function(...) {
   # Groups contiguous equal-valued raster cells into unique patch identifiers.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$clump(...)
@@ -3230,7 +3602,19 @@ colourize_based_on_class <- function(...) {
   session$colourize_based_on_class(...)
 }
 
+wbw_colourize_based_on_class <- function(...) {
+  # Sets LiDAR point RGB values based on point classifications.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$colourize_based_on_class(...)
+}
+
 colourize_based_on_point_returns <- function(...) {
+  # Sets LiDAR point RGB values based on return-type categories.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$colourize_based_on_point_returns(...)
+}
+
+wbw_colourize_based_on_point_returns <- function(...) {
   # Sets LiDAR point RGB values based on return-type categories.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$colourize_based_on_point_returns(...)
@@ -3242,7 +3626,19 @@ compactness_ratio <- function(...) {
   session$compactness_ratio(...)
 }
 
+wbw_compactness_ratio <- function(...) {
+  # Computes compactness ratio (perimeter of equivalent circle / actual perimeter) for polygon features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$compactness_ratio(...)
+}
+
 concave_hull <- function(...) {
+  # Creates concave hull polygons around all input feature coordinates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$concave_hull(...)
+}
+
+wbw_concave_hull <- function(...) {
   # Creates concave hull polygons around all input feature coordinates.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$concave_hull(...)
@@ -3254,7 +3650,19 @@ conditional_evaluation <- function(...) {
   session$conditional_evaluation(...)
 }
 
+wbw_conditional_evaluation <- function(...) {
+  # Performs if-then-else conditional evaluation on raster cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$conditional_evaluation(...)
+}
+
 conservative_smoothing_filter <- function(...) {
+  # Performs conservative smoothing by clipping impulse outliers to neighborhood bounds.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$conservative_smoothing_filter(...)
+}
+
+wbw_conservative_smoothing_filter <- function(...) {
   # Performs conservative smoothing by clipping impulse outliers to neighborhood bounds.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$conservative_smoothing_filter(...)
@@ -3266,7 +3674,19 @@ construct_vector_tin <- function(...) {
   session$construct_vector_tin(...)
 }
 
+wbw_construct_vector_tin <- function(...) {
+  # Constructs a triangular irregular network (TIN) from an input point set using Delaunay triangulation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$construct_vector_tin(...)
+}
+
 contours_from_points <- function(...) {
+  # Creates contour polylines from point elevations using a Delaunay TIN.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$contours_from_points(...)
+}
+
+wbw_contours_from_points <- function(...) {
   # Creates contour polylines from point elevations using a Delaunay TIN.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$contours_from_points(...)
@@ -3278,7 +3698,19 @@ contours_from_raster <- function(...) {
   session$contours_from_raster(...)
 }
 
+wbw_contours_from_raster <- function(...) {
+  # Creates contour polylines from a raster surface model.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$contours_from_raster(...)
+}
+
 convergence_index <- function(...) {
+  # Calculates the convergence/divergence index from local neighbour aspect alignment.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$convergence_index(...)
+}
+
+wbw_convergence_index <- function(...) {
   # Calculates the convergence/divergence index from local neighbour aspect alignment.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$convergence_index(...)
@@ -3290,7 +3722,19 @@ convert_nodata_to_zero <- function(...) {
   session$convert_nodata_to_zero(...)
 }
 
+wbw_convert_nodata_to_zero <- function(...) {
+  # Replaces raster nodata cells with 0 while leaving valid cells unchanged.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$convert_nodata_to_zero(...)
+}
+
 corner_detection <- function(...) {
+  # Identifies corner patterns in binary rasters using hit-and-miss templates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$corner_detection(...)
+}
+
+wbw_corner_detection <- function(...) {
   # Identifies corner patterns in binary rasters using hit-and-miss templates.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$corner_detection(...)
@@ -3302,7 +3746,19 @@ correct_vignetting <- function(...) {
   session$correct_vignetting(...)
 }
 
+wbw_correct_vignetting <- function(...) {
+  # Reduces brightness fall-off away from a principal point using a cosine lens model.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$correct_vignetting(...)
+}
+
 cos <- function(...) {
+  # Computes the cosine of each raster cell value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cos(...)
+}
+
+wbw_cos <- function(...) {
   # Computes the cosine of each raster cell value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$cos(...)
@@ -3314,7 +3770,19 @@ cosh <- function(...) {
   session$cosh(...)
 }
 
+wbw_cosh <- function(...) {
+  # Computes the hyperbolic cosine of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cosh(...)
+}
+
 cost_allocation <- function(...) {
+  # Assigns each cell to a source region using a backlink raster from cost distance analysis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cost_allocation(...)
+}
+
+wbw_cost_allocation <- function(...) {
   # Assigns each cell to a source region using a backlink raster from cost distance analysis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$cost_allocation(...)
@@ -3326,7 +3794,19 @@ cost_distance <- function(...) {
   session$cost_distance(...)
 }
 
+wbw_cost_distance <- function(...) {
+  # Computes accumulated travel cost and backlink rasters from source and cost surfaces.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cost_distance(...)
+}
+
 cost_pathway <- function(...) {
+  # Traces least-cost pathways from destination cells using a backlink raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cost_pathway(...)
+}
+
+wbw_cost_pathway <- function(...) {
   # Traces least-cost pathways from destination cells using a backlink raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$cost_pathway(...)
@@ -3338,7 +3818,19 @@ count_if <- function(...) {
   session$count_if(...)
 }
 
+wbw_count_if <- function(...) {
+  # Counts the number of input rasters whose cell equals a comparison value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$count_if(...)
+}
+
 create_colour_composite <- function(...) {
+  # Creates a packed RGB colour composite from red, green, blue, and optional opacity rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$create_colour_composite(...)
+}
+
+wbw_create_colour_composite <- function(...) {
   # Creates a packed RGB colour composite from red, green, blue, and optional opacity rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$create_colour_composite(...)
@@ -3350,7 +3842,19 @@ create_plane <- function(...) {
   session$create_plane(...)
 }
 
+wbw_create_plane <- function(...) {
+  # Creates a raster from a planar equation using a base raster geometry.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$create_plane(...)
+}
+
 crispness_index <- function(...) {
+  # Calculates the crispness index for a membership probability raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$crispness_index(...)
+}
+
+wbw_crispness_index <- function(...) {
   # Calculates the crispness index for a membership probability raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$crispness_index(...)
@@ -3362,7 +3866,19 @@ cross_tabulation <- function(...) {
   session$cross_tabulation(...)
 }
 
+wbw_cross_tabulation <- function(...) {
+  # Performs cross-tabulation on two categorical rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cross_tabulation(...)
+}
+
 csv_points_to_vector <- function(...) {
+  # Imports point records from a CSV file into a point vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$csv_points_to_vector(...)
+}
+
+wbw_csv_points_to_vector <- function(...) {
   # Imports point records from a CSV file into a point vector layer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$csv_points_to_vector(...)
@@ -3374,7 +3890,19 @@ cumulative_distribution <- function(...) {
   session$cumulative_distribution(...)
 }
 
+wbw_cumulative_distribution <- function(...) {
+  # Converts raster values to cumulative distribution probabilities.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$cumulative_distribution(...)
+}
+
 curvedness <- function(...) {
+  # Calculates the curvedness surface form descriptor from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$curvedness(...)
+}
+
+wbw_curvedness <- function(...) {
   # Calculates the curvedness surface form descriptor from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$curvedness(...)
@@ -3386,7 +3914,19 @@ d8_flow_accum <- function(...) {
   session$d8_flow_accum(...)
 }
 
+wbw_d8_flow_accum <- function(...) {
+  # Calculates D8 flow accumulation from a DEM or D8 pointer raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$d8_flow_accum(...)
+}
+
 d8_mass_flux <- function(...) {
+  # Performs a D8-based mass-flux accumulation using loading, efficiency, and absorption rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$d8_mass_flux(...)
+}
+
+wbw_d8_mass_flux <- function(...) {
   # Performs a D8-based mass-flux accumulation using loading, efficiency, and absorption rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$d8_mass_flux(...)
@@ -3398,7 +3938,19 @@ d8_pointer <- function(...) {
   session$d8_pointer(...)
 }
 
+wbw_d8_pointer <- function(...) {
+  # Generates a D8 flow-direction pointer raster from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$d8_pointer(...)
+}
+
 dbscan <- function(...) {
+  # Performs unsupervised DBSCAN density-based clustering on a stack of input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dbscan(...)
+}
+
+wbw_dbscan <- function(...) {
   # Performs unsupervised DBSCAN density-based clustering on a stack of input rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$dbscan(...)
@@ -3410,7 +3962,19 @@ decrement <- function(...) {
   session$decrement(...)
 }
 
+wbw_decrement <- function(...) {
+  # Subtracts 1 from each non-nodata raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$decrement(...)
+}
+
 delete_field <- function(...) {
+  # Deletes one or more attribute fields from a vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$delete_field(...)
+}
+
+wbw_delete_field <- function(...) {
   # Deletes one or more attribute fields from a vector layer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$delete_field(...)
@@ -3422,7 +3986,19 @@ dem_void_filling <- function(...) {
   session$dem_void_filling(...)
 }
 
+wbw_dem_void_filling <- function(...) {
+  # Fills DEM voids using a secondary surface and interpolated elevation offsets for seamless fusion.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dem_void_filling(...)
+}
+
 densify_features <- function(...) {
+  # Adds vertices along line and polygon boundaries at a specified spacing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$densify_features(...)
+}
+
+wbw_densify_features <- function(...) {
   # Adds vertices along line and polygon boundaries at a specified spacing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$densify_features(...)
@@ -3434,7 +4010,19 @@ depth_in_sink <- function(...) {
   session$depth_in_sink(...)
 }
 
+wbw_depth_in_sink <- function(...) {
+  # Measures the depth each DEM cell lies below a depression-filled surface.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$depth_in_sink(...)
+}
+
 depth_to_water <- function(...) {
+  # Computes cartographic depth-to-water using least-cost accumulation from stream/lake source features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$depth_to_water(...)
+}
+
+wbw_depth_to_water <- function(...) {
   # Computes cartographic depth-to-water using least-cost accumulation from stream/lake source features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$depth_to_water(...)
@@ -3446,7 +4034,19 @@ deviation_from_mean_elevation <- function(...) {
   session$deviation_from_mean_elevation(...)
 }
 
+wbw_deviation_from_mean_elevation <- function(...) {
+  # Calculates the local topographic z-score using local mean and standard deviation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$deviation_from_mean_elevation(...)
+}
+
 deviation_from_regional_direction <- function(...) {
+  # Calculates polygon directional deviation from weighted regional mean orientation and appends DEV_DIR.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$deviation_from_regional_direction(...)
+}
+
+wbw_deviation_from_regional_direction <- function(...) {
   # Calculates polygon directional deviation from weighted regional mean orientation and appends DEV_DIR.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$deviation_from_regional_direction(...)
@@ -3458,7 +4058,19 @@ diff_of_gaussians_filter <- function(...) {
   session$diff_of_gaussians_filter(...)
 }
 
+wbw_diff_of_gaussians_filter <- function(...) {
+  # Performs Difference-of-Gaussians band-pass filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$diff_of_gaussians_filter(...)
+}
+
 difference <- function(...) {
+  # Removes overlay polygon areas from input polygons using topology-based difference.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$difference(...)
+}
+
+wbw_difference <- function(...) {
   # Removes overlay polygon areas from input polygons using topology-based difference.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$difference(...)
@@ -3470,7 +4082,19 @@ difference_curvature <- function(...) {
   session$difference_curvature(...)
 }
 
+wbw_difference_curvature <- function(...) {
+  # Calculates difference curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$difference_curvature(...)
+}
+
 difference_from_mean_elevation <- function(...) {
+  # Calculates the difference between each elevation and the local mean elevation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$difference_from_mean_elevation(...)
+}
+
+wbw_difference_from_mean_elevation <- function(...) {
   # Calculates the difference between each elevation and the local mean elevation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$difference_from_mean_elevation(...)
@@ -3482,7 +4106,19 @@ dinf_flow_accum <- function(...) {
   session$dinf_flow_accum(...)
 }
 
+wbw_dinf_flow_accum <- function(...) {
+  # Calculates D-Infinity flow accumulation from a DEM or D-Infinity pointer raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dinf_flow_accum(...)
+}
+
 dinf_mass_flux <- function(...) {
+  # Performs a D-Infinity mass-flux accumulation using loading, efficiency, and absorption rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dinf_mass_flux(...)
+}
+
+wbw_dinf_mass_flux <- function(...) {
   # Performs a D-Infinity mass-flux accumulation using loading, efficiency, and absorption rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$dinf_mass_flux(...)
@@ -3494,7 +4130,19 @@ dinf_pointer <- function(...) {
   session$dinf_pointer(...)
 }
 
+wbw_dinf_pointer <- function(...) {
+  # Generates a D-Infinity flow-direction raster from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dinf_pointer(...)
+}
+
 direct_decorrelation_stretch <- function(...) {
+  # Improves packed RGB colour saturation by reducing the achromatic component and linearly stretching channels.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$direct_decorrelation_stretch(...)
+}
+
+wbw_direct_decorrelation_stretch <- function(...) {
   # Improves packed RGB colour saturation by reducing the achromatic component and linearly stretching channels.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$direct_decorrelation_stretch(...)
@@ -3506,7 +4154,19 @@ directional_relief <- function(...) {
   session$directional_relief(...)
 }
 
+wbw_directional_relief <- function(...) {
+  # Calculates directional relief by ray-tracing elevation in a specified azimuth.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$directional_relief(...)
+}
+
 dissolve <- function(...) {
+  # Removes shared polygon boundaries globally or by a dissolve attribute field.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$dissolve(...)
+}
+
+wbw_dissolve <- function(...) {
   # Removes shared polygon boundaries globally or by a dissolve attribute field.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$dissolve(...)
@@ -3518,7 +4178,19 @@ distance_to_outlet <- function(...) {
   session$distance_to_outlet(...)
 }
 
+wbw_distance_to_outlet <- function(...) {
+  # Calculates downstream distance to outlet for each stream cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$distance_to_outlet(...)
+}
+
 diversity_filter <- function(...) {
+  # Computes moving-window diversity (count of unique values).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$diversity_filter(...)
+}
+
+wbw_diversity_filter <- function(...) {
   # Computes moving-window diversity (count of unique values).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$diversity_filter(...)
@@ -3530,7 +4202,19 @@ divide <- function(...) {
   session$divide(...)
 }
 
+wbw_divide <- function(...) {
+  # Divides the first raster by the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$divide(...)
+}
+
 downslope_distance_to_stream <- function(...) {
+  # Computes downslope distance from each DEM cell to nearest stream along flow paths.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$downslope_distance_to_stream(...)
+}
+
+wbw_downslope_distance_to_stream <- function(...) {
   # Computes downslope distance from each DEM cell to nearest stream along flow paths.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$downslope_distance_to_stream(...)
@@ -3542,7 +4226,19 @@ downslope_flowpath_length <- function(...) {
   session$downslope_flowpath_length(...)
 }
 
+wbw_downslope_flowpath_length <- function(...) {
+  # Computes downslope flowpath length from each cell to an outlet in a D8 pointer raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$downslope_flowpath_length(...)
+}
+
 downslope_index <- function(...) {
+  # Calculates Hjerdt et al. (2004) downslope index using D8 flow directions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$downslope_index(...)
+}
+
+wbw_downslope_index <- function(...) {
   # Calculates Hjerdt et al. (2004) downslope index using D8 flow directions.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$downslope_index(...)
@@ -3554,7 +4250,19 @@ edge_contamination <- function(...) {
   session$edge_contamination(...)
 }
 
+wbw_edge_contamination <- function(...) {
+  # Identifies DEM cells whose upslope area extends beyond the DEM edge for common flow-routing schemes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$edge_contamination(...)
+}
+
 edge_density <- function(...) {
+  # Calculates local density of breaks-in-slope using angular normal-vector differences.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$edge_density(...)
+}
+
+wbw_edge_density <- function(...) {
   # Calculates local density of breaks-in-slope using angular normal-vector differences.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$edge_density(...)
@@ -3566,7 +4274,19 @@ edge_preserving_mean_filter <- function(...) {
   session$edge_preserving_mean_filter(...)
 }
 
+wbw_edge_preserving_mean_filter <- function(...) {
+  # Performs thresholded edge-preserving mean filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$edge_preserving_mean_filter(...)
+}
+
 edge_proportion <- function(...) {
+  # Calculates the proportion of each patch's cells that are edge cells and maps it back to patch cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$edge_proportion(...)
+}
+
+wbw_edge_proportion <- function(...) {
   # Calculates the proportion of each patch's cells that are edge cells and maps it back to patch cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$edge_proportion(...)
@@ -3578,7 +4298,19 @@ elev_above_pit <- function(...) {
   session$elev_above_pit(...)
 }
 
+wbw_elev_above_pit <- function(...) {
+  # Calculates elevation above the nearest downslope pit cell (or edge sink).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elev_above_pit(...)
+}
+
 elev_above_pit_dist <- function(...) {
+  # Compatibility alias for elev_above_pit.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elev_above_pit_dist(...)
+}
+
+wbw_elev_above_pit_dist <- function(...) {
   # Compatibility alias for elev_above_pit.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$elev_above_pit_dist(...)
@@ -3590,7 +4322,19 @@ elev_relative_to_min_max <- function(...) {
   session$elev_relative_to_min_max(...)
 }
 
+wbw_elev_relative_to_min_max <- function(...) {
+  # Expresses each elevation as a percentage (0–100) of the raster's elevation range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elev_relative_to_min_max(...)
+}
+
 elev_relative_to_watershed_min_max <- function(...) {
+  # Calculates a DEM cell's relative elevation position within each watershed as a percentage.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elev_relative_to_watershed_min_max(...)
+}
+
+wbw_elev_relative_to_watershed_min_max <- function(...) {
   # Calculates a DEM cell's relative elevation position within each watershed as a percentage.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$elev_relative_to_watershed_min_max(...)
@@ -3602,7 +4346,19 @@ elevation_above_stream <- function(...) {
   session$elevation_above_stream(...)
 }
 
+wbw_elevation_above_stream <- function(...) {
+  # Computes elevation above nearest stream measured along downslope flow paths.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elevation_above_stream(...)
+}
+
 elevation_above_stream_euclidean <- function(...) {
+  # Computes elevation above nearest stream using straight-line (Euclidean) proximity.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elevation_above_stream_euclidean(...)
+}
+
+wbw_elevation_above_stream_euclidean <- function(...) {
   # Computes elevation above nearest stream using straight-line (Euclidean) proximity.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$elevation_above_stream_euclidean(...)
@@ -3614,7 +4370,19 @@ elevation_percentile <- function(...) {
   session$elevation_percentile(...)
 }
 
+wbw_elevation_percentile <- function(...) {
+  # Calculates the local percentile rank of each cell elevation within a neighbourhood window.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elevation_percentile(...)
+}
+
 eliminate_coincident_points <- function(...) {
+  # Removes coincident or near-coincident points within a tolerance distance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$eliminate_coincident_points(...)
+}
+
+wbw_eliminate_coincident_points <- function(...) {
   # Removes coincident or near-coincident points within a tolerance distance.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$eliminate_coincident_points(...)
@@ -3626,7 +4394,19 @@ elongation_ratio <- function(...) {
   session$elongation_ratio(...)
 }
 
+wbw_elongation_ratio <- function(...) {
+  # Computes elongation ratio (short axis / long axis of bounding rectangle) for polygon features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$elongation_ratio(...)
+}
+
 embankment_mapping <- function(...) {
+  # Maps transportation embankments from a DEM and road network, with optional embankment-surface removal via interpolation. Authored by John Lindsay and Nigel VanNieuwenhuizen.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$embankment_mapping(...)
+}
+
+wbw_embankment_mapping <- function(...) {
   # Maps transportation embankments from a DEM and road network, with optional embankment-surface removal via interpolation. Authored by John Lindsay and Nigel VanNieuwenhuizen.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$embankment_mapping(...)
@@ -3638,7 +4418,19 @@ emboss_filter <- function(...) {
   session$emboss_filter(...)
 }
 
+wbw_emboss_filter <- function(...) {
+  # Performs directional emboss filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$emboss_filter(...)
+}
+
 equal_to <- function(...) {
+  # Tests whether two rasters are equal on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$equal_to(...)
+}
+
+wbw_equal_to <- function(...) {
   # Tests whether two rasters are equal on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$equal_to(...)
@@ -3650,7 +4442,19 @@ erase <- function(...) {
   session$erase(...)
 }
 
+wbw_erase <- function(...) {
+  # Erases overlay polygon areas from input polygons and preserves input attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$erase(...)
+}
+
 erase_polygon_from_lidar <- function(...) {
+  # Removes LiDAR points that fall within polygon geometry.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$erase_polygon_from_lidar(...)
+}
+
+wbw_erase_polygon_from_lidar <- function(...) {
   # Removes LiDAR points that fall within polygon geometry.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$erase_polygon_from_lidar(...)
@@ -3662,7 +4466,19 @@ erase_polygon_from_raster <- function(...) {
   session$erase_polygon_from_raster(...)
 }
 
+wbw_erase_polygon_from_raster <- function(...) {
+  # Sets raster cells inside polygons to NoData while preserving cells in polygon holes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$erase_polygon_from_raster(...)
+}
+
 euclidean_allocation <- function(...) {
+  # Assigns each valid cell the value of its nearest non-zero target cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$euclidean_allocation(...)
+}
+
+wbw_euclidean_allocation <- function(...) {
   # Assigns each valid cell the value of its nearest non-zero target cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$euclidean_allocation(...)
@@ -3674,7 +4490,19 @@ euclidean_distance <- function(...) {
   session$euclidean_distance(...)
 }
 
+wbw_euclidean_distance <- function(...) {
+  # Computes Euclidean distance to nearest non-zero target cell in a raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$euclidean_distance(...)
+}
+
 evaluate_training_sites <- function(...) {
+  # Evaluates class separability in multi-band training polygons and writes an HTML report with per-band distribution statistics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$evaluate_training_sites(...)
+}
+
+wbw_evaluate_training_sites <- function(...) {
   # Evaluates class separability in multi-band training polygons and writes an HTML report with per-band distribution statistics.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$evaluate_training_sites(...)
@@ -3686,7 +4514,19 @@ exp <- function(...) {
   session$exp(...)
 }
 
+wbw_exp <- function(...) {
+  # Computes e raised to the power of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$exp(...)
+}
+
 exp2 <- function(...) {
+  # Computes 2 raised to the power of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$exp2(...)
+}
+
+wbw_exp2 <- function(...) {
   # Computes 2 raised to the power of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$exp2(...)
@@ -3698,7 +4538,19 @@ export_table_to_csv <- function(...) {
   session$export_table_to_csv(...)
 }
 
+wbw_export_table_to_csv <- function(...) {
+  # Exports a vector attribute table to a CSV file.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$export_table_to_csv(...)
+}
+
 exposure_towards_wind_flux <- function(...) {
+  # Calculates terrain exposure relative to dominant wind direction and upwind horizon shielding.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$exposure_towards_wind_flux(...)
+}
+
+wbw_exposure_towards_wind_flux <- function(...) {
   # Calculates terrain exposure relative to dominant wind direction and upwind horizon shielding.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$exposure_towards_wind_flux(...)
@@ -3710,7 +4562,19 @@ extend_vector_lines <- function(...) {
   session$extend_vector_lines(...)
 }
 
+wbw_extend_vector_lines <- function(...) {
+  # Extends polyline endpoints by a specified distance at the start, end, or both.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extend_vector_lines(...)
+}
+
 extract_by_attribute <- function(...) {
+  # Extracts vector features that satisfy an attribute expression.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extract_by_attribute(...)
+}
+
+wbw_extract_by_attribute <- function(...) {
   # Extracts vector features that satisfy an attribute expression.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$extract_by_attribute(...)
@@ -3722,7 +4586,19 @@ extract_nodes <- function(...) {
   session$extract_nodes(...)
 }
 
+wbw_extract_nodes <- function(...) {
+  # Converts polyline and polygon vertices into point features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extract_nodes(...)
+}
+
 extract_raster_values_at_points <- function(...) {
+  # Samples one or more rasters at point locations and writes the values to point attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extract_raster_values_at_points(...)
+}
+
+wbw_extract_raster_values_at_points <- function(...) {
   # Samples one or more rasters at point locations and writes the values to point attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$extract_raster_values_at_points(...)
@@ -3734,7 +4610,19 @@ extract_streams <- function(...) {
   session$extract_streams(...)
 }
 
+wbw_extract_streams <- function(...) {
+  # Extracts streams based on flow accumulation threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extract_streams(...)
+}
+
 extract_valleys <- function(...) {
+  # Extracts valleys from DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$extract_valleys(...)
+}
+
+wbw_extract_valleys <- function(...) {
   # Extracts valleys from DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$extract_valleys(...)
@@ -3746,7 +4634,19 @@ farthest_channel_head <- function(...) {
   session$farthest_channel_head(...)
 }
 
+wbw_farthest_channel_head <- function(...) {
+  # Calculates distance to most distant channel head.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$farthest_channel_head(...)
+}
+
 fast_almost_gaussian_filter <- function(...) {
+  # Performs a fast approximation to Gaussian smoothing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fast_almost_gaussian_filter(...)
+}
+
+wbw_fast_almost_gaussian_filter <- function(...) {
   # Performs a fast approximation to Gaussian smoothing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fast_almost_gaussian_filter(...)
@@ -3758,7 +4658,19 @@ fd8_flow_accum <- function(...) {
   session$fd8_flow_accum(...)
 }
 
+wbw_fd8_flow_accum <- function(...) {
+  # Calculates FD8 flow accumulation from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fd8_flow_accum(...)
+}
+
 fd8_pointer <- function(...) {
+  # Generates an FD8 multiple-flow-direction pointer raster from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fd8_pointer(...)
+}
+
+wbw_fd8_pointer <- function(...) {
   # Generates an FD8 multiple-flow-direction pointer raster from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fd8_pointer(...)
@@ -3770,7 +4682,19 @@ feature_preserving_smoothing <- function(...) {
   session$feature_preserving_smoothing(...)
 }
 
+wbw_feature_preserving_smoothing <- function(...) {
+  # Smooths DEM roughness while preserving breaks-in-slope using normal-vector filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$feature_preserving_smoothing(...)
+}
+
 fetch_analysis <- function(...) {
+  # Computes upwind distance to the first topographic obstacle along a specified azimuth.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fetch_analysis(...)
+}
+
+wbw_fetch_analysis <- function(...) {
   # Computes upwind distance to the first topographic obstacle along a specified azimuth.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fetch_analysis(...)
@@ -3782,7 +4706,19 @@ field_calculator <- function(...) {
   session$field_calculator(...)
 }
 
+wbw_field_calculator <- function(...) {
+  # Calculates a field value from an expression using feature attributes and geometry variables.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$field_calculator(...)
+}
+
 fill_burn <- function(...) {
+  # Hydro-enforces a DEM by burning streams and then filling depressions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_burn(...)
+}
+
+wbw_fill_burn <- function(...) {
   # Hydro-enforces a DEM by burning streams and then filling depressions.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fill_burn(...)
@@ -3794,7 +4730,19 @@ fill_depressions <- function(...) {
   session$fill_depressions(...)
 }
 
+wbw_fill_depressions <- function(...) {
+  # Fills depressions in a DEM using a priority-flood strategy with optional flat resolution.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_depressions(...)
+}
+
 fill_depressions_planchon_and_darboux <- function(...) {
+  # Fills depressions in a DEM with a Planchon-and-Darboux-compatible interface.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_depressions_planchon_and_darboux(...)
+}
+
+wbw_fill_depressions_planchon_and_darboux <- function(...) {
   # Fills depressions in a DEM with a Planchon-and-Darboux-compatible interface.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fill_depressions_planchon_and_darboux(...)
@@ -3806,7 +4754,19 @@ fill_depressions_wang_and_liu <- function(...) {
   session$fill_depressions_wang_and_liu(...)
 }
 
+wbw_fill_depressions_wang_and_liu <- function(...) {
+  # Fills depressions in a DEM with a Wang-and-Liu-compatible interface.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_depressions_wang_and_liu(...)
+}
+
 fill_missing_data <- function(...) {
+  # Fills NoData gaps using inverse-distance weighting from valid gap-edge cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_missing_data(...)
+}
+
+wbw_fill_missing_data <- function(...) {
   # Fills NoData gaps using inverse-distance weighting from valid gap-edge cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fill_missing_data(...)
@@ -3818,7 +4778,19 @@ fill_pits <- function(...) {
   session$fill_pits(...)
 }
 
+wbw_fill_pits <- function(...) {
+  # Fills single-cell pits in a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fill_pits(...)
+}
+
 filter_lidar <- function(...) {
+  # Filters LiDAR points using a boolean expression over point attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar(...)
+}
+
+wbw_filter_lidar <- function(...) {
   # Filters LiDAR points using a boolean expression over point attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$filter_lidar(...)
@@ -3830,7 +4802,19 @@ filter_lidar_by_percentile <- function(...) {
   session$filter_lidar_by_percentile(...)
 }
 
+wbw_filter_lidar_by_percentile <- function(...) {
+  # Selects one representative point per grid block based on elevation percentile.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar_by_percentile(...)
+}
+
 filter_lidar_by_reference_surface <- function(...) {
+  # Extracts or classifies points based on z relation to a reference raster surface.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar_by_reference_surface(...)
+}
+
+wbw_filter_lidar_by_reference_surface <- function(...) {
   # Extracts or classifies points based on z relation to a reference raster surface.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$filter_lidar_by_reference_surface(...)
@@ -3842,7 +4826,19 @@ filter_lidar_classes <- function(...) {
   session$filter_lidar_classes(...)
 }
 
+wbw_filter_lidar_classes <- function(...) {
+  # Removes points that match excluded classification values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar_classes(...)
+}
+
 filter_lidar_noise <- function(...) {
+  # Removes low (class 7) and high (class 18) noise-classified points from a LiDAR file.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar_noise(...)
+}
+
+wbw_filter_lidar_noise <- function(...) {
   # Removes low (class 7) and high (class 18) noise-classified points from a LiDAR file.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$filter_lidar_noise(...)
@@ -3854,7 +4850,19 @@ filter_lidar_scan_angles <- function(...) {
   session$filter_lidar_scan_angles(...)
 }
 
+wbw_filter_lidar_scan_angles <- function(...) {
+  # Removes LiDAR points whose absolute scan angle exceeds a threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_lidar_scan_angles(...)
+}
+
 filter_raster_features_by_area <- function(...) {
+  # Removes integer-labelled raster features smaller than a cell-count threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_raster_features_by_area(...)
+}
+
+wbw_filter_raster_features_by_area <- function(...) {
   # Removes integer-labelled raster features smaller than a cell-count threshold.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$filter_raster_features_by_area(...)
@@ -3866,7 +4874,19 @@ filter_vector_features_by_area <- function(...) {
   session$filter_vector_features_by_area(...)
 }
 
+wbw_filter_vector_features_by_area <- function(...) {
+  # Filters polygon features below a minimum area threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$filter_vector_features_by_area(...)
+}
+
 find_flightline_edge_points <- function(...) {
+  # Extracts only points flagged as edge-of-flightline.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_flightline_edge_points(...)
+}
+
+wbw_find_flightline_edge_points <- function(...) {
   # Extracts only points flagged as edge-of-flightline.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$find_flightline_edge_points(...)
@@ -3878,7 +4898,19 @@ find_lowest_or_highest_points <- function(...) {
   session$find_lowest_or_highest_points(...)
 }
 
+wbw_find_lowest_or_highest_points <- function(...) {
+  # Locates lowest and/or highest raster cells and outputs their locations as points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_lowest_or_highest_points(...)
+}
+
 find_main_stem <- function(...) {
+  # Identifies main stem of stream network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_main_stem(...)
+}
+
+wbw_find_main_stem <- function(...) {
   # Identifies main stem of stream network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$find_main_stem(...)
@@ -3890,7 +4922,19 @@ find_noflow_cells <- function(...) {
   session$find_noflow_cells(...)
 }
 
+wbw_find_noflow_cells <- function(...) {
+  # Finds DEM cells that have no lower D8 neighbour.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_noflow_cells(...)
+}
+
 find_parallel_flow <- function(...) {
+  # Identifies stream cells that possess parallel D8 flow directions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_parallel_flow(...)
+}
+
+wbw_find_parallel_flow <- function(...) {
   # Identifies stream cells that possess parallel D8 flow directions.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$find_parallel_flow(...)
@@ -3902,7 +4946,19 @@ find_patch_edge_cells <- function(...) {
   session$find_patch_edge_cells(...)
 }
 
+wbw_find_patch_edge_cells <- function(...) {
+  # Identifies edge cells for each positive raster patch ID; non-edge patch cells are set to zero.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_patch_edge_cells(...)
+}
+
 find_ridges <- function(...) {
+  # Identifies potential ridge and peak cells in a DEM, with optional line thinning.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$find_ridges(...)
+}
+
+wbw_find_ridges <- function(...) {
   # Identifies potential ridge and peak cells in a DEM, with optional line thinning.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$find_ridges(...)
@@ -3914,7 +4970,19 @@ fix_dangling_arcs <- function(...) {
   session$fix_dangling_arcs(...)
 }
 
+wbw_fix_dangling_arcs <- function(...) {
+  # Fixes undershot and overshot dangling arcs in a line network by snapping line endpoints within a threshold distance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fix_dangling_arcs(...)
+}
+
 flatten_lakes <- function(...) {
+  # Flattens lake elevations using minimum perimeter elevation for each polygon.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flatten_lakes(...)
+}
+
+wbw_flatten_lakes <- function(...) {
   # Flattens lake elevations using minimum perimeter elevation for each polygon.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$flatten_lakes(...)
@@ -3926,7 +4994,19 @@ flightline_overlap <- function(...) {
   session$flightline_overlap(...)
 }
 
+wbw_flightline_overlap <- function(...) {
+  # Counts distinct point-source IDs per raster cell to identify overlapping flightlines.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flightline_overlap(...)
+}
+
 flip_image <- function(...) {
+  # Flips an image vertically, horizontally, or both.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flip_image(...)
+}
+
+wbw_flip_image <- function(...) {
   # Flips an image vertically, horizontally, or both.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$flip_image(...)
@@ -3938,7 +5018,19 @@ flood_order <- function(...) {
   session$flood_order(...)
 }
 
+wbw_flood_order <- function(...) {
+  # Outputs the sequential priority-flood order for each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flood_order(...)
+}
+
 floor <- function(...) {
+  # Rounds each raster cell downward to the nearest integer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$floor(...)
+}
+
+wbw_floor <- function(...) {
   # Rounds each raster cell downward to the nearest integer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$floor(...)
@@ -3950,7 +5042,19 @@ flow_accum_full_workflow <- function(...) {
   session$flow_accum_full_workflow(...)
 }
 
+wbw_flow_accum_full_workflow <- function(...) {
+  # Runs a full non-divergent flow-accumulation workflow and returns breached DEM, flow-direction pointer, and accumulation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flow_accum_full_workflow(...)
+}
+
 flow_length_diff <- function(...) {
+  # Computes local maximum absolute differences in downslope path length from a D8 pointer raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$flow_length_diff(...)
+}
+
+wbw_flow_length_diff <- function(...) {
   # Computes local maximum absolute differences in downslope path length from a D8 pointer raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$flow_length_diff(...)
@@ -3962,7 +5066,19 @@ frangi_filter <- function(...) {
   session$frangi_filter(...)
 }
 
+wbw_frangi_filter <- function(...) {
+  # Performs multiscale Frangi vesselness enhancement.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$frangi_filter(...)
+}
+
 frost_filter <- function(...) {
+  # Performs adaptive Frost speckle filtering for radar imagery.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$frost_filter(...)
+}
+
+wbw_frost_filter <- function(...) {
   # Performs adaptive Frost speckle filtering for radar imagery.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$frost_filter(...)
@@ -3974,7 +5090,19 @@ fuzzy_knn_classification <- function(...) {
   session$fuzzy_knn_classification(...)
 }
 
+wbw_fuzzy_knn_classification <- function(...) {
+  # Performs fuzzy k-nearest-neighbor classification and outputs class membership confidence.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fuzzy_knn_classification(...)
+}
+
 gabor_filter_bank <- function(...) {
+  # Performs multi-orientation Gabor response filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gabor_filter_bank(...)
+}
+
+wbw_gabor_filter_bank <- function(...) {
   # Performs multi-orientation Gabor response filtering.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$gabor_filter_bank(...)
@@ -3986,7 +5114,19 @@ gamma_correction <- function(...) {
   session$gamma_correction(...)
 }
 
+wbw_gamma_correction <- function(...) {
+  # Applies gamma intensity correction to grayscale or RGB imagery.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gamma_correction(...)
+}
+
 gamma_map_filter <- function(...) {
+  # Performs Gamma-MAP speckle filtering for radar imagery.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gamma_map_filter(...)
+}
+
+wbw_gamma_map_filter <- function(...) {
   # Performs Gamma-MAP speckle filtering for radar imagery.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$gamma_map_filter(...)
@@ -3998,7 +5138,19 @@ gaussian_contrast_stretch <- function(...) {
   session$gaussian_contrast_stretch(...)
 }
 
+wbw_gaussian_contrast_stretch <- function(...) {
+  # Stretches contrast by matching to a Gaussian reference distribution.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gaussian_contrast_stretch(...)
+}
+
 gaussian_curvature <- function(...) {
+  # Calculates Gaussian curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gaussian_curvature(...)
+}
+
+wbw_gaussian_curvature <- function(...) {
   # Calculates Gaussian curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$gaussian_curvature(...)
@@ -4010,7 +5162,19 @@ gaussian_filter <- function(...) {
   session$gaussian_filter(...)
 }
 
+wbw_gaussian_filter <- function(...) {
+  # Performs Gaussian smoothing on a raster image.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$gaussian_filter(...)
+}
+
 generalize_classified_raster <- function(...) {
+  # Generalizes small class patches by merging them into neighboring larger classes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$generalize_classified_raster(...)
+}
+
+wbw_generalize_classified_raster <- function(...) {
   # Generalizes small class patches by merging them into neighboring larger classes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$generalize_classified_raster(...)
@@ -4022,7 +5186,19 @@ generalize_with_similarity <- function(...) {
   session$generalize_with_similarity(...)
 }
 
+wbw_generalize_with_similarity <- function(...) {
+  # Generalizes small patches in a classified raster by merging them into the most spectrally similar neighboring patch.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$generalize_with_similarity(...)
+}
+
 generating_function <- function(...) {
+  # Calculates generating function from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$generating_function(...)
+}
+
+wbw_generating_function <- function(...) {
   # Calculates generating function from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$generating_function(...)
@@ -4034,7 +5210,19 @@ geomorphons <- function(...) {
   session$geomorphons(...)
 }
 
+wbw_geomorphons <- function(...) {
+  # Classifies landforms using 8-direction line-of-sight ternary patterns based on zenith-nadir angle differences, or 10 common geomorphon forms. Authored by Dan Newman and John Lindsay.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$geomorphons(...)
+}
+
 greater_than <- function(...) {
+  # Tests whether the first raster is greater than the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$greater_than(...)
+}
+
+wbw_greater_than <- function(...) {
   # Tests whether the first raster is greater than the second on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$greater_than(...)
@@ -4046,7 +5234,19 @@ guided_filter <- function(...) {
   session$guided_filter(...)
 }
 
+wbw_guided_filter <- function(...) {
+  # Performs edge-preserving guided filtering using local linear models.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$guided_filter(...)
+}
+
 hack_stream_order <- function(...) {
+  # Assigns Hack stream order to stream cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hack_stream_order(...)
+}
+
+wbw_hack_stream_order <- function(...) {
   # Assigns Hack stream order to stream cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hack_stream_order(...)
@@ -4058,7 +5258,19 @@ heat_map <- function(...) {
   session$heat_map(...)
 }
 
+wbw_heat_map <- function(...) {
+  # Generates a kernel-density heat map raster from point occurrences.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$heat_map(...)
+}
+
 height_above_ground <- function(...) {
+  # Converts LiDAR elevations to heights above the nearest ground-classified point.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$height_above_ground(...)
+}
+
+wbw_height_above_ground <- function(...) {
   # Converts LiDAR elevations to heights above the nearest ground-classified point.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$height_above_ground(...)
@@ -4070,7 +5282,19 @@ hexagonal_grid_from_raster_base <- function(...) {
   session$hexagonal_grid_from_raster_base(...)
 }
 
+wbw_hexagonal_grid_from_raster_base <- function(...) {
+  # Creates a hexagonal polygon grid covering a raster extent.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hexagonal_grid_from_raster_base(...)
+}
+
 hexagonal_grid_from_vector_base <- function(...) {
+  # Creates a hexagonal polygon grid covering a vector-layer bounding extent.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hexagonal_grid_from_vector_base(...)
+}
+
+wbw_hexagonal_grid_from_vector_base <- function(...) {
   # Creates a hexagonal polygon grid covering a vector-layer bounding extent.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hexagonal_grid_from_vector_base(...)
@@ -4082,7 +5306,19 @@ high_pass_bilateral_filter <- function(...) {
   session$high_pass_bilateral_filter(...)
 }
 
+wbw_high_pass_bilateral_filter <- function(...) {
+  # Computes a high-pass residual by subtracting bilateral smoothing from the input raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$high_pass_bilateral_filter(...)
+}
+
 high_pass_filter <- function(...) {
+  # Performs high-pass filtering using neighborhood mean subtraction.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$high_pass_filter(...)
+}
+
+wbw_high_pass_filter <- function(...) {
   # Performs high-pass filtering using neighborhood mean subtraction.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$high_pass_filter(...)
@@ -4094,7 +5330,19 @@ high_pass_median_filter <- function(...) {
   session$high_pass_median_filter(...)
 }
 
+wbw_high_pass_median_filter <- function(...) {
+  # Performs high-pass filtering by subtracting local median from center values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$high_pass_median_filter(...)
+}
+
 highest_position <- function(...) {
+  # Returns the zero-based raster-stack index containing the highest value at each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$highest_position(...)
+}
+
+wbw_highest_position <- function(...) {
   # Returns the zero-based raster-stack index containing the highest value at each cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$highest_position(...)
@@ -4106,7 +5354,19 @@ hillshade <- function(...) {
   session$hillshade(...)
 }
 
+wbw_hillshade <- function(...) {
+  # Produces shaded-relief from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hillshade(...)
+}
+
 hillslopes <- function(...) {
+  # Identifies hillslope regions draining to each stream link, separating left- and right-bank areas.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hillslopes(...)
+}
+
+wbw_hillslopes <- function(...) {
   # Identifies hillslope regions draining to each stream link, separating left- and right-bank areas.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hillslopes(...)
@@ -4118,7 +5378,19 @@ histogram_equalization <- function(...) {
   session$histogram_equalization(...)
 }
 
+wbw_histogram_equalization <- function(...) {
+  # Applies histogram equalization to improve image contrast.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$histogram_equalization(...)
+}
+
 histogram_matching <- function(...) {
+  # Matches an image histogram to a supplied reference histogram.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$histogram_matching(...)
+}
+
+wbw_histogram_matching <- function(...) {
   # Matches an image histogram to a supplied reference histogram.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$histogram_matching(...)
@@ -4130,7 +5402,19 @@ histogram_matching_two_images <- function(...) {
   session$histogram_matching_two_images(...)
 }
 
+wbw_histogram_matching_two_images <- function(...) {
+  # Matches an input image histogram to a reference image histogram.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$histogram_matching_two_images(...)
+}
+
 hole_proportion <- function(...) {
+  # Calculates polygon hole area divided by hull area and appends HOLE_PROP.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hole_proportion(...)
+}
+
+wbw_hole_proportion <- function(...) {
   # Calculates polygon hole area divided by hull area and appends HOLE_PROP.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hole_proportion(...)
@@ -4142,7 +5426,19 @@ horizon_angle <- function(...) {
   session$horizon_angle(...)
 }
 
+wbw_horizon_angle <- function(...) {
+  # Calculates horizon angle (maximum slope) along a specified azimuth direction.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$horizon_angle(...)
+}
+
 horizon_area <- function(...) {
+  # Calculates area of the horizon polygon (hectares).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$horizon_area(...)
+}
+
+wbw_horizon_area <- function(...) {
   # Calculates area of the horizon polygon (hectares).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$horizon_area(...)
@@ -4154,7 +5450,19 @@ horizontal_excess_curvature <- function(...) {
   session$horizontal_excess_curvature(...)
 }
 
+wbw_horizontal_excess_curvature <- function(...) {
+  # Calculates horizontal excess curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$horizontal_excess_curvature(...)
+}
+
 horton_ratios <- function(...) {
+  # Calculates Horton bifurcation, length, drainage-area, and slope ratios.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$horton_ratios(...)
+}
+
+wbw_horton_ratios <- function(...) {
   # Calculates Horton bifurcation, length, drainage-area, and slope ratios.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$horton_ratios(...)
@@ -4166,7 +5474,19 @@ horton_stream_order <- function(...) {
   session$horton_stream_order(...)
 }
 
+wbw_horton_stream_order <- function(...) {
+  # Assigns Horton stream order to stream cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$horton_stream_order(...)
+}
+
 hydrologic_connectivity <- function(...) {
+  # Computes DUL and UDSA connectivity indices from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hydrologic_connectivity(...)
+}
+
+wbw_hydrologic_connectivity <- function(...) {
   # Computes DUL and UDSA connectivity indices from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hydrologic_connectivity(...)
@@ -4178,7 +5498,19 @@ hypsometric_analysis <- function(...) {
   session$hypsometric_analysis(...)
 }
 
+wbw_hypsometric_analysis <- function(...) {
+  # Creates a hypsometric (area-elevation) curve HTML report for one or more DEMs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hypsometric_analysis(...)
+}
+
 hypsometrically_tinted_hillshade <- function(...) {
+  # Creates a Swiss-style terrain rendering by blending multi-azimuth hillshade with hypsometric tinting and optional atmospheric haze.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$hypsometrically_tinted_hillshade(...)
+}
+
+wbw_hypsometrically_tinted_hillshade <- function(...) {
   # Creates a Swiss-style terrain rendering by blending multi-azimuth hillshade with hypsometric tinting and optional atmospheric haze.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$hypsometrically_tinted_hillshade(...)
@@ -4190,7 +5522,19 @@ idw_interpolation <- function(...) {
   session$idw_interpolation(...)
 }
 
+wbw_idw_interpolation <- function(...) {
+  # Interpolates a raster from point samples using inverse-distance weighting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$idw_interpolation(...)
+}
+
 ihs_to_rgb <- function(...) {
+  # Converts intensity, hue, and saturation band rasters back to red, green, and blue channels (0–255).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ihs_to_rgb(...)
+}
+
+wbw_ihs_to_rgb <- function(...) {
   # Converts intensity, hue, and saturation band rasters back to red, green, and blue channels (0–255).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ihs_to_rgb(...)
@@ -4202,7 +5546,19 @@ image_autocorrelation <- function(...) {
   session$image_autocorrelation(...)
 }
 
+wbw_image_autocorrelation <- function(...) {
+  # Computes Moran's I for one or more raster images.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_autocorrelation(...)
+}
+
 image_correlation <- function(...) {
+  # Computes Pearson correlation matrix for two or more raster images.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_correlation(...)
+}
+
+wbw_image_correlation <- function(...) {
   # Computes Pearson correlation matrix for two or more raster images.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$image_correlation(...)
@@ -4214,7 +5570,19 @@ image_correlation_neighbourhood_analysis <- function(...) {
   session$image_correlation_neighbourhood_analysis(...)
 }
 
+wbw_image_correlation_neighbourhood_analysis <- function(...) {
+  # Performs moving-window correlation analysis between two rasters and returns correlation and p-value rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_correlation_neighbourhood_analysis(...)
+}
+
 image_regression <- function(...) {
+  # Performs bivariate linear regression between two rasters and outputs a residual raster and report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_regression(...)
+}
+
+wbw_image_regression <- function(...) {
   # Performs bivariate linear regression between two rasters and outputs a residual raster and report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$image_regression(...)
@@ -4226,7 +5594,19 @@ image_segmentation <- function(...) {
   session$image_segmentation(...)
 }
 
+wbw_image_segmentation <- function(...) {
+  # Segments multi-band raster stacks into contiguous homogeneous regions using seeded region growing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_segmentation(...)
+}
+
 segment_multiresolution_hierarchical <- function(...) {
+  # Builds coarse and fine segmentations and outputs a hierarchy mapping from fine objects to parent coarse objects.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_multiresolution_hierarchical(...)
+}
+
+wbw_segment_multiresolution_hierarchical <- function(...) {
   # Builds coarse and fine segmentations and outputs a hierarchy mapping from fine objects to parent coarse objects.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$segment_multiresolution_hierarchical(...)
@@ -4238,7 +5618,19 @@ image_slider <- function(...) {
   session$image_slider(...)
 }
 
+wbw_image_slider <- function(...) {
+  # Creates an interactive HTML image slider from two raster images.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_slider(...)
+}
+
 image_stack_profile <- function(...) {
+  # Extracts per-point profiles across an ordered raster stack and optionally writes an HTML report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$image_stack_profile(...)
+}
+
+wbw_image_stack_profile <- function(...) {
   # Extracts per-point profiles across an ordered raster stack and optionally writes an HTML report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$image_stack_profile(...)
@@ -4250,7 +5642,19 @@ impoundment_size_index <- function(...) {
   session$impoundment_size_index(...)
 }
 
+wbw_impoundment_size_index <- function(...) {
+  # Computes mean/max depth, volume, area, and dam-height impoundment metrics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$impoundment_size_index(...)
+}
+
 improved_ground_point_filter <- function(...) {
+  # Multi-stage ground point filtering pipeline.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$improved_ground_point_filter(...)
+}
+
+wbw_improved_ground_point_filter <- function(...) {
   # Multi-stage ground point filtering pipeline.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$improved_ground_point_filter(...)
@@ -4262,7 +5666,19 @@ increment <- function(...) {
   session$increment(...)
 }
 
+wbw_increment <- function(...) {
+  # Adds 1 to each non-nodata raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$increment(...)
+}
+
 individual_tree_detection <- function(...) {
+  # Identifies tree top points in a LiDAR cloud using local maxima detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$individual_tree_detection(...)
+}
+
+wbw_individual_tree_detection <- function(...) {
   # Identifies tree top points in a LiDAR cloud using local maxima detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$individual_tree_detection(...)
@@ -4274,7 +5690,19 @@ individual_tree_segmentation <- function(...) {
   session$individual_tree_segmentation(...)
 }
 
+wbw_individual_tree_segmentation <- function(...) {
+  # Segments vegetation LiDAR points into individual tree clusters using a mean-shift mode-seeking workflow.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$individual_tree_segmentation(...)
+}
+
 inplace_add <- function(...) {
+  # Performs an in-place addition operation (input1 += input2).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$inplace_add(...)
+}
+
+wbw_inplace_add <- function(...) {
   # Performs an in-place addition operation (input1 += input2).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$inplace_add(...)
@@ -4286,7 +5714,19 @@ inplace_divide <- function(...) {
   session$inplace_divide(...)
 }
 
+wbw_inplace_divide <- function(...) {
+  # Performs an in-place division operation (input1 /= input2).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$inplace_divide(...)
+}
+
 inplace_multiply <- function(...) {
+  # Performs an in-place multiplication operation (input1 *= input2).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$inplace_multiply(...)
+}
+
+wbw_inplace_multiply <- function(...) {
   # Performs an in-place multiplication operation (input1 *= input2).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$inplace_multiply(...)
@@ -4298,7 +5738,19 @@ inplace_subtract <- function(...) {
   session$inplace_subtract(...)
 }
 
+wbw_inplace_subtract <- function(...) {
+  # Performs an in-place subtraction operation (input1 -= input2).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$inplace_subtract(...)
+}
+
 insert_dams <- function(...) {
+  # Adds local dam embankments at specified points using profile-based crest selection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$insert_dams(...)
+}
+
+wbw_insert_dams <- function(...) {
   # Adds local dam embankments at specified points using profile-based crest selection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$insert_dams(...)
@@ -4310,7 +5762,19 @@ integer_division <- function(...) {
   session$integer_division(...)
 }
 
+wbw_integer_division <- function(...) {
+  # Divides two rasters and truncates each result toward zero.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$integer_division(...)
+}
+
 integral_image_transform <- function(...) {
+  # Computes a summed-area (integral image) transform for each band.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$integral_image_transform(...)
+}
+
+wbw_integral_image_transform <- function(...) {
   # Computes a summed-area (integral image) transform for each band.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$integral_image_transform(...)
@@ -4322,7 +5786,19 @@ intersect <- function(...) {
   session$intersect(...)
 }
 
+wbw_intersect <- function(...) {
+  # Intersects input and overlay polygons using topology-based overlay and tracks source feature IDs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$intersect(...)
+}
+
 inverse_pca <- function(...) {
+  # Reconstructs original band images from PCA component rasters using stored eigenvectors.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$inverse_pca(...)
+}
+
+wbw_inverse_pca <- function(...) {
   # Reconstructs original band images from PCA component rasters using stored eigenvectors.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$inverse_pca(...)
@@ -4334,7 +5810,19 @@ is_nodata <- function(...) {
   session$is_nodata(...)
 }
 
+wbw_is_nodata <- function(...) {
+  # Outputs 1 for nodata cells and 0 for all valid cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$is_nodata(...)
+}
+
 isobasins <- function(...) {
+  # Divides a landscape into approximately equal-sized watersheds (isobasins) based on a target area threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$isobasins(...)
+}
+
+wbw_isobasins <- function(...) {
   # Divides a landscape into approximately equal-sized watersheds (isobasins) based on a target area threshold.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$isobasins(...)
@@ -4346,7 +5834,19 @@ jenson_snap_pour_points <- function(...) {
   session$jenson_snap_pour_points(...)
 }
 
+wbw_jenson_snap_pour_points <- function(...) {
+  # Snaps each pour point to the nearest stream cell within a search distance, preserving all input attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$jenson_snap_pour_points(...)
+}
+
 join_tables <- function(...) {
+  # Joins attributes from a foreign vector table to a primary vector table using key fields.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$join_tables(...)
+}
+
+wbw_join_tables <- function(...) {
   # Joins attributes from a foreign vector table to a primary vector table using key fields.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$join_tables(...)
@@ -4358,7 +5858,19 @@ k_means_clustering <- function(...) {
   session$k_means_clustering(...)
 }
 
+wbw_k_means_clustering <- function(...) {
+  # Performs k-means clustering on a multi-band raster stack and outputs a categorical class raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$k_means_clustering(...)
+}
+
 k_nearest_mean_filter <- function(...) {
+  # Performs edge-preserving k-nearest neighbor mean smoothing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$k_nearest_mean_filter(...)
+}
+
+wbw_k_nearest_mean_filter <- function(...) {
   # Performs edge-preserving k-nearest neighbor mean smoothing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$k_nearest_mean_filter(...)
@@ -4370,7 +5882,19 @@ k_shortest_paths_network <- function(...) {
   session$k_shortest_paths_network(...)
 }
 
+wbw_k_shortest_paths_network <- function(...) {
+  # Finds the k shortest simple paths between start and end coordinates over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$k_shortest_paths_network(...)
+}
+
 kappa_index <- function(...) {
+  # Computes Cohen's kappa and agreement metrics between two categorical rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$kappa_index(...)
+}
+
+wbw_kappa_index <- function(...) {
   # Computes Cohen's kappa and agreement metrics between two categorical rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$kappa_index(...)
@@ -4382,7 +5906,19 @@ knn_classification <- function(...) {
   session$knn_classification(...)
 }
 
+wbw_knn_classification <- function(...) {
+  # Performs supervised k-nearest-neighbor classification on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$knn_classification(...)
+}
+
 knn_regression <- function(...) {
+  # Performs supervised k-nearest-neighbor regression on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$knn_regression(...)
+}
+
+wbw_knn_regression <- function(...) {
   # Performs supervised k-nearest-neighbor regression on multi-band input rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$knn_regression(...)
@@ -4394,7 +5930,19 @@ ks_normality_test <- function(...) {
   session$ks_normality_test(...)
 }
 
+wbw_ks_normality_test <- function(...) {
+  # Evaluates whether raster values are drawn from a normal distribution.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ks_normality_test(...)
+}
+
 kuan_filter <- function(...) {
+  # Performs Kuan speckle filtering for radar imagery.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$kuan_filter(...)
+}
+
+wbw_kuan_filter <- function(...) {
   # Performs Kuan speckle filtering for radar imagery.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$kuan_filter(...)
@@ -4406,7 +5954,19 @@ kuwahara_filter <- function(...) {
   session$kuwahara_filter(...)
 }
 
+wbw_kuwahara_filter <- function(...) {
+  # Performs edge-preserving Kuwahara filtering using minimum-variance subwindows.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$kuwahara_filter(...)
+}
+
 laplacian_filter <- function(...) {
+  # Performs Laplacian edge/sharpen filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$laplacian_filter(...)
+}
+
+wbw_laplacian_filter <- function(...) {
   # Performs Laplacian edge/sharpen filtering.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$laplacian_filter(...)
@@ -4418,7 +5978,19 @@ laplacian_of_gaussians_filter <- function(...) {
   session$laplacian_of_gaussians_filter(...)
 }
 
+wbw_laplacian_of_gaussians_filter <- function(...) {
+  # Performs Laplacian-of-Gaussians edge enhancement.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$laplacian_of_gaussians_filter(...)
+}
+
 las_to_ascii <- function(...) {
+  # Converts LiDAR points to CSV ASCII text.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$las_to_ascii(...)
+}
+
+wbw_las_to_ascii <- function(...) {
   # Converts LiDAR points to CSV ASCII text.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$las_to_ascii(...)
@@ -4430,7 +6002,19 @@ las_to_shapefile <- function(...) {
   session$las_to_shapefile(...)
 }
 
+wbw_las_to_shapefile <- function(...) {
+  # Converts LAS/LAZ point clouds into vector point shapefiles.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$las_to_shapefile(...)
+}
+
 layer_footprint_raster <- function(...) {
+  # Creates a polygon footprint representing the full extent of an input raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$layer_footprint_raster(...)
+}
+
+wbw_layer_footprint_raster <- function(...) {
   # Creates a polygon footprint representing the full extent of an input raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$layer_footprint_raster(...)
@@ -4442,7 +6026,19 @@ layer_footprint_vector <- function(...) {
   session$layer_footprint_vector(...)
 }
 
+wbw_layer_footprint_vector <- function(...) {
+  # Creates a polygon footprint representing the full bounding extent of an input vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$layer_footprint_vector(...)
+}
+
 lee_filter <- function(...) {
+  # Performs Lee sigma filtering using in-range neighborhood averaging.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lee_filter(...)
+}
+
+wbw_lee_filter <- function(...) {
   # Performs Lee sigma filtering using in-range neighborhood averaging.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lee_filter(...)
@@ -4454,7 +6050,19 @@ length_of_upstream_channels <- function(...) {
   session$length_of_upstream_channels(...)
 }
 
+wbw_length_of_upstream_channels <- function(...) {
+  # Calculates total upstream channel length.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$length_of_upstream_channels(...)
+}
+
 less_than <- function(...) {
+  # Tests whether the first raster is less than the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$less_than(...)
+}
+
+wbw_less_than <- function(...) {
   # Tests whether the first raster is less than the second on a cell-by-cell basis.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$less_than(...)
@@ -4466,7 +6074,19 @@ lidar_block_maximum <- function(...) {
   session$lidar_block_maximum(...)
 }
 
+wbw_lidar_block_maximum <- function(...) {
+  # Creates a raster by assigning each cell the maximum value of included LiDAR points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_block_maximum(...)
+}
+
 lidar_block_minimum <- function(...) {
+  # Creates a raster by assigning each cell the minimum value of included LiDAR points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_block_minimum(...)
+}
+
+wbw_lidar_block_minimum <- function(...) {
   # Creates a raster by assigning each cell the minimum value of included LiDAR points.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_block_minimum(...)
@@ -4478,7 +6098,19 @@ lidar_classify_subset <- function(...) {
   session$lidar_classify_subset(...)
 }
 
+wbw_lidar_classify_subset <- function(...) {
+  # Classifies points in a base LiDAR cloud that spatially match points in a subset cloud.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_classify_subset(...)
+}
+
 lidar_colourize <- function(...) {
+  # Assigns LiDAR point RGB values from an overlapping raster image.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_colourize(...)
+}
+
+wbw_lidar_colourize <- function(...) {
   # Assigns LiDAR point RGB values from an overlapping raster image.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_colourize(...)
@@ -4490,7 +6122,19 @@ lidar_construct_vector_tin <- function(...) {
   session$lidar_construct_vector_tin(...)
 }
 
+wbw_lidar_construct_vector_tin <- function(...) {
+  # Creates a vector TIN (triangular mesh) from LiDAR points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_construct_vector_tin(...)
+}
+
 lidar_contour <- function(...) {
+  # Creates contour vector lines from a LiDAR point cloud using TIN contouring.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_contour(...)
+}
+
+wbw_lidar_contour <- function(...) {
   # Creates contour vector lines from a LiDAR point cloud using TIN contouring.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_contour(...)
@@ -4502,7 +6146,19 @@ lidar_digital_surface_model <- function(...) {
   session$lidar_digital_surface_model(...)
 }
 
+wbw_lidar_digital_surface_model <- function(...) {
+  # Builds a DSM from top-surface LiDAR points and TIN interpolation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_digital_surface_model(...)
+}
+
 lidar_eigenvalue_features <- function(...) {
+  # Computes local PCA-based LiDAR neighbourhood features and writes a .eigen binary with JSON sidecar.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_eigenvalue_features(...)
+}
+
+wbw_lidar_eigenvalue_features <- function(...) {
   # Computes local PCA-based LiDAR neighbourhood features and writes a .eigen binary with JSON sidecar.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_eigenvalue_features(...)
@@ -4514,7 +6170,19 @@ lidar_elevation_slice <- function(...) {
   session$lidar_elevation_slice(...)
 }
 
+wbw_lidar_elevation_slice <- function(...) {
+  # Extracts or reclassifies LiDAR points within a specified elevation range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_elevation_slice(...)
+}
+
 lidar_ground_point_filter <- function(...) {
+  # Slope-based filtering/classification of off-terrain points in LiDAR data.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_ground_point_filter(...)
+}
+
+wbw_lidar_ground_point_filter <- function(...) {
   # Slope-based filtering/classification of off-terrain points in LiDAR data.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_ground_point_filter(...)
@@ -4526,7 +6194,19 @@ lidar_hex_bin <- function(...) {
   session$lidar_hex_bin(...)
 }
 
+wbw_lidar_hex_bin <- function(...) {
+  # Bins LiDAR points into a hexagonal grid and outputs per-cell summary attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_hex_bin(...)
+}
+
 lidar_hillshade <- function(...) {
+  # Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_hillshade(...)
+}
+
+wbw_lidar_hillshade <- function(...) {
   # Creates a hillshade raster from LiDAR elevations using local block maxima as surface input.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_hillshade(...)
@@ -4538,7 +6218,19 @@ lidar_histogram <- function(...) {
   session$lidar_histogram(...)
 }
 
+wbw_lidar_histogram <- function(...) {
+  # Builds a simple histogram report for a selected LiDAR attribute.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_histogram(...)
+}
+
 lidar_idw_interpolation <- function(...) {
+  # Interpolates a raster from LiDAR points using inverse-distance weighting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_idw_interpolation(...)
+}
+
+wbw_lidar_idw_interpolation <- function(...) {
   # Interpolates a raster from LiDAR points using inverse-distance weighting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_idw_interpolation(...)
@@ -4550,7 +6242,19 @@ lidar_info <- function(...) {
   session$lidar_info(...)
 }
 
+wbw_lidar_info <- function(...) {
+  # Generates a textual or HTML summary report for a LiDAR file.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_info(...)
+}
+
 lidar_join <- function(...) {
+  # Merges multiple LiDAR files into a single output point cloud.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_join(...)
+}
+
+wbw_lidar_join <- function(...) {
   # Merges multiple LiDAR files into a single output point cloud.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_join(...)
@@ -4562,7 +6266,19 @@ lidar_kappa <- function(...) {
   session$lidar_kappa(...)
 }
 
+wbw_lidar_kappa <- function(...) {
+  # Computes a kappa agreement report between two classified LiDAR clouds and writes a class-agreement raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_kappa(...)
+}
+
 lidar_nearest_neighbour_gridding <- function(...) {
+  # Interpolates a raster from LiDAR points using nearest-neighbour assignment.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_nearest_neighbour_gridding(...)
+}
+
+wbw_lidar_nearest_neighbour_gridding <- function(...) {
   # Interpolates a raster from LiDAR points using nearest-neighbour assignment.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_nearest_neighbour_gridding(...)
@@ -4574,7 +6290,19 @@ lidar_point_density <- function(...) {
   session$lidar_point_density(...)
 }
 
+wbw_lidar_point_density <- function(...) {
+  # Computes point density from LiDAR samples within a moving-radius neighbourhood.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_point_density(...)
+}
+
 lidar_point_return_analysis <- function(...) {
+  # Runs return-sequence QC analysis and writes a text report; optionally writes a classified QC LiDAR output.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_point_return_analysis(...)
+}
+
+wbw_lidar_point_return_analysis <- function(...) {
   # Runs return-sequence QC analysis and writes a text report; optionally writes a classified QC LiDAR output.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_point_return_analysis(...)
@@ -4586,7 +6314,19 @@ lidar_point_stats <- function(...) {
   session$lidar_point_stats(...)
 }
 
+wbw_lidar_point_stats <- function(...) {
+  # Creates one or more raster grids summarizing LiDAR point distributions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_point_stats(...)
+}
+
 lidar_radial_basis_function_interpolation <- function(...) {
+  # Interpolates a raster from LiDAR points using local radial-basis similarity weighting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_radial_basis_function_interpolation(...)
+}
+
+wbw_lidar_radial_basis_function_interpolation <- function(...) {
   # Interpolates a raster from LiDAR points using local radial-basis similarity weighting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_radial_basis_function_interpolation(...)
@@ -4598,7 +6338,19 @@ lidar_ransac_planes <- function(...) {
   session$lidar_ransac_planes(...)
 }
 
+wbw_lidar_ransac_planes <- function(...) {
+  # Identifies locally planar LiDAR points using neighbourhood RANSAC plane fitting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_ransac_planes(...)
+}
+
 lidar_remove_outliers <- function(...) {
+  # Filters or classifies outlier points based on local elevation residuals.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_remove_outliers(...)
+}
+
+wbw_lidar_remove_outliers <- function(...) {
   # Filters or classifies outlier points based on local elevation residuals.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_remove_outliers(...)
@@ -4610,7 +6362,19 @@ lidar_rooftop_analysis <- function(...) {
   session$lidar_rooftop_analysis(...)
 }
 
+wbw_lidar_rooftop_analysis <- function(...) {
+  # Identifies planar rooftop segments within building footprints and outputs segment polygons with roof attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_rooftop_analysis(...)
+}
+
 lidar_segmentation <- function(...) {
+  # Segments a LiDAR cloud into connected components and assigns segment colours.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_segmentation(...)
+}
+
+wbw_lidar_segmentation <- function(...) {
   # Segments a LiDAR cloud into connected components and assigns segment colours.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_segmentation(...)
@@ -4622,7 +6386,19 @@ lidar_segmentation_based_filter <- function(...) {
   session$lidar_segmentation_based_filter(...)
 }
 
+wbw_lidar_segmentation_based_filter <- function(...) {
+  # Ground-point filtering based on neighbourhood-connected low-relief segments.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_segmentation_based_filter(...)
+}
+
 lidar_shift <- function(...) {
+  # Shifts LiDAR point coordinates by x/y/z offsets.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_shift(...)
+}
+
+wbw_lidar_shift <- function(...) {
   # Shifts LiDAR point coordinates by x/y/z offsets.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_shift(...)
@@ -4634,7 +6410,19 @@ lidar_sibson_interpolation <- function(...) {
   session$lidar_sibson_interpolation(...)
 }
 
+wbw_lidar_sibson_interpolation <- function(...) {
+  # Interpolates a raster from LiDAR points using true Sibson natural-neighbour interpolation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_sibson_interpolation(...)
+}
+
 lidar_thin <- function(...) {
+  # Thins a LiDAR point cloud by retaining at most one point per grid cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_thin(...)
+}
+
+wbw_lidar_thin <- function(...) {
   # Thins a LiDAR point cloud by retaining at most one point per grid cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_thin(...)
@@ -4646,7 +6434,19 @@ lidar_thin_high_density <- function(...) {
   session$lidar_thin_high_density(...)
 }
 
+wbw_lidar_thin_high_density <- function(...) {
+  # Thins points in locally high-density areas while preserving lower-density regions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_thin_high_density(...)
+}
+
 lidar_tile <- function(...) {
+  # Splits an input LiDAR file into a regular tile grid and writes one output per populated tile.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_tile(...)
+}
+
+wbw_lidar_tile <- function(...) {
   # Splits an input LiDAR file into a regular tile grid and writes one output per populated tile.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_tile(...)
@@ -4658,7 +6458,19 @@ lidar_tile_footprint <- function(...) {
   session$lidar_tile_footprint(...)
 }
 
+wbw_lidar_tile_footprint <- function(...) {
+  # Creates polygon footprints (bounding boxes or convex hulls) for LiDAR tiles.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_tile_footprint(...)
+}
+
 lidar_tin_gridding <- function(...) {
+  # Interpolates a raster from LiDAR points using Delaunay triangulation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_tin_gridding(...)
+}
+
+wbw_lidar_tin_gridding <- function(...) {
   # Interpolates a raster from LiDAR points using Delaunay triangulation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_tin_gridding(...)
@@ -4670,7 +6482,19 @@ lidar_tophat_transform <- function(...) {
   session$lidar_tophat_transform(...)
 }
 
+wbw_lidar_tophat_transform <- function(...) {
+  # Applies a white top-hat transform to LiDAR elevations to approximate height above local ground.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_tophat_transform(...)
+}
+
 line_detection_filter <- function(...) {
+  # Performs directional line detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$line_detection_filter(...)
+}
+
+wbw_line_detection_filter <- function(...) {
   # Performs directional line detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$line_detection_filter(...)
@@ -4682,7 +6506,19 @@ line_intersections <- function(...) {
   session$line_intersections(...)
 }
 
+wbw_line_intersections <- function(...) {
+  # Finds line intersection points between input and overlay layers and appends parent IDs with merged attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$line_intersections(...)
+}
+
 line_polygon_clip <- function(...) {
+  # Clips line features to polygon interiors and outputs clipped line segments.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$line_polygon_clip(...)
+}
+
+wbw_line_polygon_clip <- function(...) {
   # Clips line features to polygon interiors and outputs clipped line segments.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$line_polygon_clip(...)
@@ -4694,7 +6530,19 @@ line_thinning <- function(...) {
   session$line_thinning(...)
 }
 
+wbw_line_thinning <- function(...) {
+  # Reduces connected binary raster features to one-cell-wide skeleton lines.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$line_thinning(...)
+}
+
 linearity_index <- function(...) {
+  # Computes linearity index (straight-line distance / actual length) for line and polygon features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$linearity_index(...)
+}
+
+wbw_linearity_index <- function(...) {
   # Computes linearity index (straight-line distance / actual length) for line and polygon features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$linearity_index(...)
@@ -4706,7 +6554,19 @@ lines_to_polygons <- function(...) {
   session$lines_to_polygons(...)
 }
 
+wbw_lines_to_polygons <- function(...) {
+  # Converts polyline features into polygon features, treating the first part as the exterior ring and later parts as holes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lines_to_polygons(...)
+}
+
 list_unique_values <- function(...) {
+  # Lists unique values and frequencies in a vector attribute field.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$list_unique_values(...)
+}
+
+wbw_list_unique_values <- function(...) {
   # Lists unique values and frequencies in a vector attribute field.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$list_unique_values(...)
@@ -4718,7 +6578,19 @@ list_unique_values_raster <- function(...) {
   session$list_unique_values_raster(...)
 }
 
+wbw_list_unique_values_raster <- function(...) {
+  # Lists unique valid values in a raster (capped to protect memory).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$list_unique_values_raster(...)
+}
+
 ln <- function(...) {
+  # Computes the natural logarithm of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ln(...)
+}
+
+wbw_ln <- function(...) {
   # Computes the natural logarithm of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ln(...)
@@ -4730,7 +6602,19 @@ local_hypsometric_analysis <- function(...) {
   session$local_hypsometric_analysis(...)
 }
 
+wbw_local_hypsometric_analysis <- function(...) {
+  # Computes the minimum local hypsometric integral across a nonlinearly sampled range of neighbourhood scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$local_hypsometric_analysis(...)
+}
+
 locate_points_along_routes <- function(...) {
+  # Locates point features along route lines and writes route-measure attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$locate_points_along_routes(...)
+}
+
+wbw_locate_points_along_routes <- function(...) {
   # Locates point features along route lines and writes route-measure attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$locate_points_along_routes(...)
@@ -4742,7 +6626,19 @@ location_allocation_network <- function(...) {
   session$location_allocation_network(...)
 }
 
+wbw_location_allocation_network <- function(...) {
+  # Selects k facilities and allocates demand points by network cost with greedy or exact solving, optional capacities, and required/forbidden candidate constraints.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$location_allocation_network(...)
+}
+
 log10 <- function(...) {
+  # Computes the base-10 logarithm of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$log10(...)
+}
+
+wbw_log10 <- function(...) {
   # Computes the base-10 logarithm of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$log10(...)
@@ -4754,7 +6650,19 @@ log2 <- function(...) {
   session$log2(...)
 }
 
+wbw_log2 <- function(...) {
+  # Computes the base-2 logarithm of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$log2(...)
+}
+
 logistic_regression <- function(...) {
+  # Performs supervised logistic regression classification on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$logistic_regression(...)
+}
+
+wbw_logistic_regression <- function(...) {
   # Performs supervised logistic regression classification on multi-band input rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$logistic_regression(...)
@@ -4766,7 +6674,19 @@ long_profile <- function(...) {
   session$long_profile(...)
 }
 
+wbw_long_profile <- function(...) {
+  # Creates longitudinal stream profile.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$long_profile(...)
+}
+
 long_profile_from_points <- function(...) {
+  # Creates long profile from vector points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$long_profile_from_points(...)
+}
+
+wbw_long_profile_from_points <- function(...) {
   # Creates long profile from vector points.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$long_profile_from_points(...)
@@ -4778,7 +6698,19 @@ longest_flowpath <- function(...) {
   session$longest_flowpath(...)
 }
 
+wbw_longest_flowpath <- function(...) {
+  # Delineates longest flowpath lines for each basin in a basin raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$longest_flowpath(...)
+}
+
 low_points_on_headwater_divides <- function(...) {
+  # Locates low pass points along divides between neighboring headwater subbasins.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$low_points_on_headwater_divides(...)
+}
+
+wbw_low_points_on_headwater_divides <- function(...) {
   # Locates low pass points along divides between neighboring headwater subbasins.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$low_points_on_headwater_divides(...)
@@ -4790,7 +6722,19 @@ lowest_position <- function(...) {
   session$lowest_position(...)
 }
 
+wbw_lowest_position <- function(...) {
+  # Returns the zero-based raster-stack index containing the lowest value at each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lowest_position(...)
+}
+
 majority_filter <- function(...) {
+  # Computes moving-window mode (majority class/value).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$majority_filter(...)
+}
+
+wbw_majority_filter <- function(...) {
   # Computes moving-window mode (majority class/value).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$majority_filter(...)
@@ -4802,7 +6746,19 @@ map_features <- function(...) {
   session$map_features(...)
 }
 
+wbw_map_features <- function(...) {
+  # Maps discrete elevated terrain features from a raster using descending-priority region growth.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$map_features(...)
+}
+
 map_matching_v1 <- function(...) {
+  # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$map_matching_v1(...)
+}
+
+wbw_map_matching_v1 <- function(...) {
   # Snaps trajectory points onto a line network and reconstructs an inferred route with diagnostics.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$map_matching_v1(...)
@@ -4814,7 +6770,19 @@ map_off_terrain_objects <- function(...) {
   session$map_off_terrain_objects(...)
 }
 
+wbw_map_off_terrain_objects <- function(...) {
+  # Maps off-terrain object segments in DSMs using slope-constrained region growing and optional minimum feature-size filtering.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$map_off_terrain_objects(...)
+}
+
 max <- function(...) {
+  # Performs a MAX operation on two rasters or a raster and a constant value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max(...)
+}
+
+wbw_max <- function(...) {
   # Performs a MAX operation on two rasters or a raster and a constant value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max(...)
@@ -4826,7 +6794,19 @@ max_absolute_overlay <- function(...) {
   session$max_absolute_overlay(...)
 }
 
+wbw_max_absolute_overlay <- function(...) {
+  # Computes the per-cell maximum absolute value across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_absolute_overlay(...)
+}
+
 max_anisotropy_dev <- function(...) {
+  # Calculates maximum anisotropy in elevation deviation over a range of neighbourhood scales. Written by Dan Newman.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_anisotropy_dev(...)
+}
+
+wbw_max_anisotropy_dev <- function(...) {
   # Calculates maximum anisotropy in elevation deviation over a range of neighbourhood scales. Written by Dan Newman.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_anisotropy_dev(...)
@@ -4838,7 +6818,19 @@ max_anisotropy_dev_signature <- function(...) {
   session$max_anisotropy_dev_signature(...)
 }
 
+wbw_max_anisotropy_dev_signature <- function(...) {
+  # Calculates multiscale anisotropy signatures for input point sites and writes an HTML report. Written by Dan Newman.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_anisotropy_dev_signature(...)
+}
+
 max_branch_length <- function(...) {
+  # Calculates maximum branch length between neighbouring D8 flowpaths, useful for highlighting divides.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_branch_length(...)
+}
+
+wbw_max_branch_length <- function(...) {
   # Calculates maximum branch length between neighbouring D8 flowpaths, useful for highlighting divides.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_branch_length(...)
@@ -4850,7 +6842,19 @@ max_difference_from_mean <- function(...) {
   session$max_difference_from_mean(...)
 }
 
+wbw_max_difference_from_mean <- function(...) {
+  # Calculates maximum absolute difference-from-mean over a range of neighbourhood scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_difference_from_mean(...)
+}
+
 max_downslope_elev_change <- function(...) {
+  # Calculates the maximum elevation drop to lower neighbouring cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_downslope_elev_change(...)
+}
+
+wbw_max_downslope_elev_change <- function(...) {
   # Calculates the maximum elevation drop to lower neighbouring cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_downslope_elev_change(...)
@@ -4862,7 +6866,19 @@ max_elev_dev_signature <- function(...) {
   session$max_elev_dev_signature(...)
 }
 
+wbw_max_elev_dev_signature <- function(...) {
+  # Calculates multiscale elevation-deviation signatures for input point sites and writes an HTML report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_elev_dev_signature(...)
+}
+
 max_elevation_deviation <- function(...) {
+  # Calculates maximum standardized elevation deviation (DEVmax) over a range of neighbourhood scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_elevation_deviation(...)
+}
+
+wbw_max_elevation_deviation <- function(...) {
   # Calculates maximum standardized elevation deviation (DEVmax) over a range of neighbourhood scales.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_elevation_deviation(...)
@@ -4874,7 +6890,19 @@ multiscale_topographic_position_class <- function(...) {
   session$multiscale_topographic_position_class(...)
 }
 
+wbw_multiscale_topographic_position_class <- function(...) {
+  # Classifies cells into 9 topographic position classes based on local and broad-scale elevation deviation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_topographic_position_class(...)
+}
+
 max_overlay <- function(...) {
+  # Computes the per-cell maximum across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_overlay(...)
+}
+
+wbw_max_overlay <- function(...) {
   # Computes the per-cell maximum across a raster stack, propagating NoData if any input cell is NoData.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_overlay(...)
@@ -4886,7 +6914,19 @@ max_upslope_elev_change <- function(...) {
   session$max_upslope_elev_change(...)
 }
 
+wbw_max_upslope_elev_change <- function(...) {
+  # Calculates the maximum elevation gain to higher neighbouring cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_upslope_elev_change(...)
+}
+
 max_upslope_flowpath_length <- function(...) {
+  # Computes the maximum upslope flowpath length passing through each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_upslope_flowpath_length(...)
+}
+
+wbw_max_upslope_flowpath_length <- function(...) {
   # Computes the maximum upslope flowpath length passing through each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$max_upslope_flowpath_length(...)
@@ -4898,7 +6938,19 @@ max_upslope_value <- function(...) {
   session$max_upslope_value(...)
 }
 
+wbw_max_upslope_value <- function(...) {
+  # Propagates maximum upslope value along D8 flowpaths over a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$max_upslope_value(...)
+}
+
 maximal_curvature <- function(...) {
+  # Calculates maximal (maximum principal) curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$maximal_curvature(...)
+}
+
+wbw_maximal_curvature <- function(...) {
   # Calculates maximal (maximum principal) curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$maximal_curvature(...)
@@ -4910,7 +6962,19 @@ maximum_filter <- function(...) {
   session$maximum_filter(...)
 }
 
+wbw_maximum_filter <- function(...) {
+  # Computes a moving-window maximum for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$maximum_filter(...)
+}
+
 mdinf_flow_accum <- function(...) {
+  # Calculates MD-Infinity triangular multiple-flow-direction accumulation from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mdinf_flow_accum(...)
+}
+
+wbw_mdinf_flow_accum <- function(...) {
   # Calculates MD-Infinity triangular multiple-flow-direction accumulation from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$mdinf_flow_accum(...)
@@ -4922,7 +6986,19 @@ mean_curvature <- function(...) {
   session$mean_curvature(...)
 }
 
+wbw_mean_curvature <- function(...) {
+  # Calculates mean curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mean_curvature(...)
+}
+
 mean_filter <- function(...) {
+  # Computes a moving-window mean for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mean_filter(...)
+}
+
+wbw_mean_filter <- function(...) {
   # Computes a moving-window mean for each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$mean_filter(...)
@@ -4934,7 +7010,19 @@ median_filter <- function(...) {
   session$median_filter(...)
 }
 
+wbw_median_filter <- function(...) {
+  # Computes moving-window median values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$median_filter(...)
+}
+
 medoid <- function(...) {
+  # Calculates medoid points from vector geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$medoid(...)
+}
+
+wbw_medoid <- function(...) {
   # Calculates medoid points from vector geometries.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$medoid(...)
@@ -4946,7 +7034,19 @@ merge_line_segments <- function(...) {
   session$merge_line_segments(...)
 }
 
+wbw_merge_line_segments <- function(...) {
+  # Merges connected line segments that meet at non-branching endpoints.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$merge_line_segments(...)
+}
+
 merge_table_with_csv <- function(...) {
+  # Merges attributes from a CSV table into a vector attribute table by key fields.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$merge_table_with_csv(...)
+}
+
+wbw_merge_table_with_csv <- function(...) {
   # Merges attributes from a CSV table into a vector attribute table by key fields.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$merge_table_with_csv(...)
@@ -4958,7 +7058,19 @@ merge_vectors <- function(...) {
   session$merge_vectors(...)
 }
 
+wbw_merge_vectors <- function(...) {
+  # Combines two or more input vectors of the same geometry type into a single output vector.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$merge_vectors(...)
+}
+
 min <- function(...) {
+  # Performs a MIN operation on two rasters or a raster and a constant value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min(...)
+}
+
+wbw_min <- function(...) {
   # Performs a MIN operation on two rasters or a raster and a constant value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$min(...)
@@ -4970,7 +7082,19 @@ min_absolute_overlay <- function(...) {
   session$min_absolute_overlay(...)
 }
 
+wbw_min_absolute_overlay <- function(...) {
+  # Computes the per-cell minimum absolute value across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min_absolute_overlay(...)
+}
+
 min_dist_classification <- function(...) {
+  # Performs a supervised minimum-distance classification on multi-spectral rasters using polygon training data.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min_dist_classification(...)
+}
+
+wbw_min_dist_classification <- function(...) {
   # Performs a supervised minimum-distance classification on multi-spectral rasters using polygon training data.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$min_dist_classification(...)
@@ -4982,7 +7106,19 @@ min_downslope_elev_change <- function(...) {
   session$min_downslope_elev_change(...)
 }
 
+wbw_min_downslope_elev_change <- function(...) {
+  # Calculates the minimum non-negative elevation drop to neighbouring cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min_downslope_elev_change(...)
+}
+
 min_max_contrast_stretch <- function(...) {
+  # Linearly stretches values between user-specified minimum and maximum.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min_max_contrast_stretch(...)
+}
+
+wbw_min_max_contrast_stretch <- function(...) {
   # Linearly stretches values between user-specified minimum and maximum.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$min_max_contrast_stretch(...)
@@ -4994,7 +7130,19 @@ min_overlay <- function(...) {
   session$min_overlay(...)
 }
 
+wbw_min_overlay <- function(...) {
+  # Computes the per-cell minimum across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$min_overlay(...)
+}
+
 minimal_curvature <- function(...) {
+  # Calculates minimal (minimum principal) curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimal_curvature(...)
+}
+
+wbw_minimal_curvature <- function(...) {
   # Calculates minimal (minimum principal) curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$minimal_curvature(...)
@@ -5006,7 +7154,19 @@ minimal_dispersion_flow_algorithm <- function(...) {
   session$minimal_dispersion_flow_algorithm(...)
 }
 
+wbw_minimal_dispersion_flow_algorithm <- function(...) {
+  # Generates MDFA flow-direction and flow-accumulation rasters from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimal_dispersion_flow_algorithm(...)
+}
+
 minimum_bounding_box <- function(...) {
+  # Calculates oriented minimum bounding boxes around individual features or the entire layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimum_bounding_box(...)
+}
+
+wbw_minimum_bounding_box <- function(...) {
   # Calculates oriented minimum bounding boxes around individual features or the entire layer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$minimum_bounding_box(...)
@@ -5018,7 +7178,19 @@ minimum_bounding_circle <- function(...) {
   session$minimum_bounding_circle(...)
 }
 
+wbw_minimum_bounding_circle <- function(...) {
+  # Calculates minimum enclosing circles around individual features or the entire layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimum_bounding_circle(...)
+}
+
 minimum_bounding_envelope <- function(...) {
+  # Calculates axis-aligned minimum bounding envelopes around individual features or the entire layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimum_bounding_envelope(...)
+}
+
+wbw_minimum_bounding_envelope <- function(...) {
   # Calculates axis-aligned minimum bounding envelopes around individual features or the entire layer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$minimum_bounding_envelope(...)
@@ -5030,7 +7202,19 @@ minimum_convex_hull <- function(...) {
   session$minimum_convex_hull(...)
 }
 
+wbw_minimum_convex_hull <- function(...) {
+  # Creates convex hull polygons around individual features or the full input layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimum_convex_hull(...)
+}
+
 minimum_filter <- function(...) {
+  # Computes a moving-window minimum for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$minimum_filter(...)
+}
+
+wbw_minimum_filter <- function(...) {
   # Computes a moving-window minimum for each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$minimum_filter(...)
@@ -5042,7 +7226,19 @@ modified_k_means_clustering <- function(...) {
   session$modified_k_means_clustering(...)
 }
 
+wbw_modified_k_means_clustering <- function(...) {
+  # Performs modified k-means clustering with centroid merging based on a user-defined merge distance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$modified_k_means_clustering(...)
+}
+
 modified_shepard_interpolation <- function(...) {
+  # Interpolates a raster from point samples using locally weighted modified-Shepard blending.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$modified_shepard_interpolation(...)
+}
+
+wbw_modified_shepard_interpolation <- function(...) {
   # Interpolates a raster from point samples using locally weighted modified-Shepard blending.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$modified_shepard_interpolation(...)
@@ -5054,7 +7250,19 @@ modify_lidar <- function(...) {
   session$modify_lidar(...)
 }
 
+wbw_modify_lidar <- function(...) {
+  # Applies assignment expressions to modify LiDAR point attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$modify_lidar(...)
+}
+
 modify_nodata_value <- function(...) {
+  # Changes the raster nodata value and rewrites existing nodata cells to the new value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$modify_nodata_value(...)
+}
+
+wbw_modify_nodata_value <- function(...) {
   # Changes the raster nodata value and rewrites existing nodata cells to the new value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$modify_nodata_value(...)
@@ -5066,7 +7274,19 @@ modulo <- function(...) {
   session$modulo(...)
 }
 
+wbw_modulo <- function(...) {
+  # Computes the remainder of dividing the first raster by the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$modulo(...)
+}
+
 mosaic <- function(...) {
+  # Mosaics two or more rasters into a new output raster using nearest-neighbour, bilinear, or cubic resampling.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mosaic(...)
+}
+
+wbw_mosaic <- function(...) {
   # Mosaics two or more rasters into a new output raster using nearest-neighbour, bilinear, or cubic resampling.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$mosaic(...)
@@ -5078,7 +7298,19 @@ mosaic_with_feathering <- function(...) {
   session$mosaic_with_feathering(...)
 }
 
+wbw_mosaic_with_feathering <- function(...) {
+  # Mosaics two rasters and feather-blends overlapping cells using edge-distance weights.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mosaic_with_feathering(...)
+}
+
 multidirectional_hillshade <- function(...) {
+  # Produces weighted multi-azimuth shaded-relief.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multidirectional_hillshade(...)
+}
+
+wbw_multidirectional_hillshade <- function(...) {
   # Produces weighted multi-azimuth shaded-relief.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multidirectional_hillshade(...)
@@ -5090,7 +7322,19 @@ multimodal_od_cost_matrix <- function(...) {
   session$multimodal_od_cost_matrix(...)
 }
 
+wbw_multimodal_od_cost_matrix <- function(...) {
+  # Computes batched multimodal OD costs and mode summaries between origin and destination point sets.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_od_cost_matrix(...)
+}
+
 multimodal_routes_from_od <- function(...) {
+  # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_routes_from_od(...)
+}
+
+wbw_multimodal_routes_from_od <- function(...) {
   # Builds route geometries for multimodal origin-destination point pairs with per-route mode summaries.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multimodal_routes_from_od(...)
@@ -5102,7 +7346,19 @@ multimodal_shortest_path <- function(...) {
   session$multimodal_shortest_path(...)
 }
 
+wbw_multimodal_shortest_path <- function(...) {
+  # Finds a mode-aware shortest path over a line network with configurable transfer penalties.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multimodal_shortest_path(...)
+}
+
 multipart_to_singlepart <- function(...) {
+  # Converts a vector containing multi-part features into one with only single-part features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multipart_to_singlepart(...)
+}
+
+wbw_multipart_to_singlepart <- function(...) {
   # Converts a vector containing multi-part features into one with only single-part features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multipart_to_singlepart(...)
@@ -5114,7 +7370,19 @@ multiply <- function(...) {
   session$multiply(...)
 }
 
+wbw_multiply <- function(...) {
+  # Multiplies two rasters on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiply(...)
+}
+
 multiply_overlay <- function(...) {
+  # Computes the per-cell product across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiply_overlay(...)
+}
+
+wbw_multiply_overlay <- function(...) {
   # Computes the per-cell product across a raster stack, propagating NoData if any input cell is NoData.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiply_overlay(...)
@@ -5126,7 +7394,19 @@ multiscale_curvatures <- function(...) {
   session$multiscale_curvatures(...)
 }
 
+wbw_multiscale_curvatures <- function(...) {
+  # Calculates multiscale curvatures and curvature-based indices from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_curvatures(...)
+}
+
 multiscale_elevated_index <- function(...) {
+  # Calculates multiscale elevated-index (MsEI) and key-scale rasters using Gaussian scale-space residuals.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_elevated_index(...)
+}
+
+wbw_multiscale_elevated_index <- function(...) {
   # Calculates multiscale elevated-index (MsEI) and key-scale rasters using Gaussian scale-space residuals.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiscale_elevated_index(...)
@@ -5138,7 +7418,19 @@ multiscale_elevation_percentile <- function(...) {
   session$multiscale_elevation_percentile(...)
 }
 
+wbw_multiscale_elevation_percentile <- function(...) {
+  # Calculates the most extreme local elevation percentile across a range of neighbourhood scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_elevation_percentile(...)
+}
+
 multiscale_low_lying_index <- function(...) {
+  # Calculates multiscale low-lying-index (MsLLI) and key-scale rasters using Gaussian scale-space residuals.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_low_lying_index(...)
+}
+
+wbw_multiscale_low_lying_index <- function(...) {
   # Calculates multiscale low-lying-index (MsLLI) and key-scale rasters using Gaussian scale-space residuals.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiscale_low_lying_index(...)
@@ -5150,7 +7442,19 @@ multiscale_roughness <- function(...) {
   session$multiscale_roughness(...)
 }
 
+wbw_multiscale_roughness <- function(...) {
+  # Calculates surface roughness over a range of neighbourhood scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_roughness(...)
+}
+
 multiscale_roughness_signature <- function(...) {
+  # Calculates multiscale roughness signatures for input point sites and writes an HTML report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_roughness_signature(...)
+}
+
+wbw_multiscale_roughness_signature <- function(...) {
   # Calculates multiscale roughness signatures for input point sites and writes an HTML report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiscale_roughness_signature(...)
@@ -5162,7 +7466,19 @@ multiscale_std_dev_normals <- function(...) {
   session$multiscale_std_dev_normals(...)
 }
 
+wbw_multiscale_std_dev_normals <- function(...) {
+  # Calculates maximum spherical standard deviation of surface normals over a nonlinearly sampled range of scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_std_dev_normals(...)
+}
+
 multiscale_std_dev_normals_signature <- function(...) {
+  # Calculates spherical-standard-deviation scale signatures for input point sites and writes an HTML report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_std_dev_normals_signature(...)
+}
+
+wbw_multiscale_std_dev_normals_signature <- function(...) {
   # Calculates spherical-standard-deviation scale signatures for input point sites and writes an HTML report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multiscale_std_dev_normals_signature(...)
@@ -5174,7 +7490,19 @@ multiscale_topographic_position_image <- function(...) {
   session$multiscale_topographic_position_image(...)
 }
 
+wbw_multiscale_topographic_position_image <- function(...) {
+  # Creates a packed RGB multiscale topographic-position image from local, meso, and broad DEVmax rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multiscale_topographic_position_image(...)
+}
+
 narrowness_index <- function(...) {
+  # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$narrowness_index(...)
+}
+
+wbw_narrowness_index <- function(...) {
   # Computes narrowness index (perimeter / sqrt(area)) for polygon features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$narrowness_index(...)
@@ -5186,7 +7514,19 @@ natural_neighbour_interpolation <- function(...) {
   session$natural_neighbour_interpolation(...)
 }
 
+wbw_natural_neighbour_interpolation <- function(...) {
+  # Interpolates a raster from point samples using a Delaunay-neighbour weighted scheme.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$natural_neighbour_interpolation(...)
+}
+
 near <- function(...) {
+  # Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$near(...)
+}
+
+wbw_near <- function(...) {
   # Finds the nearest feature in a near layer and writes NEAR_FID and NEAR_DIST attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$near(...)
@@ -5198,7 +7538,19 @@ nearest_neighbour_interpolation <- function(...) {
   session$nearest_neighbour_interpolation(...)
 }
 
+wbw_nearest_neighbour_interpolation <- function(...) {
+  # Interpolates a raster from point samples by assigning each cell the nearest sample value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$nearest_neighbour_interpolation(...)
+}
+
 negate <- function(...) {
+  # Negates each non-nodata raster cell value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$negate(...)
+}
+
+wbw_negate <- function(...) {
   # Negates each non-nodata raster cell value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$negate(...)
@@ -5210,7 +7562,19 @@ network_accessibility_metrics <- function(...) {
   session$network_accessibility_metrics(...)
 }
 
+wbw_network_accessibility_metrics <- function(...) {
+  # Computes accessibility indices for origin points based on reachability to destinations with optional impedance cutoffs and decay functions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_accessibility_metrics(...)
+}
+
 network_centrality_metrics <- function(...) {
+  # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_centrality_metrics(...)
+}
+
+wbw_network_centrality_metrics <- function(...) {
   # Computes baseline degree, closeness, and betweenness centrality metrics for network nodes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$network_centrality_metrics(...)
@@ -5222,7 +7586,19 @@ network_connected_components <- function(...) {
   session$network_connected_components(...)
 }
 
+wbw_network_connected_components <- function(...) {
+  # Assigns a connected-component ID to each line feature in a network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_connected_components(...)
+}
+
 network_node_degree <- function(...) {
+  # Extracts network nodes from line features and computes node degree and node type.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_node_degree(...)
+}
+
+wbw_network_node_degree <- function(...) {
   # Extracts network nodes from line features and computes node degree and node type.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$network_node_degree(...)
@@ -5234,7 +7610,19 @@ network_od_cost_matrix <- function(...) {
   session$network_od_cost_matrix(...)
 }
 
+wbw_network_od_cost_matrix <- function(...) {
+  # Computes origin-destination shortest-path costs over a line network and writes a CSV matrix.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_od_cost_matrix(...)
+}
+
 network_routes_from_od <- function(...) {
+  # Builds route geometries for origin-destination point pairs over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_routes_from_od(...)
+}
+
+wbw_network_routes_from_od <- function(...) {
   # Builds route geometries for origin-destination point pairs over a line network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$network_routes_from_od(...)
@@ -5246,7 +7634,19 @@ network_service_area <- function(...) {
   session$network_service_area(...)
 }
 
+wbw_network_service_area <- function(...) {
+  # Computes reachable network nodes from origin points within a maximum network cost.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_service_area(...)
+}
+
 network_topology_audit <- function(...) {
+  # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_topology_audit(...)
+}
+
+wbw_network_topology_audit <- function(...) {
   # Audits a line network for topology anomalies—disconnected components, dead ends, and degree anomalies—that cause routing failures.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$network_topology_audit(...)
@@ -5258,7 +7658,19 @@ new_raster_from_base_raster <- function(...) {
   session$new_raster_from_base_raster(...)
 }
 
+wbw_new_raster_from_base_raster <- function(...) {
+  # Creates a new raster using the extent, dimensions, and CRS of a base raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$new_raster_from_base_raster(...)
+}
+
 new_raster_from_base_vector <- function(...) {
+  # Creates a new raster from a base vector extent and cell size, filled with an optional value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$new_raster_from_base_vector(...)
+}
+
+wbw_new_raster_from_base_vector <- function(...) {
   # Creates a new raster from a base vector extent and cell size, filled with an optional value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$new_raster_from_base_vector(...)
@@ -5270,7 +7682,19 @@ nibble <- function(...) {
   session$nibble(...)
 }
 
+wbw_nibble <- function(...) {
+  # Fills background regions using nearest-neighbour allocation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$nibble(...)
+}
+
 nnd_classification <- function(...) {
+  # Performs nearest-normalized-distance classification with optional outlier rejection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$nnd_classification(...)
+}
+
+wbw_nnd_classification <- function(...) {
   # Performs nearest-normalized-distance classification with optional outlier rejection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$nnd_classification(...)
@@ -5282,7 +7706,19 @@ non_local_means_filter <- function(...) {
   session$non_local_means_filter(...)
 }
 
+wbw_non_local_means_filter <- function(...) {
+  # Performs non-local means denoising using patch similarity weighting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$non_local_means_filter(...)
+}
+
 normal_vectors <- function(...) {
+  # Estimates local point-cloud normals and stores them in point normals and RGB values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$normal_vectors(...)
+}
+
+wbw_normal_vectors <- function(...) {
   # Estimates local point-cloud normals and stores them in point normals and RGB values.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$normal_vectors(...)
@@ -5294,7 +7730,19 @@ normalize_lidar <- function(...) {
   session$normalize_lidar(...)
 }
 
+wbw_normalize_lidar <- function(...) {
+  # Normalizes LiDAR z-values using a raster DTM so elevations become height above ground.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$normalize_lidar(...)
+}
+
 normalized_difference_index <- function(...) {
+  # Computes (band1 - band2) / (band1 + band2) from a multiband raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$normalized_difference_index(...)
+}
+
+wbw_normalized_difference_index <- function(...) {
   # Computes (band1 - band2) / (band1 + band2) from a multiband raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$normalized_difference_index(...)
@@ -5306,7 +7754,19 @@ not_equal_to <- function(...) {
   session$not_equal_to(...)
 }
 
+wbw_not_equal_to <- function(...) {
+  # Tests whether two rasters are not equal on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$not_equal_to(...)
+}
+
 num_downslope_neighbours <- function(...) {
+  # Counts the number of 8-neighbour cells lower than each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$num_downslope_neighbours(...)
+}
+
+wbw_num_downslope_neighbours <- function(...) {
   # Counts the number of 8-neighbour cells lower than each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$num_downslope_neighbours(...)
@@ -5318,7 +7778,19 @@ num_inflowing_neighbours <- function(...) {
   session$num_inflowing_neighbours(...)
 }
 
+wbw_num_inflowing_neighbours <- function(...) {
+  # Counts the number of inflowing D8 neighbours for each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$num_inflowing_neighbours(...)
+}
+
 num_upslope_neighbours <- function(...) {
+  # Counts the number of 8-neighbour cells higher than each DEM cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$num_upslope_neighbours(...)
+}
+
+wbw_num_upslope_neighbours <- function(...) {
   # Counts the number of 8-neighbour cells higher than each DEM cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$num_upslope_neighbours(...)
@@ -5330,7 +7802,19 @@ od_sensitivity_analysis <- function(...) {
   session$od_sensitivity_analysis(...)
 }
 
+wbw_od_sensitivity_analysis <- function(...) {
+  # Computes OD shortest-path costs with impedance perturbations and outputs sensitivity statistics via Monte Carlo sampling.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$od_sensitivity_analysis(...)
+}
+
 olympic_filter <- function(...) {
+  # Performs Olympic smoothing by averaging local values excluding min and max.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$olympic_filter(...)
+}
+
+wbw_olympic_filter <- function(...) {
   # Performs Olympic smoothing by averaging local values excluding min and max.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$olympic_filter(...)
@@ -5342,7 +7826,19 @@ opening <- function(...) {
   session$opening(...)
 }
 
+wbw_opening <- function(...) {
+  # Performs a morphological opening operation using a rectangular structuring element.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$opening(...)
+}
+
 openness <- function(...) {
+  # Calculates Yokoyama et al. (2002) topographic openness from an input DEM. Returns positive (convex) and negative (concave) openness rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$openness(...)
+}
+
+wbw_openness <- function(...) {
   # Calculates Yokoyama et al. (2002) topographic openness from an input DEM. Returns positive (convex) and negative (concave) openness rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$openness(...)
@@ -5354,7 +7850,19 @@ otsu_thresholding <- function(...) {
   session$otsu_thresholding(...)
 }
 
+wbw_otsu_thresholding <- function(...) {
+  # Applies Otsu's automatic thresholding to create a binary raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$otsu_thresholding(...)
+}
+
 paired_sample_t_test <- function(...) {
+  # Performs a paired-sample t-test on two rasters using paired valid cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$paired_sample_t_test(...)
+}
+
+wbw_paired_sample_t_test <- function(...) {
   # Performs a paired-sample t-test on two rasters using paired valid cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$paired_sample_t_test(...)
@@ -5366,7 +7874,19 @@ panchromatic_sharpening <- function(...) {
   session$panchromatic_sharpening(...)
 }
 
+wbw_panchromatic_sharpening <- function(...) {
+  # Fuses multispectral and panchromatic rasters using Brovey or IHS methods.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$panchromatic_sharpening(...)
+}
+
 parallelepiped_classification <- function(...) {
+  # Performs a supervised parallelepiped classification on multi-spectral rasters using polygon training data.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$parallelepiped_classification(...)
+}
+
+wbw_parallelepiped_classification <- function(...) {
   # Performs a supervised parallelepiped classification on multi-spectral rasters using polygon training data.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$parallelepiped_classification(...)
@@ -5378,7 +7898,19 @@ patch_orientation <- function(...) {
   session$patch_orientation(...)
 }
 
+wbw_patch_orientation <- function(...) {
+  # Calculates polygon orientation (degrees from north) using reduced major axis regression and appends ORIENT.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$patch_orientation(...)
+}
+
 pennock_landform_classification <- function(...) {
+  # Classifies landform elements into seven Pennock et al. (1987) terrain classes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$pennock_landform_classification(...)
+}
+
+wbw_pennock_landform_classification <- function(...) {
   # Classifies landform elements into seven Pennock et al. (1987) terrain classes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$pennock_landform_classification(...)
@@ -5390,7 +7922,19 @@ percent_elev_range <- function(...) {
   session$percent_elev_range(...)
 }
 
+wbw_percent_elev_range <- function(...) {
+  # Calculates local topographic position as percent of neighbourhood elevation range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percent_elev_range(...)
+}
+
 percent_equal_to <- function(...) {
+  # Computes the fraction of rasters in a stack whose values equal the comparison raster at each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percent_equal_to(...)
+}
+
+wbw_percent_equal_to <- function(...) {
   # Computes the fraction of rasters in a stack whose values equal the comparison raster at each cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$percent_equal_to(...)
@@ -5402,7 +7946,19 @@ percent_greater_than <- function(...) {
   session$percent_greater_than(...)
 }
 
+wbw_percent_greater_than <- function(...) {
+  # Computes the fraction of rasters in a stack whose values are greater than the comparison raster at each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percent_greater_than(...)
+}
+
 percent_less_than <- function(...) {
+  # Computes the fraction of rasters in a stack whose values are less than the comparison raster at each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percent_less_than(...)
+}
+
+wbw_percent_less_than <- function(...) {
   # Computes the fraction of rasters in a stack whose values are less than the comparison raster at each cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$percent_less_than(...)
@@ -5414,7 +7970,19 @@ percentage_contrast_stretch <- function(...) {
   session$percentage_contrast_stretch(...)
 }
 
+wbw_percentage_contrast_stretch <- function(...) {
+  # Performs linear contrast stretch with percentile clipping.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percentage_contrast_stretch(...)
+}
+
 percentile_filter <- function(...) {
+  # Computes center-cell percentile rank in a moving window.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$percentile_filter(...)
+}
+
+wbw_percentile_filter <- function(...) {
   # Computes center-cell percentile rank in a moving window.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$percentile_filter(...)
@@ -5426,7 +7994,19 @@ perimeter_area_ratio <- function(...) {
   session$perimeter_area_ratio(...)
 }
 
+wbw_perimeter_area_ratio <- function(...) {
+  # Calculates polygon perimeter/area ratio and appends P_A_RATIO.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$perimeter_area_ratio(...)
+}
+
 phi_coefficient <- function(...) {
+  # Performs binary classification agreement assessment using the phi coefficient.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$phi_coefficient(...)
+}
+
+wbw_phi_coefficient <- function(...) {
   # Performs binary classification agreement assessment using the phi coefficient.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$phi_coefficient(...)
@@ -5438,7 +8018,19 @@ pick_from_list <- function(...) {
   session$pick_from_list(...)
 }
 
+wbw_pick_from_list <- function(...) {
+  # Selects per-cell values from a raster stack using a zero-based position raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$pick_from_list(...)
+}
+
 piecewise_contrast_stretch <- function(...) {
+  # Performs piecewise linear contrast stretching using user-specified breakpoints.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$piecewise_contrast_stretch(...)
+}
+
+wbw_piecewise_contrast_stretch <- function(...) {
   # Performs piecewise linear contrast stretching using user-specified breakpoints.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$piecewise_contrast_stretch(...)
@@ -5450,7 +8042,19 @@ plan_curvature <- function(...) {
   session$plan_curvature(...)
 }
 
+wbw_plan_curvature <- function(...) {
+  # Calculates plan (contour) curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$plan_curvature(...)
+}
+
 points_along_lines <- function(...) {
+  # Creates regularly spaced point features along input line geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$points_along_lines(...)
+}
+
+wbw_points_along_lines <- function(...) {
   # Creates regularly spaced point features along input line geometries.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$points_along_lines(...)
@@ -5462,7 +8066,19 @@ polygon_area <- function(...) {
   session$polygon_area(...)
 }
 
+wbw_polygon_area <- function(...) {
+  # Calculates polygon area and appends an AREA attribute field.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygon_area(...)
+}
+
 polygon_long_axis <- function(...) {
+  # Maps the long axis of each polygon feature's minimum bounding box as line output.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygon_long_axis(...)
+}
+
+wbw_polygon_long_axis <- function(...) {
   # Maps the long axis of each polygon feature's minimum bounding box as line output.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$polygon_long_axis(...)
@@ -5474,7 +8090,19 @@ polygon_perimeter <- function(...) {
   session$polygon_perimeter(...)
 }
 
+wbw_polygon_perimeter <- function(...) {
+  # Calculates polygon perimeter and appends a PERIMETER attribute field.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygon_perimeter(...)
+}
+
 polygon_short_axis <- function(...) {
+  # Maps the short axis of each polygon feature's minimum bounding box as line output.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygon_short_axis(...)
+}
+
+wbw_polygon_short_axis <- function(...) {
   # Maps the short axis of each polygon feature's minimum bounding box as line output.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$polygon_short_axis(...)
@@ -5486,7 +8114,19 @@ polygonize <- function(...) {
   session$polygonize(...)
 }
 
+wbw_polygonize <- function(...) {
+  # Creates polygons from closed input linework rings.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygonize(...)
+}
+
 polygons_to_lines <- function(...) {
+  # Converts polygon and multipolygon features into linework tracing their boundaries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygons_to_lines(...)
+}
+
+wbw_polygons_to_lines <- function(...) {
   # Converts polygon and multipolygon features into linework tracing their boundaries.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$polygons_to_lines(...)
@@ -5498,7 +8138,19 @@ power <- function(...) {
   session$power(...)
 }
 
+wbw_power <- function(...) {
+  # Raises the first raster to the power of the second on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$power(...)
+}
+
 prewitt_filter <- function(...) {
+  # Performs Prewitt edge detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$prewitt_filter(...)
+}
+
+wbw_prewitt_filter <- function(...) {
   # Performs Prewitt edge detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$prewitt_filter(...)
@@ -5510,7 +8162,19 @@ principal_component_analysis <- function(...) {
   session$principal_component_analysis(...)
 }
 
+wbw_principal_component_analysis <- function(...) {
+  # Performs PCA on a stack of rasters, returning component images and a JSON report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$principal_component_analysis(...)
+}
+
 principal_curvature_direction <- function(...) {
+  # Calculates the principal curvature direction angle (degrees).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$principal_curvature_direction(...)
+}
+
+wbw_principal_curvature_direction <- function(...) {
   # Calculates the principal curvature direction angle (degrees).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$principal_curvature_direction(...)
@@ -5522,7 +8186,19 @@ print_geotiff_tags <- function(...) {
   session$print_geotiff_tags(...)
 }
 
+wbw_print_geotiff_tags <- function(...) {
+  # Produces a text report describing TIFF/GeoTIFF tags and key metadata for an input GeoTIFF-family raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$print_geotiff_tags(...)
+}
+
 profile <- function(...) {
+  # Creates an HTML elevation profile plot for one or more input polyline features sampled from a surface raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$profile(...)
+}
+
+wbw_profile <- function(...) {
   # Creates an HTML elevation profile plot for one or more input polyline features sampled from a surface raster.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$profile(...)
@@ -5534,7 +8210,19 @@ profile_curvature <- function(...) {
   session$profile_curvature(...)
 }
 
+wbw_profile_curvature <- function(...) {
+  # Calculates profile curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$profile_curvature(...)
+}
+
 prune_vector_streams <- function(...) {
+  # Prunes vector stream network based on Shreve magnitude.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$prune_vector_streams(...)
+}
+
+wbw_prune_vector_streams <- function(...) {
   # Prunes vector stream network based on Shreve magnitude.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$prune_vector_streams(...)
@@ -5546,7 +8234,19 @@ qin_flow_accumulation <- function(...) {
   session$qin_flow_accumulation(...)
 }
 
+wbw_qin_flow_accumulation <- function(...) {
+  # Calculates Qin MFD flow accumulation from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$qin_flow_accumulation(...)
+}
+
 quantiles <- function(...) {
+  # Transforms raster values into quantile classes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$quantiles(...)
+}
+
+wbw_quantiles <- function(...) {
   # Transforms raster values into quantile classes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$quantiles(...)
@@ -5558,7 +8258,19 @@ quinn_flow_accumulation <- function(...) {
   session$quinn_flow_accumulation(...)
 }
 
+wbw_quinn_flow_accumulation <- function(...) {
+  # Calculates Quinn MFD flow accumulation from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$quinn_flow_accumulation(...)
+}
+
 radial_basis_function_interpolation <- function(...) {
+  # Interpolates a raster from point samples using local radial-basis similarity weighting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$radial_basis_function_interpolation(...)
+}
+
+wbw_radial_basis_function_interpolation <- function(...) {
   # Interpolates a raster from point samples using local radial-basis similarity weighting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$radial_basis_function_interpolation(...)
@@ -5570,7 +8282,19 @@ radius_of_gyration <- function(...) {
   session$radius_of_gyration(...)
 }
 
+wbw_radius_of_gyration <- function(...) {
+  # Computes per-patch radius of gyration and maps values back to patch cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$radius_of_gyration(...)
+}
+
 raise_walls <- function(...) {
+  # Raises DEM elevations along wall vectors and optionally breaches selected crossings.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raise_walls(...)
+}
+
+wbw_raise_walls <- function(...) {
   # Raises DEM elevations along wall vectors and optionally breaches selected crossings.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raise_walls(...)
@@ -5582,7 +8306,19 @@ random_field <- function(...) {
   session$random_field(...)
 }
 
+wbw_random_field <- function(...) {
+  # Creates a raster containing standard normal random values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_field(...)
+}
+
 random_forest_classification <- function(...) {
+  # Performs supervised random forest classification on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_classification(...)
+}
+
+wbw_random_forest_classification <- function(...) {
   # Performs supervised random forest classification on multi-band input rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$random_forest_classification(...)
@@ -5594,7 +8330,19 @@ random_forest_classification_fit <- function(...) {
   session$random_forest_classification_fit(...)
 }
 
+wbw_random_forest_classification_fit <- function(...) {
+  # Fits a random forest classification model and returns serialized model bytes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_classification_fit(...)
+}
+
 random_forest_classification_predict <- function(...) {
+  # Applies a serialized random forest classification model to multi-band predictors.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_classification_predict(...)
+}
+
+wbw_random_forest_classification_predict <- function(...) {
   # Applies a serialized random forest classification model to multi-band predictors.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$random_forest_classification_predict(...)
@@ -5606,7 +8354,19 @@ random_forest_regression <- function(...) {
   session$random_forest_regression(...)
 }
 
+wbw_random_forest_regression <- function(...) {
+  # Performs supervised random forest regression on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_regression(...)
+}
+
 random_forest_regression_fit <- function(...) {
+  # Fits a random forest regression model and returns serialized model bytes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_regression_fit(...)
+}
+
+wbw_random_forest_regression_fit <- function(...) {
   # Fits a random forest regression model and returns serialized model bytes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$random_forest_regression_fit(...)
@@ -5618,7 +8378,19 @@ random_forest_regression_predict <- function(...) {
   session$random_forest_regression_predict(...)
 }
 
+wbw_random_forest_regression_predict <- function(...) {
+  # Applies a serialized random forest regression model to multi-band predictors.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_forest_regression_predict(...)
+}
+
 random_points_in_polygon <- function(...) {
+  # Generates random points uniformly within input polygon geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_points_in_polygon(...)
+}
+
+wbw_random_points_in_polygon <- function(...) {
   # Generates random points uniformly within input polygon geometries.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$random_points_in_polygon(...)
@@ -5630,7 +8402,19 @@ random_sample <- function(...) {
   session$random_sample(...)
 }
 
+wbw_random_sample <- function(...) {
+  # Creates a raster containing randomly located sample cells with unique IDs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$random_sample(...)
+}
+
 range_filter <- function(...) {
+  # Computes a moving-window range (max-min) for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$range_filter(...)
+}
+
+wbw_range_filter <- function(...) {
   # Computes a moving-window range (max-min) for each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$range_filter(...)
@@ -5642,7 +8426,19 @@ raster_area <- function(...) {
   session$raster_area(...)
 }
 
+wbw_raster_area <- function(...) {
+  # Estimates per-class raster polygon area in grid-cell or map units and writes class totals to each class cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_area(...)
+}
+
 raster_calculator <- function(...) {
+  # Evaluates a mathematical expression on a list of input rasters cell-by-cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_calculator(...)
+}
+
+wbw_raster_calculator <- function(...) {
   # Evaluates a mathematical expression on a list of input rasters cell-by-cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raster_calculator(...)
@@ -5654,7 +8450,19 @@ raster_cell_assignment <- function(...) {
   session$raster_cell_assignment(...)
 }
 
+wbw_raster_cell_assignment <- function(...) {
+  # Creates a raster derived from a base raster assigning row, column, x, or y values to each cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_cell_assignment(...)
+}
+
 raster_histogram <- function(...) {
+  # Builds a fixed-bin histogram for valid raster cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_histogram(...)
+}
+
+wbw_raster_histogram <- function(...) {
   # Builds a fixed-bin histogram for valid raster cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raster_histogram(...)
@@ -5666,7 +8474,19 @@ raster_perimeter <- function(...) {
   session$raster_perimeter(...)
 }
 
+wbw_raster_perimeter <- function(...) {
+  # Estimates per-class raster polygon perimeter using an anti-aliasing lookup table and writes class totals to each class cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_perimeter(...)
+}
+
 raster_streams_to_vector <- function(...) {
+  # Converts raster stream network to vector.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_streams_to_vector(...)
+}
+
+wbw_raster_streams_to_vector <- function(...) {
   # Converts raster stream network to vector.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raster_streams_to_vector(...)
@@ -5678,7 +8498,19 @@ raster_summary_stats <- function(...) {
   session$raster_summary_stats(...)
 }
 
+wbw_raster_summary_stats <- function(...) {
+  # Computes basic summary statistics for valid raster cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_summary_stats(...)
+}
+
 raster_to_vector_lines <- function(...) {
+  # Converts non-zero, non-nodata raster line cells into polyline vector features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_to_vector_lines(...)
+}
+
+wbw_raster_to_vector_lines <- function(...) {
   # Converts non-zero, non-nodata raster line cells into polyline vector features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raster_to_vector_lines(...)
@@ -5690,7 +8522,19 @@ raster_to_vector_points <- function(...) {
   session$raster_to_vector_points(...)
 }
 
+wbw_raster_to_vector_points <- function(...) {
+  # Converts non-zero, non-nodata cells in a raster into point features located at cell centres.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_to_vector_points(...)
+}
+
 raster_to_vector_polygons <- function(...) {
+  # Converts non-zero, non-nodata raster regions into polygon vector features with FID and VALUE attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$raster_to_vector_polygons(...)
+}
+
+wbw_raster_to_vector_polygons <- function(...) {
   # Converts non-zero, non-nodata raster regions into polygon vector features with FID and VALUE attributes.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$raster_to_vector_polygons(...)
@@ -5702,7 +8546,19 @@ rasterize_streams <- function(...) {
   session$rasterize_streams(...)
 }
 
+wbw_rasterize_streams <- function(...) {
+  # Rasterizes vector stream network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rasterize_streams(...)
+}
+
 reciprocal <- function(...) {
+  # Computes the reciprocal (1/x) of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reciprocal(...)
+}
+
+wbw_reciprocal <- function(...) {
   # Computes the reciprocal (1/x) of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$reciprocal(...)
@@ -5714,7 +8570,19 @@ reclass <- function(...) {
   session$reclass(...)
 }
 
+wbw_reclass <- function(...) {
+  # Reclassifies raster values using either ranges or exact assignment pairs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reclass(...)
+}
+
 reclass_equal_interval <- function(...) {
+  # Reclassifies raster values into equal-width intervals over an optional value range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reclass_equal_interval(...)
+}
+
+wbw_reclass_equal_interval <- function(...) {
   # Reclassifies raster values into equal-width intervals over an optional value range.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$reclass_equal_interval(...)
@@ -5726,7 +8594,19 @@ recover_flightline_info <- function(...) {
   session$recover_flightline_info(...)
 }
 
+wbw_recover_flightline_info <- function(...) {
+  # Infers flightlines from GPS-time gaps and writes identifiers to point source ID, user data, and/or RGB.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$recover_flightline_info(...)
+}
+
 rectangular_grid_from_raster_base <- function(...) {
+  # Creates a rectangular polygon grid covering a raster extent.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rectangular_grid_from_raster_base(...)
+}
+
+wbw_rectangular_grid_from_raster_base <- function(...) {
   # Creates a rectangular polygon grid covering a raster extent.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$rectangular_grid_from_raster_base(...)
@@ -5738,7 +8618,19 @@ rectangular_grid_from_vector_base <- function(...) {
   session$rectangular_grid_from_vector_base(...)
 }
 
+wbw_rectangular_grid_from_vector_base <- function(...) {
+  # Creates a rectangular polygon grid covering a vector-layer bounding extent.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rectangular_grid_from_vector_base(...)
+}
+
 reinitialize_attribute_table <- function(...) {
+  # Creates a copy of a vector layer with only a regenerated FID attribute.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reinitialize_attribute_table(...)
+}
+
+wbw_reinitialize_attribute_table <- function(...) {
   # Creates a copy of a vector layer with only a regenerated FID attribute.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$reinitialize_attribute_table(...)
@@ -5750,7 +8642,19 @@ related_circumscribing_circle <- function(...) {
   session$related_circumscribing_circle(...)
 }
 
+wbw_related_circumscribing_circle <- function(...) {
+  # Calculates 1 - (polygon area / smallest circumscribing circle area) and appends RC_CIRCLE.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$related_circumscribing_circle(...)
+}
+
 relative_aspect <- function(...) {
+  # Calculates terrain aspect relative to a user-specified azimuth (0 to 180 degrees).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$relative_aspect(...)
+}
+
+wbw_relative_aspect <- function(...) {
   # Calculates terrain aspect relative to a user-specified azimuth (0 to 180 degrees).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$relative_aspect(...)
@@ -5762,7 +8666,19 @@ relative_stream_power_index <- function(...) {
   session$relative_stream_power_index(...)
 }
 
+wbw_relative_stream_power_index <- function(...) {
+  # Calculates the relative stream power index from specific catchment area and slope.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$relative_stream_power_index(...)
+}
+
 relative_topographic_position <- function(...) {
+  # Calculates RTP using neighbourhood min, mean, and max elevation values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$relative_topographic_position(...)
+}
+
+wbw_relative_topographic_position <- function(...) {
   # Calculates RTP using neighbourhood min, mean, and max elevation values.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$relative_topographic_position(...)
@@ -5774,7 +8690,19 @@ remove_duplicates <- function(...) {
   session$remove_duplicates(...)
 }
 
+wbw_remove_duplicates <- function(...) {
+  # Removes duplicate LiDAR points using x/y and optionally z coordinates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_duplicates(...)
+}
+
 remove_off_terrain_objects <- function(...) {
+  # Removes steep off-terrain objects from DEMs using white top-hat normalization, slope-constrained region growing, and local interpolation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_off_terrain_objects(...)
+}
+
+wbw_remove_off_terrain_objects <- function(...) {
   # Removes steep off-terrain objects from DEMs using white top-hat normalization, slope-constrained region growing, and local interpolation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$remove_off_terrain_objects(...)
@@ -5786,7 +8714,19 @@ remove_polygon_holes <- function(...) {
   session$remove_polygon_holes(...)
 }
 
+wbw_remove_polygon_holes <- function(...) {
+  # Removes interior rings from polygon features while preserving attributes.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_polygon_holes(...)
+}
+
 remove_raster_polygon_holes <- function(...) {
+  # Removes interior background holes (0 or nodata regions enclosed by foreground) from raster polygons.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_raster_polygon_holes(...)
+}
+
+wbw_remove_raster_polygon_holes <- function(...) {
   # Removes interior background holes (0 or nodata regions enclosed by foreground) from raster polygons.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$remove_raster_polygon_holes(...)
@@ -5798,7 +8738,19 @@ remove_short_streams <- function(...) {
   session$remove_short_streams(...)
 }
 
+wbw_remove_short_streams <- function(...) {
+  # Removes stream links shorter than minimum length.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_short_streams(...)
+}
+
 remove_spurs <- function(...) {
+  # Removes short spur artifacts from binary raster features by iterative pruning.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remove_spurs(...)
+}
+
+wbw_remove_spurs <- function(...) {
   # Removes short spur artifacts from binary raster features by iterative pruning.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$remove_spurs(...)
@@ -5810,7 +8762,19 @@ rename_field <- function(...) {
   session$rename_field(...)
 }
 
+wbw_rename_field <- function(...) {
+  # Renames an attribute field in a vector layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rename_field(...)
+}
+
 repair_stream_vector_topology <- function(...) {
+  # Repairs topology of vector stream network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$repair_stream_vector_topology(...)
+}
+
+wbw_repair_stream_vector_topology <- function(...) {
   # Repairs topology of vector stream network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$repair_stream_vector_topology(...)
@@ -5822,7 +8786,19 @@ reproject_vector <- function(...) {
   session$reproject_vector(...)
 }
 
+wbw_reproject_vector <- function(...) {
+  # Reprojects an input vector layer to a destination EPSG code.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$reproject_vector(...)
+}
+
 resample <- function(...) {
+  # Resamples one or more input rasters to a base raster grid or to a user-defined output cell size.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$resample(...)
+}
+
+wbw_resample <- function(...) {
   # Resamples one or more input rasters to a base raster grid or to a user-defined output cell size.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$resample(...)
@@ -5834,7 +8810,19 @@ rescale_value_range <- function(...) {
   session$rescale_value_range(...)
 }
 
+wbw_rescale_value_range <- function(...) {
+  # Linearly rescales raster values into a target range.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rescale_value_range(...)
+}
+
 rgb_to_ihs <- function(...) {
+  # Transforms red, green, blue band rasters (or a packed composite) to intensity, hue, and saturation components.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rgb_to_ihs(...)
+}
+
+wbw_rgb_to_ihs <- function(...) {
   # Transforms red, green, blue band rasters (or a packed composite) to intensity, hue, and saturation components.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$rgb_to_ihs(...)
@@ -5846,7 +8834,19 @@ rho8_flow_accum <- function(...) {
   session$rho8_flow_accum(...)
 }
 
+wbw_rho8_flow_accum <- function(...) {
+  # Calculates Rho8 flow accumulation from a DEM or Rho8 pointer raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rho8_flow_accum(...)
+}
+
 rho8_pointer <- function(...) {
+  # Generates a Rho8 stochastic single-flow-direction pointer raster from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rho8_pointer(...)
+}
+
+wbw_rho8_pointer <- function(...) {
   # Generates a Rho8 stochastic single-flow-direction pointer raster from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$rho8_pointer(...)
@@ -5858,7 +8858,19 @@ ridge_and_valley_vectors <- function(...) {
   session$ridge_and_valley_vectors(...)
 }
 
+wbw_ridge_and_valley_vectors <- function(...) {
+  # Extracts ridge and valley centreline vectors from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ridge_and_valley_vectors(...)
+}
+
 ring_curvature <- function(...) {
+  # Calculates ring curvature (squared flow-line twisting) from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ring_curvature(...)
+}
+
+wbw_ring_curvature <- function(...) {
   # Calculates ring curvature (squared flow-line twisting) from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ring_curvature(...)
@@ -5870,7 +8882,19 @@ river_centerlines <- function(...) {
   session$river_centerlines(...)
 }
 
+wbw_river_centerlines <- function(...) {
+  # Extracts river centerlines from water raster using medial axis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$river_centerlines(...)
+}
+
 roberts_cross_filter <- function(...) {
+  # Performs Roberts Cross edge detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$roberts_cross_filter(...)
+}
+
+wbw_roberts_cross_filter <- function(...) {
   # Performs Roberts Cross edge detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$roberts_cross_filter(...)
@@ -5882,7 +8906,19 @@ root_mean_square_error <- function(...) {
   session$root_mean_square_error(...)
 }
 
+wbw_root_mean_square_error <- function(...) {
+  # Calculates RMSE and related accuracy statistics between two rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$root_mean_square_error(...)
+}
+
 rotor <- function(...) {
+  # Calculates the rotor (flow-line twisting) from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$rotor(...)
+}
+
+wbw_rotor <- function(...) {
   # Calculates the rotor (flow-line twisting) from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$rotor(...)
@@ -5894,7 +8930,19 @@ round <- function(...) {
   session$round(...)
 }
 
+wbw_round <- function(...) {
+  # Rounds each raster cell to the nearest integer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$round(...)
+}
+
 route_calibrate <- function(...) {
+  # Calibrates route start/end measures from control points with known measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_calibrate(...)
+}
+
+wbw_route_calibrate <- function(...) {
   # Calibrates route start/end measures from control points with known measures.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_calibrate(...)
@@ -5906,7 +8954,19 @@ route_event_lines_from_layer <- function(...) {
   session$route_event_lines_from_layer(...)
 }
 
+wbw_route_event_lines_from_layer <- function(...) {
+  # Creates routed line events from an event vector layer using from/to measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_lines_from_layer(...)
+}
+
 route_event_lines_from_table <- function(...) {
+  # Creates routed line events from a CSV event table and a route layer using from/to measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_lines_from_table(...)
+}
+
+wbw_route_event_lines_from_table <- function(...) {
   # Creates routed line events from a CSV event table and a route layer using from/to measures.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_event_lines_from_table(...)
@@ -5918,7 +8978,19 @@ route_event_merge <- function(...) {
   session$route_event_merge(...)
 }
 
+wbw_route_event_merge <- function(...) {
+  # Merges adjacent compatible route events.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_merge(...)
+}
+
 route_event_overlay <- function(...) {
+  # Overlays two route event layers by interval overlap.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_overlay(...)
+}
+
+wbw_route_event_overlay <- function(...) {
   # Overlays two route event layers by interval overlap.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_event_overlay(...)
@@ -5930,7 +9002,19 @@ route_event_points_from_layer <- function(...) {
   session$route_event_points_from_layer(...)
 }
 
+wbw_route_event_points_from_layer <- function(...) {
+  # Creates routed point events from an event vector layer and a route layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_points_from_layer(...)
+}
+
 route_event_points_from_table <- function(...) {
+  # Creates routed point events from a CSV event table and a route layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_points_from_table(...)
+}
+
+wbw_route_event_points_from_table <- function(...) {
   # Creates routed point events from a CSV event table and a route layer.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_event_points_from_table(...)
@@ -5942,7 +9026,19 @@ route_event_split <- function(...) {
   session$route_event_split(...)
 }
 
+wbw_route_event_split <- function(...) {
+  # Splits route events by per-route boundary measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_split(...)
+}
+
 route_measure_qa <- function(...) {
+  # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_measure_qa(...)
+}
+
+wbw_route_measure_qa <- function(...) {
   # Diagnoses route-event measure gaps, overlaps, non-monotonic sequences, and duplicate measures.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_measure_qa(...)
@@ -5954,7 +9050,19 @@ route_recalibrate <- function(...) {
   session$route_recalibrate(...)
 }
 
+wbw_route_recalibrate <- function(...) {
+  # Recalibrates edited route measures from a reference route layer while preserving route measure continuity.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_recalibrate(...)
+}
+
 ruggedness_index <- function(...) {
+  # Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$ruggedness_index(...)
+}
+
+wbw_ruggedness_index <- function(...) {
   # Calculates the terrain ruggedness index (TRI) after Riley et al. (1999).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$ruggedness_index(...)
@@ -5966,7 +9074,19 @@ savitzky_golay_2d_filter <- function(...) {
   session$savitzky_golay_2d_filter(...)
 }
 
+wbw_savitzky_golay_2d_filter <- function(...) {
+  # Performs 2D Savitzky-Golay smoothing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$savitzky_golay_2d_filter(...)
+}
+
 scharr_filter <- function(...) {
+  # Performs Scharr edge detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$scharr_filter(...)
+}
+
+wbw_scharr_filter <- function(...) {
   # Performs Scharr edge detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$scharr_filter(...)
@@ -5978,7 +9098,19 @@ sediment_transport_index <- function(...) {
   session$sediment_transport_index(...)
 }
 
+wbw_sediment_transport_index <- function(...) {
+  # Calculates the sediment transport index (LS factor) from specific catchment area and slope.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sediment_transport_index(...)
+}
+
 select_by_location <- function(...) {
+  # Extracts target features that satisfy a spatial relationship to query features.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$select_by_location(...)
+}
+
+wbw_select_by_location <- function(...) {
   # Extracts target features that satisfy a spatial relationship to query features.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$select_by_location(...)
@@ -5990,7 +9122,19 @@ select_tiles_by_polygon <- function(...) {
   session$select_tiles_by_polygon(...)
 }
 
+wbw_select_tiles_by_polygon <- function(...) {
+  # Copies LiDAR tiles from an input directory to an output directory when tile sample points overlap polygon geometries.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$select_tiles_by_polygon(...)
+}
+
 set_nodata_value <- function(...) {
+  # Sets a raster nodata value and maps existing nodata cells to the specified background value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$set_nodata_value(...)
+}
+
+wbw_set_nodata_value <- function(...) {
   # Sets a raster nodata value and maps existing nodata cells to the specified background value.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$set_nodata_value(...)
@@ -6002,7 +9146,19 @@ shadow_animation <- function(...) {
   session$shadow_animation(...)
 }
 
+wbw_shadow_animation <- function(...) {
+  # Creates an interactive HTML viewer and animated GIF showing terrain shadows throughout a day.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shadow_animation(...)
+}
+
 shadow_image <- function(...) {
+  # Generates a terrain shadow intensity raster for a specified date, time, and location.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shadow_image(...)
+}
+
+wbw_shadow_image <- function(...) {
   # Generates a terrain shadow intensity raster for a specified date, time, and location.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$shadow_image(...)
@@ -6014,7 +9170,19 @@ shape_complexity_index_raster <- function(...) {
   session$shape_complexity_index_raster(...)
 }
 
+wbw_shape_complexity_index_raster <- function(...) {
+  # Computes raster patch shape complexity from horizontal/vertical transition frequency normalized by patch span.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shape_complexity_index_raster(...)
+}
+
 shape_complexity_index_vector <- function(...) {
+  # Computes shape complexity index for vector polygon features using normalized form factor.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shape_complexity_index_vector(...)
+}
+
+wbw_shape_complexity_index_vector <- function(...) {
   # Computes shape complexity index for vector polygon features using normalized form factor.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$shape_complexity_index_vector(...)
@@ -6026,7 +9194,19 @@ shape_index <- function(...) {
   session$shape_index(...)
 }
 
+wbw_shape_index <- function(...) {
+  # Calculates the shape index surface form descriptor from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shape_index(...)
+}
+
 shortest_path_network <- function(...) {
+  # Finds the shortest path between start and end coordinates over a line network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shortest_path_network(...)
+}
+
+wbw_shortest_path_network <- function(...) {
   # Finds the shortest path between start and end coordinates over a line network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$shortest_path_network(...)
@@ -6038,7 +9218,19 @@ shreve_stream_magnitude <- function(...) {
   session$shreve_stream_magnitude(...)
 }
 
+wbw_shreve_stream_magnitude <- function(...) {
+  # Calculates Shreve stream magnitude.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$shreve_stream_magnitude(...)
+}
+
 sieve <- function(...) {
+  # Removes small isolated patches below a cell-count threshold.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sieve(...)
+}
+
+wbw_sieve <- function(...) {
   # Removes small isolated patches below a cell-count threshold.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sieve(...)
@@ -6050,7 +9242,19 @@ sigmoidal_contrast_stretch <- function(...) {
   session$sigmoidal_contrast_stretch(...)
 }
 
+wbw_sigmoidal_contrast_stretch <- function(...) {
+  # Performs sigmoidal contrast stretching using gain and cutoff.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sigmoidal_contrast_stretch(...)
+}
+
 simplify_features <- function(...) {
+  # Simplifies vector geometries using Douglas-Peucker tolerance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$simplify_features(...)
+}
+
+wbw_simplify_features <- function(...) {
   # Simplifies vector geometries using Douglas-Peucker tolerance.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$simplify_features(...)
@@ -6062,7 +9266,19 @@ sin <- function(...) {
   session$sin(...)
 }
 
+wbw_sin <- function(...) {
+  # Computes the sine of each raster cell value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sin(...)
+}
+
 singlepart_to_multipart <- function(...) {
+  # Merges single-part features into multi-part features, grouped by an optional categorical field.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$singlepart_to_multipart(...)
+}
+
+wbw_singlepart_to_multipart <- function(...) {
   # Merges single-part features into multi-part features, grouped by an optional categorical field.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$singlepart_to_multipart(...)
@@ -6074,7 +9290,19 @@ sinh <- function(...) {
   session$sinh(...)
 }
 
+wbw_sinh <- function(...) {
+  # Computes the hyperbolic sine of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sinh(...)
+}
+
 sink <- function(...) {
+  # Identifies cells that belong to topographic depressions in a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sink(...)
+}
+
+wbw_sink <- function(...) {
   # Identifies cells that belong to topographic depressions in a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sink(...)
@@ -6086,7 +9314,19 @@ sky_view_factor <- function(...) {
   session$sky_view_factor(...)
 }
 
+wbw_sky_view_factor <- function(...) {
+  # Calculates the proportion of visible sky from a DEM/DSM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sky_view_factor(...)
+}
+
 skyline_analysis <- function(...) {
+  # Performs skyline analysis for one or more observation points and writes a vector horizon trace plus HTML report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$skyline_analysis(...)
+}
+
+wbw_skyline_analysis <- function(...) {
   # Performs skyline analysis for one or more observation points and writes a vector horizon trace plus HTML report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$skyline_analysis(...)
@@ -6098,7 +9338,19 @@ slope <- function(...) {
   session$slope(...)
 }
 
+wbw_slope <- function(...) {
+  # Calculates slope gradient from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$slope(...)
+}
+
 slope_vs_aspect_plot <- function(...) {
+  # Creates an HTML radial slope-vs-aspect analysis plot for an input DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$slope_vs_aspect_plot(...)
+}
+
+wbw_slope_vs_aspect_plot <- function(...) {
   # Creates an HTML radial slope-vs-aspect analysis plot for an input DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$slope_vs_aspect_plot(...)
@@ -6110,7 +9362,19 @@ slope_vs_elev_plot <- function(...) {
   session$slope_vs_elev_plot(...)
 }
 
+wbw_slope_vs_elev_plot <- function(...) {
+  # Creates an HTML slope-vs-elevation analysis chart for one or more DEMs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$slope_vs_elev_plot(...)
+}
+
 smooth_vectors <- function(...) {
+  # Smooths polyline or polygon vectors using a moving-average filter.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$smooth_vectors(...)
+}
+
+wbw_smooth_vectors <- function(...) {
   # Smooths polyline or polygon vectors using a moving-average filter.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$smooth_vectors(...)
@@ -6122,7 +9386,19 @@ smooth_vegetation_residual <- function(...) {
   session$smooth_vegetation_residual(...)
 }
 
+wbw_smooth_vegetation_residual <- function(...) {
+  # Reduces canopy residual roughness by masking high local DEV responses at small scales and re-interpolating masked elevations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$smooth_vegetation_residual(...)
+}
+
 snap_endnodes <- function(...) {
+  # Snaps nearby polyline endpoints to a shared location within a tolerance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$snap_endnodes(...)
+}
+
+wbw_snap_endnodes <- function(...) {
   # Snaps nearby polyline endpoints to a shared location within a tolerance.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$snap_endnodes(...)
@@ -6134,7 +9410,19 @@ snap_pour_points <- function(...) {
   session$snap_pour_points(...)
 }
 
+wbw_snap_pour_points <- function(...) {
+  # Snaps pour points to the highest flow-accumulation cell within a search distance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$snap_pour_points(...)
+}
+
 sobel_filter <- function(...) {
+  # Performs Sobel edge detection.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sobel_filter(...)
+}
+
+wbw_sobel_filter <- function(...) {
   # Performs Sobel edge detection.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sobel_filter(...)
@@ -6146,7 +9434,19 @@ sort_lidar <- function(...) {
   session$sort_lidar(...)
 }
 
+wbw_sort_lidar <- function(...) {
+  # Sorts points by one or more LiDAR properties, with optional bin sizes per criterion.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sort_lidar(...)
+}
+
 spatial_join <- function(...) {
+  # Joins attributes from a join layer onto target features using a spatial predicate.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$spatial_join(...)
+}
+
+wbw_spatial_join <- function(...) {
   # Joins attributes from a join layer onto target features using a spatial predicate.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$spatial_join(...)
@@ -6158,7 +9458,19 @@ spherical_std_dev_of_normals <- function(...) {
   session$spherical_std_dev_of_normals(...)
 }
 
+wbw_spherical_std_dev_of_normals <- function(...) {
+  # Calculates spherical standard deviation of local surface normals.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$spherical_std_dev_of_normals(...)
+}
+
 split_colour_composite <- function(...) {
+  # Splits a packed RGB colour composite into separate red, green, and blue single-band rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$split_colour_composite(...)
+}
+
+wbw_split_colour_composite <- function(...) {
   # Splits a packed RGB colour composite into separate red, green, and blue single-band rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$split_colour_composite(...)
@@ -6170,7 +9482,19 @@ split_lidar <- function(...) {
   session$split_lidar(...)
 }
 
+wbw_split_lidar <- function(...) {
+  # Splits LiDAR points into multiple output files based on a grouping criterion.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$split_lidar(...)
+}
+
 split_vector_lines <- function(...) {
+  # Splits each polyline feature into segments of a maximum specified length.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$split_vector_lines(...)
+}
+
+wbw_split_vector_lines <- function(...) {
   # Splits each polyline feature into segments of a maximum specified length.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$split_vector_lines(...)
@@ -6182,7 +9506,19 @@ split_with_lines <- function(...) {
   session$split_with_lines(...)
 }
 
+wbw_split_with_lines <- function(...) {
+  # Splits input polylines using intersection points from a split line layer.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$split_with_lines(...)
+}
+
 sqrt <- function(...) {
+  # Computes the square-root of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sqrt(...)
+}
+
+wbw_sqrt <- function(...) {
   # Computes the square-root of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sqrt(...)
@@ -6194,7 +9530,19 @@ square <- function(...) {
   session$square(...)
 }
 
+wbw_square <- function(...) {
+  # Squares each raster cell value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$square(...)
+}
+
 standard_deviation_contrast_stretch <- function(...) {
+  # Performs linear contrast stretch using mean plus/minus a standard deviation multiplier.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$standard_deviation_contrast_stretch(...)
+}
+
+wbw_standard_deviation_contrast_stretch <- function(...) {
   # Performs linear contrast stretch using mean plus/minus a standard deviation multiplier.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$standard_deviation_contrast_stretch(...)
@@ -6206,7 +9554,19 @@ standard_deviation_filter <- function(...) {
   session$standard_deviation_filter(...)
 }
 
+wbw_standard_deviation_filter <- function(...) {
+  # Computes a moving-window standard deviation for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$standard_deviation_filter(...)
+}
+
 standard_deviation_of_slope <- function(...) {
+  # Calculates local standard deviation of slope as a terrain roughness metric.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$standard_deviation_of_slope(...)
+}
+
+wbw_standard_deviation_of_slope <- function(...) {
   # Calculates local standard deviation of slope as a terrain roughness metric.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$standard_deviation_of_slope(...)
@@ -6218,7 +9578,19 @@ standard_deviation_overlay <- function(...) {
   session$standard_deviation_overlay(...)
 }
 
+wbw_standard_deviation_overlay <- function(...) {
+  # Computes the per-cell standard deviation across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$standard_deviation_overlay(...)
+}
+
 stochastic_depression_analysis <- function(...) {
+  # Runs Monte Carlo DEM perturbations and estimates depression-membership probability.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stochastic_depression_analysis(...)
+}
+
+wbw_stochastic_depression_analysis <- function(...) {
   # Runs Monte Carlo DEM perturbations and estimates depression-membership probability.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$stochastic_depression_analysis(...)
@@ -6230,7 +9602,19 @@ strahler_order_basins <- function(...) {
   session$strahler_order_basins(...)
 }
 
+wbw_strahler_order_basins <- function(...) {
+  # Delineates watershed basins labelled by the Horton-Strahler order of their draining stream link.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$strahler_order_basins(...)
+}
+
 strahler_stream_order <- function(...) {
+  # Assigns Strahler stream order to stream cells.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$strahler_stream_order(...)
+}
+
+wbw_strahler_stream_order <- function(...) {
   # Assigns Strahler stream order to stream cells.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$strahler_stream_order(...)
@@ -6242,7 +9626,19 @@ stream_link_class <- function(...) {
   session$stream_link_class(...)
 }
 
+wbw_stream_link_class <- function(...) {
+  # Classifies stream links as interior, exterior, or source.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stream_link_class(...)
+}
+
 stream_link_identifier <- function(...) {
+  # Assigns unique ID to each stream link.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stream_link_identifier(...)
+}
+
+wbw_stream_link_identifier <- function(...) {
   # Assigns unique ID to each stream link.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$stream_link_identifier(...)
@@ -6254,7 +9650,19 @@ stream_link_length <- function(...) {
   session$stream_link_length(...)
 }
 
+wbw_stream_link_length <- function(...) {
+  # Calculates total length for each stream link.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stream_link_length(...)
+}
+
 stream_link_slope <- function(...) {
+  # Calculates average slope for each stream link.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stream_link_slope(...)
+}
+
+wbw_stream_link_slope <- function(...) {
   # Calculates average slope for each stream link.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$stream_link_slope(...)
@@ -6266,7 +9674,19 @@ stream_slope_continuous <- function(...) {
   session$stream_slope_continuous(...)
 }
 
+wbw_stream_slope_continuous <- function(...) {
+  # Calculates slope value for each stream cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$stream_slope_continuous(...)
+}
+
 subbasins <- function(...) {
+  # Identifies the catchment area of each stream link (sub-basins) in a D8 stream network.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$subbasins(...)
+}
+
+wbw_subbasins <- function(...) {
   # Identifies the catchment area of each stream link (sub-basins) in a D8 stream network.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$subbasins(...)
@@ -6278,7 +9698,19 @@ subtract <- function(...) {
   session$subtract(...)
 }
 
+wbw_subtract <- function(...) {
+  # Subtracts the second raster from the first on a cell-by-cell basis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$subtract(...)
+}
+
 sum_overlay <- function(...) {
+  # Computes the per-cell sum across a raster stack, propagating NoData if any input cell is NoData.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sum_overlay(...)
+}
+
+wbw_sum_overlay <- function(...) {
   # Computes the per-cell sum across a raster stack, propagating NoData if any input cell is NoData.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sum_overlay(...)
@@ -6290,7 +9722,19 @@ surface_area_ratio <- function(...) {
   session$surface_area_ratio(...)
 }
 
+wbw_surface_area_ratio <- function(...) {
+  # Calculates the ratio of 3D surface area to planimetric area using the Jenness (2004) method.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$surface_area_ratio(...)
+}
+
 svm_classification <- function(...) {
+  # Performs supervised support-vector-machine classification on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$svm_classification(...)
+}
+
+wbw_svm_classification <- function(...) {
   # Performs supervised support-vector-machine classification on multi-band input rasters.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$svm_classification(...)
@@ -6302,7 +9746,19 @@ svm_regression <- function(...) {
   session$svm_regression(...)
 }
 
+wbw_svm_regression <- function(...) {
+  # Performs supervised support-vector-machine regression on multi-band input rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$svm_regression(...)
+}
+
 symmetrical_difference <- function(...) {
+  # Computes non-overlapping polygon regions from input and overlay layers.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$symmetrical_difference(...)
+}
+
+wbw_symmetrical_difference <- function(...) {
   # Computes non-overlapping polygon regions from input and overlay layers.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$symmetrical_difference(...)
@@ -6314,7 +9770,19 @@ tan <- function(...) {
   session$tan(...)
 }
 
+wbw_tan <- function(...) {
+  # Computes the tangent of each raster cell value.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tan(...)
+}
+
 tangential_curvature <- function(...) {
+  # Calculates tangential curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tangential_curvature(...)
+}
+
+wbw_tangential_curvature <- function(...) {
   # Calculates tangential curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$tangential_curvature(...)
@@ -6326,7 +9794,19 @@ tanh <- function(...) {
   session$tanh(...)
 }
 
+wbw_tanh <- function(...) {
+  # Computes the hyperbolic tangent of each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tanh(...)
+}
+
 thicken_raster_line <- function(...) {
+  # Thickens diagonal raster line segments to prevent diagonal leak-through.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$thicken_raster_line(...)
+}
+
+wbw_thicken_raster_line <- function(...) {
   # Thickens diagonal raster line segments to prevent diagonal leak-through.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$thicken_raster_line(...)
@@ -6338,7 +9818,19 @@ time_in_daylight <- function(...) {
   session$time_in_daylight(...)
 }
 
+wbw_time_in_daylight <- function(...) {
+  # Calculates the proportion of daytime each cell is illuminated (not in terrain/object shadow).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$time_in_daylight(...)
+}
+
 tin_interpolation <- function(...) {
+  # Interpolates a raster from point samples using Delaunay triangulation and planar interpolation within each triangle.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tin_interpolation(...)
+}
+
+wbw_tin_interpolation <- function(...) {
   # Interpolates a raster from point samples using Delaunay triangulation and planar interpolation within each triangle.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$tin_interpolation(...)
@@ -6350,7 +9842,19 @@ to_degrees <- function(...) {
   session$to_degrees(...)
 }
 
+wbw_to_degrees <- function(...) {
+  # Converts each raster cell from radians to degrees.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$to_degrees(...)
+}
+
 to_radians <- function(...) {
+  # Converts each raster cell from degrees to radians.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$to_radians(...)
+}
+
+wbw_to_radians <- function(...) {
   # Converts each raster cell from degrees to radians.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$to_radians(...)
@@ -6362,7 +9866,19 @@ tophat_transform <- function(...) {
   session$tophat_transform(...)
 }
 
+wbw_tophat_transform <- function(...) {
+  # Performs a white or black morphological top-hat transform.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tophat_transform(...)
+}
+
 topo_render <- function(...) {
+  # Creates a pseudo-3D topographic rendering using palette tinting, hillshade, shadows, and attenuation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topo_render(...)
+}
+
+wbw_topo_render <- function(...) {
   # Creates a pseudo-3D topographic rendering using palette tinting, hillshade, shadows, and attenuation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$topo_render(...)
@@ -6374,7 +9890,19 @@ topographic_hachures <- function(...) {
   session$topographic_hachures(...)
 }
 
+wbw_topographic_hachures <- function(...) {
+  # Creates topographic hachure polylines from a DEM using contour-seeded downslope and upslope flowlines. Legacy authorship attribution is intentionally preserved for this tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topographic_hachures(...)
+}
+
 topographic_position_animation <- function(...) {
+  # Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topographic_position_animation(...)
+}
+
+wbw_topographic_position_animation <- function(...) {
   # Creates an interactive HTML viewer and animated GIF of DEV or DEVmax across nonlinearly sampled scales.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$topographic_position_animation(...)
@@ -6386,7 +9914,19 @@ topological_breach_burn <- function(...) {
   session$topological_breach_burn(...)
 }
 
+wbw_topological_breach_burn <- function(...) {
+  # Burns streams into a DEM, conditions the surface, and returns stream, DEM, pointer, and accumulation rasters.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topological_breach_burn(...)
+}
+
 topological_stream_order <- function(...) {
+  # Assigns topological stream order based on link count.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topological_stream_order(...)
+}
+
+wbw_topological_stream_order <- function(...) {
   # Assigns topological stream order based on link count.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$topological_stream_order(...)
@@ -6398,7 +9938,19 @@ topology_rule_autofix <- function(...) {
   session$topology_rule_autofix(...)
 }
 
+wbw_topology_rule_autofix <- function(...) {
+  # Automatically applies safe, auditable fixes to topology violations detected by topology_rule_validate.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_rule_autofix(...)
+}
+
 topology_rule_validate <- function(...) {
+  # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_rule_validate(...)
+}
+
+wbw_topology_rule_validate <- function(...) {
   # Validates vector topology against rule-set checks (self-intersection, overlap, gaps, dangles, point coverage, endpoint snapping) and emits feature-level violations.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$topology_rule_validate(...)
@@ -6410,7 +9962,19 @@ topology_validation_report <- function(...) {
   session$topology_validation_report(...)
 }
 
+wbw_topology_validation_report <- function(...) {
+  # Audits a vector layer for topology issues and writes a per-feature CSV report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$topology_validation_report(...)
+}
+
 total_curvature <- function(...) {
+  # Calculates total curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$total_curvature(...)
+}
+
+wbw_total_curvature <- function(...) {
   # Calculates total curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$total_curvature(...)
@@ -6422,7 +9986,19 @@ total_filter <- function(...) {
   session$total_filter(...)
 }
 
+wbw_total_filter <- function(...) {
+  # Computes a moving-window total for each raster cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$total_filter(...)
+}
+
 trace_downslope_flowpaths <- function(...) {
+  # Marks D8 flowpaths initiated from seed points until no-flow or grid edge.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$trace_downslope_flowpaths(...)
+}
+
+wbw_trace_downslope_flowpaths <- function(...) {
   # Marks D8 flowpaths initiated from seed points until no-flow or grid edge.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$trace_downslope_flowpaths(...)
@@ -6434,7 +10010,19 @@ travelling_salesman_problem <- function(...) {
   session$travelling_salesman_problem(...)
 }
 
+wbw_travelling_salesman_problem <- function(...) {
+  # Finds approximate solutions to the travelling salesman problem (TSP) using 2-opt heuristics. Given a set of point locations, identifies the shortest route connecting all points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$travelling_salesman_problem(...)
+}
+
 trend_surface <- function(...) {
+  # Fits a polynomial trend surface to a raster using least-squares regression.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$trend_surface(...)
+}
+
+wbw_trend_surface <- function(...) {
   # Fits a polynomial trend surface to a raster using least-squares regression.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$trend_surface(...)
@@ -6446,7 +10034,19 @@ trend_surface_vector_points <- function(...) {
   session$trend_surface_vector_points(...)
 }
 
+wbw_trend_surface_vector_points <- function(...) {
+  # Fits a polynomial trend surface to vector point data using least-squares regression.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$trend_surface_vector_points(...)
+}
+
 tributary_identifier <- function(...) {
+  # Assigns unique ID to each tributary.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$tributary_identifier(...)
+}
+
+wbw_tributary_identifier <- function(...) {
   # Assigns unique ID to each tributary.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$tributary_identifier(...)
@@ -6458,7 +10058,19 @@ truncate <- function(...) {
   session$truncate(...)
 }
 
+wbw_truncate <- function(...) {
+  # Truncates each raster cell value to its integer part.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$truncate(...)
+}
+
 turning_bands_simulation <- function(...) {
+  # Creates a spatially-autocorrelated random field using the turning bands algorithm.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$turning_bands_simulation(...)
+}
+
+wbw_turning_bands_simulation <- function(...) {
   # Creates a spatially-autocorrelated random field using the turning bands algorithm.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$turning_bands_simulation(...)
@@ -6470,7 +10082,19 @@ two_sample_ks_test <- function(...) {
   session$two_sample_ks_test(...)
 }
 
+wbw_two_sample_ks_test <- function(...) {
+  # Performs a two-sample Kolmogorov-Smirnov test on two raster value distributions.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$two_sample_ks_test(...)
+}
+
 union <- function(...) {
+  # Dissolves combined input and overlay polygons into a unified polygon coverage.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$union(...)
+}
+
+wbw_union <- function(...) {
   # Dissolves combined input and overlay polygons into a unified polygon coverage.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$union(...)
@@ -6482,7 +10106,19 @@ unnest_basins <- function(...) {
   session$unnest_basins(...)
 }
 
+wbw_unnest_basins <- function(...) {
+  # Creates one basin raster per pour-point nesting level from a D8 pointer grid.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$unnest_basins(...)
+}
+
 unsharp_masking <- function(...) {
+  # Performs edge-enhancing unsharp masking.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$unsharp_masking(...)
+}
+
+wbw_unsharp_masking <- function(...) {
   # Performs edge-enhancing unsharp masking.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$unsharp_masking(...)
@@ -6494,7 +10130,19 @@ unsphericity <- function(...) {
   session$unsphericity(...)
 }
 
+wbw_unsphericity <- function(...) {
+  # Calculates the unsphericity curvature (half the difference of principal curvatures) from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$unsphericity(...)
+}
+
 update_nodata_cells <- function(...) {
+  # Assigns NoData cells in input1 from corresponding valid cells in input2.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$update_nodata_cells(...)
+}
+
+wbw_update_nodata_cells <- function(...) {
   # Assigns NoData cells in input1 from corresponding valid cells in input2.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$update_nodata_cells(...)
@@ -6506,7 +10154,19 @@ upslope_depression_storage <- function(...) {
   session$upslope_depression_storage(...)
 }
 
+wbw_upslope_depression_storage <- function(...) {
+  # Maps mean upslope depression-storage depth by routing depression depth over a conditioned DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$upslope_depression_storage(...)
+}
+
 user_defined_weights_filter <- function(...) {
+  # Applies a user-defined convolution kernel.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$user_defined_weights_filter(...)
+}
+
+wbw_user_defined_weights_filter <- function(...) {
   # Applies a user-defined convolution kernel.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$user_defined_weights_filter(...)
@@ -6518,7 +10178,19 @@ vector_hex_binning <- function(...) {
   session$vector_hex_binning(...)
 }
 
+wbw_vector_hex_binning <- function(...) {
+  # Aggregates point features into hexagonal bins, counting points per hex cell.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_hex_binning(...)
+}
+
 vector_lines_to_raster <- function(...) {
+  # Rasterizes line and polygon boundary geometries to a raster grid.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_lines_to_raster(...)
+}
+
+wbw_vector_lines_to_raster <- function(...) {
   # Rasterizes line and polygon boundary geometries to a raster grid.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$vector_lines_to_raster(...)
@@ -6530,7 +10202,19 @@ vector_points_to_raster <- function(...) {
   session$vector_points_to_raster(...)
 }
 
+wbw_vector_points_to_raster <- function(...) {
+  # Rasterizes point or multipoint vectors to a grid using a selected assignment operation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_points_to_raster(...)
+}
+
 vector_polygons_to_raster <- function(...) {
+  # Rasterizes polygon vectors to a grid, supporting attribute-driven burn values.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_polygons_to_raster(...)
+}
+
+wbw_vector_polygons_to_raster <- function(...) {
   # Rasterizes polygon vectors to a grid, supporting attribute-driven burn values.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$vector_polygons_to_raster(...)
@@ -6542,7 +10226,19 @@ vector_stream_network_analysis <- function(...) {
   session$vector_stream_network_analysis(...)
 }
 
+wbw_vector_stream_network_analysis <- function(...) {
+  # Comprehensive vector stream network analysis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_stream_network_analysis(...)
+}
+
 vector_summary_statistics <- function(...) {
+  # Computes grouped summary statistics for a numeric field and writes the result to CSV.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vector_summary_statistics(...)
+}
+
+wbw_vector_summary_statistics <- function(...) {
   # Computes grouped summary statistics for a numeric field and writes the result to CSV.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$vector_summary_statistics(...)
@@ -6554,7 +10250,19 @@ vehicle_routing_cvrp <- function(...) {
   session$vehicle_routing_cvrp(...)
 }
 
+wbw_vehicle_routing_cvrp <- function(...) {
+  # Builds capacity-constrained multi-depot delivery routes with heterogeneous fleet controls, objective modes, and optional local optimization.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_cvrp(...)
+}
+
 vehicle_routing_pickup_delivery <- function(...) {
+  # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_pickup_delivery(...)
+}
+
+wbw_vehicle_routing_pickup_delivery <- function(...) {
   # Builds paired pickup-delivery routes with precedence and capacity constraints using a deterministic nearest-neighbour baseline.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$vehicle_routing_pickup_delivery(...)
@@ -6566,7 +10274,19 @@ vehicle_routing_vrptw <- function(...) {
   session$vehicle_routing_vrptw(...)
 }
 
+wbw_vehicle_routing_vrptw <- function(...) {
+  # Builds capacity-constrained multi-depot VRPTW routes with heterogeneous fleet settings, break windows, and objective-mode controls.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vehicle_routing_vrptw(...)
+}
+
 vertical_excess_curvature <- function(...) {
+  # Calculates vertical excess curvature from a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$vertical_excess_curvature(...)
+}
+
+wbw_vertical_excess_curvature <- function(...) {
   # Calculates vertical excess curvature from a DEM.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$vertical_excess_curvature(...)
@@ -6578,7 +10298,19 @@ viewshed <- function(...) {
   session$viewshed(...)
 }
 
+wbw_viewshed <- function(...) {
+  # Computes station visibility counts from point stations over a DEM.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$viewshed(...)
+}
+
 visibility_index <- function(...) {
+  # Calculates a topography-based visibility index from sampled viewsheds.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$visibility_index(...)
+}
+
+wbw_visibility_index <- function(...) {
   # Calculates a topography-based visibility index from sampled viewsheds.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$visibility_index(...)
@@ -6590,7 +10322,19 @@ voronoi_diagram <- function(...) {
   session$voronoi_diagram(...)
 }
 
+wbw_voronoi_diagram <- function(...) {
+  # Creates Voronoi (Thiessen) polygons from input point locations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$voronoi_diagram(...)
+}
+
 watershed <- function(...) {
+  # Delineates watersheds from a D8 pointer and vector pour points.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$watershed(...)
+}
+
+wbw_watershed <- function(...) {
   # Delineates watersheds from a D8 pointer and vector pour points.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$watershed(...)
@@ -6602,7 +10346,19 @@ watershed_from_raster_pour_points <- function(...) {
   session$watershed_from_raster_pour_points(...)
 }
 
+wbw_watershed_from_raster_pour_points <- function(...) {
+  # Delineates watersheds from a D8 pointer and a raster of pour-point outlet IDs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$watershed_from_raster_pour_points(...)
+}
+
 weighted_overlay <- function(...) {
+  # Combines factor rasters using normalized weights, optional cost flags, and optional binary constraints.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$weighted_overlay(...)
+}
+
+wbw_weighted_overlay <- function(...) {
   # Combines factor rasters using normalized weights, optional cost flags, and optional binary constraints.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$weighted_overlay(...)
@@ -6614,7 +10370,19 @@ weighted_sum <- function(...) {
   session$weighted_sum(...)
 }
 
+wbw_weighted_sum <- function(...) {
+  # Computes a weighted sum across a raster stack after normalizing weights to sum to one.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$weighted_sum(...)
+}
+
 wetness_index <- function(...) {
+  # Calculates the topographic wetness index ln(SCA / tan(slope)).
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wetness_index(...)
+}
+
+wbw_wetness_index <- function(...) {
   # Calculates the topographic wetness index ln(SCA / tan(slope)).
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$wetness_index(...)
@@ -6626,7 +10394,19 @@ wiener_filter <- function(...) {
   session$wiener_filter(...)
 }
 
+wbw_wiener_filter <- function(...) {
+  # Performs adaptive Wiener denoising using local mean and variance.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wiener_filter(...)
+}
+
 wilcoxon_signed_rank_test <- function(...) {
+  # Performs a Wilcoxon signed-rank test on paired raster differences.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wilcoxon_signed_rank_test(...)
+}
+
+wbw_wilcoxon_signed_rank_test <- function(...) {
   # Performs a Wilcoxon signed-rank test on paired raster differences.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$wilcoxon_signed_rank_test(...)
@@ -6638,7 +10418,19 @@ write_function_memory_insertion <- function(...) {
   session$write_function_memory_insertion(...)
 }
 
+wbw_write_function_memory_insertion <- function(...) {
+  # Creates a packed RGB change-visualization composite from two or three single-band dates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$write_function_memory_insertion(...)
+}
+
 z_scores <- function(...) {
+  # Standardizes raster values to z-scores using global mean and standard deviation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$z_scores(...)
+}
+
+wbw_z_scores <- function(...) {
   # Standardizes raster values to z-scores using global mean and standard deviation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$z_scores(...)
@@ -6650,7 +10442,19 @@ zonal_statistics <- function(...) {
   session$zonal_statistics(...)
 }
 
+wbw_zonal_statistics <- function(...) {
+  # Summarises the values of a data raster within zones defined by a feature raster.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$zonal_statistics(...)
+}
+
 brdf_surface_reflectance_consistency <- function(...) {
+  # Produces BRDF-normalized reflectance, normalization delta, and consistency confidence outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$brdf_surface_reflectance_consistency(...)
+}
+
+wbw_brdf_surface_reflectance_consistency <- function(...) {
   # Produces BRDF-normalized reflectance, normalization delta, and consistency confidence outputs.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$brdf_surface_reflectance_consistency(...)
@@ -6662,7 +10466,19 @@ carbon_sequestration_verification_audit <- function(...) {
   session$carbon_sequestration_verification_audit(...)
 }
 
+wbw_carbon_sequestration_verification_audit <- function(...) {
+  # Produces NDVI delta, carbon proxy change, confidence scoring, verification zone polygons, and audit-ready JSON contract for MRV and ESG reporting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$carbon_sequestration_verification_audit(...)
+}
+
 corridor_mapping_intelligence <- function(...) {
+  # Computes terrain cost surface, least-cost route, and corridor suitability band for linear infrastructure siting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$corridor_mapping_intelligence(...)
+}
+
+wbw_corridor_mapping_intelligence <- function(...) {
   # Computes terrain cost surface, least-cost route, and corridor suitability band for linear infrastructure siting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$corridor_mapping_intelligence(...)
@@ -6674,7 +10490,19 @@ emergency_scenario_routing_and_accessibility_simulator <- function(...) {
   session$emergency_scenario_routing_and_accessibility_simulator(...)
 }
 
+wbw_emergency_scenario_routing_and_accessibility_simulator <- function(...) {
+  # Simulates emergency accessibility under disruption scenarios and reports coverage deltas for critical facilities.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$emergency_scenario_routing_and_accessibility_simulator(...)
+}
+
 fleet_routing_and_dispatch_optimizer <- function(...) {
+  # Solves vehicle routing problems (CVRP/VRPTW) with capacity constraints and time windows. Produces optimized routes, stop assignments, KPIs, and exception diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fleet_routing_and_dispatch_optimizer(...)
+}
+
+wbw_fleet_routing_and_dispatch_optimizer <- function(...) {
   # Solves vehicle routing problems (CVRP/VRPTW) with capacity constraints and time windows. Produces optimized routes, stop assignments, KPIs, and exception diagnostics.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$fleet_routing_and_dispatch_optimizer(...)
@@ -6686,7 +10514,19 @@ forestry_structure_and_biomass_intelligence <- function(...) {
   session$forestry_structure_and_biomass_intelligence(...)
 }
 
+wbw_forestry_structure_and_biomass_intelligence <- function(...) {
+  # Produces canopy height metrics, vertical structure classes, stand units, biomass proxy, confidence, and summary report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$forestry_structure_and_biomass_intelligence(...)
+}
+
 guided_uav_image_intake_workflow <- function(...) {
+  # Generates image inventory, QA diagnostics, and pass/review/fail intake guidance before expensive downstream processing.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$guided_uav_image_intake_workflow(...)
+}
+
+wbw_guided_uav_image_intake_workflow <- function(...) {
   # Generates image inventory, QA diagnostics, and pass/review/fail intake guidance before expensive downstream processing.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$guided_uav_image_intake_workflow(...)
@@ -6698,7 +10538,19 @@ landslide_susceptibility_assessment <- function(...) {
   session$landslide_susceptibility_assessment(...)
 }
 
+wbw_landslide_susceptibility_assessment <- function(...) {
+  # Produces susceptibility, trigger pressure, and summary outputs for slope-failure screening.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$landslide_susceptibility_assessment(...)
+}
+
 lidar_qa_and_confidence <- function(...) {
+  # QA workflow with confidence and uncertainty diagnostics for LiDAR ground products.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_qa_and_confidence(...)
+}
+
+wbw_lidar_qa_and_confidence <- function(...) {
   # QA workflow with confidence and uncertainty diagnostics for LiDAR ground products.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$lidar_qa_and_confidence(...)
@@ -6710,7 +10562,19 @@ lidar_terrain_product_suite <- function(...) {
   session$lidar_terrain_product_suite(...)
 }
 
+wbw_lidar_terrain_product_suite <- function(...) {
+  # Single-command LiDAR to publication-ready terrain products: DTM, DSM, slope, hillshade, confidence, uncertainty, and metadata JSON.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$lidar_terrain_product_suite(...)
+}
+
 market_access_and_site_intelligence_workflow <- function(...) {
+  # Analyzes candidate sites for commercial expansion. Computes catchments, demand coverage, competitive positioning, and ranking.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$market_access_and_site_intelligence_workflow(...)
+}
+
+wbw_market_access_and_site_intelligence_workflow <- function(...) {
   # Analyzes candidate sites for commercial expansion. Computes catchments, demand coverage, competitive positioning, and ranking.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$market_access_and_site_intelligence_workflow(...)
@@ -6722,7 +10586,19 @@ mine_site_reclamation_compliance_tracker <- function(...) {
   session$mine_site_reclamation_compliance_tracker(...)
 }
 
+wbw_mine_site_reclamation_compliance_tracker <- function(...) {
+  # Produces NDVI recovery rasters, reclamation progress, compliance zone polygons, and a regulatory-ready compliance contract.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$mine_site_reclamation_compliance_tracker(...)
+}
+
 multi_sensor_fusion_monitoring <- function(...) {
+  # Produces fused change probability, sensor agreement, terrain context, and high-confidence change zones.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$multi_sensor_fusion_monitoring(...)
+}
+
+wbw_multi_sensor_fusion_monitoring <- function(...) {
   # Produces fused change probability, sensor agreement, terrain context, and high-confidence change zones.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$multi_sensor_fusion_monitoring(...)
@@ -6734,7 +10610,19 @@ network_readiness_and_diagnostics_intelligence <- function(...) {
   session$network_readiness_and_diagnostics_intelligence(...)
 }
 
+wbw_network_readiness_and_diagnostics_intelligence <- function(...) {
+  # Audits network integrity and provides decision-grade readiness scoring for routing workflows.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$network_readiness_and_diagnostics_intelligence(...)
+}
+
 parcel_and_land_fabric_topology_compliance_workflow <- function(...) {
+  # Runs topology compliance checks for parcel fabrics, flags overlaps/gaps/slivers, and optionally emits auto-fix candidates.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$parcel_and_land_fabric_topology_compliance_workflow(...)
+}
+
+wbw_parcel_and_land_fabric_topology_compliance_workflow <- function(...) {
   # Runs topology compliance checks for parcel fabrics, flags overlaps/gaps/slivers, and optionally emits auto-fix candidates.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$parcel_and_land_fabric_topology_compliance_workflow(...)
@@ -6746,7 +10634,19 @@ precision_ag_yield_zone_intelligence <- function(...) {
   session$precision_ag_yield_zone_intelligence(...)
 }
 
+wbw_precision_ag_yield_zone_intelligence <- function(...) {
+  # Produces management zones, yield stability surface, and a contract summary.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$precision_ag_yield_zone_intelligence(...)
+}
+
 precision_irrigation_optimization <- function(...) {
+  # Produces irrigation prescription, moisture-stress risk, and summary contract outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$precision_irrigation_optimization(...)
+}
+
+wbw_precision_irrigation_optimization <- function(...) {
   # Produces irrigation prescription, moisture-stress risk, and summary contract outputs.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$precision_irrigation_optimization(...)
@@ -6758,7 +10658,19 @@ registration_oriented_feature_workflow <- function(...) {
   session$registration_oriented_feature_workflow(...)
 }
 
+wbw_registration_oriented_feature_workflow <- function(...) {
+  # Runs lightweight keypoint-based registration diagnostics and emits tie points for downstream workflows.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$registration_oriented_feature_workflow(...)
+}
+
 remote_sensing_change_detection <- function(...) {
+  # Workflow-grade NDVI change detection with temporal validation, confidence scoring, and summary reporting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$remote_sensing_change_detection(...)
+}
+
+wbw_remote_sensing_change_detection <- function(...) {
   # Workflow-grade NDVI change detection with temporal validation, confidence scoring, and summary reporting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$remote_sensing_change_detection(...)
@@ -6770,7 +10682,19 @@ river_corridor_health_assessment <- function(...) {
   session$river_corridor_health_assessment(...)
 }
 
+wbw_river_corridor_health_assessment <- function(...) {
+  # Creates stream health scoring, erosion pressure, and restoration zones with contract summary.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$river_corridor_health_assessment(...)
+}
+
 route_event_governance_for_linear_assets <- function(...) {
+  # Validates route events for overlap, gap, and monotonicity compliance and optionally auto-corrects detectable violations.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$route_event_governance_for_linear_assets(...)
+}
+
+wbw_route_event_governance_for_linear_assets <- function(...) {
   # Validates route events for overlap, gap, and monotonicity compliance and optionally auto-corrects detectable violations.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$route_event_governance_for_linear_assets(...)
@@ -6782,7 +10706,19 @@ sar_analysis_readiness <- function(...) {
   session$sar_analysis_readiness(...)
 }
 
+wbw_sar_analysis_readiness <- function(...) {
+  # Calibrates and terrain-normalizes SAR scenes with QA-oriented outputs and optional coherence-proxy estimation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_analysis_readiness(...)
+}
+
 sar_coregistration <- function(...) {
+  # SAR pair alignment with translation or experimental affine residual mode, aligned-raster output, and machine-readable QA diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_coregistration(...)
+}
+
+wbw_sar_coregistration <- function(...) {
   # SAR pair alignment with translation or experimental affine residual mode, aligned-raster output, and machine-readable QA diagnostics.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$sar_coregistration(...)
@@ -6794,7 +10730,19 @@ sar_interferogram_coherence <- function(...) {
   session$sar_interferogram_coherence(...)
 }
 
+wbw_sar_interferogram_coherence <- function(...) {
+  # Single workflow for interferogram and coherence production with shared QA/provenance outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$sar_interferogram_coherence(...)
+}
+
 service_area_planning_and_coverage_optimization <- function(...) {
+  # Generates network-derived service-area rings, uncovered demand diagnostics, and planning summary outputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$service_area_planning_and_coverage_optimization(...)
+}
+
+wbw_service_area_planning_and_coverage_optimization <- function(...) {
   # Generates network-derived service-area rings, uncovered demand diagnostics, and planning summary outputs.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$service_area_planning_and_coverage_optimization(...)
@@ -6806,7 +10754,19 @@ soil_landscape_classification <- function(...) {
   session$soil_landscape_classification(...)
 }
 
+wbw_soil_landscape_classification <- function(...) {
+  # Classifies terrain into Pennock-style soil landscape units using multiscale curvature analysis. Outputs landform class raster, class polygons, and summary statistics JSON.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$soil_landscape_classification(...)
+}
+
 solar_site_suitability_analysis <- function(...) {
+  # Generates solar suitability, visual impact proxy, candidate sites, and summary report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$solar_site_suitability_analysis(...)
+}
+
+wbw_solar_site_suitability_analysis <- function(...) {
   # Generates solar suitability, visual impact proxy, candidate sites, and summary report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$solar_site_suitability_analysis(...)
@@ -6818,7 +10778,19 @@ terrain_corrected_optical_analytics <- function(...) {
   session$terrain_corrected_optical_analytics(...)
 }
 
+wbw_terrain_corrected_optical_analytics <- function(...) {
+  # Topographic C-correction of multispectral optical bands using a co-registered DEM. Outputs surface reflectance stack, correction factor, cloud/shadow mask, and quality confidence.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$terrain_corrected_optical_analytics(...)
+}
+
 time_series_change_intelligence <- function(...) {
+  # BFAST-like trend and breakpoint screening from multitemporal stacks with confidence diagnostics.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$time_series_change_intelligence(...)
+}
+
+wbw_time_series_change_intelligence <- function(...) {
   # BFAST-like trend and breakpoint screening from multitemporal stacks with confidence diagnostics.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$time_series_change_intelligence(...)
@@ -6830,7 +10802,19 @@ urban_expansion_impact_assessment <- function(...) {
   session$urban_expansion_impact_assessment(...)
 }
 
+wbw_urban_expansion_impact_assessment <- function(...) {
+  # Produces impact severity, habitat loss, affected streams, and summary reporting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$urban_expansion_impact_assessment(...)
+}
+
 utility_corridor_encroachment_and_access_planning <- function(...) {
+  # Prioritizes encroachment hotspots near utility corridors and assigns nearest access points for field-response planning.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$utility_corridor_encroachment_and_access_planning(...)
+}
+
+wbw_utility_corridor_encroachment_and_access_planning <- function(...) {
   # Prioritizes encroachment hotspots near utility corridors and assigns nearest access points for field-response planning.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$utility_corridor_encroachment_and_access_planning(...)
@@ -6842,7 +10826,19 @@ utility_corridor_encroachment_intelligence <- function(...) {
   session$utility_corridor_encroachment_intelligence(...)
 }
 
+wbw_utility_corridor_encroachment_intelligence <- function(...) {
+  # Produces corridor encroachment risk raster, priority zones, asset risk table, confidence raster, and summary JSON.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$utility_corridor_encroachment_intelligence(...)
+}
+
 wetland_hydrogeomorphic_classification <- function(...) {
+  # Produces HGM class raster, confidence raster, wetland polygons, and summary reporting.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wetland_hydrogeomorphic_classification(...)
+}
+
+wbw_wetland_hydrogeomorphic_classification <- function(...) {
   # Produces HGM class raster, confidence raster, wetland polygons, and summary reporting.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$wetland_hydrogeomorphic_classification(...)
@@ -6854,13 +10850,31 @@ wildfire_fuel_loading_and_risk_matrix <- function(...) {
   session$wildfire_fuel_loading_and_risk_matrix(...)
 }
 
+wbw_wildfire_fuel_loading_and_risk_matrix <- function(...) {
+  # Produces fuel load classification, moisture index, fire risk matrix, risk tier polygons, and summary reporting from optical + optional LiDAR and terrain inputs.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wildfire_fuel_loading_and_risk_matrix(...)
+}
+
 wind_turbine_siting <- function(...) {
   # Workflow siting score with confidence and summary report.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$wind_turbine_siting(...)
 }
 
+wbw_wind_turbine_siting <- function(...) {
+  # Workflow siting score with confidence and summary report.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$wind_turbine_siting(...)
+}
+
 yield_data_conditioning_and_qa <- function(...) {
+  # Orchestrates yield point cleaning, pass reconstruction, reconciliation, filtering, normalization, and swath map generation.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$yield_data_conditioning_and_qa(...)
+}
+
+wbw_yield_data_conditioning_and_qa <- function(...) {
   # Orchestrates yield point cleaning, pass reconstruction, reconciliation, filtering, normalization, and swath map generation.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$yield_data_conditioning_and_qa(...)
@@ -6874,7 +10888,19 @@ build_object_hierarchy_multiscale <- function(...) {
   session$build_object_hierarchy_multiscale(...)
 }
 
+wbw_build_object_hierarchy_multiscale <- function(...) {
+  # Runs the build_object_hierarchy_multiscale tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$build_object_hierarchy_multiscale(...)
+}
+
 classify_objects_ensemble_pro <- function(...) {
+  # Runs the classify_objects_ensemble_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_ensemble_pro(...)
+}
+
+wbw_classify_objects_ensemble_pro <- function(...) {
   # Runs the classify_objects_ensemble_pro tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$classify_objects_ensemble_pro(...)
@@ -6886,7 +10912,19 @@ classify_objects_random_forest <- function(...) {
   session$classify_objects_random_forest(...)
 }
 
+wbw_classify_objects_random_forest <- function(...) {
+  # Runs the classify_objects_random_forest tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_random_forest(...)
+}
+
 classify_objects_rules_basic <- function(...) {
+  # Runs the classify_objects_rules_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_rules_basic(...)
+}
+
+wbw_classify_objects_rules_basic <- function(...) {
   # Runs the classify_objects_rules_basic tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$classify_objects_rules_basic(...)
@@ -6898,7 +10936,19 @@ classify_objects_rules_hierarchical <- function(...) {
   session$classify_objects_rules_hierarchical(...)
 }
 
+wbw_classify_objects_rules_hierarchical <- function(...) {
+  # Runs the classify_objects_rules_hierarchical tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_rules_hierarchical(...)
+}
+
 classify_objects_svm <- function(...) {
+  # Runs the classify_objects_svm tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$classify_objects_svm(...)
+}
+
+wbw_classify_objects_svm <- function(...) {
   # Runs the classify_objects_svm tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$classify_objects_svm(...)
@@ -6910,7 +10960,19 @@ evaluate_object_classification_accuracy <- function(...) {
   session$evaluate_object_classification_accuracy(...)
 }
 
+wbw_evaluate_object_classification_accuracy <- function(...) {
+  # Runs the evaluate_object_classification_accuracy tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$evaluate_object_classification_accuracy(...)
+}
+
 evaluate_segmentation_quality_pro <- function(...) {
+  # Runs the evaluate_segmentation_quality_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$evaluate_segmentation_quality_pro(...)
+}
+
+wbw_evaluate_segmentation_quality_pro <- function(...) {
   # Runs the evaluate_segmentation_quality_pro tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$evaluate_segmentation_quality_pro(...)
@@ -6922,7 +10984,19 @@ feature_preserving_smoothing_multiscale <- function(...) {
   session$feature_preserving_smoothing_multiscale(...)
 }
 
+wbw_feature_preserving_smoothing_multiscale <- function(...) {
+  # Runs the feature_preserving_smoothing_multiscale tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$feature_preserving_smoothing_multiscale(...)
+}
+
 obia_audit_report_pro <- function(...) {
+  # Runs the obia_audit_report_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_audit_report_pro(...)
+}
+
+wbw_obia_audit_report_pro <- function(...) {
   # Runs the obia_audit_report_pro tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$obia_audit_report_pro(...)
@@ -6934,7 +11008,19 @@ obia_batch_orchestrator_pro <- function(...) {
   session$obia_batch_orchestrator_pro(...)
 }
 
+wbw_obia_batch_orchestrator_pro <- function(...) {
+  # Runs the obia_batch_orchestrator_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_batch_orchestrator_pro(...)
+}
+
 obia_pipeline_basic <- function(...) {
+  # Runs the obia_pipeline_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$obia_pipeline_basic(...)
+}
+
+wbw_obia_pipeline_basic <- function(...) {
   # Runs the obia_pipeline_basic tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$obia_pipeline_basic(...)
@@ -6946,7 +11032,19 @@ object_class_probability_maps <- function(...) {
   session$object_class_probability_maps(...)
 }
 
+wbw_object_class_probability_maps <- function(...) {
+  # Runs the object_class_probability_maps tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_class_probability_maps(...)
+}
+
 object_features_context_neighbors <- function(...) {
+  # Runs the object_features_context_neighbors tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_context_neighbors(...)
+}
+
+wbw_object_features_context_neighbors <- function(...) {
   # Runs the object_features_context_neighbors tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$object_features_context_neighbors(...)
@@ -6958,7 +11056,19 @@ object_features_shape_basic <- function(...) {
   session$object_features_shape_basic(...)
 }
 
+wbw_object_features_shape_basic <- function(...) {
+  # Runs the object_features_shape_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_shape_basic(...)
+}
+
 object_features_spectral_basic <- function(...) {
+  # Runs the object_features_spectral_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_spectral_basic(...)
+}
+
+wbw_object_features_spectral_basic <- function(...) {
   # Runs the object_features_spectral_basic tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$object_features_spectral_basic(...)
@@ -6970,7 +11080,19 @@ object_features_texture_glcm_basic <- function(...) {
   session$object_features_texture_glcm_basic(...)
 }
 
+wbw_object_features_texture_glcm_basic <- function(...) {
+  # Runs the object_features_texture_glcm_basic tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_texture_glcm_basic(...)
+}
+
 object_features_topology_relations <- function(...) {
+  # Runs the object_features_topology_relations tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_features_topology_relations(...)
+}
+
+wbw_object_features_topology_relations <- function(...) {
   # Runs the object_features_topology_relations tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$object_features_topology_relations(...)
@@ -6982,7 +11104,19 @@ object_uncertainty_diagnostics_pro <- function(...) {
   session$object_uncertainty_diagnostics_pro(...)
 }
 
+wbw_object_uncertainty_diagnostics_pro <- function(...) {
+  # Runs the object_uncertainty_diagnostics_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$object_uncertainty_diagnostics_pro(...)
+}
+
 objects_boundary_refinement_pro <- function(...) {
+  # Runs the objects_boundary_refinement_pro tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$objects_boundary_refinement_pro(...)
+}
+
+wbw_objects_boundary_refinement_pro <- function(...) {
   # Runs the objects_boundary_refinement_pro tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$objects_boundary_refinement_pro(...)
@@ -6994,7 +11128,19 @@ objects_enforce_min_mapping_unit <- function(...) {
   session$objects_enforce_min_mapping_unit(...)
 }
 
+wbw_objects_enforce_min_mapping_unit <- function(...) {
+  # Runs the objects_enforce_min_mapping_unit tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$objects_enforce_min_mapping_unit(...)
+}
+
 polygons_to_segments <- function(...) {
+  # Runs the polygons_to_segments tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$polygons_to_segments(...)
+}
+
+wbw_polygons_to_segments <- function(...) {
   # Runs the polygons_to_segments tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$polygons_to_segments(...)
@@ -7006,7 +11152,19 @@ propagate_labels_across_hierarchy <- function(...) {
   session$propagate_labels_across_hierarchy(...)
 }
 
+wbw_propagate_labels_across_hierarchy <- function(...) {
+  # Runs the propagate_labels_across_hierarchy tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$propagate_labels_across_hierarchy(...)
+}
+
 segment_graph_felzenszwalb <- function(...) {
+  # Runs the segment_graph_felzenszwalb tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_graph_felzenszwalb(...)
+}
+
+wbw_segment_graph_felzenszwalb <- function(...) {
   # Runs the segment_graph_felzenszwalb tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$segment_graph_felzenszwalb(...)
@@ -7018,7 +11176,19 @@ segment_scale_parameter_optimizer <- function(...) {
   session$segment_scale_parameter_optimizer(...)
 }
 
+wbw_segment_scale_parameter_optimizer <- function(...) {
+  # Runs the segment_scale_parameter_optimizer tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_scale_parameter_optimizer(...)
+}
+
 segment_slic_superpixels <- function(...) {
+  # Runs the segment_slic_superpixels tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_slic_superpixels(...)
+}
+
+wbw_segment_slic_superpixels <- function(...) {
   # Runs the segment_slic_superpixels tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$segment_slic_superpixels(...)
@@ -7030,13 +11200,31 @@ segment_watershed_markers <- function(...) {
   session$segment_watershed_markers(...)
 }
 
+wbw_segment_watershed_markers <- function(...) {
+  # Runs the segment_watershed_markers tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segment_watershed_markers(...)
+}
+
 segments_merge_small_regions <- function(...) {
   # Runs the segments_merge_small_regions tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$segments_merge_small_regions(...)
 }
 
+wbw_segments_merge_small_regions <- function(...) {
+  # Runs the segments_merge_small_regions tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segments_merge_small_regions(...)
+}
+
 segments_split_low_cohesion <- function(...) {
+  # Runs the segments_split_low_cohesion tool.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$segments_split_low_cohesion(...)
+}
+
+wbw_segments_split_low_cohesion <- function(...) {
   # Runs the segments_split_low_cohesion tool.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$segments_split_low_cohesion(...)

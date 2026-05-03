@@ -21,6 +21,21 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   the raw `f64` storage for a single band when the native type is `F64`.
 - `Raster::band_to_vec_f64(band: usize) -> Vec<f64>`: backing method used by
   `band_view`; also available directly when a plain `Vec<f64>` is preferred.
+- `Raster::apply_unary_math<F>(f, target_bands) -> Result<()>`: unified in-place unary
+  math kernel with direct typed-slice fast-paths for F32/F64 and per-band fallback for
+  integer types. Operates on all bands if `target_bands` is `None`, or only on selected
+  band indices if `target_bands` is `Some(vec)`. Shared by `wbw_python::Raster::map_valid_to_new`
+  (selective band application) and `wbtools_oss` unary math tools (all-band operation).
+- `Raster::apply_unary_math_from<F>(f, src) -> Result<()>`: unary math kernel that
+  reads from a source raster and writes to `self`. Uses direct F32/F64 slice zipping for
+  performance. Used by `wbtools_oss` unary math tools to transform input→output without
+  intermediate buffering. Shared kernel eliminates code duplication with `map_valid_to_new`.
+- `RasterData::new_uninit(data_type, len) -> Self`: allocate uninitialized raster data
+  buffer for the given type and cell count using `Vec::with_capacity + unsafe set_len`,
+  avoiding zero-initialization overhead on large buffers.
+- `Raster::new_like_uninit(template) -> Self`: allocate a new raster with the same
+  structure and CRS as a template, but with an uninitialized data buffer. Eliminates
+  redundant zero-fill when the caller will overwrite all cells immediately.
 
 ### Changed
 - GeoTIFF native read aggregation now has a single-band fast path in

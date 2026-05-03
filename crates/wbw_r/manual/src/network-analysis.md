@@ -69,13 +69,11 @@ overshoots, and isolated islands, writing each flagged location as a point
 feature and optionally producing a text report.
 
 ```r
-wbw_run_tool('network_topology_audit', args = list(
-  i             = 'roads.shp',
+wbw_network_topology_audit(i             = 'roads.shp',
   output        = 'topology_errors.shp',
   snap_tolerance = 0.5,
   one_way_field  = 'ONEWAY',
-  report         = 'topology_report.txt'
-), session = s)
+  report         = 'topology_report.txt')
 ```
 
 Review `topology_report.txt` to understand the error count and class
@@ -87,11 +85,9 @@ distribution before continuing.
 you can identify and resolve disconnected islands before running OD queries.
 
 ```r
-wbw_run_tool('network_connected_components', args = list(
-  i              = 'roads.shp',
+wbw_network_connected_components(i              = 'roads.shp',
   output         = 'roads_components.shp',
-  snap_tolerance = 0.5
-), session = s)
+  snap_tolerance = 0.5)
 # Edges not in the dominant component are candidates for removal or bridging.
 ```
 
@@ -101,11 +97,9 @@ wbw_run_tool('network_connected_components', args = list(
 Degree-1 nodes are dead ends; unusually high-degree nodes may be duplicates.
 
 ```r
-wbw_run_tool('network_node_degree', args = list(
-  i              = 'roads.shp',
+wbw_network_node_degree(i              = 'roads.shp',
   output         = 'node_degree.shp',
-  snap_tolerance = 0.5
-), session = s)
+  snap_tolerance = 0.5)
 ```
 
 ---
@@ -119,8 +113,7 @@ using Dijkstra's algorithm. Supply `edge_cost_field` for travel-time routing;
 omit it to route by Euclidean arc length.
 
 ```r
-wbw_run_tool('shortest_path_network', args = list(
-  i               = 'roads.shp',
+wbw_shortest_path_network(i               = 'roads.shp',
   output          = 'route_shortest.shp',
   start_x         = 454230.0,
   start_y         = 4823150.0,
@@ -128,16 +121,14 @@ wbw_run_tool('shortest_path_network', args = list(
   end_y           = 4819700.0,
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
-  one_way_field   = 'ONEWAY'
-), session = s)
+  one_way_field   = 'ONEWAY')
 ```
 
 Turn penalties model the real cost of left, right, and U-turns in dense urban
 networks.
 
 ```r
-wbw_run_tool('shortest_path_network', args = list(
-  i               = 'roads.shp',
+wbw_shortest_path_network(i               = 'roads.shp',
   output          = 'route_with_turns.shp',
   start_x         = 454230.0,
   start_y         = 4823150.0,
@@ -148,8 +139,7 @@ wbw_run_tool('shortest_path_network', args = list(
   one_way_field   = 'ONEWAY',
   turn_penalty    = 0.5,
   u_turn_penalty  = 3.0,
-  forbid_u_turns  = TRUE
-), session = s)
+  forbid_u_turns  = TRUE)
 ```
 
 ### K-Shortest Alternative Paths
@@ -159,8 +149,7 @@ same endpoints — useful for resilience analysis and presenting alternatives to
 planners.
 
 ```r
-wbw_run_tool('k_shortest_paths_network', args = list(
-  i               = 'roads.shp',
+wbw_k_shortest_paths_network(i               = 'roads.shp',
   output          = 'routes_k3.shp',
   start_x         = 454230.0,
   start_y         = 4823150.0,
@@ -169,8 +158,7 @@ wbw_run_tool('k_shortest_paths_network', args = list(
   k               = 3L,
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
-  one_way_field   = 'ONEWAY'
-), session = s)
+  one_way_field   = 'ONEWAY')
 # Each feature carries a PATH_RANK attribute (1 = shortest).
 ```
 
@@ -184,8 +172,7 @@ catchments for emergency services, walking isochrones around transit stops, and
 delivery zones.
 
 ```r
-wbw_run_tool('network_service_area', args = list(
-  i                    = 'roads.shp',
+wbw_network_service_area(i                    = 'roads.shp',
   origins              = 'fire_stations.shp',
   output               = 'fire_catchment_5min.shp',
   max_cost             = 5.0,
@@ -193,8 +180,7 @@ wbw_run_tool('network_service_area', args = list(
   output_mode          = 'polygon',
   polygon_merge_origins = TRUE,
   edge_cost_field      = 'MINUTES',
-  one_way_field        = 'ONEWAY'
-), session = s)
+  one_way_field        = 'ONEWAY')
 ```
 
 Use `output_mode = 'edges'` to retain actual road arcs inside the catchment
@@ -210,15 +196,13 @@ is the core tool for emergency-response siting, healthcare access studies, and
 school-catchment delineation.
 
 ```r
-wbw_run_tool('closest_facility_network', args = list(
-  i               = 'roads.shp',
+wbw_closest_facility_network(i               = 'roads.shp',
   incidents       = 'accidents.shp',
   facilities      = 'hospitals.shp',
   output          = 'routes_to_hospital.shp',
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
-  one_way_field   = 'ONEWAY'
-), session = s)
+  one_way_field   = 'ONEWAY')
 # Output carries INCIDENT_FID, FACILITY_FID, and COST fields per route.
 ```
 
@@ -233,15 +217,13 @@ Each row contains an origin identifier, a destination identifier, and the
 network cost between them.
 
 ```r
-wbw_run_tool('network_od_cost_matrix', args = list(
-  i               = 'roads.shp',
+wbw_network_od_cost_matrix(i               = 'roads.shp',
   origins         = 'schools.shp',
   destinations    = 'libraries.shp',
   output          = 'od_costs.csv',
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
-  one_way_field   = 'ONEWAY'
-), session = s)
+  one_way_field   = 'ONEWAY')
 
 od <- read.csv('od_costs.csv')
 # Minimum travel time from each school to any library:
@@ -253,15 +235,13 @@ print(aggregate(COST ~ ORIGIN_FID, data = od, FUN = min))
 `network_routes_from_od` creates the actual path lines between OD pairs.
 
 ```r
-wbw_run_tool('network_routes_from_od', args = list(
-  i               = 'roads.shp',
+wbw_network_routes_from_od(i               = 'roads.shp',
   origins         = 'schools.shp',
   destinations    = 'libraries.shp',
   output          = 'od_routes.shp',
   snap_tolerance  = 20.0,
   edge_cost_field = 'MINUTES',
-  one_way_field   = 'ONEWAY'
-), session = s)
+  one_way_field   = 'ONEWAY')
 ```
 
 ---
@@ -274,8 +254,7 @@ total travel cost? Directly supports clinic siting, school consolidation, and
 warehouse network design.
 
 ```r
-wbw_run_tool('location_allocation_network', args = list(
-  i                    = 'roads.shp',
+wbw_location_allocation_network(i                    = 'roads.shp',
   demand_points        = 'demand_points.shp',
   facilities           = 'candidate_sites.shp',
   output               = 'selected_facilities.shp',
@@ -283,8 +262,7 @@ wbw_run_tool('location_allocation_network', args = list(
   solver_mode          = 'minimize_impedance',
   demand_weight_field  = 'POP',
   snap_tolerance       = 20.0,
-  edge_cost_field      = 'MINUTES'
-), session = s)
+  edge_cost_field      = 'MINUTES')
 # SELECTED == 1 on the four chosen candidate sites.
 # Demand points carry ASSIGNED_FID linking each to its nearest selected site.
 ```
@@ -397,8 +375,7 @@ network edges using a hidden Markov model with candidate expansion. It is the
 first step in any floating-vehicle data or probe-data workflow.
 
 ```r
-wbw_run_tool('map_matching_v1', args = list(
-  i                     = 'roads.shp',
+wbw_map_matching_v1(i                     = 'roads.shp',
   trajectory_points     = 'gps_probe_points.shp',
   timestamp_field       = 'TIMESTAMP',
   output                = 'matched_route.shp',
@@ -407,8 +384,7 @@ wbw_run_tool('map_matching_v1', args = list(
   snap_tolerance        = 10.0,
   edge_cost_field       = 'MINUTES',
   matched_points_output = 'matched_points.shp',
-  match_report          = 'match_report.txt'
-), session = s)
+  match_report          = 'match_report.txt')
 ```
 
 ---
@@ -453,44 +429,36 @@ s <- wbw_session()
 setwd('/data/emergency_planning')
 
 # 1. Audit topology.
-wbw_run_tool('network_topology_audit', args = list(
-  i = 'roads.shp', output = 'topology_errors.shp',
-  snap_tolerance = 0.5, report = 'topology_report.txt'
-), session = s)
+wbw_network_topology_audit(i = 'roads.shp', output = 'topology_errors.shp',
+  snap_tolerance = 0.5, report = 'topology_report.txt')
 
 # 2. Five-minute drive catchments from existing stations.
-wbw_run_tool('network_service_area', args = list(
-  i                    = 'roads.shp',
+wbw_network_service_area(i                    = 'roads.shp',
   origins              = 'fire_stations.shp',
   output               = 'existing_catchment_5min.shp',
   max_cost             = 5.0,
   output_mode          = 'polygon',
   polygon_merge_origins = TRUE,
   edge_cost_field      = 'MINUTES',
-  snap_tolerance       = 20.0
-), session = s)
+  snap_tolerance       = 20.0)
 
 # 3. Route historical incidents to nearest existing station.
-wbw_run_tool('closest_facility_network', args = list(
-  i               = 'roads.shp',
+wbw_closest_facility_network(i               = 'roads.shp',
   incidents       = 'historical_incidents.shp',
   facilities      = 'fire_stations.shp',
   output          = 'incident_routes.shp',
   snap_tolerance  = 20.0,
-  edge_cost_field = 'MINUTES'
-), session = s)
+  edge_cost_field = 'MINUTES')
 
 # 4. Find two new station sites that maximise coverage.
-wbw_run_tool('location_allocation_network', args = list(
-  i               = 'roads.shp',
+wbw_location_allocation_network(i               = 'roads.shp',
   demand_points   = 'historical_incidents.shp',
   facilities      = 'candidate_stations.shp',
   output          = 'new_station_sites.shp',
   facility_count  = 2L,
   solver_mode     = 'maximize_coverage',
   snap_tolerance  = 20.0,
-  edge_cost_field = 'MINUTES'
-), session = s)
+  edge_cost_field = 'MINUTES')
 ```
 
 ---

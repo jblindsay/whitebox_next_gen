@@ -53,22 +53,16 @@ cat('Data type:', meta$data_type, '\n')
 
 ```r
 # Single-raster expression — multiply by constant
-wbw_run_tool('raster_calculator', args = list(
-  statement = "'elevation.tif' * 3.28084",
-  output    = 'elevation_ft.tif'
-), session = s)
+wbw_raster_calculator(statement = "'elevation.tif' * 3.28084",
+  output    = 'elevation_ft.tif')
 
 # Multi-raster NDVI expression
-wbw_run_tool('raster_calculator', args = list(
-  statement = "('nir.tif' - 'red.tif') / ('nir.tif' + 'red.tif')",
-  output    = 'ndvi.tif'
-), session = s)
+wbw_raster_calculator(statement = "('nir.tif' - 'red.tif') / ('nir.tif' + 'red.tif')",
+  output    = 'ndvi.tif')
 
 # Conditional expression using isnull() and nodata()
-wbw_run_tool('raster_calculator', args = list(
-  statement = "if(isnull('input.tif'), nodata(), 'input.tif' + 100.0)",
-  output    = 'result.tif'
-), session = s)
+wbw_raster_calculator(statement = "if(isnull('input.tif'), nodata(), 'input.tif' + 100.0)",
+  output    = 'result.tif')
 ```
 
 Special tokens available in statements: `nodata()`, `isnull()`, `if()`, `abs()`, `sqrt()`, `log()`, `log2()`, `exp()`, `min()`, `max()`, `pi`, integer constants, and floating-point constants.
@@ -80,28 +74,22 @@ Special tokens available in statements: `nodata()`, `isnull()`, `if()`, `abs()`,
 ```r
 # Reclassify using from-to-becomes triplets
 # Format: "from;to;new;from;to;new;..."
-wbw_run_tool('reclass', args = list(
-  i         = 'slope.tif',
+wbw_reclass(i         = 'slope.tif',
   output    = 'slope_class.tif',
   reclass_vals = '0;5;1;5;15;2;15;30;3;30;45;4;45;90;5',
-  assign_mode = FALSE
-), session = s)
+  assign_mode = FALSE)
 
 # Equal-interval reclassification
-wbw_run_tool('reclass_equal_interval', args = list(
-  i         = 'ndvi.tif',
+wbw_reclass_equal_interval(i         = 'ndvi.tif',
   output    = 'ndvi_class.tif',
   interval  = 0.1,
   start_val = -1.0,
-  end_val   = 1.0
-), session = s)
+  end_val   = 1.0)
 
 # Reclassify from a CSV lookup table
-wbw_run_tool('reclass_from_file', args = list(
-  i          = 'landcover.tif',
+wbw_reclass_from_file(i          = 'landcover.tif',
   reclass_file = 'reclass_table.txt',
-  output     = 'landcover_reclassed.tif'
-), session = s)
+  output     = 'landcover_reclassed.tif')
 ```
 
 ---
@@ -110,27 +98,22 @@ wbw_run_tool('reclass_from_file', args = list(
 
 ```r
 # Gaussian filter
-wbw_run_tool('gaussian_filter', args = list(
-  i = 'dem.tif', output = 'dem_gauss.tif', sigma = 1.5), session = s)
+wbw_gaussian_filter(i = 'dem.tif', output = 'dem_gauss.tif', sigma = 1.5)
 
 # Median filter (feature-preserving)
-wbw_run_tool('median_filter', args = list(
-  i = 'dem.tif', output = 'dem_median.tif', filterx = 5, filtery = 5,
-  sig_digits = 2), session = s)
+wbw_median_filter(i = 'dem.tif', output = 'dem_median.tif', filterx = 5, filtery = 5,
+  sig_digits = 2)
 
 # Feature-preserving smoothing (Zhang et al.)
-wbw_run_tool('feature_preserving_smoothing', args = list(
-  dem = 'dem.tif', output = 'dem_fps.tif', filter = 11,
-  norm_diff = 8.0, num_iter = 3, max_diff = 0.5, zfactor = 1.0), session = s)
+wbw_feature_preserving_smoothing(dem = 'dem.tif', output = 'dem_fps.tif', filter = 11,
+  norm_diff = 8.0, num_iter = 3, max_diff = 0.5, zfactor = 1.0)
 
 # Standard deviation in a window
-wbw_run_tool('standard_dev_filter', args = list(
-  i = 'dem.tif', output = 'dem_sd.tif', filterx = 11, filtery = 11), session = s)
+wbw_standard_dev_filter(i = 'dem.tif', output = 'dem_sd.tif', filterx = 11, filtery = 11)
 
 # Percentile filter
-wbw_run_tool('percentile_filter', args = list(
-  i = 'dem.tif', output = 'dem_pct75.tif', filterx = 11, filtery = 11,
-  sig_digits = 2), session = s)
+wbw_percentile_filter(i = 'dem.tif', output = 'dem_pct75.tif', filterx = 11, filtery = 11,
+  sig_digits = 2)
 ```
 
 ---
@@ -139,17 +122,14 @@ wbw_run_tool('percentile_filter', args = list(
 
 ```r
 # Morphological closing (fills gaps in foreground)
-wbw_run_tool('closing', args = list(
-  i = 'binary.tif', output = 'binary_close.tif', filterx = 3, filtery = 3), session = s)
+wbw_closing(i = 'binary.tif', output = 'binary_close.tif', filterx = 3, filtery = 3)
 
 # Morphological opening (removes small foreground blobs)
-wbw_run_tool('opening', args = list(
-  i = 'binary.tif', output = 'binary_open.tif', filterx = 3, filtery = 3), session = s)
+wbw_opening(i = 'binary.tif', output = 'binary_open.tif', filterx = 3, filtery = 3)
 
 # Top-hat transform (white)
-wbw_run_tool('tophat_transform', args = list(
-  i = 'raster.tif', output = 'tophat.tif', filterx = 11, filtery = 11,
-  variant = 'white'), session = s)
+wbw_tophat_transform(i = 'raster.tif', output = 'tophat.tif', filterx = 11, filtery = 11,
+  variant = 'white')
 ```
 
 ---
@@ -158,17 +138,14 @@ wbw_run_tool('tophat_transform', args = list(
 
 ```r
 # Global statistics (summary of entire raster)
-wbw_run_tool('raster_histogram', args = list(
-  i = 'dem.tif', output = 'dem_histogram.html'), session = s)
+wbw_raster_histogram(i = 'dem.tif', output = 'dem_histogram.html')
 
 # Zonal statistics — mean elevation per watershed zone
-wbw_run_tool('zonal_statistics', args = list(
-  i         = 'dem.tif',
+wbw_zonal_statistics(i         = 'dem.tif',
   features  = 'watersheds.tif',
   output    = 'watershed_stats.html',
   stat      = 'mean',
-  out_raster = 'watershed_mean_elev.tif'
-), session = s)
+  out_raster = 'watershed_mean_elev.tif')
 ```
 
 ---
@@ -177,21 +154,17 @@ wbw_run_tool('zonal_statistics', args = list(
 
 ```r
 # Weighted sum (multi-criteria suitability)
-wbw_run_tool('weighted_sum', args = list(
-  inputs  = 'soil.tif;slope.tif;distance.tif',
+wbw_weighted_sum(inputs  = 'soil.tif;slope.tif;distance.tif',
   weights = '0.3;0.5;0.2',
-  output  = 'suitability.tif'
-), session = s)
+  output  = 'suitability.tif')
 
 # Weighted overlay (MCE) with constraint
-wbw_run_tool('weighted_overlay', args = list(
-  inputs      = 'factor1.tif;factor2.tif;factor3.tif',
+wbw_weighted_overlay(inputs      = 'factor1.tif;factor2.tif;factor3.tif',
   weights     = '0.4;0.4;0.2',
   output      = 'suitability_mce.tif',
   scale_max   = 5.0,
   scale_min   = 0.0,
-  scale_factor  = 1.0
-), session = s)
+  scale_factor  = 1.0)
 ```
 
 ---
@@ -199,16 +172,13 @@ wbw_run_tool('weighted_overlay', args = list(
 ## Resampling and Aggregation
 
 ```r
-wbw_run_tool('resample', args = list(
-  inputs      = 'dem.tif',
+wbw_resample(inputs      = 'dem.tif',
   output      = 'dem_10m.tif',
   cell_size   = 10.0,
-  method      = 'bilinear'
-), session = s)
+  method      = 'bilinear')
 
-wbw_run_tool('aggregate_raster', args = list(
-  i = 'dem.tif', output = 'dem_agg.tif', agg_factor = 5,
-  type = 'mean'), session = s)
+wbw_aggregate_raster(i = 'dem.tif', output = 'dem_agg.tif', agg_factor = 5,
+  type = 'mean')
 ```
 
 ---
@@ -217,29 +187,23 @@ wbw_run_tool('aggregate_raster', args = list(
 
 ```r
 # Euclidean distance
-wbw_run_tool('euclidean_distance', args = list(
-  i = 'sources.tif', output = 'euclidean_dist.tif'), session = s)
+wbw_euclidean_distance(i = 'sources.tif', output = 'euclidean_dist.tif')
 
 # Cost-distance accumulation
-wbw_run_tool('cost_distance', args = list(
-  source = 'sources.tif',
+wbw_cost_distance(source = 'sources.tif',
   cost   = 'friction.tif',
   out_accum = 'cost_accum.tif',
-  out_backlink = 'cost_backlink.tif'
-), session = s)
+  out_backlink = 'cost_backlink.tif')
 
 # Least-cost path
-wbw_run_tool('cost_pathway', args = list(
-  destination = 'destinations.tif',
+wbw_cost_pathway(destination = 'destinations.tif',
   backlink    = 'cost_backlink.tif',
   output      = 'least_cost_path.tif',
-  zero_background = FALSE
-), session = s)
+  zero_background = FALSE)
 
 # Raster buffer
-wbw_run_tool('buffer_raster', args = list(
-  i = 'features.tif', output = 'buffered.tif',
-  size = 250.0, gridcells = FALSE), session = s)
+wbw_buffer_raster(i = 'features.tif', output = 'buffered.tif',
+  size = 250.0, gridcells = FALSE)
 ```
 
 ---
@@ -248,19 +212,16 @@ wbw_run_tool('buffer_raster', args = list(
 
 ```r
 # Label connected patches (foreground = non-zero)
-wbw_run_tool('clump', args = list(
-  i = 'binary.tif', output = 'patches.tif',
-  diag = TRUE, zero_back = TRUE), session = s)
+wbw_clump(i = 'binary.tif', output = 'patches.tif',
+  diag = TRUE, zero_back = TRUE)
 
 # Remove small patches below area threshold (10 000 m²)
-wbw_run_tool('remove_spurs', args = list(
-  i = 'patches.tif', output = 'patches_clean.tif',
-  iterations = 10), session = s)
+wbw_remove_spurs(i = 'patches.tif', output = 'patches_clean.tif',
+  iterations = 10)
 
 # Raster area of each patch value
-wbw_run_tool('raster_area', args = list(
-  i = 'patches.tif', output = 'patch_area.tif',
-  out_text = FALSE, units = 'map units', zero_back = TRUE), session = s)
+wbw_raster_area(i = 'patches.tif', output = 'patch_area.tif',
+  out_text = FALSE, units = 'map units', zero_back = TRUE)
 ```
 
 ---
@@ -271,37 +232,31 @@ wbw_run_tool('raster_area', args = list(
 pts <- wbw_read_vector('sample_points.shp')
 
 # IDW
-wbw_run_tool('idw_interpolation', args = list(
-  i         = pts$file_path(),
+wbw_idw_interpolation(i         = pts$file_path(),
   field     = 'ELEV',
   output    = 'idw_surf.tif',
   use_z     = FALSE,
   weight    = 2.0,
   radius    = 2.5,
   min_points = 2,
-  cell_size  = 5.0
-), session = s)
+  cell_size  = 5.0)
 
 # Natural Neighbour
-wbw_run_tool('natural_neighbour_interpolation', args = list(
-  i        = pts$file_path(),
+wbw_natural_neighbour_interpolation(i        = pts$file_path(),
   field    = 'ELEV',
   output   = 'nn_surf.tif',
   use_z    = FALSE,
-  cell_size = 5.0
-), session = s)
+  cell_size = 5.0)
 
 # Radial Basis Function
-wbw_run_tool('radial_basis_function_interpolation', args = list(
-  i         = pts$file_path(),
+wbw_radial_basis_function_interpolation(i         = pts$file_path(),
   field     = 'ELEV',
   output    = 'rbf_surf.tif',
   num_points = 8,
   cell_size  = 5.0,
   func_type  = 'ThinPlateSpline',
   poly_order = 1,
-  weight     = 0.1
-), session = s)
+  weight     = 0.1)
 ```
 
 ---
@@ -310,13 +265,11 @@ wbw_run_tool('radial_basis_function_interpolation', args = list(
 
 ```r
 # Kolmogorov-Smirnov normality test
-wbw_run_tool('ks_test_for_normality', args = list(
-  i = 'dem.tif', output = 'ks_normality.html'), session = s)
+wbw_ks_test_for_normality(i = 'dem.tif', output = 'ks_normality.html')
 
 # Two-raster paired samples t-test
-wbw_run_tool('paired_sample_t_test', args = list(
-  input1 = 'dem_2010.tif', input2 = 'dem_2020.tif',
-  output = 'ttest.html', num_samples = 1000), session = s)
+wbw_paired_sample_t_test(input1 = 'dem_2010.tif', input2 = 'dem_2020.tif',
+  output = 'ttest.html', num_samples = 1000)
 ```
 
 ---
@@ -324,14 +277,12 @@ wbw_run_tool('paired_sample_t_test', args = list(
 ## Contour Generation
 
 ```r
-wbw_run_tool('contours_from_raster', args = list(
-  i          = 'dem.tif',
+wbw_contours_from_raster(i          = 'dem.tif',
   output     = 'contours.shp',
   interval   = 10.0,
   base       = 0.0,
   smooth     = 5,
-  tolerance  = 10.0
-), session = s)
+  tolerance  = 10.0)
 ```
 
 ---
@@ -373,40 +324,31 @@ setwd('/data/raster_workflow')
 dem <- wbw_read_raster('dem.tif')
 
 # 1. Smooth DEM
-wbw_run_tool('feature_preserving_smoothing', args = list(
-  dem = dem$file_path(), output = 'dem_smooth.tif', filter = 11,
-  norm_diff = 8.0, num_iter = 3, max_diff = 0.5), session = s)
+wbw_feature_preserving_smoothing(dem = dem$file_path(), output = 'dem_smooth.tif', filter = 11,
+  norm_diff = 8.0, num_iter = 3, max_diff = 0.5)
 
 # 2. Slope
-wbw_run_tool('slope', args = list(
-  dem = 'dem_smooth.tif', output = 'slope.tif', units = 'degrees'), session = s)
+wbw_slope(dem = 'dem_smooth.tif', output = 'slope.tif', units = 'degrees')
 
 # 3. Reclassify slope into erosion risk classes
-wbw_run_tool('reclass', args = list(
-  i = 'slope.tif', output = 'slope_risk.tif',
-  reclass_vals = '0;5;1;5;15;2;15;30;3;30;90;4'), session = s)
+wbw_reclass(i = 'slope.tif', output = 'slope_risk.tif',
+  reclass_vals = '0;5;1;5;15;2;15;30;3;30;90;4')
 
 # 4. Euclidean distance to water
-wbw_run_tool('euclidean_distance', args = list(
-  i = 'water_bodies.tif', output = 'dist_water.tif'), session = s)
+wbw_euclidean_distance(i = 'water_bodies.tif', output = 'dist_water.tif')
 
 # 5. Multi-criteria suitability overlay
-wbw_run_tool('weighted_sum', args = list(
-  inputs  = paste('slope_risk.tif', 'dist_water.tif', 'soil_type.tif', sep=';'),
+wbw_weighted_sum(inputs  = paste('slope_risk.tif', 'dist_water.tif', 'soil_type.tif', sep=';'),
   weights = '0.5;0.3;0.2',
-  output  = 'suitability.tif'
-), session = s)
+  output  = 'suitability.tif')
 
 # 6. Reclassify to binary mask (suitability > threshold)
-wbw_run_tool('raster_calculator', args = list(
-  statement = "if('suitability.tif' >= 3.0, 1.0, 0.0)",
-  output    = 'suitable_areas.tif'
-), session = s)
+wbw_raster_calculator(statement = "if('suitability.tif' >= 3.0, 1.0, 0.0)",
+  output    = 'suitable_areas.tif')
 
 # 7. Generate contours
-wbw_run_tool('contours_from_raster', args = list(
-  i = dem$file_path(), output = 'contours_10m.shp',
-  interval = 10.0, base = 0.0, smooth = 3), session = s)
+wbw_contours_from_raster(i = dem$file_path(), output = 'contours_10m.shp',
+  interval = 10.0, base = 0.0, smooth = 3)
 
 cat('Raster analysis complete.\n')
 ```

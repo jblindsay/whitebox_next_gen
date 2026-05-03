@@ -67,7 +67,7 @@ wbe.verbose = True
 
 roads = wbe.read_vector('roads.shp')
 
-errors, report_path = wbe.network_topology_audit(
+errors, report_path = wbe.vector.network_analysis.network_topology_audit(
     roads,
     snap_tolerance=0.5,
     one_way_field='ONEWAY',
@@ -87,7 +87,7 @@ that cluster. `network_connected_components()` labels every edge with its
 component identifier.
 
 ```python
-roads_comps = wbe.network_connected_components(roads, snap_tolerance=0.5)
+roads_comps = wbe.vector.network_analysis.network_connected_components(roads, snap_tolerance=0.5)
 wbe.write_vector(roads_comps, 'roads_components.shp')
 # Edges not in the dominant component are candidates for removal or bridging.
 ```
@@ -99,7 +99,7 @@ node as a point layer. Degree-1 nodes are dead ends; unusually high-degree
 nodes may indicate duplicate arcs.
 
 ```python
-nodes = wbe.network_node_degree(roads, snap_tolerance=0.5)
+nodes = wbe.vector.network_analysis.network_node_degree(roads, snap_tolerance=0.5)
 wbe.write_vector(nodes, 'node_degree.shp')
 ```
 
@@ -114,7 +114,7 @@ using Dijkstra's algorithm. Supply an `edge_cost_field` to use travel-time or
 impedance; omit it to route by Euclidean arc length.
 
 ```python
-path = wbe.shortest_path_network(
+path = wbe.vector.network_analysis.shortest_path_network(
     roads,
     start_x=454230.0, start_y=4823150.0,
     end_x=458900.0,   end_y=4819700.0,
@@ -129,7 +129,7 @@ Turn penalties model the real-world cost of left, right, and U-turns — these
 can substantially alter optimal routes in dense urban networks.
 
 ```python
-path_turns = wbe.shortest_path_network(
+path_turns = wbe.vector.network_analysis.shortest_path_network(
     roads,
     start_x=454230.0, start_y=4823150.0,
     end_x=458900.0,   end_y=4819700.0,
@@ -150,7 +150,7 @@ the same endpoints. Use this for resilience analysis, route-choice modelling,
 or presenting alternatives to planners.
 
 ```python
-alt_paths = wbe.k_shortest_paths_network(
+alt_paths = wbe.vector.network_analysis.k_shortest_paths_network(
     roads,
     start_x=454230.0, start_y=4823150.0,
     end_x=458900.0,   end_y=4819700.0,
@@ -175,7 +175,7 @@ delivery zones.
 ```python
 fire_stations = wbe.read_vector('fire_stations.shp')
 
-catchment = wbe.network_service_area(
+catchment = wbe.vector.network_analysis.network_service_area(
     roads,
     origins=fire_stations,
     max_cost=5.0,               # 5 minutes
@@ -205,7 +205,7 @@ access studies, and school-catchment delineation.
 accidents   = wbe.read_vector('accidents.shp')
 hospitals   = wbe.read_vector('hospitals.shp')
 
-routes_to_hosp = wbe.closest_facility_network(
+routes_to_hosp = wbe.vector.network_analysis.closest_facility_network(
     roads,
     incidents=accidents,
     facilities=hospitals,
@@ -234,7 +234,7 @@ the network cost between them.
 schools   = wbe.read_vector('schools.shp')
 libraries = wbe.read_vector('libraries.shp')
 
-cost_csv = wbe.network_od_cost_matrix(
+cost_csv = wbe.vector.network_analysis.network_od_cost_matrix(
     roads,
     origins=schools,
     destinations=libraries,
@@ -259,7 +259,7 @@ To visualize or spatially analyse the actual path lines between OD pairs, use
 `network_routes_from_od()`.
 
 ```python
-od_routes = wbe.network_routes_from_od(
+od_routes = wbe.vector.network_analysis.network_routes_from_od(
     roads,
     origins=schools,
     destinations=libraries,
@@ -283,7 +283,7 @@ warehouse network design, and similar strategic planning problems.
 demand     = wbe.read_vector('demand_points.shp')  # population-weighted
 candidates = wbe.read_vector('candidate_sites.shp')
 
-sited = wbe.location_allocation_network(
+sited = wbe.vector.network_analysis.location_allocation_network(
     roads,
     demand_points=demand,
     facilities=candidates,
@@ -414,7 +414,7 @@ the first step in any floating-vehicle data or probe-data workflow.
 ```python
 gps_points = wbe.read_vector('gps_probe_points.shp')
 
-matched_path, match_report = wbe.map_matching_v1(
+matched_path, match_report = wbe.vector.network_analysis.map_matching_v1(
     roads,
     trajectory_points=gps_points,
     timestamp_field='TIMESTAMP',
@@ -485,13 +485,13 @@ candidates = wbe.read_vector('candidate_stations.shp')
 incidents  = wbe.read_vector('historical_incidents.shp')
 
 # 1. Audit topology before running any queries.
-errors, _ = wbe.network_topology_audit(
+errors, _ = wbe.vector.network_analysis.network_topology_audit(
     roads, snap_tolerance=0.5, report='topology_report.txt'
 )
 wbe.write_vector(errors, 'topology_errors.shp')
 
 # 2. Map 5-minute drive catchments from existing stations.
-catchment = wbe.network_service_area(
+catchment = wbe.vector.network_analysis.network_service_area(
     roads,
     origins=stations,
     max_cost=5.0,
@@ -503,7 +503,7 @@ catchment = wbe.network_service_area(
 wbe.write_vector(catchment, 'existing_catchment_5min.shp')
 
 # 3. Route each historical incident to its nearest station.
-routes = wbe.closest_facility_network(
+routes = wbe.vector.network_analysis.closest_facility_network(
     roads,
     incidents=incidents,
     facilities=stations,
@@ -513,7 +513,7 @@ routes = wbe.closest_facility_network(
 wbe.write_vector(routes, 'incident_routes.shp')
 
 # 4. Find two additional station locations that maximise coverage.
-sited = wbe.location_allocation_network(
+sited = wbe.vector.network_analysis.location_allocation_network(
     roads,
     demand_points=incidents,
     facilities=candidates,

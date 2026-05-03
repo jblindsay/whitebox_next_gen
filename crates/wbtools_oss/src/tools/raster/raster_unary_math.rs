@@ -14,7 +14,6 @@ struct UnaryRasterMathSpec {
     id: &'static str,
     display_name: &'static str,
     summary: &'static str,
-    op: fn(f64) -> f64,
 }
 
 fn parse_input(args: &ToolArgs) -> Result<&str, ToolError> {
@@ -131,20 +130,24 @@ fn manifest_for(spec: &UnaryRasterMathSpec) -> ToolManifest {
     }
 }
 
-fn run_unary_math(spec: &UnaryRasterMathSpec, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+fn run_unary_math<Op>(spec: &UnaryRasterMathSpec, op: Op, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError>
+where
+    Op: Fn(f64) -> f64 + Send + Sync,
+{
     let input_path = parse_input(args)?;
     let output_path = parse_optional_output(args)?;
 
-    ctx.progress
-        .info(&format!("running {}", spec.id));
+    ctx.progress.info(&format!("running {}", spec.id));
 
     let input = load_input_raster(input_path)?;
-    let mut output = Raster::new_like(&input);
+    let mut output = Raster::new_like_uninit(&input);
     let len = output.data.len();
-    output.par_fill_with(|i| {
-        let z = input.data.get_f64(i);
-        if input.is_nodata(z) { input.nodata } else { (spec.op)(z) }
-    });
+
+    // Use shared kernel: read from input, write to output.
+    output.apply_unary_math_from(op, &input).map_err(|e| {
+        ToolError::Execution(format!("apply_unary_math_from failed: {e}"))
+    })?;
+
     ctx.progress.progress(0.9);
 
     let output_locator = write_or_store_output(output, output_path)?;
@@ -170,7 +173,6 @@ macro_rules! define_unary_tool {
                     id: $id,
                     display_name: $display,
                     summary: $summary,
-                    op: $op,
                 };
                 metadata_for(&spec)
             }
@@ -180,7 +182,6 @@ macro_rules! define_unary_tool {
                     id: $id,
                     display_name: $display,
                     summary: $summary,
-                    op: $op,
                 };
                 manifest_for(&spec)
             }
@@ -196,9 +197,8 @@ macro_rules! define_unary_tool {
                     id: $id,
                     display_name: $display,
                     summary: $summary,
-                    op: $op,
                 };
-                run_unary_math(&spec, args, ctx)
+                run_unary_math(&spec, $op, args, ctx)
             }
         }
     };

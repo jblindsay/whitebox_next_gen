@@ -10,6 +10,8 @@ use serde_json::Value;
 
 use crate::{ToolArgs, ToolError};
 
+pub const IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH: &str = "__wbw_memory_vector_output__";
+
 /// Resolve a raster-path `Value` to a plain path string.
 ///
 /// Accepts either a plain path string, or a typed raster object
@@ -86,9 +88,16 @@ pub fn parse_raster_path_arg(args: &ToolArgs, param: &str) -> Result<String, Too
 /// Look up a required vector-path parameter from `args` and resolve it to a
 /// plain path string.
 pub fn parse_vector_path_arg(args: &ToolArgs, param: &str) -> Result<String, ToolError> {
-    let val = args.get(param).ok_or_else(|| {
-        ToolError::Validation(format!("missing required parameter '{}'", param))
-    })?;
+    let val = match args.get(param) {
+        Some(value) => value,
+        None if param == "output" => return Ok(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH.to_string()),
+        None => {
+            return Err(ToolError::Validation(format!(
+                "missing required parameter '{}'",
+                param
+            )))
+        }
+    };
     parse_vector_path_value(val, param)
 }
 

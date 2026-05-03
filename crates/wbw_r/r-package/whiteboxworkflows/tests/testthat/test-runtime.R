@@ -806,9 +806,7 @@ test_that("memory store helpers manage raster vector and lidar objects", {
   expect_true(wbw_vector_memory_count() >= 1L)
   expect_true(wbw_lidar_memory_count() >= 1L)
 
-  expect_true(session$clear_raster_memory() >= 1L)
-  expect_true(session$clear_vector_memory() >= 1L)
-  expect_true(session$clear_lidar_memory() >= 1L)
+  expect_true(session$clear_memory() >= 3L)
 
   expect_equal(wbw_raster_memory_count(), 0L)
   expect_equal(wbw_vector_memory_count(), 0L)

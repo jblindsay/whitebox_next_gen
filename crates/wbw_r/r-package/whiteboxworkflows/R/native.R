@@ -351,6 +351,10 @@ clear_lidar_memory <- function() {
   .Call("wrap__clear_lidar_memory", PACKAGE = "whiteboxworkflows")
 }
 
+clear_memory <- function() {
+  .Call("wrap__clear_memory", PACKAGE = "whiteboxworkflows")
+}
+
 lidar_memory_count <- function() {
   .Call("wrap__lidar_memory_count", PACKAGE = "whiteboxworkflows")
 }

@@ -63,7 +63,7 @@ wbe.working_directory = '/data/linear_referencing'
 routes      = wbe.read_vector('roads_measured.shp')
 obs_points  = wbe.read_vector('field_observations.shp')
 
-located = wbe.locate_points_along_routes(
+located = wbe.vector.linear_referencing.locate_points_along_routes(
     routes=routes,
     points=obs_points,
     max_offset_distance=15.0   # max perpendicular snap distance in map units
@@ -91,7 +91,7 @@ external databases.
 
 ```python
 # events.csv columns: ROUTE_ID, MEASURE, SEVERITY, NOTES
-pts = wbe.route_event_points_from_table(
+pts = wbe.vector.linear_referencing.route_event_points_from_table(
     routes=routes,
     events='pavement_defects.csv',
     event_route_field='ROUTE_ID',
@@ -109,7 +109,7 @@ route rather than a single point.
 
 ```python
 # condition.csv columns: ROUTE_ID, FROM_MEASURE, TO_MEASURE, IRI, CONDITION
-segs = wbe.route_event_lines_from_table(
+segs = wbe.vector.linear_referencing.route_event_lines_from_table(
     routes=routes,
     events='pavement_condition.csv',
     event_route_field='ROUTE_ID',
@@ -133,7 +133,7 @@ into the output.
 ```python
 inspections = wbe.read_vector('manhole_inspections.shp')
 
-pts_from_layer = wbe.route_event_points_from_layer(
+pts_from_layer = wbe.vector.linear_referencing.route_event_points_from_layer(
     routes=routes,
     events=inspections,
     event_route_field='ROUTE_ID',
@@ -149,7 +149,7 @@ wbe.write_vector(pts_from_layer, 'manholes_on_routes.shp')
 ```python
 speed_zones = wbe.read_vector('speed_zone_events.shp')
 
-segs_from_layer = wbe.route_event_lines_from_layer(
+segs_from_layer = wbe.vector.linear_referencing.route_event_lines_from_layer(
     routes=routes,
     events=speed_zones,
     event_route_field='ROUTE_ID',
@@ -211,7 +211,7 @@ routes         = wbe.read_vector('roads_measured.shp')
 field_gps      = wbe.read_vector('field_inspection_gps.shp')
 
 # Step 1: Snap GPS observation points onto routes and extract M-values.
-located = wbe.locate_points_along_routes(
+located = wbe.vector.linear_referencing.locate_points_along_routes(
     routes=routes,
     points=field_gps,
     max_offset_distance=10.0
@@ -219,7 +219,7 @@ located = wbe.locate_points_along_routes(
 wbe.write_vector(located, 'gps_on_routes.shp')
 
 # Step 2: Place point defect records from the inspection database.
-defects = wbe.route_event_points_from_table(
+defects = wbe.vector.linear_referencing.route_event_points_from_table(
     routes=routes,
     events='defect_records.csv',
     event_route_field='ROUTE_ID',
@@ -228,7 +228,7 @@ defects = wbe.route_event_points_from_table(
 wbe.write_vector(defects, 'defects_located.shp')
 
 # Step 3: Place condition rating intervals from the same database.
-condition = wbe.route_event_lines_from_table(
+condition = wbe.vector.linear_referencing.route_event_lines_from_table(
     routes=routes,
     events='condition_ratings.csv',
     event_route_field='ROUTE_ID',

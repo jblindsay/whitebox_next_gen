@@ -237,6 +237,34 @@ impl RasterData {
         }
     }
 
+    /// Create a typed data buffer of length `len` with **uninitialized** contents.
+    ///
+    /// # Safety
+    /// Every element must be written before any read. This is intended as a
+    /// performance fast-path for callers that immediately overwrite every cell
+    /// (e.g. `par_fill_with`), avoiding the redundant nodata-fill of `new_filled`.
+    pub fn new_uninit(data_type: DataType, len: usize) -> Self {
+        fn uninit_vec<T>(len: usize) -> Vec<T> {
+            let mut v = Vec::with_capacity(len);
+            // SAFETY: capacity == len, all elements are written by the caller
+            // before any read occurs.
+            unsafe { v.set_len(len) };
+            v
+        }
+        match data_type {
+            DataType::U8  => Self::U8(uninit_vec(len)),
+            DataType::I8  => Self::I8(uninit_vec(len)),
+            DataType::U16 => Self::U16(uninit_vec(len)),
+            DataType::I16 => Self::I16(uninit_vec(len)),
+            DataType::U32 => Self::U32(uninit_vec(len)),
+            DataType::I32 => Self::I32(uninit_vec(len)),
+            DataType::U64 => Self::U64(uninit_vec(len)),
+            DataType::I64 => Self::I64(uninit_vec(len)),
+            DataType::F32 => Self::F32(uninit_vec(len)),
+            DataType::F64 => Self::F64(uninit_vec(len)),
+        }
+    }
+
     /// Convert an `f64` vector into typed storage.
     pub fn from_f64_vec(data_type: DataType, data: Vec<f64>) -> Self {
         match data_type {
@@ -1030,6 +1058,30 @@ impl Raster {
         })
     }
 
+    /// Like [`new_like`] but skips initializing the data buffer.
+    ///
+    /// Use this when every cell will be written before any read (e.g. immediately
+    /// followed by `par_fill_with`). Avoids a redundant full-buffer nodata write.
+    pub fn new_like_uninit(template: &Raster) -> Self {
+        let bands = template.bands.max(1);
+        let n = template.cols * template.rows * bands;
+        let cell_size_y = template.cell_size_y;
+        Self {
+            cols: template.cols,
+            rows: template.rows,
+            bands,
+            x_min: template.x_min,
+            y_min: template.y_min,
+            cell_size_x: template.cell_size_x,
+            cell_size_y,
+            nodata: template.nodata,
+            data_type: template.data_type,
+            crs: template.crs.clone(),
+            metadata: template.metadata.clone(),
+            data: RasterData::new_uninit(template.data_type, n),
+        }
+    }
+
     /// Typed fast-path access to `u8` storage.
     pub fn data_u8(&self) -> Option<&[u8]> { self.data.as_u8_slice() }
     /// Typed fast-path mutable access to `u8` storage.
@@ -1159,6 +1211,149 @@ impl Raster {
         F: Fn(usize) -> f64 + Send + Sync,
     {
         self.data.par_fill_with(f);
+    }
+
+    /// Apply a unary math operation to selected bands (or all bands if `target_bands` is `None`).
+    ///
+    /// Operates **in-place** on `self`. For floating-point rasters (F32/F64), uses direct typed 
+    /// slice access + SIMD-friendly iteration. For integer rasters, falls back to per-band copy-loop.
+    ///
+    /// If `target_bands` is `None`, operates on the entire flat buffer with fast F32/F64 paths.
+    /// If `target_bands` is `Some(vec)`, operates only on those band indices via per-band slicing.
+    ///
+    /// # Errors
+    /// Returns an error if a band index is out of bounds (only when `target_bands` is `Some`).
+    pub fn apply_unary_math<F>(
+        &mut self,
+        f: F,
+        target_bands: Option<Vec<usize>>,
+    ) -> Result<()>
+    where
+        F: Fn(f64) -> f64 + Send + Sync,
+    {
+        let nodata = self.nodata;
+        let nodata_is_nan = nodata.is_nan();
+
+        match target_bands {
+            None => {
+                // Fast path: operate on all data via flat buffer (most common for tools).
+                // F32 direct access with no enum dispatch.
+                if let Some(data) = self.data.as_f32_slice_mut() {
+                    let nodata_f32 = nodata as f32;
+                    data.par_iter_mut().for_each(|v| {
+                        let zf = *v as f64;
+                        let is_nd = if nodata_is_nan { zf.is_nan() } else { *v == nodata_f32 };
+                        if !is_nd {
+                            *v = f(zf) as f32;
+                        }
+                    });
+                // F64 direct access.
+                } else if let Some(data) = self.data.as_f64_slice_mut() {
+                    data.par_iter_mut().for_each(|v| {
+                        let is_nd = if nodata_is_nan { v.is_nan() } else { *v == nodata };
+                        if !is_nd {
+                            *v = f(*v);
+                        }
+                    });
+                // Generic fallback for integer types.
+                } else {
+                    let len = self.data.len();
+                    for i in 0..len {
+                        let z = self.data.get_f64(i);
+                        if nodata_is_nan { 
+                            if !z.is_nan() {
+                                self.data.set_f64(i, f(z));
+                            }
+                        } else if z != nodata {
+                            self.data.set_f64(i, f(z));
+                        }
+                    }
+                }
+            }
+            Some(bands) => {
+                // Per-band operation for selective application.
+                for band in bands {
+                    if band >= self.bands {
+                        return Err(RasterError::OutOfBounds {
+                            band: band as isize,
+                            row: 0,
+                            col: 0,
+                            bands: self.bands,
+                            cols: self.cols,
+                            rows: self.rows,
+                        });
+                    }
+                    let mut vals = self.band_slice(band as isize);
+                    vals.par_iter_mut().for_each(|v| {
+                        let is_nd = if nodata_is_nan { v.is_nan() } else { *v == nodata };
+                        if !is_nd {
+                            *v = f(*v);
+                        }
+                    });
+                    self.set_band_slice(band as isize, &vals)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Apply a unary math operation reading from `src` and writing to `self`.
+    ///
+    /// Copies each cell value from `src`, applies the operation, and stores in `self`.
+    /// Uses direct typed slice access (F32/F64) for performance.
+    ///
+    /// # Errors
+    /// Returns an error if rasters have different dimensions.
+    pub fn apply_unary_math_from<F>(
+        &mut self,
+        f: F,
+        src: &Raster,
+    ) -> Result<()>
+    where
+        F: Fn(f64) -> f64 + Send + Sync,
+    {
+        if self.rows != src.rows || self.cols != src.cols || self.bands != src.bands {
+            return Err(RasterError::Other(format!(
+                "raster dimension mismatch: self {}×{}×{} != src {}×{}×{}",
+                self.bands, self.rows, self.cols, src.bands, src.rows, src.cols
+            )));
+        }
+
+        let nodata = src.nodata;
+        let nodata_is_nan = nodata.is_nan();
+
+        // Fast path: F32 input/output.
+        if let (Some(src_data), Some(dst_data)) = (src.data.as_f32_slice(), self.data.as_f32_slice_mut()) {
+            let nodata_f32 = nodata as f32;
+            dst_data.par_iter_mut().zip(src_data.par_iter()).for_each(|(out, &z)| {
+                let zf = z as f64;
+                let is_nd = if nodata_is_nan { zf.is_nan() } else { z == nodata_f32 };
+                *out = if is_nd { nodata_f32 } else { f(zf) as f32 };
+            });
+        // Fast path: F64 input/output.
+        } else if let (Some(src_data), Some(dst_data)) = (src.data.as_f64_slice(), self.data.as_f64_slice_mut()) {
+            dst_data.par_iter_mut().zip(src_data.par_iter()).for_each(|(out, &z)| {
+                let is_nd = if nodata_is_nan { z.is_nan() } else { z == nodata };
+                *out = if is_nd { nodata } else { f(z) };
+            });
+        // Generic fallback for mixed or integer types.
+        } else {
+            let len = self.data.len();
+            for i in 0..len {
+                let z = src.data.get_f64(i);
+                let result = if nodata_is_nan { 
+                    if z.is_nan() { nodata } else { f(z) } 
+                } else if z == nodata { 
+                    nodata 
+                } else { 
+                    f(z) 
+                };
+                self.data.set_f64(i, result);
+            }
+        }
+
+        Ok(())
     }
 
     // ─── Pixel access ──────────────────────────────────────────────────────

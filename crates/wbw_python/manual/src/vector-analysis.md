@@ -49,25 +49,25 @@ wbe.write_vector(watersheds, 'watersheds_processed.shp')
 
 ```python
 # Add a new numeric field
-watersheds = wbe.add_field(watersheds, field_name='AREA_KM2', field_type='Float')
+watersheds = wbe.vector.attribute_analysis.add_field(watersheds, field_name='AREA_KM2', field_type='Float')
 
 # Rename a field
-watersheds = wbe.rename_field(watersheds,
+watersheds = wbe.vector.attribute_analysis.rename_field(watersheds,
                                old_field_name='OBJECTID',
                                new_field_name='WS_ID')
 
 # Delete a field
-watersheds = wbe.delete_field(watersheds, field_name='TEMP_FIELD')
+watersheds = wbe.vector.attribute_analysis.delete_field(watersheds, field_name='TEMP_FIELD')
 
 # Reset the entire attribute table to only an FID column
-watersheds = wbe.reinitialize_attribute_table(watersheds)
+watersheds = wbe.conversion.vector_table_io.reinitialize_attribute_table(watersheds)
 ```
 
 ### Filtering by Attribute
 
 ```python
 # Select features where upstream area exceeds 50 km²
-large_ws = wbe.extract_by_attribute(watersheds,
+large_ws = wbe.vector.attribute_analysis.extract_by_attribute(watersheds,
                                      field_name='AREA_KM2',
                                      operator='>',
                                      value=50.0)
@@ -79,7 +79,7 @@ wbe.write_vector(large_ws, 'large_watersheds.shp')
 ```python
 # Merge a CSV attribute table into a vector by a shared key field
 import csv
-merged = wbe.merge_table_with_csv(watersheds,
+merged = wbe.conversion.vector_table_io.merge_table_with_csv(watersheds,
                                    csv_file='watershed_stats.csv',
                                    join_field='WS_ID')
 ```
@@ -87,13 +87,13 @@ merged = wbe.merge_table_with_csv(watersheds,
 ### Exporting the Attribute Table
 
 ```python
-wbe.export_table_to_csv(watersheds, 'watershed_attributes.csv')
+wbe.conversion.vector_table_io.export_table_to_csv(watersheds, 'watershed_attributes.csv')
 ```
 
 ### Listing Unique Values
 
 ```python
-wbe.list_unique_values(watersheds, field_name='REGION')
+wbe.vector.attribute_analysis.list_unique_values(watersheds, field_name='REGION')
 ```
 
 ---
@@ -104,10 +104,10 @@ wbe.list_unique_values(watersheds, field_name='REGION')
 
 ```python
 # Compute polygon area (adds AREA field to attribute table)
-watersheds = wbe.polygon_area(watersheds)
+watersheds = wbe.vector.shape_metrics.polygon_area(watersheds)
 
 # Compute perimeter (adds PERIMETER field)
-watersheds = wbe.polygon_perimeter(watersheds)
+watersheds = wbe.vector.shape_metrics.polygon_perimeter(watersheds)
 ```
 
 ### Shape Indices
@@ -117,42 +117,42 @@ Shape indices quantify the geometric complexity and elongation of polygon featur
 ```python
 # Compactness ratio — measures how closely a polygon approximates a circle
 # Perfectly circular = 1.0; lower values = more elongated
-watersheds = wbe.compactness_ratio(watersheds)
+watersheds = wbe.vector.shape_metrics.compactness_ratio(watersheds)
 
 # Elongation ratio — based on minimum bounding box dimensions
-watersheds = wbe.elongation_ratio(watersheds)
+watersheds = wbe.vector.shape_metrics.elongation_ratio(watersheds)
 
 # Linearity index — R² of an RMA regression through hull vertices
 # Higher values indicate long, narrow linear shapes
-watersheds = wbe.linearity_index(watersheds)
+watersheds = wbe.vector.shape_metrics.linearity_index(watersheds)
 
 # Related circumscribing circle
-watersheds = wbe.related_circumscribing_circle(watersheds)
+watersheds = wbe.vector.shape_metrics.related_circumscribing_circle(watersheds)
 
 # Boundary shape complexity
-watersheds = wbe.boundary_shape_complexity(watersheds)
+watersheds = wbe.raster.general.boundary_shape_complexity(watersheds)
 
 # Hole proportion — fraction of polygon area that is holes
-watersheds = wbe.hole_proportion(watersheds)
+watersheds = wbe.vector.shape_metrics.hole_proportion(watersheds)
 
 # Shape complexity (vector)
-watersheds = wbe.shape_complexity_index_vector(watersheds)
+watersheds = wbe.vector.shape_metrics.shape_complexity_index_vector(watersheds)
 
 # Patch orientation (degrees from north of long axis)
-watersheds = wbe.patch_orientation(watersheds)
+watersheds = wbe.vector.shape_metrics.patch_orientation(watersheds)
 
 # Narrowness index
-watersheds = wbe.narrowness_index(watersheds)
+watersheds = wbe.vector.shape_metrics.narrowness_index(watersheds)
 
 # Radius of gyration (area-weighted centroid distance)
-watersheds = wbe.radius_of_gyration(watersheds)
+watersheds = wbe.raster.general.radius_of_gyration(watersheds)
 ```
 
 ### Point Coordinate Addition
 
 ```python
 # Add X, Y (and optionally Z) coordinate columns to a point vector
-sample_pts = wbe.add_point_coordinates_to_table(sample_pts)
+sample_pts = wbe.conversion.vector_table_io.add_point_coordinates_to_table(sample_pts)
 ```
 
 ---
@@ -161,27 +161,27 @@ sample_pts = wbe.add_point_coordinates_to_table(sample_pts)
 
 ```python
 # Point centroid of each polygon
-centroids = wbe.centroid_vector(watersheds)
+centroids = wbe.vector.geometry_processing.centroid_vector(watersheds)
 wbe.write_vector(centroids, 'watershed_centroids.shp')
 
 # Minimum bounding box for each polygon
-bboxes = wbe.minimum_bounding_box(watersheds)
+bboxes = wbe.vector.geometry_processing.minimum_bounding_box(watersheds)
 
 # Minimum bounding circle
-circles = wbe.minimum_bounding_circle(watersheds)
+circles = wbe.vector.geometry_processing.minimum_bounding_circle(watersheds)
 
 # Minimum bounding envelope (overall)
-envelope = wbe.minimum_bounding_envelope(watersheds)
+envelope = wbe.vector.geometry_processing.minimum_bounding_envelope(watersheds)
 
 # Minimum convex hull
-hull = wbe.minimum_convex_hull(watersheds)
+hull = wbe.vector.geometry_processing.minimum_convex_hull(watersheds)
 
 # Layer footprint (bounding box of entire layer)
-footprint = wbe.layer_footprint_vector(watersheds)
+footprint = wbe.vector.sampling_gridding.layer_footprint_vector(watersheds)
 
 # Long axis and short axis lines
-long_axis  = wbe.polygon_long_axis(watersheds)
-short_axis = wbe.polygon_short_axis(watersheds)
+long_axis  = wbe.vector.shape_metrics.polygon_long_axis(watersheds)
+short_axis = wbe.vector.shape_metrics.polygon_short_axis(watersheds)
 ```
 
 ---
@@ -190,40 +190,40 @@ short_axis = wbe.polygon_short_axis(watersheds)
 
 ```python
 # Smooth vertices by averaging — reduces digitising artefacts
-smooth = wbe.smooth_vectors(streams, filter_size=5)
+smooth = wbe.vector.geometry_processing.smooth_vectors(streams, filter_size=5)
 
 # Douglas-Peucker line simplification
-simplified = wbe.simplify_features(streams, snap_distance=10.0)
+simplified = wbe.vector.geometry_processing.simplify_features(streams, snap_distance=10.0)
 
 # Split long lines into segments of maximum length
-segmented = wbe.split_vector_lines(streams, segment_length=1000.0)
+segmented = wbe.vector.geometry_processing.split_vector_lines(streams, segment_length=1000.0)
 
 # Extend line endpoints by a specified distance
-extended = wbe.extend_vector_lines(streams, dist=50.0, extend_type='both')
+extended = wbe.vector.geometry_processing.extend_vector_lines(streams, dist=50.0, extend_type='both')
 
 # Split polygons or lines using another line layer
-split_polys = wbe.split_with_lines(watersheds, split_lines=roads)
+split_polys = wbe.vector.geometry_processing.split_with_lines(watersheds, split_lines=roads)
 
 # Lines to polygon conversion (close and fill each polyline)
-polys_from_lines = wbe.lines_to_polygons(outline_lines)
+polys_from_lines = wbe.conversion.geometry_topology.lines_to_polygons(outline_lines)
 
 # Polygons to lines (extract boundary lines)
-lines_from_polys = wbe.polygons_to_lines(watersheds)
+lines_from_polys = wbe.conversion.geometry_topology.polygons_to_lines(watersheds)
 
 # Convert multipart features to singlepart
-single = wbe.multipart_to_singlepart(watersheds)
+single = wbe.conversion.geometry_topology.multipart_to_singlepart(watersheds)
 
 # Convert singlepart to multipart by shared attribute value
-multi = wbe.singlepart_to_multipart(parcels, field_name='OWNER_ID')
+multi = wbe.conversion.geometry_topology.singlepart_to_multipart(parcels, field_name='OWNER_ID')
 
 # Merge all features in two or more files into one layer
-merged_streams = wbe.merge_vectors(streams_a, streams_b)
+merged_streams = wbe.conversion.vector_table_io.merge_vectors(streams_a, streams_b)
 
 # Clean topology (remove duplicate vertices and degenerate features)
-cleaned = wbe.clean_vector(streams)
+cleaned = wbe.conversion.vector_table_io.clean_vector(streams)
 
 # Remove polygon holes smaller than a threshold
-no_holes = wbe.remove_polygon_holes(watersheds)
+no_holes = wbe.conversion.geometry_topology.remove_polygon_holes(watersheds)
 ```
 
 ---
@@ -238,7 +238,7 @@ Cuts one layer to the extent of another, retaining only features within the clip
 
 ```python
 # Clip roads to a study area polygon
-roads_clipped = wbe.clip(input=roads, clip=study_area)
+roads_clipped = wbe.vector.overlay_analysis.clip(input=roads, clip=study_area)
 wbe.write_vector(roads_clipped, 'roads_study_area.shp')
 ```
 
@@ -247,7 +247,7 @@ wbe.write_vector(roads_clipped, 'roads_study_area.shp')
 Returns the geometric intersection of two layers, keeping the portions where they overlap and combining attributes from both:
 
 ```python
-soil_in_watershed = wbe.intersect(input=soil_polygons, overlay=watershed_boundary,
+soil_in_watershed = wbe.vector.overlay_analysis.intersect(input=soil_polygons, overlay=watershed_boundary,
                                    snap_tolerance=1e-6)
 wbe.write_vector(soil_in_watershed, 'soil_in_watershed.shp')
 ```
@@ -258,7 +258,7 @@ Removes the area of one layer from another:
 
 ```python
 # Remove urban areas from the vegetation layer
-rural_veg = wbe.erase(input=vegetation, erase_layer=urban_boundaries)
+rural_veg = wbe.vector.overlay_analysis.erase(input=vegetation, erase_layer=urban_boundaries)
 ```
 
 ### Union
@@ -266,7 +266,7 @@ rural_veg = wbe.erase(input=vegetation, erase_layer=urban_boundaries)
 Combines two polygon layers and divides overlapping areas, retaining all features from both:
 
 ```python
-combined = wbe.union(input=zoning, overlay=flood_zones)
+combined = wbe.vector.overlay_analysis.union(input=zoning, overlay=flood_zones)
 wbe.write_vector(combined, 'zoning_flood_overlay.shp')
 ```
 
@@ -275,7 +275,7 @@ wbe.write_vector(combined, 'zoning_flood_overlay.shp')
 Returns only the non-overlapping portions of each layer:
 
 ```python
-sym_diff = wbe.symmetrical_difference(input=year1_polygons, overlay=year2_polygons)
+sym_diff = wbe.vector.overlay_analysis.symmetrical_difference(input=year1_polygons, overlay=year2_polygons)
 ```
 
 ### Dissolve
@@ -284,7 +284,7 @@ Merges features that share a common attribute value:
 
 ```python
 # Merge all polygons of the same land-cover class
-dissolved = wbe.dissolve(input=landcover_polygons, field_name='CLASS')
+dissolved = wbe.vector.overlay_analysis.dissolve(input=landcover_polygons, field_name='CLASS')
 wbe.write_vector(dissolved, 'landcover_dissolved.shp')
 ```
 
@@ -296,7 +296,7 @@ wbe.write_vector(dissolved, 'landcover_dissolved.shp')
 
 ```python
 # Find the distance from each sample point to the nearest road
-near_result = wbe.near(input=sample_pts, feature=roads)
+near_result = wbe.vector.overlay_analysis.near(input=sample_pts, feature=roads)
 # Adds NEAR_DIST and NEAR_FID fields to sample_pts
 wbe.write_vector(near_result, 'samples_near_roads.shp')
 ```
@@ -306,15 +306,15 @@ wbe.write_vector(near_result, 'samples_near_roads.shp')
 Thiessen polygons partition space so every location is assigned to the nearest source point:
 
 ```python
-voronoi = wbe.voronoi_diagram(sample_pts)
+voronoi = wbe.vector.sampling_gridding.voronoi_diagram(sample_pts)
 wbe.write_vector(voronoi, 'thiessen_polygons.shp')
 ```
 
 ### Convex Hull and Medoid
 
 ```python
-hull_pts = wbe.minimum_convex_hull(sample_pts)  # minimum convex hull of point set
-med      = wbe.medoid(sample_pts)               # geometric median of a set of points
+hull_pts = wbe.vector.geometry_processing.minimum_convex_hull(sample_pts)  # minimum convex hull of point set
+med      = wbe.vector.sampling_gridding.medoid(sample_pts)               # geometric median of a set of points
 ```
 
 ---
@@ -325,7 +325,7 @@ Spatial queries allow selection of features based on their geometric relationshi
 
 ```python
 # Select all stream segments that intersect wetland polygons
-streams_in_wetlands = wbe.select_by_location(
+streams_in_wetlands = wbe.vector.overlay_analysis.select_by_location(
     input=streams,
     comparison=wetlands,
     geometry_type='intersects'
@@ -341,7 +341,7 @@ Spatial join transfers attributes from a join layer to an input layer based on s
 
 ```python
 # Join soil class to sample points based on the polygon they fall within
-pts_with_soil = wbe.spatial_join(
+pts_with_soil = wbe.vector.overlay_analysis.spatial_join(
     input=sample_pts,
     join_layer=soil_polygons,
     join_type='within',       # 'within', 'intersects', 'nearest'
@@ -359,15 +359,15 @@ Create regular grids of vector polygons covering a raster or vector extent. Usef
 
 ```python
 # Hexagonal grid with resolution based on an existing raster
-hex_grid = wbe.hexagonal_grid_from_raster_base(dem)
+hex_grid = wbe.vector.sampling_gridding.hexagonal_grid_from_raster_base(dem)
 wbe.write_vector(hex_grid, 'hexgrid.shp')
 
 # Rectangular grid
-rec_grid = wbe.rectangular_grid_from_raster_base(dem)
+rec_grid = wbe.vector.sampling_gridding.rectangular_grid_from_raster_base(dem)
 wbe.write_vector(rec_grid, 'recgrid.shp')
 
 # Hexagonal grid with resolution based on a vector extent
-hex_v = wbe.hexagonal_grid_from_vector_base(watersheds, width=500.0)
+hex_v = wbe.vector.sampling_gridding.hexagonal_grid_from_vector_base(watersheds, width=500.0)
 ```
 
 ---
@@ -376,7 +376,7 @@ hex_v = wbe.hexagonal_grid_from_vector_base(watersheds, width=500.0)
 
 ```python
 # Rasterize polygon layer (burn polygon attribute value into grid cells)
-lc_raster = wbe.vector_polygons_to_raster(
+lc_raster = wbe.conversion.raster_vector_conversion.vector_polygons_to_raster(
     input=landcover_polygons,
     field_name='CLASS_ID',
     cell_size=30.0
@@ -384,14 +384,14 @@ lc_raster = wbe.vector_polygons_to_raster(
 wbe.write_raster(lc_raster, 'landcover_raster.tif')
 
 # Rasterize line layer
-roads_raster = wbe.vector_lines_to_raster(
+roads_raster = wbe.conversion.raster_vector_conversion.vector_lines_to_raster(
     input=roads,
     field_name='FID',
     cell_size=10.0
 )
 
 # Rasterize point layer
-pts_raster = wbe.vector_points_to_raster(
+pts_raster = wbe.conversion.raster_vector_conversion.vector_points_to_raster(
     input=sample_pts,
     field_name='YIELD',
     assign_op='mean',  # 'first', 'last', 'min', 'max', 'sum', 'mean', 'number'
@@ -407,7 +407,7 @@ The field calculator tool evaluates an expression against the attribute table to
 
 ```python
 # Compute a normalised shape index from existing area and perimeter fields
-watersheds = wbe.field_calculator(
+watersheds = wbe.vector.attribute_analysis.field_calculator(
     input=watersheds,
     field_name='SHAPE_IDX',
     expression="'PERIMETER' / (2.0 * 3.14159 * sqrt('AREA' / 3.14159))"
@@ -422,17 +422,17 @@ watersheds = wbe.field_calculator(
 
 ```python
 # Snap nearby line endpoints to within a tolerance distance
-streams_clean = wbe.repair_stream_vector_topology(streams, snap_distance=1.0)
+streams_clean = wbe.streams.network_extraction.repair_stream_vector_topology(streams, snap_distance=1.0)
 
 # Fix dangling arcs (lines that overshoot or undershoot intersections)
-fixed = wbe.fix_dangling_arcs(streams, snap_distance=1.0)
+fixed = wbe.conversion.geometry_topology.fix_dangling_arcs(streams, snap_distance=1.0)
 ```
 
 ### Line Intersections
 
 ```python
 # Find all intersection points between two line layers
-intersections = wbe.line_intersections(roads, rivers)
+intersections = wbe.vector.overlay_analysis.line_intersections(roads, rivers)
 wbe.write_vector(intersections, 'road_river_crossings.shp')
 ```
 
@@ -440,7 +440,7 @@ wbe.write_vector(intersections, 'road_river_crossings.shp')
 
 ```python
 # Extract all vertices of a line layer as points
-nodes = wbe.extract_nodes(streams)
+nodes = wbe.vector.sampling_gridding.extract_nodes(streams)
 wbe.write_vector(nodes, 'stream_nodes.shp')
 ```
 
@@ -450,7 +450,7 @@ wbe.write_vector(nodes, 'stream_nodes.shp')
 
 ```python
 # Polygonise a raster — convert raster regions to vector polygons
-polys = wbe.polygonize(classified_raster)
+polys = wbe.vector.geometry_processing.polygonize(classified_raster)
 wbe.write_vector(polys, 'class_polygons.shp')
 ```
 
@@ -460,11 +460,11 @@ wbe.write_vector(polys, 'class_polygons.shp')
 
 ```python
 # Heat map (kernel density estimation)
-density = wbe.heat_map(sample_pts, bandwidth=500.0)
+density = wbe.raster.general.heat_map(sample_pts, bandwidth=500.0)
 wbe.write_raster(density, 'point_density.tif')
 
 # Vector hexagonal binning — count points per hexagon
-hex_counts = wbe.vector_hex_binning(sample_pts, width=1000.0, orientation='vertical')
+hex_counts = wbe.vector.sampling_gridding.vector_hex_binning(sample_pts, width=1000.0, orientation='vertical')
 wbe.write_vector(hex_counts, 'hex_counts.shp')
 ```
 
@@ -525,15 +525,15 @@ soil_map      = wbe.read_vector('soil_types.shp')
 sample_pts    = wbe.read_vector('sample_points.shp')
 
 # 2. Clip parcels to study boundary
-parcels_clip = wbe.clip(input=parcels, clip=study_boundary)
+parcels_clip = wbe.vector.overlay_analysis.clip(input=parcels, clip=study_boundary)
 
 # 3. Compute geometric attributes
-parcels_clip = wbe.polygon_area(parcels_clip)
-parcels_clip = wbe.polygon_perimeter(parcels_clip)
-parcels_clip = wbe.compactness_ratio(parcels_clip)
+parcels_clip = wbe.vector.shape_metrics.polygon_area(parcels_clip)
+parcels_clip = wbe.vector.shape_metrics.polygon_perimeter(parcels_clip)
+parcels_clip = wbe.vector.shape_metrics.compactness_ratio(parcels_clip)
 
 # 4. Spatial join — assign soil type to each parcel
-parcels_with_soil = wbe.spatial_join(
+parcels_with_soil = wbe.vector.overlay_analysis.spatial_join(
     input=parcels_clip,
     join_layer=soil_map,
     join_type='intersects',
@@ -542,21 +542,21 @@ parcels_with_soil = wbe.spatial_join(
 )
 
 # 5. Dissolve by soil code to get soil extents within study area
-soil_dissolved = wbe.dissolve(input=parcels_with_soil, field_name='SOIL_CODE')
+soil_dissolved = wbe.vector.overlay_analysis.dissolve(input=parcels_with_soil, field_name='SOIL_CODE')
 wbe.write_vector(soil_dissolved, 'soil_study_area.shp')
 
 # 6. Spatial join sample points with soil polygons
-samples_enriched = wbe.spatial_join(
+samples_enriched = wbe.vector.overlay_analysis.spatial_join(
     input=sample_pts,
     join_layer=soil_dissolved,
     join_type='within',
     strategy='first',
     field_name='SOIL_CODE'
 )
-samples_enriched = wbe.add_point_coordinates_to_table(samples_enriched)
+samples_enriched = wbe.conversion.vector_table_io.add_point_coordinates_to_table(samples_enriched)
 
 # 7. Export for external analysis
-wbe.export_table_to_csv(samples_enriched, 'samples_with_soil.csv')
+wbe.conversion.vector_table_io.export_table_to_csv(samples_enriched, 'samples_with_soil.csv')
 print('Vector analysis pipeline complete.')
 ```
 

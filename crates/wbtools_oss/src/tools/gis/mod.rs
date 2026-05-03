@@ -25,11 +25,12 @@ use kdtree::KdTree;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{PercentCoalescer,
-    parse_optional_output_path, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext,
+    parse_optional_output_path, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory, ToolContext,
     ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamDescriptor, ToolParamSpec,
     ToolRunResult, ToolStability,
 };
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
+use wbvector::memory_store as vector_memory_store;
 use wbtopology::{
     buffer_linestring, buffer_point, buffer_polygon_multi, make_valid_polygon, BufferCapStyle,
     BufferJoinStyle, BufferOptions, Coord as TopoCoord, LineString as TopoLineString,
@@ -9675,6 +9676,11 @@ fn detect_vector_output_format(path: &str) -> Result<wbvector::VectorFormat, Too
 }
 
 fn write_vector_output(layer: &wbvector::Layer, path: &str) -> Result<String, ToolError> {
+    if path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+        let id = vector_memory_store::put_vector(layer.clone());
+        return Ok(vector_memory_store::make_vector_memory_path(&id));
+    }
+
     if let Some(parent) = std::path::Path::new(path).parent() {
         if !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent)

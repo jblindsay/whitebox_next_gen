@@ -19,8 +19,8 @@ import whitebox_workflows as wb
 wbe = wb.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
 
-filled = wbe.hydrology.fill_depressions(dem)
-accum = wbe.hydrology.d8_flow_accum(filled)
+filled = wbe.hydrology.depressions_storage.fill_depressions(dem)
+accum = wbe.hydrology.flow_routing.d8_flow_accum(filled)
 wbe.write_raster(accum, 'accum.tif')
 ```
 
@@ -34,7 +34,7 @@ import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 
-result = wbe.hydrology.fill_depressions(
+result = wbe.hydrology.depressions_storage.fill_depressions(
 	dem='dem.tif',
 	output='filled.tif',
 )
@@ -50,7 +50,7 @@ import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 
-filled = wbe.hydrology.fill_depressions(
+filled = wbe.hydrology.depressions_storage.fill_depressions(
 	dem='dem.tif',
 	output='filled.tif',
 	callback=wb.print_progress,

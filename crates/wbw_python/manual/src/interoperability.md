@@ -113,7 +113,7 @@ src = CRS.from_epsg(r.metadata().epsg_code)
 dst = CRS.from_epsg(32618)
 print(src.to_string(), '->', dst.to_string())
 
-r_utm = wbe.reproject_raster(r, dst_epsg=dst.to_epsg(), resample='bilinear')
+r_utm = wbe.projection_georeferencing.general.reproject_raster(r, dst_epsg=dst.to_epsg(), resample='bilinear')
 ```
 
 ## Validation Checklist

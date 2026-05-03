@@ -225,6 +225,7 @@ Special Python dunder methods are intentionally omitted.
 | `write_rasters` | Write multiple rasters to disk in one call. |
 | `remove_raster_from_memory` | Drop a specific memory-backed raster from the environment cache. |
 | `clear_raster_memory` | Clear all memory-backed rasters tracked by the environment. |
+| `clear_memory` | Clear all memory-backed rasters, vectors, and LiDAR objects tracked by the environment. |
 | `raster_memory_count` | Return the count of memory-backed rasters currently tracked. |
 | `raster_memory_bytes` | Return the estimated bytes used by tracked memory-backed rasters. |
 | `write_vector` | Write one vector dataset to disk with optional format options. |

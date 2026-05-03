@@ -115,6 +115,15 @@ wbw_build_session <- function(floating_license_id = NULL,
     )
   }
 
+  session$write_lidar <- function(lidar, output_path, options = NULL) {
+    wbw_write_lidar(
+      lidar = lidar,
+      output_path = output_path,
+      options = options,
+      session = session
+    )
+  }
+
   session$read_vector <- function(path, options = NULL, strict_format_options = FALSE, file_mode = "r") {
     wbw_read_vector(
       path = path,
@@ -167,6 +176,10 @@ wbw_build_session <- function(floating_license_id = NULL,
 
   session$clear_lidar_memory <- function() {
     wbw_clear_lidar_memory()
+  }
+
+  session$clear_memory <- function() {
+    wbw_clear_memory()
   }
 
   session$lidar_memory_count <- function() {
@@ -1231,6 +1244,13 @@ wbw_clear_lidar_memory <- function() {
   as.integer(clear_lidar_memory())
 }
 
+#' Clear all memory-backed rasters, vectors, and lidar objects from the in-process stores.
+#'
+#' @export
+wbw_clear_memory <- function() {
+  as.integer(clear_memory())
+}
+
 #' Return the number of memory-backed lidar objects in the in-process store.
 #'
 #' @export
@@ -1303,6 +1323,33 @@ wbw_write_rasters <- function(rasters,
     )
   }
   out
+}
+
+#' Write a LiDAR point cloud to disk with optional format-specific controls.
+#'
+#' @export
+wbw_write_lidar <- function(lidar,
+                            output_path,
+                            options = NULL,
+                            session = NULL) {
+  if (!inherits(lidar, "wbw_lidar")) {
+    stop("lidar must be a wbw_lidar object.", call. = FALSE)
+  }
+  if (!is.character(output_path) || length(output_path) != 1L || !nzchar(output_path)) {
+    stop("output_path must be a non-empty string.", call. = FALSE)
+  }
+  if (!is.null(options) && !is.list(options)) {
+    stop("options must be a list or NULL.", call. = FALSE)
+  }
+  resolved <- wbw_apply_default_output_extension(output_path, kind = "lidar")
+  output_path_resolved <- resolved$path
+  opts_json <- if (is.null(options) || length(options) == 0L) {
+    "{}"
+  } else {
+    jsonlite::toJSON(options, auto_unbox = TRUE, null = "null")
+  }
+  written <- lidar_write_with_options_json(lidar$path, output_path_resolved, opts_json)
+  wbw_lidar_from_path(written, session = session)
 }
 
 #' Write a vector to disk with optional format-specific controls.

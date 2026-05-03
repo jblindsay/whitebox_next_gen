@@ -1,6 +1,6 @@
 # Vector Analysis
 
-Vector GIS analysis in WbW-R covers attribute management, geometric measurement, shape analysis, spatial overlay, proximity tools, spatial joins, and vector-to-raster conversion. All computation runs in the Whitebox backend through `wbw_run_tool()`; R handles session management, sequencing, and result processing.
+Vector GIS analysis in WbW-R covers attribute management, geometric measurement, shape analysis, spatial overlay, proximity tools, spatial joins, and vector-to-raster conversion. All computation runs in the Whitebox backend through `wbw_<tool>(...)` wrappers (or `wbw_run_tool(...)` when tool IDs are dynamic); R handles session management, sequencing, and result processing.
 
 ---
 
@@ -51,36 +51,28 @@ cat('CRS:', meta$wkt, '\n')
 
 ```r
 # Add a new field
-wbw_run_tool('add_field', args = list(
-  i         = polys$file_path(),
+wbw_add_field(i         = polys$file_path(),
   output    = 'parcels_v2.shp',
   field_name = 'AREA_HA',
-  field_type = 'Float'
-), session = s)
+  field_type = 'Float')
 
 # Delete an unwanted field
-wbw_run_tool('delete_field', args = list(
-  i          = 'parcels_v2.shp',
+wbw_delete_field(i          = 'parcels_v2.shp',
   output     = 'parcels_v3.shp',
-  field_name = 'OLD_FIELD'
-), session = s)
+  field_name = 'OLD_FIELD')
 
 # Rename a field
-wbw_run_tool('rename_field', args = list(
-  i             = 'parcels_v3.shp',
+wbw_rename_field(i             = 'parcels_v3.shp',
   output        = 'parcels_v4.shp',
   input_field   = 'AREA_HA',
-  output_field  = 'HECTARES'
-), session = s)
+  output_field  = 'HECTARES')
 
 # Extract features by attribute value
-wbw_run_tool('extract_by_attribute', args = list(
-  i            = polys$file_path(),
+wbw_extract_by_attribute(i            = polys$file_path(),
   output       = 'large_parcels.shp',
   field        = 'AREA_M2',
   filter_value = 10000.0,
-  filter_type  = 'Greater Than'
-), session = s)
+  filter_type  = 'Greater Than')
 ```
 
 ---
@@ -89,26 +81,19 @@ wbw_run_tool('extract_by_attribute', args = list(
 
 ```r
 # Add area, perimeter, and basic shape metrics to polygon attribute table
-wbw_run_tool('add_polygon_coordinates_to_table', args = list(
-  i      = polys$file_path(),
-  output = 'parcels_geom.shp'
-), session = s)
+wbw_add_polygon_coordinates_to_table(i      = polys$file_path(),
+  output = 'parcels_geom.shp')
 
 # Polygon shape index — compactness
-wbw_run_tool('compactness_ratio', args = list(
-  i = polys$file_path(), output = 'parcels_compact.shp'), session = s)
+wbw_compactness_ratio(i = polys$file_path(), output = 'parcels_compact.shp')
 
-wbw_run_tool('elongation_ratio', args = list(
-  i = polys$file_path(), output = 'parcels_elong.shp'), session = s)
+wbw_elongation_ratio(i = polys$file_path(), output = 'parcels_elong.shp')
 
-wbw_run_tool('related_circumscribing_circle', args = list(
-  i = polys$file_path(), output = 'parcels_rcc.shp'), session = s)
+wbw_related_circumscribing_circle(i = polys$file_path(), output = 'parcels_rcc.shp')
 
-wbw_run_tool('patch_orientation', args = list(
-  i = polys$file_path(), output = 'parcels_orient.shp'), session = s)
+wbw_patch_orientation(i = polys$file_path(), output = 'parcels_orient.shp')
 
-wbw_run_tool('radius_of_gyration', args = list(
-  i = polys$file_path(), output = 'parcels_rog.shp'), session = s)
+wbw_radius_of_gyration(i = polys$file_path(), output = 'parcels_rog.shp')
 ```
 
 ---
@@ -117,30 +102,24 @@ wbw_run_tool('radius_of_gyration', args = list(
 
 ```r
 # Centroids
-wbw_run_tool('centroid_vector', args = list(
-  i = polys$file_path(), output = 'centroids.shp'), session = s)
+wbw_centroid_vector(i = polys$file_path(), output = 'centroids.shp')
 
 # Convex hull
-wbw_run_tool('convex_hull', args = list(
-  i = polys$file_path(), output = 'convex_hulls.shp'), session = s)
+wbw_convex_hull(i = polys$file_path(), output = 'convex_hulls.shp')
 
 # Minimum bounding envelopes
-wbw_run_tool('minimum_bounding_envelope', args = list(
-  i = polys$file_path(), output = 'mbe.shp'), session = s)
+wbw_minimum_bounding_envelope(i = polys$file_path(), output = 'mbe.shp')
 
 # Smooth vector polygons
-wbw_run_tool('smooth_vectors', args = list(
-  i = polys$file_path(), output = 'parcels_smooth.shp', filter = 5), session = s)
+wbw_smooth_vectors(i = polys$file_path(), output = 'parcels_smooth.shp', filter = 5)
 
 # Simplify features (Douglas-Peucker)
-wbw_run_tool('simplify_line_or_polygon', args = list(
-  i = polys$file_path(), output = 'parcels_simplified.shp',
-  dist = 5.0, remove_spurs = TRUE, errors_only = FALSE), session = s)
+wbw_simplify_line_or_polygon(i = polys$file_path(), output = 'parcels_simplified.shp',
+  dist = 5.0, remove_spurs = TRUE, errors_only = FALSE)
 
 # Dissolve polygons on field value
-wbw_run_tool('dissolve', args = list(
-  i = polys$file_path(), output = 'parcels_dissolved.shp',
-  field = 'LAND_USE', snap_tol = 0.001), session = s)
+wbw_dissolve(i = polys$file_path(), output = 'parcels_dissolved.shp',
+  field = 'LAND_USE', snap_tol = 0.001)
 ```
 
 ---
@@ -149,44 +128,34 @@ wbw_run_tool('dissolve', args = list(
 
 ```r
 # Clip
-wbw_run_tool('clip', args = list(
-  i        = polys$file_path(),
+wbw_clip(i        = polys$file_path(),
   clip     = 'study_area.shp',
   output   = 'clipped.shp',
-  snap_tol = 0.001
-), session = s)
+  snap_tol = 0.001)
 
 # Intersect
-wbw_run_tool('intersect', args = list(
-  i        = polys$file_path(),
+wbw_intersect(i        = polys$file_path(),
   overlay  = 'zones.shp',
   output   = 'intersection.shp',
-  snap_tol = 0.001
-), session = s)
+  snap_tol = 0.001)
 
 # Erase
-wbw_run_tool('erase', args = list(
-  i        = polys$file_path(),
+wbw_erase(i        = polys$file_path(),
   erase    = 'exclusion_areas.shp',
   output   = 'erased.shp',
-  snap_tol = 0.001
-), session = s)
+  snap_tol = 0.001)
 
 # Union
-wbw_run_tool('union', args = list(
-  i        = polys$file_path(),
+wbw_union(i        = polys$file_path(),
   overlay  = 'other_layer.shp',
   output   = 'union.shp',
-  snap_tol = 0.001
-), session = s)
+  snap_tol = 0.001)
 
 # Symmetrical difference
-wbw_run_tool('symmetrical_difference', args = list(
-  i        = polys$file_path(),
+wbw_symmetrical_difference(i        = polys$file_path(),
   overlay  = 'other_layer.shp',
   output   = 'symdiff.shp',
-  snap_tol = 0.001
-), session = s)
+  snap_tol = 0.001)
 ```
 
 ---
@@ -195,15 +164,12 @@ wbw_run_tool('symmetrical_difference', args = list(
 
 ```r
 # Euclidean distance from vector features
-wbw_run_tool('vector_points_to_raster', args = list(
-  i = points$file_path(), output = 'points.tif', field = 'FID',
-  assign = 'last', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
-wbw_run_tool('euclidean_distance', args = list(
-  i = 'points.tif', output = 'euclidean_dist.tif'), session = s)
+wbw_vector_points_to_raster(i = points$file_path(), output = 'points.tif', field = 'FID',
+  assign = 'last', nodata = TRUE, cell_size = 5.0, base = 'dem.tif')
+wbw_euclidean_distance(i = 'points.tif', output = 'euclidean_dist.tif')
 
 # Voronoi diagram
-wbw_run_tool('voronoi_diagram', args = list(
-  i = points$file_path(), output = 'voronoi.shp'), session = s)
+wbw_voronoi_diagram(i = points$file_path(), output = 'voronoi.shp')
 ```
 
 ---
@@ -211,12 +177,10 @@ wbw_run_tool('voronoi_diagram', args = list(
 ## Select by Location
 
 ```r
-wbw_run_tool('select_by_location', args = list(
-  input   = polys$file_path(),
+wbw_select_by_location(input   = polys$file_path(),
   select  = 'stream_buffer.shp',
   output  = 'parcels_near_streams.shp',
-  condition = 'within'
-), session = s)
+  condition = 'within')
 ```
 
 ---
@@ -224,13 +188,11 @@ wbw_run_tool('select_by_location', args = list(
 ## Spatial Join
 
 ```r
-wbw_run_tool('spatial_join', args = list(
-  target  = points$file_path(),
+wbw_spatial_join(target  = points$file_path(),
   join    = polys$file_path(),
   output  = 'points_joined.shp',
   condition = 'within',
-  attr    = 'first'
-), session = s)
+  attr    = 'first')
 ```
 
 ### Aggregation Strategies
@@ -238,13 +200,11 @@ wbw_run_tool('spatial_join', args = list(
 ```r
 # Join and aggregate field values from nearest polygon
 for (stat in c('count', 'sum', 'mean', 'min', 'max')) {
-  wbw_run_tool('spatial_join', args = list(
-    target    = 'zones.shp',
+  wbw_spatial_join(target    = 'zones.shp',
     join      = 'observations.shp',
     output    = paste0('zones_', stat, '.shp'),
     condition = 'contains',
-    attr      = stat
-  ), session = s)
+    attr      = stat)
 }
 ```
 
@@ -254,19 +214,16 @@ for (stat in c('count', 'sum', 'mean', 'min', 'max')) {
 
 ```r
 # Rasterize polygon layer
-wbw_run_tool('vector_polygons_to_raster', args = list(
-  i = polys$file_path(), output = 'parcels_raster.tif',
-  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
+wbw_vector_polygons_to_raster(i = polys$file_path(), output = 'parcels_raster.tif',
+  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif')
 
 # Rasterize line layer
-wbw_run_tool('vector_lines_to_raster', args = list(
-  i = lines$file_path(), output = 'roads_raster.tif',
-  field = 'FID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif'), session = s)
+wbw_vector_lines_to_raster(i = lines$file_path(), output = 'roads_raster.tif',
+  field = 'FID', nodata = TRUE, cell_size = 5.0, base = 'dem.tif')
 
 # Rasterize points
-wbw_run_tool('vector_points_to_raster', args = list(
-  i = points$file_path(), output = 'points_raster.tif',
-  field = 'VALUE', assign = 'max', nodata = TRUE, cell_size = 5.0), session = s)
+wbw_vector_points_to_raster(i = points$file_path(), output = 'points_raster.tif',
+  field = 'VALUE', assign = 'max', nodata = TRUE, cell_size = 5.0)
 ```
 
 ---
@@ -275,13 +232,11 @@ wbw_run_tool('vector_points_to_raster', args = list(
 
 ```r
 # Compute area in hectares and write to existing field
-wbw_run_tool('field_calculator', args = list(
-  i         = polys$file_path(),
+wbw_field_calculator(i         = polys$file_path(),
   output    = 'parcels_calc.shp',
   field_name = 'AREA_HA',
   py_statement = '@Area / 10000.0',
-  analyse   = FALSE
-), session = s)
+  analyse   = FALSE)
 ```
 
 ---
@@ -290,21 +245,17 @@ wbw_run_tool('field_calculator', args = list(
 
 ```r
 # Kernel density estimation (heat map)
-wbw_run_tool('kernel_density_estimation', args = list(
-  i         = points$file_path(),
+wbw_kernel_density_estimation(i         = points$file_path(),
   output    = 'heatmap.tif',
   bandwidth = 200.0,
   kernel_type = 'quartic',
   cell_size = 5.0,
-  base      = 'dem.tif'
-), session = s)
+  base      = 'dem.tif')
 
 # Hexagonal binning
-wbw_run_tool('create_hexagonal_vector_grid', args = list(
-  i = 'study_area.shp', output = 'hex_grid.shp', width = 500.0, orientation = 'horizontal'), session = s)
-wbw_run_tool('spatial_join', args = list(
-  target = 'hex_grid.shp', join = points$file_path(),
-  output = 'hex_counts.shp', condition = 'contains', attr = 'count'), session = s)
+wbw_create_hexagonal_vector_grid(i = 'study_area.shp', output = 'hex_grid.shp', width = 500.0, orientation = 'horizontal')
+wbw_spatial_join(target = 'hex_grid.shp', join = points$file_path(),
+  output = 'hex_counts.shp', condition = 'contains', attr = 'count')
 ```
 
 ---
@@ -356,31 +307,25 @@ study   <- wbw_read_vector('study_area.shp')
 streams <- wbw_read_vector('streams.shp')
 
 # 1. Clip to study area
-wbw_run_tool('clip', args = list(
-  i = parcels$file_path(), clip = study$file_path(),
-  output = 'parcels_clipped.shp', snap_tol = 0.001), session = s)
+wbw_clip(i = parcels$file_path(), clip = study$file_path(),
+  output = 'parcels_clipped.shp', snap_tol = 0.001)
 
 # 2. Add shape metrics
-wbw_run_tool('compactness_ratio',
-  args = list(i = 'parcels_clipped.shp', output = 'parcels_shape.shp'), session = s)
+wbw_compactness_ratio(i = 'parcels_clipped.shp', output = 'parcels_shape.shp')
 
 # 3. Buffer streams and intersect with parcels
-wbw_run_tool('buffer_raster', args = list(
-  i = streams$file_path(), output = 'stream_buf.shp',
-  size = 30.0, gridcells = FALSE), session = s)
-wbw_run_tool('intersect', args = list(
-  i = 'parcels_shape.shp', overlay = 'stream_buf.shp',
-  output = 'riparian_parcels.shp', snap_tol = 0.001), session = s)
+wbw_buffer_raster(i = streams$file_path(), output = 'stream_buf.shp',
+  size = 30.0, gridcells = FALSE)
+wbw_intersect(i = 'parcels_shape.shp', overlay = 'stream_buf.shp',
+  output = 'riparian_parcels.shp', snap_tol = 0.001)
 
 # 4. Dissolve by land-use class
-wbw_run_tool('dissolve', args = list(
-  i = 'riparian_parcels.shp', output = 'riparian_dissolved.shp',
-  field = 'LAND_USE', snap_tol = 0.001), session = s)
+wbw_dissolve(i = 'riparian_parcels.shp', output = 'riparian_dissolved.shp',
+  field = 'LAND_USE', snap_tol = 0.001)
 
 # 5. Rasterize result
-wbw_run_tool('vector_polygons_to_raster', args = list(
-  i = 'riparian_dissolved.shp', output = 'riparian.tif',
-  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0), session = s)
+wbw_vector_polygons_to_raster(i = 'riparian_dissolved.shp', output = 'riparian.tif',
+  field = 'LAND_USE_ID', nodata = TRUE, cell_size = 5.0)
 
 cat('Vector analysis complete.\n')
 ```

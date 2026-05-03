@@ -5,13 +5,14 @@ use std::path::Path;
 use rayon::prelude::*;
 use serde_json::json;
 use wbcore::{
-    parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool, ToolArgs, ToolCategory,
+    parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool, ToolArgs, ToolCategory,
     ToolContext, ToolError, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult,
     ToolStability,
 };
 use wbraster::Raster;
 use wbtopology::{delaunay_triangulation, Coord as TopoCoord};
 use wbvector::{Coord, Crs, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, VectorFormat};
+use wbvector::memory_store as vector_memory_store;
 
 use crate::memory_store;
 
@@ -79,6 +80,11 @@ fn ensure_parent_dir(path: &str) -> Result<(), ToolError> {
 }
 
 fn write_vector(layer: &Layer, path: &str) -> Result<String, ToolError> {
+    if path == IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH {
+        let id = vector_memory_store::put_vector(layer.clone());
+        return Ok(vector_memory_store::make_vector_memory_path(&id));
+    }
+
     let fmt = detect_vector_format(path)?;
     wbvector::write(layer, path, fmt)
         .map_err(|e| ToolError::Execution(format!("failed writing output vector: {}", e)))?;

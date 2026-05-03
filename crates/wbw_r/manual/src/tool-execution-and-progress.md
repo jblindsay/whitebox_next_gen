@@ -18,11 +18,7 @@ library(whiteboxworkflows)
 
 s <- wbw_session()
 
-result <- wbw_run_tool(
-	'slope',
-	args = list(dem = 'dem.tif', output = 'slope.tif'),
-	session = s
-)
+result <- wbw_slope(dem = 'dem.tif', output = 'slope.tif')
 print(result)
 ```
 

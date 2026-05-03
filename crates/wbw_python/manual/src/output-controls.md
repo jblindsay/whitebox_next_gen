@@ -186,7 +186,7 @@ print(f"Final raster count: {wbe.raster_memory_count()}")
 print(f"Final raster memory: {wbe.raster_memory_bytes() / 1e6:.1f} MB")
 
 # Explicit reset if needed
-wbe.clear_raster_memory()
+wbe.clear_memory()
 print(f"After clear: {wbe.raster_memory_count()}")
 ```
 

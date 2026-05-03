@@ -8,13 +8,14 @@ use serde_json::json;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use wbcore::{PercentCoalescer, 
-    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool,
+    parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH, LicenseTier, Tool,
     ToolArgs, ToolCategory, ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamDescriptor, ToolParamSpec, ToolRunResult, ToolStability,
 };
 use wbgeotiff::{ifd::{IfdValue, TiffReader}, tags::tag, GeoTiff};
 use wbraster::{CrsInfo, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, Ring, VectorFormat};
+use wbvector::memory_store as vector_memory_store;
 use wbtopology::{
     from_wkb as topology_from_wkb, overlaps as topology_overlaps, to_wkb as topology_to_wkb,
     Geometry as TopologyGeometry, Polygon as TopologyPolygon, is_simple_linestring, is_valid_polygon,
@@ -105,6 +106,17 @@ fn write_raster_output(
 }
 
 fn write_vector_output(layer: &Layer, output_path: &Path) -> Result<ToolRunResult, ToolError> {
+    if output_path == Path::new(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH) {
+        let id = vector_memory_store::put_vector(layer.clone());
+        let mut outputs = BTreeMap::new();
+        outputs.insert("__wbw_type__".to_string(), json!("vector"));
+        outputs.insert(
+            "path".to_string(),
+            json!(vector_memory_store::make_vector_memory_path(&id)),
+        );
+        return Ok(ToolRunResult { outputs });
+    }
+
     ensure_parent_dir(output_path)?;
     let format = VectorFormat::detect(output_path)
         .map_err(|e| ToolError::Validation(format!("unsupported vector output path: {e}")))?;
@@ -1323,7 +1335,7 @@ impl Tool for AddPointCoordinatesToTableTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "coords"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running add_point_coordinates_to_table");
         let input = read_vector_layer(&input_path, "input")?;
@@ -1425,7 +1437,7 @@ impl Tool for CleanVectorTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "clean"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running clean_vector");
         let input = read_vector_layer(&input_path, "input")?;
@@ -1521,7 +1533,7 @@ impl Tool for FixDanglingArcsTool {
         let snap_dist = parse_optional_f64(args, "snap")?
             .ok_or_else(|| ToolError::Validation("parameter 'snap' is required".to_string()))?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "fixed_dangles"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running fix_dangling_arcs");
         let coalescer = PercentCoalescer::new(1, 99);
@@ -2193,7 +2205,7 @@ impl Tool for TopologyRuleValidateTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_rule_violations").with_extension("gpkg"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
         let report_path = parse_optional_output_path(args, "report")?;
         let rules = parse_topology_rule_set(args)?;
 
@@ -2625,7 +2637,7 @@ impl Tool for TopologyRuleAutoFixTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "topology_fixed").with_extension("gpkg"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
         let change_report_path = parse_optional_output_path(args, "change_report")?;
         let rules = parse_topology_rule_set(args)?;
         let snap_tolerance = args
@@ -3124,7 +3136,7 @@ impl Tool for LinesToPolygonsTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "polygons"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running lines_to_polygons");
         let input = read_vector_layer(&input_path, "input")?;
@@ -3341,7 +3353,7 @@ impl Tool for PolygonsToLinesTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "lines"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running polygons_to_lines");
         let input = read_vector_layer(&input_path, "input")?;
@@ -3621,7 +3633,7 @@ impl Tool for RasterToVectorPointsTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "points"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running raster_to_vector_points");
         let coalescer = PercentCoalescer::new(1, 99);
@@ -3726,7 +3738,7 @@ impl Tool for RemovePolygonHolesTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "no_holes"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running remove_polygon_holes");
         let input = read_vector_layer(&input_path, "input")?;
@@ -3913,7 +3925,7 @@ impl Tool for MultipartToSinglepartTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "singlepart"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
         let exclude_holes = args
             .get("exclude_holes")
             .and_then(|v| v.as_bool())
@@ -4020,7 +4032,7 @@ impl Tool for SinglepartToMultipartTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_vector_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "multipart"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
         let field_name = parse_optional_string(args, "field")?;
 
         ctx.progress.info("running singlepart_to_multipart");
@@ -4486,7 +4498,7 @@ impl Tool for RasterToVectorPolygonsTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "polygons"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running raster_to_vector_polygons");
         let coalescer = PercentCoalescer::new(1, 99);
@@ -4863,7 +4875,7 @@ impl Tool for RasterToVectorLinesTool {
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = parse_raster_path_arg(args, "input")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&input_path, "lines"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running raster_to_vector_lines");
         let coalescer = PercentCoalescer::new(1, 99);
@@ -5990,7 +6002,7 @@ impl Tool for JoinTablesTool {
             .ok_or_else(|| ToolError::Validation("parameter 'foreign_key_field' is required".to_string()))?;
         let import_field = parse_optional_string(args, "import_field")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&primary_path, "joined"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running join_tables");
         let primary = read_vector_layer(&primary_path, "primary_vector")?;
@@ -6160,7 +6172,7 @@ impl Tool for MergeTableWithCsvTool {
             .ok_or_else(|| ToolError::Validation("parameter 'foreign_key_field' is required".to_string()))?;
         let import_field = parse_optional_string(args, "import_field")?;
         let output_path = parse_optional_output_path(args, "output")?
-            .unwrap_or_else(|| derived_vector_output_path(&primary_path, "merged_csv"));
+            .unwrap_or_else(|| PathBuf::from(IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH));
 
         ctx.progress.info("running merge_table_with_csv");
         let primary = read_vector_layer(&primary_path, "primary_vector")?;

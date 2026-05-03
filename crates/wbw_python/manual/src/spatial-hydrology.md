@@ -69,7 +69,7 @@ wbe = wbw.WbEnvironment()
 
 dem = wbe.read_raster('dem_raw.tif')
 
-dem_breached = wbe.breach_depressions_least_cost(
+dem_breached = wbe.hydrology.depressions_storage.breach_depressions_least_cost(
     dem,
     dist=50,           # maximum breach channel length in cells
     max_cost=None,     # no cost ceiling (breach wherever needed)
@@ -85,8 +85,8 @@ flow, consider mapping them as embankments first and then burning them into
 the DEM:
 
 ```python
-dem_burned = wbe.topological_breach_burn(dem, streams='streams_mapped.shp')
-dem_conditioned = wbe.breach_depressions_least_cost(dem_burned, dist=50, fill_deps=True)
+dem_burned = wbe.hydrology.depressions_storage.topological_breach_burn(dem, streams='streams_mapped.shp')
+dem_conditioned = wbe.hydrology.depressions_storage.breach_depressions_least_cost(dem_burned, dist=50, fill_deps=True)
 ```
 
 ### Fill Depressions
@@ -95,7 +95,7 @@ When you need guaranteed flat-free surfaces or are processing coarse-resolution
 DEMs where breaching introduces artefacts, full filling is appropriate:
 
 ```python
-dem_filled = wbe.fill_depressions(dem, flat_increment=0.001)
+dem_filled = wbe.hydrology.depressions_storage.fill_depressions(dem, flat_increment=0.001)
 wbe.write_raster(dem_filled, 'dem_filled.tif')
 ```
 
@@ -109,8 +109,8 @@ radiometric noise in LiDAR interpolation), a lightweight pre-pass avoids
 unnecessary full conditioning:
 
 ```python
-dem_pitless = wbe.fill_pits(dem)
-dem_conditioned = wbe.breach_depressions_least_cost(dem_pitless, dist=50, fill_deps=True)
+dem_pitless = wbe.hydrology.depressions_storage.fill_pits(dem)
+dem_conditioned = wbe.hydrology.depressions_storage.breach_depressions_least_cost(dem_pitless, dist=50, fill_deps=True)
 ```
 
 ---
@@ -128,7 +128,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem_conditioned.tif')
 
-d8_pntr = wbe.d8_pointer(dem)
+d8_pntr = wbe.hydrology.flow_routing.d8_pointer(dem)
 wbe.write_raster(d8_pntr, 'd8_pointer.tif')
 ```
 
@@ -139,7 +139,7 @@ slope angle, producing a continuous flow direction that reduces the
 directional bias of D8:
 
 ```python
-dinf_pntr = wbe.dinf_pointer(dem)
+dinf_pntr = wbe.hydrology.flow_routing.dinf_pointer(dem)
 wbe.write_raster(dinf_pntr, 'dinf_pointer.tif')
 ```
 
@@ -160,10 +160,10 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem_conditioned.tif')
 
-d8_pntr = wbe.d8_pointer(dem)
+d8_pntr = wbe.hydrology.flow_routing.d8_pointer(dem)
 
 # Cell-count accumulation
-flow_accum = wbe.d8_flow_accum(d8_pntr, out_type='cells')
+flow_accum = wbe.hydrology.flow_routing.d8_flow_accum(d8_pntr, out_type='cells')
 wbe.write_raster(flow_accum, 'flow_accum_d8.tif')
 
 # Log-transform for visualisation (high dynamic range)
@@ -178,8 +178,8 @@ Specific contributing area normalises by cell width and is used in wetness
 index and erosion models:
 
 ```python
-dinf_pntr = wbe.dinf_pointer(dem)
-sca = wbe.dinf_flow_accum(dinf_pntr, input_is_pointer=True, out_type='sca')
+dinf_pntr = wbe.hydrology.flow_routing.dinf_pointer(dem)
+sca = wbe.hydrology.flow_routing.dinf_flow_accum(dinf_pntr, input_is_pointer=True, out_type='sca')
 wbe.write_raster(sca, 'specific_contributing_area.tif')
 ```
 
@@ -195,9 +195,9 @@ import math
 wbe = wbw.WbEnvironment()
 dem = wbe.read_raster('dem_conditioned.tif')
 
-dinf_pntr = wbe.dinf_pointer(dem)
-sca       = wbe.dinf_flow_accum(dinf_pntr, out_type='sca')
-slope_rad = wbe.slope(dem, units='radians')
+dinf_pntr = wbe.hydrology.flow_routing.dinf_pointer(dem)
+sca       = wbe.hydrology.flow_routing.dinf_flow_accum(dinf_pntr, out_type='sca')
+slope_rad = wbe.terrain.derivatives.slope(dem, units='radians')
 
 # Avoid log(0) by clamping minimum SCA
 sca_clamped = sca.max(0.001)
@@ -226,11 +226,11 @@ d8_pntr   = wbe.read_raster('d8_pointer.tif')
 flow_accum = wbe.read_raster('flow_accum_d8.tif')
 
 # Extract stream cells above threshold (contributing area in cells)
-streams = wbe.extract_streams(flow_accum, threshold=1000.0)
+streams = wbe.streams.network_extraction.extract_streams(flow_accum, threshold=1000.0)
 wbe.write_raster(streams, 'streams_raster.tif')
 
 # Convert to vector lines
-stream_vec = wbe.raster_streams_to_vector(streams, d8_pntr)
+stream_vec = wbe.streams.network_extraction.raster_streams_to_vector(streams, d8_pntr)
 wbe.write_vector(stream_vec, 'streams.gpkg')
 ```
 
@@ -247,15 +247,15 @@ streams   = wbe.read_raster('streams_raster.tif')
 d8_pntr   = wbe.read_raster('d8_pointer.tif')
 
 # Assign Strahler order to each channel cell
-strahler = wbe.strahler_stream_order(d8_pntr, streams)
+strahler = wbe.streams.ordering_metrics.strahler_stream_order(d8_pntr, streams)
 wbe.write_raster(strahler, 'strahler_order.tif')
 
 # Hack stream order (less sensitive to stubs)
-hack = wbe.hack_stream_order(d8_pntr, streams)
+hack = wbe.streams.ordering_metrics.hack_stream_order(d8_pntr, streams)
 wbe.write_raster(hack, 'hack_order.tif')
 
 # Horton's drainage composition ratios
-horton_ratios = wbe.horton_ratios(d8_pntr, streams)
+horton_ratios = wbe.streams.ordering_metrics.horton_ratios(d8_pntr, streams)
 print(horton_ratios)   # returns bifurcation ratio, length ratio, area ratio
 ```
 
@@ -264,10 +264,10 @@ print(horton_ratios)   # returns bifurcation ratio, length ratio, area ratio
 For large network analysis requiring consistent junction-based numbering:
 
 ```python
-shreve = wbe.shreve_stream_magnitude(d8_pntr, streams)
+shreve = wbe.streams.ordering_metrics.shreve_stream_magnitude(d8_pntr, streams)
 wbe.write_raster(shreve, 'shreve_magnitude.tif')
 
-topo_order = wbe.topological_stream_order(d8_pntr, streams)
+topo_order = wbe.streams.ordering_metrics.topological_stream_order(d8_pntr, streams)
 wbe.write_raster(topo_order, 'topological_order.tif')
 ```
 
@@ -287,7 +287,7 @@ wbe = wbw.WbEnvironment()
 d8_pntr   = wbe.read_raster('d8_pointer.tif')
 outlet_pts = wbe.read_vector('outlet.shp')
 
-watershed = wbe.watershed(d8_pntr, outlet_pts)
+watershed = wbe.hydrology.watersheds_basins.watershed(d8_pntr, outlet_pts)
 wbe.write_raster(watershed, 'watershed.tif')
 ```
 
@@ -304,7 +304,7 @@ d8_pntr   = wbe.read_raster('d8_pointer.tif')
 outlets   = wbe.read_vector('outlets_multiple.shp')
 
 # Each outlet gets a unique basin ID; nested basins properly accounted for
-nested = wbe.unnest_basins(d8_pntr, outlets)
+nested = wbe.hydrology.watersheds_basins.unnest_basins(d8_pntr, outlets)
 wbe.write_raster(nested, 'nested_watersheds.tif')
 ```
 
@@ -313,7 +313,7 @@ wbe.write_raster(nested, 'nested_watersheds.tif')
 Delineate subbasins for all channel junctions simultaneously:
 
 ```python
-subbasins = wbe.subbasins(d8_pntr, streams)
+subbasins = wbe.hydrology.watersheds_basins.subbasins(d8_pntr, streams)
 wbe.write_raster(subbasins, 'subbasins.tif')
 ```
 
@@ -335,7 +335,7 @@ dem     = wbe.read_raster('dem_conditioned.tif')
 streams = wbe.read_raster('streams_raster.tif')
 d8_pntr = wbe.read_raster('d8_pointer.tif')
 
-height_above_stream = wbe.elevation_above_stream(dem, streams)
+height_above_stream = wbe.hydrology.hydrologic_indices.elevation_above_stream(dem, streams)
 wbe.write_raster(height_above_stream, 'height_above_stream.tif')
 ```
 
@@ -347,7 +347,7 @@ under typical storm recurrence intervals.
 How far (path-following the flow network) is each cell from the nearest channel?
 
 ```python
-dist_to_stream = wbe.downslope_distance_to_stream(
+dist_to_stream = wbe.hydrology.hydrologic_indices.downslope_distance_to_stream(
     d8_pntr, streams, dist_type='path'
 )
 wbe.write_raster(dist_to_stream, 'distance_to_stream.tif')
@@ -372,7 +372,7 @@ dem = wbe.read_raster('dem.tif')
 # rmse: vertical uncertainty of the DEM (e.g. 0.15 m for good LiDAR)
 # range: spatial autocorrelation range of the error field in map units
 # iterations: number of Monte Carlo realisations
-depression_prob = wbe.stochastic_depression_analysis(
+depression_prob = wbe.hydrology.depressions_storage.stochastic_depression_analysis(
     dem,
     rmse=0.15,
     range=5.0,
@@ -400,7 +400,7 @@ wbe = wbw.WbEnvironment()
 dem     = wbe.read_raster('dem_conditioned.tif')
 streams = wbe.read_raster('streams_raster.tif')
 
-connectivity = wbe.hydrologic_connectivity(dem, streams)
+connectivity = wbe.hydrology.hydrologic_indices.hydrologic_connectivity(dem, streams)
 wbe.write_raster(connectivity, 'hydrologic_connectivity.tif')
 ```
 
@@ -423,7 +423,7 @@ dem     = wbe.read_raster('dem_conditioned.tif')
 streams = wbe.read_raster('streams_raster.tif')
 
 # impoundment height above stream bed in metres
-impoundment_area = wbe.impoundment_size_index(
+impoundment_area = wbe.hydrology.depressions_storage.impoundment_size_index(
     dem, streams, damlength=1000.0
 )
 wbe.write_raster(impoundment_area, 'impoundment_size_index.tif')
@@ -452,50 +452,50 @@ streams_threshold = 2000   # cells (adjust to DEM resolution)
 dem = wbe.read_raster(dem_path)
 
 # --- 2. Fill missing data ---
-dem = wbe.fill_missing_data(dem, filter_size=11)
+dem = wbe.terrain.general.fill_missing_data(dem, filter_size=11)
 
 # --- 3. Smooth ---
-dem = wbe.feature_preserving_smoothing(dem, filter_size=11, num_iter=2)
+dem = wbe.terrain.general.feature_preserving_smoothing(dem, filter_size=11, num_iter=2)
 wbe.write_raster(dem, 'dem_smooth.tif')
 
 # --- 4. Condition DEM ---
-dem_cond = wbe.breach_depressions_least_cost(dem, dist=50, fill_deps=True)
+dem_cond = wbe.hydrology.depressions_storage.breach_depressions_least_cost(dem, dist=50, fill_deps=True)
 wbe.write_raster(dem_cond, 'dem_conditioned.tif')
 
 # --- 5. Flow direction ---
-d8_pntr  = wbe.d8_pointer(dem_cond)
-dinf_pntr = wbe.dinf_pointer(dem_cond)
+d8_pntr  = wbe.hydrology.flow_routing.d8_pointer(dem_cond)
+dinf_pntr = wbe.hydrology.flow_routing.dinf_pointer(dem_cond)
 wbe.write_raster(d8_pntr, 'd8_pointer.tif')
 
 # --- 6. Flow accumulation ---
-flow_accum = wbe.d8_flow_accum(d8_pntr, out_type='cells')
+flow_accum = wbe.hydrology.flow_routing.d8_flow_accum(d8_pntr, out_type='cells')
 wbe.write_raster(flow_accum, 'flow_accum.tif')
 
 # --- 7. Streams ---
-streams = wbe.extract_streams(flow_accum, threshold=streams_threshold)
+streams = wbe.streams.network_extraction.extract_streams(flow_accum, threshold=streams_threshold)
 wbe.write_raster(streams, 'streams.tif')
-stream_vec = wbe.raster_streams_to_vector(streams, d8_pntr)
+stream_vec = wbe.streams.network_extraction.raster_streams_to_vector(streams, d8_pntr)
 wbe.write_vector(stream_vec, 'streams.gpkg')
 
 # --- 8. Stream order ---
-strahler = wbe.strahler_stream_order(d8_pntr, streams)
+strahler = wbe.streams.ordering_metrics.strahler_stream_order(d8_pntr, streams)
 wbe.write_raster(strahler, 'strahler_order.tif')
 
 # --- 9. Watershed ---
 outlet_pts = wbe.read_vector(outlet_path)
-watershed  = wbe.watershed(d8_pntr, outlet_pts)
+watershed  = wbe.hydrology.watersheds_basins.watershed(d8_pntr, outlet_pts)
 wbe.write_raster(watershed, 'watershed.tif')
 
 # --- 10. TWI ---
-sca         = wbe.dinf_flow_accum(dinf_pntr, out_type='sca')
-slope_rad   = wbe.slope(dem_cond, units='radians')
+sca         = wbe.hydrology.flow_routing.dinf_flow_accum(dinf_pntr, out_type='sca')
+slope_rad   = wbe.terrain.derivatives.slope(dem_cond, units='radians')
 sca_c       = sca.max(0.001)
 slope_c     = slope_rad.max(0.001)
 twi         = (sca_c / slope_c.tan()).log()
 wbe.write_raster(twi, 'twi.tif')
 
 # --- 11. Height above stream ---
-height_above = wbe.elevation_above_stream(dem_cond, streams)
+height_above = wbe.hydrology.hydrologic_indices.elevation_above_stream(dem_cond, streams)
 wbe.write_raster(height_above, 'height_above_stream.tif')
 
 print("Watershed analysis pipeline complete.")

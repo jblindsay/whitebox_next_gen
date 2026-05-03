@@ -16,11 +16,7 @@ library(whiteboxworkflows)
 s <- wbw_session()
 dem <- wbw_read_raster("dem.tif")
 
-result <- wbw_run_tool(
-  "slope",
-  args = list(dem = dem$file_path(), output = "slope.tif"),
-  session = s
-)
+result <- wbw_slope(dem = dem$file_path(), output = "slope.tif")
 print(result)
 ```
 

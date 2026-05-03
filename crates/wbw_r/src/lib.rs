@@ -1077,6 +1077,10 @@ pub fn clear_lidar_memory() -> Result<usize, ToolError> {
     Ok(clear_lidars())
 }
 
+pub fn clear_memory() -> Result<usize, ToolError> {
+    Ok(clear_rasters() + clear_vectors() + clear_lidars())
+}
+
 pub fn lidar_memory_count() -> Result<usize, ToolError> {
     Ok(lidar_count())
 }
@@ -2824,12 +2828,25 @@ pub fn generate_r_wrapper_module_with_options(
 
     for manifest in rt.list_visible_manifests() {
         let fn_name = manifest.id.replace('-', "_");
+        let wbw_fn_name = format!("wbw_{}", fn_name);
+        let summary = manifest.summary.replace('\n', " ");
+        let include_pro_literal = if include_pro { "TRUE" } else { "FALSE" };
+
         out.push_str(&format!(
-            "{fn_name} <- function(...) {{\n  # {summary}\n  session <- wbw_make_session(include_pro = {}, tier = \"{}\")\n  session${fn_name}(...)\n}}\n\n",
-            if include_pro { "TRUE" } else { "FALSE" },
-            tier,
+            "{fn_name} <- function(...) {{\n  # {summary}\n  session <- wbw_make_session(include_pro = {include_pro}, tier = \"{tier}\")\n  session${fn_name}(...)\n}}\n\n",
             fn_name = fn_name,
-            summary = manifest.summary.replace('\n', " "),
+            summary = summary,
+            include_pro = include_pro_literal,
+            tier = tier,
+        ));
+
+        out.push_str(&format!(
+            "{wbw_fn_name} <- function(...) {{\n  # {summary}\n  session <- wbw_make_session(include_pro = {include_pro}, tier = \"{tier}\")\n  session${fn_name}(...)\n}}\n\n",
+            wbw_fn_name = wbw_fn_name,
+            summary = summary,
+            include_pro = include_pro_literal,
+            tier = tier,
+            fn_name = fn_name,
         ));
     }
 
@@ -3269,6 +3286,13 @@ mod native_exports {
     }
 
     #[extendr]
+    fn clear_memory() -> extendr_api::Result<i32> {
+        super::clear_memory()
+            .map(|value| value as i32)
+            .map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn lidar_memory_count() -> extendr_api::Result<i32> {
         super::lidar_memory_count()
             .map(|value| value as i32)
@@ -3486,6 +3510,7 @@ mod native_exports {
         fn lidar_read_to_memory_path;
         fn remove_lidar_from_memory_path;
         fn clear_lidar_memory;
+        fn clear_memory;
         fn lidar_memory_count;
         fn lidar_copy_to_path;
         fn lidar_write_with_options_json;

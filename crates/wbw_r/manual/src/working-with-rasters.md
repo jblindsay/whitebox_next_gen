@@ -61,7 +61,7 @@ r <- wbw_read_raster('dem.tif', file_mode = "m")
 
 # Inspect and transform
 meta <- r$metadata()
-scaled <- wbw_run_tool('multiply', list(input = r$file_path(), multiplier = 1.5))
+scaled <- wbw_multiply(input = r$file_path(), multiplier = 1.5)
 
 # Export to disk when ready
 wbw_write_raster(scaled, 'dem_scaled_1p5x.tif')
@@ -101,6 +101,7 @@ Best practices:
 - Export memory-backed rasters to disk with `write()` when persisting results.
 - Call `remove_raster_from_memory()` after a raster is no longer needed.
 - Use `clear_raster_memory()` between independent job phases.
+- Use `wbw_clear_memory()` when resetting all in-process raster/vector/lidar stores together.
 - Monitor `raster_memory_count()` and `raster_memory_bytes()` in large pipelines.
 
 ## Iterating Through Grid Cells
@@ -234,7 +235,7 @@ library(whiteboxworkflows)
 s <- wbw_session()
 dem <- wbw_read_raster('dem.tif')
 
-wbw_run_tool('fill_depressions', args = list(dem = dem$file_path(), output = 'filled.tif'), session = s)
+wbw_fill_depressions(dem = dem$file_path(), output = 'filled.tif')
 filled <- wbw_read_raster('filled.tif')
 
 slope <- filled$square()  # placeholder unary op example

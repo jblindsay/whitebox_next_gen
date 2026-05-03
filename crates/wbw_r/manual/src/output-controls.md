@@ -78,10 +78,8 @@ for (tile_id in 1:1000) {
   v <- wbw_read_vector(sprintf('bounds_%d.gpkg', tile_id), file_mode = "m")
   
   # Process
-  result <- wbw_run_tool('clip_raster_by_polygon',
-    args = list(input = r$file_path(), polygon = v$file_path(), 
+  result <- wbw_clip_raster_by_polygon(input = r$file_path(), polygon = v$file_path(), 
                 output = sprintf('clipped_%d.tif', tile_id))
-  )
   
   # Explicit cleanup before next iteration
   wbw_remove_raster_from_memory(r)
@@ -106,7 +104,7 @@ cat('Final raster count:', wbw_raster_memory_count(), '\n')
 cat('Final raster memory:', wbw_raster_memory_bytes() / 1e6, 'MB\n')
 
 # Explicit reset if needed
-wbw_clear_raster_memory()
+wbw_clear_memory()
 cat('After clear:', wbw_raster_memory_count(), '\n')
 ```
 

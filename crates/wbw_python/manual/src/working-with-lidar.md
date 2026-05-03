@@ -118,11 +118,11 @@ wbe = wb.WbEnvironment()
 survey = wbe.read_lidar('survey.laz')
 
 # No output path — result is stored in memory automatically
-filtered = wbe.lidar.filter_lidar_classes(survey, excluded_classes=[7])
+filtered = wbe.lidar.filtering_classification.filter_lidar_classes(survey, excluded_classes=[7])
 print(filtered.file_path)  # prints: memory://lidar/...
 
 # Chain operations without any intermediate files
-thinned = wbe.lidar.lidar_thin(filtered, resolution=0.5)
+thinned = wbe.lidar.interpolation_gridding.lidar_thin(filtered, resolution=0.5)
 print(thinned.file_path)  # also memory://lidar/...
 
 # Persist the final result only
@@ -137,6 +137,7 @@ Best practices:
 - Export memory-backed lidar to disk with `write_lidar()` when persisting final outputs.
 - Call `remove_lidar_from_memory()` after a point cloud is no longer needed.
 - Use `clear_lidar_memory()` between independent analysis phases.
+- Use `clear_memory()` when resetting all in-process raster/vector/lidar stores together.
 - Monitor `lidar_memory_count()` for large processing jobs.
 
 ## Iterating Through Lidar Points

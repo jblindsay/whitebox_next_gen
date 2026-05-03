@@ -113,6 +113,7 @@ Best practices:
 - Export memory-backed rasters to disk with `write_raster()` when persisting results.
 - Call `remove_raster_from_memory()` after a raster is no longer needed.
 - Use `clear_raster_memory()` between independent job phases.
+- Use `clear_memory()` when resetting all in-process raster/vector/lidar stores together.
 - Monitor `raster_memory_count()` and `raster_memory_bytes()` in large pipelines.
 
 ## Iterating Through Grid Cells
@@ -241,8 +242,8 @@ import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
-filled = wbe.hydrology.fill_depressions(dem)
-slope = wbe.terrain.slope(filled)
+filled = wbe.hydrology.depressions_storage.fill_depressions(dem)
+slope = wbe.terrain.derivatives.slope(filled)
 
 # Optional post-processing pass in NumPy.
 a = slope.to_numpy(all_bands=False)
@@ -312,6 +313,8 @@ from the tables to keep the reference readable.
 | `reproject_to_match_resolution_in_epsg` | Reproject to a target EPSG while borrowing cell resolution from a reference raster. |
 
 ### Unary Math and Numeric Transforms
+
+Unary transform calls return a single Raster object. Band selection (`band_mode='all'|'active'|'list'` and `bands=[...]`) controls which bands are changed within that returned raster.
 
 | Method | Description |
 |---|---|

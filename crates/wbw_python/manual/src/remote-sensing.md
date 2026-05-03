@@ -106,7 +106,7 @@ def compute_ndvi_from_bundle(wbe, bundle_path, output_path):
         # Fall back to band-based NDVI — works for any optical sensor
         red_band = b.read_band('B04') if b.family == 'sentinel2' else b.read_band('SR_B4')
         nir_band = b.read_band('B08') if b.family == 'sentinel2' else b.read_band('SR_B5')
-        ndvi = wbe.normalized_difference_index(nir_band, red_band)
+        ndvi = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir_band, red_band)
     wbe.write_raster(ndvi, output_path, compress=True)
 
 compute_ndvi_from_bundle(wbe, '/data/S2B_MSIL2A_20240601.SAFE', 'ndvi_s2.tif')
@@ -128,8 +128,8 @@ red    = wbe.read_raster('B04_10m.tif')
 nir    = wbe.read_raster('B08_10m.tif')
 
 # Sentinel-2 bands 11/12 are 20 m; resample to match 10 m bands before analysis
-swir1 = wbe.resample(wbe.read_raster('B11_20m.tif'), base_raster=red, method='bilinear')
-swir2 = wbe.resample(wbe.read_raster('B12_20m.tif'), base_raster=red, method='bilinear')
+swir1 = wbe.remote_sensing.enhancement_contrast.resample(wbe.read_raster('B11_20m.tif'), base_raster=red, method='bilinear')
+swir2 = wbe.remote_sensing.enhancement_contrast.resample(wbe.read_raster('B12_20m.tif'), base_raster=red, method='bilinear')
 ```
 
 ---
@@ -141,7 +141,7 @@ Before any analysis, mask clouds, cloud shadows, and saturated pixels.
 ```python
 # Sentinel-2 SCL classes: 3=cloud shadow, 8=medium cloud, 9=high cloud, 10=thin cirrus
 scl = bundle.read_qa_layer('SCL')
-cloud_free_red = wbe.raster_calculator(
+cloud_free_red = wbe.raster.general.raster_calculator(
     "if('scl' == 3 or 'scl' == 8 or 'scl' == 9 or 'scl' == 10, nodata, 'red')",
     [scl, red]
 )
@@ -166,7 +166,7 @@ $$NDVI = \frac{NIR - Red}{NIR + Red}$$
 Values range from −1 to +1; healthy vegetation typically exceeds 0.3.
 
 ```python
-ndvi = wbe.normalized_difference_index(nir, red)
+ndvi = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir, red)
 wbe.write_raster(ndvi, 'ndvi.tif', compress=True)
 ```
 
@@ -174,19 +174,19 @@ wbe.write_raster(ndvi, 'ndvi.tif', compress=True)
 
 ```python
 # NDWI (McFeeters 1996) — open water; Green/NIR
-ndwi  = wbe.normalized_difference_index(green, nir)
+ndwi  = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(green, nir)
 
 # MNDWI — better for urban areas; Green/SWIR1
-mndwi = wbe.normalized_difference_index(green, swir1)
+mndwi = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(green, swir1)
 
 # NBR — fire severity and post-fire recovery; NIR/SWIR2
-nbr   = wbe.normalized_difference_index(nir, swir2)
+nbr   = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir, swir2)
 
 # NDSI — snow and ice; Green/SWIR1
-ndsi  = wbe.normalized_difference_index(green, swir1)
+ndsi  = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(green, swir1)
 
 # NDBI — normalised built-up index; SWIR1/NIR
-ndbi  = wbe.normalized_difference_index(swir1, nir)
+ndbi  = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(swir1, nir)
 ```
 
 ### Enhanced Vegetation Index (EVI)
@@ -196,7 +196,7 @@ EVI reduces soil background noise and atmospheric effects that affect NDVI in de
 $$EVI = 2.5 \cdot \frac{NIR - Red}{NIR + 6 \cdot Red - 7.5 \cdot Blue + 1}$$
 
 ```python
-evi = wbe.raster_calculator(
+evi = wbe.raster.general.raster_calculator(
     expression="2.5 * ('nir' - 'red') / ('nir' + 6.0 * 'red' - 7.5 * 'blue' + 1.0)",
     input_rasters=[nir, red, blue]
 )
@@ -211,7 +211,7 @@ $$SAVI = \frac{(NIR - Red) \cdot (1 + L)}{NIR + Red + L}$$
 
 ```python
 L = 0.5
-savi = wbe.raster_calculator(
+savi = wbe.raster.general.raster_calculator(
     expression="('nir' - 'red') * (1.0 + 0.5) / ('nir' + 'red' + 0.5)",
     input_rasters=[nir, red]
 )
@@ -225,32 +225,32 @@ Raw digital numbers often have narrow histogram ranges that make visualisation d
 
 ```python
 # Percentage contrast stretch — clips top and bottom 2% of values
-enhanced = wbe.percentage_contrast_stretch(red, clip_tail=2.0)
+enhanced = wbe.remote_sensing.enhancement_contrast.percentage_contrast_stretch(red, clip_tail=2.0)
 
 # Standard deviation stretch — maps ±2σ to display range
-sd_stretched = wbe.standard_deviation_contrast_stretch(red, num_std_dev=2.0)
+sd_stretched = wbe.remote_sensing.enhancement_contrast.standard_deviation_contrast_stretch(red, num_std_dev=2.0)
 
 # Gaussian contrast stretch
-gauss = wbe.gaussian_contrast_stretch(red, num_std_dev=2.0)
+gauss = wbe.remote_sensing.enhancement_contrast.gaussian_contrast_stretch(red, num_std_dev=2.0)
 
 # Sigmoidal stretch — soft S-curve useful for optical imagery
-sig = wbe.sigmoidal_contrast_stretch(red, cutoff=0.4, gain=4.0)
+sig = wbe.remote_sensing.enhancement_contrast.sigmoidal_contrast_stretch(red, cutoff=0.4, gain=4.0)
 
 # Min-max linear stretch
-linear = wbe.min_max_contrast_stretch(red, min_val=0.0, max_val=255.0)
+linear = wbe.remote_sensing.enhancement_contrast.min_max_contrast_stretch(red, min_val=0.0, max_val=255.0)
 
 # Gamma correction — lighten (gamma<1) or darken (gamma>1) an image
-gamma = wbe.gamma_correction(red, gamma=0.6)
+gamma = wbe.remote_sensing.enhancement_contrast.gamma_correction(red, gamma=0.6)
 ```
 
 Histogram matching normalises a source image to match the distribution of a reference image — invaluable when mosaicking scenes acquired on different dates or under different atmospheric conditions:
 
 ```python
 # Match the histogram of a target scene to a reference scene
-matched = wbe.histogram_matching(source_scene, reference_scene)
+matched = wbe.remote_sensing.enhancement_contrast.histogram_matching(source_scene, reference_scene)
 
 # You can also match between two images from the same sensor
-matched2 = wbe.histogram_matching_two_images(img1, img2)
+matched2 = wbe.remote_sensing.enhancement_contrast.histogram_matching_two_images(img1, img2)
 ```
 
 ### IHS Colour Space Transformations
@@ -259,13 +259,13 @@ Intensity-Hue-Saturation (IHS) space separates brightness from colour, enabling 
 
 ```python
 # Convert RGB composite to IHS
-(intensity, hue, saturation) = wbe.rgb_to_ihs(red, green, blue)
+(intensity, hue, saturation) = wbe.remote_sensing.enhancement_contrast.rgb_to_ihs(red, green, blue)
 
 # Enhance the intensity channel
-enhanced_i = wbe.standard_deviation_contrast_stretch(intensity, num_std_dev=2.0)
+enhanced_i = wbe.remote_sensing.enhancement_contrast.standard_deviation_contrast_stretch(intensity, num_std_dev=2.0)
 
 # Convert back to RGB
-(r2, g2, b2) = wbe.ihs_to_rgb(enhanced_i, hue, saturation)
+(r2, g2, b2) = wbe.remote_sensing.enhancement_contrast.ihs_to_rgb(enhanced_i, hue, saturation)
 ```
 
 ### Panchromatic Sharpening (Pan-Sharpening)
@@ -276,7 +276,7 @@ When a high-resolution panchromatic band accompanies lower-resolution multispect
 panchromatic = bundle.read_band('B8A')   # Sentinel-2 red-edge as panchromatic proxy
 # Landsat: panchromatic = bundle.read_band('PAN')   # 15 m Landsat panchromatic
 
-(sharp_r, sharp_g, sharp_b) = wbe.panchromatic_sharpening(
+(sharp_r, sharp_g, sharp_b) = wbe.remote_sensing.enhancement_contrast.panchromatic_sharpening(
     pan=panchromatic,
     red=red,
     green=green,
@@ -295,27 +295,27 @@ Spatial filters are used to suppress noise, enhance edges, or smooth imagery bef
 
 ```python
 # Gaussian smoothing — reduces sensor noise
-smoothed = wbe.gaussian_filter(red, sigma=1.0)
+smoothed = wbe.remote_sensing.filters.gaussian_filter(red, sigma=1.0)
 
 # Bilateral filter — edge-preserving smoothing
-bilateral = wbe.bilateral_filter(red, sigma_dist=2.0, sigma_int=25.0)
+bilateral = wbe.remote_sensing.filters.bilateral_filter(red, sigma_dist=2.0, sigma_int=25.0)
 
 # High-pass filter — enhances fine texture
-texture = wbe.high_pass_filter(red, filter_size_x=5, filter_size_y=5)
+texture = wbe.remote_sensing.filters.high_pass_filter(red, filter_size_x=5, filter_size_y=5)
 
 # Unsharp masking — sharpens blurred imagery
-sharp = wbe.unsharp_masking(red, sigma=3.0, amount=1.0, threshold=0)
+sharp = wbe.remote_sensing.filters.unsharp_masking(red, sigma=3.0, amount=1.0, threshold=0)
 
 # Edge detection — Sobel gradient magnitude
-edges_h = wbe.sobel_filter(red, variant='3x3')
+edges_h = wbe.remote_sensing.edge_feature_detection.sobel_filter(red, variant='3x3')
 
 # Canny edge detector — more precise edge localisation
-canny_edges = wbe.canny_edge_detection(red, sigma=0.5,
+canny_edges = wbe.remote_sensing.edge_feature_detection.canny_edge_detection(red, sigma=0.5,
                                         low_threshold=5.0, high_threshold=15.0)
 
 # General-purpose GLCM texture (multiband output)
 # Band names are recorded in raster metadata as band_1_name, band_2_name, ...
-glcm = wbe.glcm_texture(
+glcm = wbe.remote_sensing.filters.glcm_texture(
     red,
     window_size=9,
     distance=1,
@@ -336,7 +336,7 @@ PCA is an essential step in multispectral and hyperspectral analysis. It rotates
 ```python
 # Run PCA on all six bands
 bands = [blue, green, red, nir, swir1]
-pca_result = wbe.principal_component_analysis(
+pca_result = wbe.raster.general.principal_component_analysis(
     input_rasters=bands,
     output_html_file='pca_report.html',
     num_comp=4,
@@ -357,10 +357,10 @@ Apply classification or enhancements to individual PCs and then reconstruct back
 
 ```python
 # Modify pc1, then reconstruct
-pc1_modified = wbe.standard_deviation_contrast_stretch(pc1, num_std_dev=2.0)
+pc1_modified = wbe.remote_sensing.enhancement_contrast.standard_deviation_contrast_stretch(pc1, num_std_dev=2.0)
 modified_components = [pc1_modified, pc2, pc3, pc4]
 
-reconstructed_bands = wbe.inverse_pca(
+reconstructed_bands = wbe.raster.general.inverse_pca(
     modified_components,
     original_rasters=bands
 )
@@ -562,7 +562,7 @@ Unsupervised classification groups pixels by spectral similarity without trainin
 ```python
 bands = [blue, green, red, nir, swir1]
 
-kmeans_result = wbe.k_means_clustering(
+kmeans_result = wbe.remote_sensing.classification.k_means_clustering(
     input_rasters=bands,
     num_classes=10,
     max_iterations=25,
@@ -579,7 +579,7 @@ K-means with 10–15 classes followed by manual merging of semantically similar 
 Modified k-means iteratively merges clusters that are too small or spectrally indistinct, and splits clusters that are too dispersed:
 
 ```python
-mod_kmeans = wbe.modified_k_means_clustering(
+mod_kmeans = wbe.remote_sensing.classification.modified_k_means_clustering(
     input_rasters=bands,
     start_num_classes=20,
     merge_distance=2.0,
@@ -593,7 +593,7 @@ wbe.write_raster(mod_kmeans, 'modified_kmeans.tif')
 DBSCAN is a density-based algorithm that does not require specifying the number of clusters and handles irregularly shaped spectral clusters well:
 
 ```python
-dbscan_result = wbe.dbscan(
+dbscan_result = wbe.raster.general.dbscan(
     input_rasters=bands,
     scaling_method='min_max',
     search_distance=0.5,
@@ -614,7 +614,7 @@ Before training, check that each class is spectrally separable. Poor separabilit
 
 ```python
 training_polys = wbe.read_vector('training_polygons.shp')
-wbe.evaluate_training_sites(
+wbe.remote_sensing.classification.evaluate_training_sites(
     input_rasters=bands,
     training_polygons=training_polys,
     class_field_name='CLASS',
@@ -629,7 +629,7 @@ The HTML report shows histograms and box-plots per band per class. Classes whose
 The simplest linear classifier assigns each pixel to the nearest class mean in feature space:
 
 ```python
-classified_md = wbe.min_dist_classification(
+classified_md = wbe.remote_sensing.classification.min_dist_classification(
     input_rasters=bands,
     polys=training_polys,
     class_field=True,
@@ -644,7 +644,7 @@ wbe.write_raster(classified_md, 'classified_min_dist.tif')
 The parallelepiped classifier assigns pixels that fall within all class-mean ± n×σ boxes. It is fast but can leave pixels unclassified when they fall outside all boxes:
 
 ```python
-classified_pp = wbe.parallelepiped_classification(
+classified_pp = wbe.remote_sensing.classification.parallelepiped_classification(
     input_rasters=bands,
     polys=training_polys,
     class_field_name='CLASS'
@@ -659,7 +659,7 @@ KNN classification is a non-parametric method well-suited to non-linear class bo
 ```python
 training_pts = wbe.read_vector('training_points.shp')
 
-knn_model = wbe.knn_classification(
+knn_model = wbe.remote_sensing.classification.knn_classification(
     input_rasters=bands,
     training_data=training_pts,
     field_name='CLASS',
@@ -678,7 +678,7 @@ Random forest is an ensemble tree classifier that is robust to noise, handles mu
 
 ```python
 # Step 1: fit the model and save it
-rf_model = wbe.random_forest_classification_fit(
+rf_model = wbe.raster.general.random_forest_classification_fit(
     input_rasters=bands,
     training_data=training_polys,
     class_field_name='CLASS',
@@ -689,7 +689,7 @@ rf_model = wbe.random_forest_classification_fit(
 # rf_model is a path to the saved model file
 
 # Step 2: predict on the full image (can be a different image/date)
-classified_rf = wbe.random_forest_classification_predict(
+classified_rf = wbe.raster.general.random_forest_classification_predict(
     input_rasters=bands,
     model=rf_model
 )
@@ -703,7 +703,7 @@ The fit step prints an accuracy report including the confusion matrix, Kappa coe
 SVMs find the maximum-margin hyperplane separating classes and are particularly effective with high-dimensional data and small training sets:
 
 ```python
-classified_svm = wbe.svm_classification(
+classified_svm = wbe.remote_sensing.classification.svm_classification(
     input_rasters=bands,
     training=training_polys,
     field='CLASS',
@@ -719,7 +719,7 @@ wbe.write_raster(classified_svm, 'classified_svm.tif')
 Logistic regression is a fast and interpretable baseline classifier, useful as a benchmark before applying more complex models:
 
 ```python
-classified_lr = wbe.logistic_regression(
+classified_lr = wbe.remote_sensing.classification.logistic_regression(
     input_rasters=bands,
     training_data=training_polys,
     class_field_name='CLASS',
@@ -735,7 +735,7 @@ Compare a classified raster against a validation point dataset:
 
 ```python
 # Kappa index of agreement between classified image and reference data
-accuracy = wbe.kappa_index(
+accuracy = wbe.raster.general.kappa_index(
     classified=classified_rf,
     reference=wbe.read_raster('reference_classification.tif'),
     output_html_file='accuracy_report.html'
@@ -750,20 +750,20 @@ Classified rasters often contain salt-and-pepper noise — isolated pixels assig
 
 ```python
 # Remove small patches by merging them into surrounding majority class
-generalised = wbe.generalize_classified_raster(
+generalised = wbe.remote_sensing.classification.generalize_classified_raster(
     classified=classified_rf,
     min_class_size=5  # minimum patch size in cells
 )
 
 # Alternative: merge small patches into most spectrally similar neighbour
-generalised2 = wbe.generalize_with_similarity(
+generalised2 = wbe.remote_sensing.classification.generalize_with_similarity(
     input_rasters=bands,
     classified=classified_rf,
     min_class_size=5
 )
 
 # Remove holes (background pixels encircled by foreground)
-no_holes = wbe.remove_raster_polygon_holes(
+no_holes = wbe.conversion.raster_vector_conversion.remove_raster_polygon_holes(
     input_raster=classified_rf,
     threshold=25          # cells
 )
@@ -781,9 +781,9 @@ Multi-temporal analysis detects land-cover change between two acquisitions.
 The simplest approach differences co-registered images. NDVI differencing, for example, highlights vegetation gain and loss:
 
 ```python
-ndvi_t1 = wbe.normalized_difference_index(nir_t1, red_t1)
-ndvi_t2 = wbe.normalized_difference_index(nir_t2, red_t2)
-ndvi_change = wbe.raster_calculator("'t2' - 't1'", [ndvi_t2, ndvi_t1])
+ndvi_t1 = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir_t1, red_t1)
+ndvi_t2 = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir_t2, red_t2)
+ndvi_change = wbe.raster.general.raster_calculator("'t2' - 't1'", [ndvi_t2, ndvi_t1])
 wbe.write_raster(ndvi_change, 'ndvi_change.tif', compress=True)
 ```
 
@@ -792,7 +792,7 @@ wbe.write_raster(ndvi_change, 'ndvi_change.tif', compress=True)
 CVA computes the magnitude and direction of change in multidimensional feature space between two dates. The output direction angle indicates the type of change (e.g., vegetation gain vs. urban growth) while magnitude reflects its intensity:
 
 ```python
-magnitude, direction = wbe.change_vector_analysis(
+magnitude, direction = wbe.remote_sensing.change_detection.change_vector_analysis(
     input_rasters_t1=[red_t1, nir_t1, swir1_t1],
     input_rasters_t2=[red_t2, nir_t2, swir1_t2]
 )
@@ -806,11 +806,11 @@ Classify both dates independently and difference the class maps. This preserves 
 
 ```python
 # Train on t1 and apply to t2 using the same saved RF model
-classified_t1 = wbe.random_forest_classification_predict(bands_t1, rf_model)
-classified_t2 = wbe.random_forest_classification_predict(bands_t2, rf_model)
+classified_t1 = wbe.raster.general.random_forest_classification_predict(bands_t1, rf_model)
+classified_t2 = wbe.raster.general.random_forest_classification_predict(bands_t2, rf_model)
 
 # Produce a change raster (unique code for each from-to class transition)
-change_map = wbe.raster_calculator(
+change_map = wbe.raster.general.raster_calculator(
     "'t1' * 100 + 't2'",
     [classified_t1, classified_t2]
 )
@@ -825,16 +825,16 @@ Combining NDWI thresholding with morphological post-processing extracts water bo
 
 ```python
 # Threshold MNDWI — water pixels where mndwi > 0
-water = wbe.raster_calculator("if('mndwi' > 0.0, 1.0, nodata)", [mndwi])
+water = wbe.raster.general.raster_calculator("if('mndwi' > 0.0, 1.0, nodata)", [mndwi])
 
 # Remove small spurious water patches
-water_clean = wbe.sieve(water, threshold=50)
+water_clean = wbe.raster.general.sieve(water, threshold=50)
 
 # Remove islands in water polygons
-water_filled = wbe.remove_raster_polygon_holes(water_clean, threshold=100)
+water_filled = wbe.conversion.raster_vector_conversion.remove_raster_polygon_holes(water_clean, threshold=100)
 
 # Extract river centrelines from the water raster
-river_lines = wbe.river_centerlines(water_filled, min_length=5, search_radius=9)
+river_lines = wbe.streams.network_extraction.river_centerlines(water_filled, min_length=5, search_radius=9)
 wbe.write_vector(river_lines, 'river_centerlines.shp')
 ```
 
@@ -846,20 +846,20 @@ WbW-Py supports several image correlation and regression tools useful for sensor
 
 ```python
 # Pearson correlation matrix between all bands
-wbe.image_correlation(bands, output_html_file='correlation_matrix.html')
+wbe.raster.general.image_correlation(bands, output_html_file='correlation_matrix.html')
 
 # Spatial autocorrelation (Moran's I) per band
-wbe.image_autocorrelation(bands, contiguity='Rooks', output_html_file='autocorr.html')
+wbe.raster.general.image_autocorrelation(bands, contiguity='Rooks', output_html_file='autocorr.html')
 
 # Neighbourhood correlation analysis between two images
-wbe.image_correlation_neighbourhood_analysis(
+wbe.raster.local_neighborhood.image_correlation_neighbourhood_analysis(
     img1=ndvi_t1, img2=ndvi_t2,
     filter_size=11,
     output_html_file='neighbourhood_corr.html'
 )
 
 # Simple linear regression of one image on another
-slope, intercept, r2 = wbe.image_regression(img1=ndvi_t1, img2=ndvi_t2,
+slope, intercept, r2 = wbe.raster.general.image_regression(img1=ndvi_t1, img2=ndvi_t2,
                                               output_html_file='regression.html')
 ```
 
@@ -921,23 +921,23 @@ blue  = bundle.read_band('B02')
 green = bundle.read_band('B03')
 red   = bundle.read_band('B04')
 nir   = bundle.read_band('B08')
-swir1 = wbe.resample(bundle.read_band('B11'), base_raster=red, method='bilinear')
-swir2 = wbe.resample(bundle.read_band('B12'), base_raster=red, method='bilinear')
+swir1 = wbe.remote_sensing.enhancement_contrast.resample(bundle.read_band('B11'), base_raster=red, method='bilinear')
+swir2 = wbe.remote_sensing.enhancement_contrast.resample(bundle.read_band('B12'), base_raster=red, method='bilinear')
 bands = [blue, green, red, nir, swir1, swir2]
 
 # 3. Mask clouds using SCL
 scl = bundle.read_qa_layer('SCL')
-cloud_mask = wbe.raster_calculator(
+cloud_mask = wbe.raster.general.raster_calculator(
     "if('scl' == 3 or 'scl' == 8 or 'scl' == 9 or 'scl' == 10, 1.0, 0.0)", [scl]
 )
 
 # 4. Compute indices
-ndvi  = wbe.normalized_difference_index(nir, red)
-mndwi = wbe.normalized_difference_index(green, swir1)
-nbr   = wbe.normalized_difference_index(nir, swir2)
+ndvi  = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir, red)
+mndwi = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(green, swir1)
+nbr   = wbe.remote_sensing.enhancement_contrast.normalized_difference_index(nir, swir2)
 
 # 5. Build PCA decorrelation on 6 spectral bands
-pc_rasters = wbe.principal_component_analysis(
+pc_rasters = wbe.raster.general.principal_component_analysis(
     input_rasters=bands,
     output_html_file='pca.html',
     num_comp=4,
@@ -949,10 +949,10 @@ feature_stack = bands + [ndvi, mndwi, nbr] + pc_rasters
 
 # 7. Evaluate training separability
 training = wbe.read_vector('training_polygons.shp')
-wbe.evaluate_training_sites(feature_stack, training, 'CLASS', 'separability.html')
+wbe.remote_sensing.classification.evaluate_training_sites(feature_stack, training, 'CLASS', 'separability.html')
 
 # 8. Train random forest
-rf_model_path = wbe.random_forest_classification_fit(
+rf_model_path = wbe.raster.general.random_forest_classification_fit(
     input_rasters=feature_stack,
     training_data=training,
     class_field_name='CLASS',
@@ -961,15 +961,15 @@ rf_model_path = wbe.random_forest_classification_fit(
 )
 
 # 9. Predict
-classified = wbe.random_forest_classification_predict(feature_stack, rf_model_path)
+classified = wbe.raster.general.random_forest_classification_predict(feature_stack, rf_model_path)
 
 # 10. Generalise
-classified_clean = wbe.generalize_classified_raster(classified, min_class_size=9)
-classified_clean = wbe.remove_raster_polygon_holes(classified_clean, threshold=25)
+classified_clean = wbe.remote_sensing.classification.generalize_classified_raster(classified, min_class_size=9)
+classified_clean = wbe.conversion.raster_vector_conversion.remove_raster_polygon_holes(classified_clean, threshold=25)
 
 # 11. Save and assess accuracy
 wbe.write_raster(classified_clean, 'classified_final.tif', compress=True)
-wbe.kappa_index(classified_clean,
+wbe.raster.general.kappa_index(classified_clean,
                 wbe.read_raster('validation_reference.tif'),
                 'accuracy_report.html')
 

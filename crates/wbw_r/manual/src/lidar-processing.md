@@ -55,22 +55,18 @@ cat('Point density per m²:', meta$point_density, '\n')
 
 ```r
 # Remove isolated low and high points
-wbw_run_tool('lidar_elevation_slice', args = list(
-  i       = 'survey.las',
+wbw_lidar_elevation_slice(i       = 'survey.las',
   output  = 'survey_sliced.las',
   minz    = 0.0,
   maxz    = 200.0,
-  cls     = FALSE
-), session = s)
+  cls     = FALSE)
 
 # Statistical outlier removal
-wbw_run_tool('lidar_remove_outliers', args = list(
-  i       = 'survey.las',
+wbw_lidar_remove_outliers(i       = 'survey.las',
   output  = 'survey_clean.las',
   radius  = 2.0,
   elev_diff = 25.0,
-  use_median = FALSE
-), session = s)
+  use_median = FALSE)
 ```
 
 ---
@@ -80,8 +76,7 @@ wbw_run_tool('lidar_remove_outliers', args = list(
 ### Progressive Morphological Filter
 
 ```r
-wbw_run_tool('lidar_ground_point_filter', args = list(
-  i        = 'survey_clean.las',
+wbw_lidar_ground_point_filter(i        = 'survey_clean.las',
   output   = 'survey_classified.las',
   radius   = 2.0,
   min_elev_diff = 0.15,
@@ -93,8 +88,7 @@ wbw_run_tool('lidar_ground_point_filter', args = list(
   classify  = TRUE,
   slope       = FALSE,
   height_diff = TRUE,
-  filter_return_all = FALSE
-), session = s)
+  filter_return_all = FALSE)
 ```
 
 ---
@@ -104,41 +98,35 @@ wbw_run_tool('lidar_ground_point_filter', args = list(
 ### Tin Gridding (TIN Interpolation)
 
 ```r
-wbw_run_tool('tin_gridding', args = list(
-  i          = 'survey_classified.las',
+wbw_tin_gridding(i          = 'survey_classified.las',
   output     = 'dtm.tif',
   returns    = 'last',
   resolution = 1.0,
   exclude_cls = '1,3,4,5,6,7',
   minz       = -50.0,
-  maxz       = 250.0
-), session = s)
+  maxz       = 250.0)
 ```
 
 ### LiDAR IDW Interpolation
 
 ```r
-wbw_run_tool('lidar_idw_interpolation', args = list(
-  i          = 'survey_classified.las',
+wbw_lidar_idw_interpolation(i          = 'survey_classified.las',
   output     = 'dtm_idw.tif',
   parameter  = 'elevation',
   returns    = 'last',
   resolution = 1.0,
   weight     = 1.0,
   radius     = 2.5,
-  exclude_cls = '1,3,4,5,6,7'
-), session = s)
+  exclude_cls = '1,3,4,5,6,7')
 ```
 
 ### Normalised Height Above Ground
 
 ```r
-wbw_run_tool('normalize_lidar', args = list(
-  i          = 'survey_classified.las',
+wbw_normalize_lidar(i          = 'survey_classified.las',
   ground     = 'survey_classified.las',
   output     = 'survey_normalised.las',
-  ignore_ground_distance = FALSE
-), session = s)
+  ignore_ground_distance = FALSE)
 ```
 
 ---
@@ -147,23 +135,19 @@ wbw_run_tool('normalize_lidar', args = list(
 
 ```r
 # First return DSM
-wbw_run_tool('lidar_idw_interpolation', args = list(
-  i          = 'survey_classified.las',
+wbw_lidar_idw_interpolation(i          = 'survey_classified.las',
   output     = 'dsm.tif',
   parameter  = 'elevation',
   returns    = 'first',
   resolution = 1.0,
   weight     = 1.0,
   radius     = 2.5,
-  exclude_cls = '7'
-), session = s)
+  exclude_cls = '7')
 
 # Canopy Height Model = DSM - DTM
-wbw_run_tool('subtract', args = list(
-  input1 = 'dsm.tif',
+wbw_subtract(input1 = 'dsm.tif',
   input2 = 'dtm.tif',
-  output = 'chm.tif'
-), session = s)
+  output = 'chm.tif')
 ```
 
 ---
@@ -171,20 +155,16 @@ wbw_run_tool('subtract', args = list(
 ## Point Density and Distribution Analysis
 
 ```r
-wbw_run_tool('lidar_point_stats', args = list(
-  i          = 'survey.las',
+wbw_lidar_point_stats(i          = 'survey.las',
   resolution = 1.0,
   num_points = TRUE,
-  num_pulses = FALSE
-), session = s)
+  num_pulses = FALSE)
 
-wbw_run_tool('lidar_density', args = list(
-  i          = 'survey.las',
+wbw_lidar_density(i          = 'survey.las',
   output     = 'density.tif',
   resolution = 1.0,
   returns    = 'all',
-  exclude_cls = '7'
-), session = s)
+  exclude_cls = '7')
 ```
 
 ---
@@ -193,22 +173,18 @@ wbw_run_tool('lidar_density', args = list(
 
 ```r
 # Filter by scan angle
-wbw_run_tool('filter_lidar_scan_angles', args = list(
-  i         = 'survey.las',
+wbw_filter_lidar_scan_angles(i         = 'survey.las',
   output    = 'survey_nadir.las',
-  threshold = 15.0
-), session = s)
+  threshold = 15.0)
 
 # Intensity image
-wbw_run_tool('lidar_idw_interpolation', args = list(
-  i          = 'survey_nadir.las',
+wbw_lidar_idw_interpolation(i          = 'survey_nadir.las',
   output     = 'intensity.tif',
   parameter  = 'intensity',
   returns    = 'all',
   resolution = 1.0,
   weight     = 1.0,
-  radius     = 2.5
-), session = s)
+  radius     = 2.5)
 ```
 
 ---
@@ -219,20 +195,16 @@ Working with large surveys requires tiling:
 
 ```r
 # Tile large dataset
-wbw_run_tool('lidar_tile', args = list(
-  i        = 'full_survey.las',
+wbw_lidar_tile(i        = 'full_survey.las',
   width    = 500.0,
   height   = 500.0,
   origin_x = 0.0,
-  origin_y = 0.0
-), session = s)
+  origin_y = 0.0)
 
 # Add a buffer overlap to each tile
-wbw_run_tool('lidar_tile_footprint', args = list(
-  i      = 'tile_000_000.las',
+wbw_lidar_tile_footprint(i      = 'tile_000_000.las',
   output = 'tile_000_000_footprint.shp',
-  hull   = FALSE
-), session = s)
+  hull   = FALSE)
 ```
 
 ---
@@ -241,23 +213,19 @@ wbw_run_tool('lidar_tile_footprint', args = list(
 
 ```r
 # Individual tree segmentation from normalised LiDAR
-wbw_run_tool('individual_tree_detection', args = list(
-  i          = 'survey_normalised.las',
+wbw_individual_tree_detection(i          = 'survey_normalised.las',
   output     = 'tree_tops.shp',
   min_search_radius = 1.0,
   min_height  = 2.0,
   max_search_radius = 5.0,
-  max_height  = 40.0
-), session = s)
+  max_height  = 40.0)
 
 # Canopy cover (fraction first return above height threshold)
-wbw_run_tool('lidar_segmentation_based_filter', args = list(
-  i            = 'survey_classified.las',
+wbw_lidar_segmentation_based_filter(i            = 'survey_classified.las',
   output       = 'survey_seg_filtered.las',
   slope_threshold = 15.0,
   max_edge_length = 0.5,
-  classify     = TRUE
-), session = s)
+  classify     = TRUE)
 ```
 
 ---
@@ -300,45 +268,37 @@ setwd('/data/lidar_project')
 las_file <- 'raw_survey.las'
 
 # 1. Remove outliers
-wbw_run_tool('lidar_remove_outliers', args = list(
-  i = las_file, output = 'clean.las', radius = 2.0, elev_diff = 25.0), session = s)
+wbw_lidar_remove_outliers(i = las_file, output = 'clean.las', radius = 2.0, elev_diff = 25.0)
 
 # 2. Ground classification
-wbw_run_tool('lidar_ground_point_filter', args = list(
-  i = 'clean.las', output = 'classified.las', radius = 2.0,
+wbw_lidar_ground_point_filter(i = 'clean.las', output = 'classified.las', radius = 2.0,
   min_elev_diff = 0.15, max_elev_diff = 1.3, num_iter = 5,
   threshold = 0.15, slope_threshold = 0.15, height_threshold = 1.0,
   classify = TRUE, slope = FALSE, height_diff = TRUE,
-  filter_return_all = FALSE), session = s)
+  filter_return_all = FALSE)
 
 # 3. DTM
-wbw_run_tool('tin_gridding', args = list(
-  i = 'classified.las', output = 'dtm.tif', returns = 'last',
-  resolution = 1.0, exclude_cls = '1,3,4,5,6,7'), session = s)
+wbw_tin_gridding(i = 'classified.las', output = 'dtm.tif', returns = 'last',
+  resolution = 1.0, exclude_cls = '1,3,4,5,6,7')
 
 # 4. DSM and CHM
-wbw_run_tool('lidar_idw_interpolation', args = list(
-  i = 'classified.las', output = 'dsm.tif', parameter = 'elevation',
+wbw_lidar_idw_interpolation(i = 'classified.las', output = 'dsm.tif', parameter = 'elevation',
   returns = 'first', resolution = 1.0, weight = 1.0, radius = 2.5,
-  exclude_cls = '7'), session = s)
-wbw_run_tool('subtract', args = list(
-  input1 = 'dsm.tif', input2 = 'dtm.tif', output = 'chm.tif'), session = s)
+  exclude_cls = '7')
+wbw_subtract(input1 = 'dsm.tif', input2 = 'dtm.tif', output = 'chm.tif')
 
 # 5. Normalise for vegetation analysis
-wbw_run_tool('normalize_lidar', args = list(
-  i = 'classified.las', ground = 'classified.las',
-  output = 'normalised.las', ignore_ground_distance = FALSE), session = s)
+wbw_normalize_lidar(i = 'classified.las', ground = 'classified.las',
+  output = 'normalised.las', ignore_ground_distance = FALSE)
 
 # 6. Tree detection
-wbw_run_tool('individual_tree_detection', args = list(
-  i = 'normalised.las', output = 'tree_tops.shp',
+wbw_individual_tree_detection(i = 'normalised.las', output = 'tree_tops.shp',
   min_search_radius = 1.0, min_height = 2.0,
-  max_search_radius = 5.0, max_height = 40.0), session = s)
+  max_search_radius = 5.0, max_height = 40.0)
 
 # 7. Point density
-wbw_run_tool('lidar_density', args = list(
-  i = 'classified.las', output = 'density.tif',
-  resolution = 1.0, returns = 'all', exclude_cls = '7'), session = s)
+wbw_lidar_density(i = 'classified.las', output = 'density.tif',
+  resolution = 1.0, returns = 'all', exclude_cls = '7')
 
 cat('LiDAR processing complete.\n')
 ```

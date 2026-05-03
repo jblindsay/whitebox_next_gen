@@ -52,10 +52,7 @@ schema <- v$schema()
 meta <- v$metadata()
 
 # Pass to spatial tools
-buffered_path <- wbw_run_tool(
-  'buffer_vector',
-  args = list(input = v$path, output = 'buffered', distance = 10.0)
-)
+buffered_path <- wbw_buffer_vector(input = v$path, output = 'buffered', distance = 10.0)
 
 # Export to disk when ready
 result <- wbw_read_vector(buffered_path)
@@ -122,6 +119,7 @@ Best practices:
 - Export memory-backed vectors to disk with `write()` when persisting final outputs.
 - Call `remove_vector_from_memory()` after a vector is no longer needed.
 - Use `clear_vector_memory()` between independent analysis phases.
+- Use `wbw_clear_memory()` when resetting all in-process raster/vector/lidar stores together.
 
 ## Iterate Through Features
 
@@ -168,11 +166,7 @@ library(whiteboxworkflows)
 s <- wbw_session()
 roads <- wbw_read_vector('roads.gpkg')
 
-wbw_run_tool(
-  'buffer_vector',
-  args = list(input = roads$file_path(), output = 'roads_buffer.gpkg', distance = 15.0),
-  session = s
-)
+wbw_buffer_vector(input = roads$file_path(), output = 'roads_buffer.gpkg', distance = 15.0)
 
 buffered <- wbw_read_vector('roads_buffer.gpkg')
 print(buffered$metadata())

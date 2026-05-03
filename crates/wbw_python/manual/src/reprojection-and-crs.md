@@ -195,7 +195,7 @@ import whitebox_workflows as wb
 wbe = wb.WbEnvironment()
 roads = wbe.read_vector('roads.gpkg')
 
-roads_utm = wbe.reproject_vector(
+roads_utm = wbe.projection_georeferencing.general.reproject_vector(
     roads,
     dst_epsg=32618,
     failure_policy='error',
@@ -216,7 +216,7 @@ import whitebox_workflows as wb
 wbe = wb.WbEnvironment()
 las = wbe.read_lidar('survey.las')
 
-las_utm = wbe.reproject_lidar(
+las_utm = wbe.projection_georeferencing.general.reproject_lidar(
     las,
     dst_epsg=32618,
     use_3d_transform=False,
@@ -243,7 +243,7 @@ import whitebox_workflows as wb
 
 wbe = wb.WbEnvironment()
 
-result = wbe.georeference_raster_from_control_points(
+result = wbe.projection_georeferencing.general.georeference_raster_from_control_points(
     input_raster='historical_scan.tif',
     control_points_csv='historical_scan_gcps.csv',
     epsg=32618,

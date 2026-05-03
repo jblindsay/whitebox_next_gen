@@ -11,6 +11,7 @@ pub use tool_args_ext::{
     parse_raster_path_value,
     parse_vector_path_arg,
     parse_vector_path_value,
+    IMPLICIT_MEMORY_VECTOR_OUTPUT_PATH,
 };
 
 pub type ToolArgs = BTreeMap<String, Value>;

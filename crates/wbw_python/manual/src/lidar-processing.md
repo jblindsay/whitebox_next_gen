@@ -113,7 +113,7 @@ import whitebox_workflows as wbw
 
 wbe = wbw.WbEnvironment()
 
-footprints = wbe.lidar_tile_footprint(
+footprints = wbe.lidar.interpolation_gridding.lidar_tile_footprint(
     input_directory='lidar_tiles/',
     output='tile_index.gpkg'
 )
@@ -137,7 +137,7 @@ wbe = wbw.WbEnvironment()
 lidar = wbe.read_lidar('raw_tile.laz')
 
 # Classify ground returns using the improved ground point filter
-lidar_classified = wbe.improved_ground_point_filter(
+lidar_classified = wbe.lidar.filtering_classification.improved_ground_point_filter(
     lidar,
     radius=0.5,       # initial search radius in metres
     min_z_range=0.1,  # minimum Z variation to be non-ground
@@ -154,7 +154,7 @@ within each local neighbourhood — useful for identifying near-ground returns
 without full classification:
 
 ```python
-near_ground = wbe.filter_lidar_by_percentile(
+near_ground = wbe.lidar.filtering_classification.filter_lidar_by_percentile(
     lidar,
     radius=2.0,
     percentile=5.0   # lowest 5% of heights locally
@@ -169,7 +169,7 @@ Remove points above (or below) a reference raster surface by a tolerance:
 ```python
 ground_ref = wbe.read_raster('dtm_existing.tif')
 
-filtered = wbe.filter_lidar_by_reference_surface(
+filtered = wbe.lidar.filtering_classification.filter_lidar_by_reference_surface(
     lidar,
     reference=ground_ref,
     threshold=0.5,   # metres above reference surface
@@ -195,7 +195,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 lidar = wbe.read_lidar('tile_classified.laz')
 
-dtm = wbe.lidar_tin_gridding(
+dtm = wbe.lidar.interpolation_gridding.lidar_tin_gridding(
     lidar,
     parameter='elevation',
     returns_included='last',   # last returns best represent ground
@@ -222,7 +222,7 @@ dsm = wbe.lidar_pointdensity(
     resolution=1.0
 )
 # Or use the high-point gridding:
-dsm = wbe.lidar_tin_gridding(
+dsm = wbe.lidar.interpolation_gridding.lidar_tin_gridding(
     lidar,
     parameter='elevation',
     returns_included='first',
@@ -256,7 +256,7 @@ reflectance. Gridding intensity produces a pseudo-imagery product useful for
 feature detection:
 
 ```python
-intensity = wbe.lidar_tin_gridding(
+intensity = wbe.lidar.interpolation_gridding.lidar_tin_gridding(
     lidar,
     parameter='intensity',
     returns_included='all',
@@ -299,7 +299,7 @@ tiles = wbe.read_lidars([
 ### Joining Tiles
 
 ```python
-merged = wbe.lidar_join(tiles)
+merged = wbe.lidar.io_management.lidar_join(tiles)
 wbe.write_lidar(merged, 'merged.laz')
 ```
 
@@ -308,7 +308,7 @@ wbe.write_lidar(merged, 'merged.laz')
 After processing a large cloud, re-tile for downstream storage:
 
 ```python
-wbe.lidar_tile(
+wbe.lidar.io_management.lidar_tile(
     lidar,
     width=500.0,   # tile width in map units
     height=500.0,
@@ -356,7 +356,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 chm = wbe.read_raster('chm_smooth.tif')
 
-tree_polygons = wbe.individual_tree_detection(
+tree_polygons = wbe.lidar.analysis_metrics.individual_tree_detection(
     chm,
     min_search_radius=1.0,   # minimum crown radius in metres
     min_height=2.0,           # ignore vegetation below this height
@@ -370,7 +370,7 @@ A smooth CHM substantially improves segmentation quality — apply
 
 ```python
 chm_raw    = wbe.read_raster('chm_1m.tif')
-chm_smooth = wbe.gaussian_filter(chm_raw, sigma=0.75)
+chm_smooth = wbe.remote_sensing.filters.gaussian_filter(chm_raw, sigma=0.75)
 wbe.write_raster(chm_smooth, 'chm_smooth.tif')
 ```
 
@@ -384,7 +384,7 @@ import whitebox_workflows as wbw
 wbe = wbw.WbEnvironment()
 lidar_norm = wbe.read_lidar('tile_normalised.laz')
 
-tree_clouds = wbe.lidar_segmentation(
+tree_clouds = wbe.lidar.filtering_classification.lidar_segmentation(
     lidar_norm,
     radius=1.5,
     min_z_range=2.0
@@ -412,7 +412,7 @@ wbe.write_raster(cover, 'canopy_cover_20m.tif')
 ### Height Percentiles and Mean Height
 
 ```python
-p75 = wbe.lidar_elevation_slice(lidar, min_h=0.0, max_h=None, cls=1)
+p75 = wbe.lidar.filtering_classification.lidar_elevation_slice(lidar, min_h=0.0, max_h=None, cls=1)
 wbe.write_raster(p75, 'canopy_p75.tif')
 ```
 
@@ -474,25 +474,25 @@ lidar = wbe.read_lidar('raw_flight.laz')
 print(lidar.metadata())
 
 # --- 2. Remove outlier points ---
-lidar_clean = wbe.lidar_elevation_slice(lidar, min_h=-2.0, max_h=3000.0)
+lidar_clean = wbe.lidar.filtering_classification.lidar_elevation_slice(lidar, min_h=-2.0, max_h=3000.0)
 
 # --- 3. Ground point filtering ---
-lidar_classified = wbe.improved_ground_point_filter(lidar_clean, radius=0.5)
+lidar_classified = wbe.lidar.filtering_classification.improved_ground_point_filter(lidar_clean, radius=0.5)
 wbe.write_lidar(lidar_classified, 'classified.laz')
 
 # --- 4. DTM ---
-dtm = wbe.lidar_tin_gridding(
+dtm = wbe.lidar.interpolation_gridding.lidar_tin_gridding(
     lidar_classified,
     parameter='elevation',
     returns_included='last',
     resolution=0.5,
     exclude_cls='0,1,3,4,5,6,7,8,9'
 )
-dtm = wbe.fill_missing_data(dtm, filter_size=11)
+dtm = wbe.terrain.general.fill_missing_data(dtm, filter_size=11)
 wbe.write_raster(dtm, 'dtm_0.5m.tif')
 
 # --- 5. DSM ---
-dsm = wbe.lidar_tin_gridding(
+dsm = wbe.lidar.interpolation_gridding.lidar_tin_gridding(
     lidar_classified,
     parameter='elevation',
     returns_included='first',
@@ -509,8 +509,8 @@ lidar_norm = wbe.normalise_lidar(lidar_classified, dtm)
 wbe.write_lidar(lidar_norm, 'normalised.laz')
 
 # --- 8. Tree segmentation ---
-chm_smooth = wbe.gaussian_filter(chm, sigma=0.75)
-trees = wbe.individual_tree_detection(chm_smooth, min_search_radius=1.0, min_height=2.0)
+chm_smooth = wbe.remote_sensing.filters.gaussian_filter(chm, sigma=0.75)
+trees = wbe.lidar.analysis_metrics.individual_tree_detection(chm_smooth, min_search_radius=1.0, min_height=2.0)
 wbe.write_vector(trees, 'tree_crowns.gpkg')
 
 print(f"Detected {trees.num_features()} tree crowns.")

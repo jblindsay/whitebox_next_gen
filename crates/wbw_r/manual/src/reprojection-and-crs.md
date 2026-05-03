@@ -74,7 +74,8 @@ so behavior is explicit across language bindings):
    (`reproject_to_match_resolution_in_epsg`)
 
 In WbW-R, practical workflows typically call reprojection tools through
-`wbw_run_tool(...)` and then reopen outputs as typed objects.
+`wbw_<tool>(...)` wrappers (or `wbw_run_tool(...)` for dynamic tool-id workflows)
+and then reopen outputs as typed objects.
 
 ### Available resampling methods (wbraster)
 
@@ -103,16 +104,10 @@ Method guidance:
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'reproject_raster',
-  args = list(
-    input = 'dem.tif',
+wbw_reproject_raster(input = 'dem.tif',
     output = 'dem_utm.tif',
     epsg = 32618,
-    method = 'bilinear'
-  ),
-  session = s
-)
+    method = 'bilinear')
 
 dem_utm <- wbw_read_raster('dem_utm.tif')
 print(dem_utm$crs_epsg())
@@ -124,16 +119,10 @@ print(dem_utm$crs_epsg())
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'reproject_raster',
-  args = list(
-    input = 'landcover_4326.tif',
+wbw_reproject_raster(input = 'landcover_4326.tif',
     output = 'landcover_utm_aligned.tif',
     epsg = 32618,
-    method = 'nearest'
-  ),
-  session = s
-)
+    method = 'nearest')
 ```
 
 ### Automatic reprojection in raster-stack tools
@@ -160,17 +149,11 @@ PCA, inverse PCA, raster calculator, segmentation).
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'weighted_sum',
-  args = list(
-    input_rasters = c('slope_utm.tif', 'landcover_4326.tif', 'distance_utm.tif'),
+wbw_weighted_sum(input_rasters = c('slope_utm.tif', 'landcover_4326.tif', 'distance_utm.tif'),
     weights = c(0.4, 0.35, 0.25),
     auto_reproject = TRUE,
     auto_reproject_method = '',
-    output = 'weighted_sum.tif'
-  ),
-  session = s
-)
+    output = 'weighted_sum.tif')
 ```
 
 ## Vector Reprojection Pattern
@@ -181,11 +164,7 @@ Use this when downstream geometry processing depends on a specific projected CRS
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'reproject_vector',
-  args = list(input = 'roads.gpkg', output = 'roads_utm.gpkg', epsg = 32618),
-  session = s
-)
+wbw_reproject_vector(input = 'roads.gpkg', output = 'roads_utm.gpkg', epsg = 32618)
 
 roads_utm <- wbw_read_vector('roads_utm.gpkg')
 print(roads_utm$crs_epsg())
@@ -199,11 +178,7 @@ Use this when point-cloud alignment and metric operations require a target CRS.
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'reproject_lidar',
-  args = list(input = 'survey.las', output = 'survey_utm.laz', epsg = 32618),
-  session = s
-)
+wbw_reproject_lidar(input = 'survey.las', output = 'survey_utm.laz', epsg = 32618)
 
 survey_utm <- wbw_read_lidar('survey_utm.laz')
 print(survey_utm$crs_epsg())
@@ -225,18 +200,12 @@ Required CSV fields:
 library(whiteboxworkflows)
 
 s <- wbw_session()
-wbw_run_tool(
-  'georeference_raster_from_control_points',
-  args = list(
-    input = 'historical_scan.tif',
+wbw_georeference_raster_from_control_points(input = 'historical_scan.tif',
     control_points = 'historical_scan_gcps.csv',
     epsg = 32618,
     resample = 'bilinear',
     output = 'historical_scan_georef.tif',
-    report = 'historical_scan_georef_report.json'
-  ),
-  session = s
-)
+    report = 'historical_scan_georef_report.json')
 ```
 
 ## Best Practices

@@ -59,12 +59,10 @@ for every point. Use this when field teams have collected GPS observation points
 and you need to convert them to route-distance offsets.
 
 ```r
-wbw_run_tool('locate_points_along_routes', args = list(
-  routes               = 'roads_measured.shp',
+wbw_locate_points_along_routes(routes               = 'roads_measured.shp',
   points               = 'field_observations.shp',
   output               = 'observations_located.shp',
-  max_offset_distance  = 15.0
-), session = s)
+  max_offset_distance  = 15.0)
 # Output adds ROUTE_ID, MEASURE, and OFFSET fields to every input point.
 ```
 
@@ -85,13 +83,11 @@ maintenance logs stored in external databases.
 
 ```r
 # pavement_defects.csv columns: ROUTE_ID, MEASURE, SEVERITY, NOTES
-wbw_run_tool('route_event_points_from_table', args = list(
-  routes             = 'roads_measured.shp',
+wbw_route_event_points_from_table(routes             = 'roads_measured.shp',
   events             = 'pavement_defects.csv',
   event_route_field  = 'ROUTE_ID',
   measure_field      = 'MEASURE',
-  output             = 'pavement_defects_located.shp'
-), session = s)
+  output             = 'pavement_defects_located.shp')
 ```
 
 ### Line (Interval) Events
@@ -102,14 +98,12 @@ or any attribute that applies to a stretch of route rather than a single point.
 
 ```r
 # pavement_condition.csv columns: ROUTE_ID, FROM_MEASURE, TO_MEASURE, IRI, CONDITION
-wbw_run_tool('route_event_lines_from_table', args = list(
-  routes             = 'roads_measured.shp',
+wbw_route_event_lines_from_table(routes             = 'roads_measured.shp',
   events             = 'pavement_condition.csv',
   event_route_field  = 'ROUTE_ID',
   from_measure_field = 'FROM_MEASURE',
   to_measure_field   = 'TO_MEASURE',
-  output             = 'pavement_condition_segments.shp'
-), session = s)
+  output             = 'pavement_condition_segments.shp')
 ```
 
 ---
@@ -123,29 +117,25 @@ feature and can optionally write the original FID and XY into the output.
 ### Point Events from a Layer
 
 ```r
-wbw_run_tool('route_event_points_from_layer', args = list(
-  routes             = 'roads_measured.shp',
+wbw_route_event_points_from_layer(routes             = 'roads_measured.shp',
   events             = 'manhole_inspections.shp',
   event_route_field  = 'ROUTE_ID',
   measure_field      = 'MEASURE',
   output             = 'manholes_on_routes.shp',
   write_event_fid    = TRUE,
-  write_event_xy     = TRUE
-), session = s)
+  write_event_xy     = TRUE)
 ```
 
 ### Line Events from a Layer
 
 ```r
-wbw_run_tool('route_event_lines_from_layer', args = list(
-  routes             = 'roads_measured.shp',
+wbw_route_event_lines_from_layer(routes             = 'roads_measured.shp',
   events             = 'speed_zone_events.shp',
   event_route_field  = 'ROUTE_ID',
   from_measure_field = 'FROM_M',
   to_measure_field   = 'TO_M',
   output             = 'speed_zones_on_routes.shp',
-  write_event_fid    = TRUE
-), session = s)
+  write_event_fid    = TRUE)
 ```
 
 ---
@@ -189,31 +179,25 @@ s <- wbw_session()
 setwd('/data/pavement_assessment')
 
 # Step 1: Snap GPS observation points onto routes and extract M-values.
-wbw_run_tool('locate_points_along_routes', args = list(
-  routes              = 'roads_measured.shp',
+wbw_locate_points_along_routes(routes              = 'roads_measured.shp',
   points              = 'field_inspection_gps.shp',
   output              = 'gps_on_routes.shp',
-  max_offset_distance = 10.0
-), session = s)
+  max_offset_distance = 10.0)
 
 # Step 2: Place point defect records from the inspection database.
-wbw_run_tool('route_event_points_from_table', args = list(
-  routes            = 'roads_measured.shp',
+wbw_route_event_points_from_table(routes            = 'roads_measured.shp',
   events            = 'defect_records.csv',
   event_route_field = 'ROUTE_ID',
   measure_field     = 'MEASURE',
-  output            = 'defects_located.shp'
-), session = s)
+  output            = 'defects_located.shp')
 
 # Step 3: Place condition rating intervals.
-wbw_run_tool('route_event_lines_from_table', args = list(
-  routes             = 'roads_measured.shp',
+wbw_route_event_lines_from_table(routes             = 'roads_measured.shp',
   events             = 'condition_ratings.csv',
   event_route_field  = 'ROUTE_ID',
   from_measure_field = 'FROM_M',
   to_measure_field   = 'TO_M',
-  output             = 'condition_segments.shp'
-), session = s)
+  output             = 'condition_segments.shp')
 
 # Step 4 (Pro): Audit the condition layer for gaps and overlaps.
 result <- s$run_tool(

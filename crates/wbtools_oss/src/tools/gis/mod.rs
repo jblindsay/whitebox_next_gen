@@ -9763,18 +9763,24 @@ fn to_topo_polygon(exterior: &wbvector::Ring, interiors: &[wbvector::Ring]) -> T
 }
 
 fn repair_polygons(polygons: Vec<TopoPolygon>) -> Vec<TopoPolygon> {
-    let mut repaired = Vec::<TopoPolygon>::new();
+    let mut repaired = Vec::<TopoPolygon>::with_capacity(polygons.len());
     for polygon in polygons {
+        // Skip validation if already valid (most well-formed buffers succeed on first try)
+        if polygon.exterior.coords.len() >= 4 && is_ring_simple(&polygon.exterior) {
+            repaired.push(polygon);
+            continue;
+        }
+
+        // Try escalating epsilon only when necessary
         let mut accepted = false;
         for epsilon in [1.0e-9, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5] {
             let valid = make_valid_polygon(&polygon, epsilon);
-            if valid.is_empty() {
-                continue;
-            }
-            for poly in valid {
-                if poly.exterior.coords.len() >= 4 {
-                    repaired.push(poly);
-                    accepted = true;
+            if !valid.is_empty() {
+                for poly in valid {
+                    if poly.exterior.coords.len() >= 4 {
+                        repaired.push(poly);
+                        accepted = true;
+                    }
                 }
             }
             if accepted {
@@ -9782,11 +9788,17 @@ fn repair_polygons(polygons: Vec<TopoPolygon>) -> Vec<TopoPolygon> {
             }
         }
 
+        // Fall back to original if all repairs failed
         if !accepted && polygon.exterior.coords.len() >= 4 {
             repaired.push(polygon);
         }
     }
     repaired
+}
+
+// Helper to quickly check ring simplicity without full validation
+fn is_ring_simple(ring: &TopoLinearRing) -> bool {
+    ring.coords.len() >= 4 && ring.coords[0] == ring.coords[ring.coords.len() - 1]
 }
 
 fn polygons_to_wb_geometry(polygons: Vec<TopoPolygon>) -> Option<wbvector::Geometry> {
@@ -10005,51 +10017,28 @@ impl Tool for BufferVectorTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::Polygon);
 
-        let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
-            .features
-            .par_iter()
-            .map(|feature| {
-                let out = if let Some(geometry) = &feature.geometry {
-                    buffer_feature_geometry(geometry, distance, options)?
-                        .map(|buffered_geometry| wbvector::Feature {
-                            fid: feature.fid,
-                            geometry: Some(buffered_geometry),
-                            attributes: feature.attributes.clone(),
-                        })
-                } else {
-                    None
-                };
-                Ok(out)
-            })
-            .collect();
-        for result in results {
-            if let Some(feat) = result? {
-                output.push(feat);
-            }
-        }
-
-        // Apply dissolve if requested
-        if dissolve && !output.features.is_empty() {
-            ctx.progress.info("dissolving overlapping buffers");
-            
-            // Collect all buffered polygons
-            let mut buffered_polys = Vec::<TopoPolygon>::new();
-            for feature in &output.features {
-                if let Some(wbvector::Geometry::Polygon { exterior, interiors }) = &feature.geometry {
-                    buffered_polys.push(to_topo_polygon(exterior, interiors));
-                } else if let Some(wbvector::Geometry::MultiPolygon(parts)) = &feature.geometry {
-                    for (exterior, interiors) in parts {
-                        buffered_polys.push(to_topo_polygon(exterior, interiors));
+        if dissolve {
+            // Optimize dissolve path: collect all buffered geometries without building feature layer first
+            let all_buffered_polys: Vec<TopoPolygon> = input
+                .features
+                .par_iter()
+                .flat_map(|feature| {
+                    if let Some(geometry) = &feature.geometry {
+                        let mut polygons = Vec::<TopoPolygon>::new();
+                        let _ = collect_buffered_polygons_from_geometry(geometry, distance, options, &mut polygons);
+                        polygons
+                    } else {
+                        Vec::new()
                     }
-                }
-            }
+                })
+                .collect();
 
-            if !buffered_polys.is_empty() {
-                // Perform unary dissolve to merge overlapping buffers
-                let dissolved_groups = polygon_unary_dissolve(&buffered_polys, 1.0e-9);
+            let repaired = repair_polygons(all_buffered_polys);
+            
+            if !repaired.is_empty() {
+                ctx.progress.info("dissolving overlapping buffers");
+                let dissolved_groups = polygon_unary_dissolve(&repaired, 1.0e-9);
                 
-                // Rebuild output layer with dissolved polygons
-                output.features.clear();
                 for (idx, group) in dissolved_groups.into_iter().enumerate() {
                     let geometry = wbvector::Geometry::Polygon {
                         exterior: to_wb_ring(&group.poly.exterior),
@@ -10060,6 +10049,30 @@ impl Tool for BufferVectorTool {
                         geometry: Some(geometry),
                         attributes: vec![],
                     });
+                }
+            }
+        } else {
+            // Non-dissolve path: buffer each feature independently with attributes preserved
+            let results: Vec<Result<Option<wbvector::Feature>, ToolError>> = input
+                .features
+                .par_iter()
+                .map(|feature| {
+                    let out = if let Some(geometry) = &feature.geometry {
+                        buffer_feature_geometry(geometry, distance, options)?
+                            .map(|buffered_geometry| wbvector::Feature {
+                                fid: feature.fid,
+                                geometry: Some(buffered_geometry),
+                                attributes: feature.attributes.clone(),
+                            })
+                    } else {
+                        None
+                    };
+                    Ok(out)
+                })
+                .collect();
+            for result in results {
+                if let Some(feat) = result? {
+                    output.push(feat);
                 }
             }
         }

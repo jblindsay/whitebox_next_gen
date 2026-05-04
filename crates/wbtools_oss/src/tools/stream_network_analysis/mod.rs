@@ -6,7 +6,8 @@
 /// - Stream link identification and analysis
 /// - Flow accumulation-based stream extraction
 /// - Valley extraction
-use std::collections::{BTreeMap, HashMap};
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BinaryHeap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use wbcore::{PercentCoalescer,
     ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata,
     ToolParamSpec, ToolRunResult, ToolStability,
 };
-use wbraster::{DataType, Raster, RasterFormat};
+use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
 use wbvector::{Coord, Crs, FieldDef, FieldType, FieldValue, Geometry, GeometryType, Layer, VectorFormat};
 use wbvector::memory_store as vector_memory_store;
 
@@ -176,6 +177,33 @@ impl D8Core {
         }
         count
     }
+}
+
+fn raster_to_vec(input: &Raster) -> Vec<f64> {
+    let mut out = vec![input.nodata; input.rows * input.cols];
+    for r in 0..input.rows {
+        for c in 0..input.cols {
+            out[r * input.cols + c] = input.get(0, r as isize, c as isize);
+        }
+    }
+    out
+}
+
+fn vec_to_raster(template: &Raster, data: &[f64], data_type: DataType) -> Raster {
+    let cfg = RasterConfig {
+        cols: template.cols,
+        rows: template.rows,
+        bands: template.bands,
+        x_min: template.x_min,
+        y_min: template.y_min,
+        cell_size: template.cell_size_x,
+        cell_size_y: Some(template.cell_size_y),
+        nodata: template.nodata,
+        data_type,
+        crs: template.crs.clone(),
+        metadata: template.metadata.clone(),
+    };
+    Raster::from_data(cfg, data.to_vec()).expect("vec_to_raster data length should match template dimensions")
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -3277,6 +3305,29 @@ impl Tool for BurnStreamsTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        #[derive(Clone, Copy)]
+        struct Node {
+            cost: f64,
+            idx: usize,
+        }
+
+        impl PartialEq for Node {
+            fn eq(&self, other: &Self) -> bool {
+                self.idx == other.idx && self.cost.to_bits() == other.cost.to_bits()
+            }
+        }
+        impl Eq for Node {}
+        impl PartialOrd for Node {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                other.cost.partial_cmp(&self.cost)
+            }
+        }
+        impl Ord for Node {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.partial_cmp(other).unwrap_or(Ordering::Equal)
+            }
+        }
+
         let dem_path   = parse_raster_path_arg(args, "dem")?;
         let streams_path = parse_vector_path_arg(args, "streams")?;
         let decrement  = args.get("decrement_value").and_then(|v| v.as_f64()).unwrap_or(5.0);
@@ -3291,6 +3342,7 @@ impl Tool for BurnStreamsTool {
         let res_x = dem.cell_size_x;
         let res_y = dem.cell_size_y.abs();
         let grid_res = (res_x + res_y) / 2.0;
+        let n_cells = rows * cols;
 
         // ── rasterize stream vector ──────────────────────────────────────────
         ctx.progress.info("rasterizing streams");
@@ -3309,40 +3361,40 @@ impl Tool for BurnStreamsTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| ToolError::Execution("rasterize_streams returned no path".to_string()))?;
         let streams_raster = D8Core::load_raster(streams_raster_path)?;
+        let stream_data = raster_to_vec(&streams_raster);
+        let dem_data = raster_to_vec(&dem);
 
         // ── burn ─────────────────────────────────────────────────────────────
-        let mut output = dem.as_ref().clone();
+        let mut burned = dem_data.clone();
         if grad_dist <= 0 {
             ctx.progress.info("applying flat elevation decrement");
-            for row in 0..rows {
-                for col in 0..cols {
-                    let z = dem.get(0, row as isize, col as isize);
-                    if z == nodata { continue; }
-                    let s = streams_raster.get(0, row as isize, col as isize);
-                    if s > 0.0 {
-                        let _ = output.set(0, row as isize, col as isize, z - decrement);
+            burned
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, z)| {
+                    if *z != nodata && stream_data[i] > 0.0 {
+                        *z -= decrement;
                     }
-                }
-            }
+                });
         } else {
-            // Calculate Euclidean distance from streams using a simple BFS/scan approach
+            // Calculate Euclidean distance from streams using bounded Dijkstra
             ctx.progress.info("computing euclidean distance from streams");
             let large = f64::INFINITY;
-            let mut dist = vec![large; rows * cols];
+            let mut dist: Vec<f64> = vec![large; n_cells];
 
             // Seed stream cells at distance 0
-            let mut queue: std::collections::VecDeque<(isize, isize)> = std::collections::VecDeque::new();
+            let mut heap: BinaryHeap<Node> = BinaryHeap::new();
             for row in 0..rows {
                 for col in 0..cols {
-                    let s = streams_raster.get(0, row as isize, col as isize);
-                    if s > 0.0 {
-                        dist[row * cols + col] = 0.0;
-                        queue.push_back((row as isize, col as isize));
+                    let i = row * cols + col;
+                    if stream_data[i] > 0.0 && dem_data[i] != nodata {
+                        dist[i] = 0.0;
+                        heap.push(Node { cost: 0.0, idx: i });
                     }
                 }
             }
 
-            // Breadth-first propagation using Meijster-style approximation (row/col distances)
+            // Weighted 8-neighbour propagation, bounded by the gradient threshold.
             let dx = [1isize, -1, 0, 0, 1, -1, 1, -1];
             let dy = [0isize, 0, 1, -1, 1, 1, -1, -1];
             let dd = [res_x, res_x, res_y, res_y,
@@ -3351,34 +3403,53 @@ impl Tool for BurnStreamsTool {
                       (res_x * res_x + res_y * res_y).sqrt(),
                       (res_x * res_x + res_y * res_y).sqrt()];
 
-            while let Some((r, c)) = queue.pop_front() {
-                let d = dist[(r as usize) * cols + (c as usize)];
+            let dist_threshold = grad_dist as f64 * grid_res;
+
+            while let Some(node) = heap.pop() {
+                if node.cost > dist[node.idx] {
+                    continue;
+                }
+                if node.cost >= dist_threshold {
+                    continue;
+                }
+                let r = node.idx / cols;
+                let c = node.idx % cols;
                 for k in 0..8 {
-                    let nr = r + dy[k];
-                    let nc = c + dx[k];
+                    let nr = r as isize + dy[k];
+                    let nc = c as isize + dx[k];
                     if nr < 0 || nc < 0 || nr >= rows as isize || nc >= cols as isize { continue; }
                     let idx = (nr as usize) * cols + (nc as usize);
-                    let nd = d + dd[k];
+                    if dem_data[idx] == nodata {
+                        continue;
+                    }
+                    let nd = node.cost + dd[k];
                     if nd < dist[idx] {
                         dist[idx] = nd;
-                        queue.push_back((nr, nc));
+                        heap.push(Node { cost: nd, idx });
                     }
                 }
             }
 
-            let dist_threshold = grad_dist as f64 * grid_res;
             ctx.progress.info("applying gradient decrement");
-            for row in 0..rows {
-                for col in 0..cols {
-                    let z = dem.get(0, row as isize, col as isize);
-                    if z == nodata { continue; }
-                    let d = dist[row * cols + col];
-                    // burned_dem = dem + clamp((d - threshold) / threshold, min=−1, max=0) * decrement
-                    let factor = ((d - dist_threshold) / dist_threshold).min(0.0).max(-1.0);
-                    let _ = output.set(0, row as isize, col as isize, z + factor * decrement);
-                }
-            }
+            burned
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, z)| {
+                    if *z == nodata {
+                        return;
+                    }
+                    let d: f64 = dist[i];
+                    if !d.is_finite() || d >= dist_threshold {
+                        return;
+                    }
+                    // burned_dem = dem + clamp((d - threshold) / threshold, min=-1, max=0) * decrement
+                    let factor = ((d - dist_threshold) / dist_threshold).clamp(-1.0, 0.0);
+                    *z += factor * decrement;
+                });
         }
+
+        let mut output = vec_to_raster(&dem, &burned, DataType::F32);
+        output.nodata = nodata;
 
         ctx.progress.info("writing output");
         let locator = D8Core::write_or_store_output(output, output_path)?;

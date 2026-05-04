@@ -1485,22 +1485,31 @@ impl FlipImageTool {
         let rgb_mode = color_support::detect_rgb_mode(input, false, true);
         let packed_rgb = matches!(rgb_mode, color_support::RgbMode::Packed) && input.bands == 1;
 
-        let mut min_v = f64::INFINITY;
-        let mut max_v = f64::NEG_INFINITY;
-        let mut values = Vec::with_capacity(input.rows * input.cols);
-        for r in 0..input.rows as isize {
-            for c in 0..input.cols as isize {
-                let z_raw = input.get(0, r, c);
-                if input.is_nodata(z_raw) {
-                    continue;
+        let (min_v, max_v, valid_count) = (0..input.rows)
+            .into_par_iter()
+            .map(|r| {
+                let mut local_min = f64::INFINITY;
+                let mut local_max = f64::NEG_INFINITY;
+                let mut local_count = 0usize;
+                for c in 0..input.cols as isize {
+                    let z_raw = input.get(0, r as isize, c);
+                    if input.is_nodata(z_raw) {
+                        continue;
+                    }
+                    let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+                    local_min = local_min.min(z);
+                    local_max = local_max.max(z);
+                    local_count += 1;
                 }
-                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
-                min_v = min_v.min(z);
-                max_v = max_v.max(z);
-                values.push(z);
-            }
-        }
-        if values.is_empty() {
+                (local_min, local_max, local_count)
+            })
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |(min_a, max_a, count_a), (min_b, max_b, count_b)| {
+                    (min_a.min(min_b), max_a.max(max_b), count_a + count_b)
+                },
+            );
+        if valid_count == 0 {
             return Ok(Raster::new(RasterConfig {
                 rows: input.rows,
                 cols: input.cols,
@@ -1522,12 +1531,31 @@ impl FlipImageTool {
             num_bins = range.round() as usize;
         }
         let bin_size = range / (num_bins - 1) as f64;
-        let mut histo = vec![0usize; num_bins];
-        for z in &values {
-            let idx = (((*z - min_v) / bin_size).floor() as usize).min(num_bins - 1);
-            histo[idx] += 1;
-        }
-        let total = values.len() as f64;
+        let histo = (0..input.rows)
+            .into_par_iter()
+            .map(|r| {
+                let mut local_histo = vec![0usize; num_bins];
+                for c in 0..input.cols as isize {
+                    let z_raw = input.get(0, r as isize, c);
+                    if input.is_nodata(z_raw) {
+                        continue;
+                    }
+                    let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+                    let idx = (((z - min_v) / bin_size).floor() as usize).min(num_bins - 1);
+                    local_histo[idx] += 1;
+                }
+                local_histo
+            })
+            .reduce(
+                || vec![0usize; num_bins],
+                |mut acc, local| {
+                    for (dst, src) in acc.iter_mut().zip(local) {
+                        *dst += src;
+                    }
+                    acc
+                },
+            );
+        let total = valid_count as f64;
 
         let mut cumulative = vec![0usize; num_bins];
         let mut running = 0usize;

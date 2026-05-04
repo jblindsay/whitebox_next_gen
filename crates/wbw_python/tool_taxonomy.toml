@@ -748,6 +748,7 @@ tools = [
   "erase_polygon_from_raster",
   "exp",
   "exp2",
+  "fft_random_field",
   "filter_raster_features_by_area",
   "find_patch_edge_cells",
   "floor",
@@ -900,6 +901,7 @@ tools = [
   "plan_curvature",
   "principal_curvature_direction",
   "profile_curvature",
+  "relative_aspect",
   "ring_curvature",
   "rotor",
   "shape_index",
@@ -932,7 +934,6 @@ tools = [
   "multiscale_topographic_position_class",
   "pennock_landform_classification",
   "percent_elev_range",
-  "relative_aspect",
   "relative_topographic_position",
 ]
 

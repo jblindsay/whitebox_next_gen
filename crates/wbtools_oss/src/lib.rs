@@ -240,10 +240,12 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::RasterExpTool));
     registry.register(Box::new(tools::RasterFloorTool));
     registry.register(Box::new(tools::RasterGreaterThanTool));
+    registry.register(Box::new(tools::RasterGreaterThanOrEqualToTool));
     registry.register(Box::new(tools::RasterIncrementTool));
     registry.register(Box::new(tools::RasterIntegerDivisionTool));
     registry.register(Box::new(tools::RasterIsNodataTool));
     registry.register(Box::new(tools::RasterLessThanTool));
+    registry.register(Box::new(tools::RasterLessThanOrEqualToTool));
     registry.register(Box::new(tools::RasterLnTool));
     registry.register(Box::new(tools::RasterLog10Tool));
     registry.register(Box::new(tools::RasterLog2Tool));
@@ -271,6 +273,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::QuantilesTool));
     registry.register(Box::new(tools::RootMeanSquareErrorTool));
     registry.register(Box::new(tools::RandomFieldTool));
+    registry.register(Box::new(tools::FftRandomFieldTool));
     registry.register(Box::new(tools::RandomSampleTool));
     registry.register(Box::new(tools::CumulativeDistributionTool));
     registry.register(Box::new(tools::CrispnessIndexTool));

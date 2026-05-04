@@ -14,7 +14,7 @@ use wbcore::{
 	ToolContext, ToolError, ToolExample, ToolManifest, ToolMetadata, ToolParamSpec, ToolRunResult, ToolStability,
 };
 
-use wbraster::{DataType, Raster, RasterConfig, RasterFormat};
+use wbraster::{BandView, DataType, Raster, RasterConfig, RasterFormat};
 use wbvector;
 use wbvector::memory_store as vector_memory_store;
 
@@ -317,36 +317,6 @@ fn get_oob_as_nodata(data: &[f64], r: isize, c: isize, rows: usize, cols: usize,
 	}
 }
 
-fn detect_pits(data: &[f64], rows: usize, cols: usize, nodata: f64) -> Vec<usize> {
-	let mut pits = Vec::new();
-	for r in 0..rows {
-		for c in 0..cols {
-			let i = idx(r, c, cols);
-			let z = data[i];
-			if z == nodata {
-				continue;
-			}
-			let mut has_lower = false;
-			for k in 0..8 {
-				let rn = r as isize + DY[k];
-				let cn = c as isize + DX[k];
-				if !in_bounds(rn, cn, rows, cols) {
-					continue;
-				}
-				let zn = data[idx(rn as usize, cn as usize, cols)];
-				if zn != nodata && zn < z {
-					has_lower = true;
-					break;
-				}
-			}
-			if !has_lower {
-				pits.push(i);
-			}
-		}
-	}
-	pits
-}
-
 fn detect_strict_pits_with_raise(data: &mut [f64], rows: usize, cols: usize, nodata: f64, small: f64) -> Vec<(usize, f64)> {
 	let mut pits = Vec::new();
 	for r in 0..rows {
@@ -379,27 +349,88 @@ fn detect_strict_pits_with_raise(data: &mut [f64], rows: usize, cols: usize, nod
 	pits
 }
 
-fn fill_pits_core(data: &mut [f64], rows: usize, cols: usize, nodata: f64, small: f64) {
-	let pits = detect_pits(data, rows, cols, nodata);
-	for i in pits {
-		let r = i / cols;
-		let c = i % cols;
-		let mut min_neigh = f64::INFINITY;
-		for k in 0..8 {
-			let rn = r as isize + DY[k];
-			let cn = c as isize + DX[k];
-			if !in_bounds(rn, cn, rows, cols) {
+fn fill_pits_core(src: &BandView, out: &mut [f64], small: f64) {
+	let rows = src.rows;
+	let cols = src.cols;
+	let nodata = src.nodata;
+	let cols_usize = cols as usize;
+	out.par_chunks_mut(cols_usize).enumerate().for_each(|(r, row_out)| {
+		let rr = r as isize;
+		for c in 0..cols_usize {
+			let cc = c as isize;
+			let z = src.get(rr, cc);
+			if z == nodata {
+				row_out[c] = nodata;
 				continue;
 			}
-			let zn = data[idx(rn as usize, cn as usize, cols)];
-			if zn != nodata && zn < min_neigh {
-				min_neigh = zn;
+
+			let z0 = src.get(rr - 1, cc + 1);
+			if z0 == nodata || z0 < z {
+				row_out[c] = z;
+				continue;
 			}
+			let z1 = src.get(rr, cc + 1);
+			if z1 == nodata || z1 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z2 = src.get(rr + 1, cc + 1);
+			if z2 == nodata || z2 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z3 = src.get(rr + 1, cc);
+			if z3 == nodata || z3 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z4 = src.get(rr + 1, cc - 1);
+			if z4 == nodata || z4 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z5 = src.get(rr, cc - 1);
+			if z5 == nodata || z5 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z6 = src.get(rr - 1, cc - 1);
+			if z6 == nodata || z6 < z {
+				row_out[c] = z;
+				continue;
+			}
+			let z7 = src.get(rr - 1, cc);
+			if z7 == nodata || z7 < z {
+				row_out[c] = z;
+				continue;
+			}
+
+			let mut min_zn = z0;
+			if z1 < min_zn {
+				min_zn = z1;
+			}
+			if z2 < min_zn {
+				min_zn = z2;
+			}
+			if z3 < min_zn {
+				min_zn = z3;
+			}
+			if z4 < min_zn {
+				min_zn = z4;
+			}
+			if z5 < min_zn {
+				min_zn = z5;
+			}
+			if z6 < min_zn {
+				min_zn = z6;
+			}
+			if z7 < min_zn {
+				min_zn = z7;
+			}
+
+			row_out[c] = min_zn + small;
 		}
-		if min_neigh.is_finite() {
-			data[i] = min_neigh + small;
-		}
-	}
+	});
 }
 
 fn breach_single_cell_pits_core(data: &mut [f64], rows: usize, cols: usize, nodata: f64) {
@@ -2706,8 +2737,9 @@ impl Tool for FillPitsTool {
 	fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
 		let (dem, output_path) = parse_dem_and_output(args)?;
 		let small = auto_small_increment(&dem, None);
-		let mut data = raster_to_vec(&dem);
-		fill_pits_core(&mut data, dem.rows, dem.cols, dem.nodata, small);
+		let src = dem.band_view(0);
+		let mut data = vec![src.nodata; dem.rows * dem.cols];
+		fill_pits_core(&src, &mut data, small);
 		let out = vec_to_raster(&dem, &data, DataType::F64);
 		Ok(build_result(write_or_store_output(out, output_path)?))
 	}
@@ -5210,17 +5242,20 @@ impl Tool for FillBurnTool {
 		}
 
 		let mut lowered = raster_to_vec(&dem);
-		for i in 0..lowered.len() {
-			if mask[i] > 0 && lowered[i] != dem.nodata {
+		let nodata = dem.nodata;
+		let n = lowered.len();
+		for i in 0..n {
+			if mask[i] > 0 && lowered[i] != nodata {
 				lowered[i] -= 10_000.0;
 			}
 		}
 
 		let small = auto_small_increment(&dem, None);
 		let mut out = fill_depressions_wang_and_liu_core(&lowered, dem.rows, dem.cols, dem.nodata, small);
+
 		let mut min_diff = f64::INFINITY;
-		for i in 0..out.len() {
-			if mask[i] > 0 && out[i] != dem.nodata && lowered[i] != dem.nodata {
+		for i in 0..n {
+			if mask[i] > 0 && out[i] != nodata && lowered[i] != nodata {
 				let d = lowered[i] + 10_000.0 - out[i];
 				if d < min_diff {
 					min_diff = d;
@@ -5231,8 +5266,8 @@ impl Tool for FillBurnTool {
 			min_diff = 0.0;
 		}
 		let adj = min_diff - 1.0;
-		for i in 0..out.len() {
-			if mask[i] > 0 && out[i] != dem.nodata {
+		for i in 0..n {
+			if mask[i] > 0 && out[i] != nodata {
 				out[i] += adj;
 			}
 		}
@@ -6055,6 +6090,8 @@ impl Tool for TopologicalBreachBurnTool {
 
 		let rows = dem.rows;
 		let cols = dem.cols;
+		let n_cells = rows * cols;
+		let dem_data = raster_to_vec(&dem);
 
 		let analysis_path = unique_temp_path("wbtools_oss_tbb_analysis", "geojson");
 		let mut analysis_args = ToolArgs::new();
@@ -6079,39 +6116,45 @@ impl Tool for TopologicalBreachBurnTool {
 			trib: i64,
 		}
 
-		let mut links = Vec::<LinkCells>::new();
-		let mut unique_tucl = Vec::<f64>::new();
-		for feat in &analyzed.features {
-			let Some(ref geom) = feat.geometry else { continue };
-			let cells = collect_line_cells_geometry(rows, cols, &dem, geom);
-			if cells.is_empty() {
-				continue;
-			}
-			let tucl = tucl_idx
-				.and_then(|ix| feat.get_by_index(ix).and_then(|v| v.as_f64()))
-				.unwrap_or(cells.len() as f64)
-				.max(0.0);
-			let trib = trib_idx
-				.and_then(|ix| feat.get_by_index(ix).and_then(|v| v.as_i64()))
-				.unwrap_or((feat.fid as i64) + 1)
-				.max(1);
-			links.push(LinkCells { cells, tucl, trib });
-			unique_tucl.push(tucl);
-		}
-
-		if links.is_empty() {
-			for feat in &streams_layer.features {
-				let Some(ref geom) = feat.geometry else { continue };
+		let mut links: Vec<LinkCells> = analyzed
+			.features
+			.par_iter()
+			.filter_map(|feat| {
+				let geom = feat.geometry.as_ref()?;
 				let cells = collect_line_cells_geometry(rows, cols, &dem, geom);
 				if cells.is_empty() {
-					continue;
+					return None;
 				}
-				let tucl = cells.len() as f64;
-				let trib = (feat.fid as i64) + 1;
-				links.push(LinkCells { cells, tucl, trib });
-				unique_tucl.push(tucl);
-			}
+				let tucl = tucl_idx
+					.and_then(|ix| feat.get_by_index(ix).and_then(|v| v.as_f64()))
+					.unwrap_or(cells.len() as f64)
+					.max(0.0);
+				let trib = trib_idx
+					.and_then(|ix| feat.get_by_index(ix).and_then(|v| v.as_i64()))
+					.unwrap_or((feat.fid as i64) + 1)
+					.max(1);
+				Some(LinkCells { cells, tucl, trib })
+			})
+			.collect();
+
+		if links.is_empty() {
+			links = streams_layer
+				.features
+				.par_iter()
+				.filter_map(|feat| {
+					let geom = feat.geometry.as_ref()?;
+					let cells = collect_line_cells_geometry(rows, cols, &dem, geom);
+					if cells.is_empty() {
+						return None;
+					}
+					let tucl = cells.len() as f64;
+					let trib = (feat.fid as i64) + 1;
+					Some(LinkCells { cells, tucl, trib })
+				})
+				.collect();
 		}
+
+		let mut unique_tucl: Vec<f64> = links.iter().map(|l| l.tucl).collect();
 
 		if links.is_empty() {
 			return Err(ToolError::Validation(
@@ -6137,22 +6180,30 @@ impl Tool for TopologicalBreachBurnTool {
 		let total_cells: usize = links.iter().map(|l| l.cells.len()).sum();
 		let mut best_threshold = 0.0;
 		let mut best_score = f64::NEG_INFINITY;
+		let mut seen_stamp = vec![0u32; n_cells];
+		let mut owner = vec![0i64; n_cells];
+		let mut conflict_stamp = vec![0u32; n_cells];
+		let mut stamp: u32 = 1;
 		for threshold in candidates {
-			let mut seen = vec![false; rows * cols];
-			let mut owner = vec![0i64; rows * cols];
-			let mut conflict = vec![false; rows * cols];
 			let mut occupied = 0usize;
 			let mut collisions = 0usize;
 			let mut kept_cells = 0usize;
+			if stamp == u32::MAX {
+				seen_stamp.fill(0);
+				conflict_stamp.fill(0);
+				stamp = 1;
+			}
+			let cur_stamp = stamp;
+			stamp += 1;
 			for link in links.iter().filter(|l| l.tucl >= threshold) {
 				kept_cells += link.cells.len();
 				for &cell in &link.cells {
-					if !seen[cell] {
-						seen[cell] = true;
+					if seen_stamp[cell] != cur_stamp {
+						seen_stamp[cell] = cur_stamp;
 						owner[cell] = link.trib;
 						occupied += 1;
-					} else if owner[cell] != link.trib && !conflict[cell] {
-						conflict[cell] = true;
+					} else if owner[cell] != link.trib && conflict_stamp[cell] != cur_stamp {
+						conflict_stamp[cell] = cur_stamp;
 						collisions += 1;
 					}
 				}
@@ -6187,18 +6238,21 @@ impl Tool for TopologicalBreachBurnTool {
 		}
 
 		let stream_nodata = -32768.0;
-		let mut stream_data = vec![stream_nodata; rows * cols];
-		for i in 0..rows * cols {
-			if dem.get(0, (i / cols) as isize, (i % cols) as isize) == dem.nodata {
-				continue;
-			}
-			stream_data[i] = if stream_trib[i] > 0 { stream_trib[i] as f64 } else { 0.0 };
-		}
+		let mut stream_data = vec![stream_nodata; n_cells];
+		stream_data
+			.par_iter_mut()
+			.enumerate()
+			.for_each(|(i, v)| {
+				if dem_data[i] == dem.nodata {
+					return;
+				}
+				*v = if stream_trib[i] > 0 { stream_trib[i] as f64 } else { 0.0 };
+			});
 		let mut stream_raster = vec_to_raster(&dem, &stream_data, DataType::I32);
 		stream_raster.nodata = stream_nodata;
 		let stream_path = write_or_store_output(stream_raster, out_streams)?;
 
-		let mut burned = raster_to_vec(&dem);
+		let mut burned = dem_data.clone();
 		let cell_len = ((dem.cell_size_x.abs() + dem.cell_size_y.abs()) / 2.0).max(1.0e-12);
 		let burn_depth_base = (snap_distance.max(cell_len) * 10.0).max(1.0);
 		let max_tucl = stream_tucl
@@ -6207,13 +6261,16 @@ impl Tool for TopologicalBreachBurnTool {
 			.filter(|v| v.is_finite() && *v > 0.0)
 			.fold(0.0, f64::max)
 			.max(1.0);
-		for i in 0..burned.len() {
-			if stream_trib[i] > 0 && burned[i] != dem.nodata {
-				let rel = (stream_tucl[i] / max_tucl).clamp(0.0, 1.0);
-				let depth = burn_depth_base * (1.0 + 0.75 * rel);
-				burned[i] -= depth;
-			}
-		}
+		burned
+			.par_iter_mut()
+			.enumerate()
+			.for_each(|(i, z)| {
+				if stream_trib[i] > 0 && *z != dem.nodata {
+					let rel = (stream_tucl[i] / max_tucl).clamp(0.0, 1.0);
+					let depth = burn_depth_base * (1.0 + 0.75 * rel);
+					*z -= depth;
+				}
+			});
 
 		let small = auto_small_increment(&dem, None);
 		let conditioned = fill_depressions_wang_and_liu_core(&burned, rows, cols, dem.nodata, small);
@@ -6223,52 +6280,56 @@ impl Tool for TopologicalBreachBurnTool {
 
 		let dirs = d8_dir_from_dem_local(&conditioned_raster);
 		let d8_values = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0];
-		let mut pointer_data = vec![0.0f64; rows * cols];
-		for i in 0..rows * cols {
-			let z = conditioned_raster.get(0, (i / cols) as isize, (i % cols) as isize);
-			if z == dem.nodata {
-				pointer_data[i] = dem.nodata;
-				continue;
-			}
-			let dir = dirs[i];
-			pointer_data[i] = if dir >= 0 { d8_values[dir as usize] } else { 0.0 };
-		}
+		let mut pointer_data = vec![0.0f64; n_cells];
+		pointer_data
+			.par_iter_mut()
+			.enumerate()
+			.for_each(|(i, out)| {
+				let z = conditioned[i];
+				if z == dem.nodata {
+					*out = dem.nodata;
+					return;
+				}
+				let mut val = {
+					let dir = dirs[i];
+					if dir >= 0 { d8_values[dir as usize] } else { 0.0 }
+				};
 
-		for i in 0..rows * cols {
-			if stream_trib[i] <= 0 || conditioned_raster.get(0, (i / cols) as isize, (i % cols) as isize) == dem.nodata {
-				continue;
-			}
-			let r = i / cols;
-			let c = i % cols;
-			let z0 = conditioned_raster.get(0, r as isize, c as isize);
-			let mut best_dir = -1i8;
-			let mut best_rank = (false, false, f64::NEG_INFINITY, f64::NEG_INFINITY);
-			for d in 0..8 {
-				let rn = r as isize + DY[d];
-				let cn = c as isize + DX[d];
-				if !in_bounds(rn, cn, rows, cols) {
-					continue;
+				if stream_trib[i] > 0 {
+					let r = i / cols;
+					let c = i % cols;
+					let z0 = z;
+					let mut best_dir = -1i8;
+					let mut best_rank = (false, false, f64::NEG_INFINITY, f64::NEG_INFINITY);
+					for d in 0..8 {
+						let rn = r as isize + DY[d];
+						let cn = c as isize + DX[d];
+						if !in_bounds(rn, cn, rows, cols) {
+							continue;
+						}
+						let ni = idx(rn as usize, cn as usize, cols);
+						if stream_trib[ni] <= 0 {
+							continue;
+						}
+						let zn = conditioned[ni];
+						if zn == dem.nodata {
+							continue;
+						}
+						let same_trib = stream_trib[ni] == stream_trib[i];
+						let lower = zn < z0;
+						let rank = (same_trib, lower, stream_tucl[ni], -zn);
+						if rank > best_rank {
+							best_rank = rank;
+							best_dir = d as i8;
+						}
+					}
+					if best_dir >= 0 {
+						val = d8_values[best_dir as usize];
+					}
 				}
-				let ni = idx(rn as usize, cn as usize, cols);
-				if stream_trib[ni] <= 0 {
-					continue;
-				}
-				let zn = conditioned_raster.get(0, rn, cn);
-				if zn == dem.nodata {
-					continue;
-				}
-				let same_trib = stream_trib[ni] == stream_trib[i];
-				let lower = zn < z0;
-				let rank = (same_trib, lower, stream_tucl[ni], -zn);
-				if rank > best_rank {
-					best_rank = rank;
-					best_dir = d as i8;
-				}
-			}
-			if best_dir >= 0 {
-				pointer_data[i] = d8_values[best_dir as usize];
-			}
-		}
+
+				*out = val;
+			});
 
 		let mut ptr_raster = vec_to_raster(&conditioned_raster, &pointer_data, DataType::I16);
 		ptr_raster.nodata = dem.nodata;

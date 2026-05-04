@@ -1483,7 +1483,12 @@ fn append_cap(
 
     match cap_style {
         BufferCapStyle::Flat => {
-            ring.push(right_pt);
+            if at_end {
+                // Bridge from left_end to right_end across the tip.
+                ring.push(right_pt);
+            }
+            // at_end=false: the ring's implicit closure from right_start back to
+            // left_start (ring[0]) already forms the flat cap — nothing to push.
         }
         BufferCapStyle::Square => {
             let ext = if at_end {
@@ -1491,21 +1496,37 @@ fn append_cap(
             } else {
                 Coord::xy(-ux * distance, -uy * distance)
             };
-            ring.push(Coord::xy(left_pt.x + ext.x, left_pt.y + ext.y));
-            ring.push(Coord::xy(right_pt.x + ext.x, right_pt.y + ext.y));
-            ring.push(right_pt);
+            if at_end {
+                // End cap: left_end → left_ext → right_ext → right_end
+                ring.push(Coord::xy(left_pt.x + ext.x, left_pt.y + ext.y));
+                ring.push(Coord::xy(right_pt.x + ext.x, right_pt.y + ext.y));
+                ring.push(right_pt);
+            } else {
+                // Start cap: right_start → right_ext → left_ext → (close to left_start)
+                ring.push(Coord::xy(right_pt.x + ext.x, right_pt.y + ext.y));
+                ring.push(Coord::xy(left_pt.x + ext.x, left_pt.y + ext.y));
+                // implicit ring closure lands on left_pt = ring[0]
+            }
         }
         BufferCapStyle::Round => {
-            let start = left_pt;
-            let end = right_pt;
+            // End cap: arc from left_end → right_end (wraps around the tip).
+            // Start cap: arc from right_start → left_start (wraps behind the start).
+            // The ring traversal always ends at the "from" point and the arc
+            // delivers us to the "to" point; swapping start/end for at_end=false
+            // corrects the direction so the cap wraps the correct side.
+            let (arc_start, arc_end) = if at_end {
+                (left_pt, right_pt)
+            } else {
+                (right_pt, left_pt)
+            };
             let test = if at_end {
                 Coord::xy(endpoint.x + ux * distance, endpoint.y + uy * distance)
             } else {
                 Coord::xy(endpoint.x - ux * distance, endpoint.y - uy * distance)
             };
 
-            let ccw = ccw_arc_contains(endpoint, start, end, test);
-            append_arc(ring, endpoint, start, end, segs / 2, ccw, false);
+            let ccw = ccw_arc_contains(endpoint, arc_start, arc_end, test);
+            append_arc(ring, endpoint, arc_start, arc_end, segs / 2, ccw, false);
         }
     }
 }

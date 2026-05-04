@@ -1356,6 +1356,305 @@ impl Raster {
         Ok(())
     }
 
+    /// Apply a binary math operation from two source rasters, writing results into `self`.
+    ///
+    /// `self` must be a freshly-allocated output (e.g. from `Raster::new_like`). The closure
+    /// `f(z1, z2) -> f64` is called only for cell pairs where neither source is nodata.
+    /// When either source is nodata the output cell is set to `self.nodata`.
+    ///
+    /// Fast paths: when `self`, `src1`, and `src2` are all F32 or all F64 the typed slices
+    /// are zipped in parallel without any enum dispatch per cell.
+    ///
+    /// # Errors
+    /// Returns an error if the raster dimensions do not all match.
+    pub fn apply_binary_math_from<F>(
+        &mut self,
+        f: F,
+        src1: &Raster,
+        src2: &Raster,
+    ) -> Result<()>
+    where
+        F: Fn(f64, f64) -> f64 + Send + Sync,
+    {
+        if self.rows != src1.rows || self.cols != src1.cols || self.bands != src1.bands
+            || src1.rows != src2.rows || src1.cols != src2.cols || src1.bands != src2.bands
+        {
+            return Err(RasterError::Other(format!(
+                "raster dimension mismatch: self {}×{}×{}, src1 {}×{}×{}, src2 {}×{}×{}",
+                self.bands, self.rows, self.cols,
+                src1.bands, src1.rows, src1.cols,
+                src2.bands, src2.rows, src2.cols,
+            )));
+        }
+
+        let nd1 = src1.nodata;
+        let nd1_is_nan = nd1.is_nan();
+        let nd2 = src2.nodata;
+        let nd2_is_nan = nd2.is_nan();
+        let nd_out = self.nodata;
+
+        let is_nd1 = |v: f32| -> bool {
+            if nd1_is_nan { (v as f64).is_nan() } else { v == nd1 as f32 }
+        };
+        let is_nd2 = |v: f32| -> bool {
+            if nd2_is_nan { (v as f64).is_nan() } else { v == nd2 as f32 }
+        };
+        let is_nd1_f64 = |v: f64| -> bool {
+            if nd1_is_nan { v.is_nan() } else { v == nd1 }
+        };
+        let is_nd2_f64 = |v: f64| -> bool {
+            if nd2_is_nan { v.is_nan() } else { v == nd2 }
+        };
+
+        // Fast path family: destination + src1 are F32, src2 may be any native storage.
+        if let (Some(d1), Some(dst)) = (src1.data.as_f32_slice(), self.data.as_f32_slice_mut()) {
+            let nd_out_f32 = nd_out as f32;
+
+            if let Some(d2) = src2.data.as_f32_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        if is_nd1(z1) || is_nd2(z2) {
+                            *out = nd_out_f32;
+                        } else {
+                            *out = f(z1 as f64, z2 as f64) as f32;
+                        }
+                    });
+                return Ok(());
+            }
+
+            macro_rules! run_f32_rhs_typed {
+                ($rhs:expr) => {{
+                    dst.par_iter_mut()
+                        .zip(d1.par_iter())
+                        .zip($rhs.par_iter())
+                        .for_each(|((out, &z1), &z2)| {
+                            let z2f = z2 as f64;
+                            let z2_is_nd = if nd2_is_nan { z2f.is_nan() } else { z2f == nd2 };
+                            if is_nd1(z1) || z2_is_nd {
+                                *out = nd_out_f32;
+                            } else {
+                                *out = f(z1 as f64, z2f) as f32;
+                            }
+                        });
+                    return Ok(());
+                }};
+            }
+
+            if let Some(d2) = src2.data.as_f64_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        if is_nd1(z1) || is_nd2_f64(z2) {
+                            *out = nd_out_f32;
+                        } else {
+                            *out = f(z1 as f64, z2) as f32;
+                        }
+                    });
+                return Ok(());
+            }
+            if let Some(d2) = src2.data.as_u8_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i8_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u16_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i16_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u32_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i32_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u64_slice() { run_f32_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i64_slice() { run_f32_rhs_typed!(d2); }
+        }
+
+        // Fast path family: destination + src1 are F64, src2 may be any native storage.
+        if let (Some(d1), Some(dst)) = (src1.data.as_f64_slice(), self.data.as_f64_slice_mut()) {
+            if let Some(d2) = src2.data.as_f64_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        if is_nd1_f64(z1) || is_nd2_f64(z2) {
+                            *out = nd_out;
+                        } else {
+                            *out = f(z1, z2);
+                        }
+                    });
+                return Ok(());
+            }
+
+            macro_rules! run_f64_rhs_typed {
+                ($rhs:expr) => {{
+                    dst.par_iter_mut()
+                        .zip(d1.par_iter())
+                        .zip($rhs.par_iter())
+                        .for_each(|((out, &z1), &z2)| {
+                            let z2f = z2 as f64;
+                            let z2_is_nd = if nd2_is_nan { z2f.is_nan() } else { z2f == nd2 };
+                            if is_nd1_f64(z1) || z2_is_nd {
+                                *out = nd_out;
+                            } else {
+                                *out = f(z1, z2f);
+                            }
+                        });
+                    return Ok(());
+                }};
+            }
+
+            if let Some(d2) = src2.data.as_f32_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        if is_nd1_f64(z1) || is_nd2(z2) {
+                            *out = nd_out;
+                        } else {
+                            *out = f(z1, z2 as f64);
+                        }
+                    });
+                return Ok(());
+            }
+            if let Some(d2) = src2.data.as_u8_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i8_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u16_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i16_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u32_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i32_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u64_slice() { run_f64_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i64_slice() { run_f64_rhs_typed!(d2); }
+        }
+
+        // Fast path family: destination + src1 are I16, src2 may be any native storage.
+        // Covers D8 flow-pointer rasters and other signed-16-bit outputs.
+        if let (Some(d1), Some(dst)) = (src1.data.as_i16_slice(), self.data.as_i16_slice_mut()) {
+            let nd1_i16 = nd1 as i16;
+            let nd_out_i16 = nd_out as i16;
+            let chk1_i16 = |v: i16| v == nd1_i16;
+
+            macro_rules! run_i16_rhs_typed {
+                ($rhs:expr) => {{
+                    dst.par_iter_mut()
+                        .zip(d1.par_iter())
+                        .zip($rhs.par_iter())
+                        .for_each(|((out, &z1), &z2)| {
+                            let z2f = z2 as f64;
+                            let z2_is_nd = if nd2_is_nan { z2f.is_nan() } else { z2f == nd2 };
+                            *out = if chk1_i16(z1) || z2_is_nd {
+                                nd_out_i16
+                            } else {
+                                f(z1 as f64, z2f) as i16
+                            };
+                        });
+                    return Ok(());
+                }};
+            }
+
+            if let Some(d2) = src2.data.as_f32_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        *out = if chk1_i16(z1) || is_nd2(z2) {
+                            nd_out_i16
+                        } else {
+                            f(z1 as f64, z2 as f64) as i16
+                        };
+                    });
+                return Ok(());
+            }
+            if let Some(d2) = src2.data.as_f64_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u8_slice()  { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i8_slice()  { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u16_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i16_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u32_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i32_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u64_slice() { run_i16_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i64_slice() { run_i16_rhs_typed!(d2); }
+        }
+
+        // Fast path family: destination + src1 are U8, src2 may be any native storage.
+        // Covers binary classification masks and other unsigned-8-bit outputs.
+        if let (Some(d1), Some(dst)) = (src1.data.as_u8_slice(), self.data.as_u8_slice_mut()) {
+            let nd1_u8 = nd1 as u8;
+            let nd_out_u8 = nd_out as u8;
+            let chk1_u8 = |v: u8| v == nd1_u8;
+
+            macro_rules! run_u8_rhs_typed {
+                ($rhs:expr) => {{
+                    dst.par_iter_mut()
+                        .zip(d1.par_iter())
+                        .zip($rhs.par_iter())
+                        .for_each(|((out, &z1), &z2)| {
+                            let z2f = z2 as f64;
+                            let z2_is_nd = if nd2_is_nan { z2f.is_nan() } else { z2f == nd2 };
+                            *out = if chk1_u8(z1) || z2_is_nd {
+                                nd_out_u8
+                            } else {
+                                f(z1 as f64, z2f) as u8
+                            };
+                        });
+                    return Ok(());
+                }};
+            }
+
+            if let Some(d2) = src2.data.as_f32_slice() {
+                dst.par_iter_mut()
+                    .zip(d1.par_iter())
+                    .zip(d2.par_iter())
+                    .for_each(|((out, &z1), &z2)| {
+                        *out = if chk1_u8(z1) || is_nd2(z2) {
+                            nd_out_u8
+                        } else {
+                            f(z1 as f64, z2 as f64) as u8
+                        };
+                    });
+                return Ok(());
+            }
+            if let Some(d2) = src2.data.as_f64_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u8_slice()  { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i8_slice()  { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u16_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i16_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u32_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i32_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_u64_slice() { run_u8_rhs_typed!(d2); }
+            if let Some(d2) = src2.data.as_i64_slice() { run_u8_rhs_typed!(d2); }
+        }
+
+        // Generic parallel fallback for any remaining type combinations
+        // (e.g. I32/U16/U32/I64/U64 as dst+src1, or cross-typed mixed pairs).
+        // Uses par_fill_with for parallelism; get_f64 dispatch is slightly
+        // heavier than the typed fast paths but still fully parallel.
+        self.data.par_fill_with(|i| {
+            let z1 = src1.data.get_f64(i);
+            let z2 = src2.data.get_f64(i);
+            if is_nd1_f64(z1) || is_nd2_f64(z2) { nd_out } else { f(z1, z2) }
+        });
+
+        Ok(())
+    }
+
+    /// Add a scalar constant to every non-nodata cell, reading from `src`, writing to `self`.
+    ///
+    /// Equivalent to `apply_unary_math_from(|z| z + scalar, src)` but expresses intent clearly
+    /// and is the canonical kernel shared by the `increment` tool.
+    ///
+    /// # Errors
+    /// Returns an error if raster dimensions do not match.
+    pub fn apply_scalar_add(&mut self, src: &Raster, scalar: f64) -> Result<()> {
+        self.apply_unary_math_from(|z| z + scalar, src)
+    }
+
+    /// Subtract a scalar constant from every non-nodata cell, reading from `src`, writing to `self`.
+    ///
+    /// Equivalent to `apply_unary_math_from(|z| z - scalar, src)` but expresses intent clearly
+    /// and is the canonical kernel shared by the `decrement` tool.
+    ///
+    /// # Errors
+    /// Returns an error if raster dimensions do not match.
+    pub fn apply_scalar_sub(&mut self, src: &Raster, scalar: f64) -> Result<()> {
+        self.apply_unary_math_from(|z| z - scalar, src)
+    }
+
     // ─── Pixel access ──────────────────────────────────────────────────────
 
     /// Return the flat buffer index for signed band, row, and column coordinates.

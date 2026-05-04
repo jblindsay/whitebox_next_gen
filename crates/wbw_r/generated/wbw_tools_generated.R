@@ -424,7 +424,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("dbscan", list(...))
   }
   session$decrement <- function(...) {
-    # Subtracts 1 from each non-nodata raster cell.
+    # Subtracts a value (default 1.0) from each non-nodata raster cell.
     run_tool("decrement", list(...))
   }
   session$delete_field <- function(...) {
@@ -618,6 +618,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$exp2 <- function(...) {
     # Computes 2 raised to the power of each raster cell.
     run_tool("exp2", list(...))
+  }
+  session$fft_random_field <- function(...) {
+    # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+    run_tool("fft_random_field", list(...))
   }
   session$export_table_to_csv <- function(...) {
     # Exports a vector attribute table to a CSV file.
@@ -1012,7 +1016,7 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     run_tool("improved_ground_point_filter", list(...))
   }
   session$increment <- function(...) {
-    # Adds 1 to each non-nodata raster cell.
+    # Adds a value (default 1.0) to each non-nodata raster cell.
     run_tool("increment", list(...))
   }
   session$individual_tree_detection <- function(...) {
@@ -3957,13 +3961,13 @@ wbw_dbscan <- function(...) {
 }
 
 decrement <- function(...) {
-  # Subtracts 1 from each non-nodata raster cell.
+  # Subtracts a value (default 1.0) from each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$decrement(...)
 }
 
 wbw_decrement <- function(...) {
-  # Subtracts 1 from each non-nodata raster cell.
+  # Subtracts a value (default 1.0) from each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$decrement(...)
 }
@@ -4530,6 +4534,18 @@ wbw_exp2 <- function(...) {
   # Computes 2 raised to the power of each raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$exp2(...)
+}
+
+fft_random_field <- function(...) {
+  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fft_random_field(...)
+}
+
+wbw_fft_random_field <- function(...) {
+  # Creates a spatially-autocorrelated random field using FFT spectral synthesis.
+  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
+  session$fft_random_field(...)
 }
 
 export_table_to_csv <- function(...) {
@@ -5661,13 +5677,13 @@ wbw_improved_ground_point_filter <- function(...) {
 }
 
 increment <- function(...) {
-  # Adds 1 to each non-nodata raster cell.
+  # Adds a value (default 1.0) to each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$increment(...)
 }
 
 wbw_increment <- function(...) {
-  # Adds 1 to each non-nodata raster cell.
+  # Adds a value (default 1.0) to each non-nodata raster cell.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$increment(...)
 }

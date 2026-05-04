@@ -15,6 +15,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Reset `src/fast_triangulation.rs` to a closer upstream-style delaunator port so performance work can restart from a simpler baseline.
 - Updated LiDAR IDW interpolation to use fixed-radius search in radius mode instead of k-d tree radius queries.
 
+### Fixed
+- Fixed buffer line cap direction bug in `append_cap`: start cap (at_end=false) now correctly wraps the back of the starting point instead of the front, eliminating self-intersecting rings that repair logic would collapse. Round, square, and flat cap styles now produce geometrically correct output.
+
 ## [0.1.0] - 2026-03-31
 ### Added
 - Initial published release.

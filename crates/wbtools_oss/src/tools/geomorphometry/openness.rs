@@ -88,11 +88,21 @@ impl OpennessCore {
         let input_path = Self::parse_input(args)?;
         let pos_output_path = parse_optional_output_path(args, "pos_output")?;
         let neg_output_path = parse_optional_output_path(args, "neg_output")?;
+        // Accept integer or floating-point JSON values for dist; float inputs are rounded.
         let search_dist = args
             .get("dist")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(20)
-            .max(1) as usize;
+            .and_then(|v| {
+                if let Some(u) = v.as_u64() {
+                    Some(u as usize)
+                } else if let Some(i) = v.as_i64() {
+                    Some(i.max(1) as usize)
+                } else {
+                    v.as_f64()
+                        .filter(|f| f.is_finite())
+                        .map(|f| f.round().max(1.0) as usize)
+                }
+            })
+            .unwrap_or(20);
 
         let input = Self::load_raster(&input_path)?;
         let rows = input.rows;

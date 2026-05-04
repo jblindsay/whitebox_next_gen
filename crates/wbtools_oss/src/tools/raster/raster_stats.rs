@@ -8,6 +8,8 @@ use kdtree::KdTree;
 use rayon::prelude::*;
 use rand::seq::SliceRandom;
 use rand::RngExt;
+use rustfft::num_complex::Complex;
+use rustfft::FftPlanner;
 use serde_json::json;
 use wbcore::{
     parse_optional_output_path, parse_raster_path_arg, parse_vector_path_arg, LicenseTier, Tool,
@@ -178,6 +180,7 @@ pub struct ImageCorrelationNeighbourhoodAnalysisTool;
 pub struct ImageRegressionTool;
 pub struct DbscanTool;
 pub struct ZonalStatisticsTool;
+pub struct FftRandomFieldTool;
 pub struct TurningBandsSimulationTool;
 pub struct TrendSurfaceTool;
 pub struct TrendSurfaceVectorPointsTool;
@@ -445,6 +448,36 @@ fn sample_standard_normal<R: RngExt + ?Sized>(rng: &mut R) -> f64 {
     let u1: f64 = rng.random::<f64>().clamp(f64::MIN_POSITIVE, 1.0);
     let u2: f64 = rng.random::<f64>();
     (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+}
+
+fn fft2_in_place(data: &mut [Complex<f64>], rows: usize, cols: usize, inverse: bool) {
+    let mut planner = FftPlanner::<f64>::new();
+    let row_fft = if inverse {
+        planner.plan_fft_inverse(cols)
+    } else {
+        planner.plan_fft_forward(cols)
+    };
+
+    for row in data.chunks_exact_mut(cols) {
+        row_fft.process(row);
+    }
+
+    let col_fft = if inverse {
+        planner.plan_fft_inverse(rows)
+    } else {
+        planner.plan_fft_forward(rows)
+    };
+
+    let mut col_buffer = vec![Complex::new(0.0, 0.0); rows];
+    for col in 0..cols {
+        for row in 0..rows {
+            col_buffer[row] = data[row * cols + col];
+        }
+        col_fft.process(&mut col_buffer);
+        for row in 0..rows {
+            data[row * cols + col] = col_buffer[row];
+        }
+    }
 }
 
 fn write_inplace_raster(raster: Raster, input1_path: &str) -> Result<String, ToolError> {
@@ -1587,9 +1620,181 @@ impl Tool for RandomFieldTool {
             metadata: base.metadata.clone(),
         });
 
-        let mut rng = rand::rng();
-        for i in 0..output.data.len() {
-            output.data.set_f64(i, sample_standard_normal(&mut rng));
+        // Generate parallel random F32 values directly into the typed buffer
+        // This avoids the per-cell dynamic dispatch overhead of set_f64
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            use rayon::prelude::*;
+            data_slice.par_iter_mut().for_each(|cell| {
+                let mut rng = rand::rng();
+                *cell = sample_standard_normal(&mut rng) as f32;
+            });
+        } else {
+            // Fallback: shouldn't happen since we just created F32 output above
+            let mut rng = rand::rng();
+            for i in 0..output.data.len() {
+                output.data.set_f64(i, sample_standard_normal(&mut rng));
+            }
+        }
+
+        let loc = write_or_store_output(output, output_path)?;
+        let mut outputs = BTreeMap::new();
+        outputs.insert("output".to_string(), typed_raster_output(loc));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+impl Tool for FftRandomFieldTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "fft_random_field",
+            display_name: "FFT Random Field",
+            summary: "Creates a spatially-autocorrelated random field using FFT spectral synthesis.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec { name: "base_raster", description: "Base raster path used for grid geometry.", required: true },
+                ToolParamSpec { name: "range", description: "Approximate correlation range in map units. Default: 1.0.", required: false },
+                ToolParamSpec { name: "output", description: "Optional output raster path.", required: false },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("range".to_string(), json!(1.0));
+
+        let mut example = ToolArgs::new();
+        example.insert("base_raster".to_string(), json!("dem.tif"));
+        example.insert("range".to_string(), json!(250.0));
+        example.insert("output".to_string(), json!("fft_random_field.tif"));
+
+        ToolManifest {
+            id: "fft_random_field".to_string(),
+            display_name: "FFT Random Field".to_string(),
+            summary: "Creates a spatially-autocorrelated random field using FFT spectral synthesis.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor { name: "base_raster".to_string(), description: "Base raster path used for grid geometry.".to_string(), required: true },
+                ToolParamDescriptor { name: "range".to_string(), description: "Approximate correlation range in map units. Default: 1.0.".to_string(), required: false },
+                ToolParamDescriptor { name: "output".to_string(), description: "Optional output raster path.".to_string(), required: false },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "basic_fft_random_field".to_string(),
+                description: "Create an autocorrelated random raster using FFT spectral filtering.".to_string(),
+                args: example,
+            }],
+            tags: vec!["raster".to_string(), "simulation".to_string(), "fft".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = parse_raster_path_arg(args, "base_raster")?;
+        let _ = parse_optional_output_path(args, "output")?;
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, _ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let base_path = parse_raster_path_arg(args, "base_raster")?;
+        let range = args.get("range").and_then(|v| v.as_f64()).unwrap_or(1.0).max(0.0);
+        let output_path = parse_optional_output_path(args, "output")?;
+
+        let base = load_raster(&base_path, "base_raster")?;
+        let rows = base.rows;
+        let cols = base.cols;
+        let n = rows * cols;
+
+        if rows == 0 || cols == 0 {
+            return Err(ToolError::Validation("base_raster must have non-zero rows and columns".to_string()));
+        }
+
+        let mut spectral = vec![Complex::new(0.0, 0.0); n];
+        spectral.par_iter_mut().for_each(|z| {
+            let mut rng = rand::rng();
+            z.re = sample_standard_normal(&mut rng);
+        });
+
+        fft2_in_place(&mut spectral, rows, cols, false);
+
+        if range > 0.0 {
+            let cell_size = base.cell_size_x.abs().max(f64::MIN_POSITIVE);
+            let sigma_cells = (range / cell_size).max(f64::MIN_POSITIVE);
+            let two_pi = 2.0 * std::f64::consts::PI;
+
+            for row in 0..rows {
+                let fy = if row <= rows / 2 {
+                    row as f64 / rows as f64
+                } else {
+                    (rows - row) as f64 / rows as f64
+                };
+                let wy = two_pi * fy;
+
+                for col in 0..cols {
+                    let fx = if col <= cols / 2 {
+                        col as f64 / cols as f64
+                    } else {
+                        (cols - col) as f64 / cols as f64
+                    };
+                    let wx = two_pi * fx;
+                    let k2 = wx * wx + wy * wy;
+                    let gain = (-0.5 * sigma_cells * sigma_cells * k2).exp();
+                    spectral[row * cols + col] *= gain;
+                }
+            }
+        }
+
+        fft2_in_place(&mut spectral, rows, cols, true);
+
+        let inv_n = 1.0 / n as f64;
+        let mut field = vec![0.0f64; n];
+        field
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, v)| *v = spectral[i].re * inv_n);
+
+        let mean = field.par_iter().copied().sum::<f64>() / n as f64;
+        let variance = field
+            .par_iter()
+            .map(|&v| {
+                let d = v - mean;
+                d * d
+            })
+            .sum::<f64>()
+            / n as f64;
+        let stdev = variance.max(0.0).sqrt();
+
+        if stdev > 1.0e-15 {
+            field.par_iter_mut().for_each(|v| *v = (*v - mean) / stdev);
+        } else {
+            field.par_iter_mut().for_each(|v| *v = 0.0);
+        }
+
+        let mut output = Raster::new(RasterConfig {
+            rows,
+            cols,
+            bands: 1,
+            x_min: base.x_min,
+            y_min: base.y_min,
+            cell_size: base.cell_size_x,
+            cell_size_y: Some(base.cell_size_y),
+            nodata: base.nodata,
+            data_type: DataType::F32,
+            crs: base.crs.clone(),
+            metadata: base.metadata.clone(),
+            ..Default::default()
+        });
+
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            data_slice
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, cell)| *cell = field[i] as f32);
+        } else {
+            for i in 0..n {
+                output.data.set_f64(i, field[i]);
+            }
         }
 
         let loc = write_or_store_output(output, output_path)?;
@@ -5258,22 +5463,47 @@ impl Tool for QuantilesTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let input = load_raster(&input_path, "input")?;
 
-        let mut vals = Vec::<f64>::new();
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if !input.is_nodata(z) {
-                vals.push(z);
+        // Compute min/max in one parallel pass
+        let (min_val, max_val, num_valid) = {
+            let mut mn = f64::INFINITY;
+            let mut mx = f64::NEG_INFINITY;
+            let mut n = 0usize;
+            for i in 0..input.data.len() {
+                let z = input.data.get_f64(i);
+                if !input.is_nodata(z) {
+                    if z < mn { mn = z; }
+                    if z > mx { mx = z; }
+                    n += 1;
+                }
             }
-        }
-        if vals.is_empty() {
+            (mn, mx, n)
+        };
+        if num_valid == 0 {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
         }
 
-        vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        let mut cuts = Vec::<f64>::new();
-        for q in 1..num_quantiles {
-            let idx = ((q as f64 / num_quantiles as f64) * (vals.len() - 1) as f64).round() as usize;
-            cuts.push(vals[idx]);
+        // Build histogram with fixed number of bins (same approach as legacy)
+        const NUM_BINS: usize = 10_000;
+        let value_range = (max_val - min_val).max(f64::EPSILON);
+        let bin_size = value_range / NUM_BINS as f64;
+        let mut histo = vec![0u64; NUM_BINS];
+        for i in 0..input.data.len() {
+            let z = input.data.get_f64(i);
+            if !input.is_nodata(z) {
+                let b = ((z - min_val) / bin_size).floor() as usize;
+                let b = b.min(NUM_BINS - 1);
+                histo[b] += 1;
+            }
+        }
+
+        // Cumulative histogram → quantile class per bin
+        let mut cumulative = 0u64;
+        let mut bin_class = vec![0u8; NUM_BINS];
+        for b in 0..NUM_BINS {
+            cumulative += histo[b];
+            // quantile class 1..=num_quantiles
+            let klass = ((cumulative as f64 / num_valid as f64) * num_quantiles as f64).ceil() as usize;
+            bin_class[b] = klass.clamp(1, num_quantiles) as u8;
         }
 
         let mut out = Raster::new(RasterConfig {
@@ -5294,17 +5524,11 @@ impl Tool for QuantilesTool {
             let z = input.data.get_f64(i);
             if input.is_nodata(z) {
                 out.data.set_f64(i, input.nodata);
-                continue;
+            } else {
+                let b = ((z - min_val) / bin_size).floor() as usize;
+                let b = b.min(NUM_BINS - 1);
+                out.data.set_f64(i, bin_class[b] as f64);
             }
-            let mut klass = 1usize;
-            for cut in &cuts {
-                if z > *cut {
-                    klass += 1;
-                } else {
-                    break;
-                }
-            }
-            out.data.set_f64(i, klass as f64);
         }
 
         let loc = write_or_store_output(out, output_path)?;
@@ -5748,14 +5972,14 @@ impl Tool for TurningBandsSimulationTool {
         let cell_offsets: Vec<isize> = (0..filter_size as isize).map(|i| i - filter_half_size as isize).collect();
         let w = (36.0 / (filter_half_size as f64 * (filter_half_size as f64 + 1.0) * filter_size as f64)).sqrt();
 
-        let mut accum = vec![0.0f64; rows * cols];
+        let mut accum = vec![0.0f32; rows * cols];
         let mut rng = rand::rng();
 
         for _ in 0..iterations {
             let mut t = vec![0.0f64; diagonal_size + 2 * filter_half_size];
             for j in 0..diagonal_size { t[j] = sample_standard_normal(&mut rng); }
 
-            let mut y = vec![0.0f64; diagonal_size];
+            let mut y = vec![0.0f32; diagonal_size];
             let mut sum = 0.0f64;
             let mut sq_sum = 0.0f64;
             for j in 0..diagonal_size {
@@ -5764,68 +5988,47 @@ impl Tool for TurningBandsSimulationTool {
                     let m = cell_offsets[k];
                     z += m as f64 * t[(j as isize + filter_half_size as isize + m) as usize];
                 }
-                y[j] = w * z;
-                sum += y[j];
-                sq_sum += y[j] * y[j];
+                y[j] = (w * z) as f32;
+                sum += y[j] as f64;
+                sq_sum += y[j] as f64 * y[j] as f64;
             }
             let mean = sum / diagonal_size as f64;
             let variance = (sq_sum / diagonal_size as f64 - mean * mean).max(0.0);
             let stdev = variance.sqrt();
-            if stdev > 1.0e-15 { for j in 0..diagonal_size { y[j] = (y[j] - mean) / stdev; } }
-
-            // Pick two edge points on different sides of the grid
-            let edge1 = rng.random_range(0..4usize);
-            let mut edge2 = edge1;
-            while edge2 == edge1 { edge2 = rng.random_range(0..4usize); }
-
-            let (p1x, p1y) = match edge1 {
-                0 => (0.0f64, rng.random_range(0..rows) as f64),
-                1 => (rng.random_range(0..cols) as f64, 0.0f64),
-                2 => ((cols as f64 - 1.0), rng.random_range(0..rows) as f64),
-                _ => (rng.random_range(0..cols) as f64, (rows as f64 - 1.0)),
-            };
-            let (mut p2x, mut p2y) = match edge2 {
-                0 => (0.0f64, rng.random_range(0..rows) as f64),
-                1 => (rng.random_range(0..cols) as f64, 0.0f64),
-                2 => ((cols as f64 - 1.0), rng.random_range(0..rows) as f64),
-                _ => (rng.random_range(0..cols) as f64, (rows as f64 - 1.0)),
-            };
-            let mut attempts = 0usize;
-            while p1x == p2x || p1y == p2y {
-                p2x = match edge2 { 0 | 2 => if edge2 == 0 { 0.0 } else { cols as f64 - 1.0 }, _ => rng.random_range(0..cols) as f64 };
-                p2y = match edge2 { 1 | 3 => if edge2 == 1 { 0.0 } else { rows as f64 - 1.0 }, _ => rng.random_range(0..rows) as f64 };
-                attempts += 1;
-                if attempts > 50 { break; }
-            }
-            if p1x == p2x || p1y == p2y { continue; }
-
-            let slope = (p2y - p1y) / (p2x - p1x);
-            let intercept = p1y - slope * p1x;
-            let perp = -1.0 / slope;
-            let slope_diff = slope - perp;
-
-            // Find starting corner (min y-projection)
-            let grid_corners = [(0.0f64, 0.0f64), (0.0, cols as f64), (rows as f64, 0.0), (rows as f64, cols as f64)];
-            let (lsx, lsy) = grid_corners.iter().map(|&(r, c)| {
-                let b = r - perp * c;
-                let cx = (b - intercept) / slope_diff;
-                let cy = slope * cx - intercept;
-                (cx, cy)
-            }).min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
-
-            for row in 0..rows {
-                for col in 0..cols {
-                    let b = row as f64 - perp * col as f64;
-                    let ix = (b - intercept) / slope_diff;
-                    let iy = slope * ix - intercept;
-                    let p = (((ix - lsx).powi(2) + (iy - lsy).powi(2)).sqrt() as isize)
-                        .clamp(0, (diagonal_size - 1) as isize) as usize;
-                    accum[row * cols + col] += y[p];
+            if stdev > 1.0e-15 {
+                for v in &mut y {
+                    *v = ((*v as f64 - mean) / stdev) as f32;
                 }
             }
+
+            // Use a random band angle and project cells onto that 1D axis.
+            // This avoids expensive per-cell intersection and sqrt calculations.
+            let theta = rng.random_range(0.0..std::f64::consts::PI);
+            let dir_x = theta.cos();
+            let dir_y = theta.sin();
+
+            let max_col = (cols.saturating_sub(1)) as f64;
+            let max_row = (rows.saturating_sub(1)) as f64;
+            let p00 = 0.0_f64;
+            let p10 = max_col * dir_x;
+            let p01 = max_row * dir_y;
+            let p11 = max_col * dir_x + max_row * dir_y;
+            let min_proj = p00.min(p10).min(p01).min(p11);
+
+            accum
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(row, row_accum)| {
+                    let mut proj = row as f64 * dir_y - min_proj;
+                    for cell in row_accum.iter_mut() {
+                        let p = (proj.round() as isize).clamp(0, (diagonal_size - 1) as isize) as usize;
+                        *cell += y[p];
+                        proj += dir_x;
+                    }
+                });
         }
 
-        let iter_sqrt = (iterations as f64).sqrt();
+        let iter_sqrt = (iterations as f32).sqrt();
         let mut output = Raster::new(RasterConfig {
             rows, cols, bands: 1,
             x_min: input.x_min, y_min: input.y_min,
@@ -5834,7 +6037,17 @@ impl Tool for TurningBandsSimulationTool {
             crs: input.crs.clone(), metadata: input.metadata.clone(),
             ..Default::default()
         });
-        for i in 0..rows * cols { output.data.set_f64(i, accum[i] / iter_sqrt); }
+        
+        // Parallel normalized accumulation into typed F32 buffer (avoids per-cell dispatch overhead)
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            use rayon::prelude::*;
+            data_slice.par_iter_mut().enumerate().for_each(|(i, cell)| {
+                *cell = accum[i] / iter_sqrt;
+            });
+        } else {
+            // Fallback: shouldn't happen since we just created F32 output above
+            for i in 0..rows * cols { output.data.set_f64(i, (accum[i] / iter_sqrt) as f64); }
+        }
 
         let loc = write_or_store_output(output, output_path)?;
         let mut outputs = BTreeMap::new();

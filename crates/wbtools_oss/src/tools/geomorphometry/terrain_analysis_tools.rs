@@ -3726,83 +3726,120 @@ impl TerrainAnalysisCore {
         let cell_size_sqrd = cell_size * cell_size;
         let four_times_cell_size_sqrd = cell_size_sqrd * 4.0;
         let eight_grid_res = cell_size * 8.0;
-        let dx = [1isize, 1, 1, 0, -1, -1, -1, 0];
-        let dy = [-1isize, 0, 1, 1, 1, 0, -1, -1];
-        let band = 0isize;
+        let nodata = input.nodata;
+        // Precompute a fast nodata check to avoid the expensive epsilon arithmetic in
+        // input.is_nodata() (which recalculates `nodata.abs().max(1.0)` per call).
+        let nodata_is_nan = nodata.is_nan();
 
         ctx.progress.info("running pennock_landform_classification");
 
-        let row_data: Vec<Vec<f64>> = (0..rows)
-            .into_par_iter()
-            .map(|r| {
-                let mut row_out = vec![out_nodata; cols];
-                for c in 0..cols {
-                    let mut z = input.get(band, r as isize, c as isize);
-                    if input.is_nodata(z) {
-                        continue;
-                    }
-
-                    z *= z_factor;
-                    let mut n = [0.0_f64; 8];
-                    for i in 0..8 {
-                        let v = input.get(band, r as isize + dy[i], c as isize + dx[i]);
-                        n[i] = if input.is_nodata(v) { z } else { v * z_factor };
-                    }
-
-                    let zx = (n[1] - n[5]) / cell_size_times2;
-                    let zy = (n[7] - n[3]) / cell_size_times2;
-                    let zxx = (n[1] - 2.0 * z + n[5]) / cell_size_sqrd;
-                    let zyy = (n[7] - 2.0 * z + n[3]) / cell_size_sqrd;
-                    let zxy = (-n[6] + n[0] + n[4] - n[2]) / four_times_cell_size_sqrd;
-
-                    let zx2 = zx * zx;
-                    let zy2 = zy * zy;
-                    let p = zx2 + zy2;
-                    if p <= 0.0 {
-                        continue;
-                    }
-                    let q = p + 1.0;
-
-                    let fy = (n[6] - n[4] + 2.0 * (n[7] - n[3]) + n[0] - n[2]) / eight_grid_res;
-                    let fx = (n[2] - n[4] + 2.0 * (n[1] - n[5]) + n[0] - n[6]) / eight_grid_res;
-                    let slope = (fx * fx + fy * fy).sqrt().atan().to_degrees();
-                    let denom = p * q.powf(1.5);
-                    let plan = -((zxx * zy2 - 2.0 * zxy * zx * zy + zyy * zx2) / denom).to_degrees();
-                    let prof = -((zxx * zx2 - 2.0 * zxy * zx * zy + zyy * zy2) / denom).to_degrees();
-
-                    row_out[c] = if prof < -prof_threshold && plan <= -plan_threshold && slope > slope_threshold {
-                        1.0
-                    } else if prof < -prof_threshold && plan > plan_threshold && slope > slope_threshold {
-                        2.0
-                    } else if prof > prof_threshold && plan <= plan_threshold && slope > slope_threshold {
-                        3.0
-                    } else if prof > prof_threshold && plan > plan_threshold && slope > slope_threshold {
-                        4.0
-                    } else if prof >= -prof_threshold
-                        && prof < prof_threshold
-                        && slope > slope_threshold
-                        && plan <= -plan_threshold
-                    {
-                        5.0
-                    } else if prof >= -prof_threshold
-                        && prof < prof_threshold
-                        && slope > slope_threshold
-                        && plan > plan_threshold
-                    {
-                        6.0
-                    } else if slope <= slope_threshold {
-                        7.0
-                    } else {
-                        out_nodata
+        let num_workers = rayon::current_num_threads().max(1);
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<f64>)>();
+        std::thread::scope(|scope| {
+            for tid in 0..num_workers {
+                let tx = tx.clone();
+                let input = &input;
+                scope.spawn(move || {
+                    // Inline nodata check — avoids epsilon arithmetic in is_nodata() per pixel.
+                    let is_nd = |v: f64| -> bool {
+                        if nodata_is_nan { v.is_nan() } else { v == nodata }
                     };
-                }
-                row_out
-            })
-            .collect();
+                    for r in (0..rows).filter(|r| r % num_workers == tid) {
+                        // Preload 3 row slices for sequential memory access instead of
+                        // 9 random-access input.get() calls per pixel.
+                        // row_slice() returns an empty Vec for out-of-bounds rows (top/bottom edge).
+                        let row_prev = input.row_slice(0, r as isize - 1);
+                        let row_curr = input.row_slice(0, r as isize);
+                        let row_next = input.row_slice(0, r as isize + 1);
 
-        for (r, row) in row_data.iter().enumerate() {
+                        // Safely index a row slice: returns z_fallback for out-of-bounds col
+                        // or when the value is nodata (matching legacy clamping behaviour).
+                        let get_n = |row: &[f64], c: isize, z_fallback: f64| -> f64 {
+                            if row.is_empty() || c < 0 || c as usize >= cols {
+                                return z_fallback;
+                            }
+                            let v = row[c as usize];
+                            if is_nd(v) { z_fallback } else { v * z_factor }
+                        };
+
+                        let mut row_out = vec![out_nodata; cols];
+                        for c in 0..cols {
+                            let z_raw = row_curr[c];
+                            if is_nd(z_raw) {
+                                continue;
+                            }
+
+                            let z = z_raw * z_factor;
+                            let ci = c as isize;
+                            // n[0..8] layout matches dx=[1,1,1,0,-1,-1,-1,0], dy=[-1,0,1,1,1,0,-1,-1]
+                            let n = [
+                                get_n(&row_prev, ci + 1, z), // n[0]: row-1, col+1
+                                get_n(&row_curr, ci + 1, z), // n[1]: row+0, col+1
+                                get_n(&row_next, ci + 1, z), // n[2]: row+1, col+1
+                                get_n(&row_next, ci,     z), // n[3]: row+1, col+0
+                                get_n(&row_next, ci - 1, z), // n[4]: row+1, col-1
+                                get_n(&row_curr, ci - 1, z), // n[5]: row+0, col-1
+                                get_n(&row_prev, ci - 1, z), // n[6]: row-1, col-1
+                                get_n(&row_prev, ci,     z), // n[7]: row-1, col+0
+                            ];
+
+                            let zx = (n[1] - n[5]) / cell_size_times2;
+                            let zy = (n[7] - n[3]) / cell_size_times2;
+                            let zxx = (n[1] - 2.0 * z + n[5]) / cell_size_sqrd;
+                            let zyy = (n[7] - 2.0 * z + n[3]) / cell_size_sqrd;
+                            let zxy = (-n[6] + n[0] + n[4] - n[2]) / four_times_cell_size_sqrd;
+
+                            let zx2 = zx * zx;
+                            let zy2 = zy * zy;
+                            let p = zx2 + zy2;
+                            if p <= 0.0 {
+                                continue;
+                            }
+                            let q = p + 1.0;
+
+                            let fy = (n[6] - n[4] + 2.0 * (n[7] - n[3]) + n[0] - n[2]) / eight_grid_res;
+                            let fx = (n[2] - n[4] + 2.0 * (n[1] - n[5]) + n[0] - n[6]) / eight_grid_res;
+                            let slope = (fx * fx + fy * fy).sqrt().atan().to_degrees();
+                            let denom = p * q.powf(1.5);
+                            let plan = -((zxx * zy2 - 2.0 * zxy * zx * zy + zyy * zx2) / denom).to_degrees();
+                            let prof = -((zxx * zx2 - 2.0 * zxy * zx * zy + zyy * zy2) / denom).to_degrees();
+
+                            row_out[c] = if prof < -prof_threshold && plan <= -plan_threshold && slope > slope_threshold {
+                                1.0
+                            } else if prof < -prof_threshold && plan > plan_threshold && slope > slope_threshold {
+                                2.0
+                            } else if prof > prof_threshold && plan <= plan_threshold && slope > slope_threshold {
+                                3.0
+                            } else if prof > prof_threshold && plan > plan_threshold && slope > slope_threshold {
+                                4.0
+                            } else if prof >= -prof_threshold
+                                && prof < prof_threshold
+                                && slope > slope_threshold
+                                && plan <= -plan_threshold
+                            {
+                                5.0
+                            } else if prof >= -prof_threshold
+                                && prof < prof_threshold
+                                && slope > slope_threshold
+                                && plan > plan_threshold
+                            {
+                                6.0
+                            } else if slope <= slope_threshold {
+                                7.0
+                            } else {
+                                out_nodata
+                            };
+                        }
+                        let _ = tx.send((r, row_out));
+                    }
+                });
+            }
+            drop(tx);
+        });
+
+        for (r, row) in rx {
             output
-                .set_row_slice(0, r as isize, row)
+                .set_row_slice(0, r as isize, &row)
                 .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
         }
         ctx.progress.progress(1.0);

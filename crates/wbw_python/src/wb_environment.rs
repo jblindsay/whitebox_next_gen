@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::IntoPyObjectExt;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use rayon::prelude::*;
 use serde_json::json;
@@ -1576,7 +1577,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("adaptive_filter", "remote_sensing", "filters"),
     ("add", "raster", "overlay_math"),
     ("add_field", "vector", "attribute_analysis"),
-    ("add_geometry_attributes", "vector", "shape_metrics"),
+    ("add_geometry_attributes", "vector", "attribute_analysis"),
     ("add_point_coordinates_to_table", "conversion", "vector_table_io"),
     ("aggregate_raster", "raster", "general"),
     ("anisotropic_diffusion_filter", "remote_sensing", "filters"),
@@ -1590,6 +1591,9 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("ascii_to_las", "lidar", "io_management"),
     ("aspect", "terrain", "derivatives"),
     ("assess_route", "terrain", "general"),
+    ("assign_projection_lidar", "projection_georeferencing", "general"),
+    ("assign_projection_raster", "projection_georeferencing", "general"),
+    ("assign_projection_vector", "projection_georeferencing", "general"),
     ("atan2", "raster", "general"),
     ("attribute_correlation", "vector", "attribute_analysis"),
     ("attribute_histogram", "vector", "attribute_analysis"),
@@ -1739,6 +1743,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("feature_preserving_smoothing", "terrain", "general"),
     ("feature_preserving_smoothing_multiscale", "terrain", "general"),
     ("fetch_analysis", "terrain", "general"),
+    ("fft_random_field", "raster", "general"),
     ("field_calculator", "vector", "attribute_analysis"),
     ("field_trafficability_and_operation_planning", "precision_agriculture", "general"),
     ("fill_burn", "hydrology", "depressions_storage"),
@@ -1785,6 +1790,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("generalize_with_similarity", "remote_sensing", "classification"),
     ("generating_function", "terrain", "derivatives"),
     ("geomorphons", "terrain", "landform_indices"),
+    ("georeference_raster_from_control_points", "projection_georeferencing", "general"),
     ("glcm_texture", "remote_sensing", "filters"),
     ("greater_than", "raster", "general"),
     ("guided_filter", "remote_sensing", "filters"),
@@ -2099,7 +2105,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("registration_oriented_feature_workflow", "remote_sensing", "workflow_products"),
     ("reinitialize_attribute_table", "conversion", "vector_table_io"),
     ("related_circumscribing_circle", "vector", "shape_metrics"),
-    ("relative_aspect", "terrain", "landform_indices"),
+    ("relative_aspect", "terrain", "derivatives"),
     ("relative_stream_power_index", "hydrology", "hydrologic_indices"),
     ("relative_topographic_position", "terrain", "landform_indices"),
     ("remote_sensing_change_detection", "remote_sensing", "change_detection"),
@@ -2111,7 +2117,9 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("remove_spurs", "remote_sensing", "filters"),
     ("rename_field", "vector", "attribute_analysis"),
     ("repair_stream_vector_topology", "streams", "network_extraction"),
-    ("reproject_vector", "vector", "geometry_processing"),
+    ("reproject_lidar", "projection_georeferencing", "general"),
+    ("reproject_raster", "projection_georeferencing", "general"),
+    ("reproject_vector", "projection_georeferencing", "general"),
     ("resample", "remote_sensing", "enhancement_contrast"),
     ("rescale_value_range", "raster", "general"),
     ("rgb_to_ihs", "remote_sensing", "enhancement_contrast"),
@@ -2442,6 +2450,9 @@ fn known_subcategories_for_category(category_slug: &str) -> &'static [&'static s
             "sampling_gridding",
             "attribute_analysis",
             "workflow_products",
+        ],
+        "projection_georeferencing" => &[
+            "general",
         ],
         "hydrology" => &[
             "flow_routing",
@@ -3640,6 +3651,15 @@ fn looks_like_output_locator_key(key: &str) -> bool {
 
 fn sort_output_key(a: &str, b: &str) -> std::cmp::Ordering {
     fn rank(key: &str) -> (u8, usize, &str) {
+        fn signed_pair_rank(prefix: &str) -> usize {
+            let p = prefix.to_ascii_lowercase();
+            match p.as_str() {
+                "pos" | "positive" => 0,
+                "neg" | "negative" => 1,
+                _ => 2,
+            }
+        }
+
         if key == "path" {
             return (0, 0, key);
         }
@@ -3655,11 +3675,11 @@ fn sort_output_key(a: &str, b: &str) -> std::cmp::Ordering {
             return (3, 0, key);
         }
         if let Some(prefix) = key.strip_suffix("_path") {
-            return (4, 0, prefix);
+            return (4, signed_pair_rank(prefix), prefix);
         }
         if let Some((prefix, tail)) = key.rsplit_once('_') {
             if tail == "output" {
-                return (5, 0, prefix);
+                return (5, signed_pair_rank(prefix), prefix);
             }
         }
         (6, 0, key)
@@ -3912,6 +3932,12 @@ impl WbCategoryToolCallable {
             }
         }
 
+        if !args_map.contains_key("input") {
+            if let Some(value) = args_map.remove("raster") {
+                args_map.insert("input".to_string(), value);
+            }
+        }
+
         if self.tool_id == "true_colour_composite" || self.tool_id == "false_colour_composite" {
             let bundle_root = args_map
                 .remove("bundle_root")
@@ -4023,6 +4049,23 @@ impl WbCategoryToolCallable {
         {
             let items = check_outputs.get("items").unwrap_or(check_outputs);
             return json_value_to_pyobject(py, items);
+        }
+
+        // Handle pennock_landform_classification: returns (Raster, str) tuple.
+        // The generic data-object extractor would return only the raster, dropping
+        // the classification_key string.
+        if self.tool_id == "pennock_landform_classification" {
+            let out_path = extract_typed_output_path("pennock_landform_classification", &response)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{e}")))?;
+            let class_key = response
+                .get("outputs")
+                .and_then(|o| o.get("classification_key"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let raster = Raster { file_path: out_path, active_band: 0 };
+            let tuple = pyo3::types::PyTuple::new(py, [raster.into_py_any(py)?, class_key.into_py_any(py)?])?;
+            return Ok(tuple.unbind().into_any());
         }
 
         if let Some(data_objects) = maybe_extract_data_object_outputs(
@@ -5843,6 +5886,11 @@ impl Raster {
         self.pow(other, output_path, band_mode, bands)
     }
 
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn mod_(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.map_binary_operand_to_new("modulo", other, output_path, Some(band_mode), bands, |a, b| a % b)
+    }
+
     #[pyo3(signature = (other, band_mode="all", bands=None))]
     fn add_in_place(&self, other: &Bound<'_, PyAny>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<()> {
         self.map_binary_operand_in_place("add_in_place", other, Some(band_mode), bands, |a, b| a + b)
@@ -5866,6 +5914,11 @@ impl Raster {
     #[pyo3(signature = (other, band_mode="all", bands=None))]
     fn pow_in_place(&self, other: &Bound<'_, PyAny>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<()> {
         self.map_binary_operand_in_place("pow_in_place", other, Some(band_mode), bands, |a, b| a.powf(b))
+    }
+
+    #[pyo3(signature = (other, band_mode="all", bands=None))]
+    fn mod_in_place(&self, other: &Bound<'_, PyAny>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<()> {
+        self.map_binary_operand_in_place("mod_in_place", other, Some(band_mode), bands, |a, b| a % b)
     }
 
     #[pyo3(signature = (other, band_mode="all", bands=None))]
@@ -5983,6 +6036,17 @@ impl Raster {
         self.pow(other, None, "all", None)
     }
 
+    fn __mod__(&self, other: &Bound<'_, PyAny>) -> PyResult<Raster> {
+        self.mod_(other, None, "all", None)
+    }
+
+    fn __imod__(&mut self, other: &Bound<'_, PyAny>) -> PyResult<()> {
+        let out = self.mod_(other, None, "all", None)?;
+        self.file_path = out.file_path;
+        self.active_band = out.active_band;
+        Ok(())
+    }
+
     fn __radd__(&self, other: &Bound<'_, PyAny>) -> PyResult<Raster> {
         self.add(other, None, "all", None)
     }
@@ -6078,6 +6142,11 @@ impl Raster {
     }
 
     #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
+    fn arctanh(&self, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.atanh(output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
     fn asin(&self, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
         self.map_valid_to_new("asin", output_path, Some(band_mode), bands, |v| v.asin())
     }
@@ -6128,8 +6197,18 @@ impl Raster {
     }
 
     #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
+    fn arcsinh(&self, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.asinh(output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
     fn acosh(&self, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
         self.map_valid_to_new("acosh", output_path, Some(band_mode), bands, |v| v.acosh())
+    }
+
+    #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
+    fn arccosh(&self, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.acosh(output_path, band_mode, bands)
     }
 
     #[pyo3(signature = (output_path=None, band_mode="all", bands=None))]
@@ -6164,11 +6243,21 @@ impl Raster {
 
     #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
     fn eq(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        if band_mode.eq_ignore_ascii_case("all") && bands.is_none() {
+            if let Ok(r_other) = other.extract::<PyRef<Raster>>() {
+                return self.map_binary_raster_to_new_via_runtime("equal_to", &r_other, output_path);
+            }
+        }
         self.map_binary_predicate_to_new("eq", other, output_path, Some(band_mode), bands, |a, b| a == b)
     }
 
     #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
     fn ne(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        if band_mode.eq_ignore_ascii_case("all") && bands.is_none() {
+            if let Ok(r_other) = other.extract::<PyRef<Raster>>() {
+                return self.map_binary_raster_to_new_via_runtime("not_equal_to", &r_other, output_path);
+            }
+        }
         self.map_binary_predicate_to_new("ne", other, output_path, Some(band_mode), bands, |a, b| a != b)
     }
 
@@ -6190,6 +6279,37 @@ impl Raster {
     #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
     fn le(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
         self.map_binary_predicate_to_new("le", other, output_path, Some(band_mode), bands, |a, b| a <= b)
+    }
+
+    // Long-form aliases matching the tool names (e.g. dem.equal_to(pntr) == dem.eq(pntr) == dem == pntr).
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn equal_to(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.eq(other, output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn not_equal_to(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.ne(other, output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn greater_than(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.gt(other, output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn greater_than_or_equal_to(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.ge(other, output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn less_than(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.lt(other, output_path, band_mode, bands)
+    }
+
+    #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
+    fn less_than_or_equal_to(&self, other: &Bound<'_, PyAny>, output_path: Option<&str>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.le(other, output_path, band_mode, bands)
     }
 
     #[pyo3(signature = (other, output_path=None, band_mode="all", bands=None))]
@@ -6261,6 +6381,14 @@ impl Raster {
             file_path: self.file_path.clone(),
             active_band: self.active_band,
         }
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> PyResult<Raster> {
+        self.eq(other, None, "all", None)
+    }
+
+    fn __ne__(&self, other: &Bound<'_, PyAny>) -> PyResult<Raster> {
+        self.ne(other, None, "all", None)
     }
 
     fn __lt__(&self, other: &Bound<'_, PyAny>) -> PyResult<Raster> {
@@ -6767,6 +6895,21 @@ impl Raster {
     #[pyo3(signature = (output_path=None, callback=None, band_mode="all", bands=None))]
     fn round(&self, output_path: Option<&str>, callback: Option<Py<PyAny>>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
         self.run_unary("round", output_path, callback, Some(band_mode), bands)
+    }
+
+    #[pyo3(signature = (output_path=None, callback=None, band_mode="all", bands=None))]
+    fn negate(&self, output_path: Option<&str>, callback: Option<Py<PyAny>>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.run_unary("negate", output_path, callback, Some(band_mode), bands)
+    }
+
+    #[pyo3(signature = (output_path=None, callback=None, band_mode="all", bands=None))]
+    fn reciprocal(&self, output_path: Option<&str>, callback: Option<Py<PyAny>>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.run_unary("reciprocal", output_path, callback, Some(band_mode), bands)
+    }
+
+    #[pyo3(signature = (output_path=None, callback=None, band_mode="all", bands=None))]
+    fn truncate(&self, output_path: Option<&str>, callback: Option<Py<PyAny>>, band_mode: &str, bands: Option<Vec<usize>>) -> PyResult<Raster> {
+        self.run_unary("truncate", output_path, callback, Some(band_mode), bands)
     }
 
     #[pyo3(signature = (output_path=None, callback=None, band_mode="all", bands=None))]
@@ -8027,6 +8170,16 @@ impl Raster {
             "sub" | "subtract" => Some("subtract"),
             "mul" | "multiply" => Some("multiply"),
             "div" | "divide" => Some("divide"),
+            "eq" | "equal_to" => Some("equal_to"),
+            "ne" | "not_equal_to" => Some("not_equal_to"),
+            "gt" | "greater_than" => Some("greater_than"),
+            "ge" | "greater_than_or_equal_to" => Some("greater_than_or_equal_to"),
+            "lt" | "less_than" => Some("less_than"),
+            "le" | "less_than_or_equal_to" => Some("less_than_or_equal_to"),
+            "atan2" => Some("atan2"),
+            "logical_and" | "and_" => Some("bool_and"),
+            "logical_or" | "or_" => Some("bool_or"),
+            "logical_xor" | "xor_" => Some("bool_xor"),
             _ => None,
         }
     }
@@ -8212,7 +8365,15 @@ impl Raster {
         let mut r = self.load_wbraster()?;
         let target_bands = resolve_target_bands(r.bands, self.active_band, band_mode, bands)?;
         
-        r.apply_unary_math(f, Some(target_bands)).map_err(|e| {
+        // When all bands are selected, use the flat-buffer fast-path (F32/F64 typed slices,
+        // no band_slice copy or set_band_slice serial write-back).
+        let math_bands = if target_bands.len() == r.bands {
+            None
+        } else {
+            Some(target_bands)
+        };
+        
+        r.apply_unary_math(f, math_bands).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
         })?;
         
@@ -8259,33 +8420,88 @@ impl Raster {
         }
 
         let target_bands = resolve_target_bands(left.bands, self.active_band, band_mode, bands)?;
-        for band in target_bands {
-            if band >= right.bands {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    "selected band is not available in the other raster",
-                ));
-            }
-            let mut vals_left = left.band_slice(band as isize);
-            let vals_right = right.band_slice(band as isize);
-            let left_nodata = left.nodata;
-            let right_nodata = right.nodata;
-            let left_nodata_is_nan = left_nodata.is_nan();
-            let right_nodata_is_nan = right_nodata.is_nan();
-            vals_left
-                .par_iter_mut()
-                .zip(vals_right.par_iter())
-                .for_each(|(a, b)| {
-                    let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { *a == left_nodata };
-                    let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { *b == right_nodata };
-                    if a_is_nodata || b_is_nodata {
-                        *a = left_nodata;
+        let left_nodata = left.nodata;
+        let right_nodata = right.nodata;
+        let left_nodata_is_nan = left_nodata.is_nan();
+        let right_nodata_is_nan = right_nodata.is_nan();
+
+        // Fast path: if all bands are targeted, operate directly on flat buffers
+        // to avoid per-band Vec copies from band_slice()/set_band_slice().
+        if target_bands.len() == left.bands {
+            if let (Some(vals_left), Some(vals_right)) =
+                (left.data.as_f32_slice_mut(), right.data.as_f32_slice())
+            {
+                let left_nodata_f32 = left_nodata as f32;
+                let right_nodata_f32 = right_nodata as f32;
+                vals_left
+                    .par_iter_mut()
+                    .zip(vals_right.par_iter())
+                    .for_each(|(a, b)| {
+                        let a_f64 = *a as f64;
+                        let b_f64 = *b as f64;
+                        let a_is_nodata = if left_nodata_is_nan { a_f64.is_nan() } else { *a == left_nodata_f32 };
+                        let b_is_nodata = if right_nodata_is_nan { b_f64.is_nan() } else { *b == right_nodata_f32 };
+                        *a = if a_is_nodata || b_is_nodata {
+                            left_nodata_f32
+                        } else {
+                            f(a_f64, b_f64) as f32
+                        };
+                    });
+            } else if let (Some(vals_left), Some(vals_right)) =
+                (left.data.as_f64_slice_mut(), right.data.as_f64_slice())
+            {
+                vals_left
+                    .par_iter_mut()
+                    .zip(vals_right.par_iter())
+                    .for_each(|(a, b)| {
+                        let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { *a == left_nodata };
+                        let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { *b == right_nodata };
+                        *a = if a_is_nodata || b_is_nodata {
+                            left_nodata
+                        } else {
+                            f(*a, *b)
+                        };
+                    });
+            } else {
+                let len = left.data.len();
+                for i in 0..len {
+                    let a = left.data.get_f64(i);
+                    let b = right.data.get_f64(i);
+                    let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { a == left_nodata };
+                    let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { b == right_nodata };
+                    let out = if a_is_nodata || b_is_nodata {
+                        left_nodata
                     } else {
-                        *a = f(*a, *b);
-                    }
-                });
-            left.set_band_slice(band as isize, &vals_left).map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
-            })?;
+                        f(a, b)
+                    };
+                    left.data.set_f64(i, out);
+                }
+            }
+        } else {
+            for band in target_bands {
+                if band >= right.bands {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                        "selected band is not available in the other raster",
+                    ));
+                }
+                let mut vals_left = left.band_slice(band as isize);
+                let vals_right = right.band_slice(band as isize);
+                vals_left
+                    .par_iter_mut()
+                    .zip(vals_right.par_iter())
+                    .for_each(|(a, b)| {
+                        let a_is_nodata = if left_nodata_is_nan { a.is_nan() } else { *a == left_nodata };
+                        let b_is_nodata = if right_nodata_is_nan { b.is_nan() } else { *b == right_nodata };
+                        if a_is_nodata || b_is_nodata {
+                            *a = left_nodata;
+                        } else {
+                            *a = f(*a, *b);
+                        }
+                    });
+                left.set_band_slice(band as isize, &vals_left).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{suffix} failed: {e}"))
+                })?;
+            }
         }
 
         // Keep intermediates in memory for memory-backed inputs unless an explicit output path is provided.
@@ -8332,9 +8548,13 @@ impl Raster {
         if let Ok(r_other) = other.extract::<PyRef<Raster>>() {
             if mode_all && bands.is_none() {
                 if let Some(tool_id) = Self::runtime_binary_tool_id(suffix) {
-                    let allow_runtime_fast_path = !(
-                        output_path.is_none() && (self.is_memory_backed() || r_other.is_memory_backed())
-                    );
+                    // Use the Arc-based registry tool path when either:
+                    // (a) an explicit output path was given (disk or memory), OR
+                    // (b) both inputs are memory-backed (Arc clone is ~free; avoids deep Vec copy).
+                    // Block only when both inputs are disk-backed and no output path is given,
+                    // as that would produce an unnamed disk file.
+                    let both_disk = !self.is_memory_backed() && !r_other.is_memory_backed();
+                    let allow_runtime_fast_path = output_path.is_some() || !both_disk;
                     if allow_runtime_fast_path {
                         return self.map_binary_raster_to_new_via_runtime(tool_id, &r_other, output_path);
                     }
@@ -27479,7 +27699,7 @@ impl WbEnvironment {
         self._run_raster_tool_with_args("map_features", args, input.active_band, callback)
     }
 
-    #[pyo3(signature = (input, distance, quadrant_segments=8, cap_style="round", join_style="round", mitre_limit=5.0, output_path=None, callback=None))]
+    #[pyo3(signature = (input, distance, quadrant_segments=8, cap_style="round", join_style="round", mitre_limit=5.0, dissolve=false, output_path=None, callback=None))]
     fn buffer_vector(
         &self,
         input: &Vector,
@@ -27488,6 +27708,7 @@ impl WbEnvironment {
         cap_style: &str,
         join_style: &str,
         mitre_limit: f64,
+        dissolve: bool,
         output_path: Option<&str>,
         callback: Option<Py<PyAny>>,
     ) -> PyResult<Vector> {
@@ -27505,6 +27726,7 @@ impl WbEnvironment {
         args.insert("cap_style".to_string(), json!(cap_style));
         args.insert("join_style".to_string(), json!(join_style));
         args.insert("mitre_limit".to_string(), json!(mitre_limit));
+        args.insert("dissolve".to_string(), json!(dissolve));
         args.insert("output".to_string(), json!(output));
         self._run_vector_tool_with_args("buffer_vector", args, callback)
     }

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use rayon::prelude::*;
 use serde_json::json;
@@ -612,7 +613,7 @@ impl TerrainCore {
         let z_factor = Self::parse_z_factor(args);
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.clone();
+        let mut output = Raster::new_like(&input);
         let rows = input.rows;
         let cols = input.cols;
         let bands = input.bands;
@@ -638,11 +639,13 @@ impl TerrainCore {
             let band = band_idx as isize;
 
             // Stage 1: aspect raster in degrees clockwise from north.
-            let aspect_rows: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
+            // Use f32 backing to reduce peak memory while preserving precision for angle comparisons.
+            let mut aspect = vec![nodata as f32; rows * cols];
+            aspect
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(r, row_out)| {
+                    for (c, cell) in row_out.iter_mut().enumerate() {
                         let row = r as isize;
                         let col = c as isize;
                         let Some((p, q)) = (if is_geographic {
@@ -654,7 +657,7 @@ impl TerrainCore {
                         };
 
                         let g = p.mul_add(p, q * q).sqrt();
-                        row_out[c] = if g <= 0.0 {
+                        let aspect_deg = if g <= 0.0 {
                             -1.0
                         } else {
                             let mut aspect = 180.0 - (q / p).atan().to_degrees() + 90.0 * p.signum();
@@ -663,58 +666,49 @@ impl TerrainCore {
                             }
                             aspect
                         };
+                        *cell = aspect_deg as f32;
                     }
-                    row_out
-                })
-                .collect();
-
-            let mut aspect = vec![nodata; rows * cols];
-            for (r, row_vals) in aspect_rows.iter().enumerate() {
-                for c in 0..cols {
-                    aspect[r * cols + c] = row_vals[c];
-                }
-            }
+                });
+            let aspect = Arc::new(aspect);
 
             // Stage 2: convergence index from neighbour aspect alignment.
-            let conv_rows: Vec<Vec<f64>> = (0..rows)
-                .into_par_iter()
-                .map(|r| {
-                    let mut row_out = vec![nodata; cols];
-                    for c in 0..cols {
-                        let i = r * cols + c;
-                        if aspect[i] == nodata {
+            let mut conv = vec![nodata; rows * cols];
+            conv.par_chunks_mut(cols).enumerate().for_each(|(r, row_out)| {
+                for (c, cell) in row_out.iter_mut().enumerate() {
+                    let i = r * cols + c;
+                    if aspect[i] as f64 == nodata {
+                        continue;
+                    }
+                    let mut sum = 0.0;
+                    let mut n = 0.0;
+                    for k in 0..8 {
+                        let rr = r as isize + offsets[k].1;
+                        let cc = c as isize + offsets[k].0;
+                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
                             continue;
                         }
-                        let mut sum = 0.0;
-                        let mut n = 0.0;
-                        for k in 0..8 {
-                            let rr = r as isize + offsets[k].1;
-                            let cc = c as isize + offsets[k].0;
-                            if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
-                                continue;
-                            }
-                            let a = aspect[rr as usize * cols + cc as usize];
-                            if a == nodata {
-                                continue;
-                            }
-                            let mut rel = (a - azimuth[k]).abs();
-                            if rel > 180.0 {
-                                rel = 360.0 - rel;
-                            }
-                            sum += rel;
-                            n += 1.0;
+                        let a = aspect[rr as usize * cols + cc as usize] as f64;
+                        if a == nodata {
+                            continue;
                         }
-                        if n > 0.0 {
-                            row_out[c] = sum / n - 90.0;
+                        let mut rel = (a - azimuth[k]).abs();
+                        if rel > 180.0 {
+                            rel = 360.0 - rel;
                         }
+                        sum += rel;
+                        n += 1.0;
                     }
-                    row_out
-                })
-                .collect();
+                    if n > 0.0 {
+                        *cell = sum / n - 90.0;
+                    }
+                }
+            });
 
-            for (r, row_vals) in conv_rows.iter().enumerate() {
+            for r in 0..rows {
+                let start = r * cols;
+                let end = start + cols;
                 output
-                    .set_row_slice(band, r as isize, row_vals)
+                    .set_row_slice(band, r as isize, &conv[start..end])
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
 
@@ -854,12 +848,14 @@ impl TerrainCore {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = if is_geographic {
-                (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
-                        for c in 0..cols {
+            let mut band_out = vec![nodata; rows * cols];
+
+            if is_geographic {
+                band_out
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_out)| {
+                        for (c, cell) in row_out.iter_mut().enumerate() {
                             let row = r as isize;
                             let col = c as isize;
                             let Some((p, q)) = Self::pq_geographic(&input, band, row, col, z_factor) else {
@@ -880,11 +876,9 @@ impl TerrainCore {
                                 let term3 = cos_alt * (azimuths[i] - aspect).sin();
                                 val += term1 * (term2 - term3) * weights[i];
                             }
-                            row_out[c] = (val * 32767.0).max(0.0).round();
+                            *cell = (val * 32767.0).max(0.0).round();
                         }
-                        row_out
-                    })
-                    .collect()
+                    });
             } else {
                 let mut band_buf = vec![nodata; rows * cols];
                 band_buf
@@ -895,13 +889,14 @@ impl TerrainCore {
                             *cell = input.get(band, r as isize, c as isize);
                         }
                     });
+                let band_buf = Arc::new(band_buf);
 
-                (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
+                band_out
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .for_each(|(r, row_out)| {
                         let row = r as isize;
-                        for c in 0..cols {
+                        for (c, cell) in row_out.iter_mut().enumerate() {
                             let idx = r * cols + c;
                             let z_center = band_buf[idx];
                             if z_center == nodata {
@@ -913,7 +908,11 @@ impl TerrainCore {
                                     return z_center_scaled;
                                 }
                                 let v = band_buf[rr as usize * cols + cc as usize];
-                                if v == nodata { z_center_scaled } else { v * z_factor }
+                                if v == nodata {
+                                    z_center_scaled
+                                } else {
+                                    v * z_factor
+                                }
                             };
 
                             let col = c as isize;
@@ -973,16 +972,16 @@ impl TerrainCore {
                                 let term3 = cos_alt * (azimuths[i] - aspect).sin();
                                 val += term1 * (term2 - term3) * weights[i];
                             }
-                            row_out[c] = (val * 32767.0).max(0.0).round();
+                            *cell = (val * 32767.0).max(0.0).round();
                         }
-                        row_out
-                    })
-                    .collect()
-            };
+                    });
+            }
 
-            for (r, row) in row_data.iter().enumerate() {
+            for r in 0..rows {
+                let start = r * cols;
+                let end = start + cols;
                 output
-                    .set_row_slice(band, r as isize, row)
+                    .set_row_slice(band, r as isize, &band_out[start..end])
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
             coalescer.emit_unit_fraction(ctx.progress, (band_idx + 1) as f64 / bands as f64);

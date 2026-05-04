@@ -773,6 +773,76 @@ impl PlanCurvatureTool {
         }
     }
 
+    #[inline]
+    fn curvature_value(
+        op: CurvatureOp,
+        p: f64,
+        q: f64,
+        r2: f64,
+        s: f64,
+        t: f64,
+        log_transform: bool,
+        log_multiplier: f64,
+    ) -> f64 {
+        let g2 = p * p + q * q;
+        let w = 1.0 + g2;
+        let w_sqrt = w.sqrt();
+        let w_pow_1p5 = w * w_sqrt;
+        let w_squared = w * w;
+
+        let mean_curv = -((1.0 + q * q).mul_add(r2, (1.0 + p * p).mul_add(t, -2.0 * p * q * s)))
+            / (2.0 * w_pow_1p5);
+        let gaussian_curv = (r2 * t - s * s) / w_squared;
+
+        let mut curv = match op {
+            CurvatureOp::Plan => {
+                if g2 <= f64::EPSILON {
+                    0.0
+                } else {
+                    let denom = g2 * g2.sqrt();
+                    if denom <= f64::EPSILON {
+                        0.0
+                    } else {
+                        -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom
+                    }
+                }
+            }
+            CurvatureOp::Profile => {
+                if g2 <= f64::EPSILON {
+                    0.0
+                } else {
+                    let denom = g2 * w_pow_1p5;
+                    if denom <= f64::EPSILON {
+                        0.0
+                    } else {
+                        -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom
+                    }
+                }
+            }
+            CurvatureOp::Tangential => {
+                if g2 <= f64::EPSILON {
+                    0.0
+                } else {
+                    let denom = g2.sqrt() * w_sqrt;
+                    if denom <= f64::EPSILON {
+                        0.0
+                    } else {
+                        -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom
+                    }
+                }
+            }
+            CurvatureOp::Total => r2 + t,
+            CurvatureOp::Mean => mean_curv,
+            CurvatureOp::Gaussian => gaussian_curv,
+        };
+
+        if log_transform {
+            curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+        }
+
+        curv
+    }
+
     fn run_with_op(op: CurvatureOp, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
         let input_path = Self::parse_input(args)?;
         let output_path = parse_optional_output_path(args, "output")?;
@@ -783,7 +853,7 @@ impl PlanCurvatureTool {
         ctx.progress.info("reading input raster");
 
         let input = Self::load_raster(&input_path)?;
-        let mut output = input.as_ref().clone();
+        let mut output = Raster::new_like(input.as_ref());
 
         let rows = input.rows;
         let cols = input.cols;
@@ -797,182 +867,141 @@ impl PlanCurvatureTool {
 
         for band_idx in 0..bands {
             let band = band_idx as isize;
-            let row_data: Vec<Vec<f64>> = if is_geographic {
-                (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
-                        for c in 0..cols {
-                            let row = r as isize;
-                            let col = c as isize;
-                            let Some((p, q, r2, s, t)) =
-                                Self::derivatives_geographic(&input, band, row, col, z_factor)
-                            else {
-                                continue;
-                            };
+            let num_workers = rayon::current_num_threads().max(1);
+            let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<f64>)>();
 
-                            let g2 = p * p + q * q;
-                            let w = 1.0 + g2;
-                            let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s + (1.0 + p * p) * t)
-                                / (2.0 * w.powf(1.5));
-                            let gaussian_curv = (r2 * t - s * s) / w.powi(2);
-                            let mut curv = match op {
-                                CurvatureOp::Plan => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2.powf(1.5);
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
-                                    }
-                                }
-                                CurvatureOp::Profile => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2 * w.powf(1.5);
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom }
-                                    }
-                                }
-                                CurvatureOp::Tangential => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2.sqrt() * w.sqrt();
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
-                                    }
-                                }
-                                CurvatureOp::Total => r2 + t,
-                                CurvatureOp::Mean => mean_curv,
-                                CurvatureOp::Gaussian => gaussian_curv,
-                            };
+            std::thread::scope(|scope| {
+                if is_geographic {
+                    for worker_id in 0..num_workers {
+                        let tx = tx.clone();
+                        let input = &input;
+                        scope.spawn(move || {
+                            for row_idx in (worker_id..rows).step_by(num_workers) {
+                                let mut row_out = vec![nodata; cols];
+                                let row = row_idx as isize;
+                                for c in 0..cols {
+                                    let col = c as isize;
+                                    let Some((p, q, r2, s, t)) =
+                                        Self::derivatives_geographic(input, band, row, col, z_factor)
+                                    else {
+                                        continue;
+                                    };
 
-                            if log_transform {
-                                curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+                                    row_out[c] = Self::curvature_value(
+                                        op,
+                                        p,
+                                        q,
+                                        r2,
+                                        s,
+                                        t,
+                                        log_transform,
+                                        log_multiplier,
+                                    );
+                                }
+
+                                if tx.send((row_idx, row_out)).is_err() {
+                                    break;
+                                }
                             }
-
-                            row_out[c] = curv;
-                        }
-                        row_out
-                    })
-                    .collect()
-            } else {
-                let mut band_buf = vec![nodata; rows * cols];
-                band_buf
-                    .par_chunks_mut(cols)
-                    .enumerate()
-                    .for_each(|(r, row_buf)| {
-                        for (c, cell) in row_buf.iter_mut().enumerate() {
-                            *cell = input.get(band, r as isize, c as isize);
-                        }
-                    });
-                let res = (dx + dy) / 2.0;
-
-                (0..rows)
-                    .into_par_iter()
-                    .map(|r| {
-                        let mut row_out = vec![nodata; cols];
-                        let row = r as isize;
-                        for c in 0..cols {
-                            let idx = r * cols + c;
-                            let z5_raw = band_buf[idx];
-                            if z5_raw == nodata {
-                                continue;
+                        });
+                    }
+                } else {
+                    let mut band_buf = vec![nodata; rows * cols];
+                    band_buf
+                        .par_chunks_mut(cols)
+                        .enumerate()
+                        .for_each(|(r, row_buf)| {
+                            for (c, cell) in row_buf.iter_mut().enumerate() {
+                                *cell = input.get(band, r as isize, c as isize);
                             }
-                            let z_center = z5_raw * z_factor;
-                            let read_scaled = |rr: isize, cc: isize| -> f64 {
-                                if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
-                                    return z_center;
-                                }
-                                let v = band_buf[rr as usize * cols + cc as usize];
-                                if v == nodata { z_center } else { v * z_factor }
-                            };
+                        });
+                    let band_buf = Arc::new(band_buf);
+                    let res = (dx + dy) / 2.0;
 
-                            let col = c as isize;
-                            let z = [
-                                read_scaled(row - 2, col - 2),
-                                read_scaled(row - 2, col - 1),
-                                read_scaled(row - 2, col),
-                                read_scaled(row - 2, col + 1),
-                                read_scaled(row - 2, col + 2),
-                                read_scaled(row - 1, col - 2),
-                                read_scaled(row - 1, col - 1),
-                                read_scaled(row - 1, col),
-                                read_scaled(row - 1, col + 1),
-                                read_scaled(row - 1, col + 2),
-                                read_scaled(row, col - 2),
-                                read_scaled(row, col - 1),
-                                read_scaled(row, col),
-                                read_scaled(row, col + 1),
-                                read_scaled(row, col + 2),
-                                read_scaled(row + 1, col - 2),
-                                read_scaled(row + 1, col - 1),
-                                read_scaled(row + 1, col),
-                                read_scaled(row + 1, col + 1),
-                                read_scaled(row + 1, col + 2),
-                                read_scaled(row + 2, col - 2),
-                                read_scaled(row + 2, col - 1),
-                                read_scaled(row + 2, col),
-                                read_scaled(row + 2, col + 1),
-                                read_scaled(row + 2, col + 2),
-                            ];
-
-                            let (p, q, r2, s, t, _, _, _, _) = Self::projected_5x5_derivs(&z, res);
-
-                            let g2 = p * p + q * q;
-                            let w = 1.0 + g2;
-                            let mean_curv = -((1.0 + q * q) * r2 - 2.0 * p * q * s + (1.0 + p * p) * t)
-                                / (2.0 * w.powf(1.5));
-                            let gaussian_curv = (r2 * t - s * s) / w.powi(2);
-                            let mut curv = match op {
-                                CurvatureOp::Plan => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2.powf(1.5);
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
+                    for worker_id in 0..num_workers {
+                        let tx = tx.clone();
+                        let band_buf = Arc::clone(&band_buf);
+                        scope.spawn(move || {
+                            for row_idx in (worker_id..rows).step_by(num_workers) {
+                                let mut row_out = vec![nodata; cols];
+                                let row = row_idx as isize;
+                                for c in 0..cols {
+                                    let idx = row_idx * cols + c;
+                                    let z5_raw = band_buf[idx];
+                                    if z5_raw == nodata {
+                                        continue;
                                     }
-                                }
-                                CurvatureOp::Profile => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2 * w.powf(1.5);
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(p * p * r2 + 2.0 * p * q * s + q * q * t) / denom }
-                                    }
-                                }
-                                CurvatureOp::Tangential => {
-                                    if g2 <= f64::EPSILON {
-                                        0.0
-                                    } else {
-                                        let denom = g2.sqrt() * w.sqrt();
-                                        if denom <= f64::EPSILON { 0.0 }
-                                        else { -(q * q * r2 - 2.0 * p * q * s + p * p * t) / denom }
-                                    }
-                                }
-                                CurvatureOp::Total => r2 + t,
-                                CurvatureOp::Mean => mean_curv,
-                                CurvatureOp::Gaussian => gaussian_curv,
-                            };
+                                    let z_center = z5_raw * z_factor;
+                                    let read_scaled = |rr: isize, cc: isize| -> f64 {
+                                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                                            return z_center;
+                                        }
+                                        let v = band_buf[rr as usize * cols + cc as usize];
+                                        if v == nodata {
+                                            z_center
+                                        } else {
+                                            v * z_factor
+                                        }
+                                    };
 
-                            if log_transform {
-                                curv = curv.signum() * (1.0 + log_multiplier * curv.abs()).ln();
+                                    let col = c as isize;
+                                    let z = [
+                                        read_scaled(row - 2, col - 2),
+                                        read_scaled(row - 2, col - 1),
+                                        read_scaled(row - 2, col),
+                                        read_scaled(row - 2, col + 1),
+                                        read_scaled(row - 2, col + 2),
+                                        read_scaled(row - 1, col - 2),
+                                        read_scaled(row - 1, col - 1),
+                                        read_scaled(row - 1, col),
+                                        read_scaled(row - 1, col + 1),
+                                        read_scaled(row - 1, col + 2),
+                                        read_scaled(row, col - 2),
+                                        read_scaled(row, col - 1),
+                                        read_scaled(row, col),
+                                        read_scaled(row, col + 1),
+                                        read_scaled(row, col + 2),
+                                        read_scaled(row + 1, col - 2),
+                                        read_scaled(row + 1, col - 1),
+                                        read_scaled(row + 1, col),
+                                        read_scaled(row + 1, col + 1),
+                                        read_scaled(row + 1, col + 2),
+                                        read_scaled(row + 2, col - 2),
+                                        read_scaled(row + 2, col - 1),
+                                        read_scaled(row + 2, col),
+                                        read_scaled(row + 2, col + 1),
+                                        read_scaled(row + 2, col + 2),
+                                    ];
+
+                                    let (p, q, r2, s, t, _, _, _, _) = Self::projected_5x5_derivs(&z, res);
+                                    row_out[c] = Self::curvature_value(
+                                        op,
+                                        p,
+                                        q,
+                                        r2,
+                                        s,
+                                        t,
+                                        log_transform,
+                                        log_multiplier,
+                                    );
+                                }
+
+                                if tx.send((row_idx, row_out)).is_err() {
+                                    break;
+                                }
                             }
+                        });
+                    }
+                }
+            });
+            drop(tx);
 
-                            row_out[c] = curv;
-                        }
-                        row_out
-                    })
-                    .collect()
-            };
-
-            for (r, row) in row_data.iter().enumerate() {
+            for _ in 0..rows {
+                let (r, row) = rx
+                    .recv()
+                    .map_err(|e| ToolError::Execution(format!("failed receiving row data: {}", e)))?;
                 output
-                    .set_row_slice(band, r as isize, row)
+                    .set_row_slice(band, r as isize, &row)
                     .map_err(|e| ToolError::Execution(format!("failed writing row {}: {}", r, e)))?;
             }
 

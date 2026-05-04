@@ -20,8 +20,10 @@ pub struct RasterMultiplyTool;
 pub struct RasterDivideTool;
 pub struct RasterEqualToTool;
 pub struct RasterGreaterThanTool;
+pub struct RasterGreaterThanOrEqualToTool;
 pub struct RasterIntegerDivisionTool;
 pub struct RasterLessThanTool;
+pub struct RasterLessThanOrEqualToTool;
 pub struct RasterModuloTool;
 pub struct RasterNotEqualToTool;
 pub struct RasterPowerTool;
@@ -38,8 +40,10 @@ enum BinaryMathOp {
     Divide,
     EqualTo,
     GreaterThan,
+    GreaterThanOrEqualTo,
     IntegerDivision,
     LessThan,
+    LessThanOrEqualTo,
     Modulo,
     NotEqualTo,
     Power,
@@ -58,8 +62,10 @@ impl BinaryMathOp {
             Self::Divide => "divide",
             Self::EqualTo => "equal_to",
             Self::GreaterThan => "greater_than",
+            Self::GreaterThanOrEqualTo => "greater_than_or_equal_to",
             Self::IntegerDivision => "integer_division",
             Self::LessThan => "less_than",
+            Self::LessThanOrEqualTo => "less_than_or_equal_to",
             Self::Modulo => "modulo",
             Self::NotEqualTo => "not_equal_to",
             Self::Power => "power",
@@ -78,8 +84,10 @@ impl BinaryMathOp {
             Self::Divide => "Divide",
             Self::EqualTo => "EqualTo",
             Self::GreaterThan => "GreaterThan",
+            Self::GreaterThanOrEqualTo => "GreaterThanOrEqualTo",
             Self::IntegerDivision => "IntegerDivision",
             Self::LessThan => "LessThan",
+            Self::LessThanOrEqualTo => "LessThanOrEqualTo",
             Self::Modulo => "Modulo",
             Self::NotEqualTo => "NotEqualTo",
             Self::Power => "Power",
@@ -98,8 +106,10 @@ impl BinaryMathOp {
             Self::Divide => "Divides the first raster by the second on a cell-by-cell basis.",
             Self::EqualTo => "Tests whether two rasters are equal on a cell-by-cell basis.",
             Self::GreaterThan => "Tests whether the first raster is greater than the second on a cell-by-cell basis.",
+            Self::GreaterThanOrEqualTo => "Tests whether the first raster is greater than or equal to the second on a cell-by-cell basis.",
             Self::IntegerDivision => "Divides two rasters and truncates each result toward zero.",
             Self::LessThan => "Tests whether the first raster is less than the second on a cell-by-cell basis.",
+            Self::LessThanOrEqualTo => "Tests whether the first raster is less than or equal to the second on a cell-by-cell basis.",
             Self::Modulo => "Computes the remainder of dividing the first raster by the second on a cell-by-cell basis.",
             Self::NotEqualTo => "Tests whether two rasters are not equal on a cell-by-cell basis.",
             Self::Power => "Raises the first raster to the power of the second on a cell-by-cell basis.",
@@ -118,8 +128,10 @@ impl BinaryMathOp {
             Self::Divide => "running divide",
             Self::EqualTo => "running equal_to",
             Self::GreaterThan => "running greater_than",
+            Self::GreaterThanOrEqualTo => "running greater_than_or_equal_to",
             Self::IntegerDivision => "running integer_division",
             Self::LessThan => "running less_than",
+            Self::LessThanOrEqualTo => "running less_than_or_equal_to",
             Self::Modulo => "running modulo",
             Self::NotEqualTo => "running not_equal_to",
             Self::Power => "running power",
@@ -138,8 +150,10 @@ impl BinaryMathOp {
             Self::Divide => "dividing raster cells",
             Self::EqualTo => "computing equal_to across raster cells",
             Self::GreaterThan => "computing greater_than across raster cells",
+            Self::GreaterThanOrEqualTo => "computing greater_than_or_equal_to across raster cells",
             Self::IntegerDivision => "computing integer_division across raster cells",
             Self::LessThan => "computing less_than across raster cells",
+            Self::LessThanOrEqualTo => "computing less_than_or_equal_to across raster cells",
             Self::Modulo => "computing modulo across raster cells",
             Self::NotEqualTo => "computing not_equal_to across raster cells",
             Self::Power => "raising raster cells to powers",
@@ -158,8 +172,10 @@ impl BinaryMathOp {
             Self::Divide => "dem_ratio.tif",
             Self::EqualTo => "dem_equal_to.tif",
             Self::GreaterThan => "dem_greater_than.tif",
+            Self::GreaterThanOrEqualTo => "dem_greater_than_or_equal_to.tif",
             Self::IntegerDivision => "dem_integer_division.tif",
             Self::LessThan => "dem_less_than.tif",
+            Self::LessThanOrEqualTo => "dem_less_than_or_equal_to.tif",
             Self::Modulo => "dem_modulo.tif",
             Self::NotEqualTo => "dem_not_equal_to.tif",
             Self::Power => "dem_power.tif",
@@ -198,11 +214,17 @@ impl BinaryMathOp {
             Self::GreaterThan => {
                 if z1 > z2 { 1.0 } else { 0.0 }
             }
+            Self::GreaterThanOrEqualTo => {
+                if z1 >= z2 { 1.0 } else { 0.0 }
+            }
             Self::IntegerDivision => {
                 if z2 == 0.0 { nodata } else { (z1 / z2).trunc() }
             }
             Self::LessThan => {
                 if z1 < z2 { 1.0 } else { 0.0 }
+            }
+            Self::LessThanOrEqualTo => {
+                if z1 <= z2 { 1.0 } else { 0.0 }
             }
             Self::Modulo => {
                 if z2 == 0.0 { nodata } else { z1 % z2 }
@@ -334,15 +356,9 @@ impl RasterAddTool {
         let mut output = Raster::new_like(&input1);
 
         ctx.progress.info(op.processing_message());
-        output.par_fill_with(|i| {
-            let z1 = input1.data.get_f64(i);
-            let z2 = input2.data.get_f64(i);
-            if input1.is_nodata(z1) || input2.is_nodata(z2) {
-                input1.nodata
-            } else {
-                op.apply(z1, z2, input1.nodata)
-            }
-        });
+        let nodata = output.nodata;
+        output.apply_binary_math_from(|z1, z2| op.apply(z1, z2, nodata), &input1, &input2)
+            .map_err(|e| ToolError::Execution(format!("apply_binary_math_from failed: {e}")))?;
         ctx.progress.progress(0.9);
 
         let output_locator = if let Some(output_path) = output_path {
@@ -430,8 +446,10 @@ impl_binary_tool!(RasterBoolXorTool, BinaryMathOp::BoolXor);
 impl_binary_tool!(RasterDivideTool, BinaryMathOp::Divide);
 impl_binary_tool!(RasterEqualToTool, BinaryMathOp::EqualTo);
 impl_binary_tool!(RasterGreaterThanTool, BinaryMathOp::GreaterThan);
+impl_binary_tool!(RasterGreaterThanOrEqualToTool, BinaryMathOp::GreaterThanOrEqualTo);
 impl_binary_tool!(RasterIntegerDivisionTool, BinaryMathOp::IntegerDivision);
 impl_binary_tool!(RasterLessThanTool, BinaryMathOp::LessThan);
+impl_binary_tool!(RasterLessThanOrEqualToTool, BinaryMathOp::LessThanOrEqualTo);
 impl_binary_tool!(RasterModuloTool, BinaryMathOp::Modulo);
 impl_binary_tool!(RasterMultiplyTool, BinaryMathOp::Multiply);
 impl_binary_tool!(RasterNotEqualToTool, BinaryMathOp::NotEqualTo);

@@ -30,6 +30,15 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
   reads from a source raster and writes to `self`. Uses direct F32/F64 slice zipping for
   performance. Used by `wbtools_oss` unary math tools to transform input→output without
   intermediate buffering. Shared kernel eliminates code duplication with `map_valid_to_new`.
+- `Raster::apply_binary_math_from<F>(f, src1, src2) -> Result<()>`: binary math kernel
+  that reads from two source rasters and writes results into `self`. Closure `f(z1, z2)`
+  is called only for valid (non-nodata) cell pairs; nodata in either source propagates to
+  the output. Fast paths for all-F32 and all-F64 buffer combinations use parallel typed
+  slice zipping; a generic fallback handles mixed or integer types. Used by all binary
+  raster tools in `wbtools_oss` (`add`, `subtract`, `multiply`, `divide`, `equal_to`,
+  `not_equal_to`, `greater_than`, `less_than`, `atan2`, `power`, `modulo`, etc.) via
+  `RasterAddTool::run_with_op`, replacing the previous `par_fill_with` + per-cell
+  `data.get_f64` loop. Eliminates enum dispatch per pixel on the hot path for F32 rasters.
 - `RasterData::new_uninit(data_type, len) -> Self`: allocate uninitialized raster data
   buffer for the given type and cell count using `Vec::with_capacity + unsafe set_len`,
   avoiding zero-initialization overhead on large buffers.
@@ -67,6 +76,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [0.1.3] - 2026-04-21
 
 ### Added
+- `Raster::apply_scalar_add(src, scalar) -> Result<()>`: add a scalar constant to every
+  non-nodata cell reading from `src`, writing to `self`. Canonical kernel for the `increment`
+  tool; delegates to `apply_unary_math_from` with `|z| z + scalar`.
+- `Raster::apply_scalar_sub(src, scalar) -> Result<()>`: subtract a scalar constant from
+  every non-nodata cell reading from `src`, writing to `self`. Canonical kernel for the
+  `decrement` tool; delegates to `apply_unary_math_from` with `|z| z - scalar`.
 - Added an execution-tracked JPEG2000 bridge retirement implementation plan in
   `docs/internal/jpeg2000_bridge_retirement_plan.md`, including phased
   milestones, owner/checklist fields, weekly deliverables, risk controls, and

@@ -230,8 +230,246 @@ define_unary_tool!(RasterLog2Tool, "log2", "Log2", "Computes the base-2 logarith
 define_unary_tool!(RasterNegateTool, "negate", "Negate", "Negates each non-nodata raster cell value.", |z: f64| -z);
 define_unary_tool!(RasterReciprocalTool, "reciprocal", "Reciprocal", "Computes the reciprocal (1/x) of each raster cell.", |z: f64| 1.0 / z);
 define_unary_tool!(RasterTruncateTool, "truncate", "Truncate", "Truncates each raster cell value to its integer part.", |z: f64| z.trunc());
-define_unary_tool!(RasterIncrementTool, "increment", "Increment", "Adds 1 to each non-nodata raster cell.", |z: f64| z + 1.0);
-define_unary_tool!(RasterDecrementTool, "decrement", "Decrement", "Subtracts 1 from each non-nodata raster cell.", |z: f64| z - 1.0);
+pub struct RasterIncrementTool;
+
+impl Tool for RasterIncrementTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "increment",
+            display_name: "Increment",
+            summary: "Adds a value (default 1.0) to each non-nodata raster cell.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input raster file path.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "value",
+                    description: "The amount to add to each cell. Defaults to 1.0.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output raster file path. If omitted, the result is stored in memory.",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.tif"));
+        defaults.insert("value".to_string(), json!(1.0));
+        defaults.insert("output".to_string(), json!("output.tif"));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("dem.tif"));
+        example_args.insert("value".to_string(), json!(1.0));
+        example_args.insert("output".to_string(), json!("increment_dem.tif"));
+
+        ToolManifest {
+            id: "increment".to_string(),
+            display_name: "Increment".to_string(),
+            summary: "Adds a value (default 1.0) to each non-nodata raster cell.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input raster file path.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "value".to_string(),
+                    description: "The amount to add to each cell. Defaults to 1.0.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output raster file path. If omitted, the result is stored in memory.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "basic_run".to_string(),
+                description: "Add 1.0 to each non-nodata cell.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["raster".to_string(), "math".to_string(), "increment".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = parse_input(args)?;
+        let _ = parse_optional_output(args)?;
+        if let Some(v) = args.get("value") {
+            if !v.is_null() && v.as_f64().is_none() {
+                return Err(ToolError::Validation("parameter 'value' must be a number".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_input(args)?;
+        let output_path = parse_optional_output(args)?;
+        let increment_by = args
+            .get("value")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+
+        ctx.progress.info("running increment");
+
+        let input = load_input_raster(input_path)?;
+        let mut output = Raster::new_like_uninit(&input);
+        let len = output.data.len();
+
+        output.apply_scalar_add(&input, increment_by).map_err(|e| {
+            ToolError::Execution(format!("apply_scalar_add failed: {e}"))
+        })?;
+
+        ctx.progress.progress(0.9);
+
+        let output_locator = write_or_store_output(output, output_path)?;
+        ctx.progress.progress(1.0);
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator.clone()));
+        outputs.insert(
+            "output".to_string(),
+            json!({"__wbw_type__": "raster", "path": output_locator, "active_band": 0}),
+        );
+        outputs.insert("cells_processed".to_string(), json!(len));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
+pub struct RasterDecrementTool;
+
+impl Tool for RasterDecrementTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "decrement",
+            display_name: "Decrement",
+            summary: "Subtracts a value (default 1.0) from each non-nodata raster cell.",
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamSpec {
+                    name: "input",
+                    description: "Input raster file path.",
+                    required: true,
+                },
+                ToolParamSpec {
+                    name: "value",
+                    description: "The amount to subtract from each cell. Defaults to 1.0.",
+                    required: false,
+                },
+                ToolParamSpec {
+                    name: "output",
+                    description: "Optional output raster file path. If omitted, the result is stored in memory.",
+                    required: false,
+                },
+            ],
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        let mut defaults = ToolArgs::new();
+        defaults.insert("input".to_string(), json!("input.tif"));
+        defaults.insert("value".to_string(), json!(1.0));
+        defaults.insert("output".to_string(), json!("output.tif"));
+
+        let mut example_args = ToolArgs::new();
+        example_args.insert("input".to_string(), json!("dem.tif"));
+        example_args.insert("value".to_string(), json!(1.0));
+        example_args.insert("output".to_string(), json!("decrement_dem.tif"));
+
+        ToolManifest {
+            id: "decrement".to_string(),
+            display_name: "Decrement".to_string(),
+            summary: "Subtracts a value (default 1.0) from each non-nodata raster cell.".to_string(),
+            category: ToolCategory::Raster,
+            license_tier: LicenseTier::Open,
+            params: vec![
+                ToolParamDescriptor {
+                    name: "input".to_string(),
+                    description: "Input raster file path.".to_string(),
+                    required: true,
+                },
+                ToolParamDescriptor {
+                    name: "value".to_string(),
+                    description: "The amount to subtract from each cell. Defaults to 1.0.".to_string(),
+                    required: false,
+                },
+                ToolParamDescriptor {
+                    name: "output".to_string(),
+                    description: "Optional output raster file path. If omitted, the result is stored in memory.".to_string(),
+                    required: false,
+                },
+            ],
+            defaults,
+            examples: vec![ToolExample {
+                name: "basic_run".to_string(),
+                description: "Subtract 1.0 from each non-nodata cell.".to_string(),
+                args: example_args,
+            }],
+            tags: vec!["raster".to_string(), "math".to_string(), "decrement".to_string()],
+            stability: ToolStability::Experimental,
+        }
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        let _ = parse_input(args)?;
+        let _ = parse_optional_output(args)?;
+        if let Some(v) = args.get("value") {
+            if !v.is_null() && v.as_f64().is_none() {
+                return Err(ToolError::Validation("parameter 'value' must be a number".to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let input_path = parse_input(args)?;
+        let output_path = parse_optional_output(args)?;
+        let decrement_by = args
+            .get("value")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+
+        ctx.progress.info("running decrement");
+
+        let input = load_input_raster(input_path)?;
+        let mut output = Raster::new_like_uninit(&input);
+        let len = output.data.len();
+
+        output.apply_scalar_sub(&input, decrement_by).map_err(|e| {
+            ToolError::Execution(format!("apply_scalar_sub failed: {e}"))
+        })?;
+
+        ctx.progress.progress(0.9);
+
+        let output_locator = write_or_store_output(output, output_path)?;
+        ctx.progress.progress(1.0);
+
+        let mut outputs = BTreeMap::new();
+        outputs.insert("path".to_string(), json!(output_locator.clone()));
+        outputs.insert(
+            "output".to_string(),
+            json!({"__wbw_type__": "raster", "path": output_locator, "active_band": 0}),
+        );
+        outputs.insert("cells_processed".to_string(), json!(len));
+        Ok(ToolRunResult { outputs })
+    }
+}
+
 define_unary_tool!(RasterToDegTool, "to_degrees", "ToDegrees", "Converts each raster cell from radians to degrees.", |z: f64| z.to_degrees());
 define_unary_tool!(RasterToRadTool, "to_radians", "ToRadians", "Converts each raster cell from degrees to radians.", |z: f64| z.to_radians());
 define_unary_tool!(RasterBoolNotTool, "bool_not", "BoolNot", "Computes a logical NOT of each raster cell, outputting 1 for zero-valued cells and 0 otherwise.", |z: f64| if z == 0.0 { 1.0 } else { 0.0 });

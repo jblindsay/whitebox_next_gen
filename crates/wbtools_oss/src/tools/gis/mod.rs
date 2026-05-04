@@ -9879,6 +9879,7 @@ impl Tool for BufferVectorTool {
                 ToolParamSpec { name: "cap_style", description: "Line end-cap style: round, flat, or square.", required: false },
                 ToolParamSpec { name: "join_style", description: "Corner join style: round, bevel, or mitre.", required: false },
                 ToolParamSpec { name: "mitre_limit", description: "Mitre join limit used when join_style=mitre; defaults to 5.0.", required: false },
+                ToolParamSpec { name: "dissolve", description: "Dissolve overlapping buffers into a single unified polygon; defaults to false.", required: false },
                 ToolParamSpec { name: "output", description: "Output vector path.", required: true },
             ],
         }
@@ -9892,6 +9893,7 @@ impl Tool for BufferVectorTool {
         defaults.insert("cap_style".to_string(), json!("round"));
         defaults.insert("join_style".to_string(), json!("round"));
         defaults.insert("mitre_limit".to_string(), json!(5.0));
+        defaults.insert("dissolve".to_string(), json!(false));
 
         let mut example_args = defaults.clone();
         example_args.insert("output".to_string(), json!("buffer_vector.shp"));
@@ -9909,6 +9911,7 @@ impl Tool for BufferVectorTool {
                 ToolParamDescriptor { name: "cap_style".to_string(), description: "Line end-cap style: round, flat, or square.".to_string(), required: false },
                 ToolParamDescriptor { name: "join_style".to_string(), description: "Corner join style: round, bevel, or mitre.".to_string(), required: false },
                 ToolParamDescriptor { name: "mitre_limit".to_string(), description: "Mitre join limit used when join_style=mitre; defaults to 5.0.".to_string(), required: false },
+                ToolParamDescriptor { name: "dissolve".to_string(), description: "Dissolve overlapping buffers into a single unified polygon; defaults to false.".to_string(), required: false },
                 ToolParamDescriptor { name: "output".to_string(), description: "Output vector path.".to_string(), required: true },
             ],
             defaults,
@@ -9983,6 +9986,10 @@ impl Tool for BufferVectorTool {
             .get("mitre_limit")
             .and_then(|value| value.as_f64())
             .unwrap_or(5.0);
+        let dissolve = args
+            .get("dissolve")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
         let output_path = parse_vector_path_arg(args, "output")?;
 
         let options = BufferOptions {
@@ -10018,6 +10025,42 @@ impl Tool for BufferVectorTool {
         for result in results {
             if let Some(feat) = result? {
                 output.push(feat);
+            }
+        }
+
+        // Apply dissolve if requested
+        if dissolve && !output.features.is_empty() {
+            ctx.progress.info("dissolving overlapping buffers");
+            
+            // Collect all buffered polygons
+            let mut buffered_polys = Vec::<TopoPolygon>::new();
+            for feature in &output.features {
+                if let Some(wbvector::Geometry::Polygon { exterior, interiors }) = &feature.geometry {
+                    buffered_polys.push(to_topo_polygon(exterior, interiors));
+                } else if let Some(wbvector::Geometry::MultiPolygon(parts)) = &feature.geometry {
+                    for (exterior, interiors) in parts {
+                        buffered_polys.push(to_topo_polygon(exterior, interiors));
+                    }
+                }
+            }
+
+            if !buffered_polys.is_empty() {
+                // Perform unary dissolve to merge overlapping buffers
+                let dissolved_groups = polygon_unary_dissolve(&buffered_polys, 1.0e-9);
+                
+                // Rebuild output layer with dissolved polygons
+                output.features.clear();
+                for (idx, group) in dissolved_groups.into_iter().enumerate() {
+                    let geometry = wbvector::Geometry::Polygon {
+                        exterior: to_wb_ring(&group.poly.exterior),
+                        interiors: to_wb_rings(&group.poly.holes),
+                    };
+                    output.push(wbvector::Feature {
+                        fid: idx as u64,
+                        geometry: Some(geometry),
+                        attributes: vec![],
+                    });
+                }
             }
         }
 

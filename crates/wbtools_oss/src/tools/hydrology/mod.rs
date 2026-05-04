@@ -350,7 +350,6 @@ fn detect_strict_pits_with_raise(data: &mut [f64], rows: usize, cols: usize, nod
 }
 
 fn fill_pits_core(src: &BandView, out: &mut [f64], small: f64) {
-	let rows = src.rows;
 	let cols = src.cols;
 	let nodata = src.nodata;
 	let cols_usize = cols as usize;

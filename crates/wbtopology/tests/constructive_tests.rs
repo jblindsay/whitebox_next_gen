@@ -9,6 +9,7 @@ use wbtopology::{
     contains,
     is_valid_polygon,
     make_valid_polygon,
+    offset_linestring,
     polygonize_closed_linestrings,
     BufferCapStyle,
     BufferJoinStyle,
@@ -17,6 +18,8 @@ use wbtopology::{
     Geometry,
     LineString,
     LinearRing,
+    OffsetCurveOptions,
+    OffsetSide,
     PrecisionModel,
     Polygon,
 };
@@ -763,4 +766,162 @@ fn buffer_problem_building_cw_ring() {
     assert!(max_y > 4818649.428 + 4.0, "Buffer too narrow on top: max_y={}", max_y);
     let buf_area = ring_area_abs(&buf.exterior.coords);
     assert!(buf_area > 400.0, "Buffer area {} too small (source ~201 m²)", buf_area);
+}
+
+// ── offset_linestring tests ─────────────────────────────────────────────────
+
+#[test]
+fn offset_linestring_left_horizontal() {
+    // Horizontal line along x-axis; left side at distance 3.0 should be y=3.
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)]);
+    let opts = OffsetCurveOptions::default();
+    let result = offset_linestring(&ls, 3.0, OffsetSide::Left, opts);
+    assert_eq!(result.coords.len(), 2, "Expected 2 coords for simple horizontal line");
+    for c in &result.coords {
+        assert!((c.y - 3.0).abs() < 1.0e-9, "Left offset of horizontal line should have y≈3, got {}", c.y);
+    }
+    assert!((result.coords[0].x - 0.0).abs() < 1.0e-9);
+    assert!((result.coords[1].x - 10.0).abs() < 1.0e-9);
+}
+
+#[test]
+fn offset_linestring_right_horizontal() {
+    // Horizontal line; right side at distance 3.0 should be y=-3.
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)]);
+    let opts = OffsetCurveOptions::default();
+    let result = offset_linestring(&ls, 3.0, OffsetSide::Right, opts);
+    assert_eq!(result.coords.len(), 2);
+    for c in &result.coords {
+        assert!((c.y - (-3.0)).abs() < 1.0e-9, "Right offset should have y≈-3, got {}", c.y);
+    }
+}
+
+#[test]
+fn offset_linestring_returns_open_not_closed() {
+    // Result must be an open linestring (first ≠ last).
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(10.0, 10.0),
+    ]);
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Left, OffsetCurveOptions::default());
+    assert!(result.coords.len() >= 2, "Result should have at least 2 coords");
+    let first = result.coords.first().unwrap();
+    let last  = result.coords.last().unwrap();
+    let dist2 = (first.x - last.x).powi(2) + (first.y - last.y).powi(2);
+    assert!(dist2 > 1.0e-6, "Offset linestring should be open (first ≠ last)");
+}
+
+#[test]
+fn offset_linestring_preserves_direction() {
+    // Left offset of a north-going line should be to the west (negative x).
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(0.0, 10.0)]);
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Left, OffsetCurveOptions::default());
+    assert_eq!(result.coords.len(), 2);
+    for c in &result.coords {
+        assert!(c.x < -1.9, "Left of north-going line should be west (x < 0), got {}", c.x);
+    }
+}
+
+#[test]
+fn offset_linestring_right_preserves_direction() {
+    // Right offset of a north-going line should be to the east (positive x).
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(0.0, 10.0)]);
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Right, OffsetCurveOptions::default());
+    assert_eq!(result.coords.len(), 2);
+    for c in &result.coords {
+        assert!(c.x > 1.9, "Right of north-going line should be east (x > 0), got {}", c.x);
+    }
+}
+
+#[test]
+fn offset_linestring_mitre_join_style() {
+    // L-shaped line; Mitre join should produce a single sharp corner point.
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(10.0, 10.0),
+    ]);
+    let opts = OffsetCurveOptions {
+        join_style: BufferJoinStyle::Mitre,
+        ..Default::default()
+    };
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Left, opts);
+    // 3 input points → 3 output points with Mitre (no arc insertion).
+    assert_eq!(result.coords.len(), 3, "Mitre join should produce 3 coords, got {}", result.coords.len());
+}
+
+#[test]
+fn offset_linestring_round_join_adds_arc_vertices() {
+    // L-shaped line; Round join should produce more than 3 output coords.
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(10.0, 10.0),
+    ]);
+    let opts = OffsetCurveOptions {
+        join_style: BufferJoinStyle::Round,
+        quadrant_segments: 8,
+        ..Default::default()
+    };
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Left, opts);
+    assert!(result.coords.len() > 3, "Round join should insert arc vertices (got {})", result.coords.len());
+}
+
+#[test]
+fn offset_linestring_zero_distance_returns_empty() {
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)]);
+    let result = offset_linestring(&ls, 0.0, OffsetSide::Left, OffsetCurveOptions::default());
+    assert!(result.coords.is_empty(), "Zero distance should return empty linestring");
+}
+
+#[test]
+fn offset_linestring_negative_distance_returns_empty() {
+    let ls = LineString::new(vec![Coord::xy(0.0, 0.0), Coord::xy(10.0, 0.0)]);
+    let result = offset_linestring(&ls, -1.0, OffsetSide::Left, OffsetCurveOptions::default());
+    assert!(result.coords.is_empty(), "Negative distance should return empty linestring");
+}
+
+#[test]
+fn offset_linestring_single_point_returns_empty() {
+    let ls = LineString::new(vec![Coord::xy(5.0, 5.0)]);
+    let result = offset_linestring(&ls, 1.0, OffsetSide::Left, OffsetCurveOptions::default());
+    assert!(result.coords.is_empty(), "Single-point input should return empty linestring");
+}
+
+#[test]
+fn offset_linestring_multipoint_preserves_vertex_count_mitre() {
+    // 5-point path with Mitre joins should produce exactly 5 output coords.
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 5.0),
+        Coord::xy(20.0, 0.0),
+        Coord::xy(30.0, 5.0),
+        Coord::xy(40.0, 0.0),
+    ]);
+    let opts = OffsetCurveOptions {
+        join_style: BufferJoinStyle::Mitre,
+        ..Default::default()
+    };
+    let result = offset_linestring(&ls, 2.0, OffsetSide::Left, opts);
+    assert_eq!(result.coords.len(), 5, "5-point path with Mitre should have 5 output coords, got {}", result.coords.len());
+}
+
+#[test]
+fn offset_linestring_left_right_symmetric_about_centreline() {
+    // For a horizontal line the left and right offsets should be mirror images
+    // about y=0 (i.e. left.y == -right.y for corresponding coords).
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(20.0, 0.0),
+    ]);
+    let opts = OffsetCurveOptions { join_style: BufferJoinStyle::Mitre, ..Default::default() };
+    let left  = offset_linestring(&ls, 3.0, OffsetSide::Left,  opts);
+    let right = offset_linestring(&ls, 3.0, OffsetSide::Right, opts);
+    assert_eq!(left.coords.len(), right.coords.len(), "Left and right should have same vertex count");
+    for (l, r) in left.coords.iter().zip(right.coords.iter()) {
+        assert!((l.x - r.x).abs() < 1.0e-9, "x-coords should match: {} vs {}", l.x, r.x);
+        assert!((l.y + r.y).abs() < 1.0e-9, "left.y + right.y should be 0: {} + {}", l.y, r.y);
+    }
 }

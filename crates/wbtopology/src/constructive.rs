@@ -74,6 +74,42 @@ pub enum BufferPipelineStrategy {
     GraphBuilder,
 }
 
+/// Which side of a linestring to offset toward.
+///
+/// "Left" and "Right" are defined relative to the direction of travel along the
+/// input linestring (i.e. the direction from the first coordinate to the last).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetSide {
+    /// Left side when facing the direction of travel (positive normal direction).
+    Left,
+    /// Right side when facing the direction of travel (negative normal direction).
+    Right,
+}
+
+/// Options for one-sided offset curve generation via [`offset_linestring`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OffsetCurveOptions {
+    /// Number of segments per quarter circle (used for `Round` joins).
+    pub quadrant_segments: usize,
+    /// Join style at intermediate vertices.
+    pub join_style: BufferJoinStyle,
+    /// Maximum mitre ratio (used when `join_style == Mitre`).
+    ///
+    /// If the computed mitre point exceeds `mitre_limit * distance` from the
+    /// source vertex, the join falls back to bevel.
+    pub mitre_limit: f64,
+}
+
+impl Default for OffsetCurveOptions {
+    fn default() -> Self {
+        Self {
+            quadrant_segments: 8,
+            join_style: BufferJoinStyle::Round,
+            mitre_limit: 5.0,
+        }
+    }
+}
+
 /// Builder for buffering operations with explicit robustness controls.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BufferBuilder {
@@ -410,6 +446,121 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
 
     let poly = Polygon::new(LinearRing::new(cleaned), vec![]);
     buffer_linestring_graph_repair(poly, 1.0e-9)
+}
+
+/// Generate a one-sided offset curve for a linestring.
+///
+/// Unlike [`buffer_linestring`], which produces a closed polygon corridor,
+/// this function returns an open `LineString` representing only one side of
+/// the offset. It is analogous to JTS/GEOS `OffsetCurve` and is suitable for:
+///
+/// - Road edge and lane boundary extraction
+/// - Hydration buffer centreline offsets
+/// - Planning setback lines
+/// - Any workflow that requires the raw offset geometry, not a filled polygon
+///
+/// # Parameters
+///
+/// - `ls`: input linestring
+/// - `distance`: magnitude of the offset; must be positive and finite
+/// - `side`: [`OffsetSide::Left`] (left when facing direction of travel) or
+///   [`OffsetSide::Right`] (right when facing direction of travel)
+/// - `options`: join style and resolution controls via [`OffsetCurveOptions`]
+///
+/// # Returns
+///
+/// An open `LineString`. The number of output vertices equals the number of
+/// input vertices for `Mitre`/`Bevel` joins; `Round` joins insert additional
+/// arc vertices at convex turns. Returns an empty `LineString` when:
+/// - `distance` is zero, negative, or non-finite
+/// - the input has fewer than two distinct coordinates
+///
+/// # Notes
+///
+/// - Single-point inputs return an empty `LineString`.
+/// - Self-intersecting input curves are not split; the offset curve may also
+///   self-intersect. Post-process with [`make_valid_geometry`] if needed.
+/// - Use [`buffer_linestring`] when you need a closed polygon (corridor buffer).
+///
+/// # Example
+///
+/// ```
+/// use wbtopology::{offset_linestring, OffsetSide, OffsetCurveOptions, LineString, Coord};
+///
+/// let road = LineString::new(vec![
+///     Coord::xy(0.0, 0.0),
+///     Coord::xy(100.0, 0.0),
+///     Coord::xy(200.0, 50.0),
+/// ]);
+/// // 5-metre left kerb line
+/// let left_edge = offset_linestring(&road, 5.0, OffsetSide::Left, OffsetCurveOptions::default());
+/// assert!(left_edge.coords.len() >= 3);
+/// ```
+pub fn offset_linestring(
+    ls: &LineString,
+    distance: f64,
+    side: OffsetSide,
+    options: OffsetCurveOptions,
+) -> LineString {
+    if !distance.is_finite() || distance <= 0.0 {
+        return LineString::new(vec![]);
+    }
+    if ls.coords.len() < 2 {
+        return LineString::new(vec![]);
+    }
+
+    let mut coords = sanitize_path(&ls.coords);
+    if coords.len() < 2 {
+        return LineString::new(vec![]);
+    }
+
+    let segs = (options.quadrant_segments.max(2) * 4).max(8);
+
+    // Left side: positive normal direction (standard build_offset_side direction).
+    // Right side: reverse the path so the right side becomes the left, compute,
+    // then reverse the result to restore the original travel direction.
+    let offset_coords = match side {
+        OffsetSide::Left => build_offset_side(
+            &coords,
+            distance,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+        ),
+        OffsetSide::Right => {
+            coords.reverse();
+            let mut result = build_offset_side(
+                &coords,
+                distance,
+                options.join_style,
+                segs,
+                options.mitre_limit,
+            );
+            // Restore original direction so the output linestring runs from the
+            // input's start to its end.
+            result.reverse();
+            result
+        }
+    };
+
+    if offset_coords.len() < 2 {
+        return LineString::new(vec![]);
+    }
+
+    // Deduplicate adjacent near-identical points (produced by collinear segments).
+    let mut cleaned = Vec::<Coord>::with_capacity(offset_coords.len());
+    for p in offset_coords {
+        if cleaned
+            .last()
+            .map(|q| coord_dist2(*q, p) <= 1.0e-24)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        cleaned.push(p);
+    }
+
+    LineString::new(cleaned)
 }
 
 /// Buffer a polygon by the given distance.

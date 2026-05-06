@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 ### Added
 - Added `extract_face_rings_with_edges` and `extract_bounded_face_rings_with_edges` on `TopologyGraph`, returning face rings paired with their directed edge id lists; used by depth-labeling BFS face classification.
+- Added `offset_linestring` public function returning an open `LineString` one-sided offset curve (analogous to JTS/GEOS `OffsetCurve`): takes a linestring, signed distance, `OffsetSide` (Left/Right), and `OffsetCurveOptions` (join style, quadrant segments, mitre limit); suitable for road edge extraction, centreline offsets, and planning setback lines. Added companion types `OffsetSide` and `OffsetCurveOptions`; both exported from the crate root.
 
 ### Changed
 - Replaced point-in-polygon probe face classification in `unary_dissolve_graph_component` with GEOS/JTS-style directed-edge depth labeling; face membership is now determined purely topologically via BFS depth propagation, eliminating misclassification of faces adjacent to short source-polygon edges.

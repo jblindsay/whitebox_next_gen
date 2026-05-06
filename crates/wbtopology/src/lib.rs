@@ -91,6 +91,7 @@ pub use constructive::{
 	buffer_polygon_with_precision,
 	buffer_point,
 	buffer_point_with_precision,
+	offset_linestring,
 	make_valid_geometry,
 	make_valid_polygon,
 	polygonize_linework,
@@ -102,6 +103,8 @@ pub use constructive::{
 	BufferOptions,
 	GeometryFixMode,
 	GeometryFixOptions,
+	OffsetCurveOptions,
+	OffsetSide,
 	PolygonizeOptions,
 	PolygonizeResult,
 };

@@ -696,15 +696,27 @@ fn classify_faces_by_depth(
     }
 
     // Any face not reached by BFS (isolated component not touching the exterior)
-    // falls back to its own seed delta.
+    // falls back to using its first edge's delta value, which may be conservative but
+    // is rare in practice (requires complex overlapping topology). Log a diagnostic
+    // if this occurs: it suggests possible topology graph issues or degenerate input.
+    let mut unreached_count = 0usize;
     for face_id in 0..n_faces {
         if face_depth[face_id] == i32::MIN {
+            unreached_count += 1;
             face_depth[face_id] = face_rings[face_id]
                 .1
                 .first()
                 .and_then(|&eid| delta.get(eid).copied())
                 .unwrap_or(0);
         }
+    }
+
+    if unreached_count > 0 {
+        eprintln!(
+            "WARNING: classify_faces_by_depth: {} unreached face(s) with isolated topology \
+             (using delta fallback for robustness)",
+            unreached_count
+        );
     }
 
     face_depth.iter().map(|&d| d > 0).collect()

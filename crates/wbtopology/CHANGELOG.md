@@ -6,7 +6,17 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 ### Added
-- Added a fast Delaunay triangulation implementation in `src/fast_triangulation.rs`, adapted with attribution from the Delaunator algorithm lineage.
+- Added `extract_face_rings_with_edges` and `extract_bounded_face_rings_with_edges` on `TopologyGraph`, returning face rings paired with their directed edge id lists; used by depth-labeling BFS face classification.
+
+### Changed
+- Replaced point-in-polygon probe face classification in `unary_dissolve_graph_component` with GEOS/JTS-style directed-edge depth labeling; face membership is now determined purely topologically via BFS depth propagation, eliminating misclassification of faces adjacent to short source-polygon edges.
+- Replaced point-in-polygon probe face classification in `classify_overlay_faces` (two-polygon Boolean overlay) with directed-edge depth labeling matching the unary dissolve approach, fixing the same short-segment misclassification for intersection/union/difference/symmetric-difference operations. Corrected face-ring extraction in that path to use bounded rings only (positive area); the previous all-rings extraction prevented any face from being seeded by the BFS, causing every overlay operation to return empty.
+- Removed diagnostic `eprintln!` calls from buffer pipeline internals in `constructive.rs` that were firing unconditionally in production builds.
+- Replaced `repair_buffer_polygon` fallback in `buffer_linestring` with `buffer_linestring_graph_repair`: for self-intersecting raw rings the new helper nodes the ring, extracts bounded face rings, assembles valid polygons via `polygonize_closed_linestrings`, and returns the largest result — matching the graph-pipeline approach already used for polygon buffering.
+- Added `buffer_polygon_attach_holes` helper: after the graph pipeline selects the outer shell for a source polygon with holes, inward-contracted hole rings are reconstructed using the same mitre-offset logic as the legacy path and attached to the shell, restoring correct hole geometry in the graph-pipeline buffer output.
+- Snapped intersection points to the nearest `eps`-grid vertex in `node_segment` (noding.rs); the hot-pixel snap prevents hair-thin slivers from floating-point drift at computed intersection coordinates, consistent with GEOS/JTS snap-rounding behaviour.
+- Fixed mixed-precision sliver artifacts by quantising input vertices for `NodingStrategy::Auto` (not just `SnapRounding`) before noding: previously, only intersection points were snapped to the eps-grid while input vertices remained at floating-point precision, creating the same on-grid/off-grid artifacts that snap-rounding was meant to prevent. Now all input vertices are quantised for both `Auto` and `SnapRounding` strategies unless an explicit `PrecisionModel::Floating` is passed.
+
 - Added public export `delaunay_triangulation_fast` for high-throughput triangulation workflows.
 - Added `fixed_radius_search` module with `FixedRadiusSearch2D` and `DistanceMetric` for high-throughput local neighbourhood queries.
 - Added `polygon_unary_dissolve_fast` for high-throughput polygon dissolve workflows where robust fallbacks are not required.

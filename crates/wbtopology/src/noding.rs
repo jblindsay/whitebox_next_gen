@@ -88,17 +88,25 @@ pub fn node_linestrings(lines: &[LineString], epsilon: f64) -> Vec<LineString> {
 /// Split linestrings into noded fragments using explicit strategy options.
 pub fn node_linestrings_with_options(lines: &[LineString], options: NodingOptions) -> Vec<LineString> {
     let eps = options.epsilon.abs();
-    let prepared_lines = if options.strategy == NodingStrategy::SnapRounding {
-        let precision = options
-            .precision
-            .unwrap_or(PrecisionModel::Fixed {
-                scale: 1.0 / eps.max(1.0e-9),
-            });
-        apply_precision_lines(lines, precision)
-    } else if let Some(precision) = options.precision {
-        apply_precision_lines(lines, precision)
-    } else {
-        lines.to_vec()
+    let prepared_lines = match options.strategy {
+        // SnapRounding and Auto both quantise input vertices by default to match their
+        // snap-rounding intersection points. This prevents mixed-precision sliver artifacts.
+        NodingStrategy::SnapRounding | NodingStrategy::Auto => {
+            let precision = options
+                .precision
+                .unwrap_or(PrecisionModel::Fixed {
+                    scale: 1.0 / eps.max(1.0e-9),
+                });
+            apply_precision_lines(lines, precision)
+        }
+        // For other strategies, only apply precision if explicitly provided.
+        _ => {
+            if let Some(precision) = options.precision {
+                apply_precision_lines(lines, precision)
+            } else {
+                lines.to_vec()
+            }
+        }
     };
 
     let segments = collect_segments(&prepared_lines);
@@ -213,7 +221,18 @@ fn node_segment(
         }
 
         if let Some(p) = segment_intersection_point(seg.a, seg.b, other.a, other.b, eps) {
-            push_unique_eps(&mut split_points, p, eps);
+            // Hot-pixel snap-rounding: snap the computed intersection point to the
+            // nearest grid vertex (cell size = eps).  Floating-point intersection
+            // arithmetic can place the point slightly off-grid even when the input
+            // vertices are already quantised, which creates hair-thin slivers in the
+            // topology graph.  Snapping to the same grid that was applied to input
+            // vertices ensures every noded coordinate is on-grid.
+            let scale = 1.0 / eps.max(1.0e-15);
+            let snapped = Coord::xy(
+                (p.x * scale).round() / scale,
+                (p.y * scale).round() / scale,
+            );
+            push_unique_eps(&mut split_points, snapped, eps);
         }
     }
 

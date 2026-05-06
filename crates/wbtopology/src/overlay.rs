@@ -1,10 +1,8 @@
 //! Overlay face selection built on topology graph extraction.
 
-use std::collections::{HashMap, HashSet};
-#[cfg(feature = "parallel")]
-use rayon::prelude::*;
+use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::algorithms::segment::segments_intersect_eps;
+use crate::algorithms::segment::{point_on_segment_eps, segments_intersect_eps};
 use crate::algorithms::distance::geometry_distance;
 use crate::algorithms::point_in_ring::{classify_point_in_ring_eps, PointInRing};
 use crate::geom::{Coord, Envelope, Geometry, LineString, LinearRing, Polygon};
@@ -13,8 +11,6 @@ use crate::noding::{NodingOptions, NodingStrategy};
 use crate::precision::PrecisionModel;
 use crate::spatial_index::SpatialIndex;
 
-#[cfg(feature = "parallel")]
-const PARALLEL_MIN_FACES: usize = 256;
 const OVERLAY_ALL_TINY_VERTEX_THRESHOLD: usize = 24;
 const OVERLAY_ALL_HOLERICH_VERTEX_THRESHOLD: usize = 64;
 const OVERLAY_ALL_HOLERICH_HOLES_THRESHOLD: usize = 6;
@@ -117,41 +113,103 @@ fn classify_overlay_faces(a: &Polygon, b: &Polygon, eps: f64) -> ClassifiedFaces
     // from excessively tight node-merge thresholds in the face graph.
     let graph_eps = eps.max(1.0e-9);
     let graph = TopologyGraph::from_linestrings(&boundaries, graph_eps);
-    let rings = graph.extract_face_rings(eps);
 
-    #[cfg(feature = "parallel")]
-    {
-        if rings.len() >= PARALLEL_MIN_FACES {
-            let flags: Vec<(bool, bool)> = rings
-                .par_iter()
-                .map(|ring| {
-                    let probe = face_probe_point(ring, eps);
-                    let in_a = face_in_polygon_with_probe(ring, probe, a, eps);
-                    let in_b = face_in_polygon_with_probe(ring, probe, b, eps);
-                    (in_a, in_b)
-                })
-                .collect();
+    // Use bounded face rings only (positive signed area).  Edges in CW-winding
+    // rings (outer boundary / hole inner-boundary cycles) are NOT mapped, so
+    // their `sym` edges report `edge_to_face[sym] == MAX` — that is the signal
+    // used by the BFS to identify faces adjacent to the exterior.
+    let rings_with_edges = graph.extract_bounded_face_rings_with_edges(eps);
+    let n_edges = graph.edges.len();
 
-            let mut in_a = Vec::with_capacity(flags.len());
-            let mut in_b = Vec::with_capacity(flags.len());
-            for (a_flag, b_flag) in flags {
-                in_a.push(a_flag);
-                in_b.push(b_flag);
+    // Map edge id → face index.
+    let mut edge_to_face = vec![usize::MAX; n_edges];
+    for (face_id, (_, edge_ids)) in rings_with_edges.iter().enumerate() {
+        for &eid in edge_ids {
+            if eid < n_edges {
+                edge_to_face[eid] = face_id;
             }
-
-            return ClassifiedFaces { rings, in_a, in_b };
         }
     }
 
-    let mut in_a = Vec::with_capacity(rings.len());
-    let mut in_b = Vec::with_capacity(rings.len());
-    for ring in &rings {
-        let probe = face_probe_point(ring, eps);
-        in_a.push(face_in_polygon_with_probe(ring, probe, a, eps));
-        in_b.push(face_in_polygon_with_probe(ring, probe, b, eps));
-    }
+    // Compute per-source depth deltas and classify via BFS — one pass per polygon.
+    let depth_a = classify_overlay_faces_depth(&graph, &rings_with_edges, &edge_to_face, a, n_edges, eps);
+    let depth_b = classify_overlay_faces_depth(&graph, &rings_with_edges, &edge_to_face, b, n_edges, eps);
+
+    let in_a: Vec<bool> = depth_a.iter().map(|&d| d > 0).collect();
+    let in_b: Vec<bool> = depth_b.iter().map(|&d| d > 0).collect();
+    let rings: Vec<LineString> = rings_with_edges.into_iter().map(|(ls, _)| ls).collect();
 
     ClassifiedFaces { rings, in_a, in_b }
+}
+
+/// Compute depth labels for all faces relative to a single source polygon using BFS.
+/// Returns one i32 per face; depth > 0 means the face is inside the source polygon.
+fn classify_overlay_faces_depth(
+    graph: &TopologyGraph,
+    face_rings: &[(LineString, Vec<usize>)],
+    edge_to_face: &[usize],
+    source: &Polygon,
+    n_edges: usize,
+    eps: f64,
+) -> Vec<i32> {
+    // Compute per-directed-edge depth deltas from source ring segments.
+    let mut delta = vec![0i32; n_edges];
+    let src_slice = std::slice::from_ref(source);
+    compute_unary_edge_deltas(graph, src_slice, eps, &mut delta);
+
+    // BFS from exterior-adjacent faces, same as unary dissolve.
+    let mut face_depth = vec![i32::MIN; face_rings.len()];
+    let mut queue = VecDeque::<usize>::new();
+
+    for face_id in 0..face_rings.len() {
+        let mut seed = i32::MIN;
+        let mut fallback_seed = i32::MIN;
+        for &eid in &face_rings[face_id].1 {
+            let sym = eid ^ 1;
+            if sym < n_edges && edge_to_face[sym] == usize::MAX {
+                let d = if eid < delta.len() { delta[eid] } else { 0 };
+                if d != 0 && seed == i32::MIN {
+                    seed = d;
+                    break;
+                }
+                if fallback_seed == i32::MIN {
+                    fallback_seed = d;
+                }
+            }
+        }
+        let chosen = if seed != i32::MIN { seed } else { fallback_seed };
+        if chosen != i32::MIN {
+            face_depth[face_id] = chosen;
+            queue.push_back(face_id);
+        }
+    }
+
+    while let Some(current_id) = queue.pop_front() {
+        let d = face_depth[current_id];
+        let edge_ids = face_rings[current_id].1.clone();
+        for eid in edge_ids {
+            let sym = eid ^ 1;
+            if sym >= n_edges {
+                continue;
+            }
+            let adj = edge_to_face[sym];
+            if adj == usize::MAX || face_depth[adj] != i32::MIN {
+                continue;
+            }
+            let e_delta = if eid < delta.len() { delta[eid] } else { 0 };
+            face_depth[adj] = d - e_delta;
+            queue.push_back(adj);
+        }
+    }
+
+    // Unseeded faces (fully interior, not touching exterior) keep depth 0.
+    for d in face_depth.iter_mut() {
+        if *d == i32::MIN {
+            *d = 0;
+        }
+    }
+
+    face_depth
 }
 
 fn select_classified_faces(classified: &ClassifiedFaces, operation: OverlayOp) -> Vec<Polygon> {
@@ -177,39 +235,6 @@ fn select_classified_faces(classified: &ClassifiedFaces, operation: OverlayOp) -
     }
 
     out
-}
-
-fn face_probe_point(face_ring: &LineString, eps: f64) -> Option<Coord> {
-    if face_ring.coords.len() < 2 {
-        return None;
-    }
-
-    let delta = (eps * 16.0).max(1.0e-9);
-    for i in 0..(face_ring.coords.len() - 1) {
-        let a = face_ring.coords[i];
-        let b = face_ring.coords[i + 1];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len <= eps {
-            continue;
-        }
-
-        let mx = 0.5 * (a.x + b.x);
-        let my = 0.5 * (a.y + b.y);
-        let nx = -dy / len;
-        let ny = dx / len;
-        return Some(Coord::xy(mx + nx * delta, my + ny * delta));
-    }
-
-    None
-}
-
-fn face_in_polygon_with_probe(face_ring: &LineString, probe: Option<Coord>, poly: &Polygon, eps: f64) -> bool {
-    if let Some(p) = probe {
-        return matches!(classify_point_in_polygon_eps(p, poly, eps), PointInRing::Inside);
-    }
-    face_inside_polygon(face_ring, poly, eps)
 }
 
 /// Face-decomposed polygon intersection.
@@ -440,19 +465,37 @@ fn unary_dissolve_graph_component(polys: &[Polygon], eps: f64, noding: NodingOpt
             ..noding
         },
     );
-    let face_rings = graph.extract_bounded_face_rings(eps);
 
-    let mut candidate_faces = Vec::<Polygon>::new();
-    for ring in face_rings {
-        let probe = face_probe_point(&ring, eps)
-            .or_else(|| ring.coords.first().copied())
-            .unwrap_or(Coord::xy(0.0, 0.0));
-        if polys.iter().any(|poly| matches!(classify_point_in_polygon_eps(probe, poly, eps), PointInRing::Inside)) {
-            candidate_faces.push(Polygon::new(LinearRing::new(ring.coords.clone()), vec![]));
-        }
+    // Extract bounded face rings together with the directed edge ids on each boundary.
+    let face_rings = graph.extract_bounded_face_rings_with_edges(eps);
+    if face_rings.is_empty() {
+        return Vec::new();
     }
 
+    // Assign a depth delta to every directed edge from source ring membership.
+    // delta[e] = depth(left face of e) – depth(right face of e).
+    // This is a purely topological computation — no point-in-polygon probing.
+    let mut edge_delta = vec![0i32; graph.edges.len()];
+    compute_unary_edge_deltas(&graph, polys, eps, &mut edge_delta);
+
+    // BFS from the exterior region to classify each face as depth > 0 (include) or not.
+    let included = classify_faces_by_depth(&graph, &face_rings, &edge_delta);
+
+    // Collect candidate faces and dissolve adjacent ones.
+    let candidate_faces: Vec<Polygon> = face_rings
+        .iter()
+        .zip(included.iter())
+        .filter_map(|((ring, _), &inc)| {
+            if inc {
+                Some(Polygon::new(LinearRing::new(ring.coords.clone()), vec![]))
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let dissolved = dissolve_faces(&candidate_faces, eps);
+
     let mut out = Vec::<UnaryDissolveGroup>::with_capacity(dissolved.len());
     for poly in dissolved {
         let mut source_indices = Vec::<usize>::new();
@@ -466,6 +509,205 @@ fn unary_dissolve_graph_component(polys: &[Polygon], eps: f64, noding: NodingOpt
         out.push(UnaryDissolveGroup { poly, source_indices });
     }
     out
+}
+
+/// Compute depth deltas for every directed edge in `graph` based on which source
+/// polygon ring segments contain each edge's midpoint.
+///
+/// `delta[e]` = depth(left face of e) − depth(right face of e).
+/// For a CCW exterior ring segment whose direction matches the edge direction: delta = +1.
+/// Twin edges always satisfy `delta[e ^ 1] = −delta[e]`.
+fn compute_unary_edge_deltas(
+    graph: &TopologyGraph,
+    polys: &[Polygon],
+    eps: f64,
+    delta: &mut [i32],
+) {
+    // Build a spatial index on source polygons so we only check candidates
+    // near each edge midpoint rather than all N polygons.
+    let geoms: Vec<Geometry> = polys.iter().cloned().map(Geometry::Polygon).collect();
+    let index = SpatialIndex::from_geometries(&geoms);
+
+    // Edges are stored in pairs (e, sym(e)) = (even_id, even_id+1).
+    let mut i = 0;
+    while i < graph.edges.len() {
+        let e = &graph.edges[i];
+        let a = graph.nodes[e.from].coord;
+        let b = graph.nodes[e.to].coord;
+        let mx = (a.x + b.x) * 0.5;
+        let my = (a.y + b.y) * 0.5;
+        let m = Coord::xy(mx, my);
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+
+        // Query index for polygons whose envelopes contain the midpoint.
+        let candidates = index.query_point(m);
+
+        let mut d = 0i32;
+        for poly_idx in candidates {
+            if poly_idx >= polys.len() {
+                continue;
+            }
+            let poly = &polys[poly_idx];
+            let ext_ccw = unary_ring_signed_area(&poly.exterior.coords) >= 0.0;
+            d += unary_ring_segment_delta(&poly.exterior.coords, m, dx, dy, ext_ccw, eps);
+            for hole in &poly.holes {
+                let hole_ccw = unary_ring_signed_area(&hole.coords) >= 0.0;
+                d += unary_ring_segment_delta(&hole.coords, m, dx, dy, hole_ccw, eps);
+            }
+        }
+
+        delta[i] = d;
+        if i + 1 < delta.len() {
+            delta[i + 1] = -d;
+        }
+        i += 2;
+    }
+}
+
+/// Returns the delta contribution (+1, −1, or 0) from one ring to the directed
+/// edge whose midpoint is `m` and whose direction vector is `(dx, dy)`.
+///
+/// `ring_ccw`: true if the ring winds counter-clockwise (positive signed area),
+/// which is the convention for exterior rings.
+fn unary_ring_segment_delta(
+    ring: &[Coord],
+    m: Coord,
+    dx: f64,
+    dy: f64,
+    ring_ccw: bool,
+    eps: f64,
+) -> i32 {
+    let ring_sign: i32 = if ring_ccw { 1 } else { -1 };
+    let n = ring.len();
+    if n < 2 {
+        return 0;
+    }
+    for i in 0..(n - 1) {
+        let c = ring[i];
+        let d = ring[i + 1];
+        if !point_on_segment_eps(m, c, d, eps) {
+            continue;
+        }
+        let cd_x = d.x - c.x;
+        let cd_y = d.y - c.y;
+        // dot > 0 means same general direction as the ring segment.
+        let dot = dx * cd_x + dy * cd_y;
+        let dir_sign: i32 = if dot >= 0.0 { 1 } else { -1 };
+        return ring_sign * dir_sign;
+    }
+    0
+}
+
+/// Shoelace signed area of a ring (positive = CCW, negative = CW).
+fn unary_ring_signed_area(coords: &[Coord]) -> f64 {
+    if coords.len() < 4 {
+        return 0.0;
+    }
+    let mut s = 0.0f64;
+    for i in 0..(coords.len() - 1) {
+        let a = coords[i];
+        let b = coords[i + 1];
+        s += a.x * b.y - b.x * a.y;
+    }
+    0.5 * s
+}
+
+/// Classify bounded faces by depth using BFS from the unbounded exterior region.
+///
+/// Returns one bool per face (in the same order as `face_rings`): true when
+/// `depth > 0`, meaning the face is inside at least one source polygon and
+/// should be included in the union result.
+///
+/// This replaces point-in-polygon probing entirely: face membership is derived
+/// from the edge depth deltas alone, which makes it immune to boundary-zone
+/// misclassifications near short source polygon segments.
+fn classify_faces_by_depth(
+    graph: &TopologyGraph,
+    face_rings: &[(LineString, Vec<usize>)],
+    delta: &[i32],
+) -> Vec<bool> {
+    let n_faces = face_rings.len();
+    let n_edges = graph.edges.len();
+
+    // Map each directed edge id to the bounded face ring that contains it.
+    // Edges not in this map belong to the unbounded exterior face (depth 0).
+    let mut edge_to_face = vec![usize::MAX; n_edges];
+    for (face_id, (_, edge_ids)) in face_rings.iter().enumerate() {
+        for &eid in edge_ids {
+            if eid < n_edges {
+                edge_to_face[eid] = face_id;
+            }
+        }
+    }
+
+    // BFS depth propagation.
+    // Seed: for each bounded face, find edges whose twin is in the exterior (unbounded
+    // face, depth 0).  Crossing from the exterior through sym(eid) into the face gives:
+    //   depth(face) = depth(exterior) − delta[sym(eid)]
+    //               = 0 − (−delta[eid]) = delta[eid]
+    let mut face_depth = vec![i32::MIN; n_faces];
+    let mut queue = VecDeque::<usize>::new();
+
+    for face_id in 0..n_faces {
+        // Find the first exterior-adjacent edge that provides a non-zero seed,
+        // falling back to any exterior-adjacent edge if none gives a non-zero delta.
+        let mut seed = i32::MIN;
+        let mut fallback_seed = i32::MIN;
+        for &eid in &face_rings[face_id].1 {
+            let sym = eid ^ 1;
+            if sym < n_edges && edge_to_face[sym] == usize::MAX {
+                let d = if eid < delta.len() { delta[eid] } else { 0 };
+                if d != 0 && seed == i32::MIN {
+                    seed = d;
+                    break;
+                }
+                if fallback_seed == i32::MIN {
+                    fallback_seed = d;
+                }
+            }
+        }
+        let chosen = if seed != i32::MIN { seed } else { fallback_seed };
+        if chosen != i32::MIN {
+            face_depth[face_id] = chosen;
+            queue.push_back(face_id);
+        }
+    }
+
+    // BFS: propagate from seeded faces.
+    // Crossing edge `eid` (in current face's boundary) into the adjacent face gives:
+    //   depth(adjacent) = depth(current) − delta[eid]
+    while let Some(current_id) = queue.pop_front() {
+        let d = face_depth[current_id];
+        let edge_ids = face_rings[current_id].1.clone();
+        for eid in edge_ids {
+            let sym = eid ^ 1;
+            if sym >= n_edges {
+                continue;
+            }
+            let adj = edge_to_face[sym];
+            if adj == usize::MAX || face_depth[adj] != i32::MIN {
+                continue; // exterior or already visited
+            }
+            let e_delta = if eid < delta.len() { delta[eid] } else { 0 };
+            face_depth[adj] = d - e_delta;
+            queue.push_back(adj);
+        }
+    }
+
+    // Any face not reached by BFS (isolated component not touching the exterior)
+    // falls back to its own seed delta.
+    for face_id in 0..n_faces {
+        if face_depth[face_id] == i32::MIN {
+            face_depth[face_id] = face_rings[face_id]
+                .1
+                .first()
+                .and_then(|&eid| delta.get(eid).copied())
+                .unwrap_or(0);
+        }
+    }
+
+    face_depth.iter().map(|&d| d > 0).collect()
 }
 
 fn polygons_overlap_fast(a: &Polygon, b: &Polygon, eps: f64) -> bool {

@@ -267,6 +267,78 @@ impl TopologyGraph {
             .filter(|ls| signed_area(&ls.coords) > eps * eps)
             .collect()
     }
+
+    /// Extract all left-face cycles as closed rings, also returning the directed
+    /// edge ids that form each ring's boundary.
+    ///
+    /// The second element of each tuple is the list of directed edge ids traversed
+    /// (in ring order) for that face.
+    pub fn extract_face_rings_with_edges(&self, epsilon: f64) -> Vec<(LineString, Vec<usize>)> {
+        let eps = normalized_eps(epsilon);
+        let mut result = Vec::<(LineString, Vec<usize>)>::new();
+        let mut visited = vec![false; self.edges.len()];
+
+        for start in 0..self.edges.len() {
+            if visited[start] {
+                continue;
+            }
+
+            let mut coords = Vec::<Coord>::new();
+            let mut ring_edges = Vec::<usize>::new();
+            let mut current = start;
+            let mut ok = false;
+
+            for _ in 0..=self.edges.len() {
+                if visited[current] && current != start {
+                    break;
+                }
+
+                visited[current] = true;
+                ring_edges.push(current);
+                let e = &self.edges[current];
+                coords.push(self.nodes[e.from].coord);
+
+                let Some(next) = self.next_left_face_edge(current) else {
+                    break;
+                };
+
+                if next == start {
+                    coords.push(self.nodes[self.edges[start].from].coord);
+                    ok = true;
+                    break;
+                }
+                current = next;
+            }
+
+            if !ok || coords.len() < 4 {
+                continue;
+            }
+
+            if !nearly_eq_coord(coords[0], *coords.last().unwrap_or(&coords[0]), eps) {
+                continue;
+            }
+
+            if signed_area(&coords).abs() <= eps * eps {
+                continue;
+            }
+
+            result.push((LineString::new(coords), ring_edges));
+        }
+
+        result
+    }
+
+    /// Extract bounded face cycles as closed rings with their directed edge ids.
+    ///
+    /// Bounded rings are identified by positive signed area under the
+    /// left-face traversal convention.
+    pub fn extract_bounded_face_rings_with_edges(&self, epsilon: f64) -> Vec<(LineString, Vec<usize>)> {
+        let eps = normalized_eps(epsilon);
+        self.extract_face_rings_with_edges(eps)
+            .into_iter()
+            .filter(|(ls, _)| signed_area(&ls.coords) > eps * eps)
+            .collect()
+    }
 }
 
 fn normalized_eps(epsilon: f64) -> f64 {

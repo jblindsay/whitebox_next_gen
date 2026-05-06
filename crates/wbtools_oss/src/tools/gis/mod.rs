@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 use chrono::{Datelike, Timelike};
 
 mod nibble_sieve;
@@ -9764,16 +9765,79 @@ fn to_topo_polygon(exterior: &wbvector::Ring, interiors: &[wbvector::Ring]) -> T
     )
 }
 
+fn topo_coord_nearly_equal(a: TopoCoord, b: TopoCoord, eps: f64) -> bool {
+    (a.x - b.x).abs() <= eps
+        && (a.y - b.y).abs() <= eps
+        && match (a.z, b.z) {
+            (Some(az), Some(bz)) => (az - bz).abs() <= eps,
+            _ => true,
+        }
+}
+
+fn ring_signed_area(coords: &[TopoCoord]) -> f64 {
+    if coords.len() < 3 {
+        return 0.0;
+    }
+    let mut sum = 0.0;
+    for i in 0..(coords.len() - 1) {
+        sum += coords[i].x * coords[i + 1].y - coords[i + 1].x * coords[i].y;
+    }
+    0.5 * sum
+}
+
+fn ring_has_adjacent_duplicates(coords: &[TopoCoord], eps: f64) -> bool {
+    if coords.len() < 2 {
+        return true;
+    }
+    for i in 1..coords.len() {
+        if topo_coord_nearly_equal(coords[i - 1], coords[i], eps) {
+            return true;
+        }
+    }
+    false
+}
+
+fn ring_is_probably_valid(coords: &[TopoCoord], eps: f64) -> bool {
+    if coords.len() < 4 {
+        return false;
+    }
+    if !topo_coord_nearly_equal(coords[0], coords[coords.len() - 1], eps) {
+        return false;
+    }
+    if ring_has_adjacent_duplicates(coords, eps) {
+        return false;
+    }
+    ring_signed_area(coords).abs() > eps * eps
+}
+
+fn polygon_is_probably_valid(poly: &TopoPolygon, eps: f64) -> bool {
+    if !ring_is_probably_valid(&poly.exterior.coords, eps) {
+        return false;
+    }
+    poly.holes.iter().all(|hole| ring_is_probably_valid(&hole.coords, eps))
+}
+
 fn repair_polygons(polygons: Vec<TopoPolygon>) -> Vec<TopoPolygon> {
     let mut repaired = Vec::<TopoPolygon>::with_capacity(polygons.len());
+    let mut candidates = Vec::<TopoPolygon>::new();
+    let quick_eps = 1.0e-12;
+
     for polygon in polygons {
-        // Skip validation if already valid (most well-formed buffers succeed on first try)
-        if polygon.exterior.coords.len() >= 4 && is_ring_simple(&polygon.exterior) {
+        if polygon.exterior.coords.len() < 4 {
+            continue;
+        }
+
+        // Fast path for the common case: well-formed line buffers that do not
+        // need costly make-valid repair.
+        if polygon_is_probably_valid(&polygon, quick_eps) {
             repaired.push(polygon);
             continue;
         }
 
-        // Try escalating epsilon only when necessary
+        candidates.push(polygon);
+    }
+
+    for polygon in candidates {
         let mut accepted = false;
         for epsilon in [1.0e-9, 1.0e-8, 1.0e-7, 1.0e-6, 1.0e-5] {
             let valid = make_valid_polygon(&polygon, epsilon);
@@ -9791,16 +9855,12 @@ fn repair_polygons(polygons: Vec<TopoPolygon>) -> Vec<TopoPolygon> {
         }
 
         // Fall back to original if all repairs failed
-        if !accepted && polygon.exterior.coords.len() >= 4 {
+        if !accepted {
             repaired.push(polygon);
         }
     }
-    repaired
-}
 
-// Helper to quickly check ring simplicity without full validation
-fn is_ring_simple(ring: &TopoLinearRing) -> bool {
-    ring.coords.len() >= 4 && ring.coords[0] == ring.coords[ring.coords.len() - 1]
+    repaired
 }
 
 fn polygons_to_wb_geometry(polygons: Vec<TopoPolygon>) -> Option<wbvector::Geometry> {
@@ -9835,8 +9895,7 @@ fn collect_buffered_polygons_from_geometry(
             polygons.push(buffer_point(to_topo_coord(coord), distance, options));
         }
         wbvector::Geometry::LineString(coords) => {
-            let line = TopoLineString::new(coords.iter().map(to_topo_coord).collect());
-            polygons.push(buffer_linestring(&line, distance, options));
+            collect_buffered_polygons_from_linestring_coords(coords, distance, options, polygons);
         }
         wbvector::Geometry::Polygon { exterior, interiors } => {
             let input = to_topo_polygon(exterior, interiors);
@@ -9849,8 +9908,12 @@ fn collect_buffered_polygons_from_geometry(
         }
         wbvector::Geometry::MultiLineString(lines) => {
             for line_coords in lines {
-                let line = TopoLineString::new(line_coords.iter().map(to_topo_coord).collect());
-                polygons.push(buffer_linestring(&line, distance, options));
+                collect_buffered_polygons_from_linestring_coords(
+                    line_coords,
+                    distance,
+                    options,
+                    polygons,
+                );
             }
         }
         wbvector::Geometry::MultiPolygon(parts) => {
@@ -9866,6 +9929,94 @@ fn collect_buffered_polygons_from_geometry(
         }
     }
     Ok(())
+}
+
+fn topo_coord_dist2(a: TopoCoord, b: TopoCoord) -> f64 {
+    let dx = a.x - b.x;
+    let dy = a.y - b.y;
+    dx * dx + dy * dy
+}
+
+fn uncovered_segment_indices(line: &[TopoCoord], whole_poly: &TopoPolygon) -> Vec<usize> {
+    let poly_geom = TopoGeometry::Polygon(whole_poly.clone());
+    let mut missing = Vec::<usize>::new();
+    for (idx, segment) in line.windows(2).enumerate() {
+        let a = segment[0];
+        let b = segment[1];
+        if topo_coord_dist2(a, b) <= 1.0e-24 {
+            continue;
+        }
+        let mid = TopoCoord::xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+        if !contains(&poly_geom, &TopoGeometry::Point(mid)) {
+            missing.push(idx);
+        }
+    }
+    missing
+}
+
+fn collect_buffered_polygons_from_linestring_coords(
+    coords: &[wbvector::Coord],
+    distance: f64,
+    options: BufferOptions,
+    polygons: &mut Vec<TopoPolygon>,
+) {
+    if coords.is_empty() {
+        return;
+    }
+
+    let topo_coords: Vec<TopoCoord> = coords.iter().map(to_topo_coord).collect();
+    let mut sanitized = Vec::<TopoCoord>::with_capacity(topo_coords.len());
+    for c in topo_coords {
+        if sanitized
+            .last()
+            .map(|prev| topo_coord_dist2(*prev, c) <= 1.0e-24)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        sanitized.push(c);
+    }
+
+    if sanitized.len() == 1 {
+        let point_poly = buffer_point(sanitized[0], distance, options);
+        if point_poly.exterior.coords.len() >= 4 {
+            polygons.push(point_poly);
+        }
+        return;
+    }
+
+    if sanitized.len() < 2 {
+        return;
+    }
+
+    let line = TopoLineString::new(sanitized.clone());
+    let whole_poly = buffer_linestring(&line, distance, options);
+
+    let mut missing_segments = Vec::<usize>::new();
+    if whole_poly.exterior.coords.len() >= 4 {
+        missing_segments = uncovered_segment_indices(&sanitized, &whole_poly);
+        if missing_segments.is_empty() {
+            polygons.push(whole_poly);
+            return;
+        }
+        polygons.push(whole_poly);
+    } else {
+        // Degenerate whole-line buffer; repair all segments.
+        missing_segments.extend(0..(sanitized.len() - 1));
+    }
+
+    for idx in missing_segments {
+        let a = sanitized[idx];
+        let b = sanitized[idx + 1];
+        if topo_coord_dist2(a, b) <= 1.0e-24 {
+            continue;
+        }
+        let seg_line = TopoLineString::new(vec![a, b]);
+        let seg_poly = buffer_linestring(&seg_line, distance, options);
+        if seg_poly.exterior.coords.len() >= 4 {
+            polygons.push(seg_poly);
+        }
+    }
 }
 
 fn buffer_feature_geometry(
@@ -10021,19 +10172,38 @@ impl Tool for BufferVectorTool {
 
         if dissolve {
             // Optimize dissolve path: collect all buffered geometries without building feature layer first
+            let skipped_features = AtomicUsize::new(0);
             let all_buffered_polys: Vec<TopoPolygon> = input
                 .features
                 .par_iter()
                 .flat_map(|feature| {
                     if let Some(geometry) = &feature.geometry {
                         let mut polygons = Vec::<TopoPolygon>::new();
-                        let _ = collect_buffered_polygons_from_geometry(geometry, distance, options, &mut polygons);
-                        polygons
+                        match collect_buffered_polygons_from_geometry(
+                            geometry,
+                            distance,
+                            options,
+                            &mut polygons,
+                        ) {
+                            Ok(()) => polygons,
+                            Err(_) => {
+                                skipped_features.fetch_add(1, AtomicOrdering::Relaxed);
+                                Vec::new()
+                            }
+                        }
                     } else {
                         Vec::new()
                     }
                 })
                 .collect();
+
+            let skipped = skipped_features.load(AtomicOrdering::Relaxed);
+            if skipped > 0 {
+                ctx.progress.info(&format!(
+                    "buffer_vector: skipped {} feature(s) due to geometry conversion/buffering errors",
+                    skipped
+                ));
+            }
 
             let repaired = repair_polygons(all_buffered_polys);
             

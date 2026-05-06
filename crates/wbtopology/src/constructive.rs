@@ -194,7 +194,6 @@ impl BufferBuilder {
                 if distance > 0.0 {
                     let src_ext_area = ring_abs_area(&poly.exterior.coords);
                     if p_area < src_ext_area * 1.2 {
-                        eprintln!("  filtering intermediate: area={:.2} < src_ext_area*1.2={:.2}", p_area, src_ext_area * 1.2);
                         return false;
                     }
                 }
@@ -202,7 +201,6 @@ impl BufferBuilder {
             });
         
         if let Some(out) = best_candidate {
-            eprintln!("  using first depth-sorted with reasonable area: area={:.2}", polygon_abs_area(&out));
             // Sanity check: for positive buffers the output polygon must be at
             // least as large as the source's exterior ring.  If the graph
             // pipeline selected a wrong component (e.g., a tiny face in a
@@ -211,14 +209,22 @@ impl BufferBuilder {
                 let src_ext_area = ring_abs_area(&poly.exterior.coords);
                 let out_area = polygon_abs_area(&out);
                 if out_area < src_ext_area * 0.9 {
-                    eprintln!("GRAPH FLAKE: area sanity check failed: out_area={:.2} < src_ext_area*0.9={:.2}", out_area, src_ext_area * 0.9);
                     return buffer_polygon_legacy_impl(poly, distance, self.options);
                 }
             }
-            if is_valid_polygon(&out) {
-                out
+            if !is_valid_polygon(&out) {
+                return buffer_polygon_legacy_impl(poly, distance, self.options);
+            }
+            // If the source polygon has holes, attach contracted hole rings to the
+            // graph-pipeline outer shell.  The graph pipeline's segment-buffer
+            // approach does not distinguish hole rings from exterior rings when
+            // building the curve set, so it cannot reliably reconstruct contracted
+            // holes.  The legacy inward-offset logic is exact and cheap for this
+            // step.
+            if !poly.holes.is_empty() && distance > 0.0 {
+                buffer_polygon_attach_holes(out, poly, distance, self.options)
             } else {
-                buffer_polygon_legacy_impl(poly, distance, self.options)
+                out
             }
         } else {
             buffer_polygon_legacy_impl(poly, distance, self.options)
@@ -398,7 +404,7 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
     }
 
     let poly = Polygon::new(LinearRing::new(cleaned), vec![]);
-    repair_buffer_polygon(poly, 1.0e-9)
+    buffer_linestring_graph_repair(poly, 1.0e-9)
 }
 
 /// Buffer a polygon by the given distance.
@@ -412,6 +418,108 @@ pub fn buffer_polygon(poly: &Polygon, distance: f64, options: BufferOptions) -> 
     BufferBuilder::new(options)
         .with_pipeline(BufferPipelineStrategy::GraphBuilder)
         .build_polygon(poly, distance)
+}
+
+/// Repair a raw linestring-buffer ring using the graph pipeline when the ring is
+/// self-intersecting.  For simple rings this is a no-op pass-through.  For rings
+/// with self-intersections (acute-angle joins, very short segments, complex paths)
+/// this nodes the ring, extracts bounded face rings, assembles valid polygons, and
+/// returns the largest result — equivalent to what the polygon BufferBuilder pipeline
+/// does via `polygonize_closed_linestrings`.
+fn buffer_linestring_graph_repair(poly: Polygon, eps: f64) -> Polygon {
+    if is_ring_simple_eps(&poly.exterior.coords, eps) {
+        return poly;
+    }
+
+    let ring_ls = LineString::new(poly.exterior.coords.clone());
+    let noded = node_linestrings_with_options(
+        &[ring_ls],
+        NodingOptions {
+            epsilon: eps,
+            strategy: NodingStrategy::SnapRounding,
+            precision: None,
+        },
+    );
+    if noded.is_empty() {
+        return repair_buffer_polygon(poly, eps);
+    }
+
+    let face_rings = TopologyGraph::from_linestrings(&noded, eps).extract_bounded_face_rings(eps);
+    if face_rings.is_empty() {
+        return repair_buffer_polygon(poly, eps);
+    }
+
+    let polys = polygonize_closed_linestrings(&face_rings, eps);
+    polys
+        .into_iter()
+        .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
+        .unwrap_or_else(|| repair_buffer_polygon(poly, eps))
+}
+
+/// Attach contracted hole rings to a graph-pipeline outer shell for a positive buffer.
+///
+/// The graph pipeline builds its curve set from all source rings (exterior + holes)
+/// symmetrically, so it does not inherently contract holes.  This helper applies the
+/// same inward-offset hole logic as `buffer_polygon_legacy_impl` and returns the shell
+/// polygon with any surviving contracted hole rings attached.
+fn buffer_polygon_attach_holes(
+    shell_poly: Polygon,
+    source: &Polygon,
+    distance: f64,
+    options: BufferOptions,
+) -> Polygon {
+    let shell = shell_poly.exterior.clone();
+    let segs = (options.quadrant_segments.max(2) * 4).max(8);
+    let eps = 1.0e-9;
+
+    let mut holes = Vec::<LinearRing>::new();
+    for h in &source.holes {
+        if let Some(env) = h.envelope() {
+            let w = env.max_x - env.min_x;
+            let hgt = env.max_y - env.min_y;
+            if w <= 2.0 * distance || hgt <= 2.0 * distance {
+                continue;
+            }
+        }
+
+        let hr = build_offset_ring(
+            &h.coords,
+            distance,
+            BufferJoinStyle::Mitre,
+            segs,
+            options.mitre_limit,
+            false,
+        );
+        if hr.len() < 4 {
+            continue;
+        }
+
+        let hole = LinearRing::new(hr);
+        if !is_ring_simple_eps(&hole.coords, eps) {
+            continue;
+        }
+        if ring_abs_area(&hole.coords) <= eps * eps {
+            continue;
+        }
+
+        let sample = hole.coords[0];
+        if !point_in_ring_inclusive_eps(sample, &shell.coords, eps) {
+            continue;
+        }
+        if ring_boundary_intersects_eps(&shell.coords, &hole.coords, eps) {
+            continue;
+        }
+        if holes.iter().any(|kh| {
+            ring_boundary_intersects_eps(&kh.coords, &hole.coords, eps)
+                || point_in_ring_inclusive_eps(kh.coords[0], &hole.coords, eps)
+                || point_in_ring_inclusive_eps(hole.coords[0], &kh.coords, eps)
+        }) {
+            continue;
+        }
+        holes.push(hole);
+    }
+
+    repair_buffer_polygon(Polygon::new(shell, holes), eps)
 }
 
 fn buffer_polygon_legacy_impl(poly: &Polygon, distance: f64, options: BufferOptions) -> Polygon {
@@ -1414,13 +1522,6 @@ fn build_polygon_buffer_curve_set(poly: &Polygon, distance: f64, options: Buffer
     curves
 }
 
-fn select_largest_polygon(polys: &[Polygon]) -> Option<Polygon> {
-    polys
-        .iter()
-        .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
-        .cloned()
-}
-
 fn classify_point_in_polygon_eps(p: Coord, poly: &Polygon, eps: f64) -> PointInRing {
     match classify_point_in_ring_eps(p, &poly.exterior.coords, eps) {
         PointInRing::Outside => return PointInRing::Outside,
@@ -1456,7 +1557,6 @@ fn select_buffer_polygons_by_depth(
     for poly in candidates {
         let area = ring_abs_area(&poly.exterior.coords);
         if area < min_face_area {
-            eprintln!("  filtered degenerate: area={:.2e} < {:.2e}", area, min_face_area);
             continue;
         }
 
@@ -1487,8 +1587,6 @@ fn select_buffer_polygons_by_depth(
 
         let near_source = min_distance.is_finite() && min_distance <= distance.abs() + eps;
         if inside_count > 0 || near_source {
-            eprintln!("  candidate: inside={} boundary={} samples={} near={} dist={:.6} area={:.2} holes={}", 
-                inside_count, boundary_count, samples.len(), near_source, min_distance, area, poly.holes.len());
             selected.push((
                 FaceDepthLabel {
                     inside_count,
@@ -1514,8 +1612,6 @@ fn select_buffer_polygons_by_depth(
             })
             .then_with(|| buffer_poly_sort_key(&a.1).cmp(&buffer_poly_sort_key(&b.1)))
     });
-    eprintln!("  after sort, first: inside={} area={:.2}", selected.first().map(|(l, _)| l.inside_count).unwrap_or(0), 
-        selected.first().map(|(_, p)| ring_abs_area(&p.exterior.coords)).unwrap_or(0.0));
     selected.into_iter().map(|(_, poly)| poly).collect()
 }
 
@@ -1619,66 +1715,6 @@ fn buffer_face_sample_points(poly: &Polygon) -> Vec<Coord> {
         dedup.push(p);
     }
     dedup
-}
-
-fn merge_polygon_components(polys: &[Polygon], eps: f64) -> Vec<Polygon> {
-    if polys.is_empty() {
-        return Vec::new();
-    }
-
-    eprintln!("  MERGE: input {} polygons, first areas:", polys.len());
-    for (i, p) in polys.iter().take(3).enumerate() {
-        eprintln!("    [{}] area={:.2}", i, polygon_abs_area(p));
-    }
-
-    let mut groups: Vec<Polygon> = Vec::new();
-    for poly in polys {
-        let mut acc = poly.clone();
-        let mut i = 0usize;
-        while i < groups.len() {
-            let union = polygon_union(&groups[i], &acc, eps);
-            if union.len() == 1 {
-                acc = union[0].clone();
-                groups.remove(i);
-            } else {
-                i += 1;
-            }
-        }
-        groups.push(acc);
-    }
-
-    groups
-}
-
-fn select_best_buffer_component(polys: &[Polygon], source: &Polygon, eps: f64) -> Option<Polygon> {
-    if polys.is_empty() {
-        return None;
-    }
-
-    let source_probe = source.exterior.coords.first().copied();
-    if let Some(p) = source_probe {
-        if let Some(best) = polys
-            .iter()
-            .filter(|poly| {
-                matches!(
-                    classify_point_in_polygon_eps(p, poly, eps),
-                    PointInRing::Inside | PointInRing::Boundary
-                )
-            })
-            .max_by(|a, b| {
-                ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords))
-            })
-        {
-            eprintln!("  select_best: using source-probe containment, area={:.2}", ring_abs_area(&best.exterior.coords));
-            return Some(best.clone());
-        }
-    }
-
-    let largest = select_largest_polygon(polys);
-    if let Some(ref l) = largest {
-        eprintln!("  select_best: no probe containment, using largest area={:.2}", ring_abs_area(&l.exterior.coords));
-    }
-    largest
 }
 
 fn buffer_face_probe_point(poly: &Polygon) -> Option<Coord> {

@@ -292,6 +292,39 @@ fn linestring_buffer_l_shape_does_not_fill_convex_hull_corner() {
 }
 
 #[test]
+fn closed_linestring_buffer_preserves_interior_hole() {
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(10.0, 6.0),
+        Coord::xy(0.0, 6.0),
+        Coord::xy(0.0, 0.0),
+    ]);
+
+    let buf = buffer_linestring(
+        &ls,
+        1.0,
+        BufferOptions {
+            quadrant_segments: 12,
+            join_style: BufferJoinStyle::Round,
+            ..Default::default()
+        },
+    );
+    let gpoly = Geometry::Polygon(buf.clone());
+
+    assert!(is_valid_polygon(&buf));
+    assert_eq!(buf.holes.len(), 1, "closed loop line buffer should retain one interior hole");
+    assert!(
+        !contains(&gpoly, &Geometry::Point(Coord::xy(5.0, 3.0))),
+        "centre of buffered loop should remain outside due to interior hole"
+    );
+    assert!(
+        contains(&gpoly, &Geometry::Point(Coord::xy(-0.5, 3.0))),
+        "outer corridor should still exist outside the loop"
+    );
+}
+
+#[test]
 fn linestring_buffer_mitre_join_extends_farther_than_bevel() {
     let ls = LineString::new(vec![
         Coord::xy(0.0, 0.0),
@@ -472,6 +505,36 @@ fn linestring_buffer_sharp_angle_is_valid_polygon() {
     );
 
     assert!(is_valid_polygon(&buf));
+}
+
+#[test]
+fn linestring_buffer_round_sharp_angle_keeps_outer_arc_and_inner_corridor() {
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(4.0, 0.0),
+        Coord::xy(4.2, 5.0),
+    ]);
+
+    let buf = buffer_linestring(
+        &ls,
+        1.0,
+        BufferOptions {
+            quadrant_segments: 12,
+            join_style: BufferJoinStyle::Round,
+            ..Default::default()
+        },
+    );
+    let gpoly = Geometry::Polygon(buf.clone());
+
+    assert!(is_valid_polygon(&buf));
+    assert!(
+        contains(&gpoly, &Geometry::Point(Coord::xy(3.28, 0.69))),
+        "outer round-join lobe near the sharp bend should be preserved"
+    );
+    assert!(
+        contains(&gpoly, &Geometry::Point(Coord::xy(4.80, -0.60))),
+        "inner corridor near the sharp bend should not be clipped away"
+    );
 }
 
 #[test]

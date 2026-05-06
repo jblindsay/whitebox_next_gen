@@ -11,7 +11,7 @@ use crate::algorithms::segment::segments_intersect_eps;
 use crate::geom::{Coord, Geometry, LineString, LinearRing, Polygon};
 use crate::graph::TopologyGraph;
 use crate::noding::{node_linestrings_with_options, NodingOptions, NodingStrategy};
-use crate::overlay::{polygon_union, polygon_union_with_precision};
+use crate::overlay::{polygon_unary_dissolve, polygon_union, polygon_union_with_precision};
 use crate::precision::{PrecisionModel, TopologyPrecisionOptions};
 use crate::topology::is_valid_polygon;
 
@@ -377,6 +377,48 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
         return buffer_point(coords[0], distance, options);
     }
 
+    // Closed centreline loops buffer as corridor rings with no end caps.
+    // Treating them as open lines fills the loop interior and loses the hole.
+    if coords.len() >= 4 && coord_dist2(coords[0], coords[coords.len() - 1]) <= 1.0e-24 {
+        let segs = (options.quadrant_segments.max(2) * 4).max(8);
+        let shell_coords = build_offset_ring(
+            &coords,
+            distance,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+            true,
+        );
+        if shell_coords.len() < 4 {
+            return Polygon::new(LinearRing::new(vec![]), vec![]);
+        }
+
+        let shell = LinearRing::new(shell_coords);
+        let mut holes = Vec::<LinearRing>::new();
+
+        let hole_coords = build_offset_ring(
+            &coords,
+            distance,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+            false,
+        );
+        if hole_coords.len() >= 4 {
+            let hole = LinearRing::new(hole_coords);
+            let eps = 1.0e-9;
+            if is_ring_simple_eps(&hole.coords, eps)
+                && ring_abs_area(&hole.coords) > eps * eps
+                && point_in_ring_inclusive_eps(hole.coords[0], &shell.coords, eps)
+                && !ring_boundary_intersects_eps(&shell.coords, &hole.coords, eps)
+            {
+                holes.push(hole);
+            }
+        }
+
+        return repair_buffer_polygon(Polygon::new(shell, holes), 1.0e-9);
+    }
+
     let segs = (options.quadrant_segments.max(2) * 4).max(8);
     let left = build_offset_side(
         &coords,
@@ -606,8 +648,19 @@ fn buffer_linestring_graph_repair(poly: Polygon, eps: f64) -> Polygon {
     }
 
     let polys = polygonize_closed_linestrings(&face_rings, eps);
-    polys
+    if polys.is_empty() {
+        return repair_buffer_polygon(poly, eps);
+    }
+
+    // A self-crossing raw corridor can polygonize into multiple bounded faces.
+    // Keeping only the single largest face drops valid pieces near sharp bends,
+    // which shows up as inner wedge cutouts and the matching lost outer round
+    // lobe. Dissolve all bounded faces first, then select the largest dissolved
+    // component as the repaired corridor.
+    let dissolved = polygon_unary_dissolve(&polys, eps);
+    dissolved
         .into_iter()
+        .map(|group| group.poly)
         .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
         .unwrap_or_else(|| repair_buffer_polygon(poly, eps))
 }

@@ -1659,13 +1659,30 @@ fn ring_contains_ring(container: &[Coord], candidate: &[Coord], eps: f64) -> boo
         return false;
     }
 
+    // Primary test: check if the candidate ring's centroid is inside the container.
+    // This is more robust than vertex iteration for boundary-coincident rings.
+    if let Some(centroid) = ring_centroid(candidate) {
+        match classify_point_in_ring_eps(centroid, container, eps) {
+            PointInRing::Inside => return true,
+            PointInRing::Outside => return false,
+            PointInRing::Boundary => {
+                // Centroid is on the container boundary (rare but possible).
+                // Fall through to secondary vertex check.
+            }
+        }
+    }
+
+    // Secondary test: iterate through candidate vertices, skipping boundary points.
+    // If any interior point is clearly Inside or Outside, use that result.
     let mut saw_inside = false;
     let mut saw_outside = false;
     for p in &candidate[..candidate.len() - 1] {
         match classify_point_in_ring_eps(*p, container, eps) {
             PointInRing::Inside => saw_inside = true,
             PointInRing::Outside => saw_outside = true,
-            PointInRing::Boundary => {}
+            PointInRing::Boundary => {
+                // Skip boundary points; they don't help distinguish containment.
+            }
         }
 
         if saw_outside {
@@ -1673,16 +1690,7 @@ fn ring_contains_ring(container: &[Coord], candidate: &[Coord], eps: f64) -> boo
         }
     }
 
-    if saw_inside {
-        return true;
-    }
-
-    // Fallback for boundary-coincident vertices: classify candidate centroid.
-    if let Some(c) = ring_centroid(candidate) {
-        return matches!(classify_point_in_ring_eps(c, container, eps), PointInRing::Inside);
-    }
-
-    false
+    saw_inside
 }
 
 fn ordered_pair(a: QCoord, b: QCoord) -> (QCoord, QCoord) {

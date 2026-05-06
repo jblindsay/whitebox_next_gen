@@ -1477,6 +1477,39 @@ fn ring_centroid(coords: &[Coord]) -> Option<Coord> {
     Some(Coord::xy(cx * inv, cy * inv))
 }
 
+/// Compute the envelope (bounding box) of a coordinate slice (ring).
+fn linestring_envelope(coords: &[Coord]) -> Option<Envelope> {
+    if coords.is_empty() {
+        return None;
+    }
+    let mut min_x = coords[0].x;
+    let mut max_x = coords[0].x;
+    let mut min_y = coords[0].y;
+    let mut max_y = coords[0].y;
+
+    for &c in &coords[1..] {
+        if c.x < min_x {
+            min_x = c.x;
+        }
+        if c.x > max_x {
+            max_x = c.x;
+        }
+        if c.y < min_y {
+            min_y = c.y;
+        }
+        if c.y > max_y {
+            max_y = c.y;
+        }
+    }
+
+    Some(Envelope {
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct QCoord(i64, i64);
 
@@ -1601,21 +1634,32 @@ fn assemble_polygons_from_rings(rings: Vec<Vec<Coord>>, eps: f64) -> Vec<Polygon
     let n = rings.len();
     let areas: Vec<f64> = rings.iter().map(|r| ring_signed_area(r).abs()).collect();
 
+    // Build spatial index over ring envelopes for fast candidate filtering.
+    // For large ring sets (1000+ rings), the spatial index avoids O(n²) containment tests.
+    let mut spatial_index = SpatialIndex::new();
+    for ring in rings.iter() {
+        spatial_index.insert(Geometry::LineString(LineString::new(ring.clone())));
+    }
+
     let mut parent: Vec<Option<usize>> = vec![None; n];
     for i in 0..n {
         let mut best_parent: Option<usize> = None;
         let mut best_area = f64::INFINITY;
 
-        for j in 0..n {
-            if i == j {
-                continue;
-            }
-            if areas[j] <= areas[i] + eps * eps {
-                continue;
-            }
-            if ring_contains_ring(&rings[j], &rings[i], eps) && areas[j] < best_area {
-                best_parent = Some(j);
-                best_area = areas[j];
+        // Use spatial index to find only rings whose envelope could potentially contain ring i.
+        if let Some(env_i) = linestring_envelope(&rings[i]) {
+            let candidates = spatial_index.query_envelope(env_i);
+            for &j in &candidates {
+                if i == j {
+                    continue;
+                }
+                if areas[j] <= areas[i] + eps * eps {
+                    continue;
+                }
+                if ring_contains_ring(&rings[j], &rings[i], eps) && areas[j] < best_area {
+                    best_parent = Some(j);
+                    best_area = areas[j];
+                }
             }
         }
 

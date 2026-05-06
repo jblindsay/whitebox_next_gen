@@ -2,6 +2,9 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+#[cfg(feature = "parallel")]
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
 use crate::algorithms::segment::{point_on_segment_eps, segments_intersect_eps};
 use crate::algorithms::distance::geometry_distance;
 use crate::algorithms::point_in_ring::{classify_point_in_ring_eps, PointInRing};
@@ -918,7 +921,7 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
                 if groups.len() >= 64 {
                     let best = ((i + 1)..groups.len())
                         .into_par_iter()
-                        .filter_map(|j| {
+                        .filter_map(|j: usize| {
                             if let (Some(a), Some(b)) = (env_i, groups[j].envelope) {
                                 if !a.intersects(&b) {
                                     return None;

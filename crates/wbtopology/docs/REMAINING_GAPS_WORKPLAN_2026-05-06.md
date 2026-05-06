@@ -263,7 +263,7 @@ Performance and output size for large polygons. Not a correctness issue, but ine
 - [ ] Gap G: Full DE-9IM (defer to future release)
 - [ ] Gap H: Robust predicates (consider if degenerate inputs arise)
 - [ ] Gap I: Offset-curve API (on-demand)
-- [ ] Gap J: Continuous-ring buffer curves (optimize after correctness locked)
+- [x] Gap J: Continuous-ring buffer curves (optimize after correctness locked)
 
 ---
 

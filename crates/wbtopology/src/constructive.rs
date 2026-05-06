@@ -1657,22 +1657,65 @@ fn polygon_boundaries_as_lines(poly: &Polygon) -> Vec<LineString> {
     out
 }
 
+/// Build the set of raw offset rings to feed into the graph buffer pipeline.
+///
+/// **Gap J improvement:** Instead of emitting one buffered polygon per ring *segment*
+/// (O(N_segments) curves with redundant end-caps), we walk each source ring
+/// continuously with `build_offset_ring`, producing a single closed offset curve per
+/// ring.  For a polygon with N exterior vertices and M holes this reduces input
+/// curve count from O(N + Σ hole_segments) down to O(1 + M), dramatically shrinking
+/// the noding and graph-construction work for large polygons.
+///
+/// The exterior ring is expanded outward (`outward = true`); hole rings are shrunk
+/// inward (`outward = false`), consistent with positive-buffer semantics.
 fn build_polygon_buffer_curve_set(poly: &Polygon, distance: f64, options: BufferOptions) -> Vec<LineString> {
+    let segs = (options.quadrant_segments.max(2) * 4).max(8);
+    let d = distance.abs();
     let mut curves = Vec::<LineString>::new();
-    let mut rings = Vec::<LinearRing>::with_capacity(1 + poly.holes.len());
-    rings.push(poly.exterior.clone());
-    rings.extend(poly.holes.clone());
 
-    for ring in rings {
-        if ring.coords.len() < 2 {
-            continue;
+    // Exterior ring — expand outward.
+    let ext_coords = build_offset_ring(
+        &poly.exterior.coords,
+        d,
+        options.join_style,
+        segs,
+        options.mitre_limit,
+        true, // outward
+    );
+    if ext_coords.len() >= 4 {
+        curves.push(LineString::new(ext_coords));
+    }
+
+    // Hole rings — the positive buffer shrinks holes, so offset inward.
+    for hole in &poly.holes {
+        let hole_coords = build_offset_ring(
+            &hole.coords,
+            d,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+            false, // inward (positive buffer shrinks holes)
+        );
+        if hole_coords.len() >= 4 {
+            curves.push(LineString::new(hole_coords));
         }
-        for seg in ring.coords.windows(2) {
-            let ls = LineString::new(vec![seg[0], seg[1]]);
-            let buffered = buffer_linestring(&ls, distance.abs(), options);
-            curves.push(LineString::new(buffered.exterior.coords.clone()));
-            for hole in buffered.holes {
-                curves.push(LineString::new(hole.coords));
+    }
+
+    // If no continuous curves were produced (e.g., degenerate rings), fall back
+    // to the original per-segment approach so the caller can still use its own
+    // legacy fallback path.
+    if curves.is_empty() {
+        for ring in std::iter::once(&poly.exterior).chain(poly.holes.iter()) {
+            if ring.coords.len() < 2 {
+                continue;
+            }
+            for seg in ring.coords.windows(2) {
+                let ls = LineString::new(vec![seg[0], seg[1]]);
+                let buffered = buffer_linestring(&ls, d, options);
+                curves.push(LineString::new(buffered.exterior.coords.clone()));
+                for h in buffered.holes {
+                    curves.push(LineString::new(h.coords));
+                }
             }
         }
     }

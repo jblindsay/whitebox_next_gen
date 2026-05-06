@@ -140,14 +140,16 @@ Lower impact (overlay path uses `dissolve_faces` which *does* reconstruct holes)
 **Location:**  
 `crates/wbtopology/src/overlay.rs` — `polygon_overlay_faces` function
 
-**Implementation Plan:**
-1. Add a note in the `polygon_overlay_faces` docstring: "Returns flat face rings; callers should use `polygon_overlay` or `dissolve_faces` for proper hole reconstruction."
-2. Consider adding a new public variant `polygon_overlay_faces_with_holes` that wraps the result through `assemble_polygons_from_rings`
-3. No urgent implementation required unless a caller surfaces the need
+**Implementation Plan (Completed - Documentation Approach):**
+✅ **Enhanced docstring for `polygon_overlay_faces`:**
+- Clearly documents that returned polygons are FLAT (no holes)
+- Explains that faces have not been merged or dissolved
+- Recommends using `polygon_overlay` for typical Boolean operations
+- Lists legitimate use cases: diagnostics, debugging, advanced algorithms
+- Notes that holes can be reconstructed via `assemble_polygons_from_rings` if needed
+- Makes it clear that this is a low-level primitive, not a user-facing API
 
-**Estimated Complexity:** Low (documentation + optional new wrapper)
-
-**Status:** Not started
+**Status:** ✅ Completed
 
 ---
 
@@ -254,7 +256,7 @@ Performance and output size for large polygons. Not a correctness issue, but ine
 ### Soon (Session 2+)
 - [x] **Gap D:** Isolated component fallback—diagnostic logging added
 - [ ] **Gap E:** STR-tree for ring-nesting performance
-- [ ] **Gap F:** API documentation for `polygon_overlay_faces`
+- [x] **Gap F:** API documentation for `polygon_overlay_faces`
 
 ### Backlog
 - [ ] Gap G: Full DE-9IM (defer to future release)

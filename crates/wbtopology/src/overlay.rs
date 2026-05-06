@@ -93,7 +93,25 @@ struct ClassifiedFaces {
 
 /// Select bounded arrangement faces for two polygons under `operation`.
 ///
-/// This returns a face decomposition (not yet dissolved/merged).
+/// Returns a face decomposition from the planar arrangement—a flat list of simple rings
+/// (exterior rings without holes). This is a low-level primitive useful for diagnostic
+/// purposes or advanced use cases that need raw face geometry.
+///
+/// **Important:** The returned polygons are FLAT (no holes). Adjacent faces have not
+/// been merged, and containment relationships between rings have not been resolved into
+/// shell/hole hierarchy.
+///
+/// **Recommendation:** For typical Boolean overlay operations, use [`polygon_overlay`]
+/// instead, which merges adjacent faces and properly reconstructs holes via hole nesting.
+///
+/// This function is primarily useful for:
+/// - Visualizing or debugging the underlying face decomposition
+/// - Computing intermediate results for custom overlay algorithms
+/// - Workflows that explicitly need flat face rings
+///
+/// To convert the flat output of this function to proper polygons with holes (if you
+/// need it), collect the rings and call `assemble_polygons_from_rings` (internal helper);
+/// however, `polygon_overlay` already does this and is the recommended path.
 pub fn polygon_overlay_faces(
     a: &Polygon,
     b: &Polygon,

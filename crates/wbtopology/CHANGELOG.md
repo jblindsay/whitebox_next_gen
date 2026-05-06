@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 ### Added
 - Added `extract_face_rings_with_edges` and `extract_bounded_face_rings_with_edges` on `TopologyGraph`, returning face rings paired with their directed edge id lists; used by depth-labeling BFS face classification.
+- Replaced conservative DE-9IM scaffold in `relate.rs` with a full type-dispatch implementation computing all 9 matrix cells from first principles for the 6 primary geometry pairs (Point×Point, Point×LineString, Point×Polygon, LineString×LineString, LineString×Polygon, Polygon×Polygon). Added `RelateMatrix::transpose()`, `is_covers()`, `is_covered_by()`, `is_overlaps()`, `is_crosses()`. The `IB` cell for LineString×Polygon now uses proper ring-crossing detection in addition to segment midpoint sampling, ensuring `interior(A) ∩ boundary(B)` is correctly non-empty when A's interior crosses B's boundary rings. Multi-geometry pairs retain the conservative fallback. All 9 existing relate integration tests pass.
 - Added `offset_linestring` public function returning an open `LineString` one-sided offset curve (analogous to JTS/GEOS `OffsetCurve`): takes a linestring, signed distance, `OffsetSide` (Left/Right), and `OffsetCurveOptions` (join style, quadrant segments, mitre limit); suitable for road edge extraction, centreline offsets, and planning setback lines. Added companion types `OffsetSide` and `OffsetCurveOptions`; both exported from the crate root.
 
 ### Changed

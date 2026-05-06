@@ -127,7 +127,9 @@ fn relate_linestring_polygon_crosses_sets_expected_core_cells() {
     let m = relate(&line, &poly);
     assert_eq!(m.get(Location::Interior, Location::Interior), '1');
     assert_eq!(m.get(Location::Interior, Location::Boundary), '0');
-    assert_eq!(m.get(Location::Boundary, Location::Interior), '0');
+    // The endpoints of the line (-1,5) and (11,5) lie OUTSIDE the polygon.
+    // Boundary(line) ∩ Interior(polygon) = empty. Old heuristic returned '0'; correct value is 'F'.
+    assert_eq!(m.get(Location::Boundary, Location::Interior), 'F');
 }
 
 #[test]

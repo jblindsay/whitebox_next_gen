@@ -1,0 +1,10 @@
+# name|input_wkt|distance|quadrant_segments|min_area_ratio|max_area_ratio|expect_valid
+positive_square_expand|POLYGON((0 0,10 0,10 10,0 10,0 0))|2.0|8|1.10|5.00|true
+positive_rectangle_expand|POLYGON((0 0,20 0,20 8,0 8,0 0))|1.5|8|1.05|4.00|true
+positive_hole_expand|POLYGON((0 0,20 0,20 20,0 20,0 0),(6 6,14 6,14 14,6 14,6 6))|2.0|8|1.05|6.00|true
+positive_concave_u_expand|POLYGON((0 0,12 0,12 12,8 12,8 4,4 4,4 12,0 12,0 0))|1.0|8|1.02|5.50|true
+positive_hole_survives_small|POLYGON((0 0,10 0,10 10,0 10,0 0),(3 3,7 3,7 7,3 7,3 3))|0.5|8|1.05|1.36|true
+positive_hole_closes_large|POLYGON((0 0,10 0,10 10,0 10,0 0),(3 3,7 3,7 7,3 7,3 3))|2.5|8|1.55|3.20|true
+positive_complex_clockwise_ring|POLYGON((562637.537417164 4818648.0372987,562644.815914335 4818647.60529134,562644.928259569 4818649.42786198,562654.188202102 4818648.86993476,562653.642237858 4818639.80165489,562650.180841506 4818640.01375644,562649.83002479 4818634.29045826,562638.621044375 4818634.96351884,562638.991254563 4818641.20901904,562637.131244156 4818641.31386885,562637.537417164 4818648.0372987))|5.0|8|1.05|8.00|true
+negative_square_shrink|POLYGON((0 0,10 0,10 10,0 10,0 0))|-1.0|8|0.00|0.99|true
+zero_identity|POLYGON((0 0,10 0,10 10,0 10,0 0))|0.0|8|1.00|1.00|true

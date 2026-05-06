@@ -1,0 +1,12 @@
+# name|epsilon|a_wkt|b_wkt|expected_group_count|expect_merged|expected_memberships
+# expected_memberships format: comma-separated groups using + between indices (e.g., "0+1" or "0,1")
+overlap|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((8 0,18 0,18 10,8 10,8 0))|1|true|0+1
+edge_touch|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((10 0,20 0,20 10,10 10,10 0))|1|true|0+1
+point_touch|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((10 10,20 10,20 20,10 20,10 10))|2|false|0,1
+separated|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((12 0,22 0,22 10,12 10,12 0))|2|false|0,1
+hole_disjoint_inside_void|1e-9|POLYGON((0 0,20 0,20 20,0 20,0 0),(5 5,15 5,15 15,5 15,5 5))|POLYGON((7 7,13 7,13 13,7 13,7 7))|2|false|0,1
+hole_overlap_shell|1e-9|POLYGON((0 0,20 0,20 20,0 20,0 0),(5 5,15 5,15 15,5 15,5 5))|POLYGON((14 7,22 7,22 13,14 13,14 7))|1|true|0+1
+near_touch_small_gap_strict|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((10.000001 0,20.000001 0,20.000001 10,10.000001 10,10.000001 0))|2|false|0,1
+near_touch_small_gap_loose|1e-5|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((10.000001 0,20.000001 0,20.000001 10,10.000001 10,10.000001 0))|1|true|0+1
+micro_overlap|1e-9|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((9.999999 0,19.999999 0,19.999999 10,9.999999 10,9.999999 0))|1|true|0+1
+micro_overlap_strict|1e-12|POLYGON((0 0,10 0,10 10,0 10,0 0))|POLYGON((9.999999 0,19.999999 0,19.999999 10,9.999999 10,9.999999 0))|1|true|0+1

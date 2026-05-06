@@ -1,0 +1,4 @@
+# name|input_wkt|epsilon|structure_min_parts|linework_min_parts|expect_polygon_output
+bow_tie_self_cross|POLYGON((0 0,4 4,0 4,4 0,0 0))|1e-9|1|1|true
+hole_outside_shell|POLYGON((0 0,10 0,10 10,0 10,0 0),(20 20,21 20,21 21,20 21,20 20))|1e-9|1|1|true
+triple_cross_star|POLYGON((0 0,6 6,0 12,6 0,0 6,6 12,0 0))|1e-9|1|1|true

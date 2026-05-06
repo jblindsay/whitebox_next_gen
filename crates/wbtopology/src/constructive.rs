@@ -6,10 +6,13 @@
 //! - point buffering (`buffer_point`)
 
 use crate::algorithms::point_in_ring::{classify_point_in_ring_eps, PointInRing};
+use crate::algorithms::distance::geometry_distance;
 use crate::algorithms::segment::segments_intersect_eps;
 use crate::geom::{Coord, Geometry, LineString, LinearRing, Polygon};
+use crate::graph::TopologyGraph;
+use crate::noding::{node_linestrings_with_options, NodingOptions, NodingStrategy};
 use crate::overlay::{polygon_union, polygon_union_with_precision};
-use crate::precision::PrecisionModel;
+use crate::precision::{PrecisionModel, TopologyPrecisionOptions};
 use crate::topology::is_valid_polygon;
 
 /// Buffer end-cap style for linear geometries.
@@ -60,6 +63,200 @@ impl Default for BufferOptions {
             mitre_limit: 5.0,
         }
     }
+}
+
+/// Buffer construction pipeline selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferPipelineStrategy {
+    /// Existing constructive buffer implementation.
+    Legacy,
+    /// Graph-oriented buffer builder pipeline.
+    GraphBuilder,
+}
+
+/// Builder for buffering operations with explicit robustness controls.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BufferBuilder {
+    /// Geometric buffer style options.
+    pub options: BufferOptions,
+    /// Optional precision model for curve-set noding.
+    pub precision: Option<PrecisionModel>,
+    /// Noding options used by graph-oriented pipeline.
+    pub noding: NodingOptions,
+    /// Pipeline strategy.
+    pub pipeline: BufferPipelineStrategy,
+}
+
+impl BufferBuilder {
+    /// Build a new buffer builder from base buffer options.
+    pub fn new(options: BufferOptions) -> Self {
+        Self {
+            options,
+            precision: None,
+            noding: NodingOptions {
+                epsilon: 1.0e-9,
+                strategy: NodingStrategy::SnapRounding,
+                precision: None,
+            },
+            pipeline: BufferPipelineStrategy::GraphBuilder,
+        }
+    }
+
+    /// Set precision model for topology pre-processing.
+    pub fn with_precision(mut self, precision: PrecisionModel) -> Self {
+        self.precision = Some(precision);
+        self.noding.precision = Some(precision);
+        self
+    }
+
+    /// Set noding options for graph-oriented buffering.
+    pub fn with_noding(mut self, noding: NodingOptions) -> Self {
+        self.noding = noding;
+        self
+    }
+
+    /// Set buffer pipeline strategy.
+    pub fn with_pipeline(mut self, pipeline: BufferPipelineStrategy) -> Self {
+        self.pipeline = pipeline;
+        self
+    }
+
+    /// Build a polygon buffer using the selected pipeline.
+    pub fn build_polygon(self, poly: &Polygon, distance: f64) -> Polygon {
+        match self.pipeline {
+            BufferPipelineStrategy::Legacy => buffer_polygon_legacy_impl(poly, distance, self.options),
+            BufferPipelineStrategy::GraphBuilder => self.build_polygon_graph(poly, distance),
+        }
+    }
+
+    fn build_polygon_graph(self, poly: &Polygon, distance: f64) -> Polygon {
+        // Negative/zero buffer semantics remain on the legacy path for now.
+        if distance <= 0.0 {
+            return buffer_polygon_legacy_impl(poly, distance, self.options);
+        }
+
+        // Stage 1: Build curve set from source boundaries.
+        let curves = build_polygon_buffer_curve_set(poly, distance, self.options);
+        if curves.is_empty() {
+            return buffer_polygon_legacy_impl(poly, distance, self.options);
+        }
+
+        // Stage 2: Node generated curves under explicit precision/noding settings.
+        let noded_curves = node_linestrings_with_options(&curves, self.noding);
+        if noded_curves.is_empty() {
+            return buffer_polygon_legacy_impl(poly, distance, self.options);
+        }
+
+        // Stage 3: Build planar graph and extract bounded faces.
+        let graph = TopologyGraph::from_linestrings_with_options(&noded_curves, self.noding);
+        let face_rings = graph.extract_bounded_face_rings(self.noding.epsilon.max(1.0e-9));
+        if face_rings.is_empty() {
+            return buffer_polygon_legacy_impl(poly, distance, self.options);
+        }
+
+        // Stage 4: Assemble labeled faces into polygons.
+        let poly_result = polygonize_linework(
+            &face_rings,
+            PolygonizeOptions {
+                epsilon: self.noding.epsilon,
+                noding: self.noding,
+            },
+        );
+        if poly_result.polygons.is_empty() {
+            return buffer_polygon_legacy_impl(poly, distance, self.options);
+        }
+
+        // Stage 5: Depth-style face filtering against source polygon.
+        let selected = select_buffer_polygons_by_depth(
+            &poly_result.polygons,
+            poly,
+            distance,
+            self.noding.epsilon.max(1.0e-9),
+        );
+
+        let merged = merge_polygon_components(&selected, self.noding.epsilon.max(1.0e-9));
+        if let Some(out) = select_best_buffer_component(&merged, poly, self.noding.epsilon.max(1.0e-9)) {
+            // Sanity check: for positive buffers the output polygon must be at
+            // least as large as the source's exterior ring.  If the graph
+            // pipeline selected a wrong component (e.g., a tiny face in a
+            // collapsed-hole region), reject it and fall back to legacy.
+            if distance > 0.0 {
+                let src_ext_area = ring_abs_area(&poly.exterior.coords);
+                let out_area = polygon_abs_area(&out);
+                if out_area < src_ext_area * 0.9 {
+                    return buffer_polygon_legacy_impl(poly, distance, self.options);
+                }
+            }
+            if is_valid_polygon(&out) {
+                out
+            } else {
+                buffer_polygon_legacy_impl(poly, distance, self.options)
+            }
+        } else {
+            buffer_polygon_legacy_impl(poly, distance, self.options)
+        }
+    }
+}
+
+/// Geometry fixing strategy selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GeometryFixMode {
+    /// Prioritize repairing ring/polygon structure first.
+    StructureFirst,
+    /// Prioritize noded linework polygonization first.
+    LineworkFirst,
+}
+
+/// Options controlling make-valid behavior.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GeometryFixOptions {
+    /// Predicate epsilon.
+    pub epsilon: f64,
+    /// Strategy mode.
+    pub mode: GeometryFixMode,
+    /// Preserve collapsed remnants when possible.
+    pub keep_collapsed: bool,
+}
+
+impl Default for GeometryFixOptions {
+    fn default() -> Self {
+        Self {
+            epsilon: 1.0e-9,
+            mode: GeometryFixMode::StructureFirst,
+            keep_collapsed: false,
+        }
+    }
+}
+
+/// Options controlling full linework polygonization.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PolygonizeOptions {
+    /// Predicate epsilon.
+    pub epsilon: f64,
+    /// Noding options used before graph polygon assembly.
+    pub noding: NodingOptions,
+}
+
+impl Default for PolygonizeOptions {
+    fn default() -> Self {
+        Self {
+            epsilon: 1.0e-9,
+            noding: NodingOptions::default(),
+        }
+    }
+}
+
+/// Result bundle for linework polygonization.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PolygonizeResult {
+    /// Output polygons.
+    pub polygons: Vec<Polygon>,
+    /// Dangle segments (dangling ends).
+    pub dangles: Vec<LineString>,
+    /// Cut edges not used in bounded faces.
+    pub cut_edges: Vec<LineString>,
+    /// Rings rejected as invalid.
+    pub invalid_rings: Vec<LineString>,
 }
 
 /// Build an approximate circular buffer polygon around a point.
@@ -184,6 +381,12 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
 /// multipolygon result, the largest surviving component or an empty polygon is
 /// returned.
 pub fn buffer_polygon(poly: &Polygon, distance: f64, options: BufferOptions) -> Polygon {
+    BufferBuilder::new(options)
+        .with_pipeline(BufferPipelineStrategy::GraphBuilder)
+        .build_polygon(poly, distance)
+}
+
+fn buffer_polygon_legacy_impl(poly: &Polygon, distance: f64, options: BufferOptions) -> Polygon {
     if !distance.is_finite() {
         return Polygon::new(LinearRing::new(vec![]), vec![]);
     }
@@ -210,7 +413,21 @@ fn buffer_polygon_positive(poly: &Polygon, distance: f64, options: BufferOptions
         let parts = buffer_polygon_positive_round(poly, distance, options);
         if let Some(selected) = select_round_positive_component(parts, poly, 1.0e-9) {
             let sanitized = sanitize_round_positive_component(selected, poly, 1.0e-9);
-            return enforce_valid_round_positive_output(sanitized, poly, 1.0e-9);
+            let mut result = enforce_valid_round_positive_output(sanitized, poly, 1.0e-9);
+            // Strip any holes whose bbox has collapsed under the inward offset.
+            // A hole whose output bbox dimensions are ≤ 2×distance is either a
+            // collapsed-source residue or a zero-area artifact; either way it
+            // should not appear in the output.  This mirrors the explicit
+            // collapse check used by the non-round (Mitre/Flat) path.
+            result.holes.retain(|h| {
+                if let Some(env) = h.envelope() {
+                    env.max_x - env.min_x > 2.0 * distance
+                        && env.max_y - env.min_y > 2.0 * distance
+                } else {
+                    false
+                }
+            });
+            return result;
         }
         return Polygon::new(LinearRing::new(vec![]), vec![]);
     }
@@ -888,6 +1105,90 @@ pub fn make_valid_polygon(poly: &Polygon, epsilon: f64) -> Vec<Polygon> {
     vec![Polygon::new(LinearRing::new(exterior_coords), kept_holes)]
 }
 
+/// Attempt to repair any geometry using configurable fixing strategies.
+pub fn make_valid_geometry(geom: &Geometry, options: GeometryFixOptions) -> Geometry {
+    let eps = options.epsilon.abs().max(1.0e-12);
+    match geom {
+        Geometry::Polygon(poly) => {
+            if options.mode == GeometryFixMode::LineworkFirst {
+                let lines = polygon_boundaries_as_lines(poly);
+                let res = polygonize_linework(
+                    &lines,
+                    PolygonizeOptions {
+                        epsilon: eps,
+                        noding: NodingOptions {
+                            epsilon: eps,
+                            strategy: NodingStrategy::SnapRounding,
+                            precision: Some(PrecisionModel::Fixed {
+                                scale: 1.0 / eps.max(1.0e-9),
+                            }),
+                        },
+                    },
+                );
+                if res.polygons.is_empty() {
+                    let repaired = make_valid_polygon(poly, eps);
+                    return geometry_from_valid_parts(repaired, options.keep_collapsed);
+                }
+                return geometry_from_valid_parts(res.polygons, options.keep_collapsed);
+            }
+
+            let reduced = options
+                .keep_collapsed
+                .then_some(poly.clone())
+                .and_then(|p| {
+                    PrecisionModel::Floating
+                        .apply_polygon_topology(&p, TopologyPrecisionOptions::default())
+                })
+                .unwrap_or_else(|| poly.clone());
+            let repaired = make_valid_polygon(&reduced, eps);
+            geometry_from_valid_parts(repaired, options.keep_collapsed)
+        }
+        Geometry::MultiPolygon(polys) => {
+            let mut out = Vec::<Polygon>::new();
+            for poly in polys {
+                let repaired = make_valid_polygon(poly, eps);
+                out.extend(repaired);
+            }
+            geometry_from_valid_parts(out, options.keep_collapsed)
+        }
+        Geometry::LineString(ls) => {
+            if ls.coords.len() < 2 && !options.keep_collapsed {
+                return Geometry::LineString(LineString::new(vec![]));
+            }
+            Geometry::LineString(ls.clone())
+        }
+        Geometry::MultiLineString(lines) => {
+            let filtered: Vec<LineString> = lines
+                .iter()
+                .filter(|ls| options.keep_collapsed || ls.coords.len() >= 2)
+                .cloned()
+                .collect();
+            Geometry::MultiLineString(filtered)
+        }
+        Geometry::GeometryCollection(geoms) => Geometry::GeometryCollection(
+            geoms
+                .iter()
+                .map(|g| make_valid_geometry(g, options))
+                .collect(),
+        ),
+        _ => geom.clone(),
+    }
+}
+
+fn geometry_from_valid_parts(parts: Vec<Polygon>, keep_collapsed: bool) -> Geometry {
+    match parts.len() {
+        0 => {
+            if keep_collapsed {
+                Geometry::MultiPolygon(Vec::new())
+            } else {
+                Geometry::Polygon(Polygon::new(LinearRing::new(vec![]), vec![]))
+            }
+        }
+        1 => Geometry::Polygon(parts[0].clone()),
+        _ => Geometry::MultiPolygon(parts),
+    }
+}
+
 /// Polygonize a set of closed/simple linestring rings.
 ///
 /// Rings that are not closed/simple are ignored. Rings found inside larger rings
@@ -962,6 +1263,393 @@ pub fn polygonize_closed_linestrings(lines: &[LineString], epsilon: f64) -> Vec<
             )
         })
         .collect()
+}
+
+/// Polygonize arbitrary linework after noding and graph assembly.
+pub fn polygonize_linework(lines: &[LineString], options: PolygonizeOptions) -> PolygonizeResult {
+    let eps = options.epsilon.abs().max(1.0e-12);
+    let noding = NodingOptions {
+        epsilon: eps,
+        ..options.noding
+    };
+    let noded = node_linestrings_with_options(lines, noding);
+    let graph = TopologyGraph::from_linestrings_with_options(&noded, noding);
+    let all_rings = graph.extract_face_rings(eps);
+
+    let mut rings = Vec::<LineString>::new();
+    let mut invalid_rings = Vec::<LineString>::new();
+    let area_min = eps * eps;
+    for ring in all_rings {
+        if ring.coords.len() < 4 {
+            invalid_rings.push(ring);
+            continue;
+        }
+
+        if !is_ring_simple_eps(&ring.coords, eps) || ring_abs_area(&ring.coords) <= area_min {
+            invalid_rings.push(ring);
+            continue;
+        }
+
+        let mut open = ring.coords.clone();
+        if open.first() == open.last() && open.len() > 1 {
+            open.pop();
+        }
+        if ring_signed_area_closed(&open) > area_min {
+            rings.push(ring);
+        }
+    }
+
+    let polygons = polygonize_closed_linestrings(&rings, eps);
+
+    let mut used_edges = std::collections::HashSet::<(i64, i64, i64, i64)>::new();
+    for ring in &rings {
+        for seg in ring.coords.windows(2) {
+            let a = seg[0];
+            let b = seg[1];
+            used_edges.insert(edge_key_quantized(a, b, eps));
+        }
+    }
+
+    let mut dangles = Vec::<LineString>::new();
+    let mut cut_edges = Vec::<LineString>::new();
+    for edge in &graph.edges {
+        if edge.id > edge.sym {
+            continue;
+        }
+        let a = graph.nodes[edge.from].coord;
+        let b = graph.nodes[edge.to].coord;
+        let key = edge_key_quantized(a, b, eps);
+        if used_edges.contains(&key) {
+            continue;
+        }
+
+        let ls = LineString::new(vec![a, b]);
+        let da = graph.nodes[edge.from].outgoing.len();
+        let db = graph.nodes[edge.to].outgoing.len();
+        if da <= 1 || db <= 1 {
+            dangles.push(ls);
+        } else {
+            cut_edges.push(ls);
+        }
+    }
+
+    PolygonizeResult {
+        polygons,
+        dangles,
+        cut_edges,
+        invalid_rings,
+    }
+}
+
+fn edge_key_quantized(a: Coord, b: Coord, eps: f64) -> (i64, i64, i64, i64) {
+    let scale = 1.0 / eps.max(1.0e-9);
+    let ax = (a.x * scale).round() as i64;
+    let ay = (a.y * scale).round() as i64;
+    let bx = (b.x * scale).round() as i64;
+    let by = (b.y * scale).round() as i64;
+    if (ax, ay) <= (bx, by) {
+        (ax, ay, bx, by)
+    } else {
+        (bx, by, ax, ay)
+    }
+}
+
+fn polygon_boundaries_as_lines(poly: &Polygon) -> Vec<LineString> {
+    let mut out = Vec::<LineString>::new();
+    out.push(LineString::new(poly.exterior.coords.clone()));
+    for hole in &poly.holes {
+        out.push(LineString::new(hole.coords.clone()));
+    }
+    out
+}
+
+fn build_polygon_buffer_curve_set(poly: &Polygon, distance: f64, options: BufferOptions) -> Vec<LineString> {
+    let mut curves = Vec::<LineString>::new();
+    let mut rings = Vec::<LinearRing>::with_capacity(1 + poly.holes.len());
+    rings.push(poly.exterior.clone());
+    rings.extend(poly.holes.clone());
+
+    for ring in rings {
+        if ring.coords.len() < 2 {
+            continue;
+        }
+        for seg in ring.coords.windows(2) {
+            let ls = LineString::new(vec![seg[0], seg[1]]);
+            let buffered = buffer_linestring(&ls, distance.abs(), options);
+            curves.push(LineString::new(buffered.exterior.coords.clone()));
+            for hole in buffered.holes {
+                curves.push(LineString::new(hole.coords));
+            }
+        }
+    }
+
+    curves
+}
+
+fn select_largest_polygon(polys: &[Polygon]) -> Option<Polygon> {
+    polys
+        .iter()
+        .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
+        .cloned()
+}
+
+fn classify_point_in_polygon_eps(p: Coord, poly: &Polygon, eps: f64) -> PointInRing {
+    match classify_point_in_ring_eps(p, &poly.exterior.coords, eps) {
+        PointInRing::Outside => return PointInRing::Outside,
+        PointInRing::Boundary => return PointInRing::Boundary,
+        PointInRing::Inside => {}
+    }
+
+    for hole in &poly.holes {
+        match classify_point_in_ring_eps(p, &hole.coords, eps) {
+            PointInRing::Inside => return PointInRing::Outside,
+            PointInRing::Boundary => return PointInRing::Boundary,
+            PointInRing::Outside => {}
+        }
+    }
+
+    PointInRing::Inside
+}
+
+fn select_buffer_polygons_by_depth(
+    candidates: &[Polygon],
+    source: &Polygon,
+    distance: f64,
+    eps: f64,
+) -> Vec<Polygon> {
+    let source_geom = Geometry::Polygon(source.clone());
+    let mut selected = Vec::<(FaceDepthLabel, Polygon)>::new();
+
+    for poly in candidates {
+        let samples = buffer_face_sample_points(poly);
+        if samples.is_empty() {
+            continue;
+        }
+
+        let mut inside_count = 0usize;
+        let mut boundary_count = 0usize;
+        let mut min_distance = f64::INFINITY;
+
+        for p in &samples {
+            match classify_point_in_polygon_eps(*p, source, eps) {
+                PointInRing::Inside => inside_count += 1,
+                PointInRing::Boundary => {
+                    boundary_count += 1;
+                    inside_count += 1;
+                }
+                PointInRing::Outside => {}
+            }
+
+            let d = geometry_distance(&Geometry::Point(*p), &source_geom);
+            if d.is_finite() {
+                min_distance = min_distance.min(d);
+            }
+        }
+
+        let near_source = min_distance.is_finite() && min_distance <= distance.abs() + eps;
+        if inside_count > 0 || near_source {
+            selected.push((
+                FaceDepthLabel {
+                    inside_count,
+                    boundary_count,
+                    sample_count: samples.len(),
+                    near_source,
+                    min_source_distance: min_distance,
+                },
+                poly.clone(),
+            ));
+        }
+    }
+
+    if selected.is_empty() {
+        return candidates.to_vec();
+    }
+
+    selected.sort_by(|a, b| {
+        a.0
+            .cmp(&b.0)
+            .then_with(|| {
+                ring_abs_area(&b.1.exterior.coords).total_cmp(&ring_abs_area(&a.1.exterior.coords))
+            })
+            .then_with(|| buffer_poly_sort_key(&a.1).cmp(&buffer_poly_sort_key(&b.1)))
+    });
+    selected.into_iter().map(|(_, poly)| poly).collect()
+}
+
+fn buffer_poly_sort_key(poly: &Polygon) -> (u64, u64, usize, usize) {
+    let c0 = poly
+        .exterior
+        .coords
+        .first()
+        .copied()
+        .unwrap_or(Coord::xy(0.0, 0.0));
+    (
+        c0.x.to_bits(),
+        c0.y.to_bits(),
+        poly.exterior.coords.len(),
+        poly.holes.len(),
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FaceDepthLabel {
+    inside_count: usize,
+    boundary_count: usize,
+    sample_count: usize,
+    near_source: bool,
+    min_source_distance: f64,
+}
+
+impl PartialEq for FaceDepthLabel {
+    fn eq(&self, other: &Self) -> bool {
+        self.inside_count == other.inside_count
+            && self.boundary_count == other.boundary_count
+            && self.sample_count == other.sample_count
+            && self.near_source == other.near_source
+            && self.min_source_distance == other.min_source_distance
+    }
+}
+
+impl Eq for FaceDepthLabel {}
+
+impl PartialOrd for FaceDepthLabel {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for FaceDepthLabel {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .inside_count
+            .cmp(&self.inside_count)
+            .then_with(|| other.boundary_count.cmp(&self.boundary_count))
+            .then_with(|| other.sample_count.cmp(&self.sample_count))
+            .then_with(|| other.near_source.cmp(&self.near_source))
+            .then_with(|| {
+                self.min_source_distance
+                    .partial_cmp(&other.min_source_distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    }
+}
+
+fn buffer_face_sample_points(poly: &Polygon) -> Vec<Coord> {
+    let mut out = Vec::<Coord>::new();
+
+    if let Some(probe) = buffer_face_probe_point(poly) {
+        out.push(probe);
+    }
+
+    // Add a few ring vertices to approximate face depth classification.
+    let n = poly.exterior.coords.len();
+    if n > 1 {
+        out.push(poly.exterior.coords[0]);
+        out.push(poly.exterior.coords[n / 2]);
+        out.push(poly.exterior.coords[(3 * n) / 4]);
+    }
+
+    // Add centroid-like average of exterior coordinates.
+    if !poly.exterior.coords.is_empty() {
+        let mut sx = 0.0;
+        let mut sy = 0.0;
+        let mut c = 0usize;
+        for p in &poly.exterior.coords {
+            sx += p.x;
+            sy += p.y;
+            c += 1;
+        }
+        if c > 0 {
+            out.push(Coord::xy(sx / c as f64, sy / c as f64));
+        }
+    }
+
+    // Deduplicate with small tolerance.
+    let mut dedup = Vec::<Coord>::new();
+    for p in out {
+        if dedup
+            .iter()
+            .any(|q| (q.x - p.x).abs() <= 1.0e-12 && (q.y - p.y).abs() <= 1.0e-12)
+        {
+            continue;
+        }
+        dedup.push(p);
+    }
+    dedup
+}
+
+fn merge_polygon_components(polys: &[Polygon], eps: f64) -> Vec<Polygon> {
+    if polys.is_empty() {
+        return Vec::new();
+    }
+
+    let mut groups: Vec<Polygon> = Vec::new();
+    for poly in polys {
+        let mut acc = poly.clone();
+        let mut i = 0usize;
+        while i < groups.len() {
+            let union = polygon_union(&groups[i], &acc, eps);
+            if union.len() == 1 {
+                acc = union[0].clone();
+                groups.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        groups.push(acc);
+    }
+
+    groups
+}
+
+fn select_best_buffer_component(polys: &[Polygon], source: &Polygon, eps: f64) -> Option<Polygon> {
+    if polys.is_empty() {
+        return None;
+    }
+
+    let source_probe = source.exterior.coords.first().copied();
+    if let Some(p) = source_probe {
+        if let Some(best) = polys
+            .iter()
+            .filter(|poly| {
+                matches!(
+                    classify_point_in_polygon_eps(p, poly, eps),
+                    PointInRing::Inside | PointInRing::Boundary
+                )
+            })
+            .max_by(|a, b| {
+                ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords))
+            })
+        {
+            return Some(best.clone());
+        }
+    }
+
+    select_largest_polygon(polys)
+}
+
+fn buffer_face_probe_point(poly: &Polygon) -> Option<Coord> {
+    if poly.exterior.coords.len() < 2 {
+        return poly.exterior.coords.first().copied();
+    }
+
+    for seg in poly.exterior.coords.windows(2) {
+        let a = seg[0];
+        let b = seg[1];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len <= 1.0e-12 {
+            continue;
+        }
+        let mx = 0.5 * (a.x + b.x);
+        let my = 0.5 * (a.y + b.y);
+        let nx = -dy / len;
+        let ny = dx / len;
+        return Some(Coord::xy(mx + nx * 1.0e-6, my + ny * 1.0e-6));
+    }
+
+    poly.exterior.coords.first().copied()
 }
 
 /// Precision-aware variant of [`buffer_point`].

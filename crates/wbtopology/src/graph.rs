@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::geom::{Coord, LineString};
-use crate::noding::node_linestrings;
+use crate::noding::{node_linestrings, node_linestrings_with_options, NodingOptions};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum NodeKey {
@@ -54,6 +54,20 @@ impl TopologyGraph {
     pub fn from_linestrings(lines: &[LineString], epsilon: f64) -> Self {
         let eps = normalized_eps(epsilon);
         let noded = node_linestrings(lines, eps);
+        Self::build_from_noded(noded, eps)
+    }
+
+    /// Build a topology graph from input linestrings with explicit noding options.
+    ///
+    /// Input lines are noded first; each noded segment becomes one undirected graph edge
+    /// represented by two directed edges.
+    pub fn from_linestrings_with_options(lines: &[LineString], options: NodingOptions) -> Self {
+        let eps = normalized_eps(options.epsilon);
+        let noded = node_linestrings_with_options(lines, options);
+        Self::build_from_noded(noded, eps)
+    }
+
+    fn build_from_noded(noded: Vec<LineString>, eps: f64) -> Self {
 
         let mut nodes = Vec::<GraphNode>::new();
         let mut edges = Vec::<DirectedEdge>::new();

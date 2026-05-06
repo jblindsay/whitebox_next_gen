@@ -1,0 +1,10 @@
+# name|distance|outer|holes|min_components|max_components|min_total_area|max_total_area|min_expand|min_total_holes|max_total_holes|contain_source_vertices
+# outer and holes use ring syntax:
+# - rect shorthand: x0:y0:x1:y1
+# - poly shorthand: poly:x0:y0,x1:y1,x2:y2,...
+# holes are ';' separated, or '-' for none
+
+square_expand|1.0|0:0:10:10|-|1|1|142.0|145.0|0.95|0|0|true
+hole_survives_small_positive|0.5|0:0:10:10|poly:3:3,7:3,7:7,3:7|1|1|108.0|116.0|0.45|1|1|true
+hole_collapses_positive|2.5|0:0:10:10|poly:3:3,7:3,7:7,3:7|1|1|214.0|226.0|2.30|0|0|true
+problem_building_cw_expand|5.0|poly:562637.537417164:4818648.0372987,562644.815914335:4818647.60529134,562644.928259569:4818649.42786198,562654.188202102:4818648.86993476,562653.642237858:4818639.80165489,562650.180841506:4818640.01375644,562649.83002479:4818634.29045826,562638.621044375:4818634.96351884,562638.991254563:4818641.20901904,562637.131244156:4818641.31386885,562637.537417164:4818648.0372987|-|1|1|380.0|1500.0|4.00|0|0|true

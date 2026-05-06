@@ -5,9 +5,11 @@ use std::collections::{HashMap, HashSet};
 use rayon::prelude::*;
 
 use crate::algorithms::segment::segments_intersect_eps;
+use crate::algorithms::distance::geometry_distance;
 use crate::algorithms::point_in_ring::{classify_point_in_ring_eps, PointInRing};
 use crate::geom::{Coord, Envelope, Geometry, LineString, LinearRing, Polygon};
 use crate::graph::TopologyGraph;
+use crate::noding::{NodingOptions, NodingStrategy};
 use crate::precision::PrecisionModel;
 use crate::spatial_index::SpatialIndex;
 
@@ -52,6 +54,40 @@ pub struct UnaryDissolveGroup {
     pub source_indices: Vec<usize>,
 }
 
+/// Strategy used for unary polygon dissolve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryDissolveStrategy {
+    /// Use graph/face assembly and source-classification.
+    GraphDriven,
+    /// Use legacy envelope-component pairwise merge heuristic.
+    PairwiseHeuristic,
+}
+
+/// Options for unary polygon dissolve.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UnaryDissolveOptions {
+    /// Predicate epsilon.
+    pub epsilon: f64,
+    /// Dissolve strategy.
+    pub strategy: UnaryDissolveStrategy,
+    /// Noding options used by graph-driven dissolve.
+    pub noding: NodingOptions,
+}
+
+impl Default for UnaryDissolveOptions {
+    fn default() -> Self {
+        Self {
+            epsilon: 1.0e-9,
+            strategy: UnaryDissolveStrategy::GraphDriven,
+            noding: NodingOptions {
+                epsilon: 1.0e-9,
+                strategy: NodingStrategy::SnapRounding,
+                precision: None,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ClassifiedFaces {
     rings: Vec<LineString>,
@@ -76,7 +112,11 @@ pub fn polygon_overlay_faces(
 fn classify_overlay_faces(a: &Polygon, b: &Polygon, eps: f64) -> ClassifiedFaces {
     let mut boundaries = polygon_boundaries(a);
     boundaries.extend(polygon_boundaries(b));
-    let graph = TopologyGraph::from_linestrings(&boundaries, eps);
+    // Clamp to the topology-scale minimum so that ultra-fine caller epsilons
+    // (e.g., 1e-12 from Sibson interpolation) do not produce precision loss
+    // from excessively tight node-merge thresholds in the face graph.
+    let graph_eps = eps.max(1.0e-9);
+    let graph = TopologyGraph::from_linestrings(&boundaries, graph_eps);
     let rings = graph.extract_face_rings(eps);
 
     #[cfg(feature = "parallel")]
@@ -314,6 +354,20 @@ pub fn polygon_union(a: &Polygon, b: &Polygon, epsilon: f64) -> Vec<Polygon> {
 /// The result includes both dissolved geometry and source membership so callers
 /// can aggregate attributes at the application layer.
 pub fn polygon_unary_dissolve(polys: &[Polygon], epsilon: f64) -> Vec<UnaryDissolveGroup> {
+    polygon_unary_dissolve_with_options(
+        polys,
+        UnaryDissolveOptions {
+            epsilon,
+            ..UnaryDissolveOptions::default()
+        },
+    )
+}
+
+/// Dissolve many polygons into non-overlapping groups with explicit strategy options.
+pub fn polygon_unary_dissolve_with_options(
+    polys: &[Polygon],
+    options: UnaryDissolveOptions,
+) -> Vec<UnaryDissolveGroup> {
     if polys.is_empty() {
         return Vec::new();
     }
@@ -325,7 +379,12 @@ pub fn polygon_unary_dissolve(polys: &[Polygon], epsilon: f64) -> Vec<UnaryDisso
         }];
     }
 
-    let eps = normalized_eps(epsilon);
+    let eps = normalized_eps(options.epsilon);
+
+    if options.strategy == UnaryDissolveStrategy::GraphDriven {
+        return unary_dissolve_graph(polys, eps, options.noding);
+    }
+
     let components = envelope_connected_components(polys);
 
     #[cfg(feature = "parallel")]
@@ -344,6 +403,161 @@ pub fn polygon_unary_dissolve(polys: &[Polygon], epsilon: f64) -> Vec<UnaryDisso
         out.extend(dissolve_component(polys, &comp, eps));
     }
     out
+}
+
+fn unary_dissolve_graph(polys: &[Polygon], eps: f64, noding: NodingOptions) -> Vec<UnaryDissolveGroup> {
+    let partitions = source_components_by_non_point_connectivity(polys, eps);
+    if partitions.len() > 1 {
+        let mut out = Vec::<UnaryDissolveGroup>::new();
+        for part in partitions {
+            let subset: Vec<Polygon> = part.iter().map(|&idx| polys[idx].clone()).collect();
+            let mut groups = unary_dissolve_graph_component(&subset, eps, noding);
+            for g in &mut groups {
+                for idx in &mut g.source_indices {
+                    *idx = part[*idx];
+                }
+                g.source_indices.sort_unstable();
+                g.source_indices.dedup();
+            }
+            out.extend(groups);
+        }
+        return out;
+    }
+
+    unary_dissolve_graph_component(polys, eps, noding)
+}
+
+fn unary_dissolve_graph_component(polys: &[Polygon], eps: f64, noding: NodingOptions) -> Vec<UnaryDissolveGroup> {
+    let mut boundaries = Vec::<LineString>::new();
+    for poly in polys {
+        boundaries.extend(polygon_boundaries(poly));
+    }
+
+    let graph = TopologyGraph::from_linestrings_with_options(
+        &boundaries,
+        NodingOptions {
+            epsilon: eps,
+            ..noding
+        },
+    );
+    let face_rings = graph.extract_bounded_face_rings(eps);
+
+    let mut candidate_faces = Vec::<Polygon>::new();
+    for ring in face_rings {
+        let probe = face_probe_point(&ring, eps)
+            .or_else(|| ring.coords.first().copied())
+            .unwrap_or(Coord::xy(0.0, 0.0));
+        if polys.iter().any(|poly| matches!(classify_point_in_polygon_eps(probe, poly, eps), PointInRing::Inside)) {
+            candidate_faces.push(Polygon::new(LinearRing::new(ring.coords.clone()), vec![]));
+        }
+    }
+
+    let dissolved = dissolve_faces(&candidate_faces, eps);
+    let mut out = Vec::<UnaryDissolveGroup>::with_capacity(dissolved.len());
+    for poly in dissolved {
+        let mut source_indices = Vec::<usize>::new();
+        for (idx, src) in polys.iter().enumerate() {
+            if polygons_overlap_fast(&poly, src, eps) {
+                source_indices.push(idx);
+            }
+        }
+        source_indices.sort_unstable();
+        source_indices.dedup();
+        out.push(UnaryDissolveGroup { poly, source_indices });
+    }
+    out
+}
+
+fn polygons_overlap_fast(a: &Polygon, b: &Polygon, eps: f64) -> bool {
+    if let (Some(ea), Some(eb)) = (a.envelope(), b.envelope()) {
+        if !ea.intersects(&eb) {
+            return false;
+        }
+    }
+
+    if polygon_boundaries_cross(a, b, eps) {
+        return true;
+    }
+
+    if let Some(p) = a.exterior.coords.first().copied() {
+        if matches!(classify_point_in_polygon_eps(p, b, eps), PointInRing::Inside | PointInRing::Boundary) {
+            return true;
+        }
+    }
+
+    if let Some(p) = b.exterior.coords.first().copied() {
+        if matches!(classify_point_in_polygon_eps(p, a, eps), PointInRing::Inside | PointInRing::Boundary) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn source_components_by_non_point_connectivity(polys: &[Polygon], eps: f64) -> Vec<Vec<usize>> {
+    if polys.is_empty() {
+        return Vec::new();
+    }
+
+    let mut visited = vec![false; polys.len()];
+    let mut comps = Vec::<Vec<usize>>::new();
+
+    for start in 0..polys.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut stack = vec![start];
+        let mut comp = Vec::<usize>::new();
+
+        while let Some(i) = stack.pop() {
+            comp.push(i);
+            for j in 0..polys.len() {
+                if visited[j] || i == j {
+                    continue;
+                }
+                if sources_have_non_point_connection(&polys[i], &polys[j], eps) {
+                    visited[j] = true;
+                    stack.push(j);
+                }
+            }
+        }
+
+        comp.sort_unstable();
+        comps.push(comp);
+    }
+
+    comps.sort();
+    comps
+}
+
+fn sources_have_non_point_connection(a: &Polygon, b: &Polygon, eps: f64) -> bool {
+    if let (Some(ea), Some(eb)) = (a.envelope(), b.envelope()) {
+        if !ea.intersects(&eb) {
+            let gap = geometry_distance(&Geometry::Polygon(a.clone()), &Geometry::Polygon(b.clone()));
+            if !(gap.is_finite() && gap > 0.0 && gap <= eps) {
+                return false;
+            }
+        }
+    }
+
+    if polygon_boundaries_have_nontrivial_contact(a, b, eps) {
+        return true;
+    }
+
+    if let Some(p) = a.exterior.coords.first().copied() {
+        if matches!(classify_point_in_polygon_eps(p, b, eps), PointInRing::Inside) {
+            return true;
+        }
+    }
+
+    if let Some(p) = b.exterior.coords.first().copied() {
+        if matches!(classify_point_in_polygon_eps(p, a, eps), PointInRing::Inside) {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn envelope_connected_components(polys: &[Polygon]) -> Vec<Vec<usize>> {
@@ -742,6 +956,92 @@ fn ring_boundary_intersects_eps(a: &[Coord], b: &[Coord], eps: f64) -> bool {
     false
 }
 
+fn ring_boundary_has_nontrivial_contact_eps(a: &[Coord], b: &[Coord], eps: f64) -> bool {
+    if a.len() < 2 || b.len() < 2 {
+        return false;
+    }
+
+    for i in 0..(a.len() - 1) {
+        let a1 = a[i];
+        let a2 = a[i + 1];
+        for j in 0..(b.len() - 1) {
+            let b1 = b[j];
+            let b2 = b[j + 1];
+            if !segments_intersect_eps(a1, a2, b1, b2, eps) {
+                continue;
+            }
+
+            if collinear_segment_overlap_gt_eps(a1, a2, b1, b2, eps) {
+                return true;
+            }
+
+            let shares_endpoint = nearly_eq(a1, b1, eps)
+                || nearly_eq(a1, b2, eps)
+                || nearly_eq(a2, b1, eps)
+                || nearly_eq(a2, b2, eps);
+            if !shares_endpoint {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn polygon_boundaries_have_nontrivial_contact(a: &Polygon, b: &Polygon, eps: f64) -> bool {
+    let mut a_rings: Vec<&[Coord]> = Vec::with_capacity(1 + a.holes.len());
+    a_rings.push(&a.exterior.coords);
+    for h in &a.holes {
+        a_rings.push(&h.coords);
+    }
+
+    let mut b_rings: Vec<&[Coord]> = Vec::with_capacity(1 + b.holes.len());
+    b_rings.push(&b.exterior.coords);
+    for h in &b.holes {
+        b_rings.push(&h.coords);
+    }
+
+    for ra in &a_rings {
+        for rb in &b_rings {
+            if ring_boundary_has_nontrivial_contact_eps(ra, rb, eps) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn collinear_segment_overlap_gt_eps(a1: Coord, a2: Coord, b1: Coord, b2: Coord, eps: f64) -> bool {
+    let ax = a2.x - a1.x;
+    let ay = a2.y - a1.y;
+    let seg_len = (ax * ax + ay * ay).sqrt();
+    if seg_len <= eps {
+        return false;
+    }
+
+    let cross1 = ax * (b1.y - a1.y) - ay * (b1.x - a1.x);
+    let cross2 = ax * (b2.y - a1.y) - ay * (b2.x - a1.x);
+    if cross1.abs() > eps || cross2.abs() > eps {
+        return false;
+    }
+
+    let ux = ax / seg_len;
+    let uy = ay / seg_len;
+    let a0 = 0.0f64;
+    let a1p = seg_len;
+    let b0 = (b1.x - a1.x) * ux + (b1.y - a1.y) * uy;
+    let b1p = (b2.x - a1.x) * ux + (b2.y - a1.y) * uy;
+
+    let amin = a0.min(a1p);
+    let amax = a0.max(a1p);
+    let bmin = b0.min(b1p);
+    let bmax = b0.max(b1p);
+
+    let overlap = amax.min(bmax) - amin.max(bmin);
+    overlap > eps
+}
+
 fn polygon_boundaries_cross(a: &Polygon, b: &Polygon, eps: f64) -> bool {
     let mut a_rings: Vec<&[Coord]> = Vec::with_capacity(1 + a.holes.len());
     a_rings.push(&a.exterior.coords);
@@ -931,8 +1231,8 @@ fn dissolve_faces(faces: &[Polygon], eps: f64) -> Vec<Polygon> {
                 continue;
             }
 
-            coord_map.entry(qa).or_insert(a);
-            coord_map.entry(qb).or_insert(b);
+            update_quantized_coord_map(&mut coord_map, qa, a);
+            update_quantized_coord_map(&mut coord_map, qb, b);
             let key = ordered_pair(qa, qb);
             seg_counts
                 .entry(key)
@@ -958,7 +1258,7 @@ fn dissolve_faces(faces: &[Polygon], eps: f64) -> Vec<Polygon> {
         neighbors.sort_by(|na, nb| {
             let aa = edge_angle_q(*node, *na, &coord_map);
             let ab = edge_angle_q(*node, *nb, &coord_map);
-            aa.total_cmp(&ab)
+            aa.total_cmp(&ab).then_with(|| na.cmp(nb))
         });
     }
 
@@ -1155,6 +1455,19 @@ fn quantize_coord(c: Coord, eps: f64) -> QCoord {
     let qx = (c.x / eps).round() as i64;
     let qy = (c.y / eps).round() as i64;
     QCoord(qx, qy)
+}
+
+fn update_quantized_coord_map(coord_map: &mut HashMap<QCoord, Coord>, key: QCoord, candidate: Coord) {
+    match coord_map.get_mut(&key) {
+        Some(existing) => {
+            if coord_lex_lt(candidate, *existing) {
+                *existing = candidate;
+            }
+        }
+        None => {
+            coord_map.insert(key, candidate);
+        }
+    }
 }
 
 fn nearly_eq(a: Coord, b: Coord, eps: f64) -> bool {

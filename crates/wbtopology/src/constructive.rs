@@ -174,8 +174,35 @@ impl BufferBuilder {
             self.noding.epsilon.max(1.0e-9),
         );
 
-        let merged = merge_polygon_components(&selected, self.noding.epsilon.max(1.0e-9));
-        if let Some(out) = select_best_buffer_component(&merged, poly, self.noding.epsilon.max(1.0e-9)) {
+        // Skip component merging for buffer operations. The depth-sorting already
+        // prioritizes the correct outer buffer by inside_count and area. Merging
+        // via polygon_union can corrupt results in boundary/collapsed-hole cases.
+        // Instead, just take the first depth-sorted candidate with reasonable area.
+        let best_candidate = selected
+            .into_iter()
+            .find(|p| {
+                let p_area = polygon_abs_area(p);
+                if p_area < 1.0e-3 {
+                    return false;
+                }
+                // For positive buffers, the result should be substantially larger than source.
+                // Intermediate stage faces will be only slightly larger.
+                // Approximation: buffer distance d expands perimeter, so rough estimate is
+                // that area grows by ~perimeter * d. For a square 10x10 with d=2.5,
+                // growth is ~40*2.5 = 100, so buffered area ~200 vs source area 100.
+                // Accept if at least 1.5x source exterior area (loose threshold).
+                if distance > 0.0 {
+                    let src_ext_area = ring_abs_area(&poly.exterior.coords);
+                    if p_area < src_ext_area * 1.2 {
+                        eprintln!("  filtering intermediate: area={:.2} < src_ext_area*1.2={:.2}", p_area, src_ext_area * 1.2);
+                        return false;
+                    }
+                }
+                true
+            });
+        
+        if let Some(out) = best_candidate {
+            eprintln!("  using first depth-sorted with reasonable area: area={:.2}", polygon_abs_area(&out));
             // Sanity check: for positive buffers the output polygon must be at
             // least as large as the source's exterior ring.  If the graph
             // pipeline selected a wrong component (e.g., a tiny face in a
@@ -184,6 +211,7 @@ impl BufferBuilder {
                 let src_ext_area = ring_abs_area(&poly.exterior.coords);
                 let out_area = polygon_abs_area(&out);
                 if out_area < src_ext_area * 0.9 {
+                    eprintln!("GRAPH FLAKE: area sanity check failed: out_area={:.2} < src_ext_area*0.9={:.2}", out_area, src_ext_area * 0.9);
                     return buffer_polygon_legacy_impl(poly, distance, self.options);
                 }
             }
@@ -1420,7 +1448,18 @@ fn select_buffer_polygons_by_depth(
     let source_geom = Geometry::Polygon(source.clone());
     let mut selected = Vec::<(FaceDepthLabel, Polygon)>::new();
 
+    // Filter candidates: exclude degenerate/collapsed faces with near-zero area.
+    // These are remnants from hole collapse or noding artifacts and should not compete
+    // with the main buffer result.
+    let min_face_area = 1.0e-6;
+
     for poly in candidates {
+        let area = ring_abs_area(&poly.exterior.coords);
+        if area < min_face_area {
+            eprintln!("  filtered degenerate: area={:.2e} < {:.2e}", area, min_face_area);
+            continue;
+        }
+
         let samples = buffer_face_sample_points(poly);
         if samples.is_empty() {
             continue;
@@ -1448,6 +1487,8 @@ fn select_buffer_polygons_by_depth(
 
         let near_source = min_distance.is_finite() && min_distance <= distance.abs() + eps;
         if inside_count > 0 || near_source {
+            eprintln!("  candidate: inside={} boundary={} samples={} near={} dist={:.6} area={:.2} holes={}", 
+                inside_count, boundary_count, samples.len(), near_source, min_distance, area, poly.holes.len());
             selected.push((
                 FaceDepthLabel {
                     inside_count,
@@ -1473,6 +1514,8 @@ fn select_buffer_polygons_by_depth(
             })
             .then_with(|| buffer_poly_sort_key(&a.1).cmp(&buffer_poly_sort_key(&b.1)))
     });
+    eprintln!("  after sort, first: inside={} area={:.2}", selected.first().map(|(l, _)| l.inside_count).unwrap_or(0), 
+        selected.first().map(|(_, p)| ring_abs_area(&p.exterior.coords)).unwrap_or(0.0));
     selected.into_iter().map(|(_, poly)| poly).collect()
 }
 
@@ -1583,6 +1626,11 @@ fn merge_polygon_components(polys: &[Polygon], eps: f64) -> Vec<Polygon> {
         return Vec::new();
     }
 
+    eprintln!("  MERGE: input {} polygons, first areas:", polys.len());
+    for (i, p) in polys.iter().take(3).enumerate() {
+        eprintln!("    [{}] area={:.2}", i, polygon_abs_area(p));
+    }
+
     let mut groups: Vec<Polygon> = Vec::new();
     for poly in polys {
         let mut acc = poly.clone();
@@ -1621,11 +1669,16 @@ fn select_best_buffer_component(polys: &[Polygon], source: &Polygon, eps: f64) -
                 ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords))
             })
         {
+            eprintln!("  select_best: using source-probe containment, area={:.2}", ring_abs_area(&best.exterior.coords));
             return Some(best.clone());
         }
     }
 
-    select_largest_polygon(polys)
+    let largest = select_largest_polygon(polys);
+    if let Some(ref l) = largest {
+        eprintln!("  select_best: no probe containment, using largest area={:.2}", ring_abs_area(&l.exterior.coords));
+    }
+    largest
 }
 
 fn buffer_face_probe_point(poly: &Polygon) -> Option<Coord> {

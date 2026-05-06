@@ -1818,6 +1818,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("hydrologic_connectivity", "hydrology", "hydrologic_indices"),
     ("hypsometric_analysis", "terrain", "landform_indices"),
     ("hypsometrically_tinted_hillshade", "terrain", "general"),
+    ("identity", "vector", "overlay_analysis"),
     ("idw_interpolation", "raster", "general"),
     ("ihs_to_rgb", "remote_sensing", "enhancement_contrast"),
     ("image_autocorrelation", "raster", "general"),
@@ -2254,6 +2255,7 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("unnest_basins", "hydrology", "watersheds_basins"),
     ("unsharp_masking", "remote_sensing", "filters"),
     ("unsphericity", "terrain", "derivatives"),
+    ("update", "vector", "overlay_analysis"),
     ("update_nodata_cells", "raster", "overlay_math"),
     ("upslope_depression_storage", "hydrology", "depressions_storage"),
     ("urban_expansion_impact_assessment", "terrain", "workflow_products"),
@@ -25453,6 +25455,32 @@ impl WbEnvironment {
     }
 
     #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]
+    fn identity(
+        &self,
+        input: &Vector,
+        overlay: &Vector,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+        snap_tolerance: Option<f64>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_output_path(&input.file_path, "identity")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("overlay".to_string(), json!(overlay.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("identity", args, callback)
+    }
+
+    #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]
     fn intersect(
         &self,
         input: &Vector,
@@ -25502,6 +25530,32 @@ impl WbEnvironment {
         }
         args.insert("output".to_string(), json!(output));
         self._run_vector_tool_with_args("union", args, callback)
+    }
+
+    #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]
+    fn update(
+        &self,
+        input: &Vector,
+        overlay: &Vector,
+        output_path: Option<&str>,
+        callback: Option<Py<PyAny>>,
+        snap_tolerance: Option<f64>,
+    ) -> PyResult<Vector> {
+        let output = self
+            .resolve_output_path_for_wd(output_path)
+            .unwrap_or_else(|| {
+                derived_output_path(&input.file_path, "update")
+                    .to_string_lossy()
+                    .to_string()
+            });
+        let mut args = serde_json::Map::new();
+        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
+        args.insert("overlay".to_string(), json!(overlay.file_path.to_string_lossy().to_string()));
+        if let Some(v) = snap_tolerance {
+            args.insert("snap_tolerance".to_string(), json!(v));
+        }
+        args.insert("output".to_string(), json!(output));
+        self._run_vector_tool_with_args("update", args, callback)
     }
 
     #[pyo3(signature = (input, output_path=None, callback=None))]

@@ -5,6 +5,7 @@
 
 use crate::algorithms::segment::{point_on_segment_eps, segments_intersect_eps};
 use crate::geom::{Coord, LineString};
+use crate::precision::PrecisionModel;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -34,14 +35,74 @@ struct GridSpec {
 const PARALLEL_MIN_SEGMENTS: usize = 256;
 const SWEEP_MIN_SEGMENTS: usize = 512;
 
+/// Noding strategy selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodingStrategy {
+    /// Let the implementation choose a strategy based on data size.
+    Auto,
+    /// Force pairwise candidate generation.
+    Pairwise,
+    /// Force sweep-line candidate generation.
+    Sweep,
+    /// Force spatial-grid candidate generation.
+    Grid,
+    /// Use precision snapping before candidate generation.
+    SnapRounding,
+}
+
+/// Options controlling linework noding behavior.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodingOptions {
+    /// Predicate epsilon used for intersection and on-segment checks.
+    pub epsilon: f64,
+    /// Candidate generation and pre-snapping strategy.
+    pub strategy: NodingStrategy,
+    /// Optional precision model applied before noding.
+    pub precision: Option<PrecisionModel>,
+}
+
+impl Default for NodingOptions {
+    fn default() -> Self {
+        Self {
+            epsilon: 1.0e-9,
+            strategy: NodingStrategy::Auto,
+            precision: None,
+        }
+    }
+}
+
 /// Split a set of linestrings into noded segment fragments.
 ///
 /// Intersections and endpoint-on-segment junctions are identified under `epsilon`.
 /// Each output linestring is a 2-point segment between adjacent node points.
 pub fn node_linestrings(lines: &[LineString], epsilon: f64) -> Vec<LineString> {
-    let eps = epsilon.abs();
-    let segments = collect_segments(lines);
-    let candidate_lists = build_candidate_lists(&segments, eps);
+    node_linestrings_with_options(
+        lines,
+        NodingOptions {
+            epsilon,
+            ..NodingOptions::default()
+        },
+    )
+}
+
+/// Split linestrings into noded fragments using explicit strategy options.
+pub fn node_linestrings_with_options(lines: &[LineString], options: NodingOptions) -> Vec<LineString> {
+    let eps = options.epsilon.abs();
+    let prepared_lines = if options.strategy == NodingStrategy::SnapRounding {
+        let precision = options
+            .precision
+            .unwrap_or(PrecisionModel::Fixed {
+                scale: 1.0 / eps.max(1.0e-9),
+            });
+        apply_precision_lines(lines, precision)
+    } else if let Some(precision) = options.precision {
+        apply_precision_lines(lines, precision)
+    } else {
+        lines.to_vec()
+    };
+
+    let segments = collect_segments(&prepared_lines);
+    let candidate_lists = build_candidate_lists_with_strategy(&segments, eps, options.strategy);
 
     #[cfg(feature = "parallel")]
     {
@@ -70,6 +131,50 @@ pub fn node_linestrings(lines: &[LineString], epsilon: f64) -> Vec<LineString> {
         }
         out
     }
+}
+
+fn apply_precision_lines(lines: &[LineString], precision: PrecisionModel) -> Vec<LineString> {
+    lines
+        .iter()
+        .map(|ls| precision.apply_linestring(ls))
+        .collect()
+}
+
+fn build_candidate_lists_with_strategy(
+    segments: &[SegmentRef],
+    eps: f64,
+    strategy: NodingStrategy,
+) -> Vec<Vec<usize>> {
+    if segments.is_empty() {
+        return Vec::new();
+    }
+
+    match strategy {
+        NodingStrategy::Pairwise => build_candidate_lists_pairwise(segments.len()),
+        NodingStrategy::Sweep => {
+            let bboxes = collect_segment_bboxes(segments, eps);
+            build_candidate_lists_sweep(&bboxes)
+        }
+        NodingStrategy::Grid => {
+            let bboxes = collect_segment_bboxes(segments, eps);
+            build_candidate_lists_grid(&bboxes, eps)
+        }
+        NodingStrategy::SnapRounding | NodingStrategy::Auto => build_candidate_lists(segments, eps),
+    }
+}
+
+fn build_candidate_lists_pairwise(n: usize) -> Vec<Vec<usize>> {
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut v = Vec::with_capacity(n.saturating_sub(1));
+        for j in 0..n {
+            if i != j {
+                v.push(j);
+            }
+        }
+        out.push(v);
+    }
+    out
 }
 
 fn node_segment(
@@ -137,17 +242,7 @@ fn build_candidate_lists(segments: &[SegmentRef], eps: f64) -> Vec<Vec<usize>> {
 
     // Small inputs are usually faster with direct pairwise scans.
     if n < 128 {
-        let mut out = Vec::with_capacity(n);
-        for i in 0..n {
-            let mut v = Vec::with_capacity(n.saturating_sub(1));
-            for j in 0..n {
-                if i != j {
-                    v.push(j);
-                }
-            }
-            out.push(v);
-        }
-        return out;
+        return build_candidate_lists_pairwise(n);
     }
 
     let bboxes = collect_segment_bboxes(segments, eps);

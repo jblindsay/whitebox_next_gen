@@ -82,6 +82,7 @@ pub struct FindLowestOrHighestPointsTool;
 pub struct ExtractNodesTool;
 pub struct ExtractByAttributeTool;
 pub struct HighestPositionTool;
+pub struct IdentityTool;
 pub struct IntersectTool;
 pub struct LayerFootprintRasterTool;
 pub struct LayerFootprintVectorTool;
@@ -124,6 +125,7 @@ pub struct SplitWithLinesTool;
 pub struct SumOverlayTool;
 pub struct SymmetricalDifferenceTool;
 pub struct UnionTool;
+pub struct UpdateTool;
 pub struct UpdateNodataCellsTool;
 pub struct WeightedOverlayTool;
 pub struct WeightedSumTool;
@@ -11680,6 +11682,214 @@ impl Tool for UnionTool {
                 next_fid += 1;
             }
 
+            done += 1;
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
+        }
+
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for IdentityTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "identity",
+            display_name: "Identity",
+            summary: "Preserves all input features; portions overlapping the identity layer also acquire identity attributes.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: overlay_tool_params(),
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        overlay_manifest(
+            "identity",
+            "Identity",
+            "Preserves all input features; portions overlapping the identity layer also acquire identity attributes.",
+            "identity_basic",
+            "identity.shp",
+        )
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        validate_overlay_common_args(args)
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let (input, overlay) = load_overlay_layers_aligned(args)?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let epsilon = parse_overlay_snap_tolerance(args);
+
+        let input_pieces = collect_overlay_polygon_pieces(&input)?;
+        let overlay_pieces = collect_overlay_polygon_pieces(&overlay)?;
+        let (merged_schema, input_mapping, overlay_mapping) =
+            build_merged_overlay_schema(&input, &overlay);
+        let merged_len = merged_schema.len();
+
+        let mut overlay_polys = Vec::with_capacity(overlay_pieces.len());
+        for piece in &overlay_pieces {
+            overlay_polys.push(piece.polygon.clone());
+        }
+        let dissolved_overlay = polygon_unary_dissolve(&overlay_polys, epsilon);
+
+        let mut output = wbvector::Layer::new(format!("{}_identity", input.name));
+        output.schema = merged_schema;
+        output.crs = input.crs.clone();
+        output.geom_type = Some(wbvector::GeometryType::Polygon);
+
+        let total = input_pieces.len().max(1);
+        let coalescer = PercentCoalescer::new(1, 90);
+        let mut next_fid = 1u64;
+
+        for (index, input_piece) in input_pieces.iter().enumerate() {
+            let attrs_input_only = merged_overlay_attributes(
+                Some(&input_piece.attributes),
+                None,
+                &input_mapping,
+                &overlay_mapping,
+                merged_len,
+            );
+
+            // Intersection pieces: get merged attributes from both input and overlay
+            for overlay_piece in &overlay_pieces {
+                let intersections =
+                    polygon_intersection(&input_piece.polygon, &overlay_piece.polygon, epsilon);
+                for poly in intersections {
+                    let attrs_both = merged_overlay_attributes(
+                        Some(&input_piece.attributes),
+                        Some(&overlay_piece.attributes),
+                        &input_mapping,
+                        &overlay_mapping,
+                        merged_len,
+                    );
+                    push_topo_polygon_feature(&mut output, next_fid, poly, attrs_both);
+                    next_fid += 1;
+                }
+            }
+
+            // Remainder of input piece outside all overlay: retain input attributes
+            let mut remainder = vec![input_piece.polygon.clone()];
+            for overlay_group in &dissolved_overlay {
+                let mut next = Vec::<TopoPolygon>::new();
+                for poly in &remainder {
+                    next.extend(polygon_difference(poly, &overlay_group.poly, epsilon));
+                }
+                remainder = next;
+                if remainder.is_empty() {
+                    break;
+                }
+            }
+            for poly in remainder {
+                push_topo_polygon_feature(&mut output, next_fid, poly, attrs_input_only.clone());
+                next_fid += 1;
+            }
+
+            coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
+        }
+
+        coalescer.finish(ctx.progress);
+        ctx.progress.progress(1.0);
+        let output_locator = write_vector_output(&output, output_path.trim())?;
+        Ok(build_vector_result(output_locator))
+    }
+}
+
+impl Tool for UpdateTool {
+    fn metadata(&self) -> ToolMetadata {
+        ToolMetadata {
+            id: "update",
+            display_name: "Update",
+            summary: "Replaces input features with update features where they overlap; input features outside the update layer are preserved.",
+            category: ToolCategory::Vector,
+            license_tier: LicenseTier::Open,
+            params: overlay_tool_params(),
+        }
+    }
+
+    fn manifest(&self) -> ToolManifest {
+        overlay_manifest(
+            "update",
+            "Update",
+            "Replaces input features with update features where they overlap; input features outside the update layer are preserved.",
+            "update_basic",
+            "update.shp",
+        )
+    }
+
+    fn validate(&self, args: &ToolArgs) -> Result<(), ToolError> {
+        validate_overlay_common_args(args)
+    }
+
+    fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
+        let (input, overlay) = load_overlay_layers_aligned(args)?;
+        let output_path = parse_vector_path_arg(args, "output")?;
+        let epsilon = parse_overlay_snap_tolerance(args);
+
+        let input_pieces = collect_overlay_polygon_pieces(&input)?;
+        let overlay_pieces = collect_overlay_polygon_pieces(&overlay)?;
+        let (merged_schema, input_mapping, overlay_mapping) =
+            build_merged_overlay_schema(&input, &overlay);
+        let merged_len = merged_schema.len();
+
+        let mut overlay_polys = Vec::with_capacity(overlay_pieces.len());
+        for piece in &overlay_pieces {
+            overlay_polys.push(piece.polygon.clone());
+        }
+        let dissolved_overlay = polygon_unary_dissolve(&overlay_polys, epsilon);
+
+        let mut output = wbvector::Layer::new(format!("{}_update", input.name));
+        output.schema = merged_schema;
+        output.crs = input.crs.clone();
+        output.geom_type = Some(wbvector::GeometryType::Polygon);
+
+        let total = (input_pieces.len() + overlay_pieces.len()).max(1);
+        let mut done = 0usize;
+        let coalescer = PercentCoalescer::new(1, 90);
+        let mut next_fid = 1u64;
+
+        // Input remainder: parts of input features not covered by the update layer
+        for input_piece in &input_pieces {
+            let attrs_input_only = merged_overlay_attributes(
+                Some(&input_piece.attributes),
+                None,
+                &input_mapping,
+                &overlay_mapping,
+                merged_len,
+            );
+            let mut remainder = vec![input_piece.polygon.clone()];
+            for overlay_group in &dissolved_overlay {
+                let mut next = Vec::<TopoPolygon>::new();
+                for poly in &remainder {
+                    next.extend(polygon_difference(poly, &overlay_group.poly, epsilon));
+                }
+                remainder = next;
+                if remainder.is_empty() {
+                    break;
+                }
+            }
+            for poly in remainder {
+                push_topo_polygon_feature(&mut output, next_fid, poly, attrs_input_only.clone());
+                next_fid += 1;
+            }
+            done += 1;
+            coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
+        }
+
+        // Update features: replace input wherever they overlap (full overlay geometry + overlay attributes)
+        for overlay_piece in &overlay_pieces {
+            let attrs_overlay_only = merged_overlay_attributes(
+                None,
+                Some(&overlay_piece.attributes),
+                &input_mapping,
+                &overlay_mapping,
+                merged_len,
+            );
+            push_topo_polygon_feature(&mut output, next_fid, overlay_piece.polygon.clone(), attrs_overlay_only);
+            next_fid += 1;
             done += 1;
             coalescer.emit_unit_fraction(ctx.progress, done as f64 / total as f64);
         }

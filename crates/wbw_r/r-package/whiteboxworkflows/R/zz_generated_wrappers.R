@@ -1051,6 +1051,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Computes a summed-area (integral image) transform for each band.
     run_tool("integral_image_transform", list(...))
   }
+  session$identity <- function(...) {
+    # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
+    run_tool("identity", list(...))
+  }
   session$intersect <- function(...) {
     # Intersects input and overlay polygons using topology-based overlay and tracks source feature IDs.
     run_tool("intersect", list(...))
@@ -2542,6 +2546,10 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
   session$union <- function(...) {
     # Dissolves combined input and overlay polygons into a unified polygon coverage.
     run_tool("union", list(...))
+  }
+  session$update <- function(...) {
+    # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
+    run_tool("update", list(...))
   }
   session$unnest_basins <- function(...) {
     # Creates one basin raster per pour-point nesting level from a D8 pointer grid.
@@ -5690,6 +5698,18 @@ wbw_integral_image_transform <- function(...) {
   # Computes a summed-area (integral image) transform for each band.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$integral_image_transform(...)
+}
+
+identity <- function(...) {
+  # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$identity(...)
+}
+
+wbw_identity <- function(...) {
+  # Overlays input polygons with overlay polygons and preserves all input regions while attaching overlay attributes where overlaps occur.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$identity(...)
 }
 
 intersect <- function(...) {
@@ -10166,6 +10186,18 @@ wbw_union <- function(...) {
   # Dissolves combined input and overlay polygons into a unified polygon coverage.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$union(...)
+}
+
+update <- function(...) {
+  # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$update(...)
+}
+
+wbw_update <- function(...) {
+  # Replaces overlapping portions of input polygons with overlay polygons while retaining non-overlapping input regions.
+  session <- wbw_make_session(include_pro = FALSE, tier = "open")
+  session$update(...)
 }
 
 unnest_basins <- function(...) {

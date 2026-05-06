@@ -91,11 +91,19 @@ pub use constructive::{
 	buffer_polygon_with_precision,
 	buffer_point,
 	buffer_point_with_precision,
+	make_valid_geometry,
 	make_valid_polygon,
+	polygonize_linework,
 	polygonize_closed_linestrings,
+	BufferBuilder,
 	BufferCapStyle,
+	BufferPipelineStrategy,
 	BufferJoinStyle,
 	BufferOptions,
+	GeometryFixMode,
+	GeometryFixOptions,
+	PolygonizeOptions,
+	PolygonizeResult,
 };
 pub use algorithms::distance::{coord_dist, geometry_distance, is_within_distance, nearest_points};
 pub use algorithms::measurements::{
@@ -132,7 +140,7 @@ pub use hull::{
 };
 pub use io::{from_wkb, from_wkt, to_wkb, to_wkt};
 pub use natural_neighbour::PreparedSibsonInterpolator;
-pub use noding::node_linestrings;
+pub use noding::{node_linestrings, node_linestrings_with_options, NodingOptions, NodingStrategy};
 pub use overlay::{
 	polygon_difference,
 	polygon_difference_with_precision,
@@ -152,11 +160,14 @@ pub use overlay::{
 	polygon_union_with_precision,
 	polygon_union_faces,
 	polygon_unary_dissolve,
+	polygon_unary_dissolve_with_options,
 	OverlayOutputs,
 	OverlayOp,
+	UnaryDissolveOptions,
+	UnaryDissolveStrategy,
 	UnaryDissolveGroup,
 };
-pub use precision::PrecisionModel;
+pub use precision::{PrecisionModel, TopologyPrecisionOptions};
 pub use relate::{relate, relate_with_epsilon, relate_with_precision, Location, RelateMatrix};
 pub use spatial_index::{IndexedGeometry, SpatialIndex};
 pub use topology::{

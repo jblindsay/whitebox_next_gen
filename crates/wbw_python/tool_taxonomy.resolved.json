@@ -351,6 +351,7 @@
         "difference",
         "dissolve",
         "erase",
+        "identity",
         "intersect",
         "line_intersections",
         "line_polygon_clip",
@@ -358,7 +359,8 @@
         "select_by_location",
         "spatial_join",
         "symmetrical_difference",
-        "union"
+        "union",
+        "update"
       ]
     },
     {
@@ -377,7 +379,6 @@
         "minimum_bounding_envelope",
         "minimum_convex_hull",
         "polygonize",
-        "reproject_vector",
         "simplify_features",
         "smooth_vectors",
         "snap_endnodes",
@@ -389,7 +390,6 @@
       "category": "vector",
       "subcategory": "shape_metrics",
       "tools": [
-        "add_geometry_attributes",
         "compactness_ratio",
         "deviation_from_regional_direction",
         "elongation_ratio",
@@ -433,6 +433,7 @@
       "subcategory": "attribute_analysis",
       "tools": [
         "add_field",
+        "add_geometry_attributes",
         "attribute_correlation",
         "attribute_histogram",
         "attribute_scattergram",
@@ -452,6 +453,19 @@
         "parcel_and_land_fabric_topology_compliance_workflow",
         "emergency_scenario_routing_and_accessibility_simulator",
         "market_access_and_site_intelligence_workflow"
+      ]
+    },
+    {
+      "category": "projection_georeferencing",
+      "subcategory": "general",
+      "tools": [
+        "assign_projection_lidar",
+        "assign_projection_raster",
+        "assign_projection_vector",
+        "georeference_raster_from_control_points",
+        "reproject_lidar",
+        "reproject_raster",
+        "reproject_vector"
       ]
     },
     {
@@ -736,6 +750,7 @@
         "erase_polygon_from_raster",
         "exp",
         "exp2",
+        "fft_random_field",
         "filter_raster_features_by_area",
         "find_patch_edge_cells",
         "floor",
@@ -815,6 +830,8 @@
       "category": "terrain",
       "subcategory": "general",
       "tools": [
+        "assess_route",
+        "breakline_mapping",
         "convergence_index",
         "dem_void_filling",
         "deviation_from_mean_elevation",
@@ -828,8 +845,12 @@
         "feature_preserving_smoothing",
         "feature_preserving_smoothing_multiscale",
         "fetch_analysis",
+        "fill_missing_data",
+        "find_ridges",
         "hillshade",
         "hypsometrically_tinted_hillshade",
+        "local_hypsometric_analysis",
+        "low_points_on_headwater_divides",
         "max_downslope_elev_change",
         "max_upslope_elev_change",
         "min_downslope_elev_change",
@@ -840,11 +861,11 @@
         "slope_vs_aspect_plot",
         "slope_vs_elev_plot",
         "surface_area_ratio",
-        "fill_missing_data",
-        "find_ridges",
+        "topographic_hachures",
         "map_off_terrain_objects",
         "remove_off_terrain_objects",
-        "ridge_and_valley_vectors"
+        "ridge_and_valley_vectors",
+        "smooth_vegetation_residual"
       ]
     },
     {
@@ -855,7 +876,10 @@
         "horizon_angle",
         "horizon_area",
         "openness",
+        "shadow_animation",
+        "shadow_image",
         "sky_view_factor",
+        "skyline_analysis",
         "time_in_daylight",
         "viewshed",
         "visibility_index"
@@ -879,6 +903,7 @@
         "plan_curvature",
         "principal_curvature_direction",
         "profile_curvature",
+        "relative_aspect",
         "ring_curvature",
         "rotor",
         "shape_index",
@@ -911,9 +936,7 @@
         "multiscale_topographic_position_class",
         "pennock_landform_classification",
         "percent_elev_range",
-        "relative_aspect",
-        "relative_topographic_position",
-        "soil_landscape_classification"
+        "relative_topographic_position"
       ]
     },
     {
@@ -933,13 +956,15 @@
         "multiscale_roughness_signature",
         "multiscale_std_dev_normals",
         "multiscale_std_dev_normals_signature",
-        "multiscale_topographic_position_image"
+        "multiscale_topographic_position_image",
+        "topographic_position_animation"
       ]
     },
     {
       "category": "terrain",
       "subcategory": "workflow_products",
       "tools": [
+        "topo_render",
         "wetland_hydrogeomorphic_classification",
         "urban_expansion_impact_assessment",
         "wind_turbine_siting",
@@ -950,15 +975,22 @@
         "carbon_sequestration_verification_audit",
         "wildfire_fuel_loading_and_risk_matrix",
         "mine_site_reclamation_compliance_tracker",
-        "precision_irrigation_optimization",
-        "precision_ag_yield_zone_intelligence",
         "terrain_constraint_and_conflict_analysis",
         "terrain_constructability_and_cost_analysis",
-        "yield_data_conditioning_and_qa",
-        "in_season_crop_stress_intervention_planning",
-        "field_trafficability_and_operation_planning",
         "utility_corridor_encroachment_intelligence",
         "forestry_structure_and_biomass_intelligence"
+      ]
+    },
+    {
+      "category": "precision_agriculture",
+      "subcategory": "general",
+      "tools": [
+        "field_trafficability_and_operation_planning",
+        "in_season_crop_stress_intervention_planning",
+        "precision_irrigation_optimization",
+        "precision_ag_yield_zone_intelligence",
+        "soil_landscape_classification",
+        "yield_data_conditioning_and_qa"
       ]
     }
   ],
@@ -1034,6 +1066,22 @@
     "aspect": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
+    },
+    "assess_route": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
+    "assign_projection_lidar": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "assign_projection_raster": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "assign_projection_vector": {
+      "license_tier": "open",
+      "source_crate": "unknown"
     },
     "atan2": {
       "license_tier": "open",
@@ -1121,6 +1169,10 @@
     },
     "breach_single_cell_pits": {
       "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "breakline_mapping": {
+      "license_tier": "pro",
       "source_crate": "wbtools_oss"
     },
     "buffer_raster": {
@@ -1361,7 +1413,7 @@
     },
     "decrement": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "delete_field": {
       "license_tier": "open",
@@ -1627,6 +1679,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "fft_random_field": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "field_calculator": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1811,6 +1867,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "georeference_raster_from_control_points": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
     "glcm_texture": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1919,6 +1979,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "identity": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "idw_interpolation": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -1969,7 +2033,7 @@
     },
     "increment": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "individual_tree_detection": {
       "license_tier": "open",
@@ -2295,6 +2359,10 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "local_hypsometric_analysis": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
     "locate_points_along_routes": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2325,6 +2393,10 @@
     },
     "longest_flowpath": {
       "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "low_points_on_headwater_divides": {
+      "license_tier": "pro",
       "source_crate": "wbtools_oss"
     },
     "lowest_position": {
@@ -3107,6 +3179,14 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "reproject_lidar": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
+    "reproject_raster": {
+      "license_tier": "open",
+      "source_crate": "unknown"
+    },
     "reproject_vector": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3283,6 +3363,14 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "shadow_animation": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
+    "shadow_image": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
     "shape_complexity_index_raster": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3339,6 +3427,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "skyline_analysis": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
     "slope": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3353,6 +3445,10 @@
     },
     "smooth_vectors": {
       "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
+    "smooth_vegetation_residual": {
+      "license_tier": "pro",
       "source_crate": "wbtools_oss"
     },
     "snap_endnodes": {
@@ -3539,6 +3635,18 @@
       "license_tier": "open",
       "source_crate": "unknown"
     },
+    "topo_render": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
+    "topographic_hachures": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
+    "topographic_position_animation": {
+      "license_tier": "pro",
+      "source_crate": "wbtools_oss"
+    },
     "topological_breach_burn": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -3618,6 +3726,10 @@
     "unsphericity": {
       "license_tier": "open",
       "source_crate": "unknown"
+    },
+    "update": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "update_nodata_cells": {
       "license_tier": "open",

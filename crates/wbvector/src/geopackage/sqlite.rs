@@ -135,6 +135,7 @@ pub struct Db {
     pages:     Vec<Vec<u8>>,   // 0-indexed; page 1 = pages[0]
     page_size: usize,
     tables:    HashMap<String, TableMeta>,
+    next_rowid: HashMap<String, i64>,
 }
 
 impl Db {
@@ -158,8 +159,9 @@ impl Db {
             off += page_size;
         }
 
-        let mut db = Self { pages, page_size, tables: HashMap::new() };
+        let mut db = Self { pages, page_size, tables: HashMap::new(), next_rowid: HashMap::new() };
         db.load_schema()?;
+        db.rebuild_next_rowid_cache()?;
         Ok(db)
     }
 
@@ -191,7 +193,7 @@ impl Db {
         p1[103..105].copy_from_slice(&0u16.to_be_bytes()); // ncells = 0
         p1[105..107].copy_from_slice(&(ps as u16).to_be_bytes()); // content area
 
-        Self { pages: vec![p1], page_size: ps, tables: HashMap::new() }
+        Self { pages: vec![p1], page_size: ps, tables: HashMap::new(), next_rowid: HashMap::new() }
     }
 
     /// Serialise to bytes.
@@ -385,13 +387,20 @@ impl Db {
             .map(|m| m.root_page)
             .ok_or_else(|| GeoError::GpkgSchema(format!("table '{table}' not found")))?;
 
-        // Determine next rowid from current row count
-        let existing = self.scan_btree(root, if root == 1 { 100 } else { 0 })?;
-        let rowid    = (existing.len() as i64) + 1;
+        // Use cached next-rowid to avoid O(N) table scans per insert.
+        // Falling back to a one-time scan keeps compatibility with databases
+        // loaded from bytes where the cache has not been populated yet.
+        let rowid = if let Some(v) = self.next_rowid.get(table).copied() {
+            v
+        } else {
+            let rows = self.scan_btree_with_rowid(root, if root == 1 { 100 } else { 0 })?;
+            rows.iter().map(|(rid, _)| *rid).max().unwrap_or(0) + 1
+        };
 
         let cell = self.build_leaf_cell_with_overflow(rowid as u64, &values)?;
         let leaf  = self.find_rightmost_leaf(root, if root == 1 { 100 } else { 0 });
         self.insert_cell(leaf, cell)?;
+        self.next_rowid.insert(table.to_owned(), rowid + 1);
         Ok(rowid)
     }
 
@@ -669,7 +678,25 @@ impl Db {
         self.insert_cell(1, cell)?;
 
         let cols = extract_column_names(sql);
-        self.tables.insert(name, TableMeta { root_page: new_page_no, columns: cols });
+        self.tables.insert(name.clone(), TableMeta { root_page: new_page_no, columns: cols });
+        self.next_rowid.insert(name, 1);
+        Ok(())
+    }
+
+    fn rebuild_next_rowid_cache(&mut self) -> Result<()> {
+        self.next_rowid.clear();
+        let table_names: Vec<String> = self.tables.keys().cloned().collect();
+        for table in table_names {
+            let Some(meta) = self.tables.get(&table) else {
+                continue;
+            };
+            let rows = self.scan_btree_with_rowid(
+                meta.root_page,
+                if meta.root_page == 1 { 100 } else { 0 },
+            )?;
+            let next = rows.iter().map(|(rid, _)| *rid).max().unwrap_or(0) + 1;
+            self.next_rowid.insert(table, next);
+        }
         Ok(())
     }
 

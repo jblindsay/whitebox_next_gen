@@ -6,6 +6,24 @@
 
 use crate::geom::{Coord, Geometry, LineString, LinearRing, Polygon};
 
+/// Topology-oriented precision reduction options.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TopologyPrecisionOptions {
+    /// Whether adjacent duplicate vertices should be removed after snapping.
+    pub remove_adjacent_duplicates: bool,
+    /// Whether degenerate geometries should be dropped.
+    pub drop_degenerate: bool,
+}
+
+impl Default for TopologyPrecisionOptions {
+    fn default() -> Self {
+        Self {
+            remove_adjacent_duplicates: true,
+            drop_degenerate: true,
+        }
+    }
+}
+
 /// Precision model controlling coordinate snapping.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PrecisionModel {
@@ -119,4 +137,72 @@ impl PrecisionModel {
     pub fn eq_coord(self, a: Coord, b: Coord) -> bool {
         self.eq(a.x, b.x) && self.eq(a.y, b.y)
     }
+
+    /// Apply precision to a linestring with optional topology cleanup.
+    pub fn apply_linestring_topology(self, ls: &LineString, options: TopologyPrecisionOptions) -> Option<LineString> {
+        let mut coords = ls.coords.clone();
+        self.apply_coords_in_place(&mut coords);
+        if options.remove_adjacent_duplicates {
+            coords = remove_adjacent_duplicate_coords(&coords, self.epsilon());
+        }
+        if options.drop_degenerate && coords.len() < 2 {
+            return None;
+        }
+        Some(LineString::new(coords))
+    }
+
+    /// Apply precision to polygon rings with optional topology cleanup.
+    pub fn apply_polygon_topology(self, poly: &Polygon, options: TopologyPrecisionOptions) -> Option<Polygon> {
+        let exterior = reduce_ring_topology(self, &poly.exterior, options)?;
+        let mut holes = Vec::<LinearRing>::with_capacity(poly.holes.len());
+        for hole in &poly.holes {
+            if let Some(reduced) = reduce_ring_topology(self, hole, options) {
+                holes.push(reduced);
+            }
+        }
+        Some(Polygon::new(exterior, holes))
+    }
+}
+
+fn remove_adjacent_duplicate_coords(coords: &[Coord], eps: f64) -> Vec<Coord> {
+    let mut out = Vec::<Coord>::with_capacity(coords.len());
+    for c in coords {
+        if out
+            .last()
+            .map(|prev| (prev.x - c.x).abs() <= eps && (prev.y - c.y).abs() <= eps)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        out.push(*c);
+    }
+    out
+}
+
+fn reduce_ring_topology(
+    precision: PrecisionModel,
+    ring: &LinearRing,
+    options: TopologyPrecisionOptions,
+) -> Option<LinearRing> {
+    let mut coords = ring.coords.clone();
+    precision.apply_coords_in_place(&mut coords);
+    if options.remove_adjacent_duplicates {
+        coords = remove_adjacent_duplicate_coords(&coords, precision.epsilon());
+    }
+
+    if coords.is_empty() {
+        return None;
+    }
+
+    let first = coords[0];
+    let last = *coords.last().unwrap_or(&first);
+    if (first.x - last.x).abs() > precision.epsilon() || (first.y - last.y).abs() > precision.epsilon() {
+        coords.push(first);
+    }
+
+    if options.drop_degenerate && coords.len() < 4 {
+        return None;
+    }
+
+    Some(LinearRing::new(coords))
 }

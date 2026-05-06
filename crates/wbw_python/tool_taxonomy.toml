@@ -351,6 +351,7 @@ tools = [
   "difference",
   "dissolve",
   "erase",
+  "identity",
   "intersect",
   "line_intersections",
   "line_polygon_clip",
@@ -359,6 +360,7 @@ tools = [
   "spatial_join",
   "symmetrical_difference",
   "union",
+  "update",
 ]
 
 [[mapping]]

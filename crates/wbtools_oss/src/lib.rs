@@ -353,6 +353,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::HighestPositionTool));
     registry.register(Box::new(tools::HoleProportionTool));
     registry.register(Box::new(tools::IdwInterpolationTool));
+    registry.register(Box::new(tools::IdentityTool));
     registry.register(Box::new(tools::IntersectTool));
     registry.register(Box::new(tools::LayerFootprintRasterTool));
     registry.register(Box::new(tools::LayerFootprintVectorTool));
@@ -488,6 +489,7 @@ pub fn register_default_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(tools::SumOverlayTool));
     registry.register(Box::new(tools::SymmetricalDifferenceTool));
     registry.register(Box::new(tools::UnionTool));
+    registry.register(Box::new(tools::UpdateTool));
     registry.register(Box::new(tools::UpdateNodataCellsTool));
     registry.register(Box::new(tools::TravellingSalesmanProblemTool));
     registry.register(Box::new(tools::RandomPointsInPolygonTool));

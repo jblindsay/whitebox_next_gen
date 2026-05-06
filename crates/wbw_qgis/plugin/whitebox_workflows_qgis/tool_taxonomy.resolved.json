@@ -351,6 +351,7 @@
         "difference",
         "dissolve",
         "erase",
+        "identity",
         "intersect",
         "line_intersections",
         "line_polygon_clip",
@@ -358,7 +359,8 @@
         "select_by_location",
         "spatial_join",
         "symmetrical_difference",
-        "union"
+        "union",
+        "update"
       ]
     },
     {
@@ -1411,7 +1413,7 @@
     },
     "decrement": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "delete_field": {
       "license_tier": "open",
@@ -1977,6 +1979,10 @@
       "license_tier": "open",
       "source_crate": "wbtools_oss"
     },
+    "identity": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
+    },
     "idw_interpolation": {
       "license_tier": "open",
       "source_crate": "wbtools_oss"
@@ -2027,7 +2033,7 @@
     },
     "increment": {
       "license_tier": "open",
-      "source_crate": "unknown"
+      "source_crate": "wbtools_oss"
     },
     "individual_tree_detection": {
       "license_tier": "open",
@@ -3720,6 +3726,10 @@
     "unsphericity": {
       "license_tier": "open",
       "source_crate": "unknown"
+    },
+    "update": {
+      "license_tier": "open",
+      "source_crate": "wbtools_oss"
     },
     "update_nodata_cells": {
       "license_tier": "open",

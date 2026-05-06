@@ -59,7 +59,7 @@ classify_objects_rules_hierarchical,FALSE,TRUE,not_tested,,,,,,,
 classify_objects_svm,FALSE,TRUE,not_tested,,,,,,,
 classify_overlap_points,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 clean_vector,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
-clip,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
+clip,TRUE,TRUE,tested,user_clip_overlay_fixture,0.06,0.19,+216.67%,Red,BATCH_SIMPLE_CANDIDATE_L3,Benchmark (2026-05-05): NG runs (s): 0.20|0.19|0.18|0.21|0.19 (median runs2-5=0.19). Legacy runs (s): 0.06|0.06|0.06|0.06|0.06 (median runs2-5=0.06). Delta based on medians: +216.67% (regression vs legacy). Context: NG remains much faster than QGIS clip on same files (10.47 s), so this is still a practical net win.
 clip_lidar_to_polygon,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 clip_raster_to_polygon,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 closest_facility_network,FALSE,TRUE,not_tested,,,,,,,
@@ -105,7 +105,7 @@ depth_to_water,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 deviation_from_mean_elevation,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L2,
 deviation_from_regional_direction,TRUE,TRUE,not_tested,,,,,,,
 diff_of_gaussians_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,58.550,57.705,-1.44,Green,,Initial timing (2026-04-28): NG runs (s): 56.25|57.60|56.35|57.81|60.12 (median runs2-5=57.705). Legacy runs (s): 52.72|59.88|57.71|57.20|59.39 (median runs2-5=58.550). Params: default. Timing scope: kernel_only_excludes_read_write.
-difference,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE,
+difference,TRUE,TRUE,tested,user_clip_overlay_fixture,0.08,0.23,+187.50%,Red,BATCH_SIMPLE_CANDIDATE,Benchmark (2026-05-05): NG runs (s): 0.24|0.23|0.22|0.23|0.24 (median runs2-5=0.23). Legacy runs (s): 0.09|0.08|0.08|0.08|0.08 (median runs2-5=0.08). Delta based on medians: +187.50% (regression vs legacy). Context: same overlay dataset used for clip benchmark.
 difference_curvature,TRUE,TRUE,tested,lkerie_10m_final_dem,2.280,1.680,-26.32%,Green,LOW_INFERRED_FROM_GAUSSIAN,streaming row fix applied
 difference_from_mean_elevation,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L2,
 mdinf_flow_accum,TRUE,TRUE,not_tested,,,,,,,
@@ -113,7 +113,7 @@ rho8_flow_accum,TRUE,TRUE,tested,lkerie_30m_final_dem,12.040,7.400,-38.54,Green,
 rho8_pointer,TRUE,TRUE,tested,lkerie_30m_final_dem,2.740,2.940,+7.30,Yellow,,NG runs: 3.03|2.93|2.92|2.94|2.94 (median=2.94s). Legacy runs: 2.95|3.22|2.74|2.66|2.60 (median=2.74s). NG +7.3%. rho8_dir_from_dem parallelized + pointer-value output stage fused.
 direct_decorrelation_stretch,TRUE,TRUE,not_tested,,,,,,,
 directional_relief,TRUE,TRUE,not_tested,,,,,,,
-dissolve,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
+dissolve,TRUE,TRUE,tested,user_clip_overlay_fixture,0.00,0.04,,Red,BATCH_SIMPLE_CANDIDATE_L3,Benchmark (2026-05-05): NG runs (s): 0.04|0.04|0.04|0.04|0.04 (median runs2-5=0.04). Legacy runs (s): 0.00|0.00|0.00|0.00|0.00 (median runs2-5=0.00). Delta percent is undefined because legacy median is zero.
 distance_to_outlet,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 diversity_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,4.790,4.080,-14.82,Green,,Post-optimization retest (2026-04-28): NG runs (s): 4.16|4.28|4.08|4.08|4.07 (median runs2-5=4.080). Legacy runs (s): 4.97|4.78|4.80|4.90|4.71 (median runs2-5=4.790). Params: default. Timing scope: kernel_only_excludes_read_write.
 divide,TRUE,TRUE,tested,lkerie_10m_final_dem,2.07,0.085,-95.89,Green,,Benchmark (2026-05-03): NG runs (s): 0.08|0.09|0.09|0.08|0.08 (median runs2-5=0.085). Legacy runs (s): 2.21|2.10|2.12|2.04|2.02 (median runs2-5=2.07). Delta based on medians: -95.89% (Green; NG faster). Timing scope: kernel_only_excludes_read_write.
@@ -138,7 +138,7 @@ elongation_ratio,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L2,
 embankment_mapping,TRUE,TRUE,not_tested,,,,,,,
 emboss_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.035,1.560,-23.34,Green,,Initial timing (2026-04-28): NG runs (s): 1.80|1.57|1.55|1.52|1.57 (median runs2-5=1.560). Legacy runs (s): 2.85|2.49|2.02|1.99|2.05 (median runs2-5=2.035). Params: default. Timing scope: kernel_only_excludes_read_write.
 equal_to,TRUE,TRUE,tested,lkerie_10m_final_dem,2.37,0.11,-95.36%,Green,,Post-fix retest (2026-05-03): NG runs (s): 0.10|0.10|0.11|0.11|0.11 (median runs2-5=0.11). Legacy runs (s): median=2.37. Latest improvement includes mixed-type typed-slice fast paths in wbraster::Raster::apply_binary_math_from (in addition to prior runtime path routing fixes). Timing scope: kernel_only_excludes_read_write.
-erase,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
+erase,TRUE,TRUE,tested,user_clip_overlay_fixture,0.06,0.22,+266.67%,Red,BATCH_SIMPLE_CANDIDATE_L3,Benchmark (2026-05-05): NG runs (s): 0.22|0.23|0.21|0.22|0.22 (median runs2-5=0.22). Legacy runs (s): 0.06|0.06|0.05|0.06|0.06 (median runs2-5=0.06).
 erase_polygon_from_lidar,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 erase_polygon_from_raster,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
 euclidean_allocation,TRUE,TRUE,not_tested,,,,,,BATCH_SIMPLE_CANDIDATE_L3,
@@ -252,7 +252,7 @@ inplace_subtract,FALSE,TRUE,not_tested,,,,,,,
 insert_dams,TRUE,TRUE,not_tested,,,,,,,
 insert_flowlines,TRUE,FALSE,not_tested,,,,,,,
 integral_image_transform,TRUE,TRUE,not_tested,,,,,,,
-intersect,TRUE,TRUE,not_tested,,,,,,,
+intersect,TRUE,TRUE,tested,user_clip_overlay_fixture,0.08,0.13,+62.50%,Red,,Benchmark (2026-05-05): NG runs (s): 0.14|0.13|0.13|0.13|0.13 (median runs2-5=0.13). Legacy runs (s): 0.08|0.08|0.08|0.08|0.08 (median runs2-5=0.08). Delta based on medians: +62.50% (regression vs legacy).
 intersection_idx,TRUE,FALSE,not_tested,,,,,,,
 inverse_pca,TRUE,TRUE,not_tested,,,,,,,
 is_intersection,TRUE,FALSE,not_tested,,,,,,,
@@ -318,7 +318,7 @@ lidar_tophat_transform,TRUE,TRUE,not_tested,,,,,,,
 line_detection_filter,TRUE,TRUE,tested,lkerie_10m_final_dem,2.040,1.610,-21.08,Green,,Initial timing (2026-04-28): NG runs (s): 2.12|1.71|1.63|1.59|1.59 (median runs2-5=1.610). Legacy runs (s): 2.47|2.37|2.00|2.07|2.01 (median runs2-5=2.040). Params: default. Timing scope: kernel_only_excludes_read_write.
 line_endpoints_must_snap_within_tolerance,FALSE,TRUE,not_tested,,,,,,,
 line_intersections,TRUE,TRUE,not_tested,,,,,,,
-line_polygon_clip,FALSE,TRUE,not_tested,,,,,,,
+line_polygon_clip,FALSE,TRUE,tested,user_clip_overlay_fixture,,0.23,,,BATCH_SIMPLE_CANDIDATE_L3,Benchmark (2026-05-05): NG runs (s): 0.23|0.23|0.23|0.23|0.22 (median runs2-5=0.23). No legacy baseline (legacy_in_wbw=FALSE); delta percent is N/A.
 line_thinning,TRUE,TRUE,not_tested,,,,,,,
 linearity_index,TRUE,TRUE,not_tested,,,,,,,
 lines_to_polygons,TRUE,TRUE,not_tested,,,,,,,
@@ -608,7 +608,7 @@ sum_overlay,TRUE,TRUE,tested,lkerie_10m_final_dem,2.155,0.810,-62.41,Green,,Post
 surface_area_ratio,TRUE,TRUE,tested,LKERIE_10m_final_DEM.tif,2.205,2.01,-8.84,Green,,Benchmark (2026-05-03): NG runs (s): 1.95|1.94|2.07|2.07|1.95 (median runs2-5=2.01). Legacy runs (s): 3.34|2.87|2.33|2.06|2.08 (median runs2-5=2.205).
 svm_classification,TRUE,TRUE,not_tested,,,,,,,
 svm_regression,TRUE,TRUE,not_tested,,,,,,,
-symmetrical_difference,TRUE,TRUE,not_tested,,,,,,,
+symmetrical_difference,TRUE,TRUE,tested,user_clip_overlay_fixture,2.45,0.32,-86.94%,Green,,Benchmark (2026-05-05): NG runs (s): 0.35|0.33|0.33|0.31|0.31 (median runs2-5=0.32). Legacy runs (s): 2.35|2.41|2.50|2.45|2.46 (median runs2-5=2.45).
 tan,TRUE,TRUE,tested,lkerie_10m_final_dem,2.42,0.455,-81.20,Green,,Benchmark (2026-05-03): NG runs (s): 0.46|0.46|0.46|0.45|0.45 (median runs2-5=0.455). Legacy runs (s): 2.53|2.42|2.46|2.42|2.35 (median runs2-5=2.42). Delta based on medians: -81.20% (Green; NG faster). Timing scope: kernel_only_excludes_read_write.
 tangential_curvature,TRUE,TRUE,tested,lkerie_10m_final_dem,2.285,2.170,-5.03%,Green,LOW_INFERRED_FROM_PLAN_CURVATURE,streaming row fix applied
 tanh,TRUE,TRUE,tested,lkerie_10m_final_dem,2.09,0.47,-77.51,Green,,Benchmark (2026-05-03): NG runs (s): 0.44|0.44|0.48|0.46|0.49 (median runs2-5=0.47). Legacy runs (s): 2.21|2.17|2.11|2.04|2.07 (median runs2-5=2.09). Delta based on medians: -77.51% (Green; NG faster). Timing scope: kernel_only_excludes_read_write.
@@ -637,7 +637,7 @@ true_colour_composite,FALSE,TRUE,not_tested,,,,,,,
 truncate,TRUE,TRUE,tested,lkerie_10m_final_dem,2.01,0.03,-98.51,Green,,Benchmark (2026-05-03): NG runs (s): 0.03|0.03|0.03|0.03|0.04 (median runs2-5=0.03). Legacy runs (s): 2.18|2.01|2.06|1.99|2.01 (median runs2-5=2.01). Delta based on medians: -98.51% (Green; NG faster). Timing scope: kernel_only_excludes_read_write.
 turning_bands_simulation,TRUE,TRUE,tested,lkerie_10m_final_dem,160.56,15.54,-90.32%,Green,,Benchmark (2026-05-04): NG runs (s): 14.98|15.03|15.44|16.31|15.64 (median runs2-5=15.54). Legacy: 160.56. Post-optimization timing (f32 buffers + parallel rayon accumulation). Pre-optimization NG was ~257.7s (+60%); optimization yielded ~16.6x speedup over pre-opt baseline.
 two_sample_ks_test,TRUE,TRUE,not_tested,,,,,,,
-union,TRUE,TRUE,not_tested,,,,,,,
+union,TRUE,TRUE,tested,user_clip_overlay_fixture,2.52,0.42,-83.33%,Green,,Benchmark (2026-05-05): NG runs (s): 0.41|0.42|0.42|0.42|0.40 (median runs2-5=0.42). Legacy runs (s): 2.42|2.49|2.57|2.55|2.39 (median runs2-5=2.52).
 unnest_basins,TRUE,TRUE,not_tested,,,,,,,
 unsharp_masking,TRUE,TRUE,not_tested,,,,,,,
 unsphericity,TRUE,TRUE,tested,LKERIE_10m_final_DEM.tif,2.32,1.66,-28.45,Green,LOW_INFERRED_FROM_GAUSSIAN,Benchmark (2026-05-04): NG runs (s): 1.67|1.62|1.65|1.72|1.71 (median runs2-5=1.66). Legacy runs (s): 2.83|2.31|2.43|2.22|2.33 (median runs2-5=2.32).

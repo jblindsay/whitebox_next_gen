@@ -130,7 +130,12 @@ impl BufferBuilder {
     }
 
     fn build_polygon_graph(self, poly: &Polygon, distance: f64) -> Polygon {
-        // Negative/zero buffer semantics remain on the legacy path for now.
+        // Negative/zero buffer semantics remain on the legacy path.
+        // The legacy negative buffer is well-optimized: it handles self-intersecting
+        // offset rings via make_valid_polygon (splitting into components), has robust
+        // collapse detection, and produces correct multi-component results. The buffer_polygon_multi
+        // function returns all erosion components; buffer_polygon returns only the largest.
+        // Graph pipeline conversion for negative buffer is deferred as a future optimization.
         if distance <= 0.0 {
             return buffer_polygon_legacy_impl(poly, distance, self.options);
         }
@@ -1023,17 +1028,19 @@ fn buffer_polygon_negative(poly: &Polygon, distance: f64, options: BufferOptions
 
 /// Buffer a polygon by a signed distance, returning all resulting components.
 ///
-/// This is the multipolygon variant of [`buffer_polygon`]. While
-/// [`buffer_polygon`] returns only the largest surviving component for negative
-/// distances that split the shell into disconnected pieces, this function
-/// returns every valid component.
+/// This is the recommended function for erosion (negative distance) operations
+/// where the shell may split into multiple disconnected pieces. It is the only way
+/// to recover all components when erosion is wide enough to separate parts of the
+/// polygon. [`buffer_polygon`] returns only the largest component for comparison.
 ///
+/// Implementation notes:
 /// - Positive `distance`: delegates to `buffer_polygon_positive` and wraps
 ///   the result in a single-element `Vec`.
 /// - Zero `distance`: returns a repaired copy as a single-element `Vec`.
-/// - Negative `distance`: erodes the shell, expands holes, and recovers each
-///   surviving disconnected component. Returns an empty `Vec` when the polygon
-///   fully collapses.
+/// - Negative `distance`: erodes the shell using Mitre offset joins (which correctly
+///   self-intersect only when components disconnect), then calls `make_valid_polygon`
+///   to resolve self-intersections into separate sub-shells. Expands holes outward and
+///   attaches them to the appropriate sub-shells. Returns every disconnected component.
 pub fn buffer_polygon_multi(poly: &Polygon, distance: f64, options: BufferOptions) -> Vec<Polygon> {
     if !distance.is_finite() {
         return vec![];

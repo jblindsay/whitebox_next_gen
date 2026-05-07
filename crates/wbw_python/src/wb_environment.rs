@@ -1618,7 +1618,6 @@ const EXPLICIT_TOOL_CATEGORY_SUBCATEGORY: &[(&str, &str, &str)] = &[
     ("breach_single_cell_pits", "hydrology", "depressions_storage"),
     ("breakline_mapping", "terrain", "general"),
     ("buffer_raster", "raster", "distance_cost"),
-    ("buffer_vector", "vector", "geometry_processing"),
     ("build_object_hierarchy_multiscale", "remote_sensing", "obia"),
     ("burn_streams", "hydrology", "depressions_storage"),
     ("burn_streams_at_roads", "hydrology", "depressions_storage"),
@@ -2714,8 +2713,7 @@ fn matches_subcategory(category_slug: &str, subcategory: &str, tool_id: &str, ta
         ("vector", "geometry_processing") => {
             matches!(
                 id.as_str(),
-                "buffer_vector"
-                    | "centroid_vector"
+                "centroid_vector"
                     | "concave_hull"
                     | "densify_features"
                     | "eliminate_coincident_points"
@@ -27751,38 +27749,6 @@ impl WbEnvironment {
             args.insert("output".to_string(), json!(out));
         }
         self._run_raster_tool_with_args("map_features", args, input.active_band, callback)
-    }
-
-    #[pyo3(signature = (input, distance, quadrant_segments=8, cap_style="round", join_style="round", mitre_limit=5.0, dissolve=false, output_path=None, callback=None))]
-    fn buffer_vector(
-        &self,
-        input: &Vector,
-        distance: f64,
-        quadrant_segments: u64,
-        cap_style: &str,
-        join_style: &str,
-        mitre_limit: f64,
-        dissolve: bool,
-        output_path: Option<&str>,
-        callback: Option<Py<PyAny>>,
-    ) -> PyResult<Vector> {
-        let output = self
-            .resolve_output_path_for_wd(output_path)
-            .unwrap_or_else(|| {
-                derived_output_path(&input.file_path, "buffer_vector")
-                    .to_string_lossy()
-                    .to_string()
-            });
-        let mut args = serde_json::Map::new();
-        args.insert("input".to_string(), json!(input.file_path.to_string_lossy().to_string()));
-        args.insert("distance".to_string(), json!(distance));
-        args.insert("quadrant_segments".to_string(), json!(quadrant_segments));
-        args.insert("cap_style".to_string(), json!(cap_style));
-        args.insert("join_style".to_string(), json!(join_style));
-        args.insert("mitre_limit".to_string(), json!(mitre_limit));
-        args.insert("dissolve".to_string(), json!(dissolve));
-        args.insert("output".to_string(), json!(output));
-        self._run_vector_tool_with_args("buffer_vector", args, callback)
     }
 
     #[pyo3(signature = (input, overlay, output_path=None, callback=None, snap_tolerance=None))]

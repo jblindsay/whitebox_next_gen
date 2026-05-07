@@ -74,34 +74,6 @@
       }
     }
   },
-  "buffer_vector": {
-    "description": "",
-    "parameters": {
-      "input": {
-        "label": "Input vector layer. (default features.shp)."
-      },
-      "distance": {
-        "label": "Buffer distance in map units. (default 10.0)."
-      },
-      "quadrant_segments": {
-        "label": "Arc resolution in segments per quadrant; defaults to 8. [optional]"
-      },
-      "cap_style": {
-        "label": "Line end-cap style: round, flat, or square. (default round). [optional]",
-        "tooltip": "Line end-cap style: round, flat, or square."
-      },
-      "join_style": {
-        "label": "Corner join style: round, bevel, or mitre. (default round). [optional]",
-        "tooltip": "Corner join style: round, bevel, or mitre."
-      },
-      "mitre_limit": {
-        "label": "Mitre join limit used when join_style=mitre; defaults to 5.0. [optional]"
-      },
-      "output": {
-        "label": "Output vector path."
-      }
-    }
-  },
   "burn_streams": {
     "description": "",
     "parameters": {

@@ -203,10 +203,6 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
     run_tool("buffer_raster", list(...))
   }
-  session$buffer_vector <- function(...) {
-    # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-    run_tool("buffer_vector", list(...))
-  }
   session$build_object_hierarchy_multiscale <- function(...) {
     # Builds parent-child relationships between fine and coarse object segmentations.
     run_tool("build_object_hierarchy_multiscale", list(...))
@@ -3154,18 +3150,6 @@ wbw_buffer_raster <- function(...) {
   # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
   session <- wbw_make_session(include_pro = FALSE, tier = "open")
   session$buffer_raster(...)
-}
-
-buffer_vector <- function(...) {
-  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$buffer_vector(...)
-}
-
-wbw_buffer_vector <- function(...) {
-  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-  session <- wbw_make_session(include_pro = FALSE, tier = "open")
-  session$buffer_vector(...)
 }
 
 build_object_hierarchy_multiscale <- function(...) {

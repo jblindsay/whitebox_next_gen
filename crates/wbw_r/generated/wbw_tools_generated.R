@@ -215,10 +215,6 @@ wbw_make_session <- function(floating_license_id = NULL, include_pro = NULL, tie
     # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
     run_tool("buffer_raster", list(...))
   }
-  session$buffer_vector <- function(...) {
-    # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-    run_tool("buffer_vector", list(...))
-  }
   session$burn_streams <- function(...) {
     # Burns a stream network into a DEM by decreasing stream-cell elevations.
     run_tool("burn_streams", list(...))
@@ -3366,18 +3362,6 @@ wbw_buffer_raster <- function(...) {
   # Creates a binary buffer zone around non-zero, non-NoData raster cells within a specified distance.
   session <- wbw_make_session(include_pro = TRUE, tier = "pro")
   session$buffer_raster(...)
-}
-
-buffer_vector <- function(...) {
-  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$buffer_vector(...)
-}
-
-wbw_buffer_vector <- function(...) {
-  # Creates polygon buffers around point, line, and polygon vector geometries with configurable cap and join styles.
-  session <- wbw_make_session(include_pro = TRUE, tier = "pro")
-  session$buffer_vector(...)
 }
 
 burn_streams <- function(...) {

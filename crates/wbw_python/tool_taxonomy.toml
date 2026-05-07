@@ -367,7 +367,6 @@ tools = [
 category = "vector"
 subcategory = "geometry_processing"
 tools = [
-  "buffer_vector",
   "centroid_vector",
   "concave_hull",
   "densify_features",

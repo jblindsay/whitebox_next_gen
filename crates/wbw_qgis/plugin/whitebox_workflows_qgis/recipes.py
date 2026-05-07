@@ -97,7 +97,7 @@ RECIPE_CATALOG: list[dict[str, Any]] = [
         "output_hint": "Retain intermediate QA outputs for audit and reproducibility.",
         "tier": "open",
         "launch_tool": "add_geometry_attributes",
-        "tools": ["add_geometry_attributes", "buffer_vector", "clip"],
+        "tools": ["add_geometry_attributes", "clip"],
     },
     {
         "id": "corridor_screening_pro",

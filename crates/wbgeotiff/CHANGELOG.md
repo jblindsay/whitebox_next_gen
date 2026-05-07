@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-07
+
 ### Changed
 - Added a single-band GeoTIFF read fast path in `GeoTiff::read_band_bytes`:
     for `samples_per_pixel == 1` with chunky layout, the decoded pixel buffer is

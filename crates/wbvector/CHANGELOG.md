@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-07
+
 ### Added
 - Introduced a new in-process vector memory store module at `wbvector::memory_store` for zero-disk vector handoff between components.
 - Added memory-path API for vectors with `memory://vector/<id>` handles, including:

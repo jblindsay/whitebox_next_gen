@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-07
+
 ### Added
 - `BandView` struct: a lightweight read-only view of one raster band materialized as
   `f64`. Provides `get(row: isize, col: isize) -> f64` which returns `nodata` for

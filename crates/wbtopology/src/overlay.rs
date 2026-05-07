@@ -1,9 +1,12 @@
 //! Overlay face selection built on topology graph extraction.
 
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::join;
 
 use crate::algorithms::segment::{point_on_segment_eps, segments_intersect_eps};
 use crate::algorithms::distance::geometry_distance;
@@ -58,6 +61,8 @@ pub struct UnaryDissolveGroup {
 pub enum UnaryDissolveStrategy {
     /// Use graph/face assembly and source-classification.
     GraphDriven,
+    /// Use spatially cascaded pairwise dissolve passes.
+    CascadedHeuristic,
     /// Use legacy envelope-component pairwise merge heuristic.
     PairwiseHeuristic,
 }
@@ -71,6 +76,8 @@ pub struct UnaryDissolveOptions {
     pub strategy: UnaryDissolveStrategy,
     /// Noding options used by graph-driven dissolve.
     pub noding: NodingOptions,
+    /// Optional preferred precision model for pairwise/cascaded union attempts.
+    pub preferred_union_precision: Option<PrecisionModel>,
 }
 
 impl Default for UnaryDissolveOptions {
@@ -83,6 +90,7 @@ impl Default for UnaryDissolveOptions {
                 strategy: NodingStrategy::SnapRounding,
                 precision: None,
             },
+            preferred_union_precision: None,
         }
     }
 }
@@ -395,6 +403,54 @@ pub fn polygon_union(a: &Polygon, b: &Polygon, epsilon: f64) -> Vec<Polygon> {
     polygon_overlay(a, b, OverlayOp::Union, epsilon)
 }
 
+/// Unary union of many polygons without source-membership tracking.
+pub fn polygon_unary_union(polys: &[Polygon], epsilon: f64) -> Vec<Polygon> {
+    polygon_unary_union_with_options(
+        polys,
+        UnaryDissolveOptions {
+            epsilon,
+            ..UnaryDissolveOptions::default()
+        },
+    )
+}
+
+/// Unary union of many polygons with explicit strategy options and no membership tracking.
+pub fn polygon_unary_union_with_options(
+    polys: &[Polygon],
+    options: UnaryDissolveOptions,
+) -> Vec<Polygon> {
+    if polys.is_empty() {
+        return Vec::new();
+    }
+
+    if polys.len() == 1 {
+        return vec![polys[0].clone()];
+    }
+
+    let eps = normalized_eps(options.epsilon);
+
+    match options.strategy {
+        UnaryDissolveStrategy::GraphDriven => unary_union_graph(
+            polys,
+            eps,
+            options.noding,
+            options.preferred_union_precision,
+        ),
+        UnaryDissolveStrategy::CascadedHeuristic => unary_union_componentized(
+            polys,
+            eps,
+            true,
+            options.preferred_union_precision,
+        ),
+        UnaryDissolveStrategy::PairwiseHeuristic => unary_union_componentized(
+            polys,
+            eps,
+            false,
+            options.preferred_union_precision,
+        ),
+    }
+}
+
 /// Dissolve many polygons into non-overlapping groups.
 ///
 /// The result includes both dissolved geometry and source membership so callers
@@ -427,10 +483,34 @@ pub fn polygon_unary_dissolve_with_options(
 
     let eps = normalized_eps(options.epsilon);
 
-    if options.strategy == UnaryDissolveStrategy::GraphDriven {
-        return unary_dissolve_graph(polys, eps, options.noding);
+    match options.strategy {
+        UnaryDissolveStrategy::GraphDriven => unary_dissolve_graph(
+            polys,
+            eps,
+            options.noding,
+            options.preferred_union_precision,
+        ),
+        UnaryDissolveStrategy::CascadedHeuristic => unary_dissolve_componentized(
+            polys,
+            eps,
+            true,
+            options.preferred_union_precision,
+        ),
+        UnaryDissolveStrategy::PairwiseHeuristic => unary_dissolve_componentized(
+            polys,
+            eps,
+            false,
+            options.preferred_union_precision,
+        ),
     }
+}
 
+fn unary_dissolve_componentized(
+    polys: &[Polygon],
+    eps: f64,
+    cascaded: bool,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
     let components = envelope_connected_components(polys);
 
     #[cfg(feature = "parallel")]
@@ -438,7 +518,13 @@ pub fn polygon_unary_dissolve_with_options(
         if components.len() >= 4 {
             return components
                 .par_iter()
-                .map(|comp| dissolve_component(polys, comp, eps))
+                .map(|comp| {
+                    if cascaded {
+                        dissolve_component_cascaded(polys, comp, eps, preferred_precision)
+                    } else {
+                        dissolve_component(polys, comp, eps, preferred_precision)
+                    }
+                })
                 .flatten()
                 .collect();
         }
@@ -446,18 +532,63 @@ pub fn polygon_unary_dissolve_with_options(
 
     let mut out = Vec::<UnaryDissolveGroup>::new();
     for comp in components {
-        out.extend(dissolve_component(polys, &comp, eps));
+        if cascaded {
+            out.extend(dissolve_component_cascaded(polys, &comp, eps, preferred_precision));
+        } else {
+            out.extend(dissolve_component(polys, &comp, eps, preferred_precision));
+        }
     }
     out
 }
 
-fn unary_dissolve_graph(polys: &[Polygon], eps: f64, noding: NodingOptions) -> Vec<UnaryDissolveGroup> {
+fn unary_union_componentized(
+    polys: &[Polygon],
+    eps: f64,
+    cascaded: bool,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    let components = envelope_connected_components(polys);
+
+    #[cfg(feature = "parallel")]
+    {
+        if components.len() >= 4 {
+            return components
+                .par_iter()
+                .map(|comp| {
+                    if cascaded {
+                        union_component_cascaded(polys, comp, eps, preferred_precision)
+                    } else {
+                        union_component(polys, comp, eps, preferred_precision)
+                    }
+                })
+                .flatten()
+                .collect();
+        }
+    }
+
+    let mut out = Vec::<Polygon>::new();
+    for comp in components {
+        if cascaded {
+            out.extend(union_component_cascaded(polys, &comp, eps, preferred_precision));
+        } else {
+            out.extend(union_component(polys, &comp, eps, preferred_precision));
+        }
+    }
+    out
+}
+
+fn unary_dissolve_graph(
+    polys: &[Polygon],
+    eps: f64,
+    noding: NodingOptions,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
     let partitions = source_components_by_non_point_connectivity(polys, eps);
     if partitions.len() > 1 {
         let mut out = Vec::<UnaryDissolveGroup>::new();
         for part in partitions {
             let subset: Vec<Polygon> = part.iter().map(|&idx| polys[idx].clone()).collect();
-            let mut groups = unary_dissolve_graph_component(&subset, eps, noding);
+            let mut groups = unary_dissolve_graph_component(&subset, eps, noding, preferred_precision);
             for g in &mut groups {
                 for idx in &mut g.source_indices {
                     *idx = part[*idx];
@@ -470,10 +601,39 @@ fn unary_dissolve_graph(polys: &[Polygon], eps: f64, noding: NodingOptions) -> V
         return out;
     }
 
-    unary_dissolve_graph_component(polys, eps, noding)
+    unary_dissolve_graph_component(polys, eps, noding, preferred_precision)
 }
 
-fn unary_dissolve_graph_component(polys: &[Polygon], eps: f64, noding: NodingOptions) -> Vec<UnaryDissolveGroup> {
+fn unary_union_graph(
+    polys: &[Polygon],
+    eps: f64,
+    noding: NodingOptions,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    let partitions = source_components_by_non_point_connectivity(polys, eps);
+    if partitions.len() > 1 {
+        let mut out = Vec::<Polygon>::new();
+        for part in partitions {
+            let subset: Vec<Polygon> = part.iter().map(|&idx| polys[idx].clone()).collect();
+            out.extend(unary_union_graph_component(
+                &subset,
+                eps,
+                noding,
+                preferred_precision,
+            ));
+        }
+        return out;
+    }
+
+    unary_union_graph_component(polys, eps, noding, preferred_precision)
+}
+
+fn unary_dissolve_graph_component(
+    polys: &[Polygon],
+    eps: f64,
+    noding: NodingOptions,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
     let mut boundaries = Vec::<LineString>::new();
     for poly in polys {
         boundaries.extend(polygon_boundaries(poly));
@@ -502,34 +662,79 @@ fn unary_dissolve_graph_component(polys: &[Polygon], eps: f64, noding: NodingOpt
     // BFS from the exterior region to classify each face as depth > 0 (include) or not.
     let included = classify_faces_by_depth(&graph, &face_rings, &edge_delta);
 
-    // Collect candidate faces and dissolve adjacent ones.
-    let candidate_faces: Vec<Polygon> = face_rings
-        .iter()
-        .zip(included.iter())
-        .filter_map(|((ring, _), &inc)| {
-            if inc {
-                Some(Polygon::new(LinearRing::new(ring.coords.clone()), vec![]))
-            } else {
-                None
-            }
-        })
-        .collect();
+    let source_geoms: Vec<Geometry> = polys.iter().cloned().map(Geometry::Polygon).collect();
+    let source_index = SpatialIndex::from_geometries(&source_geoms);
 
-    let dissolved = dissolve_faces(&candidate_faces, eps);
+    // Assign source membership at face granularity, then propagate memberships
+    // through cascaded dissolve merges instead of rescanning all dissolved outputs.
+    let mut candidate_groups = Vec::<UnaryDissolveGroup>::new();
+    for ((ring, _), &inc) in face_rings.iter().zip(included.iter()) {
+        if !inc {
+            continue;
+        }
 
-    let mut out = Vec::<UnaryDissolveGroup>::with_capacity(dissolved.len());
-    for poly in dissolved {
+        let poly = Polygon::new(LinearRing::new(ring.coords.clone()), vec![]);
         let mut source_indices = Vec::<usize>::new();
-        for (idx, src) in polys.iter().enumerate() {
-            if polygons_overlap_fast(&poly, src, eps) {
+        let poly_geom = Geometry::Polygon(poly.clone());
+        let candidates = source_index.query_geometry(&poly_geom);
+        for idx in candidates {
+            if idx >= polys.len() {
+                continue;
+            }
+            if polygons_overlap_fast(&poly, &polys[idx], eps) {
                 source_indices.push(idx);
             }
         }
         source_indices.sort_unstable();
         source_indices.dedup();
-        out.push(UnaryDissolveGroup { poly, source_indices });
+        candidate_groups.push(UnaryDissolveGroup { poly, source_indices });
     }
-    out
+
+    dissolve_pre_grouped_cascaded(candidate_groups, eps, preferred_precision)
+}
+
+fn unary_union_graph_component(
+    polys: &[Polygon],
+    eps: f64,
+    noding: NodingOptions,
+    _preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    let mut boundaries = Vec::<LineString>::new();
+    for poly in polys {
+        boundaries.extend(polygon_boundaries(poly));
+    }
+
+    let graph = TopologyGraph::from_linestrings_with_options(
+        &boundaries,
+        NodingOptions {
+            epsilon: eps,
+            ..noding
+        },
+    );
+
+    let face_rings = graph.extract_bounded_face_rings_with_edges(eps);
+    if face_rings.is_empty() {
+        return Vec::new();
+    }
+
+    let mut edge_delta = vec![0i32; graph.edges.len()];
+    compute_unary_edge_deltas(&graph, polys, eps, &mut edge_delta);
+    let included = classify_faces_by_depth(&graph, &face_rings, &edge_delta);
+
+    let candidate_rings: Vec<Vec<Coord>> = face_rings
+        .iter()
+        .zip(included.iter())
+        .filter_map(|((ring, _), &inc)| if inc { Some(ring.coords.clone()) } else { None })
+        .collect();
+
+    if candidate_rings.is_empty() {
+        return Vec::new();
+    }
+
+    // Graph-driven union already computes included bounded faces from a single
+    // noded arrangement. Assemble shells/holes directly from these rings to
+    // avoid an additional pairwise overlay-union stage.
+    assemble_polygons_from_rings(candidate_rings, eps)
 }
 
 /// Compute depth deltas for every directed edge in `graph` based on which source
@@ -873,38 +1078,211 @@ fn envelope_connected_components(polys: &[Polygon]) -> Vec<Vec<usize>> {
     comps
 }
 
-fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<UnaryDissolveGroup> {
-    #[derive(Debug, Clone)]
-    struct Work {
-        poly: Polygon,
-        envelope: Option<Envelope>,
-        area: f64,
-        members: Vec<usize>,
-    }
+#[derive(Debug, Clone)]
+struct DissolveWork {
+    poly: Polygon,
+    envelope: Option<Envelope>,
+    area: f64,
+    members: Vec<usize>,
+}
 
-    if component.is_empty() {
-        return Vec::new();
-    }
+#[derive(Debug, Clone)]
+struct UnionWork {
+    poly: Polygon,
+    envelope: Option<Envelope>,
+    area: f64,
+}
 
-    let mut groups: Vec<Work> = component
+fn init_component_work(polys: &[Polygon], component: &[usize]) -> Vec<DissolveWork> {
+    component
         .iter()
         .copied()
-        .map(|idx| Work {
+        .map(|idx| DissolveWork {
             poly: polys[idx].clone(),
             envelope: polys[idx].envelope(),
             area: polygon_abs_area(&polys[idx]),
             members: vec![idx],
         })
-        .collect();
+        .collect()
+}
 
-    if groups.len() < 2 {
-        return groups
-            .into_iter()
-            .map(|g| UnaryDissolveGroup {
+fn init_union_component_work(polys: &[Polygon], component: &[usize]) -> Vec<UnionWork> {
+    component
+        .iter()
+        .copied()
+        .map(|idx| UnionWork {
+            poly: polys[idx].clone(),
+            envelope: polys[idx].envelope(),
+            area: polygon_abs_area(&polys[idx]),
+        })
+        .collect()
+}
+
+fn finalize_component_work(groups: Vec<DissolveWork>) -> Vec<UnaryDissolveGroup> {
+    groups
+        .into_iter()
+        .map(|mut g| {
+            g.members.sort_unstable();
+            g.members.dedup();
+            UnaryDissolveGroup {
                 poly: g.poly,
                 source_indices: g.members,
-            })
-            .collect();
+            }
+        })
+        .collect()
+}
+
+fn finalize_union_work(groups: Vec<UnionWork>) -> Vec<Polygon> {
+    groups.into_iter().map(|g| g.poly).collect()
+}
+
+fn dissolve_pre_grouped_cascaded(
+    groups: Vec<UnaryDissolveGroup>,
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
+    if groups.is_empty() {
+        return Vec::new();
+    }
+
+    let work: Vec<DissolveWork> = groups
+        .into_iter()
+        .map(|g| DissolveWork {
+            area: polygon_abs_area(&g.poly),
+            envelope: g.poly.envelope(),
+            poly: g.poly,
+            members: g.source_indices,
+        })
+        .collect();
+
+    finalize_component_work(dissolve_work_cascaded(work, eps, 0, preferred_precision))
+}
+
+#[allow(dead_code)]
+fn union_pre_grouped_cascaded(
+    polys: Vec<Polygon>,
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    if polys.is_empty() {
+        return Vec::new();
+    }
+
+    let work: Vec<UnionWork> = polys
+        .into_iter()
+        .map(|poly| UnionWork {
+            area: polygon_abs_area(&poly),
+            envelope: poly.envelope(),
+            poly,
+        })
+        .collect();
+
+    finalize_union_work(union_work_cascaded(work, eps, 0, preferred_precision))
+}
+
+fn dissolve_component_cascaded(
+    polys: &[Polygon],
+    component: &[usize],
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
+    if component.is_empty() {
+        return Vec::new();
+    }
+
+    let groups = init_component_work(polys, component);
+    let dissolved = dissolve_work_cascaded(groups, eps, 0, preferred_precision);
+    finalize_component_work(dissolved)
+}
+
+fn union_component_cascaded(
+    polys: &[Polygon],
+    component: &[usize],
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    if component.is_empty() {
+        return Vec::new();
+    }
+
+    let groups = init_union_component_work(polys, component);
+    let dissolved = union_work_cascaded(groups, eps, 0, preferred_precision);
+    finalize_union_work(dissolved)
+}
+
+fn dissolve_work_cascaded(
+    groups: Vec<DissolveWork>,
+    eps: f64,
+    depth: usize,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<DissolveWork> {
+    const LEAF_SIZE: usize = 16;
+
+    if groups.len() <= 1 {
+        return groups;
+    }
+
+    if groups.len() <= LEAF_SIZE {
+        return dissolve_work_pairwise(groups, eps, preferred_precision);
+    }
+
+    let axis_x = depth % 2 == 0;
+    let mut ordered = groups;
+    ordered.sort_by(|a, b| dissolve_work_axis_value(a, axis_x)
+        .partial_cmp(&dissolve_work_axis_value(b, axis_x))
+        .unwrap_or(Ordering::Equal));
+
+    let mid = ordered.len() / 2;
+    let right = ordered.split_off(mid);
+    let left = ordered;
+
+    #[cfg(feature = "parallel")]
+    if left.len() >= 64 && right.len() >= 64 {
+        let (mut left_out, mut right_out) = join(
+            || dissolve_work_cascaded(left, eps, depth + 1, preferred_precision),
+            || dissolve_work_cascaded(right, eps, depth + 1, preferred_precision),
+        );
+        left_out.append(&mut right_out);
+        return dissolve_work_pairwise(left_out, eps, preferred_precision);
+    }
+
+    let mut left_out = dissolve_work_cascaded(left, eps, depth + 1, preferred_precision);
+    let mut right_out = dissolve_work_cascaded(right, eps, depth + 1, preferred_precision);
+    left_out.append(&mut right_out);
+    dissolve_work_pairwise(left_out, eps, preferred_precision)
+}
+
+fn dissolve_work_axis_value(work: &DissolveWork, axis_x: bool) -> f64 {
+    if let Some(env) = work.envelope {
+        if axis_x {
+            (env.min_x + env.max_x) * 0.5
+        } else {
+            (env.min_y + env.max_y) * 0.5
+        }
+    } else {
+        0.0
+    }
+}
+
+fn union_work_axis_value(work: &UnionWork, axis_x: bool) -> f64 {
+    if let Some(env) = work.envelope {
+        if axis_x {
+            (env.min_x + env.max_x) * 0.5
+        } else {
+            (env.min_y + env.max_y) * 0.5
+        }
+    } else {
+        0.0
+    }
+}
+
+fn dissolve_work_pairwise(
+    mut groups: Vec<DissolveWork>,
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<DissolveWork> {
+    if groups.len() < 2 {
+        return groups;
     }
 
     loop {
@@ -915,9 +1293,6 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
 
             #[cfg(feature = "parallel")]
             {
-                // When one giant connected component dominates, component-level
-                // parallelism is ineffective. In that case, parallelize partner
-                // search for this seed polygon.
                 if groups.len() >= 64 {
                     let best = ((i + 1)..groups.len())
                         .into_par_iter()
@@ -934,8 +1309,9 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
                                 &groups[j].poly,
                                 groups[j].area,
                                 eps,
+                                preferred_precision,
                             )
-                                .map(|poly| (j, poly))
+                            .map(|poly| (j, poly))
                         })
                         .reduce_with(|a, b| if a.0 < b.0 { a } else { b });
 
@@ -948,7 +1324,6 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
                         merged_any = true;
                         break 'scan;
                     }
-                    // No merge partner for this i found in parallel path.
                     continue;
                 }
             }
@@ -966,6 +1341,7 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
                     &groups[j].poly,
                     groups[j].area,
                     eps,
+                    preferred_precision,
                 ) {
                     groups[i].poly = merged_poly;
                     groups[i].envelope = groups[i].poly.envelope();
@@ -984,28 +1360,206 @@ fn dissolve_component(polys: &[Polygon], component: &[usize], eps: f64) -> Vec<U
     }
 
     groups
-        .into_iter()
-        .map(|mut g| {
-            g.members.sort_unstable();
-            UnaryDissolveGroup {
-                poly: g.poly,
-                source_indices: g.members,
-            }
-        })
-        .collect()
 }
 
-    fn safe_dissolve_union(a: &Polygon, area_a: f64, b: &Polygon, area_b: f64, eps: f64) -> Option<Polygon> {
-        let quick_eps = eps.max(1.0e-9);
-        if !polygon_boundaries_cross(a, b, quick_eps)
-            && !shell_strictly_inside(a, b, quick_eps)
-            && !shell_strictly_inside(b, a, quick_eps)
-        {
-            return None;
+fn union_work_cascaded(
+    groups: Vec<UnionWork>,
+    eps: f64,
+    depth: usize,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnionWork> {
+    const LEAF_SIZE: usize = 16;
+
+    if groups.len() <= 1 {
+        return groups;
+    }
+
+    if groups.len() <= LEAF_SIZE {
+        return union_work_pairwise(groups, eps, preferred_precision);
+    }
+
+    let axis_x = depth % 2 == 0;
+    let mut ordered = groups;
+    ordered.sort_by(|a, b| union_work_axis_value(a, axis_x)
+        .partial_cmp(&union_work_axis_value(b, axis_x))
+        .unwrap_or(Ordering::Equal));
+
+    let mid = ordered.len() / 2;
+    let right = ordered.split_off(mid);
+    let left = ordered;
+
+    #[cfg(feature = "parallel")]
+    if left.len() >= 64 && right.len() >= 64 {
+        let (mut left_out, mut right_out) = join(
+            || union_work_cascaded(left, eps, depth + 1, preferred_precision),
+            || union_work_cascaded(right, eps, depth + 1, preferred_precision),
+        );
+        left_out.append(&mut right_out);
+        return union_work_pairwise(left_out, eps, preferred_precision);
+    }
+
+    let mut left_out = union_work_cascaded(left, eps, depth + 1, preferred_precision);
+    let mut right_out = union_work_cascaded(right, eps, depth + 1, preferred_precision);
+    left_out.append(&mut right_out);
+    union_work_pairwise(left_out, eps, preferred_precision)
+}
+
+fn union_work_pairwise(
+    mut groups: Vec<UnionWork>,
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnionWork> {
+    if groups.len() < 2 {
+        return groups;
+    }
+
+    loop {
+        let mut merged_any = false;
+
+        'scan: for i in 0..groups.len() {
+            let env_i = groups[i].envelope;
+
+            #[cfg(feature = "parallel")]
+            {
+                if groups.len() >= 64 {
+                    let best = ((i + 1)..groups.len())
+                        .into_par_iter()
+                        .filter_map(|j: usize| {
+                            if let (Some(a), Some(b)) = (env_i, groups[j].envelope) {
+                                if !a.intersects(&b) {
+                                    return None;
+                                }
+                            }
+
+                            safe_dissolve_union(
+                                &groups[i].poly,
+                                groups[i].area,
+                                &groups[j].poly,
+                                groups[j].area,
+                                eps,
+                                preferred_precision,
+                            )
+                            .map(|poly| (j, poly))
+                        })
+                        .reduce_with(|a, b| if a.0 < b.0 { a } else { b });
+
+                    if let Some((j, merged_poly)) = best {
+                        groups[i].poly = merged_poly;
+                        groups[i].envelope = groups[i].poly.envelope();
+                        groups[i].area = polygon_abs_area(&groups[i].poly);
+                        groups.remove(j);
+                        merged_any = true;
+                        break 'scan;
+                    }
+                    continue;
+                }
+            }
+
+            for j in (i + 1)..groups.len() {
+                if let (Some(a), Some(b)) = (env_i, groups[j].envelope) {
+                    if !a.intersects(&b) {
+                        continue;
+                    }
+                }
+
+                if let Some(merged_poly) = safe_dissolve_union(
+                    &groups[i].poly,
+                    groups[i].area,
+                    &groups[j].poly,
+                    groups[j].area,
+                    eps,
+                    preferred_precision,
+                ) {
+                    groups[i].poly = merged_poly;
+                    groups[i].envelope = groups[i].poly.envelope();
+                    groups[i].area = polygon_abs_area(&groups[i].poly);
+                    groups.remove(j);
+                    merged_any = true;
+                    break 'scan;
+                }
+            }
         }
+
+        if !merged_any {
+            break;
+        }
+    }
+
+    groups
+}
+
+fn dissolve_component(
+    polys: &[Polygon],
+    component: &[usize],
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<UnaryDissolveGroup> {
+    if component.is_empty() {
+        return Vec::new();
+    }
+
+    let groups = init_component_work(polys, component);
+
+    if groups.len() < 2 {
+        return finalize_component_work(groups);
+    }
+
+    finalize_component_work(dissolve_work_pairwise(groups, eps, preferred_precision))
+}
+
+fn union_component(
+    polys: &[Polygon],
+    component: &[usize],
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Vec<Polygon> {
+    if component.is_empty() {
+        return Vec::new();
+    }
+
+    let groups = init_union_component_work(polys, component);
+
+    if groups.len() < 2 {
+        return finalize_union_work(groups);
+    }
+
+    finalize_union_work(union_work_pairwise(groups, eps, preferred_precision))
+}
+
+fn safe_dissolve_union(
+    a: &Polygon,
+    area_a: f64,
+    b: &Polygon,
+    area_b: f64,
+    eps: f64,
+    preferred_precision: Option<PrecisionModel>,
+) -> Option<Polygon> {
+    let quick_eps = eps.max(1.0e-9);
+    if !polygon_boundaries_cross(a, b, quick_eps)
+        && !shell_strictly_inside(a, b, quick_eps)
+        && !shell_strictly_inside(b, a, quick_eps)
+    {
+        return None;
+    }
 
     let min_expected = area_a.max(area_b);
     let area_tol = eps.max(1.0e-9) * 10.0;
+
+    if let Some(precision) = preferred_precision {
+        let union = polygon_union_with_precision(a, b, precision);
+        if union.len() == 1 {
+            let poly = union[0].clone();
+            let tol = match precision {
+                PrecisionModel::Fixed { scale } if scale > 0.0 && scale.is_finite() => {
+                    area_tol.max(1.0 / scale)
+                }
+                _ => area_tol,
+            };
+            if union_candidate_is_valid_with_precision(&poly, a, b, eps, precision, tol, min_expected) {
+                return Some(poly);
+            }
+        }
+    }
 
     let union = polygon_union(a, b, eps);
     if union.len() == 1 {
@@ -1399,41 +1953,6 @@ fn polygon_boundaries(poly: &Polygon) -> Vec<LineString> {
         out.push(LineString::new(hole.coords.clone()));
     }
     out
-}
-
-fn face_inside_polygon(face_ring: &LineString, poly: &Polygon, eps: f64) -> bool {
-    if face_ring.coords.len() < 4 {
-        return false;
-    }
-
-    let mut candidates = Vec::<Coord>::with_capacity(face_ring.coords.len() + 1);
-    if let Some(c) = ring_centroid(&face_ring.coords) {
-        candidates.push(c);
-    }
-    for i in 0..(face_ring.coords.len() - 1) {
-        let a = face_ring.coords[i];
-        let b = face_ring.coords[i + 1];
-        candidates.push(Coord::xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5));
-    }
-
-    let mut saw_outside = false;
-    let mut saw_inside = false;
-    for p in candidates {
-        match classify_point_in_polygon_eps(p, poly, eps) {
-            PointInRing::Inside => saw_inside = true,
-            PointInRing::Outside => saw_outside = true,
-            PointInRing::Boundary => {}
-        }
-    }
-
-    if saw_inside {
-        true
-    } else if saw_outside {
-        false
-    } else {
-        // Degenerate fallback: if all probes are on boundary, keep as inside.
-        true
-    }
 }
 
 fn classify_point_in_polygon_eps(p: Coord, poly: &Polygon, eps: f64) -> PointInRing {

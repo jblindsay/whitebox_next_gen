@@ -325,6 +325,73 @@ fn closed_linestring_buffer_preserves_interior_hole() {
 }
 
 #[test]
+fn near_closed_linestring_buffer_preserves_interior_hole() {
+    let ls = LineString::new(vec![
+        Coord::xy(0.0, 0.0),
+        Coord::xy(10.0, 0.0),
+        Coord::xy(10.0, 6.0),
+        Coord::xy(0.0, 6.0),
+        Coord::xy(0.0, 0.00000001),
+    ]);
+
+    let buf = buffer_linestring(
+        &ls,
+        1.0,
+        BufferOptions {
+            quadrant_segments: 12,
+            join_style: BufferJoinStyle::Round,
+            ..Default::default()
+        },
+    );
+    let gpoly = Geometry::Polygon(buf.clone());
+
+    assert!(is_valid_polygon(&buf));
+    assert_eq!(buf.holes.len(), 1, "near-closed loop line buffer should retain one interior hole");
+    assert!(
+        !contains(&gpoly, &Geometry::Point(Coord::xy(5.0, 3.0))),
+        "centre of near-closed buffered loop should remain outside due to interior hole"
+    );
+}
+
+#[test]
+fn exact_streetcentreline_loop_buffer_preserves_interior_hole() {
+    let ls = LineString::new(vec![
+        Coord::xy(565230.8119999999, 4817282.9957),
+        Coord::xy(565228.9401000002, 4817302.0011),
+        Coord::xy(565212.8797000004, 4817353.000399999),
+        Coord::xy(565199.5022, 4817403.0002999995),
+        Coord::xy(565195.7501999997, 4817409.500600001),
+        Coord::xy(565183.3761999998, 4817410.5001),
+        Coord::xy(565172.7553000003, 4817403.9997000005),
+        Coord::xy(565127.1873000003, 4817371.4979),
+        Coord::xy(565126.8718999997, 4817360.9999),
+        Coord::xy(565129.9397999998, 4817347.5035999995),
+        Coord::xy(565153.9382999996, 4817271.498199999),
+        Coord::xy(565158.3740999997, 4817260.000700001),
+        Coord::xy(565164.8787000002, 4817260.500399999),
+        Coord::xy(565172.0630999999, 4817261.4999),
+        Coord::xy(565230.8119999999, 4817282.9957),
+    ]);
+
+    let buf = buffer_linestring(
+        &ls,
+        15.0,
+        BufferOptions {
+            quadrant_segments: 12,
+            join_style: BufferJoinStyle::Round,
+            ..Default::default()
+        },
+    );
+
+    assert!(is_valid_polygon(&buf));
+    assert_eq!(
+        buf.holes.len(),
+        1,
+        "street centreline closed loop buffer should retain one interior hole"
+    );
+}
+
+#[test]
 fn linestring_buffer_mitre_join_extends_farther_than_bevel() {
     let ls = LineString::new(vec![
         Coord::xy(0.0, 0.0),

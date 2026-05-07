@@ -85,6 +85,7 @@ pub use error::{Result, TopologyError};
 pub use fixed_radius_search::{DistanceMetric, FixedRadiusSearch2D};
 pub use constructive::{
 	buffer_linestring,
+	buffer_linestring_curve_set,
 	buffer_linestring_with_precision,
 	buffer_polygon,
 	buffer_polygon_multi,
@@ -162,6 +163,8 @@ pub use overlay::{
 	polygon_union,
 	polygon_union_with_precision,
 	polygon_union_faces,
+	polygon_unary_union,
+	polygon_unary_union_with_options,
 	polygon_unary_dissolve,
 	polygon_unary_dissolve_with_options,
 	OverlayOutputs,

@@ -26,7 +26,7 @@ GEOS applies the precision model to *all* coordinates, including original input 
 
 **Estimated Complexity:** Medium (algorithm requires care; test suite already in place)
 
-**Status:** Not started
+**Status:** ✅ Completed — `NodingStrategy::Auto` and `SnapRounding` now both quantise all input vertices to the eps-grid before noding, not just computed intersection points. Committed session 1.
 
 ---
 
@@ -49,7 +49,7 @@ Affects overlay and dissolve output whenever holes are present. For colinear or 
 
 **Estimated Complexity:** Low–Medium (well-isolated, small function)
 
-**Status:** Not started
+**Status:** ✅ Completed — `ring_contains_ring` now uses centroid-based containment as primary check; vertex-iteration fallback retained for boundary-zone edge cases. Committed session 1.
 
 ---
 
@@ -174,7 +174,7 @@ Spatial relations for complex geometries may be incomplete or incorrect. Affects
 
 **Estimated Complexity:** High (full DE-9IM is an algorithm on the order of a small crate)
 
-**Status:** Not started; deferred to future release
+**Status:** ✅ Completed — Full type-dispatch implementation replacing the conservative scaffold. All 9 matrix cells computed from first principles for 6 geometry pairs (Point×Point, Point×LineString, Point×Polygon, LineString×LineString, LineString×Polygon, Polygon×Polygon). Added `transpose()`, `is_covers()`, `is_covered_by()`, `is_overlaps()`, `is_crosses()`. Multi-geometry pairs retain conservative fallback. Committed May 6 2026 (commit 6896565).
 
 ---
 
@@ -220,7 +220,7 @@ Road edge extraction and centreline offset workflows are harder to implement cle
 
 **Estimated Complexity:** Medium (mostly extraction and API wrapping)
 
-**Status:** Not started; on backlog
+**Status:** ✅ Completed — `offset_linestring(ls, distance, side, options) -> LineString` added as public API. Returns an open one-sided offset curve. `OffsetSide` (Left/Right) and `OffsetCurveOptions` exported from crate root. 12 integration tests pass. Committed May 6 2026 (commit 14a7fa8).
 
 ---
 
@@ -243,7 +243,7 @@ Performance and output size for large polygons. Not a correctness issue, but ine
 
 **Estimated Complexity:** High (refactor of core buffering logic; substantial testing required)
 
-**Status:** Not started; consider after other gaps are closed
+**Status:** ✅ Completed — `build_polygon_buffer_curve_set` now calls `build_offset_ring` once per source ring (O(1 + holes) curves) instead of `buffer_linestring` per segment (O(N_segments) curves). Degenerate fallback retained. Committed May 6 2026 (commit 09e5965).
 
 ---
 
@@ -260,10 +260,10 @@ Performance and output size for large polygons. Not a correctness issue, but ine
 - [x] **Gap F:** API documentation for `polygon_overlay_faces`
 
 ### Backlog
-- [ ] Gap G: Full DE-9IM (defer to future release)
-- [ ] Gap H: Robust predicates (consider if degenerate inputs arise)
-- [ ] Gap I: Offset-curve API (on-demand)
-- [x] Gap J: Continuous-ring buffer curves (optimize after correctness locked)
+- [x] Gap G: Full DE-9IM — completed May 6 2026
+- [ ] Gap H: Robust predicates (deferred; consider if degenerate inputs arise in practice)
+- [x] Gap I: Offset-curve API — completed May 6 2026
+- [x] Gap J: Continuous-ring buffer curves — completed May 6 2026
 
 ---
 

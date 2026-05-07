@@ -11,7 +11,7 @@ use crate::algorithms::segment::segments_intersect_eps;
 use crate::geom::{Coord, Geometry, LineString, LinearRing, Polygon};
 use crate::graph::TopologyGraph;
 use crate::noding::{node_linestrings_with_options, NodingOptions, NodingStrategy};
-use crate::overlay::{polygon_unary_dissolve, polygon_union, polygon_union_with_precision};
+use crate::overlay::{polygon_unary_union, polygon_union, polygon_union_with_precision};
 use crate::precision::{PrecisionModel, TopologyPrecisionOptions};
 use crate::topology::is_valid_polygon;
 
@@ -379,7 +379,24 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
 
     // Closed centreline loops buffer as corridor rings with no end caps.
     // Treating them as open lines fills the loop interior and loses the hole.
-    if coords.len() >= 4 && coord_dist2(coords[0], coords[coords.len() - 1]) <= 1.0e-24 {
+    //
+    // Real-world data rarely stores an exact first==last vertex; use a
+    // distance-proportional tolerance so near-closed loops are detected even
+    // when endpoints differ by floating-point noise or road-network snapping.
+    // Any gap smaller than 5% of the buffer distance will look closed visually.
+    let close_thresh2 = (distance * 0.05).powi(2).max(1.0e-24);
+    let closed_dist2 = if coords.len() >= 4 {
+        coord_dist2(coords[0], coords[coords.len() - 1])
+    } else {
+        f64::INFINITY
+    };
+    if coords.len() >= 4 && closed_dist2 <= close_thresh2 {
+        // Snap near-closed endpoints together so ring offsetting does not
+        // retain a tiny closure segment that can invalidate the inner hole.
+        if closed_dist2 > 1.0e-24 {
+            let last = coords.len() - 1;
+            coords[last] = coords[0];
+        }
         let segs = (options.quadrant_segments.max(2) * 4).max(8);
         let shell_coords = build_offset_ring(
             &coords,
@@ -405,7 +422,20 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
             false,
         );
         if hole_coords.len() >= 4 {
-            let hole = LinearRing::new(hole_coords);
+            // ISO 19125: holes must have opposite winding order from exterior.
+            // build_offset_ring traverses input in same order for both outer/inner,
+            // so we must reverse the hole to get opposite winding.
+            let mut reversed_hole_coords = hole_coords.clone();
+            reversed_hole_coords.reverse();
+            // Close the reversed ring.
+            if reversed_hole_coords.first() != reversed_hole_coords.last() {
+                reversed_hole_coords.push(reversed_hole_coords[0]);
+            } else {
+                let first = reversed_hole_coords[0];
+                let last_idx = reversed_hole_coords.len() - 1;
+                reversed_hole_coords[last_idx] = first;
+            }
+            let hole = LinearRing::new(reversed_hole_coords);
             let eps = 1.0e-9;
             if is_ring_simple_eps(&hole.coords, eps)
                 && ring_abs_area(&hole.coords) > eps * eps
@@ -413,6 +443,26 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
                 && !ring_boundary_intersects_eps(&shell.coords, &hole.coords, eps)
             {
                 holes.push(hole);
+            } else {
+                // GEOS/JTS resolves closed-line buffer holes from noded offset
+                // linework rather than dropping them when a direct inner-offset
+                // ring fails local validation. Mirror that behavior narrowly here.
+                let fallback = polygonize_linework(
+                    &[
+                        LineString::new(shell.coords.clone()),
+                        LineString::new(hole.coords.clone()),
+                    ],
+                    PolygonizeOptions {
+                        epsilon: eps,
+                        ..Default::default()
+                    },
+                );
+                if let Some(poly) = fallback.polygons.into_iter().max_by(|a, b| {
+                    ring_abs_area(&a.exterior.coords)
+                        .total_cmp(&ring_abs_area(&b.exterior.coords))
+                }) {
+                    return repair_buffer_polygon(poly, eps);
+                }
             }
         }
 
@@ -488,6 +538,139 @@ pub fn buffer_linestring(ls: &LineString, distance: f64, options: BufferOptions)
 
     let poly = Polygon::new(LinearRing::new(cleaned), vec![]);
     buffer_linestring_graph_repair(poly, 1.0e-9)
+}
+
+/// Build raw closed buffer boundary curves for a linestring.
+///
+/// This exposes the GEOS/JTS-style "curve set" stage for callers that want
+/// to node and polygonize many buffered lines together in one global pass,
+/// instead of buffering each feature into a polygon and dissolving afterward.
+pub fn buffer_linestring_curve_set(
+    ls: &LineString,
+    distance: f64,
+    options: BufferOptions,
+) -> Vec<LineString> {
+    if !distance.is_finite() || distance <= 0.0 {
+        return Vec::new();
+    }
+    if ls.coords.is_empty() {
+        return Vec::new();
+    }
+    if ls.coords.len() == 1 {
+        let poly = buffer_point(ls.coords[0], distance, options);
+        return polygon_boundaries_as_lines(&poly);
+    }
+
+    let mut coords = sanitize_path(&ls.coords);
+    if coords.len() < 2 {
+        return vec![LineString::new(vec![])];
+    }
+
+    let close_thresh2 = (distance * 0.05).powi(2).max(1.0e-24);
+    let closed_dist2 = if coords.len() >= 4 {
+        coord_dist2(coords[0], coords[coords.len() - 1])
+    } else {
+        f64::INFINITY
+    };
+    if coords.len() >= 4 && closed_dist2 <= close_thresh2 {
+        if closed_dist2 > 1.0e-24 {
+            let last = coords.len() - 1;
+            coords[last] = coords[0];
+        }
+        let segs = (options.quadrant_segments.max(2) * 4).max(8);
+        let mut out = Vec::<LineString>::new();
+
+        let shell_coords = build_offset_ring(
+            &coords,
+            distance,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+            true,
+        );
+        if shell_coords.len() >= 4 {
+            out.push(LineString::new(shell_coords));
+        }
+
+        let hole_coords = build_offset_ring(
+            &coords,
+            distance,
+            options.join_style,
+            segs,
+            options.mitre_limit,
+            false,
+        );
+        if hole_coords.len() >= 4 {
+            out.push(LineString::new(hole_coords));
+        }
+        return out;
+    }
+
+    let segs = (options.quadrant_segments.max(2) * 4).max(8);
+    let left = build_offset_side(
+        &coords,
+        distance,
+        options.join_style,
+        segs,
+        options.mitre_limit,
+    );
+
+    coords.reverse();
+    let right = build_offset_side(
+        &coords,
+        distance,
+        options.join_style,
+        segs,
+        options.mitre_limit,
+    );
+    coords.reverse();
+
+    if left.len() < 2 || right.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut ring = Vec::<Coord>::new();
+    ring.extend(left.iter().copied());
+
+    append_cap(
+        &mut ring,
+        coords[coords.len() - 1],
+        unit_dir(coords[coords.len() - 2], coords[coords.len() - 1]),
+        distance,
+        options.cap_style,
+        segs,
+        true,
+    );
+
+    ring.extend(right.iter().copied());
+
+    append_cap(
+        &mut ring,
+        coords[0],
+        unit_dir(coords[0], coords[1]),
+        distance,
+        options.cap_style,
+        segs,
+        false,
+    );
+
+    let mut cleaned = Vec::<Coord>::with_capacity(ring.len());
+    for p in ring {
+        if cleaned
+            .last()
+            .map(|q| coord_dist2(*q, p) <= 1.0e-24)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        cleaned.push(p);
+    }
+
+    if cleaned.len() < 3 {
+        return Vec::new();
+    }
+
+    vec![LineString::new(cleaned)]
 }
 
 /// Generate a one-sided offset curve for a linestring.
@@ -657,10 +840,9 @@ fn buffer_linestring_graph_repair(poly: Polygon, eps: f64) -> Polygon {
     // which shows up as inner wedge cutouts and the matching lost outer round
     // lobe. Dissolve all bounded faces first, then select the largest dissolved
     // component as the repaired corridor.
-    let dissolved = polygon_unary_dissolve(&polys, eps);
+    let dissolved = polygon_unary_union(&polys, eps);
     dissolved
         .into_iter()
-        .map(|group| group.poly)
         .max_by(|a, b| ring_abs_area(&a.exterior.coords).total_cmp(&ring_abs_area(&b.exterior.coords)))
         .unwrap_or_else(|| repair_buffer_polygon(poly, eps))
 }

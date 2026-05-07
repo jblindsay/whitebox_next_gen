@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
-## [Unreleased]
+## [0.1.0] - 2026-05-07
 ### Added
 - Added `extract_face_rings_with_edges` and `extract_bounded_face_rings_with_edges` on `TopologyGraph`, returning face rings paired with their directed edge id lists; used by depth-labeling BFS face classification.
 - Refactored `build_polygon_buffer_curve_set` (the curve-input stage of the graph buffer pipeline) from a per-segment approach to a continuous-ring walker: instead of calling `buffer_linestring` for each source ring segment individually — producing O(N_segments) raw polygons — the function now calls `build_offset_ring` once per source ring, producing a single continuous closed offset curve per ring. For a polygon with N exterior vertices this reduces input curve count from O(N) to O(1 + holes), and eliminates all the redundant segment-end-caps that noding previously had to split and discard. A degenerate-ring fallback to the old per-segment path is retained. This is the Gap J improvement; it reduces noding and graph-construction work for large polygons (expected 2–5x fewer noded edges for complex road-network input).
@@ -12,6 +12,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added `offset_linestring` public function returning an open `LineString` one-sided offset curve (analogous to JTS/GEOS `OffsetCurve`): takes a linestring, signed distance, `OffsetSide` (Left/Right), and `OffsetCurveOptions` (join style, quadrant segments, mitre limit); suitable for road edge extraction, centreline offsets, and planning setback lines. Added companion types `OffsetSide` and `OffsetCurveOptions`; both exported from the crate root.
 
 ### Changed
+- Added geometry-only unary union APIs, `polygon_unary_union` and `polygon_unary_union_with_options`, so buffer and dissolve workflows that do not need source-membership attribution can avoid paying for it.
+- Updated geometry-only unary union internals to use STR-style packed spatial-index grouping and recursive binary union ordering, moving the dissolve path closer to GEOS/JTS `CascadedPolygonUnion` architecture.
+- Updated cascaded unary dissolve/union recursion to execute left/right subtree passes in parallel (when `parallel` feature is enabled and subtree sizes are large), improving multi-core utilization for large dissolve workloads.
+- Updated graph-driven geometry-only unary union to assemble included face rings directly into shells/holes, removing the extra pairwise overlay-union pass that previously ran after face classification.
+- Added `UnaryDissolveStrategy::CascadedHeuristic` and strategy routing in `polygon_unary_dissolve_with_options`, introducing a spatially cascaded dissolve pass for large connected components before final pairwise stitching.
+- Added `UnaryDissolveOptions.preferred_union_precision` so pairwise/cascaded dissolve can prefer an explicit precision model (for example fixed-grid union) before floating/fallback attempts.
+- Optimized graph-driven unary dissolve source-membership attribution by assigning memberships at included-face granularity and propagating them through cascaded dissolve merges; source candidate filtering now uses `SpatialIndex::query_geometry` before overlap checks.
+- Added `buffer_linestring_curve_set` and a line-only dissolved buffer fast path that builds one global raw line-buffer curve set, polygonizes it once, and then applies geometry-only unary union instead of buffering each line feature into polygons before dissolve.
 - Replaced point-in-polygon probe face classification in `unary_dissolve_graph_component` with GEOS/JTS-style directed-edge depth labeling; face membership is now determined purely topologically via BFS depth propagation, eliminating misclassification of faces adjacent to short source-polygon edges.
 - Replaced point-in-polygon probe face classification in `classify_overlay_faces` (two-polygon Boolean overlay) with directed-edge depth labeling matching the unary dissolve approach, fixing the same short-segment misclassification for intersection/union/difference/symmetric-difference operations. Corrected face-ring extraction in that path to use bounded rings only (positive area); the previous all-rings extraction prevented any face from being seeded by the BFS, causing every overlay operation to return empty.
 - Removed diagnostic `eprintln!` calls from buffer pipeline internals in `constructive.rs` that were firing unconditionally in production builds.

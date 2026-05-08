@@ -3969,7 +3969,7 @@ dependencies = [
 
 [[package]]
 name = "wbgeotiff"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flate2",
  "jpeg-decoder",
@@ -4012,10 +4012,11 @@ dependencies = [
 
 [[package]]
 name = "wbprojection"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion 0.5.1",
+ "rayon",
  "serde",
  "thiserror 1.0.69",
  "wide 1.3.0",
@@ -4023,7 +4024,7 @@ dependencies = [
 
 [[package]]
 name = "wbraster"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "criterion 0.8.2",
  "flate2",
@@ -4095,7 +4096,7 @@ dependencies = [
 
 [[package]]
 name = "wbtopology"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion 0.5.1",
  "rayon",
@@ -4105,7 +4106,7 @@ dependencies = [
 
 [[package]]
 name = "wbvector"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flatbuffers",
  "osmpbfreader",

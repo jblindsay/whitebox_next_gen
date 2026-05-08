@@ -276,6 +276,82 @@ pts_utm = wbe.projection.reproject_points(pts, src_epsg=4326, dst_epsg=32618)
 print(pts_utm)
 ```
 
+### Parse a PROJ string
+
+Use `projection.from_proj_string` when you have a PROJ4-style string (e.g.,
+read from a legacy file header or third-party metadata) and need to identify
+the corresponding EPSG code or obtain an OGC WKT representation.
+
+The method returns a dict with exactly one of these keys:
+
+- `{'epsg': int}` — EPSG code identified
+- `{'wkt': str}` — no EPSG match, WKT representation available
+- `{'unknown': True}` — PROJ string parsed but CRS could not be identified further
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+proj_str = '+proj=utm +zone=17 +datum=NAD83 +units=m +no_defs'
+result = wbe.projection.from_proj_string(proj_str)
+
+if 'epsg' in result:
+    print('identified EPSG:', result['epsg'])  # e.g. 26917
+elif 'wkt' in result:
+    print('WKT:', result['wkt'])
+else:
+    print('CRS unknown')
+```
+
+This is the recommended fallback for legacy data sources that carry only a
+PROJ4 metadata string. WbW-Py itself uses this path internally when
+reprojecting rasters whose CRS metadata does not include an EPSG code.
+
+### Area-of-use bounding box
+
+Use `projection.area_of_use` to retrieve the geographic bounding box of valid
+use for an EPSG code. This is useful for validating that your data actually
+falls within the intended CRS domain before or after reprojection.
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+bbox = wbe.projection.area_of_use(32618)  # UTM Zone 18N
+if bbox is not None:
+    print(f"valid lon: {bbox['lon_min']} to {bbox['lon_max']}")
+    print(f"valid lat: {bbox['lat_min']} to {bbox['lat_max']}")
+
+# Returns None for codes with no registered bounding box.
+print(wbe.projection.area_of_use(9999))  # None
+```
+
+You can also pass the bounding box check as a pre-reprojection guard:
+
+```python
+import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+dst_epsg = 32618
+bbox = wbe.projection.area_of_use(dst_epsg)
+if bbox is not None:
+    ext = dem.metadata().extent
+    # Quick geographic sanity check before committing to full reprojection.
+    in_range = (
+        ext.min_x >= bbox['lon_min'] and ext.max_x <= bbox['lon_max'] and
+        ext.min_y >= bbox['lat_min'] and ext.max_y <= bbox['lat_max']
+    )
+    if not in_range:
+        print('WARNING: DEM extent may fall outside area of use for EPSG:', dst_epsg)
+
+dem_utm = dem.reproject(dst_epsg=dst_epsg, resample='bilinear')
+wbe.write_raster(dem_utm, 'dem_utm.tif')
+```
+
 ## Best Practices
 
 - Confirm source CRS before any reprojection.

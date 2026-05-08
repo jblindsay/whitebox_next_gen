@@ -18,10 +18,15 @@ Raster support in Whitebox is provided by `wbraster`.
 
 | Format | Extension(s) | Read | Write | Notes |
 |---|---|:---:|:---:|---|
+| DTED | `.dt0`, `.dt1`, `.dt2` | Yes | Yes | DTED 0/1/2 elevation; WGS-84 geographic only |
 | ENVI HDR Labelled | `.hdr` + sidecar data | Yes | Yes | Multi-band (`BSQ` / `BIL` / `BIP`) |
 | ER Mapper | `.ers` + data | Yes | Yes | Hierarchical header |
+| ERDAS IMAGINE (HFA) | `.img` | Yes | No | Read-only MVP; RLC compression supported |
 | Esri ASCII Grid | `.asc`, `.grd` | Yes | Yes | Handles `xllcorner` and `xllcenter` |
 | Esri Binary Grid | workspace dir / `.adf` | Yes | Yes | Single-band float32, big-endian |
+| Esri Float Grid | `.flt`, `.hdr` | Yes | Yes | Single-band float grid with header |
+| JPEG + World File | `.jpg`, `.jpeg` + `.jgw`/`.wld` | Yes | Yes | Non-rotated georeferencing |
+| PNG + World File | `.png` + `.pgw`/`.wld` | Yes | Yes | Non-rotated georeferencing |
 | GeoTIFF / BigTIFF / COG | `.tif`, `.tiff` | Yes | Yes | Stripped/tiled GeoTIFF, BigTIFF, COG |
 | GeoPackage Raster (Phase 4) | `.gpkg` | Yes | Yes | Multi-band tiled raster |
 | GRASS ASCII Raster | `.asc`, `.txt` | Yes | Yes | `north/south/east/west`, `rows/cols` headers |
@@ -31,6 +36,7 @@ Raster support in Whitebox is provided by `wbraster`.
 | SAGA GIS Binary | `.sgrd`, `.sdat` | Yes | Yes | SAGA data types supported |
 | Surfer GRD | `.grd` | Yes | Yes | DSAA and DSRB |
 | Zarr v2/v3 | `.zarr` | Yes | Yes | 2D and 3D (`band,y,x`) chunked arrays |
+| XYZ ASCII Grid | `.xyz` | Yes | Yes | Whitespace or comma-delimited X Y Z points |
 
 Notes:
 - Whitebox avoids runtime dependence on GDAL.

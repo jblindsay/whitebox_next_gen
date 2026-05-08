@@ -420,6 +420,14 @@ projection_reproject_point_json <- function(x, y, src_epsg, dst_epsg) {
   )
 }
 
+projection_from_proj_string <- function(proj_str) {
+  .Call("wrap__projection_from_proj_string", proj_str, PACKAGE = "whiteboxworkflows")
+}
+
+projection_area_of_use <- function(epsg) {
+  .Call("wrap__projection_area_of_use", epsg, PACKAGE = "whiteboxworkflows")
+}
+
 topology_intersects_wkt <- function(a_wkt, b_wkt) {
   .Call("wrap__topology_intersects_wkt", a_wkt, b_wkt, PACKAGE = "whiteboxworkflows")
 }

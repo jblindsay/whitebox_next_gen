@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
-use wbprojection::Crs;
+use wbprojection::{from_proj_string, Crs};
 use wide::{f64x4, CmpNe};
 
 use crate::error::{Result, RasterError};
@@ -806,6 +806,9 @@ pub struct ReprojectOptions {
     pub grid_size_policy: GridSizePolicy,
     /// Destination-footprint handling policy during reprojection.
     pub destination_footprint: DestinationFootprint,
+    /// Emit non-fatal warnings when sampled source raster points appear outside
+    /// the declared area of use of source and/or destination CRS definitions.
+    pub warn_on_area_of_use_mismatch: bool,
 }
 
 impl ReprojectOptions {
@@ -825,6 +828,7 @@ impl ReprojectOptions {
             antimeridian_policy: AntimeridianPolicy::Auto,
             grid_size_policy: GridSizePolicy::Expand,
             destination_footprint: DestinationFootprint::None,
+            warn_on_area_of_use_mismatch: false,
         }
     }
 
@@ -889,6 +893,12 @@ impl ReprojectOptions {
     /// Set destination-footprint handling policy for reprojection output.
     pub fn with_destination_footprint(mut self, footprint: DestinationFootprint) -> Self {
         self.destination_footprint = footprint;
+        self
+    }
+
+    /// Enable/disable non-fatal area-of-use mismatch warnings.
+    pub fn with_area_of_use_warning(mut self, enabled: bool) -> Self {
+        self.warn_on_area_of_use_mismatch = enabled;
         self
     }
 }
@@ -1835,21 +1845,15 @@ impl Raster {
     ///
     /// # Errors
     /// Returns an error when source/destination EPSG codes are unsupported,
-    /// source CRS is missing, or transformed extents are invalid.
+    /// source CRS metadata (EPSG/WKT/PROJ) is missing or invalid, or transformed
+    /// extents are invalid.
     pub fn reproject_to_epsg(&self, dst_epsg: u32, resample: ResampleMethod) -> Result<Raster> {
         self.reproject_with_options(&ReprojectOptions::new(dst_epsg, resample))
     }
 
     /// Reproject this raster using detailed output-grid options.
     pub fn reproject_with_options(&self, options: &ReprojectOptions) -> Result<Raster> {
-        let src_epsg = self.crs.epsg.ok_or_else(|| {
-            RasterError::Other(
-                "reproject_to_epsg requires source CRS EPSG in raster.crs.epsg".to_string(),
-            )
-        })?;
-        let src_crs = Crs::from_epsg(src_epsg).map_err(|e| {
-            RasterError::Other(format!("source EPSG {src_epsg} is not supported: {e}"))
-        })?;
+        let src_crs = self.source_crs_for_reprojection()?;
         let dst_crs = Crs::from_epsg(options.dst_epsg).map_err(|e| {
             RasterError::Other(format!(
                 "destination EPSG {} is not supported: {e}",
@@ -1870,14 +1874,7 @@ impl Raster {
     where
         F: Fn(f64) + Send + Sync,
     {
-        let src_epsg = self.crs.epsg.ok_or_else(|| {
-            RasterError::Other(
-                "reproject_to_epsg requires source CRS EPSG in raster.crs.epsg".to_string(),
-            )
-        })?;
-        let src_crs = Crs::from_epsg(src_epsg).map_err(|e| {
-            RasterError::Other(format!("source EPSG {src_epsg} is not supported: {e}"))
-        })?;
+        let src_crs = self.source_crs_for_reprojection()?;
         let dst_crs = Crs::from_epsg(options.dst_epsg).map_err(|e| {
             RasterError::Other(format!(
                 "destination EPSG {} is not supported: {e}",
@@ -1890,8 +1887,8 @@ impl Raster {
 
     /// Reproject this raster using caller-supplied source/destination CRS objects.
     ///
-    /// This advanced path bypasses the requirement that `self.crs.epsg` is set,
-    /// enabling workflows where CRS definitions are managed externally.
+    /// This advanced path bypasses source CRS metadata parsing, enabling
+    /// workflows where CRS definitions are managed externally.
     ///
     /// Note: `options.dst_epsg` is still used for output `CrsInfo` metadata and
     /// EPSG-specific extent behavior (e.g., antimeridian handling for EPSG:4326).
@@ -2240,6 +2237,13 @@ impl Raster {
         options: &ReprojectOptions,
         progress: Option<&(dyn Fn(f64) + Send + Sync)>,
     ) -> Result<Raster> {
+        maybe_warn_area_of_use_mismatch(
+            src_crs,
+            dst_crs,
+            self.extent(),
+            options.warn_on_area_of_use_mismatch,
+        );
+
         let src_extent = self.extent();
         let samples_per_edge = (self.cols.max(self.rows) / 32).clamp(8, 128);
         let base_extent = transformed_extent_from_boundary_samples(
@@ -2457,6 +2461,37 @@ impl Raster {
         }
 
         Ok(out)
+    }
+
+    fn source_crs_for_reprojection(&self) -> Result<Crs> {
+        if let Some(src_epsg) = self.crs.epsg {
+            return Crs::from_epsg(src_epsg).map_err(|e| {
+                RasterError::Other(format!("source EPSG {src_epsg} is not supported: {e}"))
+            });
+        }
+
+        if let Some(wkt) = self.crs.wkt.as_deref() {
+            let trimmed = wkt.trim();
+            if !trimmed.is_empty() {
+                return wbprojection::from_wkt(trimmed).map_err(|e| {
+                    RasterError::Other(format!("source CRS WKT is not supported: {e}"))
+                });
+            }
+        }
+
+        if let Some(proj) = self.crs.proj4.as_deref() {
+            let trimmed = proj.trim();
+            if !trimmed.is_empty() {
+                return from_proj_string(trimmed).map_err(|e| {
+                    RasterError::Other(format!("source CRS PROJ string is not supported: {e}"))
+                });
+            }
+        }
+
+        Err(RasterError::Other(
+            "reproject_to_epsg requires source CRS metadata (EPSG, WKT, or PROJ string)"
+                .to_string(),
+        ))
     }
 
     /// Sample a raster value at world coordinates using the selected resampling method.
@@ -3801,6 +3836,70 @@ impl Raster {
     }
 }
 
+fn maybe_warn_area_of_use_mismatch(
+    src: &Crs,
+    dst: &Crs,
+    src_extent: Extent,
+    enabled: bool,
+) {
+    if !enabled {
+        return;
+    }
+
+    let src_area = src.area_of_use();
+    let dst_area = dst.area_of_use();
+    if src_area.is_none() && dst_area.is_none() {
+        return;
+    }
+
+    let Ok(wgs84) = Crs::from_epsg(4326) else {
+        return;
+    };
+
+    let sample_points = [
+        (src_extent.x_min, src_extent.y_min),
+        (src_extent.x_min, src_extent.y_max),
+        (src_extent.x_max, src_extent.y_min),
+        (src_extent.x_max, src_extent.y_max),
+        (
+            0.5 * (src_extent.x_min + src_extent.x_max),
+            0.5 * (src_extent.y_min + src_extent.y_max),
+        ),
+    ];
+
+    let mut src_outside = 0usize;
+    let mut dst_outside = 0usize;
+    let mut checked = 0usize;
+
+    for (x, y) in sample_points {
+        let Ok((lon, lat)) = src.transform_to(x, y, &wgs84) else {
+            continue;
+        };
+        checked += 1;
+
+        if let Some(bb) = &src_area {
+            if !bb.contains_geographic(lon, lat) {
+                src_outside += 1;
+            }
+        }
+        if let Some(bb) = &dst_area {
+            if !bb.contains_geographic(lon, lat) {
+                dst_outside += 1;
+            }
+        }
+    }
+
+    if checked == 0 {
+        return;
+    }
+
+    if src_outside > 0 || dst_outside > 0 {
+        eprintln!(
+            "wbraster reprojection warning: sampled source extent appears outside CRS area of use (src outside: {src_outside}/{checked}, dst outside: {dst_outside}/{checked})"
+        );
+    }
+}
+
 fn cubic_bspline_weights(t: f64) -> [f64; 4] {
     let t = t.clamp(0.0, 1.0);
     let t2 = t * t;
@@ -4794,6 +4893,7 @@ mod tests {
             antimeridian_policy: AntimeridianPolicy::Auto,
             grid_size_policy: GridSizePolicy::Expand,
             destination_footprint: DestinationFootprint::None,
+            warn_on_area_of_use_mismatch: false,
         };
 
         let out = r.reproject_with_options(&opts).unwrap();

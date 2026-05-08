@@ -39,7 +39,16 @@ use wblidar::{
     PointCloud,
     PointReader,
 };
-use wbprojection::{epsg_from_srs_reference, identify_epsg_from_wkt, to_ogc_wkt, Crs};
+use wbprojection::{
+    epsg_area_of_use,
+    epsg_from_srs_reference,
+    from_proj_string,
+    identify_epsg_from_crs,
+    identify_epsg_from_wkt,
+    to_ogc_wkt,
+    CrsBoundingBox,
+    Crs,
+};
 use wbraster::{open_sensor_bundle_path, OpenedSensorBundle, SafeBundle, SensorBundle};
 use wbraster::memory_store::{
     clear_rasters,
@@ -1235,6 +1244,80 @@ pub fn projection_to_ogc_wkt(epsg: u32) -> Result<String, ToolError> {
     to_ogc_wkt(epsg).map_err(to_invalid_request)
 }
 
+/// Parse a PROJ string and return the identified EPSG code, if any, or a WKT string.
+///
+/// Returns a JSON object: `{"epsg": <u32>}`, `{"wkt": "<string>"}`, or `{"unknown": true}`.
+pub fn projection_from_proj_string(proj_str: &str) -> Result<String, ToolError> {
+    let crs = from_proj_string(proj_str).map_err(to_invalid_request)?;
+    if let Some(epsg) = identify_epsg_from_crs(&crs) {
+        return serde_json::to_string(&serde_json::json!({"epsg": epsg}))
+            .map_err(|e| ToolError::Execution(e.to_string()));
+    }
+    let wkt = crs.to_wkt();
+    if wkt.is_empty() {
+        return serde_json::to_string(&serde_json::json!({"unknown": true}))
+            .map_err(|e| ToolError::Execution(e.to_string()));
+    }
+    serde_json::to_string(&serde_json::json!({"wkt": wkt}))
+        .map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Return the area-of-use bounding box for the given EPSG code as JSON, or `"null"`.
+///
+/// Returns `{"lon_min": f64, "lat_min": f64, "lon_max": f64, "lat_max": f64}`
+/// if the EPSG has a known bounding box, otherwise the string `"null"`.
+pub fn projection_area_of_use(epsg: u32) -> Result<String, ToolError> {
+    match epsg_area_of_use(epsg) {
+        Some(CrsBoundingBox { lon_min, lat_min, lon_max, lat_max }) => {
+            serde_json::to_string(&serde_json::json!({
+                "lon_min": lon_min,
+                "lat_min": lat_min,
+                "lon_max": lon_max,
+                "lat_max": lat_max,
+            }))
+            .map_err(|e| ToolError::Execution(e.to_string()))
+        }
+        None => Ok("null".to_string()),
+    }
+}
+
+/// Parse a PROJ string and return the identified EPSG code, if any, or a WKT string.
+///
+/// Returns a JSON object: `{"epsg": <u32>}` or `{"wkt": "<string>"}` or `{"unknown": true}`.
+pub fn projection_from_proj_string(proj_str: &str) -> Result<String, ToolError> {
+    let crs = from_proj_string(proj_str).map_err(to_invalid_request)?;
+    if let Some(epsg) = identify_epsg_from_crs(&crs) {
+        return serde_json::to_string(&serde_json::json!({"epsg": epsg}))
+            .map_err(|e| ToolError::Execution(e.to_string()));
+    }
+    let wkt = crs.to_wkt();
+    if wkt.is_empty() {
+        return serde_json::to_string(&serde_json::json!({"unknown": true}))
+            .map_err(|e| ToolError::Execution(e.to_string()));
+    }
+    serde_json::to_string(&serde_json::json!({"wkt": wkt}))
+        .map_err(|e| ToolError::Execution(e.to_string()))
+}
+
+/// Return the area-of-use bounding box for the given EPSG code.
+///
+/// Returns a JSON object: `{"lon_min": f64, "lat_min": f64, "lon_max": f64, "lat_max": f64}`
+/// or `null` if the EPSG code has no known bounding box.
+pub fn projection_area_of_use(epsg: u32) -> Result<String, ToolError> {
+    match epsg_area_of_use(epsg) {
+        Some(CrsBoundingBox { lon_min, lat_min, lon_max, lat_max }) => {
+            serde_json::to_string(&serde_json::json!({
+                "lon_min": lon_min,
+                "lat_min": lat_min,
+                "lon_max": lon_max,
+                "lat_max": lat_max,
+            }))
+            .map_err(|e| ToolError::Execution(e.to_string()))
+        }
+        None => Ok("null".to_string()),
+    }
+}
+
 /// Identify an EPSG code from WKT or CRS text, when possible.
 pub fn projection_identify_epsg(crs_text: &str) -> Result<Option<u32>, ToolError> {
     let trimmed = crs_text.trim();
@@ -1248,6 +1331,12 @@ pub fn projection_identify_epsg(crs_text: &str) -> Result<Option<u32>, ToolError
 
     if let Some(code) = epsg_from_srs_reference(trimmed) {
         return Ok(Some(code));
+    }
+
+    if let Ok(parsed) = from_proj_string(trimmed) {
+        if let Some(code) = identify_epsg_from_crs(&parsed) {
+            return Ok(Some(code));
+        }
     }
 
     Ok(None)
@@ -1271,7 +1360,8 @@ pub fn projection_reproject_points_json(
     let src = Crs::from_epsg(src_epsg).map_err(to_invalid_request)?;
     let dst = Crs::from_epsg(dst_epsg).map_err(to_invalid_request)?;
 
-    let mut out = Vec::with_capacity(points.len());
+    // Extract (x, y) pairs first so we can use the parallel batch API.
+    let mut coords: Vec<(f64, f64)> = Vec::with_capacity(points.len());
     for (idx, point) in points.iter().enumerate() {
         let obj = point.as_object().ok_or_else(|| {
             ToolError::InvalidRequest(format!(
@@ -1286,7 +1376,15 @@ pub fn projection_reproject_points_json(
             .get("y")
             .and_then(Value::as_f64)
             .ok_or_else(|| ToolError::InvalidRequest(format!("points_json[{idx}].y must be a number")))?;
-        let (tx, ty) = src.transform_to(x, y, &dst).map_err(to_invalid_request)?;
+        coords.push((x, y));
+    }
+
+    let results = src.transform_to_many_par(&coords, &dst);
+    let mut out = Vec::with_capacity(results.len());
+    for (idx, res) in results.into_iter().enumerate() {
+        let (tx, ty) = res.map_err(|e| ToolError::Execution(
+            format!("transform failed for point {idx}: {e}")
+        ))?;
         out.push(json!({"x": tx, "y": ty}));
     }
 
@@ -3384,6 +3482,19 @@ mod native_exports {
     }
 
     #[extendr]
+    fn projection_from_proj_string(proj_str: &str) -> extendr_api::Result<String> {
+        super::projection_from_proj_string(proj_str).map_err(map_extendr_err)
+    }
+
+    #[extendr]
+    fn projection_area_of_use(epsg: i32) -> extendr_api::Result<String> {
+        if epsg <= 0 {
+            return Err("epsg must be a positive integer".into());
+        }
+        super::projection_area_of_use(epsg as u32).map_err(map_extendr_err)
+    }
+
+    #[extendr]
     fn topology_intersects_wkt(a_wkt: &str, b_wkt: &str) -> extendr_api::Result<bool> {
         super::topology_intersects_wkt(a_wkt, b_wkt).map_err(map_extendr_err)
     }
@@ -3524,6 +3635,8 @@ mod native_exports {
         fn projection_identify_epsg;
         fn projection_reproject_points_json;
         fn projection_reproject_point_json;
+        fn projection_from_proj_string;
+        fn projection_area_of_use;
         fn topology_intersects_wkt;
         fn topology_contains_wkt;
         fn topology_within_wkt;

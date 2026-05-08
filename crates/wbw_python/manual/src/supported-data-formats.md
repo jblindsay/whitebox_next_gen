@@ -18,8 +18,11 @@ Exhaustive raster format support in the current WbW-Py build:
 
 | Format | Read (`read_raster`) | Write (`write_raster`) | Common extensions / path rules |
 |---|---|---|---|
+| DTED | Yes | Yes | `.dt0`, `.dt1`, `.dt2` (DTED 0, 1, 2 elevation data; WGS-84 geographic only) |
 | Esri ASCII Grid | Yes | Yes | `.asc` (and `.grd` when detected as ASCII) |
 | Esri Binary Grid workspace | Yes | Backend-only | Esri Binary workspace directory (`hdr.adf` + `w001001.adf`) or `.adf` |
+| Esri Float Grid | Yes | Yes | `.flt`, `.hdr` (single-band float grid with header file) |
+| ERDAS IMAGINE (HFA) | Yes | No | `.img` - read-only MVP; RLC (run-length) compression supported |
 | GRASS ASCII Raster | Yes | Yes | `.txt` / `.asc` when GRASS header keys are detected |
 | Surfer GRD | Yes | Yes | `.grd` (DSAA / DSRB signatures) |
 | PCRaster | Yes | Yes | `.map` (CSF signature) |
@@ -30,7 +33,10 @@ Exhaustive raster format support in the current WbW-Py build:
 | GeoTIFF / BigTIFF / COG | Yes | Yes | `.tif`, `.tiff` |
 | GeoPackage raster | Yes | Yes | `.gpkg` |
 | JPEG2000 / GeoJP2 | Yes | Yes | `.jp2` |
+| JPEG + World File | Yes | Yes | `.jpg`, `.jpeg` with `.jgw`, `.jpgw`, `.jpegw`, or `.wld` world file |
+| PNG + World File | Yes | Yes | `.png` with `.pgw`, `.pngw`, or `.wld` world file |
 | Zarr | Yes | Yes | `.zarr` store (directory / suffix) |
+| XYZ ASCII Grid | Yes | Yes | `.xyz` (whitespace or comma-delimited X Y Z points) |
 
 Typical pattern:
 

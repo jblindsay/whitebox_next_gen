@@ -1,6 +1,6 @@
 [package]
 name = "wbprojection"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["John Lindsay, Whitebox Geospatial Inc."]
 description = "Whitebox Projections is a map projection library for Rust, inspired by PROJ"
@@ -17,6 +17,10 @@ exclude = ["dev/"]
 thiserror = "1.0"
 wide = "1.2"
 
+[dependencies.rayon]
+version = "1.10"
+optional = true
+
 [dev-dependencies]
 approx = "0.5"
 criterion = "0.5"
@@ -28,6 +32,7 @@ harness = false
 [features]
 default = []
 serde = ["dep:serde"]
+parallel = ["dep:rayon"]
 
 [dependencies.serde]
 version = "1.0"

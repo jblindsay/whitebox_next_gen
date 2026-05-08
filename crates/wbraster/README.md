@@ -173,18 +173,24 @@ cargo run --example raster_basics
 
 | Format | Extension(s) | Read | Write | Notes |
 |---|---|:---:|:---:|---|
+| **DTED** | `.dt0` / `.dt1` / `.dt2` | ✓ | ✓ | MIL-PRF-89020B; big-endian i16 elevations; WGS-84 CRS auto-assigned |
 | **ENVI HDR Labelled** | `.hdr` + sidecar data | ✓ | ✓ | Multi-band (`BSQ`/`BIL`/`BIP`) |
 | **ER Mapper** | `.ers` + data | ✓ | ✓ | Hierarchical header; reg-coord aware |
+| **ERDAS IMAGINE HFA** | `.img` | ✓ | — | Read-only MVP; uncompressed tiled+direct bands; multi-band; WGS-84 geographic CRS detection |
 | **Esri ASCII Grid** | `.asc`, `.grd` | ✓ | ✓ | Handles `xllcorner` and `xllcenter` |
 | **Esri Binary Grid** | workspace dir / `.adf` | ✓ | ✓ | Single-band float32, big-endian |
-| **GeoTIFF / BigTIFF / COG** | `.tif`, `.tiff` | ✓ | ✓ | Stripped/tiled GeoTIFF + BigTIFF + COG writer |
+| **Esri Float Grid** | `.flt` / `.hdr` | ✓ | ✓ | Binary F32 elevation grid; optional `.prj` WKT sidecar; LSBFIRST/MSBFIRST byte order |
 | **GeoPackage Raster (Phase 4)** | `.gpkg` | ✓ | ✓ | Multi-band tiled raster; native-type raw tiles + PNG/JPEG options + extension registration |
+| **GeoTIFF / BigTIFF / COG** | `.tif`, `.tiff` | ✓ | ✓ | Stripped/tiled GeoTIFF + BigTIFF + COG writer |
 | **GRASS ASCII Raster** | `.asc`, `.txt` | ✓ | ✓ | Header with `north/south/east/west`, `rows/cols` |
 | **Idrisi/TerrSet Raster** | `.rdc` / `.rst` | ✓ | ✓ | byte, integer, real, RGB24 |
+| **JPEG + World File** | `.jpg`, `.jpeg` (+ `.jgw` / `.wld`) | ✓ | ✓ | Image-backed raster with non-rotated world-file georeferencing |
 | **JPEG 2000 / GeoJP2** | `.jp2` | ✓ | ✓ | Pure-Rust JP2/GeoJP2 reader + writer |
 | **PCRaster** | `.map` | ✓ | ✓ | CSF parser + value-scale aware writer (`UINT1`/`INT4`/`REAL4`/`REAL8`) |
+| **PNG + World File** | `.png` (+ `.pgw` / `.wld`) | ✓ | ✓ | Image-backed raster with non-rotated world-file georeferencing |
 | **SAGA GIS Binary** | `.sgrd` / `.sdat` | ✓ | ✓ | All SAGA data types; row-flip handled |
 | **Surfer GRD** | `.grd` | ✓ | ✓ | Reads DSAA (ASCII) + DSRB (Surfer 7); writes DSAA by default, DSRB with `surfer_format=dsrb` |
+| **XYZ ASCII Grid** | `.xyz` | ✓ | ✓ | Whitespace or comma-delimited X Y Z; auto-detects delimiter and header row; infers regular grid |
 | **Zarr v2/v3** | `.zarr` | ✓ | ✓ | 2D + 3D (`band,y,x`) chunked arrays |
 
 ### SAFE Bundle Support

@@ -216,6 +216,7 @@ impl VerticalOffsetProvider for GridVerticalOffsetProvider {
 }
 
 /// A Coordinate Reference System: datum + projection.
+#[derive(Clone)]
 pub struct Crs {
     /// Human-readable name.
     pub name: String,
@@ -255,6 +256,69 @@ impl Crs {
     /// Create a [`Crs`] from an EPSG code using the built-in alias catalog and policy.
     pub fn from_epsg_with_catalog(code: u32, policy: EpsgResolutionPolicy) -> Result<Self> {
         crate::epsg::from_epsg_with_catalog(code, policy)
+    }
+
+    /// Parse a [`Crs`] from a WKT1 or WKT2 string.
+    ///
+    /// This is a convenience wrapper around [`crate::epsg::from_wkt`].
+    pub fn from_wkt(wkt: &str) -> Result<Self> {
+        crate::epsg::from_wkt(wkt)
+    }
+
+    /// Serialize this CRS to an Esri-style WKT1 string.
+    ///
+    /// All coordinate values are expressed in metres regardless of the original
+    /// source units (e.g. a State-Plane CRS defined in US survey feet will emit
+    /// metre-based parameter values).  If you need the canonical EPSG WKT with
+    /// original units preserved, use [`crate::epsg::to_esri_wkt`] with the
+    /// known EPSG code.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use wbprojection::Crs;
+    ///
+    /// let crs = Crs::from_epsg(32617).unwrap();
+    /// let wkt = crs.to_wkt();
+    /// assert!(wkt.starts_with("PROJCS["));
+    /// ```
+    pub fn to_wkt(&self) -> String {
+        crate::epsg::crs_to_wkt(self)
+    }
+
+    /// Return the geographic area of use (bounding box in decimal degrees) for
+    /// this CRS, if it is known.
+    ///
+    /// The bounding box is looked up from the EPSG code embedded in `self.name`
+    /// (if present), or derived from the projection kind for UTM zones and
+    /// world-extent geographic CRSes.
+    ///
+    /// Returns `None` when no area-of-use information is available (e.g. for
+    /// custom CRSes constructed without an EPSG code).
+    ///
+    /// # Examples
+    /// ```rust
+    /// use wbprojection::Crs;
+    ///
+    /// let utm = Crs::from_epsg(32632).unwrap(); // WGS84 / UTM zone 32N
+    /// let bb = utm.area_of_use().unwrap();
+    /// assert!(bb.contains_geographic(9.0, 51.0)); // central Germany — inside zone 32
+    /// assert!(!bb.contains_geographic(15.0, 51.0)); // zone 33 — outside
+    /// ```
+    pub fn area_of_use(&self) -> Option<crate::epsg::CrsBoundingBox> {
+        // Try to extract an EPSG code from the CRS name first.
+        if let Some(code) = epsg_code_from_crs_name(&self.name) {
+            if let Some(bb) = crate::epsg::epsg_area_of_use(code) {
+                return Some(bb);
+            }
+        }
+        // Fallback: derive from projection kind.
+        use crate::projections::ProjectionKind;
+        match self.projection.params().kind {
+            ProjectionKind::Geographic => Some(crate::epsg::CrsBoundingBox::new(
+                -180.0, -90.0, 180.0, 90.0,
+            )),
+            _ => None,
+        }
     }
 
     /// Create a CRS from a datum and projection parameters.
@@ -337,6 +401,57 @@ impl Crs {
     /// 4. Forward project in target CRS
     pub fn transform_to(&self, x: f64, y: f64, target: &Crs) -> Result<(f64, f64)> {
         self.transform_to_with_policy(x, y, target, CrsTransformPolicy::Strict)
+    }
+
+    /// Forward-project a batch of (lon, lat) pairs in degrees to (x, y) in this CRS.
+    ///
+    /// Results are returned in the same order as `points`. Each entry is
+    /// `Ok((x, y))` on success or an error if a particular point failed.
+    pub fn forward_many(&self, points: &[(f64, f64)]) -> Vec<Result<(f64, f64)>> {
+        points.iter().map(|&(lon, lat)| self.forward(lon, lat)).collect()
+    }
+
+    /// Inverse-project a batch of (x, y) pairs to geographic (lon, lat) in degrees.
+    ///
+    /// Results are returned in the same order as `points`.
+    pub fn inverse_many(&self, points: &[(f64, f64)]) -> Vec<Result<(f64, f64)>> {
+        points.iter().map(|&(x, y)| self.inverse(x, y)).collect()
+    }
+
+    /// Transform a batch of (x, y) points from this CRS into `target`.
+    ///
+    /// Results are returned in the same order as `points`.
+    pub fn transform_to_many(&self, points: &[(f64, f64)], target: &Crs) -> Vec<Result<(f64, f64)>> {
+        points.iter().map(|&(x, y)| self.transform_to(x, y, target)).collect()
+    }
+
+    /// Forward-project a batch of (lon, lat) pairs in parallel using Rayon.
+    ///
+    /// Requires the `parallel` crate feature. Results are in the same order as
+    /// `points`; each entry is `Ok((x, y))` or an error for that point.
+    #[cfg(feature = "parallel")]
+    pub fn forward_many_par(&self, points: &[(f64, f64)]) -> Vec<Result<(f64, f64)>> {
+        use rayon::prelude::*;
+        points.par_iter().map(|&(lon, lat)| self.forward(lon, lat)).collect()
+    }
+
+    /// Inverse-project a batch of (x, y) pairs in parallel using Rayon.
+    ///
+    /// Requires the `parallel` crate feature.
+    #[cfg(feature = "parallel")]
+    pub fn inverse_many_par(&self, points: &[(f64, f64)]) -> Vec<Result<(f64, f64)>> {
+        use rayon::prelude::*;
+        points.par_iter().map(|&(x, y)| self.inverse(x, y)).collect()
+    }
+
+    /// Transform a batch of (x, y) points from this CRS into `target` in parallel
+    /// using Rayon.
+    ///
+    /// Requires the `parallel` crate feature.
+    #[cfg(feature = "parallel")]
+    pub fn transform_to_many_par(&self, points: &[(f64, f64)], target: &Crs) -> Vec<Result<(f64, f64)>> {
+        use rayon::prelude::*;
+        points.par_iter().map(|&(x, y)| self.transform_to(x, y, target)).collect()
     }
 
     /// Transform a 3D point from this CRS into the target CRS.

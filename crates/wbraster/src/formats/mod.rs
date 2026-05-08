@@ -2,6 +2,7 @@
 
 pub mod esri_ascii;
 pub mod esri_binary;
+pub mod esri_float;
 pub mod grass_ascii;
 pub mod surfer;
 pub mod pcraster;
@@ -12,7 +13,11 @@ pub mod envi;
 pub mod geotiff;
 pub mod geopackage;
 pub mod jpeg2000;
+pub mod png_jpeg;
 pub mod zarr;
+pub mod xyz;
+pub mod dted;
+pub mod hfa;
 pub(crate) mod geopackage_sqlite;
 pub(crate) mod zarr_v3;
 pub(crate) mod jpeg2000_core;
@@ -53,8 +58,20 @@ pub enum RasterFormat {
     GeoPackage,
     /// JPEG 2000 / GeoJP2 (`.jp2`).
     Jpeg2000,
+    /// JPEG image + world file (`.jpg`, `.jpeg` + `.jgw`/`.wld`).
+    Jpeg,
+    /// PNG image + world file (`.png` + `.pgw`/`.wld`).
+    Png,
     /// Zarr v2 raster store (`.zarr` directory).
     Zarr,
+    /// Esri Binary Float Grid (`.flt` + `.hdr`).
+    EsriFloat,
+    /// XYZ ASCII raster (`.xyz` — whitespace or comma-delimited X Y Z points).
+    Xyz,
+    /// DTED elevation tile (`.dt0`, `.dt1`, `.dt2`).
+    Dted,
+    /// ERDAS IMAGINE HFA raster (`.img`) — read-only.
+    HfaImg,
 }
 
 impl RasterFormat {
@@ -85,14 +102,21 @@ impl RasterFormat {
             "sgrd" | "sdat" => Ok(Self::Saga),
             "rdc" | "rst" => Ok(Self::Idrisi),
             "ers" => Ok(Self::ErMapper),
-            "hdr" => Ok(Self::Envi),
+            "hdr" => detect_hdr(path),
+            "flt" => Ok(Self::EsriFloat),
             "tif" | "tiff" => Ok(Self::GeoTiff),
             "gpkg" => Ok(Self::GeoPackage),
             "jp2" => Ok(Self::Jpeg2000),
+            "jpg" | "jpeg" => Ok(Self::Jpeg),
+            "png" => Ok(Self::Png),
             "zarr" => Ok(Self::Zarr),
-            // ENVI data files are commonly .img or .dat or no extension — check
-            // for a sidecar .hdr
-            "img" | "dat" | "bin" | "raw" | "bil" | "bsq" | "bip" => {
+            "xyz" => Ok(Self::Xyz),
+            "dt0" | "dt1" | "dt2" => Ok(Self::Dted),
+            // .img — could be ERDAS IMAGINE HFA or ENVI labelled.
+            // Disambiguate by sniffing the HFA magic bytes first.
+            "img" => detect_img(path),
+            // Other ENVI data files: check for a sidecar .hdr
+            "dat" | "bin" | "raw" | "bil" | "bsq" | "bip" => {
                 let hdr = crate::io_utils::with_extension(path, "hdr");
                 if std::path::Path::new(&hdr).exists() {
                     Ok(Self::Envi)
@@ -120,11 +144,16 @@ impl RasterFormat {
             "rdc" | "rst" => Ok(Self::Idrisi),
             "ers" => Ok(Self::ErMapper),
             "hdr" => Ok(Self::Envi),
+            "flt" => Ok(Self::EsriFloat),
             "tif" | "tiff" => Ok(Self::GeoTiff),
             "gpkg" => Ok(Self::GeoPackage),
             "jp2" => Ok(Self::Jpeg2000),
+            "jpg" | "jpeg" => Ok(Self::Jpeg),
+            "png" => Ok(Self::Png),
             "zarr" => Ok(Self::Zarr),
             "txt" => Ok(Self::GrassAscii),
+            "xyz" => Ok(Self::Xyz),
+            "dt0" | "dt1" | "dt2" => Ok(Self::Dted),
             "img" | "dat" | "bin" | "raw" | "bil" | "bsq" | "bip" => Ok(Self::Envi),
             "" => Err(RasterError::UnknownFormat(
                 "missing file extension for output path".to_string(),
@@ -148,7 +177,13 @@ impl RasterFormat {
             Self::GeoTiff => "GeoTIFF / BigTIFF / COG",
             Self::GeoPackage => "GeoPackage Raster (Phase 4)",
             Self::Jpeg2000 => "JPEG 2000 / GeoJP2",
+            Self::Jpeg => "JPEG + World File",
+            Self::Png => "PNG + World File",
             Self::Zarr => "Zarr v2",
+            Self::EsriFloat => "Esri Float Grid",
+            Self::Xyz => "XYZ ASCII Grid",
+            Self::Dted => "DTED Elevation",
+            Self::HfaImg => "ERDAS IMAGINE HFA",
         }
     }
 
@@ -167,7 +202,13 @@ impl RasterFormat {
             Self::GeoTiff    => geotiff::read(path),
             Self::GeoPackage => geopackage::read(path),
             Self::Jpeg2000   => jpeg2000::read(path),
+            Self::Jpeg       => png_jpeg::read_jpeg(path),
+            Self::Png        => png_jpeg::read_png(path),
             Self::Zarr       => zarr::read(path),
+            Self::EsriFloat  => esri_float::read(path),
+            Self::Xyz        => xyz::read(path),
+            Self::Dted       => dted::read(path),
+            Self::HfaImg     => hfa::read(path),
         }
     }
 
@@ -186,7 +227,16 @@ impl RasterFormat {
             Self::GeoTiff    => geotiff::write(raster, path),
             Self::GeoPackage => geopackage::write(raster, path),
             Self::Jpeg2000   => jpeg2000::write(raster, path),
+            Self::Jpeg       => png_jpeg::write_jpeg(raster, path),
+            Self::Png        => png_jpeg::write_png(raster, path),
             Self::Zarr       => zarr::write(raster, path),
+            Self::EsriFloat  => esri_float::write(raster, path),
+            Self::Xyz        => xyz::write(raster, path),
+            Self::Dted       => dted::write(raster, path),
+            Self::HfaImg     => Err(RasterError::UnsupportedDataType(
+                "ERDAS IMAGINE HFA is read-only in this implementation; \
+                 use GeoTIFF (.tif) for output".into(),
+            )),
         }
     }
 }
@@ -234,6 +284,52 @@ fn detect_ascii_text(path: &str) -> Result<RasterFormat> {
         Ok(RasterFormat::GrassAscii)
     } else {
         Ok(RasterFormat::EsriAscii)
+    }
+}
+
+/// Disambiguate `.hdr` files: ENVI headers start with the token `ENVI` on the
+/// first non-empty line; Esri Float Grid headers start with `ncols`.
+fn detect_hdr(path: &str) -> Result<RasterFormat> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+    if let Ok(file) = File::open(path) {
+        for line_result in BufReader::new(file).lines() {
+            let Ok(line) = line_result else { break };
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let first = trimmed.split_ascii_whitespace().next().unwrap_or("").to_ascii_uppercase();
+            return match first.as_str() {
+                "ENVI" => Ok(RasterFormat::Envi),
+                _ => Ok(RasterFormat::EsriFloat),
+            };
+        }
+    }
+    // Fallback: assume ENVI for unknown .hdr
+    Ok(RasterFormat::Envi)
+}
+
+/// Disambiguate `.img` files: ERDAS IMAGINE HFA files start with the magic
+/// bytes `EHFA_HEADER_TAG\0`; everything else is assumed to be an ENVI
+/// labelled raster (which requires a `.hdr` sidecar).
+fn detect_img(path: &str) -> Result<RasterFormat> {
+    use std::io::Read;
+    const HFA_MAGIC: &[u8; 16] = b"EHFA_HEADER_TAG\0";
+    if let Ok(mut f) = File::open(path) {
+        let mut magic = [0u8; 16];
+        if f.read_exact(&mut magic).is_ok() && &magic == HFA_MAGIC {
+            return Ok(RasterFormat::HfaImg);
+        }
+    }
+    // Fallback: look for an ENVI .hdr sidecar.
+    let hdr = crate::io_utils::with_extension(path, "hdr");
+    if std::path::Path::new(&hdr).exists() {
+        Ok(RasterFormat::Envi)
+    } else {
+        Err(RasterError::UnknownFormat(
+            ".img — not recognized as HFA (missing EHFA_HEADER_TAG) or ENVI (no .hdr sidecar)".into(),
+        ))
     }
 }
 

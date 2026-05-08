@@ -16,7 +16,7 @@ wbcore = { path = "../wbcore" }
 wblicense_core = { path = "../wblicense_core" }
 wbraster = { path = "../wbraster" }
 wbvector = { path = "../wbvector", features = ["geoparquet", "kmz", "osmpbf"] }
-wbprojection = { path = "../wbprojection" }
+wbprojection = { path = "../wbprojection", features = ["parallel"] }
 wbtopology = { path = "../wbtopology" }
 wbtools_oss = { path = "../wbtools_oss" }
 wblidar = { path = "../wblidar" }

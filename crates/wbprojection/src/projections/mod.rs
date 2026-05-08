@@ -521,6 +521,14 @@ pub struct Projection {
     inner: Box<dyn ProjectionImpl>,
 }
 
+impl Clone for Projection {
+    fn clone(&self) -> Self {
+        // Rebuild the projection engine from cloned parameters.
+        Projection::new(self.params.clone())
+            .expect("Projection::clone failed to rebuild from valid params")
+    }
+}
+
 impl std::fmt::Debug for Projection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Projection")

@@ -71,11 +71,16 @@ No. `wbprojection` is developed primarily to support Whitebox, but it is not res
 
 - **94 projection types** with full forward + inverse support
 - **EPSG registry** — instantiate any supported CRS from a numeric code (`Crs::from_epsg(32632)`)
+- **WKT serialization** — `Crs::to_wkt()` generates Esri-style WKT1 from any `Crs` struct instance; `Crs::from_wkt()` parses WKT1/WKT2 into a `Crs`
+- **PROJ string parsing** — `from_proj_string("+proj=...")` builds a `Crs` from common PROJ.4-style definitions
+- **Canonical WKT lookup** — `canonical_wkt_for_epsg(code)` returns the static WKT string (with original units) for registry-backed codes
 - **Ellipsoidal** formulations (not just spherical approximations)
 - **Standard ellipsoid catalog** with name/EPSG ellipsoid-code lookup helpers
 - **UTM convenience constructor** for all 60 zones, N and S
-- **Datum transformations** across 28 built-in datums (Helmert + grid-shift capable)
+- **Datum transformations** across 28 built-in datums (Helmert + Molodensky + grid-shift capable)
 - **Grid-shift datum support** with NTv2 (`.gsb`) and NADCON ASCII pair loaders
+- **Area-of-use API** — `Crs::area_of_use()` and `epsg_area_of_use(code)` provide geographic validity bounds
+- **Compound CRS support** — `CompoundCrs::from_epsg(...)` and `compound_from_wkt(...)` for common horizontal+vertical systems
 - **CRS-to-CRS pipelines**: transform directly between any two supported coordinate reference systems
 - **Pure Rust**, no C dependencies
 - **Zero required dependencies** (only `thiserror` for ergonomic error handling)
@@ -154,6 +159,18 @@ use wbprojection::from_epsg;
 let crs = from_epsg(32755)?;  // WGS84 / UTM zone 55S (eastern Australia)
 ```
 
+### PROJ string import
+
+When input data carries PROJ.4-style strings instead of an EPSG code, you can
+construct a CRS directly:
+
+```rust
+use wbprojection::from_proj_string;
+
+let crs = from_proj_string("+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs")?;
+let (x, y) = crs.forward(9.18, 48.78)?;
+```
+
 ### Querying the registry
 
 ```rust
@@ -168,6 +185,22 @@ if let Some(info) = epsg_info(27700) {
 // List every supported code
 let codes = known_epsg_codes();
 println!("{} EPSG codes supported", codes.len());
+```
+
+### Area of use / validity extent
+
+You can query a CRS validity bounding box in geographic coordinates:
+
+```rust
+use wbprojection::{Crs, epsg_area_of_use};
+
+let utm32 = Crs::from_epsg(32632)?;
+let bb = utm32.area_of_use().unwrap();
+assert!(bb.contains_geographic(9.0, 51.0));
+assert!(!bb.contains_geographic(15.0, 51.0));
+
+let web = epsg_area_of_use(3857).unwrap();
+assert!(web.contains_geographic(-75.0, 40.0));
 ```
 
 ### ESRI WKT export
@@ -193,6 +226,58 @@ println!("{wkt}");
 
 Swiss LV03/LV95 exports now use the explicit `Oblique_Stereographic` method name to match their EPSG method semantics rather than the generic stereographic label.
 
+### CRS instance WKT serialization
+
+Serialize any `Crs` struct to an Esri-style WKT1 string directly from its fields,
+without needing to know the original EPSG code:
+
+```rust
+use wbprojection::Crs;
+
+// Works for EPSG-sourced CRSes
+let crs = Crs::from_epsg(32617)?;
+let wkt = crs.to_wkt();
+assert!(wkt.starts_with("PROJCS["));
+
+// Also works for manually-constructed or parsed CRSes
+let parsed = Crs::from_wkt(&wkt)?;
+let roundtrip = parsed.to_wkt();
+assert_eq!(wkt, roundtrip);
+```
+
+The same function is available as a free function from the crate root:
+
+```rust
+use wbprojection::crs_to_wkt;
+
+let crs = Crs::from_epsg(4326)?;
+println!("{}", crs_to_wkt(&crs));
+```
+
+> **Note on units:** `to_wkt()` always outputs metre-based parameters regardless
+> of the original source units. A State Plane CRS originally defined in US survey
+> feet will have its false easting/northing expressed in metres in the generated
+> WKT. If you need the canonical EPSG WKT with original feet values preserved,
+> use `canonical_wkt_for_epsg(code)` instead.
+
+### Canonical static WKT lookup
+
+For codes whose CRS is stored as a static WKT string in the built-in registry
+(the legacy-parity and generated-WKT tables), you can retrieve the original
+string — including original unit expressions — using:
+
+```rust
+use wbprojection::canonical_wkt_for_epsg;
+
+// Returns the original Esri-formatted WKT string, e.g. with US survey foot units
+if let Some(wkt) = canonical_wkt_for_epsg(2235) {  // NAD83 / Delaware in US survey feet
+    println!("{wkt}");
+}
+
+// Returns None for codes handled only by the programmatic builder
+assert!(canonical_wkt_for_epsg(99999).is_none());
+```
+
 ### Limited WKT import
 
 `wbprojection` can now import WKT and SRS references when they embed an EPSG identifier:
@@ -215,6 +300,21 @@ let compound = compound_from_wkt(
     "COMPOUNDCRS[\"Example\",GEOGCRS[\"WGS 84\",DATUM[\"World Geodetic System 1984\",ELLIPSOID[\"WGS 84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],ANGLEUNIT[\"degree\",0.0174532925199433]],VERTCRS[\"EGM96 height\",VDATUM[\"EGM96\"],CS[vertical,1],AXIS[\"gravity-related height\",up],LENGTHUNIT[\"metre\",1]]]"
 )?;
 println!("{}", compound.name);
+```
+
+For common EPSG-defined compound systems, you can build directly from code:
+
+```rust
+use wbprojection::CompoundCrs;
+
+// NAD83 + NAVD88 height
+let us = CompoundCrs::from_epsg(5498)?;
+
+// NAD83(CSRS) + CGVD2013 height
+let ca = CompoundCrs::from_epsg(6649)?;
+
+// WGS84 + EGM2008 height
+let world = CompoundCrs::from_epsg(9518)?;
 ```
 
 Projected-unit factors in WKT (e.g., US survey foot) are respected for linear parameters such as false easting/northing during import.

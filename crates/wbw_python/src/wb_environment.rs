@@ -172,6 +172,14 @@ mod wbw_r {
         Err(disabled())
     }
 
+    pub fn projection_from_proj_string(_proj_str: &str) -> Result<String, String> {
+        Err(disabled())
+    }
+
+    pub fn projection_area_of_use(_epsg: u32) -> Result<String, String> {
+        Err(disabled())
+    }
+
     pub fn projection_reproject_points_json(
         _points_json: &str,
         _src_epsg: u32,
@@ -8942,6 +8950,47 @@ impl WbProjectionNamespace {
                 "Failed to identify EPSG from CRS text: {e}"
             ))
         })
+    }
+
+    /// Parse a PROJ string and return the identified EPSG code and/or WKT.
+    ///
+    /// Returns a dict with one of:
+    /// - `{"epsg": int}` — when a matching EPSG code was found
+    /// - `{"wkt": str}` — when no EPSG match, but a WKT representation is available
+    /// - `{"unknown": True}` — when the PROJ string could not be resolved further
+    fn from_proj_string(&self, py: Python<'_>, proj_str: &str) -> PyResult<Py<PyAny>> {
+        let json_str = wbw_r::projection_from_proj_string(proj_str).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to parse PROJ string: {e}"
+            ))
+        })?;
+        let parsed: JsonValue = serde_json::from_str(&json_str).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by projection_from_proj_string: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
+    }
+
+    /// Return the area-of-use bounding box for the given EPSG code, or `None`.
+    ///
+    /// When a bounding box is known, returns a dict with keys
+    /// `lon_min`, `lat_min`, `lon_max`, `lat_max` (all floats in decimal degrees).
+    fn area_of_use(&self, py: Python<'_>, epsg: u32) -> PyResult<Py<PyAny>> {
+        let json_str = wbw_r::projection_area_of_use(epsg).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Failed to retrieve area of use for EPSG:{epsg}: {e}"
+            ))
+        })?;
+        if json_str == "null" {
+            return Ok(py.None().into_bound(py).unbind());
+        }
+        let parsed: JsonValue = serde_json::from_str(&json_str).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Invalid JSON returned by projection_area_of_use: {e}"
+            ))
+        })?;
+        json_value_to_pyobject(py, &parsed)
     }
 
     /// Reproject a list of XY points from one EPSG code to another.

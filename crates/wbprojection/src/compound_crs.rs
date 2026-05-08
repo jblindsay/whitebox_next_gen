@@ -41,10 +41,40 @@ impl CompoundCrs {
 
     /// Build a known compound CRS from an EPSG code.
     ///
-    /// Currently supported:
-    /// - EPSG:7405 (OSGB36 / British National Grid + ODN height)
+    /// # Supported codes
+    ///
+    /// | EPSG  | Name |
+    /// |-------|------|
+    /// | 5498  | NAD83 + NAVD88 height |
+    /// | 6649  | NAD83(CSRS) + CGVD2013 height |
+    /// | 7405  | OSGB36 / British National Grid + ODN height |
+    /// | 9253  | GDA94 + AHD height |
+    /// | 9518  | WGS 84 + EGM2008 height |
+    ///
+    /// For any other compound code, construct the CRS manually with
+    /// [`CompoundCrs::new`] from individual horizontal and vertical [`Crs`] components.
     pub fn from_epsg(code: u32) -> Result<Self> {
         match code {
+            5498 => {
+                let horizontal = Crs::from_epsg(4269)?; // NAD83 geographic
+                let vertical = Crs::from_epsg(5703)?;   // NAVD88 height
+                Ok(Self {
+                    name: "NAD83 + NAVD88 height (EPSG:5498)".to_string(),
+                    horizontal,
+                    vertical,
+                    epsg_code: Some(code),
+                })
+            }
+            6649 => {
+                let horizontal = Crs::from_epsg(4617)?; // NAD83(CSRS) geographic
+                let vertical = Crs::from_epsg(6647)?;   // CGVD2013 height
+                Ok(Self {
+                    name: "NAD83(CSRS) + CGVD2013 height (EPSG:6649)".to_string(),
+                    horizontal,
+                    vertical,
+                    epsg_code: Some(code),
+                })
+            }
             7405 => {
                 let horizontal = Crs::from_epsg(27700)?;
                 let vertical = Crs::from_epsg(5701)?;
@@ -55,8 +85,29 @@ impl CompoundCrs {
                     epsg_code: Some(code),
                 })
             }
+            9253 => {
+                let horizontal = Crs::from_epsg(4283)?; // GDA94 geographic
+                let vertical = Crs::from_epsg(5711)?;   // AHD height
+                Ok(Self {
+                    name: "GDA94 + AHD height (EPSG:9253)".to_string(),
+                    horizontal,
+                    vertical,
+                    epsg_code: Some(code),
+                })
+            }
+            9518 => {
+                let horizontal = Crs::from_epsg(4326)?; // WGS84 geographic
+                let vertical = Crs::from_epsg(3855)?;   // EGM2008 height
+                Ok(Self {
+                    name: "WGS 84 + EGM2008 height (EPSG:9518)".to_string(),
+                    horizontal,
+                    vertical,
+                    epsg_code: Some(code),
+                })
+            }
             _ => Err(ProjectionError::UnsupportedProjection(format!(
-                "compound EPSG:{code} is not currently supported"
+                "compound EPSG:{code} is not in the built-in registry; \
+                 use CompoundCrs::new() with individual horizontal and vertical Crs components"
             ))),
         }
     }

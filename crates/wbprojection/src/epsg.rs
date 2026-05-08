@@ -1295,19 +1295,48 @@ pub fn epsg_from_srs_reference(s: &str) -> Option<u32> {
 
 /// Build a [`Crs`] from a WKT string or SRS-style CRS reference that embeds an EPSG code.
 ///
-/// This helper first tries [`epsg_from_wkt`] to discover an EPSG identifier and
-/// resolve through the built-in registry. If the WKT has no embedded EPSG code,
-/// it falls back to the crate's internal WKT parser for common WKT1/WKT2
-/// geographic and projected CRS definitions.
+/// Resolution order:
+/// 1. If the WKT contains an `AUTHORITY["EPSG","…"]` or `ID["EPSG",…]` tag and
+///    the code is in the built-in registry, return that CRS directly.
+/// 2. Fall through to the internal WKT1/WKT2 parser for generic definitions.
+///    This handles WKTs whose embedded EPSG code is not yet supported or that
+///    carry no authority tag at all.
+///
+/// Both the `AUTHORITY["EPSG","…"]` search (step 1) and parser projection-method
+/// lookup operate on the *outermost* CRS node, so a PROJCS with an inner GEOGCS
+/// authority will correctly resolve to the projected CRS code.
 pub fn from_wkt(wkt: &str) -> Result<Crs> {
+    // Step 1: prefer the canonical registry definition when an EPSG code is present.
     if let Some(code) = epsg_from_wkt(wkt) {
-        from_epsg(code)
-    } else {
-        crate::wkt::parse_crs_from_wkt(wkt)
+        if let Ok(crs) = from_epsg(code) {
+            return Ok(crs);
+        }
+        // Code found but not yet supported — fall through to the WKT parser,
+        // which may succeed for well-known projection method names.
     }
+    // Step 2: parse the WKT directly.
+    crate::wkt::parse_crs_from_wkt(wkt)
 }
 
-/// Build a [`CompoundCrs`] from a WKT compound CRS definition.
+/// Build a [`Crs`] from a PROJ4-compatible projection string.
+///
+/// Accepts:
+/// - Full `+key=value` PROJ strings such as
+///   `+proj=utm +zone=17 +datum=NAD83 +units=m +no_defs`.
+/// - `+init=epsg:XXXX` shortcuts (resolved via the built-in EPSG registry).
+/// - Bare `EPSG:XXXX` authority prefixed codes.
+///
+/// When `+init=epsg:XXXX` or a bare EPSG code is present the corresponding
+/// registry entry is returned directly; otherwise the full PROJ parser is used.
+///
+/// # Errors
+/// Returns [`ProjectionError::UnsupportedProjection`] if `+proj=` is not
+/// recognised, or [`ProjectionError::InvalidParameter`] for malformed values.
+pub fn from_proj_string(s: &str) -> Result<Crs> {
+    crate::proj_string::parse_crs_from_proj_string(s)
+}
+
+
 ///
 /// Supports common WKT1 `COMPD_CS[...]` and WKT2 `COMPOUNDCRS[...]` forms
 /// with a horizontal and vertical component.
@@ -1375,7 +1404,11 @@ pub fn resolve_epsg_with_policy(code: u32, policy: EpsgResolutionPolicy) -> Resu
 
 fn extract_epsg_after_marker(wkt: &str, marker: &str) -> Option<u32> {
     let upper = wkt.to_ascii_uppercase();
-    let idx = upper.find(marker)?;
+    // Use rfind so that for nested WKT (e.g. PROJCS containing GEOGCS, both
+    // with AUTHORITY tags) we extract the outermost / last occurrence, which
+    // corresponds to the top-level CRS authority rather than an inner datum or
+    // geographic CRS authority.
+    let idx = upper.rfind(marker)?;
     let tail = &upper[idx + marker.len()..];
 
     let start = tail.find(|c: char| c.is_ascii_digit())?;
@@ -1452,8 +1485,124 @@ pub fn vertical_offset_grid_name(code: u32) -> Option<&'static str> {
         5714 => Some("msl"),
         5715 => Some("msl"),
         7841 => Some("ausgeoid2020"),
+        5711 => Some("ausgeoid2020"),
+        6647 => Some("cgvd2013"),
+        7839 => Some("nzvd2016"),
         _ => None,
     }
+}
+
+/// Axis-aligned geographic bounding box representing the area of use for a CRS.
+///
+/// All values are in decimal degrees on the WGS84 ellipsoid.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrsBoundingBox {
+    /// Western limit (degrees longitude, –180 to 180).
+    pub lon_min: f64,
+    /// Southern limit (degrees latitude, –90 to 90).
+    pub lat_min: f64,
+    /// Eastern limit (degrees longitude, –180 to 180).
+    pub lon_max: f64,
+    /// Northern limit (degrees latitude, –90 to 90).
+    pub lat_max: f64,
+}
+
+impl CrsBoundingBox {
+    /// Construct a bounding box.
+    pub const fn new(lon_min: f64, lat_min: f64, lon_max: f64, lat_max: f64) -> Self {
+        CrsBoundingBox { lon_min, lat_min, lon_max, lat_max }
+    }
+
+    /// Returns `true` when the given geographic point (in decimal degrees) falls
+    /// within or on the boundary of this bounding box.
+    pub fn contains_geographic(&self, lon_deg: f64, lat_deg: f64) -> bool {
+        lon_deg >= self.lon_min
+            && lon_deg <= self.lon_max
+            && lat_deg >= self.lat_min
+            && lat_deg <= self.lat_max
+    }
+}
+
+/// Return the geographic area of use for a given EPSG code, if known.
+///
+/// For **UTM families** (WGS84, NAD83, ETRS89, ED50, NAD27) the bounds are
+/// computed from the zone number, so no static table entry is required.
+///
+/// For other common codes a curated static table is used.  Returns `None` when
+/// the code is not recognised or no bounds are defined.
+pub fn epsg_area_of_use(code: u32) -> Option<CrsBoundingBox> {
+    // ── UTM families ────────────────────────────────────────────────────────
+    // Compute zone bounds directly from the EPSG code.
+    let utm_bounds = |zone: u32, south: bool| -> CrsBoundingBox {
+        let lon_min = (zone as f64 - 1.0) * 6.0 - 180.0;
+        let lon_max = lon_min + 6.0;
+        if south {
+            CrsBoundingBox::new(lon_min, -80.0, lon_max, 0.0)
+        } else {
+            CrsBoundingBox::new(lon_min, 0.0, lon_max, 84.0)
+        }
+    };
+
+    if (32601..=32660).contains(&code) {
+        return Some(utm_bounds(code - 32600, false)); // WGS84 UTM N
+    }
+    if (32701..=32760).contains(&code) {
+        return Some(utm_bounds(code - 32700, true));  // WGS84 UTM S
+    }
+    if (26901..=26923).contains(&code) {
+        return Some(utm_bounds(code - 26900, false)); // NAD83 UTM N
+    }
+    if (26703..=26722).contains(&code) {
+        return Some(utm_bounds(code - 26700, false)); // NAD27 UTM N
+    }
+    if (25801..=25838).contains(&code) {
+        return Some(utm_bounds(code - 25800, false)); // ETRS89 UTM N
+    }
+    if (23001..=23060).contains(&code) {
+        return Some(utm_bounds(code - 23000, false)); // ED50 UTM N (approx)
+    }
+
+    // ── Curated static table ────────────────────────────────────────────────
+    Some(match code {
+        // Geographic CRS (world)
+        4326 | 4979 | 4978 => CrsBoundingBox::new(-180.0, -90.0, 180.0, 90.0),
+        4258 => CrsBoundingBox::new(-16.1, 32.88, 40.18, 84.17), // ETRS89 — Europe
+        4269 => CrsBoundingBox::new(-172.54, 23.81, -47.74, 86.46), // NAD83
+        4267 => CrsBoundingBox::new(-172.54, 23.81, -47.74, 86.46), // NAD27
+        4230 => CrsBoundingBox::new(-9.56, 34.88, 31.59, 84.33),  // ED50 — Europe
+        4617 => CrsBoundingBox::new(-141.01, 40.04, -47.74, 86.46), // NAD83(CSRS) Canada
+        4283 => CrsBoundingBox::new(112.85, -43.7, 153.69, -9.86), // GDA94 Australia
+        4284 => CrsBoundingBox::new(18.92, 39.87, 180.0, 85.2),   // Pulkovo 1942
+        // Projected — British Isles
+        27700 => CrsBoundingBox::new(-8.82, 49.79, 1.92, 60.94), // BNG
+        // Projected — Web / World
+        3857 | 3785 | 900913 => CrsBoundingBox::new(-180.0, -85.06, 180.0, 85.06),
+        // Projected — Australian GDA94 MGA zones (28348-28358)
+        28348 => CrsBoundingBox::new(114.0, -40.0, 120.0, -14.0),
+        28349 => CrsBoundingBox::new(120.0, -40.0, 126.0, -14.0),
+        28350 => CrsBoundingBox::new(126.0, -40.0, 132.0, -14.0),
+        28351 => CrsBoundingBox::new(132.0, -40.0, 138.0, -14.0),
+        28352 => CrsBoundingBox::new(138.0, -40.0, 144.0, -14.0),
+        28353 => CrsBoundingBox::new(144.0, -45.0, 150.0, -10.0),
+        28354 => CrsBoundingBox::new(150.0, -45.0, 156.0, -10.0),
+        28355 => CrsBoundingBox::new(156.0, -45.0, 162.0, -10.0),
+        // Projected — New Zealand
+        2193 => CrsBoundingBox::new(160.6, -55.95, -171.2, -25.88), // NZTM2000
+        // Compound
+        5498 | 6649 => CrsBoundingBox::new(-172.54, 23.81, -47.74, 86.46),
+        7405 => CrsBoundingBox::new(-8.82, 49.79, 1.92, 60.94),
+        9253 => CrsBoundingBox::new(112.85, -43.7, 153.69, -9.86),
+        9518 => CrsBoundingBox::new(-180.0, -90.0, 180.0, 90.0),
+        // Vertical only — inherit the area of their parent datum
+        5703 | 8228 => CrsBoundingBox::new(-172.54, 23.81, -47.74, 86.46), // NAVD88
+        5702 => CrsBoundingBox::new(-172.54, 23.81, -47.74, 86.46),        // NGVD29
+        5701 => CrsBoundingBox::new(-8.82, 49.79, 1.92, 60.94),            // ODN
+        5711 | 7841 => CrsBoundingBox::new(112.85, -43.7, 153.69, -9.86), // AHD / GDA2020
+        6647 => CrsBoundingBox::new(-141.01, 40.04, -47.74, 86.46),        // CGVD2013
+        7839 => CrsBoundingBox::new(160.6, -55.95, -171.2, -25.88),        // NZVD2016
+        3855 | 5773 => CrsBoundingBox::new(-180.0, -90.0, 180.0, 90.0),   // EGM2008/EGM96
+        _ => return None,
+    })
 }
 
 /// List all EPSG codes known to this registry.
@@ -1789,6 +1938,25 @@ pub struct GeoTiffProjectionInfo {
     pub angular_units: Option<u16>,
 }
 
+/// Return the canonical static WKT string for an EPSG code, if one exists.
+///
+/// This looks up the built-in Esri-style WKT strings (from both the legacy
+/// parity table and the generated WKT table).  Returns `None` for codes whose
+/// CRS is only available through the programmatic builder — those codes are
+/// still fully functional via [`from_epsg`] and [`crs_to_wkt`], but their
+/// static string representation isn't stored.
+///
+/// # Examples
+/// ```rust
+/// use wbprojection::canonical_wkt_for_epsg;
+///
+/// let wkt = canonical_wkt_for_epsg(32617); // WGS 84 / UTM zone 17N
+/// assert!(wkt.is_some());
+/// ```
+pub fn canonical_wkt_for_epsg(code: u32) -> Option<&'static str> {
+    legacy_parity_wkt(code).or_else(|| generated_epsg_wkt(code))
+}
+
 /// Generate GeoTIFF projection info (GeoKeys) from an EPSG code.
 ///
 /// Returns `Err(ProjectionError::UnsupportedProjection)` if the code is not
@@ -1849,6 +2017,67 @@ pub fn to_geotiff_info(code: u32) -> Result<GeoTiffProjectionInfo> {
         linear_units,
         angular_units,
     })
+}
+
+/// Generate an Esri-style WKT1 string directly from a [`Crs`] struct.
+///
+/// This is the instance-level WKT serializer, analogous to [`to_esri_wkt`] for a
+/// known EPSG code.  All coordinate values are expressed in metres regardless of
+/// the original source units (e.g. a State-Plane CRS originally in US survey feet
+/// will emit metre-based false easting/northing).  If you need the canonical
+/// EPSG WKT—with original units preserved—call [`to_esri_wkt`] with the EPSG
+/// code directly.
+///
+/// # Examples
+/// ```rust
+/// use wbprojection::Crs;
+///
+/// let crs = Crs::from_epsg(32617).unwrap(); // WGS 84 / UTM zone 17N
+/// let wkt = crs.to_wkt();
+/// assert!(wkt.starts_with("PROJCS["));
+/// assert!(wkt.contains("Transverse_Mercator"));
+/// ```
+pub fn crs_to_wkt(crs: &Crs) -> String {
+    let params = crs.projection.params();
+    let datum = &crs.datum;
+    let ellipsoid = &datum.ellipsoid;
+    let inv_f = if ellipsoid.f.abs() < 1e-15 {
+        0.0
+    } else {
+        1.0 / ellipsoid.f
+    };
+
+    let geogcs = format!(
+        "GEOGCS[\"GCS_{}\",DATUM[\"{}\",SPHEROID[\"{}\",{:.3},{:.9}]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]]",
+        datum.name,
+        datum.name,
+        ellipsoid.name,
+        ellipsoid.a,
+        inv_f
+    );
+
+    let name = crs.name.replace('"', "'");
+
+    match &params.kind {
+        ProjectionKind::Geographic => geogcs,
+        ProjectionKind::Geocentric => format!(
+            "GEOCCS[\"{}\",DATUM[\"{}\",SPHEROID[\"{}\",{:.3},{:.9}]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Meter\",1.0]]",
+            name, datum.name, ellipsoid.name, ellipsoid.a, inv_f
+        ),
+        ProjectionKind::Vertical => format!(
+            "VERT_CS[\"{}\",VERT_DATUM[\"{}\",2005],UNIT[\"Meter\",1.0],AXIS[\"Height\",UP]]",
+            name, datum.name
+        ),
+        _ => {
+            let (proj_name, params_list) = esri_projection_params(params);
+            let mut wkt = format!("PROJCS[\"{}\",{},PROJECTION[\"{}\"]", name, geogcs, proj_name);
+            for (k, v) in params_list {
+                wkt.push_str(&format!(",PARAMETER[\"{}\",{:.12}]", k, v));
+            }
+            wkt.push_str(",UNIT[\"Meter\",1.0]]");
+            wkt
+        }
+    }
 }
 
 pub(crate) fn esri_projection_params(p: &ProjectionParams) -> (&'static str, Vec<(&'static str, f64)>) {
@@ -2679,7 +2908,7 @@ fn is_geocentric_epsg(code: u32) -> bool {
 }
 
 fn is_vertical_epsg(code: u32) -> bool {
-    matches!(code, 3855 | 5701 | 5702 | 5703 | 5714 | 5715 | 5773 | 7841 | 8228)
+    matches!(code, 3855 | 5701 | 5702 | 5703 | 5711 | 5714 | 5715 | 5773 | 6647 | 7839 | 7841 | 8228)
 }
 
 fn vertical_axis_spec(code: u32) -> (&'static str, &'static str) {
@@ -3527,9 +3756,12 @@ static NAMED_ENTRIES: &[(u32, &str, &str, &str)] = &[
     (5701,  "ODN height",                          "United Kingdom",             "metre"),
     (5702,  "NGVD 29 height",                      "United States (CONUS)",      "US survey foot"),
     (5703,  "NAVD88 height",                       "United States (CONUS)",      "metre"),
+    (5711,  "AHD height",                          "Australia",                  "metre"),
     (5714,  "MSL height",                          "World",                      "metre"),
     (5715,  "MSL depth",                           "World",                      "metre"),
     (5773,  "EGM96 height",                        "World",                      "metre"),
+    (6647,  "CGVD2013 height",                     "Canada",                     "metre"),
+    (7839,  "NZVD2016 height",                     "New Zealand",                "metre"),
     (7841,  "GDA2020 height",                      "Australia",                  "metre"),
     (7842,  "GDA2020",                             "Australia",                  "metre"),
     (8228,  "NAVD88 height",                       "United States (CONUS)",      "US survey foot"),
@@ -5617,6 +5849,30 @@ fn build_crs(code: u32) -> Result<Crs> {
             projection: crate::projections::Projection::new(
                 ProjectionParams::new(ProjectionKind::Vertical)
                     .with_ellipsoid(Ellipsoid::WGS84),
+            )?,
+        }),
+        5711 => Ok(Crs {
+            name: "AHD height (EPSG:5711)".into(),
+            datum: Datum::GDA94,
+            projection: crate::projections::Projection::new(
+                ProjectionParams::new(ProjectionKind::Vertical)
+                    .with_ellipsoid(Ellipsoid::GRS80),
+            )?,
+        }),
+        6647 => Ok(Crs {
+            name: "CGVD2013 height (EPSG:6647)".into(),
+            datum: Datum::NAD83_CSRS,
+            projection: crate::projections::Projection::new(
+                ProjectionParams::new(ProjectionKind::Vertical)
+                    .with_ellipsoid(Ellipsoid::GRS80),
+            )?,
+        }),
+        7839 => Ok(Crs {
+            name: "NZVD2016 height (EPSG:7839)".into(),
+            datum: Datum::NZGD2000,
+            projection: crate::projections::Projection::new(
+                ProjectionParams::new(ProjectionKind::Vertical)
+                    .with_ellipsoid(Ellipsoid::GRS80),
             )?,
         }),
         5702 => Ok(Crs {

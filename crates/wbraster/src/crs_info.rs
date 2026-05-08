@@ -6,6 +6,8 @@
 
 use wbprojection::{
     EpsgIdentifyPolicy,
+    from_proj_string,
+    identify_epsg_from_crs,
     identify_epsg_from_wkt_with_policy,
     to_ogc_wkt,
 };
@@ -54,6 +56,20 @@ impl CrsInfo {
     /// Create from WKT with strict ambiguity rejection.
     pub fn from_wkt_strict(wkt: impl Into<String>) -> Self {
         Self::from_wkt_with_policy(wkt, EpsgIdentifyPolicy::Strict)
+    }
+
+    /// Create from a PROJ4/PROJ string.
+    pub fn from_proj4(proj4: impl Into<String>) -> Self {
+        let proj4 = proj4.into();
+        let epsg = from_proj_string(&proj4)
+            .ok()
+            .and_then(|crs| identify_epsg_from_crs(&crs));
+
+        Self {
+            epsg,
+            wkt: epsg.and_then(|code| to_ogc_wkt(code).ok()),
+            proj4: Some(proj4),
+        }
     }
 
     /// Returns `true` if no CRS information is stored.

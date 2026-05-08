@@ -57,6 +57,9 @@ pub struct VectorReprojectOptions {
     pub max_segment_length: Option<f64>,
     /// Topology validation/fix mode after reprojection.
     pub topology_policy: TopologyPolicy,
+    /// Emit non-fatal warnings when sampled source features appear outside the
+    /// declared area of use of source and/or destination CRS definitions.
+    pub warn_on_area_of_use_mismatch: bool,
 }
 
 impl Default for VectorReprojectOptions {
@@ -66,6 +69,7 @@ impl Default for VectorReprojectOptions {
             antimeridian_policy: AntimeridianPolicy::Keep,
             max_segment_length: None,
             topology_policy: TopologyPolicy::None,
+            warn_on_area_of_use_mismatch: false,
         }
     }
 }
@@ -97,6 +101,12 @@ impl VectorReprojectOptions {
     /// Sets topology validation/fix behavior after reprojection.
     pub fn with_topology_policy(mut self, topology_policy: TopologyPolicy) -> Self {
         self.topology_policy = topology_policy;
+        self
+    }
+
+    /// Enable/disable non-fatal area-of-use mismatch warnings.
+    pub fn with_area_of_use_warning(mut self, enabled: bool) -> Self {
+        self.warn_on_area_of_use_mismatch = enabled;
         self
     }
 }
@@ -216,6 +226,8 @@ fn layer_with_crs_options_internal(
 ) -> Result<Layer> {
     validate_options(options)?;
 
+    maybe_warn_area_of_use_mismatch(layer, src, dst, options.warn_on_area_of_use_mismatch);
+
     let mut out = layer.clone();
     out.features.clear();
     let total_features = layer.features.len();
@@ -249,6 +261,92 @@ fn layer_with_crs_options_internal(
     }
 
     Ok(out)
+}
+
+fn maybe_warn_area_of_use_mismatch(
+    layer: &Layer,
+    src: &Crs,
+    dst: &Crs,
+    enabled: bool,
+) {
+    if !enabled {
+        return;
+    }
+
+    let Some(layer_bbox) = layer_bbox(layer) else {
+        return;
+    };
+
+    let Ok(wgs84) = Crs::from_epsg(4326) else {
+        return;
+    };
+
+    let sample_points = [
+        (layer_bbox.min_x, layer_bbox.min_y),
+        (layer_bbox.min_x, layer_bbox.max_y),
+        (layer_bbox.max_x, layer_bbox.min_y),
+        (layer_bbox.max_x, layer_bbox.max_y),
+        (
+            0.5 * (layer_bbox.min_x + layer_bbox.max_x),
+            0.5 * (layer_bbox.min_y + layer_bbox.max_y),
+        ),
+    ];
+
+    let src_area = src.area_of_use();
+    let dst_area = dst.area_of_use();
+    if src_area.is_none() && dst_area.is_none() {
+        return;
+    }
+
+    let mut src_outside = 0usize;
+    let mut dst_outside = 0usize;
+    let mut checked = 0usize;
+
+    for (x, y) in sample_points {
+        let Ok((lon, lat)) = src.transform_to(x, y, &wgs84) else {
+            continue;
+        };
+        checked += 1;
+
+        if let Some(bb) = &src_area {
+            if !bb.contains_geographic(lon, lat) {
+                src_outside += 1;
+            }
+        }
+        if let Some(bb) = &dst_area {
+            if !bb.contains_geographic(lon, lat) {
+                dst_outside += 1;
+            }
+        }
+    }
+
+    if checked == 0 {
+        return;
+    }
+
+    if src_outside > 0 || dst_outside > 0 {
+        eprintln!(
+            "wbvector reprojection warning: sampled layer extent appears outside CRS area of use (src outside: {src_outside}/{checked}, dst outside: {dst_outside}/{checked})"
+        );
+    }
+}
+
+fn layer_bbox(layer: &Layer) -> Option<crate::geometry::BBox> {
+    let mut bb: Option<crate::geometry::BBox> = None;
+    for feat in &layer.features {
+        if let Some(geom) = &feat.geometry {
+            if let Some(gb) = geom.bbox() {
+                bb = Some(match bb {
+                    None => gb,
+                    Some(mut acc) => {
+                        acc.expand_to(&gb);
+                        acc
+                    }
+                });
+            }
+        }
+    }
+    bb
 }
 
 fn source_crs_from_layer(layer: &Layer) -> Result<Crs> {

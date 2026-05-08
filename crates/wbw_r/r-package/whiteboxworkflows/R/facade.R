@@ -202,6 +202,14 @@ wbw_build_session <- function(floating_license_id = NULL,
     wbw_projection_reproject_point(x, y, src_epsg, dst_epsg)
   }
 
+  session$projection_from_proj_string <- function(proj_str) {
+    wbw_projection_from_proj_string(proj_str)
+  }
+
+  session$projection_area_of_use <- function(epsg) {
+    wbw_projection_area_of_use(epsg)
+  }
+
   session$topology_intersects_wkt <- function(a_wkt, b_wkt) {
     wbw_topology_intersects_wkt(a_wkt, b_wkt)
   }
@@ -682,6 +690,41 @@ wbw_projection_reproject_point <- function(x, y, src_epsg, dst_epsg) {
     stop("src_epsg and dst_epsg must be positive integers.", call. = FALSE)
   }
   out_json <- projection_reproject_point_json(as.numeric(x), as.numeric(y), src_epsg_int, dst_epsg_int)
+  jsonlite::fromJSON(out_json, simplifyVector = TRUE)
+}
+
+#' Parse a PROJ string and return the identified EPSG code and/or WKT.
+#'
+#' Returns a named list with exactly one element:
+#' - `list(epsg = integer)` when an EPSG code was identified
+#' - `list(wkt = character)` when no EPSG match but a WKT is available
+#' - `list(unknown = TRUE)` when the PROJ string could not be resolved further
+#'
+#' @export
+wbw_projection_from_proj_string <- function(proj_str) {
+  if (!is.character(proj_str) || length(proj_str) != 1L || !nzchar(proj_str)) {
+    stop("proj_str must be a non-empty string.", call. = FALSE)
+  }
+  out_json <- projection_from_proj_string(proj_str)
+  jsonlite::fromJSON(out_json, simplifyVector = TRUE)
+}
+
+#' Return the area-of-use bounding box for an EPSG code, or NULL.
+#'
+#' When a bounding box is registered for the code, returns a named list with
+#' elements `lon_min`, `lat_min`, `lon_max`, `lat_max` (numeric, decimal degrees).
+#' Returns `NULL` when no bounding box is known for the code.
+#'
+#' @export
+wbw_projection_area_of_use <- function(epsg) {
+  epsg_int <- as.integer(epsg)
+  if (is.na(epsg_int) || epsg_int <= 0L) {
+    stop("epsg must be a positive integer.", call. = FALSE)
+  }
+  out_json <- projection_area_of_use(epsg_int)
+  if (out_json == "null") {
+    return(NULL)
+  }
   jsonlite::fromJSON(out_json, simplifyVector = TRUE)
 }
 

@@ -168,6 +168,7 @@ pub mod error;
 pub mod grid_formats;
 pub mod grid_shift;
 pub mod projections;
+pub(crate) mod proj_string;
 pub mod transform;
 pub mod vertical_grid;
 mod wkt;
@@ -181,16 +182,19 @@ pub use crs::{
     GridVerticalOffsetProvider,
     VerticalOffsetProvider,
 };
-pub use datum::Datum;
+pub use datum::{Datum, DatumTransform, HelmertParams, MolodenskyParams};
 pub use ellipsoid::Ellipsoid;
 pub use epsg::{
+    CrsBoundingBox,
     EpsgAliasEntry,
     EpsgIdentifyCandidate,
     EpsgIdentifyPolicy,
     EpsgIdentifyReport,
     EpsgResolution,
     EpsgResolutionPolicy,
+    canonical_wkt_for_epsg,
     clear_runtime_epsg_aliases,
+    crs_to_wkt,
     epsg_alias_catalog,
     epsg_from_srs_reference,
     epsg_from_wkt,
@@ -198,6 +202,7 @@ pub use epsg::{
     from_epsg,
     from_epsg_with_catalog,
     from_epsg_with_policy,
+    from_proj_string,
     identify_epsg_from_crs,
     identify_epsg_from_crs_report,
     identify_epsg_from_crs_with_policy,
@@ -214,7 +219,9 @@ pub use epsg::{
     to_ogc_wkt,
     unregister_epsg_alias,
     vertical_offset_grid_name,
+    epsg_area_of_use,
 };
+pub use proj_string::{ParsedProjString, ParsedProjUnits};
 pub use error::{ProjectionError, Result};
 pub use grid_formats::{
     list_ntv2_subgrids, load_nadcon_ascii_pair, load_ntv2_gsb, load_ntv2_gsb_subgrid,

@@ -208,6 +208,83 @@ wbw_georeference_raster_from_control_points(input = 'historical_scan.tif',
     report = 'historical_scan_georef_report.json')
 ```
 
+## Projection Utility Functions
+
+These functions provide CRS diagnostics and point-level coordinate transforms
+outside of full dataset reprojection workflows.
+
+### WKT and EPSG identification
+
+```r
+library(whiteboxworkflows)
+
+# Convert EPSG to OGC WKT.
+wkt <- wbw_projection_to_ogc_wkt(32618)
+cat(wkt, '\n')
+
+# Identify EPSG from WKT or CRS text.
+epsg <- wbw_projection_identify_epsg(wkt)
+print(epsg)  # 32618
+
+# Reproject a batch of points.
+pts <- data.frame(x = -79.3832, y = 43.6532)
+result <- wbw_projection_reproject_points(pts, src_epsg = 4326L, dst_epsg = 32618L)
+print(result)
+```
+
+### Parse a PROJ string
+
+Use `wbw_projection_from_proj_string` when you have a PROJ4-style string from a
+legacy file header or third-party metadata source and need the corresponding
+EPSG code or OGC WKT.
+
+The function returns a named list with exactly one element:
+
+- `list(epsg = integer)` — EPSG code identified
+- `list(wkt = character)` — no EPSG match, WKT representation available
+- `list(unknown = TRUE)` — PROJ string parsed but CRS could not be resolved
+
+```r
+library(whiteboxworkflows)
+
+proj_str <- '+proj=utm +zone=17 +datum=NAD83 +units=m +no_defs'
+result <- wbw_projection_from_proj_string(proj_str)
+
+if (!is.null(result$epsg)) {
+  cat('Identified EPSG:', result$epsg, '\n')  # e.g. 26917
+} else if (!is.null(result$wkt)) {
+  cat('WKT:', result$wkt, '\n')
+} else {
+  cat('CRS unknown\n')
+}
+```
+
+This is the recommended approach for legacy rasters or vectors whose metadata
+carries only a PROJ4 string. WbW-R uses this path internally in
+`wbw_projection_identify_epsg` as the third fallback step.
+
+### Area-of-use bounding box
+
+Use `wbw_projection_area_of_use` to retrieve the geographic domain of valid use
+for an EPSG code. This is useful for validating that data falls within the CRS
+before or after reprojection.
+
+Returns a named list `list(lon_min, lat_min, lon_max, lat_max)`, or `NULL` if no
+bounding box is registered for the code.
+
+```r
+library(whiteboxworkflows)
+
+bbox <- wbw_projection_area_of_use(32618)  # UTM Zone 18N
+if (!is.null(bbox)) {
+  cat(sprintf('valid lon: %.1f to %.1f\n', bbox$lon_min, bbox$lon_max))
+  cat(sprintf('valid lat: %.1f to %.1f\n', bbox$lat_min, bbox$lat_max))
+}
+
+# Returns NULL for unregistered codes.
+print(wbw_projection_area_of_use(9999))  # NULL
+```
+
 ## Best Practices
 
 - Confirm source CRS before transformation.

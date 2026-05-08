@@ -6,6 +6,77 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- **Esri Binary Float Grid** (`.flt` / `.hdr`) reader and writer (`formats::esri_float`).
+  Reads both `LSBFIRST` and `MSBFIRST` byte orders; handles `xllcorner`/`xllcenter` and
+  `yllcorner`/`yllcenter` variants; reads and writes a `.prj` WKT sidecar when present.
+- **XYZ ASCII Grid** (`.xyz`) reader and writer (`formats::xyz`).
+  Auto-detects comma/tab/whitespace delimiter and optional text header rows; infers a
+  regular grid from unordered point clouds; validates uniform cell spacing before
+  constructing the raster.
+- **DTED** (`.dt0` / `.dt1` / `.dt2`) reader and writer (`formats::dted`).
+  Implements MIL-PRF-89020B binary format; parses `UHL1` header for origin coordinates,
+  arc intervals, and grid dimensions; handles big-endian `i16` elevation records and void
+  values; CRS is auto-assigned to WGS-84 (EPSG:4326) on read.
+- `.hdr` extension auto-detection now distinguishes ENVI headers (first token `ENVI`) from
+  Esri Float Grid headers (`ncols` first token) via a new `detect_hdr()` helper.
+- **ERDAS IMAGINE HFA** (`.img`) read-only support (`formats::hfa`).
+  Parses the `EHFA_HEADER_TAG` file header, walks the HFA node tree, and reads
+  `Eimg_Layer` band nodes (direct + tiled storage, EPT types u1–f64).
+  Geo-transform extracted from `Eprj_MapInfo`; WGS-84 geographic CRS detected
+  from `Eprj_ProParameters`. `.img` files are auto-detected via magic-byte sniff
+  (ENVI `.img` files continue to work via `.hdr` sidecar fallback).
+- `RasterFormat::HfaImg` variant.
+- **PNG + world file** support (`.png` + `.pgw`/`.pngw`/`.wld`) with reader and writer.
+  Supports grayscale/RGB/RGBA plus 16-bit grayscale/RGB PNG data and non-rotated
+  world-file georeferencing.
+- **JPEG + world file** support (`.jpg`/`.jpeg` + `.jgw`/`.jpgw`/`.jpegw`/`.wld`) with
+  reader and writer. Supports grayscale and RGB JPEG data (CMYK is converted to RGB)
+  and non-rotated world-file georeferencing.
+- `RasterFormat` variants: `Png`, `Jpeg`.
+- `ReprojectOptions::warn_on_area_of_use_mismatch` (default `false`) and
+  `ReprojectOptions::with_area_of_use_warning(bool)` to emit non-fatal warnings
+  when sampled source raster points appear outside source/destination CRS area
+  of use definitions during reprojection.
+- `CrsInfo::from_proj4(proj4)` constructor with optional EPSG inference by
+  parsing the PROJ string via `wbprojection` and mapping to an OGC WKT when a
+  known code is identified.
+- HFA CRS Tier C expansion in `formats::hfa`:
+  strict seeded projected mappings now include canonical forms for
+  WGS84 Pseudo Mercator (`EPSG:3857`), World Mercator (`EPSG:3395`),
+  Plate Carree/Equirectangular (`EPSG:32662`),
+  Equidistant Cylindrical (`EPSG:4087`),
+  Cylindrical Equal Area (`EPSG:6933`),
+  NSIDC Sea Ice Polar Stereographic North (`EPSG:3413`),
+  NSIDC Sea Ice Polar Stereographic South (`EPSG:3976`),
+  Arctic Polar Stereographic (`EPSG:3995`),
+  Antarctic Polar Stereographic (`EPSG:3031`),
+  Lambert Azimuthal Equal Area EASE North (`EPSG:6931`), and
+  Lambert Azimuthal Equal Area EASE South (`EPSG:6932`),
+  ETRS89 / LAEA Europe (`EPSG:3035`),
+  NAD83 CONUS Albers (`EPSG:5070`), and
+  NAD83 Statistics Canada Lambert (`EPSG:3347`).
+  TM/Gauss-Kruger families also infer UTM EPSG codes when parameters
+  match canonical UTM signatures, and UTM zone/hemisphere may be
+  recovered from projection names (e.g., `...UTM_Zone_11N`) when
+  projection-number metadata is weak or missing. Explicit EPSG tokens
+  in projection names (e.g., `...EPSG:3035`) are also recognized.
+  A strict name-only seed path for common CRS labels (for example,
+  `Web Mercator`, `ETRS89 / LAEA Europe`, `NAD83 / CONUS Albers`) is
+  also applied when projection parameters are absent. Name-based
+  precedence is deterministic: explicit `EPSG` token > UTM name parse
+  > strict name seed.
+  WGS72 UTM EPSG ranges
+  (`322xx` north / `323xx` south) are now recognized in this path.
+- HFA reader now supports RLC-compressed blocks (`compressType=1`) for
+  both direct and tiled storage in `formats::hfa`.
+
+### Changed
+- Raster reprojection source CRS resolution now falls back in this order:
+  `crs.epsg` -> `crs.wkt` -> `crs.proj4`.
+  This enables reprojection workflows for datasets that provide PROJ metadata
+  without a populated EPSG code.
+
 ## [0.1.4] - 2026-05-07
 
 ### Added

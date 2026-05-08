@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+### Added
+- `VectorReprojectOptions::warn_on_area_of_use_mismatch` (default `false`) and
+	`VectorReprojectOptions::with_area_of_use_warning(bool)` to emit non-fatal
+	warnings when sampled layer extent points appear outside source/destination
+	CRS area of use definitions during vector reprojection.
+
 ## [0.1.2] - 2026-05-07
 
 ### Added

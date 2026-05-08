@@ -315,10 +315,10 @@ fn detect_hdr(path: &str) -> Result<RasterFormat> {
 /// labelled raster (which requires a `.hdr` sidecar).
 fn detect_img(path: &str) -> Result<RasterFormat> {
     use std::io::Read;
-    const HFA_MAGIC: &[u8; 16] = b"EHFA_HEADER_TAG\0";
+    const HFA_MAGIC_PREFIX: &[u8] = b"EHFA_HEADER_TAG";
     if let Ok(mut f) = File::open(path) {
         let mut magic = [0u8; 16];
-        if f.read_exact(&mut magic).is_ok() && &magic == HFA_MAGIC {
+        if f.read_exact(&mut magic).is_ok() && magic.starts_with(HFA_MAGIC_PREFIX) {
             return Ok(RasterFormat::HfaImg);
         }
     }

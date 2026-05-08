@@ -30,6 +30,21 @@ def run_cmd(cmd, timeout=60):
         return 1, "", str(exc)
 
 
+def ogr_feature_count(path):
+    """Return feature count from ogrinfo output when available."""
+    rc, out, err = run_cmd(f"ogrinfo -ro -so -al '{path}'")
+    if rc != 0:
+        return None, err
+    for line in out.splitlines():
+        line = line.strip()
+        if line.lower().startswith("feature count:"):
+            try:
+                return int(line.split(":", 1)[1].strip()), ""
+            except Exception:
+                return None, f"Unable to parse feature count from line: {line}"
+    return None, "Feature Count line not found in ogrinfo output"
+
+
 def require_cmd(name):
     """Return True when a command is on PATH."""
     return shutil.which(name) is not None
@@ -315,7 +330,11 @@ def test_r07():
     status, note = raster_roundtrip(source, roundtrip)
     if status != "PASS":
         return status, note
-    has_world = (roundtrip.with_suffix(".pgw").exists() or roundtrip.with_suffix(".pngw").exists())
+    has_world = (
+        roundtrip.with_suffix(".pgw").exists()
+        or roundtrip.with_suffix(".pngw").exists()
+        or roundtrip.with_suffix(".wld").exists()
+    )
     if not has_world:
         return "FAIL", "Roundtrip PNG world file was not created"
     return "PASS", f"{note}; world_file=present"
@@ -409,6 +428,24 @@ def test_v04():
     rc, _, err = run_cmd(f"ogr2ogr -f FlatGeobuf '{source_fgb}' '{source_geojson}'")
     if rc != 0:
         return "FAIL", f"FlatGeobuf creation failed: {err}"
+    producer_count, count_err = ogr_feature_count(source_fgb)
+    if producer_count is None:
+        return "FAIL", f"FlatGeobuf producer count unavailable: {count_err}"
+
+    env, env_err = get_env()
+    if env is None:
+        return "FAIL", env_err
+    try:
+        wbw_source_count = env.read_vector(str(source_fgb)).feature_count()
+    except Exception as exc:
+        return "FAIL", str(exc)
+
+    if wbw_source_count != producer_count:
+        return "FAIL", (
+            "FlatGeobuf source parse mismatch: "
+            f"producer_count={producer_count}, wbw_count={wbw_source_count}"
+        )
+
     return vector_roundtrip(source_fgb, roundtrip)
 
 

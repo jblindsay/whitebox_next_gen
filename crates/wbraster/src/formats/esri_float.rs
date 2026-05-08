@@ -63,9 +63,13 @@ fn read_from_header(hdr_path: &str, flt_path: &str) -> Result<Raster> {
     let mut rows: Option<usize> = None;
     let mut xll: Option<f64> = None;
     let mut yll: Option<f64> = None;
+    let mut ulx: Option<f64> = None;
+    let mut uly: Option<f64> = None;
     let mut xll_is_corner = true;
     let mut yll_is_corner = true;
     let mut cell_size: Option<f64> = None;
+    let mut xdim: Option<f64> = None;
+    let mut ydim: Option<f64> = None;
     let mut nodata: f64 = -9999.0;
     let mut little_endian = true; // LSBFIRST is the default
 
@@ -96,9 +100,14 @@ fn read_from_header(hdr_path: &str, flt_path: &str) -> Result<Raster> {
                     yll_is_corner = false;
                 }
                 "cellsize" => cell_size = Some(parse_f64(&key, &val)?),
+                "ulxmap" => ulx = Some(parse_f64(&key, &val)?),
+                "ulymap" => uly = Some(parse_f64(&key, &val)?),
+                "xdim" => xdim = Some(parse_f64(&key, &val)?),
+                "ydim" => ydim = Some(parse_f64(&key, &val)?),
                 "nodata_value" | "nodata" => nodata = parse_f64(&key, &val)?,
                 "byteorder" => {
-                    little_endian = !val.trim().eq_ignore_ascii_case("MSBFIRST");
+                    let token = val.trim().to_ascii_uppercase();
+                    little_endian = token != "MSBFIRST" && token != "M";
                 }
                 _ => {}
             }
@@ -107,12 +116,34 @@ fn read_from_header(hdr_path: &str, flt_path: &str) -> Result<Raster> {
 
     let cols = cols.ok_or_else(|| RasterError::MissingField("NCOLS".into()))?;
     let rows = rows.ok_or_else(|| RasterError::MissingField("NROWS".into()))?;
-    let cs = cell_size.ok_or_else(|| RasterError::MissingField("CELLSIZE".into()))?;
-    let xll = xll.ok_or_else(|| RasterError::MissingField("XLLCORNER/XLLCENTER".into()))?;
-    let yll = yll.ok_or_else(|| RasterError::MissingField("YLLCORNER/YLLCENTER".into()))?;
+    let cs = if let Some(cs) = cell_size {
+        cs
+    } else if let (Some(dx), Some(dy)) = (xdim, ydim) {
+        if (dx - dy).abs() > 1.0e-12 {
+            return Err(RasterError::CorruptData(format!(
+                "Esri Float Grid: XDIM ({dx}) and YDIM ({dy}) differ"
+            )));
+        }
+        dx
+    } else {
+        return Err(RasterError::MissingField("CELLSIZE or XDIM/YDIM".into()));
+    };
 
-    let x_min = if xll_is_corner { xll } else { xll - cs * 0.5 };
-    let y_min = if yll_is_corner { yll } else { yll - cs * 0.5 };
+    let (x_min, y_min) = if let (Some(xll), Some(yll)) = (xll, yll) {
+        let x_min = if xll_is_corner { xll } else { xll - cs * 0.5 };
+        let y_min = if yll_is_corner { yll } else { yll - cs * 0.5 };
+        (x_min, y_min)
+    } else if let (Some(ulx), Some(uly)) = (ulx, uly) {
+        // GDAL EHdr profile: ULXMAP/ULYMAP are center coordinates of upper-left pixel.
+        let x_min = ulx - 0.5 * cs;
+        let y_max = uly + 0.5 * cs;
+        let y_min = y_max - rows as f64 * cs;
+        (x_min, y_min)
+    } else {
+        return Err(RasterError::MissingField(
+            "XLLCORNER/XLLCENTER + YLLCORNER/YLLCENTER or ULXMAP/ULYMAP".into(),
+        ));
+    };
 
     if cols == 0 || rows == 0 {
         return Err(RasterError::InvalidDimensions { cols, rows });

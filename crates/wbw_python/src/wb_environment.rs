@@ -689,6 +689,47 @@ fn path_has_extension(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn output_raster_format_fallback(path: &Path) -> Option<RasterFormat> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.trim().to_ascii_lowercase())?;
+
+    match ext.as_str() {
+        "dt0" | "dt1" | "dt2" => Some(RasterFormat::Dted),
+        "flt" => Some(RasterFormat::EsriFloat),
+        "png" => Some(RasterFormat::Png),
+        "jpg" | "jpeg" => Some(RasterFormat::Jpeg),
+        "tif" | "tiff" => Some(RasterFormat::GeoTiff),
+        _ => None,
+    }
+}
+
+fn copy_raster_sidecars_if_present(src: &Path, dst: &Path, format: RasterFormat) -> PyResult<()> {
+    let sidecar_exts: &[&str] = match format {
+        RasterFormat::EsriFloat => &["hdr", "prj"],
+        RasterFormat::Png => &["pgw", "pngw", "wld", "prj"],
+        RasterFormat::Jpeg => &["jgw", "jpgw", "jpegw", "wld", "prj"],
+        _ => &[],
+    };
+
+    for ext in sidecar_exts {
+        let src_sidecar = src.with_extension(ext);
+        if src_sidecar.exists() {
+            let dst_sidecar = dst.with_extension(ext);
+            std::fs::copy(&src_sidecar, &dst_sidecar).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                    "Failed to copy raster sidecar '{}' to '{}': {e}",
+                    src_sidecar.display(),
+                    dst_sidecar.display()
+                ))
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 fn write_raster_with_controls_for_env(
     working_directory: &Path,
     verbose: bool,
@@ -709,12 +750,15 @@ fn write_raster_with_controls_for_env(
         effective_controls.geotiff.layout = Some(GeoTiffLayout::Cog { tile_size: 512 });
     }
 
-    let output_format = RasterFormat::for_output_path(&out_path.to_string_lossy()).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-            "Unable to infer output format for '{}': {e}",
-            out_path.display()
-        ))
-    })?;
+    let output_format = match RasterFormat::for_output_path(&out_path.to_string_lossy()) {
+        Ok(fmt) => fmt,
+        Err(primary_err) => output_raster_format_fallback(&out_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Unable to infer output format for '{}': {primary_err}",
+                out_path.display()
+            ))
+        })?,
+    };
 
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| {
@@ -772,6 +816,7 @@ fn write_raster_with_controls_for_env(
                 "Failed to write raster: {e}"
             ))
         })?;
+        copy_raster_sidecars_if_present(&raster.file_path, &out_path, output_format)?;
     } else {
         let source = WbRaster::read(&raster.file_path).map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(

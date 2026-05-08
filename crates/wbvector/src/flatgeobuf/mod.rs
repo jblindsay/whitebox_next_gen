@@ -36,6 +36,22 @@ use self::header_generated as hg;
 /// FlatGeobuf v3 file signature (`fgb\x03fgb\0`).
 pub const MAGIC: [u8; 8] = [0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x00];
 
+fn has_compatible_magic(sig: &[u8]) -> bool {
+    if sig.len() < 8 {
+        return false;
+    }
+    // Accept both observed trailing bytes for v3 FlatGeobuf in the wild:
+    // `fgb\x03fgb\x00` (writer default here) and `fgb\x03fgb\x01` (GDAL-produced sample).
+    sig[0] == 0x66
+        && sig[1] == 0x67
+        && sig[2] == 0x62
+        && sig[3] == 0x03
+        && sig[4] == 0x66
+        && sig[5] == 0x67
+        && sig[6] == 0x62
+        && (sig[7] == 0x00 || sig[7] == 0x01)
+}
+
 // ── FlatGeobuf column-type codes ─────────────────────────────────────────────
 mod ct {
     pub const BYTE:     u8 =  0;
@@ -80,7 +96,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
 
 /// Parse FlatGeobuf from a byte slice.
 pub fn from_bytes(data: &[u8]) -> Result<Layer> {
-    if data.len() < 12 || &data[0..8] != MAGIC {
+    if data.len() < 12 || !has_compatible_magic(&data[0..8]) {
         return Err(GeoError::NotFlatGeobuf(
             format!("bad magic {:?}", &data[..8.min(data.len())])
         ));
@@ -199,39 +215,102 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
         }
     }
 
-    let mut pos = 12 + hdr_size;
-    if hdr.index_node_size() > 0 && hdr.features_count() > 0 {
-        let index_size = packed_index_size(hdr.features_count() as usize, hdr.index_node_size());
-        pos = pos.saturating_add(index_size);
-        if pos > data.len() {
+    let expected_count = hdr.features_count() as usize;
+    let base_pos = 12 + hdr_size;
+    let mut start_positions: Vec<usize> = Vec::new();
+    if hdr.index_node_size() > 0 && expected_count > 0 {
+        let index_size = packed_index_size(expected_count, hdr.index_node_size());
+        let with_index = base_pos.saturating_add(index_size);
+        if with_index > data.len() {
             return Err(GeoError::NotFlatGeobuf("index extends beyond EOF".into()));
+        }
+        start_positions.push(with_index);
+    }
+    start_positions.push(base_pos);
+
+    let mut best_features: Option<Vec<Feature>> = None;
+
+    for mut pos in start_positions {
+        let mut parsed: Vec<Feature> = Vec::new();
+        let mut parse_failed = false;
+        let mut fidx = 0usize;
+
+        while pos + 4 <= data.len() {
+            let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
+            pos += 4;
+            if feat_size == 0 || pos + feat_size > data.len() {
+                break;
+            }
+            let feat_buf = &data[pos..pos + feat_size];
+            pos += feat_size;
+
+            let feat = match fg::root_as_feature(feat_buf) {
+                Ok(v) => v,
+                Err(_) => {
+                    parse_failed = true;
+                    break;
+                }
+            };
+
+            let geometry = match feat.geometry().map(decode_geom_standard).transpose() {
+                Ok(v) => v,
+                Err(_) => {
+                    parse_failed = true;
+                    break;
+                }
+            };
+            let attrs = if let Some(props) = feat.properties() {
+                let mut p = Vec::with_capacity(props.len());
+                for i in 0..props.len() {
+                    p.push(props.get(i));
+                }
+                decode_props(&p, &columns)
+            } else {
+                vec![FieldValue::Null; columns.len()]
+            };
+
+            parsed.push(Feature {
+                fid: fidx as u64,
+                geometry,
+                attributes: attrs,
+            });
+            fidx += 1;
+
+            if expected_count > 0 && parsed.len() == expected_count {
+                break;
+            }
+        }
+
+        if parse_failed {
+            continue;
+        }
+
+        if expected_count > 0 && parsed.len() == expected_count {
+            best_features = Some(parsed);
+            break;
+        }
+
+        if best_features
+            .as_ref()
+            .map(|cur| parsed.len() > cur.len())
+            .unwrap_or(true)
+        {
+            best_features = Some(parsed);
         }
     }
 
-    let mut fidx = 0usize;
-    while pos + 4 <= data.len() {
-        let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        pos += 4;
-        if feat_size == 0 || pos + feat_size > data.len() {
-            break;
-        }
-        let feat_buf = &data[pos..pos + feat_size];
-        pos += feat_size;
+    let features = best_features.ok_or_else(|| {
+        GeoError::NotFlatGeobuf("failed to decode FlatGeobuf feature records".into())
+    })?;
 
-        let feat = fg::root_as_feature(feat_buf)
-            .map_err(|e| GeoError::NotFlatGeobuf(format!("invalid feature buffer: {e}")))?;
+    if expected_count > 0 && features.is_empty() {
+        return Err(GeoError::NotFlatGeobuf(
+            "failed to decode expected FlatGeobuf feature records".into(),
+        ));
+    }
 
-        let geometry = feat.geometry().map(decode_geom_standard).transpose()?;
-        let attrs = if let Some(props) = feat.properties() {
-            let mut p = Vec::with_capacity(props.len());
-            for i in 0..props.len() { p.push(props.get(i)); }
-            decode_props(&p, &columns)
-        } else {
-            vec![FieldValue::Null; columns.len()]
-        };
-
-        layer.push(Feature { fid: fidx as u64, geometry, attributes: attrs });
-        fidx += 1;
+    for feature in features {
+        layer.push(feature);
     }
 
     Ok(layer)
@@ -1031,6 +1110,15 @@ mod tests {
         let l2 = from_bytes(&bytes).unwrap();
         assert_eq!(l2.len(), 2);
         assert_eq!(l2.schema.len(), 2);
+    }
+
+    #[test]
+    fn accepts_compat_magic_variant() {
+        let l1 = sample_layer();
+        let mut bytes = to_bytes(&l1);
+        bytes[7] = 0x01;
+        let l2 = from_bytes(&bytes).unwrap();
+        assert_eq!(l2.len(), 2);
     }
 
     #[test]

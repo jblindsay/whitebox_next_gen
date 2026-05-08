@@ -1281,43 +1281,6 @@ pub fn projection_area_of_use(epsg: u32) -> Result<String, ToolError> {
     }
 }
 
-/// Parse a PROJ string and return the identified EPSG code, if any, or a WKT string.
-///
-/// Returns a JSON object: `{"epsg": <u32>}` or `{"wkt": "<string>"}` or `{"unknown": true}`.
-pub fn projection_from_proj_string(proj_str: &str) -> Result<String, ToolError> {
-    let crs = from_proj_string(proj_str).map_err(to_invalid_request)?;
-    if let Some(epsg) = identify_epsg_from_crs(&crs) {
-        return serde_json::to_string(&serde_json::json!({"epsg": epsg}))
-            .map_err(|e| ToolError::Execution(e.to_string()));
-    }
-    let wkt = crs.to_wkt();
-    if wkt.is_empty() {
-        return serde_json::to_string(&serde_json::json!({"unknown": true}))
-            .map_err(|e| ToolError::Execution(e.to_string()));
-    }
-    serde_json::to_string(&serde_json::json!({"wkt": wkt}))
-        .map_err(|e| ToolError::Execution(e.to_string()))
-}
-
-/// Return the area-of-use bounding box for the given EPSG code.
-///
-/// Returns a JSON object: `{"lon_min": f64, "lat_min": f64, "lon_max": f64, "lat_max": f64}`
-/// or `null` if the EPSG code has no known bounding box.
-pub fn projection_area_of_use(epsg: u32) -> Result<String, ToolError> {
-    match epsg_area_of_use(epsg) {
-        Some(CrsBoundingBox { lon_min, lat_min, lon_max, lat_max }) => {
-            serde_json::to_string(&serde_json::json!({
-                "lon_min": lon_min,
-                "lat_min": lat_min,
-                "lon_max": lon_max,
-                "lat_max": lat_max,
-            }))
-            .map_err(|e| ToolError::Execution(e.to_string()))
-        }
-        None => Ok("null".to_string()),
-    }
-}
-
 /// Identify an EPSG code from WKT or CRS text, when possible.
 pub fn projection_identify_epsg(crs_text: &str) -> Result<Option<u32>, ToolError> {
     let trimmed = crs_text.trim();

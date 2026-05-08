@@ -271,6 +271,7 @@ print(f"After clear: {wbe.raster_memory_count()}")
 <li>Export memory-backed rasters to disk with <code>write_raster()</code> when persisting results.</li>
 <li>Call <code>remove_raster_from_memory()</code> after a raster is no longer needed.</li>
 <li>Use <code>clear_raster_memory()</code> between independent job phases.</li>
+<li>Use <code>clear_memory()</code> when resetting all in-process raster/vector/lidar stores together.</li>
 <li>Monitor <code>raster_memory_count()</code> and <code>raster_memory_bytes()</code> in large pipelines.</li>
 </ul>
 <h2 id="iterating-through-grid-cells"><a class="header" href="#iterating-through-grid-cells">Iterating Through Grid Cells</a></h2>
@@ -375,8 +376,8 @@ targeted custom fixes only where necessary.</p>
 
 wbe = wb.WbEnvironment()
 dem = wbe.read_raster('dem.tif')
-filled = wbe.hydrology.fill_depressions(dem)
-slope = wbe.terrain.slope(filled)
+filled = wbe.hydrology.depressions_storage.fill_depressions(dem)
+slope = wbe.terrain.derivatives.slope(filled)
 
 # Optional post-processing pass in NumPy.
 a = slope.to_numpy(all_bands=False)
@@ -440,6 +441,7 @@ from the tables to keep the reference readable.</p>
 </tbody></table>
 </div>
 <h3 id="unary-math-and-numeric-transforms"><a class="header" href="#unary-math-and-numeric-transforms">Unary Math and Numeric Transforms</a></h3>
+<p>Unary transform calls return a single Raster object. Band selection (<code>band_mode='all'|'active'|'list'</code> and <code>bands=[...]</code>) controls which bands are changed within that returned raster.</p>
 <div class="table-wrapper"><table><thead><tr><th>Method</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>abs</code></td><td>Absolute value transform.</td></tr>
 <tr><td><code>acos</code>, <code>arccos</code></td><td>Inverse cosine transform.</td></tr>

@@ -218,7 +218,7 @@ schema = v.schema()
 meta = v.metadata()
 
 # Pass to spatial tools
-buffered = wbe.vector.buffer_vector(v, distance=10.0)
+buffered = wbe.vector.geometry_processing.buffer_vector(v, distance=10.0)
 
 # Export to disk when ready
 wbe.write_vector(buffered, 'buffered_final.gpkg')
@@ -247,12 +247,37 @@ print(f"After remove: {wbe.vector_memory_count()}")
 wbe.clear_vector_memory()
 print(f"After clear: {wbe.vector_memory_count()}")
 </code></pre>
+<h3 id="implicit-memory-output-from-tools"><a class="header" href="#implicit-memory-output-from-tools">Implicit Memory Output from Tools</a></h3>
+<p>All vector-output tools store their result in memory automatically when the
+<code>output</code> parameter is omitted. You do not need to pass <code>file_mode='m'</code> or
+choose a temporary path — simply leave <code>output</code> out and the returned <code>Vector</code>
+object is already memory-backed:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+roads = wbe.read_vector('roads.gpkg')
+
+# No output path — result is stored in memory automatically
+buffered = wbe.vector.geometry_processing.buffer_vector(roads, distance=15.0)
+print(buffered.file_path)  # prints: memory://vector/...
+
+# Chain operations without any intermediate files
+clipped = wbe.vector.overlay_analysis.clip(buffered, 'boundary.gpkg')
+print(clipped.file_path)  # also memory://vector/...
+
+# Persist the final result only
+wbe.write_vector(clipped, 'result.gpkg')
+</code></pre>
+<p>This applies to all tool categories — GIS, hydrology, geomorphometry, and stream
+network tools all follow the same rule. Providing an explicit <code>output</code> path
+writes to disk as before.</p>
 <p>Best practices:</p>
 <ul>
 <li>Use <code>file_mode='m'</code> for intermediate spatial analysis results.</li>
 <li>Export memory-backed vectors to disk with <code>write_vector()</code> when persisting final outputs.</li>
 <li>Call <code>remove_vector_from_memory()</code> after a vector is no longer needed.</li>
 <li>Use <code>clear_vector_memory()</code> between independent analysis phases.</li>
+<li>Use <code>clear_memory()</code> when resetting all in-process raster/vector/lidar stores together.</li>
 </ul>
 <h2 id="iterate-through-features"><a class="header" href="#iterate-through-features">Iterate Through Features</a></h2>
 <p>Use feature iteration for inspections, QA checks, or bespoke attribute rules.</p>
@@ -295,7 +320,7 @@ for reproducibility.</p>
 
 wbe = wb.WbEnvironment()
 roads = wbe.read_vector('roads.gpkg')
-buffered = wbe.vector.buffer_vector(roads, distance=15.0)
+buffered = wbe.vector.geometry_processing.buffer_vector(roads, distance=15.0)
 
 # Extensionless output defaults to GeoPackage
 wbe.write_vector(buffered, 'roads_buffer')

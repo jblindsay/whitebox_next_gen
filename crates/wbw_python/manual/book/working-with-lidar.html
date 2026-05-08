@@ -260,12 +260,36 @@ print(f"After remove: {wbe.lidar_memory_count()}")
 wbe.clear_lidar_memory()
 print(f"After clear: {wbe.lidar_memory_count()}")
 </code></pre>
+<h3 id="implicit-memory-output-from-tools"><a class="header" href="#implicit-memory-output-from-tools">Implicit Memory Output from Tools</a></h3>
+<p>All lidar-output tools store their result in memory automatically when the
+<code>output</code> parameter is omitted. You do not need to pass <code>file_mode='m'</code> or
+choose a temporary path — simply leave <code>output</code> out and the returned <code>Lidar</code>
+object is already memory-backed:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+survey = wbe.read_lidar('survey.laz')
+
+# No output path — result is stored in memory automatically
+filtered = wbe.lidar.filtering_classification.filter_lidar_classes(survey, excluded_classes=[7])
+print(filtered.file_path)  # prints: memory://lidar/...
+
+# Chain operations without any intermediate files
+thinned = wbe.lidar.interpolation_gridding.lidar_thin(filtered, resolution=0.5)
+print(thinned.file_path)  # also memory://lidar/...
+
+# Persist the final result only
+wbe.write_lidar(thinned, 'survey_clean.copc.laz')
+</code></pre>
+<p>This applies to all lidar tools. Providing an explicit <code>output</code> path writes to
+disk as before.</p>
 <p>Best practices:</p>
 <ul>
 <li>Use <code>file_mode='m'</code> for intermediate point cloud processing.</li>
 <li>Export memory-backed lidar to disk with <code>write_lidar()</code> when persisting final outputs.</li>
 <li>Call <code>remove_lidar_from_memory()</code> after a point cloud is no longer needed.</li>
 <li>Use <code>clear_lidar_memory()</code> between independent analysis phases.</li>
+<li>Use <code>clear_memory()</code> when resetting all in-process raster/vector/lidar stores together.</li>
 <li>Monitor <code>lidar_memory_count()</code> for large processing jobs.</li>
 </ul>
 <h2 id="iterating-through-lidar-points"><a class="header" href="#iterating-through-lidar-points">Iterating Through Lidar Points</a></h2>

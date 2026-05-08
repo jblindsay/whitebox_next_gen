@@ -188,8 +188,11 @@ format is best used as an interchange artifact or as an internal working format.
 <h2 id="raster-formats"><a class="header" href="#raster-formats">Raster Formats</a></h2>
 <p>Exhaustive raster format support in the current WbW-Py build:</p>
 <div class="table-wrapper"><table><thead><tr><th>Format</th><th>Read (<code>read_raster</code>)</th><th>Write (<code>write_raster</code>)</th><th>Common extensions / path rules</th></tr></thead><tbody>
+<tr><td>DTED</td><td>Yes</td><td>Yes</td><td><code>.dt0</code>, <code>.dt1</code>, <code>.dt2</code> (DTED 0, 1, 2 elevation data; WGS-84 geographic only)</td></tr>
 <tr><td>Esri ASCII Grid</td><td>Yes</td><td>Yes</td><td><code>.asc</code> (and <code>.grd</code> when detected as ASCII)</td></tr>
 <tr><td>Esri Binary Grid workspace</td><td>Yes</td><td>Backend-only</td><td>Esri Binary workspace directory (<code>hdr.adf</code> + <code>w001001.adf</code>) or <code>.adf</code></td></tr>
+<tr><td>Esri Float Grid</td><td>Yes</td><td>Yes</td><td><code>.flt</code>, <code>.hdr</code> (single-band float grid with header file)</td></tr>
+<tr><td>ERDAS IMAGINE (HFA)</td><td>Yes</td><td>No</td><td><code>.img</code> - read-only MVP; RLC (run-length) compression supported</td></tr>
 <tr><td>GRASS ASCII Raster</td><td>Yes</td><td>Yes</td><td><code>.txt</code> / <code>.asc</code> when GRASS header keys are detected</td></tr>
 <tr><td>Surfer GRD</td><td>Yes</td><td>Yes</td><td><code>.grd</code> (DSAA / DSRB signatures)</td></tr>
 <tr><td>PCRaster</td><td>Yes</td><td>Yes</td><td><code>.map</code> (CSF signature)</td></tr>
@@ -200,7 +203,10 @@ format is best used as an interchange artifact or as an internal working format.
 <tr><td>GeoTIFF / BigTIFF / COG</td><td>Yes</td><td>Yes</td><td><code>.tif</code>, <code>.tiff</code></td></tr>
 <tr><td>GeoPackage raster</td><td>Yes</td><td>Yes</td><td><code>.gpkg</code></td></tr>
 <tr><td>JPEG2000 / GeoJP2</td><td>Yes</td><td>Yes</td><td><code>.jp2</code></td></tr>
+<tr><td>JPEG + World File</td><td>Yes</td><td>Yes</td><td><code>.jpg</code>, <code>.jpeg</code> with <code>.jgw</code>, <code>.jpgw</code>, <code>.jpegw</code>, or <code>.wld</code> world file</td></tr>
+<tr><td>PNG + World File</td><td>Yes</td><td>Yes</td><td><code>.png</code> with <code>.pgw</code>, <code>.pngw</code>, or <code>.wld</code> world file</td></tr>
 <tr><td>Zarr</td><td>Yes</td><td>Yes</td><td><code>.zarr</code> store (directory / suffix)</td></tr>
+<tr><td>XYZ ASCII Grid</td><td>Yes</td><td>Yes</td><td><code>.xyz</code> (whitespace or comma-delimited X Y Z points)</td></tr>
 </tbody></table>
 </div>
 <p>Typical pattern:</p>

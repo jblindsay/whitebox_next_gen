@@ -345,7 +345,7 @@ explicit.</p>
 wbe = wb.WbEnvironment()
 roads = wbe.read_vector('roads.gpkg')
 
-roads_utm = wbe.reproject_vector(
+roads_utm = wbe.projection_georeferencing.general.reproject_vector(
     roads,
     dst_epsg=32618,
     failure_policy='error',
@@ -362,7 +362,7 @@ defaults.</p>
 wbe = wb.WbEnvironment()
 las = wbe.read_lidar('survey.las')
 
-las_utm = wbe.reproject_lidar(
+las_utm = wbe.projection_georeferencing.general.reproject_lidar(
     las,
     dst_epsg=32618,
     use_3d_transform=False,
@@ -385,7 +385,7 @@ ground-control points (GCPs) linking image pixel coordinates to map coordinates.
 
 wbe = wb.WbEnvironment()
 
-result = wbe.georeference_raster_from_control_points(
+result = wbe.projection_georeferencing.general.georeference_raster_from_control_points(
     input_raster='historical_scan.tif',
     control_points_csv='historical_scan_gcps.csv',
     epsg=32618,
@@ -411,6 +411,70 @@ print('epsg from wkt:', wbe.projection.identify_epsg(wkt_3857))
 pts = [{'x': -79.3832, 'y': 43.6532}]
 pts_utm = wbe.projection.reproject_points(pts, src_epsg=4326, dst_epsg=32618)
 print(pts_utm)
+</code></pre>
+<h3 id="parse-a-proj-string"><a class="header" href="#parse-a-proj-string">Parse a PROJ string</a></h3>
+<p>Use <code>projection.from_proj_string</code> when you have a PROJ4-style string (e.g.,
+read from a legacy file header or third-party metadata) and need to identify
+the corresponding EPSG code or obtain an OGC WKT representation.</p>
+<p>The method returns a dict with exactly one of these keys:</p>
+<ul>
+<li><code>{'epsg': int}</code> — EPSG code identified</li>
+<li><code>{'wkt': str}</code> — no EPSG match, WKT representation available</li>
+<li><code>{'unknown': True}</code> — PROJ string parsed but CRS could not be identified further</li>
+</ul>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+proj_str = '+proj=utm +zone=17 +datum=NAD83 +units=m +no_defs'
+result = wbe.projection.from_proj_string(proj_str)
+
+if 'epsg' in result:
+    print('identified EPSG:', result['epsg'])  # e.g. 26917
+elif 'wkt' in result:
+    print('WKT:', result['wkt'])
+else:
+    print('CRS unknown')
+</code></pre>
+<p>This is the recommended fallback for legacy data sources that carry only a
+PROJ4 metadata string. WbW-Py itself uses this path internally when
+reprojecting rasters whose CRS metadata does not include an EPSG code.</p>
+<h3 id="area-of-use-bounding-box"><a class="header" href="#area-of-use-bounding-box">Area-of-use bounding box</a></h3>
+<p>Use <code>projection.area_of_use</code> to retrieve the geographic bounding box of valid
+use for an EPSG code. This is useful for validating that your data actually
+falls within the intended CRS domain before or after reprojection.</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+
+bbox = wbe.projection.area_of_use(32618)  # UTM Zone 18N
+if bbox is not None:
+    print(f"valid lon: {bbox['lon_min']} to {bbox['lon_max']}")
+    print(f"valid lat: {bbox['lat_min']} to {bbox['lat_max']}")
+
+# Returns None for codes with no registered bounding box.
+print(wbe.projection.area_of_use(9999))  # None
+</code></pre>
+<p>You can also pass the bounding box check as a pre-reprojection guard:</p>
+<pre><code class="language-python">import whitebox_workflows as wb
+
+wbe = wb.WbEnvironment()
+dem = wbe.read_raster('dem.tif')
+
+dst_epsg = 32618
+bbox = wbe.projection.area_of_use(dst_epsg)
+if bbox is not None:
+    ext = dem.metadata().extent
+    # Quick geographic sanity check before committing to full reprojection.
+    in_range = (
+        ext.min_x &gt;= bbox['lon_min'] and ext.max_x &lt;= bbox['lon_max'] and
+        ext.min_y &gt;= bbox['lat_min'] and ext.max_y &lt;= bbox['lat_max']
+    )
+    if not in_range:
+        print('WARNING: DEM extent may fall outside area of use for EPSG:', dst_epsg)
+
+dem_utm = dem.reproject(dst_epsg=dst_epsg, resample='bilinear')
+wbe.write_raster(dem_utm, 'dem_utm.tif')
 </code></pre>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
 <ul>

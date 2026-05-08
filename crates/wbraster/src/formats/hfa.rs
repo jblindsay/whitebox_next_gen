@@ -74,6 +74,9 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::crs_info::CrsInfo;
 use crate::error::{Result, RasterError};
@@ -83,10 +86,14 @@ use crate::raster::{DataType, Raster, RasterConfig};
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAGIC: &[u8; 16] = b"EHFA_HEADER_TAG\0";
-/// Byte offset within the 34-byte file header where `root_entry_ptr` lives.
-const ROOT_PTR_OFFSET: usize = 24;
-/// Byte offset of `entry_header_length` in the 34-byte file header.
-const ENTRY_HDR_LEN_OFFSET: usize = 28;
+/// Byte offset for canonical `root_entry_ptr` in one HFA header layout variant.
+const ROOT_PTR_OFFSET_V1: usize = 24;
+/// Byte offset for canonical `entry_header_length` in one HFA header layout variant.
+const ENTRY_HDR_LEN_OFFSET_V1: usize = 28;
+/// Alternate observed root-entry pointer offset (GDAL-generated sample compatibility).
+const ROOT_PTR_OFFSET_V2: usize = 28;
+/// Alternate observed entry-header-length offset (GDAL-generated sample compatibility).
+const ENTRY_HDR_LEN_OFFSET_V2: usize = 32;
 /// Standard node-header size (bytes 28-29 of the file header).
 const DEFAULT_ENTRY_HDR_LEN: usize = 128;
 
@@ -111,6 +118,16 @@ const HFA_COMPRESS_RLC: u32 = 1;
 
 /// Read an ERDAS IMAGINE `.img` file (read-only).
 pub fn read(path: &str) -> Result<Raster> {
+    match read_native(path) {
+        Ok(raster) => Ok(raster),
+        Err(native_err) => match read_via_gdal_translate(path) {
+            Ok(raster) => Ok(raster),
+            Err(_) => Err(native_err),
+        },
+    }
+}
+
+fn read_native(path: &str) -> Result<Raster> {
     let mut file = File::open(path)?;
     let mut raw: Vec<u8> = Vec::new();
     file.read_to_end(&mut raw)?;
@@ -126,9 +143,7 @@ pub fn read(path: &str) -> Result<Raster> {
             "HFA: missing EHFA_HEADER_TAG magic bytes".into(),
         ));
     }
-    let root_ptr = read_u32_le(&raw, ROOT_PTR_OFFSET) as usize;
-    let entry_hdr_len = read_u16_le(&raw, ENTRY_HDR_LEN_OFFSET) as usize;
-    let entry_hdr_len = if entry_hdr_len == 0 { DEFAULT_ENTRY_HDR_LEN } else { entry_hdr_len };
+    let (root_ptr, entry_hdr_len) = read_root_and_entry_header_len(&raw)?;
 
     // ── Walk the node tree ────────────────────────────────────────────────
     let mut nodes: Vec<NodeHdr> = Vec::new();
@@ -151,11 +166,22 @@ pub fn read(path: &str) -> Result<Raster> {
     let band_indices: Vec<usize> = nodes
         .iter()
         .enumerate()
-        .filter(|(_, n)| n.type_name == "Eimg_Layer")
+        .filter(|(_, n)| {
+            n.type_name == "Eimg_Layer"
+                || n.type_name == "Eimg_Layer_SubSample"
+                || n.type_name == "Ehfa_Layer"
+                || n.name.starts_with("Layer_")
+        })
         .map(|(i, _)| i)
         .collect();
 
-    if band_indices.is_empty() {
+    let scanned_layer_nodes = if band_indices.is_empty() {
+        scan_for_layer_nodes(&raw, entry_hdr_len)
+    } else {
+        Vec::new()
+    };
+
+    if band_indices.is_empty() && scanned_layer_nodes.is_empty() {
         return Err(RasterError::CorruptData(
             "HFA: no Eimg_Layer nodes found — file may not be a raster image".into(),
         ));
@@ -165,7 +191,10 @@ pub fn read(path: &str) -> Result<Raster> {
     let mut bands: Vec<BandData> = Vec::with_capacity(band_indices.len());
     for &bi in &band_indices {
         let node = &nodes[bi];
-        let band_info = parse_eimg_layer(&raw, node)?;
+        let band_info = match parse_eimg_layer(&raw, node) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
         let children = children_of.get(&node.file_offset).cloned().unwrap_or_default();
 
         // Locate RasterDMS child for tiled storage.
@@ -187,6 +216,27 @@ pub fn read(path: &str) -> Result<Raster> {
             nodata: nodata_val,
             pixel_type: band_info.pixel_type,
         });
+    }
+
+    if bands.is_empty() {
+        for node in &scanned_layer_nodes {
+            let band_info = match parse_eimg_layer(&raw, node) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let pixels = read_band_pixels(&raw, &band_info, None)?;
+            bands.push(BandData {
+                pixels,
+                nodata: None,
+                pixel_type: band_info.pixel_type,
+            });
+        }
+    }
+
+    if bands.is_empty() {
+        return Err(RasterError::CorruptData(
+            "HFA: no parseable raster layer payloads found".into(),
+        ));
     }
 
     // Validate uniform dimensions.
@@ -247,6 +297,59 @@ pub fn read(path: &str) -> Result<Raster> {
         ..Default::default()
     };
     Raster::from_data(cfg, all_data)
+}
+
+fn read_via_gdal_translate(path: &str) -> Result<Raster> {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let temp_path: PathBuf = std::env::temp_dir().join(format!("wbw_hfa_fallback_{unique}.tif"));
+
+    let status = Command::new("gdal_translate")
+        .args(["-of", "GTiff", path, temp_path.to_string_lossy().as_ref()])
+        .status();
+
+    let status = match status {
+        Ok(status) if status.success() => status,
+        _ => return Err(RasterError::CorruptData("HFA: native parser failed and GDAL fallback was unavailable".into())),
+    };
+    let _ = status;
+
+    let result = super::geotiff::read(temp_path.to_string_lossy().as_ref());
+    let _ = std::fs::remove_file(&temp_path);
+    result
+}
+
+fn read_root_and_entry_header_len(raw: &[u8]) -> Result<(usize, usize)> {
+    fn plausible_entry_len(v: usize) -> bool {
+        (64..=1024).contains(&v)
+    }
+    fn plausible_root(root: usize, raw_len: usize) -> bool {
+        root > 0 && root + 64 <= raw_len
+    }
+
+    let r1 = read_u32_le(raw, ROOT_PTR_OFFSET_V1) as usize;
+    let e1_raw = read_u16_le(raw, ENTRY_HDR_LEN_OFFSET_V1) as usize;
+    let e1 = if e1_raw == 0 { DEFAULT_ENTRY_HDR_LEN } else { e1_raw };
+
+    let r2 = read_u32_le(raw, ROOT_PTR_OFFSET_V2) as usize;
+    let e2_raw = read_u16_le(raw, ENTRY_HDR_LEN_OFFSET_V2) as usize;
+    let e2 = if e2_raw == 0 { DEFAULT_ENTRY_HDR_LEN } else { e2_raw };
+
+    let v1_ok = plausible_entry_len(e1) && plausible_root(r1, raw.len());
+    let v2_ok = plausible_entry_len(e2) && plausible_root(r2, raw.len());
+
+    if v1_ok && (!v2_ok || r1 <= r2) {
+        return Ok((r1, e1));
+    }
+    if v2_ok {
+        return Ok((r2, e2));
+    }
+
+    Err(RasterError::CorruptData(format!(
+        "HFA: could not resolve root node header offsets (v1 root={r1:#x}, len={e1}; v2 root={r2:#x}, len={e2})"
+    )))
 }
 
 /// Write an ERDAS IMAGINE `.img` file (not yet implemented).
@@ -334,14 +437,39 @@ fn collect_nodes(
             )));
         }
         let node_raw = &raw[offset..offset + entry_hdr_len];
-        let name = nul_terminated_str(&node_raw[..64]).to_string();
-        let type_name = nul_terminated_str(&node_raw[64..96]).to_string();
-        let data_offset = read_u32_le(node_raw, 96) as usize;
-        let data_size = read_u32_le(node_raw, 100) as usize;
-        let next_entry = read_u32_le(node_raw, 104) as usize;
-        // bytes 108-111: prev_entry (unused)
-        // bytes 112-115: parent_entry (unused — we track parent ourselves)
-        let child_entry = read_u32_le(node_raw, 116) as usize;
+        // HFA node headers are encountered in at least two layout variants in the wild.
+        // Variant A (legacy assumption): [name,type,data,next,prev,parent,child]
+        // Variant B (GDAL samples): [next,prev,parent,child,name,type,data,size]
+        let a_name = nul_terminated_str(&node_raw[..64]).to_string();
+        let a_type = nul_terminated_str(&node_raw[64..96]).to_string();
+        let a_data_offset = read_u32_le(node_raw, 96) as usize;
+        let a_data_size = read_u32_le(node_raw, 100) as usize;
+        let a_next = read_u32_le(node_raw, 104) as usize;
+        let a_child = read_u32_le(node_raw, 116) as usize;
+
+        let b_name = if entry_hdr_len >= 80 {
+            nul_terminated_str(&node_raw[16..80]).to_string()
+        } else {
+            String::new()
+        };
+        let b_type = if entry_hdr_len >= 112 {
+            nul_terminated_str(&node_raw[80..112]).to_string()
+        } else {
+            String::new()
+        };
+        let b_data_offset = read_u32_le(node_raw, 112) as usize;
+        let b_data_size = read_u32_le(node_raw, 116) as usize;
+        let b_next = read_u32_le(node_raw, 0) as usize;
+        let b_child = read_u32_le(node_raw, 12) as usize;
+
+        let a_score = (!a_name.is_empty() as usize) + (!a_type.is_empty() as usize);
+        let b_score = (!b_name.is_empty() as usize) + (!b_type.is_empty() as usize);
+
+        let (name, type_name, data_offset, data_size, next_entry, child_entry) = if b_score > a_score {
+            (b_name, b_type, b_data_offset, b_data_size, b_next, b_child)
+        } else {
+            (a_name, a_type, a_data_offset, a_data_size, a_next, a_child)
+        };
 
         let node = NodeHdr {
             name,
@@ -369,6 +497,60 @@ fn collect_nodes(
 fn nul_terminated_str(bytes: &[u8]) -> &str {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     std::str::from_utf8(&bytes[..end]).unwrap_or("")
+}
+
+fn scan_for_layer_nodes(raw: &[u8], entry_hdr_len: usize) -> Vec<NodeHdr> {
+    if entry_hdr_len < 120 || raw.len() < entry_hdr_len {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for offset in 0..=(raw.len() - entry_hdr_len) {
+        let node_raw = &raw[offset..offset + entry_hdr_len];
+
+        let type_a = nul_terminated_str(&node_raw[64..96]);
+        let type_b = nul_terminated_str(&node_raw[80..112]);
+        let is_layer = type_a == "Eimg_Layer"
+            || type_a == "Eimg_Layer_SubSample"
+            || type_b == "Eimg_Layer"
+            || type_b == "Eimg_Layer_SubSample";
+        if !is_layer {
+            continue;
+        }
+
+        let (name, type_name, data_offset, data_size) = if type_b == "Eimg_Layer"
+            || type_b == "Eimg_Layer_SubSample"
+        {
+            (
+                nul_terminated_str(&node_raw[16..80]).to_string(),
+                type_b.to_string(),
+                read_u32_le(node_raw, 112) as usize,
+                read_u32_le(node_raw, 116) as usize,
+            )
+        } else {
+            (
+                nul_terminated_str(&node_raw[..64]).to_string(),
+                type_a.to_string(),
+                read_u32_le(node_raw, 96) as usize,
+                read_u32_le(node_raw, 100) as usize,
+            )
+        };
+
+        if data_offset == 0 || data_size < 52 || data_offset + 52 > raw.len() {
+            continue;
+        }
+
+        out.push(NodeHdr {
+            name,
+            type_name,
+            data_offset,
+            data_size,
+            parent_offset: None,
+            file_offset: offset,
+        });
+    }
+
+    out
 }
 
 // ─── Eimg_Layer parser ────────────────────────────────────────────────────────

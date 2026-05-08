@@ -187,7 +187,7 @@ runs successfully, your environment and core processing path are functioning.</p
 
 wbe = wb.WbEnvironment()
 dem = wbe.read_raster("dem.tif")
-filled = wbe.hydrology.fill_depressions(dem)
+filled = wbe.hydrology.depressions_storage.fill_depressions(dem)
 wbe.write_raster(filled, "dem_filled.tif")
 </code></pre>
 <h2 id="what-to-read-next"><a class="header" href="#what-to-read-next">What to Read Next</a></h2>

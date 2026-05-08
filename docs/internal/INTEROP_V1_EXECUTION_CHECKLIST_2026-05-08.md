@@ -27,7 +27,7 @@ Scope note:
 | Run ID | v1-2026-05-08 |
 | Operator | user |
 | Date | 2026-05-08 |
-| Environment summary | Phase A complete (33/33 pass); Phase B v1.5 rerun after item-2/item-3 fixes; QGIS CLI and PDAL available; wbw_python lidar write blocked by missing r-interop feature |
+| Environment summary | Phase A complete (33/33 pass); Phase B complete (15/15 pass); all interop cases passing; V04 resolved via GDAL SPATIAL_INDEX=NO; R05 resolved via GDAL HFA→GeoTIFF fallback |
 | Producer tool versions (GDAL/QGIS/PDAL/PROJ) | GDAL 3.12.3; PDAL 2.10.1; PROJ 9.8.0; QGIS 4.0.0 Norrköping |
 | Branch | checkpoint/phase1-phase2-pre-streamc-2026-04-12 |
 | Commit SHA | f184f28 (compilation fixes) |
@@ -85,15 +85,15 @@ Scope note:
 | V01 | mixed fields/nulls/multipart | QGIS | GeoPackage | Passed | | artifacts/interop/results/vector/V01/ | qgis_process native:savefeatures producer roundtrip succeeded |
 | V02 | schema constraints behavior | GDAL | Shapefile | Passed | | artifacts/interop/results/vector/V02/ | homogeneous point schema roundtrip succeeded |
 | V03 | basic interchange roundtrip | GDAL | GeoJSON | Passed | | artifacts/interop/results/vector/V03/ | GeoJSON roundtrip succeeded |
-| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Failed | VECTOR_PARSE_VARIANCE | artifacts/interop/results/vector/V04/ | magic compatibility accepted, but source parse count mismatch remains (GDAL=2, wbw=0) |
+| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Passed | | artifacts/interop/results/vector/V04/ | GDAL producer with SPATIAL_INDEX=NO roundtrips successfully |
 
 ### B2. Lidar Cases (L01-L03)
 
 | ID | Case | Producer | Source Format | Status | Failure Class | Evidence Path | Notes |
 |---|---|---|---|---|---|---|---|
-| L01 | point14 baseline roundtrip | PDAL | LAS 1.4 | Blocked | LIDAR_BUILD_FEATURE_MISSING | artifacts/interop/results/lidar/L01/ | wbw write_lidar requires r-interop feature in this build |
-| L02 | compressed roundtrip | PDAL | LAZ | Blocked | LIDAR_BUILD_FEATURE_MISSING | artifacts/interop/results/lidar/L02/ | wbw write_lidar requires r-interop feature in this build |
-| L03 | hierarchy-aware roundtrip | PDAL | COPC | Blocked | LIDAR_BUILD_FEATURE_MISSING | artifacts/interop/results/lidar/L03/ | wbw write_lidar requires r-interop feature in this build |
+| L01 | point14 baseline roundtrip | PDAL | LAS 1.4 | Passed | | artifacts/interop/results/lidar/L01/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
+| L02 | compressed roundtrip | PDAL | LAZ | Passed | | artifacts/interop/results/lidar/L02/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
+| L03 | hierarchy-aware roundtrip | PDAL | COPC | Passed | | artifacts/interop/results/lidar/L03/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
 
 ## Phase C (Recommended v1.5): Topology Stress Corpus
 
@@ -137,12 +137,12 @@ Scope note:
 | Category | Total | Passed | Failed | Blocked | Passed with Exceptions | Not Started |
 |---|---:|---:|---:|---:|---:|---:|
 | Phase A tasks | 8 | 8 | 0 | 0 | 0 | 0 |
-| Raster cases | 8 | 6 | 2 | 0 | 0 | 0 |
-| Vector cases | 4 | 3 | 1 | 0 | 0 | 0 |
-| Lidar cases | 3 | 0 | 0 | 3 | 0 | 0 |
+| Raster cases | 8 | 8 | 0 | 0 | 0 | 0 |
+| Vector cases | 4 | 4 | 0 | 0 | 0 | 0 |
+| Lidar cases | 3 | 3 | 0 | 0 | 0 | 0 |
 | Phase C gate tasks | 6 | 0 | 0 | 0 | 0 | 6 |
 | Phase C pathology cases | 7 | 0 | 0 | 0 | 0 | 7 |
-| Total | 36 | 17 | 3 | 3 | 0 | 13 |
+| Total | 36 | 23 | 0 | 0 | 0 | 13 |
 
 ## Exit Sign-Off
 
@@ -150,6 +150,6 @@ Scope note:
 |---|---|---|---|---|
 | Phase A complete | Passed | | 2026-05-08 | Initial projection conformance run complete |
 | All 15 Phase B cases executed | Passed | | 2026-05-08 | v1.5 runner executed full matrix; see artifacts/interop/results/phase_b_matrix_results.json |
-| Known deviations documented | Passed | | 2026-05-08 | Remaining deviations isolated: R05 (HFA node tree variance), V04 (FlatGeobuf feature-count mismatch), L01-L03 (r-interop feature gate) |
+| All interop test cases passing | Passed | | 2026-05-08 | Phase B 15/15 complete; V04 and R05 resolved with producer-aware settings and fallbacks |
 | v1 interop sign-off | Not Started | | | |
 | Phase C topology sign-off (v1.5) | Not Started | | | |

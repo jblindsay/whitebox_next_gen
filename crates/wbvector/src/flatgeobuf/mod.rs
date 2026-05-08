@@ -111,6 +111,18 @@ pub fn from_bytes(data: &[u8]) -> Result<Layer> {
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
             return Ok(layer);
         }
+
+        // If standard parse fails and header declares features, do not silently
+        // accept an empty legacy parse result.
+        if hdr.features_count() > 0 {
+            let legacy = from_bytes_legacy(data, hdr_size)?;
+            if legacy.len() == 0 {
+                return Err(GeoError::NotFlatGeobuf(
+                    "standard FlatGeobuf parse failed and legacy fallback yielded zero features".into(),
+                ));
+            }
+            return Ok(legacy);
+        }
     }
 
     from_bytes_legacy(data, hdr_size)
@@ -230,13 +242,16 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
 
     let mut best_features: Option<Vec<Feature>> = None;
 
-    for mut pos in start_positions {
+    let try_parse_from = |start: usize| -> Option<Vec<Feature>> {
+        if start + 4 > data.len() {
+            return None;
+        }
+        let mut pos = start;
         let mut parsed: Vec<Feature> = Vec::new();
-        let mut parse_failed = false;
         let mut fidx = 0usize;
 
         while pos + 4 <= data.len() {
-            let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
+            let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().ok()?) as usize;
             pos += 4;
             if feat_size == 0 || pos + feat_size > data.len() {
                 break;
@@ -244,21 +259,14 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
             let feat_buf = &data[pos..pos + feat_size];
             pos += feat_size;
 
-            let feat = match fg::root_as_feature(feat_buf) {
-                Ok(v) => v,
-                Err(_) => {
-                    parse_failed = true;
-                    break;
-                }
+            let feat = if let Ok(v) = fg::root_as_feature(feat_buf) {
+                v
+            } else if let Ok(v) = fg::size_prefixed_root_as_feature(feat_buf) {
+                v
+            } else {
+                return None;
             };
-
-            let geometry = match feat.geometry().map(decode_geom_standard).transpose() {
-                Ok(v) => v,
-                Err(_) => {
-                    parse_failed = true;
-                    break;
-                }
-            };
+            let geometry = feat.geometry().map(decode_geom_standard).transpose().ok()?;
             let attrs = if let Some(props) = feat.properties() {
                 let mut p = Vec::with_capacity(props.len());
                 for i in 0..props.len() {
@@ -281,21 +289,33 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
             }
         }
 
-        if parse_failed {
-            continue;
+        if parsed.is_empty() {
+            return None;
         }
+        if expected_count > 0 && parsed.len() != expected_count {
+            return None;
+        }
+        Some(parsed)
+    };
 
-        if expected_count > 0 && parsed.len() == expected_count {
+    for pos in start_positions {
+        if let Some(parsed) = try_parse_from(pos) {
             best_features = Some(parsed);
             break;
         }
+    }
 
-        if best_features
-            .as_ref()
-            .map(|cur| parsed.len() > cur.len())
-            .unwrap_or(true)
-        {
-            best_features = Some(parsed);
+    if best_features.is_none() {
+        // Last-resort compatibility path: scan for a record start that yields exactly
+        // `features_count` valid feature records. This covers producer-specific index
+        // packing differences while still requiring structurally valid feature buffers.
+        let scan_start = base_pos;
+        let scan_end = data.len().saturating_sub(8);
+        for pos in scan_start..=scan_end {
+            if let Some(parsed) = try_parse_from(pos) {
+                best_features = Some(parsed);
+                break;
+            }
         }
     }
 
@@ -303,7 +323,7 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
         GeoError::NotFlatGeobuf("failed to decode FlatGeobuf feature records".into())
     })?;
 
-    if expected_count > 0 && features.is_empty() {
+    if expected_count > 0 && features.len() != expected_count {
         return Err(GeoError::NotFlatGeobuf(
             "failed to decode expected FlatGeobuf feature records".into(),
         ));

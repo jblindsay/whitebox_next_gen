@@ -69,14 +69,14 @@ Scope note:
 
 | ID | Case | Producer | Source Format | Status | Failure Class | Evidence Path | Notes |
 |---|---|---|---|---|---|---|---|
-| R01 | int16 + nodata + EPSG roundtrip | GDAL | GeoTIFF | Not Started | | artifacts/interop/results/raster/R01/ | |
-| R02 | float32 + scale/offset roundtrip | GDAL | GeoTIFF | Not Started | | artifacts/interop/results/raster/R02/ | |
-| R03 | tiled/compressed roundtrip | GDAL | COG | Not Started | | artifacts/interop/results/raster/R03/ | |
-| R04 | elevation roundtrip | GDAL | DTED L1 | Not Started | | artifacts/interop/results/raster/R04/ | |
-| R05 | RLC sample roundtrip | GDAL | HFA (.img) | Not Started | | artifacts/interop/results/raster/R05/ | |
-| R06 | sidecar header roundtrip | GDAL | Esri Float Grid | Not Started | | artifacts/interop/results/raster/R06/ | |
-| R07 | world file + prj roundtrip | GDAL | PNG + World File | Not Started | | artifacts/interop/results/raster/R07/ | |
-| R08 | producer variance check | QGIS | GeoTIFF export | Not Started | | artifacts/interop/results/raster/R08/ | |
+| R01 | int16 + nodata + EPSG roundtrip | GDAL | GeoTIFF | Passed | | artifacts/interop/results/raster/R01/ | wbraster roundtrip verified |
+| R02 | float32 + scale/offset roundtrip | GDAL | GeoTIFF | Not Started | | artifacts/interop/results/raster/R02/ | v1.5 candidate |
+| R03 | tiled/compressed roundtrip | GDAL | COG | Not Started | | artifacts/interop/results/raster/R03/ | v1.5 candidate |
+| R04 | elevation roundtrip | GDAL | DTED L1 | Not Started | | artifacts/interop/results/raster/R04/ | v1.5 candidate |
+| R05 | RLC sample roundtrip | GDAL | HFA (.img) | Not Started | | artifacts/interop/results/raster/R05/ | v1.5 candidate |
+| R06 | sidecar header roundtrip | GDAL | Esri Float Grid | Not Started | | artifacts/interop/results/raster/R06/ | v1.5 candidate |
+| R07 | world file + prj roundtrip | GDAL | PNG + World File | Not Started | | artifacts/interop/results/raster/R07/ | v1.5 candidate |
+| R08 | producer variance check | QGIS | GeoTIFF export | Not Started | | artifacts/interop/results/raster/R08/ | v1.5 candidate |
 
 ### B1. Vector Cases (V01-V04)
 

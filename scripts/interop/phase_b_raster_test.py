@@ -21,59 +21,8 @@ def run_command(cmd, description=""):
     except Exception as e:
         return 1, "", str(e)
 
-def create_test_geotiff(output_path, width=10, height=10, dtype="Int16", nodata=-9999):
-    """Create a test GeoTIFF with GDAL CLI tools"""
-    # Use gdal_create to generate a blank raster
-    dtype_map = {
-        "int16": "Int16",
-        "int32": "Int32",
-        "float32": "Float32",
-    }
-    gdal_dtype = dtype_map.get(dtype.lower(), "Int16")
-    
-    # Create blank raster with gdal_create
-    cmd = f"gdal_create -if GTiff -ot {gdal_dtype} -outsize {width} {height} -a_srs EPSG:4326 '{output_path}'"
-    rc, out, err = run_command(cmd, "gdal_create")
-    if rc != 0:
-        print(f"✗ GeoTIFF creation failed: {err}")
-        return False
-    
-    # Set nodata value with gdalinfo
-    cmd = f"gdal_edit.py -a_nodata {nodata} '{output_path}'"
-    rc, out, err = run_command(cmd, "set_nodata")
-    if rc != 0:
-        print(f"✗ Failed to set nodata: {err}")
-        return False
-    
-    print("✓ Created test GeoTIFF")
-    return True
-
-def get_raster_metadata(path):
-    """Extract key metadata from raster using gdalinfo"""
-    rc, out, err = run_command(f"gdalinfo '{path}' 2>/dev/null", "gdalinfo")
-    if rc != 0:
-        return None
-    
-    metadata = {}
-    for line in out.split('\n'):
-        if 'Size is' in line:
-            parts = line.split('Size is')[1].strip().split(',')
-            metadata['width'] = int(parts[0])
-            metadata['height'] = int(parts[1])
-        elif 'Type=' in line:
-            metadata['dtype'] = line.split('Type=')[1].strip()
-        elif 'NoData=' in line:
-            try:
-                metadata['nodata'] = float(line.split('NoData=')[1].strip())
-            except:
-                pass
-        elif 'PROJ' in line or 'GEOGCS' in line or 'PROJCS' in line:
-            metadata['has_crs'] = True
-    
-    return metadata
-
 def test_case_r01():
-    """R01: int16 + nodata + EPSG roundtrip"""
+    """R01: int16 + nodata + EPSG roundtrip via wbraster"""
     print("\n=== R01: int16 + nodata + EPSG roundtrip ===")
     
     test_dir = Path("/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/artifacts/interop/results/raster/R01")
@@ -82,56 +31,127 @@ def test_case_r01():
     source_tif = test_dir / "source_gdal.tif"
     roundtrip_tif = test_dir / "roundtrip_wbraster.tif"
     
-    # Step 1: Create source
-    print("Creating source artifact with GDAL...")
-    if not create_test_geotiff(str(source_tif)):
-        return "FAIL", "Source creation failed"
+    # Step 1: Create source with GDAL
+    print("Step 1: Creating source artifact with GDAL...")
+    cmd = f"""python3 << 'EOF'
+try:
+    from osgeo import gdal, osr
+    import numpy as np
     
-    source_meta = get_raster_metadata(str(source_tif))
-    if not source_meta:
-        return "FAIL", "Could not read source metadata"
-    print(f"✓ Source: {source_meta['width']}x{source_meta['height']}, {source_meta.get('dtype', 'unknown')}")
+    # Create test data
+    data = np.arange(100, dtype=np.int16).reshape(10, 10)
     
-    # Step 2: Roundtrip with wbraster (placeholder - would use Rust binary)
-    print("Roundtrip validation (GDAL rewrite for testing)...")
-    rc, out, err = run_command(f"cp '{source_tif}' '{roundtrip_tif}'", "copy for testing")
+    # Create GeoTIFF
+    driver = gdal.GetDriverByName('GTiff')
+    ds = driver.Create('{source_tif}', 10, 10, 1, gdal.GDT_Int16)
+    
+    # Set geotransform (EPSG:4326)
+    ds.SetGeoTransform([-180.0, 36.0, 0, 90.0, 0, -18.0])
+    
+    # Set projection
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    ds.SetProjection(srs.ExportToWkt())
+    
+    # Write data and nodata
+    band = ds.GetRasterBand(1)
+    band.WriteArray(data)
+    band.SetNoDataValue(-9999)
+    
+    ds = None
+    print("✓ Source created")
+except Exception as e:
+    print(f"✗ Failed: {{e}}")
+    exit(1)
+EOF"""
+    rc, out, err = run_command(cmd)
     if rc != 0:
-        return "FAIL", f"Roundtrip failed: {err}"
+        print(f"✗ GDAL source creation failed: {err}")
+        return "FAIL", f"GDAL source creation: {err}"
+    print(out.strip())
+    
+    if not source_tif.exists():
+        return "FAIL", "Source file not created"
+    print(f"✓ Source size: {source_tif.stat().st_size} bytes")
+    
+    # Step 2: Roundtrip with wbraster
+    print("Step 2: Reading and writing with wbraster...")
+    cmd = f"""python3 << 'EOF'
+try:
+    import whitebox_workflows as wbw
+    
+    # Read with wbraster
+    raster = wbw.read_raster('{source_tif}')
+    print(f"✓ Read: {{raster.cols}}x{{raster.rows}}, {{raster.data_type}}")
+    print(f"  NoData: {{raster.nodata}}")
+    print(f"  CRS: {{raster.crs}}")
+    
+    # Write roundtrip
+    wbw.write_raster(raster, '{roundtrip_tif}')
+    print(f"✓ Written: {roundtrip_tif}")
+except Exception as e:
+    print(f"✗ Failed: {{e}}")
+    import traceback
+    traceback.print_exc()
+    exit(1)
+EOF"""
+    rc, out, err = run_command(cmd)
+    if rc != 0:
+        print(f"✗ Roundtrip failed:\n{out}\n{err}")
+        return "FAIL", f"Roundtrip: {err}"
+    print(out.strip())
+    
+    if not roundtrip_tif.exists():
+        return "FAIL", "Roundtrip file not created"
+    print(f"✓ Roundtrip size: {roundtrip_tif.stat().st_size} bytes")
     
     # Step 3: Validate
-    roundtrip_meta = get_raster_metadata(str(roundtrip_tif))
-    if not roundtrip_meta:
-        return "FAIL", "Could not read roundtrip metadata"
+    print("Step 3: Validating metadata consistency...")
+    cmd = f"""python3 << 'EOF'
+try:
+    from osgeo import gdal
     
-    # Check consistency
-    checks = {
-        "Size match": source_meta['width'] == roundtrip_meta['width'] and source_meta['height'] == roundtrip_meta['height'],
-        "NoData preserved": source_meta.get('nodata') == roundtrip_meta.get('nodata'),
-        "Data type match": source_meta.get('dtype') == roundtrip_meta.get('dtype'),
-        "CRS present": roundtrip_meta.get('has_crs', False),
-    }
+    source = gdal.Open('{source_tif}')
+    roundtrip = gdal.Open('{roundtrip_tif}')
     
-    all_pass = all(checks.values())
+    if not source or not roundtrip:
+        print("✗ Failed to open rasters")
+        exit(1)
+    
+    s_band = source.GetRasterBand(1)
+    r_band = roundtrip.GetRasterBand(1)
+    
+    checks = {{
+        "Size match": (source.RasterXSize == roundtrip.RasterXSize and 
+                       source.RasterYSize == roundtrip.RasterYSize),
+        "NoData match": s_band.GetNoDataValue() == r_band.GetNoDataValue(),
+        "Data type match": s_band.DataType == r_band.DataType,
+        "Geotransform match": source.GetGeoTransform() == roundtrip.GetGeoTransform(),
+    }}
+    
     for name, result in checks.items():
         status = "✓" if result else "✗"
-        print(f"  {status} {name}")
+        print(f"{{status}} {{name}}")
     
-    return "PASS" if all_pass else "FAIL", json.dumps(checks)
-
-def test_case_r02():
-    """R02: float32 + scale/offset roundtrip"""
-    print("\n=== R02: float32 + scale/offset roundtrip ===")
+    if all(checks.values()):
+        print("✓ Validation PASS")
+        exit(0)
+    else:
+        print("✗ Validation FAIL")
+        exit(1)
+except Exception as e:
+    print(f"✗ Error: {{e}}")
+    exit(1)
+EOF"""
+    rc, out, err = run_command(cmd)
+    print(out.strip())
     
-    test_dir = Path("/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/artifacts/interop/results/raster/R02")
-    test_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("✓ R02 test structure ready (implementation pending)")
-    return "NOT_STARTED", "Implementation pending"
+    return ("PASS" if rc == 0 else "FAIL"), out
 
 def main():
     """Run Phase B raster test suite"""
     print("=" * 70)
-    print("Phase B Raster Interop Test Suite")
+    print("Phase B Raster Interop Test Suite (v1)")
     print(f"Started: {datetime.now().isoformat()}")
     print("=" * 70)
     
@@ -142,21 +162,22 @@ def main():
     
     # Run test cases
     results['R01'], results['R01_details'] = test_case_r01()
-    results['R02'], results['R02_details'] = test_case_r02()
     
     # Summary
     print("\n" + "=" * 70)
     print("Summary")
     print("=" * 70)
-    for case_id in ['R01', 'R02']:
+    for case_id in ['R01']:
         status = results.get(case_id, 'UNKNOWN')
         print(f"  {case_id}: {status}")
     
     # Write results
-    results_file = results_dir / "phase_b_raster_results.json"
+    results_file = results_dir / "phase_b_raster_results_v1.json"
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"\nResults written to: {results_file}")
+    
+    return 0 if all(v == "PASS" for k, v in results.items() if k.startswith('R')) else 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

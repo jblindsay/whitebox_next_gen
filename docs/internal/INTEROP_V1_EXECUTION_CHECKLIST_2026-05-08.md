@@ -27,10 +27,10 @@ Scope note:
 | Run ID | v1-2026-05-08 |
 | Operator | user |
 | Date | 2026-05-08 |
-| Environment summary | Phase A projection suite executed successfully; Phase B environment bootstrap complete; QGIS CLI now available via alias |
+| Environment summary | Phase A complete (33/33 pass); QGIS CLI available; Python bindings installing for Phase B roundtrip execution |
 | Producer tool versions (GDAL/QGIS/PDAL/PROJ) | GDAL 3.12.3; PDAL 2.10.1; PROJ 9.8.0; QGIS 4.0.0 Norrköping |
-| Branch | |
-| Commit SHA | |
+| Branch | checkpoint/phase1-phase2-pre-streamc-2026-04-12 |
+| Commit SHA | f184f28 (compilation fixes) |
 
 ## Phase A: Projection Conformance Mini-Suite
 

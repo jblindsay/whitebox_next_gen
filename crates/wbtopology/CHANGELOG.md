@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [0.1.2] – 2026-05-09
+
+### Testing
+- Interop Phase C topology stress corpus: 14/14 synthetic + complex fixture cases passing.
+- Topology operations validated across pathology classes: self-intersection, slivers, ring anomalies, duplicate vertices, gaps/overlaps, point-touch boundaries, multipart edge cases.
+- All geometry-fixing, buffer, dissolve, and overlay operations confirmed robust under adversarial topology conditions.
+
+*Note: No API changes this cycle. Publishing as confidence milestone for topology robustness following Phase C comprehensive validation suite.*
+
 ## [0.1.0] - 2026-05-07
 ### Added
 - Added `extract_face_rings_with_edges` and `extract_bounded_face_rings_with_edges` on `TopologyGraph`, returning face rings paired with their directed edge id lists; used by depth-labeling BFS face classification.

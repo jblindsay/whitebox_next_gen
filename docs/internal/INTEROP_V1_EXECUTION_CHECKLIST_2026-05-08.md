@@ -27,10 +27,10 @@ Scope note:
 | Run ID | v1-2026-05-08 |
 | Operator | user |
 | Date | 2026-05-08 |
-| Environment summary | Phase A complete (33/33 pass); Phase B complete (15/15 pass); all interop cases passing; V04 resolved via GDAL SPATIAL_INDEX=NO; R05 resolved via GDAL HFA→GeoTIFF fallback |
+| Environment summary | Phase A complete (33/33 pass); Phase B complete (15/15 pass); all interop cases passing; V04 now uses default indexed GDAL producer with native validation and compatibility fallback; R05 resolved via GDAL HFA→GeoTIFF fallback; Phase C parser hardening is in progress |
 | Producer tool versions (GDAL/QGIS/PDAL/PROJ) | GDAL 3.12.3; PDAL 2.10.1; PROJ 9.8.0; QGIS 4.0.0 Norrköping |
 | Branch | checkpoint/phase1-phase2-pre-streamc-2026-04-12 |
-| Commit SHA | f184f28 (compilation fixes) |
+| Commit SHA | b157dff (Phase C telemetry checkpoint) |
 
 ## Phase A: Projection Conformance Mini-Suite
 
@@ -72,8 +72,8 @@ Scope note:
 | R01 | int16 + nodata + EPSG roundtrip | GDAL | GeoTIFF | Passed | | artifacts/interop/results/raster/R01/ | wbraster roundtrip verified |
 | R02 | float32 + scale/offset roundtrip | GDAL | GeoTIFF | Passed | | artifacts/interop/results/raster/R02/ | scale/offset source produced and roundtrip preserved cell/band counts |
 | R03 | tiled/compressed roundtrip | GDAL | COG | Passed | | artifacts/interop/results/raster/R03/ | COG producer artifact roundtripped successfully |
-| R04 | elevation roundtrip | GDAL | DTED L1 | Failed | RASTER_WRITE_UNSUPPORTED | artifacts/interop/results/raster/R04/ | wbw write path could not infer .dt1 output format |
-| R05 | RLC sample roundtrip | GDAL | HFA (.img) | Failed | RASTER_READ_VARIANCE | artifacts/interop/results/raster/R05/ | parser now detects HFA magic, but GDAL sample still fails with `HFA: empty node tree` |
+| R04 | elevation roundtrip | GDAL | DTED L1 | Passed | | artifacts/interop/results/raster/R04/ | DTED read/write path stabilized in current Phase B v1.5 run |
+| R05 | RLC sample roundtrip | GDAL | HFA (.img) | Passed | | artifacts/interop/results/raster/R05/ | native read variance mitigated by contained GDAL HFA→GeoTIFF fallback |
 | R06 | sidecar header roundtrip | GDAL | Esri Float Grid | Passed | | artifacts/interop/results/raster/R06/ | reader updated for GDAL EHdr (`ULXMAP/ULYMAP/XDIM/YDIM`) |
 | R07 | world file + prj roundtrip | GDAL | PNG + World File | Passed | | artifacts/interop/results/raster/R07/ | sidecar copy and `.wld` validation now pass |
 | R08 | producer variance check | QGIS | GeoTIFF export | Passed | | artifacts/interop/results/raster/R08/ | qgis_process gdal:translate producer roundtrip succeeded |
@@ -85,7 +85,7 @@ Scope note:
 | V01 | mixed fields/nulls/multipart | QGIS | GeoPackage | Passed | | artifacts/interop/results/vector/V01/ | qgis_process native:savefeatures producer roundtrip succeeded |
 | V02 | schema constraints behavior | GDAL | Shapefile | Passed | | artifacts/interop/results/vector/V02/ | homogeneous point schema roundtrip succeeded |
 | V03 | basic interchange roundtrip | GDAL | GeoJSON | Passed | | artifacts/interop/results/vector/V03/ | GeoJSON roundtrip succeeded |
-| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Passed | | artifacts/interop/results/vector/V04/ | GDAL producer with SPATIAL_INDEX=NO roundtrips successfully |
+| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Passed | | artifacts/interop/results/vector/V04/ | default indexed GDAL producer passes with native validation + compatibility fallback |
 
 ### B2. Lidar Cases (L01-L03)
 
@@ -96,6 +96,14 @@ Scope note:
 | L03 | hierarchy-aware roundtrip | PDAL | COPC | Passed | | artifacts/interop/results/lidar/L03/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
 
 ## Phase C (Recommended v1.5): Topology Stress Corpus
+
+### C-Format. Active Parser Hardening Stream (In Progress)
+
+| ID | Task | Status | Owner | Last Updated | Evidence Path | Notes |
+|---|---|---|---|---|---|---|
+| CF01 | Indexed FlatGeobuf native validation gate | In Progress | | 2026-05-08 | crates/wbvector/src/flatgeobuf/mod.rs | native parse must match known/validated feature count before acceptance |
+| CF02 | Indexed FlatGeobuf compatibility fallback instrumentation | In Progress | | 2026-05-08 | crates/wbvector/src/flatgeobuf/mod.rs | telemetry counters/logging added to quantify native vs fallback paths |
+| CF03 | Remove indexed FlatGeobuf fallback entirely | Not Started | | | crates/wbvector/src/flatgeobuf/mod.rs | pending deterministic native indexed parse completion |
 
 ### C0. Phase Gate Checklist
 
@@ -151,5 +159,6 @@ Scope note:
 | Phase A complete | Passed | | 2026-05-08 | Initial projection conformance run complete |
 | All 15 Phase B cases executed | Passed | | 2026-05-08 | v1.5 runner executed full matrix; see artifacts/interop/results/phase_b_matrix_results.json |
 | All interop test cases passing | Passed | | 2026-05-08 | Phase B 15/15 complete; V04 and R05 resolved with producer-aware settings and fallbacks |
+| Phase C parser hardening stream started | In Progress | | 2026-05-08 | active on checkpoint branch; latest checkpoint b157dff |
 | v1 interop sign-off | Not Started | | | |
 | Phase C topology sign-off (v1.5) | Not Started | | | |

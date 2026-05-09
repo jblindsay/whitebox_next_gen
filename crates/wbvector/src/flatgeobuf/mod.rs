@@ -18,6 +18,8 @@
 //! Properties are encoded in standard FlatGeobuf property binary form.
 
 use std::path::Path;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use flatbuffers::FlatBufferBuilder;
 use crate::crs;
 use crate::error::{GeoError, Result};
@@ -90,8 +92,74 @@ mod gt {
 
 /// Read a FlatGeobuf file into a [`Layer`].
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
-    let data = std::fs::read(path).map_err(GeoError::Io)?;
+    let path_ref = path.as_ref();
+    let data = std::fs::read(path_ref).map_err(GeoError::Io)?;
+
+    // Indexed producer variants still show layout differences in the wild.
+    // Use a contained GDAL fallback for indexed files while native support
+    // continues to be hardened.
+    if header_index_node_size(&data).unwrap_or(0) > 0 {
+        if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
+            return Ok(layer);
+        }
+    }
+
     from_bytes(&data)
+}
+
+fn header_index_node_size(data: &[u8]) -> Option<u16> {
+    if data.len() < 12 || !has_compatible_magic(&data[0..8]) {
+        return None;
+    }
+    let hdr_size  = u32::from_le_bytes(data[8..12].try_into().ok()?) as usize;
+    if 12 + hdr_size > data.len() {
+        return None;
+    }
+    let hdr_data = &data[12..12 + hdr_size];
+    if let Ok(hdr) = hg::root_as_header(hdr_data) {
+        return Some(hdr.index_node_size());
+    }
+    if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
+        return Some(hdr.index_node_size());
+    }
+    None
+}
+
+fn read_via_ogr2ogr_geojson(path: &Path) -> Result<Layer> {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_micros())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    let tmp_geojson = std::env::temp_dir().join(format!("wbvector_fgb_{pid}_{stamp}.geojson"));
+
+    let output = Command::new("ogr2ogr")
+        .arg("-f")
+        .arg("GeoJSON")
+        .arg(&tmp_geojson)
+        .arg(path)
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let result = crate::geojson::read(&tmp_geojson);
+            let _ = std::fs::remove_file(&tmp_geojson);
+            result
+        }
+        Ok(out) => {
+            let _ = std::fs::remove_file(&tmp_geojson);
+            Err(GeoError::NotFlatGeobuf(format!(
+                "indexed FlatGeobuf fallback failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )))
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp_geojson);
+            Err(GeoError::NotFlatGeobuf(format!(
+                "indexed FlatGeobuf fallback unavailable: {e}"
+            )))
+        }
+    }
 }
 
 /// Parse FlatGeobuf from a byte slice.
@@ -111,21 +179,21 @@ pub fn from_bytes(data: &[u8]) -> Result<Layer> {
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
             return Ok(layer);
         }
+    }
 
-        // If standard parse fails and header declares features, do not silently
-        // accept an empty legacy parse result.
-        if hdr.features_count() > 0 {
-            let legacy = from_bytes_legacy(data, hdr_size)?;
-            if legacy.len() == 0 {
-                return Err(GeoError::NotFlatGeobuf(
-                    "standard FlatGeobuf parse failed and legacy fallback yielded zero features".into(),
-                ));
-            }
-            return Ok(legacy);
+    if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
+        if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
+            return Ok(layer);
         }
     }
 
-    from_bytes_legacy(data, hdr_size)
+    let legacy = from_bytes_legacy(data, hdr_size)?;
+    if legacy.len() == 0 && data.len() > 12 + hdr_size {
+        return Err(GeoError::NotFlatGeobuf(
+            "standard FlatGeobuf parse failed and legacy fallback yielded zero features".into(),
+        ));
+    }
+    Ok(legacy)
 }
 
 fn from_bytes_legacy(data: &[u8], hdr_size: usize) -> Result<Layer> {
@@ -240,20 +308,56 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
     }
     start_positions.push(base_pos);
 
-    let mut best_features: Option<Vec<Feature>> = None;
+    let mut best_features: Option<(Vec<Feature>, usize)> = None;
 
-    let try_parse_from = |start: usize| -> Option<Vec<Feature>> {
+    let better_candidate = |current: &Option<(Vec<Feature>, usize)>, candidate: &(Vec<Feature>, usize)| -> bool {
+        match current {
+            None => true,
+            Some((curr_features, curr_end)) => {
+                let cand_count = candidate.0.len();
+                let curr_count = curr_features.len();
+                if cand_count > curr_count {
+                    return true;
+                }
+                cand_count == curr_count && candidate.1 > *curr_end
+            }
+        }
+    };
+
+    let try_parse_from = |start: usize| -> Option<(Vec<Feature>, usize)> {
         if start + 4 > data.len() {
             return None;
         }
+
+        let read_feature_size = |at: usize| -> Option<(usize, usize)> {
+            // Some producers may align feature records with short zero padding.
+            for skip in 0..=7usize {
+                let p = at + skip;
+                if p + 4 > data.len() {
+                    return None;
+                }
+                if skip > 0 && data[at..p].iter().any(|b| *b != 0) {
+                    continue;
+                }
+                let feat_size = u32::from_le_bytes(data[p..p + 4].try_into().ok()?) as usize;
+                if feat_size > 0 && p + 4 + feat_size <= data.len() {
+                    return Some((skip, feat_size));
+                }
+            }
+            None
+        };
+
         let mut pos = start;
         let mut parsed: Vec<Feature> = Vec::new();
         let mut fidx = 0usize;
 
         while pos + 4 <= data.len() {
-            let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().ok()?) as usize;
-            pos += 4;
-            if feat_size == 0 || pos + feat_size > data.len() {
+            let (skip, feat_size) = match read_feature_size(pos) {
+                Some(v) => v,
+                None => break,
+            };
+            pos += skip + 4;
+            if pos + feat_size > data.len() {
                 break;
             }
             let feat_buf = &data[pos..pos + feat_size];
@@ -266,7 +370,10 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
             } else {
                 return None;
             };
-            let geometry = feat.geometry().map(decode_geom_standard).transpose().ok()?;
+            let geometry = match feat.geometry() {
+                Some(g) => decode_geom_standard(g).ok(),
+                None => None,
+            };
             let attrs = if let Some(props) = feat.properties() {
                 let mut p = Vec::with_capacity(props.len());
                 for i in 0..props.len() {
@@ -295,31 +402,39 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
         if expected_count > 0 && parsed.len() != expected_count {
             return None;
         }
-        Some(parsed)
+
+        Some((parsed, pos))
     };
 
     for pos in start_positions {
         if let Some(parsed) = try_parse_from(pos) {
-            best_features = Some(parsed);
-            break;
-        }
-    }
-
-    if best_features.is_none() {
-        // Last-resort compatibility path: scan for a record start that yields exactly
-        // `features_count` valid feature records. This covers producer-specific index
-        // packing differences while still requiring structurally valid feature buffers.
-        let scan_start = base_pos;
-        let scan_end = data.len().saturating_sub(8);
-        for pos in scan_start..=scan_end {
-            if let Some(parsed) = try_parse_from(pos) {
+            if better_candidate(&best_features, &parsed) {
                 best_features = Some(parsed);
+            }
+            if expected_count > 0 {
                 break;
             }
         }
     }
 
-    let features = best_features.ok_or_else(|| {
+    if best_features.is_none() || hdr.index_node_size() > 0 {
+        // Compatibility path: scan for a record start that yields the strongest
+        // structurally valid feature stream when indexed producer layouts vary.
+        let scan_start = base_pos;
+        let scan_end = data.len().saturating_sub(8);
+        for pos in scan_start..=scan_end {
+            if let Some(parsed) = try_parse_from(pos) {
+                if better_candidate(&best_features, &parsed) {
+                    best_features = Some(parsed);
+                }
+                if expected_count > 0 {
+                    break;
+                }
+            }
+        }
+    }
+
+    let (features, _end_pos) = best_features.ok_or_else(|| {
         GeoError::NotFlatGeobuf("failed to decode FlatGeobuf feature records".into())
     })?;
 

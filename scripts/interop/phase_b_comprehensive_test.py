@@ -426,7 +426,7 @@ def test_v04():
     roundtrip = test_dir / "roundtrip_wbraster.fgb"
     write_sample_geojson(source_geojson, mixed_geometry=False)
     rc, _, err = run_cmd(
-        f"ogr2ogr -f FlatGeobuf -lco SPATIAL_INDEX=NO '{source_fgb}' '{source_geojson}'"
+        f"ogr2ogr -f FlatGeobuf '{source_fgb}' '{source_geojson}'"
     )
     if rc != 0:
         return "FAIL", f"FlatGeobuf creation failed: {err}"

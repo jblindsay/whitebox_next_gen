@@ -110,6 +110,13 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         if indexed_native_parse_is_valid(expected_count, layer.len()) {
             return Ok(layer.clone());
         }
+        if expected_count == 0 {
+            if let Some(producer_count) = ogr_feature_count(path_ref) {
+                if layer.len() == producer_count {
+                    return Ok(layer.clone());
+                }
+            }
+        }
     }
 
     if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
@@ -194,6 +201,37 @@ fn read_via_ogr2ogr_geojson(path: &Path) -> Result<Layer> {
             )))
         }
     }
+}
+
+fn ogr_feature_count(path: &Path) -> Option<usize> {
+    let out = Command::new("ogrinfo")
+        .arg("-ro")
+        .arg("-so")
+        .arg("-al")
+        .arg(path)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_ogr_feature_count(&stdout)
+}
+
+fn parse_ogr_feature_count(stdout: &str) -> Option<usize> {
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.len() < 14 {
+            continue;
+        }
+        if trimmed[..14].eq_ignore_ascii_case("feature count:") {
+            let value = trimmed[14..].trim();
+            if let Ok(n) = value.parse::<usize>() {
+                return Some(n);
+            }
+        }
+    }
+    None
 }
 
 /// Parse FlatGeobuf from a byte slice.
@@ -1388,5 +1426,17 @@ mod tests {
         assert!(indexed_native_parse_is_valid(2, 2));
         assert!(!indexed_native_parse_is_valid(2, 1));
         assert!(!indexed_native_parse_is_valid(2, 3));
+    }
+
+    #[test]
+    fn parse_ogr_feature_count_from_stdout() {
+        let stdout = "Layer name: sample\nFeature Count: 42\nGeometry: Point\n";
+        assert_eq!(parse_ogr_feature_count(stdout), Some(42));
+    }
+
+    #[test]
+    fn parse_ogr_feature_count_missing_line() {
+        let stdout = "Layer name: sample\nGeometry: Point\n";
+        assert_eq!(parse_ogr_feature_count(stdout), None);
     }
 }

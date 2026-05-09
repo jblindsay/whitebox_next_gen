@@ -96,15 +96,27 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     let data = std::fs::read(path_ref).map_err(GeoError::Io)?;
 
     // Indexed producer variants still show layout differences in the wild.
-    // Use a contained GDAL fallback for indexed files while native support
-    // continues to be hardened.
-    if header_index_node_size(&data).unwrap_or(0) > 0 {
-        if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
-            return Ok(layer);
+    // Prefer native parsing first, but use a contained GDAL fallback when
+    // native decoding fails or returns an obviously inconsistent feature count.
+    let indexed = header_index_node_size(&data).unwrap_or(0) > 0;
+    let expected_count = header_features_count(&data).unwrap_or(0) as usize;
+
+    let native = from_bytes(&data);
+    if !indexed {
+        return native;
+    }
+
+    if let Ok(layer) = native.as_ref() {
+        if expected_count > 0 && layer.len() == expected_count {
+            return Ok(layer.clone());
         }
     }
 
-    from_bytes(&data)
+    if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
+        return Ok(layer);
+    }
+
+    native
 }
 
 fn header_index_node_size(data: &[u8]) -> Option<u16> {
@@ -121,6 +133,24 @@ fn header_index_node_size(data: &[u8]) -> Option<u16> {
     }
     if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
         return Some(hdr.index_node_size());
+    }
+    None
+}
+
+fn header_features_count(data: &[u8]) -> Option<u64> {
+    if data.len() < 12 || !has_compatible_magic(&data[0..8]) {
+        return None;
+    }
+    let hdr_size = u32::from_le_bytes(data[8..12].try_into().ok()?) as usize;
+    if 12 + hdr_size > data.len() {
+        return None;
+    }
+    let hdr_data = &data[12..12 + hdr_size];
+    if let Ok(hdr) = hg::root_as_header(hdr_data) {
+        return Some(hdr.features_count());
+    }
+    if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
+        return Some(hdr.features_count());
     }
     None
 }
@@ -175,19 +205,32 @@ pub fn from_bytes(data: &[u8]) -> Result<Layer> {
     }
     let hdr_data = &data[12..12 + hdr_size];
 
+    let mut expected_count: Option<usize> = None;
+
     if let Ok(hdr) = hg::root_as_header(hdr_data) {
+        expected_count = Some(hdr.features_count() as usize);
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
             return Ok(layer);
         }
     }
 
     if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
+        expected_count = Some(hdr.features_count() as usize);
         if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
             return Ok(layer);
         }
     }
 
     let legacy = from_bytes_legacy(data, hdr_size)?;
+    if let Some(expected) = expected_count {
+        if expected > 0 && legacy.len() != expected {
+            return Err(GeoError::NotFlatGeobuf(format!(
+                "legacy FlatGeobuf parse produced {} features but header declares {}",
+                legacy.len(),
+                expected
+            )));
+        }
+    }
     if legacy.len() == 0 && data.len() > 12 + hdr_size {
         return Err(GeoError::NotFlatGeobuf(
             "standard FlatGeobuf parse failed and legacy fallback yielded zero features".into(),

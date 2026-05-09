@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.2] – 2026-05-09 (Reaffirmed)
+
+### Testing
+- Interop Phase A GeoTIFF conformance: 33/33 passing across 11 CRS families.
+- Forward/inverse tolerance validation confirmed for all tested CRS.
+
+*Note: Version 0.1.2 is being published as-is as part of the interop release milestone (2026-05-09) to ensure downstream dependency resolution for wbraster 0.1.5.*
+
 ## [0.1.2] - 2026-05-07
 
 ### Changed

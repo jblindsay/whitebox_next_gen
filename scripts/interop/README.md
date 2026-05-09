@@ -18,7 +18,9 @@ Planned scripts:
 Current Phase C helper:
 - generate_phase_c_topology_synthetic_fixtures.py
 - phase_c_topology_test.py
+- phase_c1_format_expansion_test.py
 
 Example:
 - python scripts/interop/generate_phase_c_topology_synthetic_fixtures.py
 - python scripts/interop/phase_c_topology_test.py --corpus all
+- python scripts/interop/phase_c1_format_expansion_test.py

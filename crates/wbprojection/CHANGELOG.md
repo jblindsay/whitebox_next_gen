@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.1] – 2026-05-09 (Reaffirmed)
+
+### Testing
+- Interop Phase A projection conformance: 33/33 passing across 11 CRS families.
+- Forward/inverse tolerance validation confirmed for all tested CRS.
+
+*Note: Version 0.1.1 is being published as-is as part of the interop release milestone (2026-05-09) to affirm Phase A validation.*
+
 ## [0.1.1] - 2026-05-07
 ### Added
 - `Crs::to_wkt(&self) -> String` — serialize a `Crs` instance to an

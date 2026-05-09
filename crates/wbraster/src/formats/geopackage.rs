@@ -1213,7 +1213,9 @@ fn find_tile_table(db: &Db) -> Result<(String, i64)> {
             .map_err(|e| RasterError::Other(format!("GeoPackage contents read failed: {e}")))?;
         for row in rows {
             let data_type = row.get(1).and_then(SqlVal::as_str).unwrap_or("");
-            if data_type == "tiles" {
+            // GDAL raster GeoPackages may register raster content as
+            // `2d-gridded-coverage` instead of plain `tiles`.
+            if data_type == "tiles" || data_type == "2d-gridded-coverage" {
                 let table_name = row
                     .first()
                     .and_then(SqlVal::as_str)
@@ -1221,6 +1223,22 @@ fn find_tile_table(db: &Db) -> Result<(String, i64)> {
                     .to_owned();
                 let srs_id = row.get(9).and_then(SqlVal::as_i64).unwrap_or(4326);
                 return Ok((table_name, srs_id));
+            }
+        }
+    }
+
+    // Last-resort compatibility path: infer the raster table from
+    // `gpkg_tile_matrix_set` and resolve SRS from gpkg_contents when possible.
+    if db.table_meta("gpkg_tile_matrix_set").is_some() {
+        let rows = db
+            .select_all("gpkg_tile_matrix_set")
+            .map_err(|e| RasterError::Other(format!("GeoPackage tile_matrix_set read failed: {e}")))?;
+        if let Some(first_row) = rows.first() {
+            if let Some(table_name) = first_row.first().and_then(SqlVal::as_str) {
+                let srs_id = read_srs_id_for_table(db, table_name)
+                    .or_else(|| first_row.get(1).and_then(SqlVal::as_i64))
+                    .unwrap_or(4326);
+                return Ok((table_name.to_owned(), srs_id));
             }
         }
     }

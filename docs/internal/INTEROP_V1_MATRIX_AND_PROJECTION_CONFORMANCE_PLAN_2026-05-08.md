@@ -298,6 +298,9 @@ Add failure classes for this phase:
 
 ## Future Expansion (Post-v1)
 
+Phase C.1 execution draft for immediate raster/vector format expansion:
+- docs/internal/INTEROP_PHASE_C1_FORMAT_EXPANSION_MINI_MATRIX_2026-05-09.md
+
 - Add more producers and versions per format.
 - Expand vector coverage (KML/KMZ/GPX, OSM PBF read workflows).
 - Add lidar stress cases (larger COPC, optional dimensions).

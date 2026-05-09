@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [0.1.5] – 2026-05-09
+
+### Fixed
+- GeoPackage raster producer compatibility: accept GDAL-registered raster content with `data_type = "2d-gridded-coverage"` in addition to plain `"tiles"` (Interop Phase C.1 R09).
+- Fallback tile-table discovery from `gpkg_tile_matrix_set` when `gpkg_contents` metadata is unavailable, improving compatibility with diverse GeoPackage raster producers.
+
+### Testing
+- Interop Phase C.1 R09 case (GeoPackage raster roundtrip) now passes; full suite 6/6 passing.
+
 ## [Unreleased]
 
 ### Added

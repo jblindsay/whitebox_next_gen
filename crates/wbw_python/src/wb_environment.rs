@@ -34,7 +34,17 @@ use wblidar::reproject::{
     LidarReprojectOptions,
     TransformFailurePolicy as LidarTransformFailurePolicy,
 };
-use wblidar::{memory_store as lidar_memory_store, LidarFormat, PointCloud, PointColumnChunkReader, PointField};
+use wblidar::copc::CopcNodePointOrdering;
+use wblidar::{
+    memory_store as lidar_memory_store,
+    CopcWriteOptions,
+    LazWriteOptions,
+    LidarFormat,
+    LidarWriteOptions,
+    PointCloud,
+    PointColumnChunkReader,
+    PointField,
+};
 use wbprojection::{
     epsg_from_srs_reference,
     identify_epsg_from_wkt_with_policy,
@@ -146,128 +156,297 @@ fn replace_cached_disk_raster(path: &Path, raster: WbRaster, dirty: bool) -> PyR
     Ok(())
 }
 
-#[cfg(feature = "r-interop")]
-use wbw_r;
-
-#[cfg(not(feature = "r-interop"))]
 mod wbw_r {
-    fn disabled() -> String {
-        "R-backed interoperability is unavailable in this build (enable feature 'r-interop')"
-            .to_string()
+    use super::*;
+
+    fn parse_topology_geometry(wkt: &str) -> Result<wbtopology::Geometry, String> {
+        wbtopology::from_wkt(wkt).map_err(|e| e.to_string())
     }
 
-    pub fn lidar_write_with_options_json(_src: &str, _dst: &str, _options_json: &str) -> Result<String, String> {
-        Err(disabled())
+    fn get_vector_feature_geometry(path: &str, feature_index: usize) -> Result<wbtopology::Geometry, String> {
+        let layer = wbvector::read(path).map_err(|e| e.to_string())?;
+        let feature = layer
+            .features
+            .get(feature_index)
+            .ok_or_else(|| format!("feature index {feature_index} out of range for '{path}'"))?;
+        let geometry = feature
+            .geometry
+            .as_ref()
+            .ok_or_else(|| format!("feature index {feature_index} in '{path}' has no geometry"))?;
+        wbtopology::from_wkt(&geometry.to_wkt()).map_err(|e| e.to_string())
     }
 
-    pub fn lidar_copy_to_path(_src: &str, _dst: &str) -> Result<String, String> {
-        Err(disabled())
+    pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<String, String> {
+        let src_path = Path::new(src);
+        let dst_path = Path::new(dst);
+        if !src_path.exists() {
+            return Err(format!("source lidar path does not exist: {src}"));
+        }
+        write_lidar_path_with_options_json(src_path, dst_path, options_json)
+            .map(|p| p.to_string_lossy().to_string())
+            .map_err(|e| e.to_string())
     }
 
-    pub fn projection_to_ogc_wkt(_epsg: u32) -> Result<String, String> {
-        Err(disabled())
+    pub fn lidar_copy_to_path(src: &str, dst: &str) -> Result<String, String> {
+        lidar_write_with_options_json(src, dst, "{}")
     }
 
-    pub fn projection_identify_epsg(_crs_text: &str) -> Result<Option<u32>, String> {
-        Err(disabled())
+    pub fn projection_to_ogc_wkt(epsg: u32) -> Result<String, String> {
+        wbprojection::to_ogc_wkt(epsg).map_err(|e| e.to_string())
     }
 
-    pub fn projection_from_proj_string(_proj_str: &str) -> Result<String, String> {
-        Err(disabled())
+    pub fn projection_identify_epsg(crs_text: &str) -> Result<Option<u32>, String> {
+        Ok(
+            wbprojection::epsg_from_srs_reference(crs_text)
+                .or_else(|| wbprojection::identify_epsg_from_wkt_with_policy(crs_text, wbprojection::EpsgIdentifyPolicy::Lenient)),
+        )
     }
 
-    pub fn projection_area_of_use(_epsg: u32) -> Result<String, String> {
-        Err(disabled())
+    pub fn projection_from_proj_string(proj_str: &str) -> Result<String, String> {
+        let crs = wbprojection::from_proj_string(proj_str).map_err(|e| e.to_string())?;
+        let payload = if let Some(code) = wbprojection::identify_epsg_from_crs_with_policy(
+            &crs,
+            wbprojection::EpsgIdentifyPolicy::Lenient,
+        ) {
+            json!({"epsg": code})
+        } else {
+            json!({"wkt": crs.to_wkt()})
+        };
+        serde_json::to_string(&payload).map_err(|e| e.to_string())
+    }
+
+    pub fn projection_area_of_use(epsg: u32) -> Result<String, String> {
+        let payload = wbprojection::epsg_area_of_use(epsg)
+            .map(|bb| {
+                json!({
+                    "lon_min": bb.lon_min,
+                    "lat_min": bb.lat_min,
+                    "lon_max": bb.lon_max,
+                    "lat_max": bb.lat_max,
+                })
+            })
+            .unwrap_or(JsonValue::Null);
+        serde_json::to_string(&payload).map_err(|e| e.to_string())
     }
 
     pub fn projection_reproject_points_json(
-        _points_json: &str,
-        _src_epsg: u32,
-        _dst_epsg: u32,
+        points_json: &str,
+        src_epsg: u32,
+        dst_epsg: u32,
     ) -> Result<String, String> {
-        Err(disabled())
+        let src = wbprojection::from_epsg(src_epsg).map_err(|e| e.to_string())?;
+        let dst = wbprojection::from_epsg(dst_epsg).map_err(|e| e.to_string())?;
+        let parsed: JsonValue = serde_json::from_str(points_json).map_err(|e| e.to_string())?;
+        let points = parsed
+            .as_array()
+            .ok_or_else(|| "points_json must be a JSON array of {x,y} objects".to_string())?;
+
+        let mut out = Vec::with_capacity(points.len());
+        for (i, item) in points.iter().enumerate() {
+            let x = item
+                .get("x")
+                .and_then(JsonValue::as_f64)
+                .ok_or_else(|| format!("points[{i}] missing numeric field 'x'"))?;
+            let y = item
+                .get("y")
+                .and_then(JsonValue::as_f64)
+                .ok_or_else(|| format!("points[{i}] missing numeric field 'y'"))?;
+            let (tx, ty) = src.transform_to(x, y, &dst).map_err(|e| e.to_string())?;
+            out.push(json!({"x": tx, "y": ty}));
+        }
+
+        serde_json::to_string(&JsonValue::Array(out)).map_err(|e| e.to_string())
     }
 
     pub fn projection_reproject_point_json(
-        _x: f64,
-        _y: f64,
-        _src_epsg: u32,
-        _dst_epsg: u32,
+        x: f64,
+        y: f64,
+        src_epsg: u32,
+        dst_epsg: u32,
     ) -> Result<String, String> {
-        Err(disabled())
+        let src = wbprojection::from_epsg(src_epsg).map_err(|e| e.to_string())?;
+        let dst = wbprojection::from_epsg(dst_epsg).map_err(|e| e.to_string())?;
+        let (tx, ty) = src.transform_to(x, y, &dst).map_err(|e| e.to_string())?;
+        serde_json::to_string(&json!({"x": tx, "y": ty})).map_err(|e| e.to_string())
     }
 
-    pub fn topology_intersects_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_intersects_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::intersects(&a, &b))
     }
 
-    pub fn topology_contains_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_contains_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::contains(&a, &b))
     }
 
-    pub fn topology_within_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_within_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::within(&a, &b))
     }
 
-    pub fn topology_touches_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_touches_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::touches(&a, &b))
     }
 
-    pub fn topology_disjoint_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_disjoint_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::disjoint(&a, &b))
     }
 
-    pub fn topology_crosses_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_crosses_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::crosses(&a, &b))
     }
 
-    pub fn topology_overlaps_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_overlaps_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::overlaps(&a, &b))
     }
 
-    pub fn topology_covers_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_covers_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::covers(&a, &b))
     }
 
-    pub fn topology_covered_by_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_covered_by_wkt(a_wkt: &str, b_wkt: &str) -> Result<bool, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::covered_by(&a, &b))
     }
 
-    pub fn topology_relate_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<String, String> {
-        Err(disabled())
+    pub fn topology_relate_wkt(a_wkt: &str, b_wkt: &str) -> Result<String, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::relate(&a, &b).as_str9())
     }
 
-    pub fn topology_distance_wkt(_a_wkt: &str, _b_wkt: &str) -> Result<f64, String> {
-        Err(disabled())
+    pub fn topology_distance_wkt(a_wkt: &str, b_wkt: &str) -> Result<f64, String> {
+        let a = parse_topology_geometry(a_wkt)?;
+        let b = parse_topology_geometry(b_wkt)?;
+        Ok(wbtopology::geometry_distance(&a, &b))
     }
 
     pub fn topology_vector_feature_relation_json(
-        _a_path: &str,
-        _a_feature_index: usize,
-        _b_path: &str,
-        _b_feature_index: usize,
+        a_path: &str,
+        a_feature_index: usize,
+        b_path: &str,
+        b_feature_index: usize,
     ) -> Result<String, String> {
-        Err(disabled())
+        let a = get_vector_feature_geometry(a_path, a_feature_index)?;
+        let b = get_vector_feature_geometry(b_path, b_feature_index)?;
+
+        let relate = wbtopology::relate(&a, &b).as_str9();
+        let payload = json!({
+            "intersects": wbtopology::intersects(&a, &b),
+            "contains": wbtopology::contains(&a, &b),
+            "within": wbtopology::within(&a, &b),
+            "touches": wbtopology::touches(&a, &b),
+            "disjoint": wbtopology::disjoint(&a, &b),
+            "crosses": wbtopology::crosses(&a, &b),
+            "overlaps": wbtopology::overlaps(&a, &b),
+            "covers": wbtopology::covers(&a, &b),
+            "covered_by": wbtopology::covered_by(&a, &b),
+            "relate": relate,
+            "distance": wbtopology::geometry_distance(&a, &b),
+        });
+
+        serde_json::to_string(&payload).map_err(|e| e.to_string())
     }
 
-    pub fn topology_buffer_wkt(_wkt: &str, _distance: f64) -> Result<String, String> {
-        Err(disabled())
+    pub fn topology_buffer_wkt(wkt: &str, distance: f64) -> Result<String, String> {
+        let g = parse_topology_geometry(wkt)?;
+        let options = wbtopology::BufferOptions::default();
+        let out = match g {
+            wbtopology::Geometry::Point(c) => {
+                wbtopology::Geometry::Polygon(wbtopology::buffer_point(c, distance, options))
+            }
+            wbtopology::Geometry::LineString(ls) => {
+                wbtopology::Geometry::Polygon(wbtopology::buffer_linestring(&ls, distance, options))
+            }
+            wbtopology::Geometry::Polygon(poly) => {
+                wbtopology::Geometry::Polygon(wbtopology::buffer_polygon(&poly, distance, options))
+            }
+            _ => {
+                return Err("buffer_wkt currently supports Point, LineString, and Polygon geometries".to_string())
+            }
+        };
+        Ok(wbtopology::to_wkt(&out))
     }
 
-    pub fn topology_is_valid_polygon_wkt(_wkt: &str) -> Result<bool, String> {
-        Err(disabled())
+    pub fn topology_is_valid_polygon_wkt(wkt: &str) -> Result<bool, String> {
+        let g = parse_topology_geometry(wkt)?;
+        match g {
+            wbtopology::Geometry::Polygon(poly) => Ok(wbtopology::is_valid_polygon(&poly)),
+            wbtopology::Geometry::MultiPolygon(polys) => {
+                Ok(polys.iter().all(wbtopology::is_valid_polygon))
+            }
+            _ => Err("geometry is not a Polygon or MultiPolygon".to_string()),
+        }
     }
 
-    pub fn topology_make_valid_polygon_wkt(_wkt: &str, _epsilon: f64) -> Result<String, String> {
-        Err(disabled())
+    pub fn topology_make_valid_polygon_wkt(wkt: &str, epsilon: f64) -> Result<String, String> {
+        let g = parse_topology_geometry(wkt)?;
+        let repaired = match g {
+            wbtopology::Geometry::Polygon(poly) => wbtopology::make_valid_polygon(&poly, epsilon),
+            wbtopology::Geometry::MultiPolygon(polys) => polys
+                .iter()
+                .flat_map(|poly| wbtopology::make_valid_polygon(poly, epsilon))
+                .collect::<Vec<_>>(),
+            _ => return Err("geometry is not a Polygon or MultiPolygon".to_string()),
+        };
+
+        let out = if repaired.len() == 1 {
+            wbtopology::Geometry::Polygon(repaired.into_iter().next().unwrap())
+        } else {
+            wbtopology::Geometry::MultiPolygon(repaired)
+        };
+        Ok(wbtopology::to_wkt(&out))
     }
 
     pub fn vector_copy_with_options_json(
-        _src: &str,
-        _dst: &str,
-        _options_json: &str,
+        src: &str,
+        dst: &str,
+        options_json: &str,
     ) -> Result<String, String> {
-        Err(disabled())
+        let layer = wbvector::read(src).map_err(|e| e.to_string())?;
+        let dst_path = Path::new(dst);
+        let format = wbvector::VectorFormat::detect(dst_path).map_err(|e| e.to_string())?;
+
+        if matches!(format, wbvector::VectorFormat::GeoParquet) {
+            let parsed: JsonValue = serde_json::from_str(options_json).unwrap_or(JsonValue::Null);
+            let mut options = wbvector::geoparquet::GeoParquetWriteOptions::new();
+            if let Some(geo) = parsed.get("geoparquet") {
+                if let Some(v) = geo.get("max_rows_per_group").and_then(JsonValue::as_u64) {
+                    options = options.with_max_rows_per_group(v as usize);
+                }
+                if let Some(v) = geo.get("data_page_size_limit").and_then(JsonValue::as_u64) {
+                    options = options.with_data_page_size_limit(v as usize);
+                }
+                if let Some(v) = geo.get("write_batch_size").and_then(JsonValue::as_u64) {
+                    options = options.with_write_batch_size(v as usize);
+                }
+                if let Some(v) = geo.get("data_page_row_count_limit").and_then(JsonValue::as_u64) {
+                    options = options.with_data_page_row_count_limit(v as usize);
+                }
+            }
+
+            wbvector::geoparquet::write_with_options(&layer, dst_path, &options)
+                .map_err(|e| e.to_string())?;
+            return Ok(dst.to_string());
+        }
+
+        wbvector::write(&layer, dst_path, format).map_err(|e| e.to_string())?;
+        Ok(dst.to_string())
     }
 }
 
@@ -389,6 +568,120 @@ fn detect_lidar_output_format(path: &Path) -> Option<LidarFormat> {
         return Some(LidarFormat::E57);
     }
     None
+}
+
+fn parse_copc_node_point_ordering(value: &str) -> Option<CopcNodePointOrdering> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" => Some(CopcNodePointOrdering::Auto),
+        "morton" => Some(CopcNodePointOrdering::Morton),
+        "hilbert" => Some(CopcNodePointOrdering::Hilbert),
+        _ => None,
+    }
+}
+
+fn parse_lidar_write_options_json(options_json: &str) -> PyResult<LidarWriteOptions> {
+    let parsed: JsonValue = serde_json::from_str(options_json).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "invalid lidar options JSON: {e}"
+        ))
+    })?;
+
+    let mut options = LidarWriteOptions::default();
+
+    if let Some(laz) = parsed.get("laz") {
+        let laz_obj = laz.as_object().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "lidar options field 'laz' must be an object",
+            )
+        })?;
+
+        let mut laz_options = LazWriteOptions::default();
+        if let Some(chunk_size) = laz_obj.get("chunk_size") {
+            laz_options.chunk_size = Some(chunk_size.as_u64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "lidar options laz.chunk_size must be a positive integer",
+                )
+            })? as u32);
+        }
+        if let Some(level) = laz_obj.get("compression_level") {
+            laz_options.compression_level = Some(level.as_u64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "lidar options laz.compression_level must be an integer",
+                )
+            })? as u32);
+        }
+        options.laz = laz_options;
+    }
+
+    if let Some(copc) = parsed.get("copc") {
+        let copc_obj = copc.as_object().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "lidar options field 'copc' must be an object",
+            )
+        })?;
+
+        let mut copc_options = CopcWriteOptions::default();
+        if let Some(max_points) = copc_obj.get("max_points_per_node") {
+            copc_options.max_points_per_node = Some(max_points.as_u64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "lidar options copc.max_points_per_node must be an integer",
+                )
+            })? as usize);
+        }
+        if let Some(max_depth) = copc_obj.get("max_depth") {
+            copc_options.max_depth = Some(max_depth.as_u64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "lidar options copc.max_depth must be an integer",
+                )
+            })? as u32);
+        }
+        if let Some(ordering) = copc_obj.get("node_point_ordering") {
+            let ordering_str = ordering.as_str().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "lidar options copc.node_point_ordering must be a string",
+                )
+            })?;
+            copc_options.node_point_ordering = Some(
+                parse_copc_node_point_ordering(ordering_str).ok_or_else(|| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "unsupported copc.node_point_ordering '{}'; expected auto|morton|hilbert",
+                        ordering_str
+                    ))
+                })?,
+            );
+        }
+        options.copc = copc_options;
+    }
+
+    Ok(options)
+}
+
+fn write_lidar_path_with_options_json(src: &Path, dst: &Path, options_json: &str) -> PyResult<PathBuf> {
+    let cloud = PointCloud::read(src).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+            "failed to read lidar source '{}': {e}",
+            src.display()
+        ))
+    })?;
+
+    let options = parse_lidar_write_options_json(options_json)?;
+    if let Some(format) = detect_lidar_output_format(dst) {
+        cloud.write_as_with_options(dst, format, &options).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write lidar destination '{}': {e}",
+                dst.display()
+            ))
+        })?;
+    } else {
+        cloud.write_with_options(dst, &options).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "failed to write lidar destination '{}': {e}",
+                dst.display()
+            ))
+        })?;
+    }
+
+    Ok(dst.to_path_buf())
 }
 
 fn derived_output_path(input: &Path, suffix: &str) -> PathBuf {
@@ -8133,16 +8426,11 @@ impl Lidar {
             }
         };
 
-        let result_path = wbw_r::lidar_write_with_options_json(
-            source_path.to_string_lossy().as_ref(),
-            dst,
+        let result_path = write_lidar_path_with_options_json(
+            &source_path,
+            Path::new(dst),
             opts_json,
-        ).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to write lidar to '{}': {e}",
-                dst
-            ))
-        })?;
+        )?;
 
         if let Some(staged) = staged_input {
             let _ = std::fs::remove_file(staged);
@@ -8179,15 +8467,11 @@ impl Lidar {
             }
         };
 
-        let result_path = wbw_r::lidar_copy_to_path(
-            source_path.to_string_lossy().as_ref(),
-            dst,
-        ).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                "failed to copy lidar to '{}': {e}",
-                dst
-            ))
-        })?;
+        let result_path = write_lidar_path_with_options_json(
+            &source_path,
+            Path::new(dst),
+            "{}",
+        )?;
 
         if let Some(staged) = staged_input {
             let _ = std::fs::remove_file(staged);
@@ -10734,7 +11018,7 @@ impl WbEnvironment {
         let vector_path = vector.file_path.to_string_lossy().to_string();
 
         // If the output format is natively supported by wbvector, write directly
-        // without going through wbw_r (which requires the r-interop feature).
+        // and bypass the compatibility conversion shim.
         if let Ok(out_fmt) = VectorFormat::detect(&out_path) {
             let layer = if vector_memory_store::vector_is_memory_path(&vector_path) {
                 read_vector_layer_for_python(vector)?
@@ -10747,7 +11031,7 @@ impl WbEnvironment {
                         ))
                     })?,
                     Err(_) => {
-                        // Source format not natively readable; delegate to wbw_r.
+                        // Source format not natively readable; delegate to conversion shim.
                         return wbw_r::vector_copy_with_options_json(
                             &vector_path,
                             out_path.to_string_lossy().as_ref(),
@@ -10771,9 +11055,9 @@ impl WbEnvironment {
             });
         }
 
-        // Output format not natively supported — delegate to wbw_r (GDAL).
+        // Output format not natively supported — delegate to conversion shim.
         if vector_memory_store::vector_is_memory_path(&vector_path) {
-            // Stage memory vector to a temp gpkg first, then convert via wbw_r.
+            // Stage memory vector to a temp gpkg first, then convert via compatibility shim.
             let layer = read_vector_layer_for_python(vector)?;
             let millis = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -10890,17 +11174,11 @@ impl WbEnvironment {
                 }
             };
 
-            wbw_r::lidar_write_with_options_json(
-                source_path.to_string_lossy().as_ref(),
-                out_path.to_string_lossy().as_ref(),
+            write_lidar_path_with_options_json(
+                &source_path,
+                &out_path,
                 &options_json,
-            )
-            .map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
-                    "Failed to write lidar '{}': {e}",
-                    out_path.display()
-                ))
-            })?;
+            )?;
 
             if let Some(staged) = staged_input {
                 let _ = std::fs::remove_file(staged);

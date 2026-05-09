@@ -91,9 +91,9 @@ Scope note:
 
 | ID | Case | Producer | Source Format | Status | Failure Class | Evidence Path | Notes |
 |---|---|---|---|---|---|---|---|
-| L01 | point14 baseline roundtrip | PDAL | LAS 1.4 | Passed | | artifacts/interop/results/lidar/L01/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
-| L02 | compressed roundtrip | PDAL | LAZ | Passed | | artifacts/interop/results/lidar/L02/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
-| L03 | hierarchy-aware roundtrip | PDAL | COPC | Passed | | artifacts/interop/results/lidar/L03/ | r-interop-enabled wbw_python build produced successful read/write roundtrip |
+| L01 | point14 baseline roundtrip | PDAL | LAS 1.4 | Passed | | artifacts/interop/results/lidar/L01/ | wbw_python native backend path produced successful read/write roundtrip |
+| L02 | compressed roundtrip | PDAL | LAZ | Passed | | artifacts/interop/results/lidar/L02/ | wbw_python native backend path produced successful read/write roundtrip |
+| L03 | hierarchy-aware roundtrip | PDAL | COPC | Passed | | artifacts/interop/results/lidar/L03/ | wbw_python native backend path produced successful read/write roundtrip |
 
 ## Phase C (Recommended v1.5): Topology Stress Corpus
 

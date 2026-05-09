@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning while in pre-1.0 development.
 
+## [0.1.3] – 2026-05-09
+
+### Changed
+- FlatGeobuf indexed interoperability restored via internal native reader/writer enhancements (no external flatgeobuf crate dependency).
+- Lean dependency compliance enforced: FlatGeobuf indexed operations use internal packed-index logic.
+
+### Fixed
+- V04 FlatGeobuf indexed read/write now deterministic and reliable under all interop test conditions.
+- Telemetry for indexed parse decisions remains env-gated for operational insight.
+
+### Testing
+- Interop Phase B V04 case passes; full Phase B 15/15 passing; Phase C.1 vector cases (V05–V07) all passing.
+
 ## [Unreleased]
 
 ### Added

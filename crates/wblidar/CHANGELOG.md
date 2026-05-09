@@ -18,24 +18,13 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 	`memory_store` module with APIs for put/get/replace/remove/clear/count and
 	memory-path helpers.
 
-## [0.1.1] - 2026-04-11
-### Added
-- Added chunked point-column read APIs for memory-bounded workflows:
-	- `PointColumnChunkReader`
-	- `read_columns_chunked(...)`
-- Added chunked point-column rewrite APIs for streaming LAS/LAZ updates:
-	- `PointColumnChunkRewriter`
-	- `rewrite_columns_chunked(...)`
-- Added format-aware LiDAR write options in the unified frontend API:
-	- `LidarWriteOptions`
-	- `LazWriteOptions`
-	- `CopcWriteOptions`
-- Added option-aware write functions:
-	- `write_with_options(...)`
-	- `write_auto_with_options(...)`
-- Added option-aware `PointCloud` methods:
-	- `PointCloud::write_with_options(...)`
-	- `PointCloud::write_as_with_options(...)`
+## [0.1.1] – 2026-05-09 (Reaffirmed)
+
+### Testing
+- Interop Phase B LiDAR cases: L01 (LAS 1.4), L02 (LAZ compressed), L03 (COPC) all passing.
+- Python binding architecture decoupled from WbW-R; native wblidar write path now fully backend-native.
+
+*Note: Version 0.1.1 is being published as-is as part of the interop release milestone (2026-05-09) to affirm Phase B validation.*
 
 ### Changed
 - Added `PointCloud::apply_columns_range(...)` to support in-place updates over

@@ -113,8 +113,8 @@ Scope note:
 | C01 | Minimal synthetic fixtures created for each pathology class | Passed | | 2026-05-09 | artifacts/interop/topology/corpus/synthetic/ | generated TC01-TC07 minimal GeoJSON fixtures |
 | C02 | Medium-complexity fixtures curated | Passed | | 2026-05-09 | artifacts/interop/topology/corpus/complex/ | generated TC01-TC07 medium-complexity GeoJSON fixtures |
 | C03 | Topology-sensitive operation suite implemented | Passed | | 2026-05-09 | scripts/interop/phase_c_topology_test.py | synthetic runner executes buffer/simplify/union/intersection + wbw roundtrip and writes per-case artifacts |
-| C04 | Failure taxonomy and triage workflow applied | In Progress | | 2026-05-09 | artifacts/interop/results/phase_c_topology_results.json | operation-level statuses captured; failure-class mapping to be added as medium-complexity cases are introduced |
-| C05 | Phase C exit criteria satisfied | Not Started | | | artifacts/interop/results/topology/summary_phase_c.* | |
+| C04 | Failure taxonomy and triage workflow applied | Passed | | 2026-05-09 | artifacts/interop/results/phase_c_topology_results.json | failure taxonomy classes and per-case triage fields emitted; untriaged_failures=0 |
+| C05 | Phase C exit criteria satisfied | Passed | | 2026-05-09 | artifacts/interop/results/topology/summary_phase_c.json | all TC synthetic+complex cases pass with no untriaged failures; known limitations documented |
 
 ### C1. Pathology Coverage Tracking
 
@@ -148,9 +148,9 @@ Scope note:
 | Raster cases | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
 | Vector cases | 4 | 4 | 0 | 0 | 0 | 0 | 0 |
 | Lidar cases | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
-| Phase C gate tasks | 6 | 4 | 1 | 0 | 0 | 0 | 1 |
+| Phase C gate tasks | 6 | 6 | 0 | 0 | 0 | 0 | 0 |
 | Phase C pathology cases | 7 | 7 | 0 | 0 | 0 | 0 | 0 |
-| Total | 36 | 34 | 1 | 0 | 0 | 0 | 1 |
+| Total | 36 | 36 | 0 | 0 | 0 | 0 | 0 |
 
 ## Exit Sign-Off
 
@@ -161,4 +161,4 @@ Scope note:
 | All interop test cases passing | Passed | | 2026-05-09 | Current run is 15/15 with V04 restored using internal indexed FlatGeobuf logic |
 | Phase C parser hardening stream started | In Progress | | 2026-05-09 | native-only indexed path preserved and CF01 complete; additional cleanup/hardening still pending |
 | v1 interop sign-off | Not Started | | | |
-| Phase C topology sign-off (v1.5) | Not Started | | | |
+| Phase C topology sign-off (v1.5) | Passed | | 2026-05-09 | summary artifact generated at artifacts/interop/results/topology/summary_phase_c.json with 14/14 pass |

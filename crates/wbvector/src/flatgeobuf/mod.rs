@@ -20,7 +20,6 @@
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 use flatbuffers::FlatBufferBuilder;
 use crate::crs;
 use crate::error::{GeoError, Result};
@@ -37,8 +36,6 @@ use self::header_generated as hg;
 
 static FGB_INDEXED_NATIVE_ACCEPTED: AtomicUsize = AtomicUsize::new(0);
 static FGB_INDEXED_NATIVE_REJECTED: AtomicUsize = AtomicUsize::new(0);
-static FGB_INDEXED_FALLBACK_USED: AtomicUsize = AtomicUsize::new(0);
-static FGB_INDEXED_FALLBACK_FAILED: AtomicUsize = AtomicUsize::new(0);
 
 // ── Magic ─────────────────────────────────────────────────────────────────────
 /// FlatGeobuf v3 file signature (`fgb\x03fgb\0`).
@@ -102,10 +99,46 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     let data = std::fs::read(path_ref).map_err(GeoError::Io)?;
 
     // Indexed producer variants still show layout differences in the wild.
-    // Prefer native parsing first, but use a contained GDAL fallback when
-    // native decoding fails or returns an obviously inconsistent feature count.
+    // Prefer direct indexed parsing first, then fall back to the existing
+    // native parser when needed.
     let indexed = header_index_node_size(&data).unwrap_or(0) > 0;
     let expected_count = header_features_count(&data).unwrap_or(0) as usize;
+
+    if indexed {
+        let mut producer_count = expected_count;
+        if producer_count == 0 {
+            producer_count = ogr_feature_count(path_ref).unwrap_or(0);
+        }
+        if producer_count > 0 {
+            match from_bytes_indexed_exact(&data, producer_count) {
+                Ok(layer) => {
+                    if indexed_native_parse_is_valid(producer_count, layer.len()) {
+                        FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
+                        maybe_log_indexed_read_decision(path_ref, "indexed-direct-accepted", producer_count, layer.len());
+                        return Ok(layer);
+                    }
+                    if telemetry_enabled() {
+                        eprintln!(
+                            "flatgeobuf indexed read: indexed-direct-rejected path={} expected_count={} parsed_count={}",
+                            path_ref.display(),
+                            producer_count,
+                            layer.len()
+                        );
+                    }
+                }
+                Err(e) => {
+                    if telemetry_enabled() {
+                        eprintln!(
+                            "flatgeobuf indexed read: indexed-direct-error path={} expected_count={} error={}",
+                            path_ref.display(),
+                            producer_count,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     let native = from_bytes(&data);
     if !indexed {
@@ -145,17 +178,28 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     } else {
         FGB_INDEXED_NATIVE_REJECTED.fetch_add(1, Ordering::Relaxed);
         maybe_log_indexed_read_decision(path_ref, "native-error", expected_count, 0);
+        if telemetry_enabled() {
+            if let Err(e) = &native {
+                eprintln!(
+                    "flatgeobuf indexed read: native-error-detail path={} error={}",
+                    path_ref.display(),
+                    e
+                );
+            }
+        }
+        if expected_count == 0 {
+            producer_count = ogr_feature_count(path_ref);
+            if let Some(pc) = producer_count {
+                if let Ok(retry) = from_bytes_with_expected_count(&data, Some(pc)) {
+                    if retry.len() == pc {
+                        FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
+                        maybe_log_indexed_read_decision(path_ref, "native-accepted-via-override", pc, retry.len());
+                        return Ok(retry);
+                    }
+                }
+            }
+        }
     }
-
-    if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
-        FGB_INDEXED_FALLBACK_USED.fetch_add(1, Ordering::Relaxed);
-        let expected_for_log = producer_count.unwrap_or(expected_count);
-        maybe_log_indexed_read_decision(path_ref, "fallback-used", expected_for_log, layer.len());
-        return Ok(layer);
-    }
-
-    FGB_INDEXED_FALLBACK_FAILED.fetch_add(1, Ordering::Relaxed);
-    maybe_log_indexed_read_decision(path_ref, "fallback-failed", expected_count, 0);
 
     native
 }
@@ -178,24 +222,20 @@ fn maybe_log_indexed_read_decision(path: &Path, decision: &str, expected_count: 
         return;
     }
     eprintln!(
-        "flatgeobuf indexed read: decision={decision} path={} expected_count={} parsed_count={} counters={{native_accepted:{}, native_rejected:{}, fallback_used:{}, fallback_failed:{}}}",
+        "flatgeobuf indexed read: decision={decision} path={} expected_count={} parsed_count={} counters={{native_accepted:{}, native_rejected:{}}}",
         path.display(),
         expected_count,
         parsed_count,
         FGB_INDEXED_NATIVE_ACCEPTED.load(Ordering::Relaxed),
-        FGB_INDEXED_NATIVE_REJECTED.load(Ordering::Relaxed),
-        FGB_INDEXED_FALLBACK_USED.load(Ordering::Relaxed),
-        FGB_INDEXED_FALLBACK_FAILED.load(Ordering::Relaxed)
+        FGB_INDEXED_NATIVE_REJECTED.load(Ordering::Relaxed)
     );
 }
 
 #[cfg(test)]
-fn indexed_read_telemetry_snapshot() -> (usize, usize, usize, usize) {
+fn indexed_read_telemetry_snapshot() -> (usize, usize) {
     (
         FGB_INDEXED_NATIVE_ACCEPTED.load(Ordering::Relaxed),
         FGB_INDEXED_NATIVE_REJECTED.load(Ordering::Relaxed),
-        FGB_INDEXED_FALLBACK_USED.load(Ordering::Relaxed),
-        FGB_INDEXED_FALLBACK_FAILED.load(Ordering::Relaxed),
     )
 }
 
@@ -203,8 +243,6 @@ fn indexed_read_telemetry_snapshot() -> (usize, usize, usize, usize) {
 fn reset_indexed_read_telemetry() {
     FGB_INDEXED_NATIVE_ACCEPTED.store(0, Ordering::Relaxed);
     FGB_INDEXED_NATIVE_REJECTED.store(0, Ordering::Relaxed);
-    FGB_INDEXED_FALLBACK_USED.store(0, Ordering::Relaxed);
-    FGB_INDEXED_FALLBACK_FAILED.store(0, Ordering::Relaxed);
 }
 
 fn header_index_node_size(data: &[u8]) -> Option<u16> {
@@ -241,43 +279,6 @@ fn header_features_count(data: &[u8]) -> Option<u64> {
         return Some(hdr.features_count());
     }
     None
-}
-
-fn read_via_ogr2ogr_geojson(path: &Path) -> Result<Layer> {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_micros())
-        .unwrap_or(0);
-    let pid = std::process::id();
-    let tmp_geojson = std::env::temp_dir().join(format!("wbvector_fgb_{pid}_{stamp}.geojson"));
-
-    let output = Command::new("ogr2ogr")
-        .arg("-f")
-        .arg("GeoJSON")
-        .arg(&tmp_geojson)
-        .arg(path)
-        .output();
-
-    match output {
-        Ok(out) if out.status.success() => {
-            let result = crate::geojson::read(&tmp_geojson);
-            let _ = std::fs::remove_file(&tmp_geojson);
-            result
-        }
-        Ok(out) => {
-            let _ = std::fs::remove_file(&tmp_geojson);
-            Err(GeoError::NotFlatGeobuf(format!(
-                "indexed FlatGeobuf fallback failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )))
-        }
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp_geojson);
-            Err(GeoError::NotFlatGeobuf(format!(
-                "indexed FlatGeobuf fallback unavailable: {e}"
-            )))
-        }
-    }
 }
 
 fn ogr_feature_count(path: &Path) -> Option<usize> {
@@ -484,6 +485,8 @@ fn from_bytes_standard(
     start_positions.push(base_pos);
 
     let mut best_features: Option<(Vec<Feature>, usize)> = None;
+    let mut candidate_attempts = 0usize;
+    let mut candidate_successes = 0usize;
 
     let better_candidate = |current: &Option<(Vec<Feature>, usize)>, candidate: &(Vec<Feature>, usize)| -> bool {
         match current {
@@ -525,13 +528,13 @@ fn from_bytes_standard(
         let mut pos = start;
         let mut parsed: Vec<Feature> = Vec::new();
         let mut fidx = 0usize;
-        let mut resync_budget = if expected_count == 0 { 64usize } else { 0usize };
+        let mut resync_budget = 512usize;
 
         while pos + 4 <= data.len() {
             let (skip, feat_size) = match read_feature_size(pos) {
                 Some(v) => v,
                 None => {
-                    if expected_count == 0 && resync_budget > 0 {
+                    if resync_budget > 0 {
                         pos += 1;
                         resync_budget -= 1;
                         continue;
@@ -541,7 +544,7 @@ fn from_bytes_standard(
             };
             let frame_start = pos + skip + 4;
             if frame_start + feat_size > data.len() {
-                if expected_count == 0 && resync_budget > 0 {
+                if resync_budget > 0 {
                     pos += 1;
                     resync_budget -= 1;
                     continue;
@@ -549,13 +552,13 @@ fn from_bytes_standard(
                 break;
             }
             let feat_buf = &data[frame_start..frame_start + feat_size];
+            let extended_end = (frame_start + feat_size + 16).min(data.len());
+            let feat_buf_extended = &data[frame_start..extended_end];
 
-            let feat = if let Ok(v) = fg::root_as_feature(feat_buf) {
-                v
-            } else if let Ok(v) = fg::size_prefixed_root_as_feature(feat_buf) {
+            let (feat, consumed_hint) = if let Some(v) = parse_feature_record_compat(feat_buf, feat_buf_extended) {
                 v
             } else {
-                if expected_count == 0 && resync_budget > 0 {
+                if resync_budget > 0 {
                     pos += 1;
                     resync_budget -= 1;
                     continue;
@@ -576,9 +579,13 @@ fn from_bytes_standard(
                 vec![FieldValue::Null; columns.len()]
             };
 
-            let informative = geometry.is_some()
+            let has_raw_geometry = feat.geometry().is_some();
+            let has_raw_props = feat.properties().map(|p| p.len() > 0).unwrap_or(false);
+            let informative = has_raw_geometry
+                || has_raw_props
+                || geometry.is_some()
                 || attrs.iter().any(|v| !matches!(v, FieldValue::Null));
-            if expected_count == 0 && !informative {
+            if !informative {
                 if resync_budget > 0 {
                     pos += 1;
                     resync_budget -= 1;
@@ -593,10 +600,9 @@ fn from_bytes_standard(
                 attributes: attrs,
             });
             fidx += 1;
-            pos = frame_start + feat_size;
-            if expected_count == 0 {
-                resync_budget = 64;
-            }
+            let consumed = consumed_hint.max(feat_size);
+            pos = frame_start + consumed.min(data.len().saturating_sub(frame_start));
+            resync_budget = 512;
 
             if expected_count > 0 && parsed.len() == expected_count {
                 break;
@@ -614,7 +620,9 @@ fn from_bytes_standard(
     };
 
     for pos in start_positions {
+        candidate_attempts += 1;
         if let Some(parsed) = try_parse_from(pos) {
+            candidate_successes += 1;
             if better_candidate(&best_features, &parsed) {
                 best_features = Some(parsed);
             }
@@ -630,7 +638,9 @@ fn from_bytes_standard(
         let scan_start = base_pos;
         let scan_end = data.len().saturating_sub(8);
         for pos in scan_start..=scan_end {
+            candidate_attempts += 1;
             if let Some(parsed) = try_parse_from(pos) {
+                candidate_successes += 1;
                 if better_candidate(&best_features, &parsed) {
                     best_features = Some(parsed);
                 }
@@ -641,11 +651,77 @@ fn from_bytes_standard(
         }
     }
 
+    // Some indexed producer variants place feature records farther from the
+    // header/index-derived offsets than expected. If local scans found nothing,
+    // perform a broader final scan before declaring native decode failure.
+    if best_features.is_none() && hdr.index_node_size() > 0 && expected_count > 0 {
+        let global_start = hdr_size.min(data.len().saturating_sub(4));
+        let global_end = data.len().saturating_sub(4);
+        if global_start <= global_end {
+            for align in 0..4 {
+                let mut pos = global_start.saturating_add(align);
+                while pos <= global_end {
+                    candidate_attempts += 1;
+                    if let Some(parsed) = try_parse_from(pos) {
+                        candidate_successes += 1;
+                        if better_candidate(&best_features, &parsed) {
+                            best_features = Some(parsed);
+                        }
+                        break;
+                    }
+                    pos = pos.saturating_add(4);
+                }
+                if best_features.is_some() {
+                    break;
+                }
+            }
+        }
+    }
+
+    if best_features.is_none() && hdr.index_node_size() > 0 && expected_count > 0 {
+        if let Some(parsed) = try_parse_legacy_indexed_compat(
+            data,
+            base_pos,
+            hdr.geometry_type().0,
+            hdr.has_z(),
+            &columns,
+            expected_count,
+        ) {
+            if telemetry_enabled() {
+                eprintln!(
+                    "flatgeobuf standard parse: indexed-legacy-compat expected_count={} parsed_count={}",
+                    expected_count,
+                    parsed.0.len()
+                );
+            }
+            best_features = Some(parsed);
+        }
+    }
+
     let (features, _end_pos) = best_features.ok_or_else(|| {
+        if telemetry_enabled() {
+            eprintln!(
+                "flatgeobuf standard parse: indexed={} expected_count={} attempts={} successes={} result=no-candidates",
+                hdr.index_node_size() > 0,
+                expected_count,
+                candidate_attempts,
+                candidate_successes
+            );
+        }
         GeoError::NotFlatGeobuf("failed to decode FlatGeobuf feature records".into())
     })?;
 
     if expected_count > 0 && features.len() != expected_count {
+        if telemetry_enabled() {
+            eprintln!(
+                "flatgeobuf standard parse: indexed={} expected_count={} attempts={} successes={} result=count-mismatch got={}",
+                hdr.index_node_size() > 0,
+                expected_count,
+                candidate_attempts,
+                candidate_successes,
+                features.len()
+            );
+        }
         return Err(GeoError::NotFlatGeobuf(
             "failed to decode expected FlatGeobuf feature records".into(),
         ));
@@ -658,6 +734,120 @@ fn from_bytes_standard(
     Ok(layer)
 }
 
+fn parse_feature_record_compat<'a>(
+    feat_buf: &'a [u8],
+    feat_buf_extended: &'a [u8],
+) -> Option<(fg::Feature<'a>, usize)> {
+    let decode = |buf: &'a [u8]| -> Option<(fg::Feature<'a>, usize)> {
+        if let Ok(v) = fg::size_prefixed_root_as_feature(buf) {
+            let consumed = if buf.len() >= 4 {
+                4usize.saturating_add(u32::from_le_bytes(buf[0..4].try_into().ok()?) as usize)
+            } else {
+                buf.len()
+            };
+            return Some((v, consumed.min(buf.len())));
+        }
+        if let Ok(v) = fg::root_as_feature(buf) {
+            return Some((v, buf.len()));
+        }
+        None
+    };
+
+    if let Some(v) = decode(feat_buf) {
+        return Some(v);
+    }
+
+    for shift in [4usize, 8usize, 12usize, 16usize] {
+        if feat_buf.len() > shift {
+            if let Some((v, consumed)) = decode(&feat_buf[shift..]) {
+                return Some((v, shift.saturating_add(consumed)));
+            }
+        }
+    }
+
+    if feat_buf_extended.len() > feat_buf.len() {
+        if let Some(v) = decode(feat_buf_extended) {
+            return Some(v);
+        }
+        for shift in [4usize, 8usize, 12usize, 16usize] {
+            if feat_buf_extended.len() > shift {
+                if let Some((v, consumed)) = decode(&feat_buf_extended[shift..]) {
+                    return Some((v, shift.saturating_add(consumed)));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn try_parse_legacy_indexed_compat(
+    data: &[u8],
+    start_at: usize,
+    geom_type: u8,
+    has_z: bool,
+    columns: &[FgbColumn],
+    expected_count: usize,
+) -> Option<(Vec<Feature>, usize)> {
+    if expected_count == 0 || start_at >= data.len().saturating_sub(4) {
+        return None;
+    }
+
+    let end = data.len().saturating_sub(4);
+    for start in start_at..=end {
+        let mut pos = start;
+        let mut parsed: Vec<Feature> = Vec::with_capacity(expected_count);
+        let mut fidx = 0usize;
+        let mut failed = false;
+
+        while pos + 4 <= data.len() && parsed.len() < expected_count {
+            let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().ok()?) as usize;
+            if feat_size == 0 {
+                failed = true;
+                break;
+            }
+            let frame_start = pos + 4;
+            let frame_end = frame_start.saturating_add(feat_size);
+            if frame_end > data.len() || frame_start + 4 > frame_end {
+                failed = true;
+                break;
+            }
+
+            let feat_data = &data[frame_start..frame_end];
+            let geom_size = u32::from_le_bytes(feat_data[0..4].try_into().ok()?) as usize;
+            if 4 + geom_size > feat_data.len() || geom_size == 0 {
+                failed = true;
+                break;
+            }
+
+            let geom_bytes = &feat_data[4..4 + geom_size];
+            let props_bytes = &feat_data[4 + geom_size..];
+            let geometry = match decode_geom(geom_bytes, geom_type, has_z) {
+                Ok(g) => Some(g),
+                Err(_) => {
+                    failed = true;
+                    break;
+                }
+            };
+
+            let attrs = decode_props(props_bytes, columns);
+            parsed.push(Feature {
+                fid: fidx as u64,
+                geometry,
+                attributes: attrs,
+            });
+            fidx += 1;
+            pos = frame_end;
+        }
+
+        if !failed && parsed.len() == expected_count {
+            return Some((parsed, pos));
+        }
+    }
+
+    None
+}
+
 /// Write a [`Layer`] as a FlatGeobuf file.
 pub fn write<P: AsRef<Path>>(layer: &Layer, path: P) -> Result<()> {
     std::fs::write(path, to_bytes(layer)).map_err(GeoError::Io)
@@ -665,15 +855,30 @@ pub fn write<P: AsRef<Path>>(layer: &Layer, path: P) -> Result<()> {
 
 /// Serialise a [`Layer`] as FlatGeobuf bytes.
 pub fn to_bytes(layer: &Layer) -> Vec<u8> {
+    let feature_buffers: Vec<Vec<u8>> = layer
+        .features
+        .iter()
+        .map(|feat| build_standard_feature(feat, &layer.schema))
+        .collect();
+
+    let mut index_bytes = Vec::new();
+    let index_node_size = if try_build_packed_spatial_index(layer, &feature_buffers, 16, &mut index_bytes) {
+        16
+    } else {
+        0
+    };
+
+    let hdr = build_standard_header(layer, index_node_size);
     let mut out = Vec::new();
     out.extend_from_slice(&MAGIC);
-
-    let hdr = build_standard_header(layer);
     out.extend_from_slice(&(hdr.len() as u32).to_le_bytes());
     out.extend_from_slice(&hdr);
 
-    for feat in &layer.features {
-        let feat_buf = build_standard_feature(feat, &layer.schema);
+    if index_node_size > 0 {
+        out.extend_from_slice(&index_bytes);
+    }
+
+    for feat_buf in feature_buffers {
         out.extend_from_slice(&(feat_buf.len() as u32).to_le_bytes());
         out.extend_from_slice(&feat_buf);
     }
@@ -681,7 +886,7 @@ pub fn to_bytes(layer: &Layer) -> Vec<u8> {
     out
 }
 
-fn build_standard_header(layer: &Layer) -> Vec<u8> {
+fn build_standard_header(layer: &Layer, index_node_size: u16) -> Vec<u8> {
     let mut fbb = FlatBufferBuilder::new();
 
     let mut cols = Vec::new();
@@ -730,7 +935,7 @@ fn build_standard_header(layer: &Layer) -> Vec<u8> {
         has_z,
         columns: cols_off,
         features_count: layer.features.len() as u64,
-        index_node_size: 0,
+        index_node_size,
         crs,
         ..Default::default()
     };
@@ -953,6 +1158,373 @@ fn packed_index_size(num_items: usize, node_size: u16) -> usize {
         if n == 1 { break; }
     }
     num_nodes * std::mem::size_of::<(f64, f64, f64, f64, u64)>()
+}
+
+fn from_bytes_indexed_exact(data: &[u8], expected_count: usize) -> Result<Layer> {
+    if expected_count == 0 {
+        return Err(GeoError::NotFlatGeobuf("indexed parse needs a known feature count".into()));
+    }
+    if data.len() < 12 || !has_compatible_magic(&data[0..8]) {
+        return Err(GeoError::NotFlatGeobuf("bad magic".into()));
+    }
+
+    let hdr_size = u32::from_le_bytes(data[8..12].try_into().unwrap()) as usize;
+    if 12 + hdr_size > data.len() {
+        return Err(GeoError::NotFlatGeobuf("header extends beyond EOF".into()));
+    }
+    let hdr_data = &data[12..12 + hdr_size];
+    let hdr = hg::root_as_header(hdr_data)
+        .or_else(|_| hg::size_prefixed_root_as_header(hdr_data))
+        .map_err(|_| GeoError::NotFlatGeobuf("invalid FlatGeobuf header".into()))?;
+
+    let mut layer = Layer::new(hdr.name().unwrap_or("layer"));
+    layer.geom_type = geom_type_from_code(hdr.geometry_type().0);
+    if let Some(fg_crs) = hdr.crs() {
+        let code = fg_crs.code();
+        if code > 0 {
+            layer.set_crs_epsg(Some(code as u32));
+        }
+        if layer.crs_epsg().is_none() {
+            if let Some(code_string) = fg_crs.code_string() {
+                layer.set_crs_epsg(crs::epsg_from_srs_reference(code_string));
+            }
+        }
+        if layer.crs_epsg().is_none() {
+            if let Some(name) = fg_crs.name() {
+                layer.set_crs_epsg(crs::epsg_from_srs_reference(name));
+            }
+        }
+        if let Some(wkt) = fg_crs.wkt() {
+            let trimmed = wkt.trim();
+            if !trimmed.is_empty() {
+                layer.set_crs_wkt(Some(trimmed.to_owned()));
+            }
+        }
+    }
+    if layer.crs_epsg().is_none() {
+        layer.set_crs_epsg(layer.crs_wkt().and_then(crs::epsg_from_wkt_lenient));
+    }
+    if layer.crs_wkt().is_none() {
+        layer.set_crs_wkt(layer.crs_epsg().and_then(crs::ogc_wkt_from_epsg));
+    }
+
+    let mut columns: Vec<FgbColumn> = Vec::new();
+    if let Some(cols) = hdr.columns() {
+        for i in 0..cols.len() {
+            let c = cols.get(i);
+            let name = c.name().to_string();
+            let col_type = c.type_().0;
+            columns.push(FgbColumn {
+                name: name.clone(),
+                col_type,
+                _nullable: c.nullable(),
+                width: c.width(),
+            });
+            let ft = col_type_to_field_type(col_type);
+            let mut fd = FieldDef::new(name, ft).width(c.width().max(0) as usize);
+            fd.nullable = c.nullable();
+            if c.precision() > 0 {
+                fd.precision = c.precision() as usize;
+            }
+            layer.add_field(fd);
+        }
+    }
+
+    let base_pos = 12 + hdr_size;
+    let approx_index_size = packed_index_size(expected_count, hdr.index_node_size());
+    let preferred_start = base_pos.saturating_add(approx_index_size);
+
+    let mut candidate_starts: Vec<usize> = Vec::new();
+    candidate_starts.push(preferred_start);
+
+    // Some producers vary packed-index layout details. Search around the
+    // expected post-index boundary before giving up.
+    let scan_start = base_pos;
+    let scan_end = preferred_start
+        .saturating_add(1024)
+        .min(data.len().saturating_sub(4));
+    if scan_start <= scan_end {
+        let mut p = scan_start;
+        while p <= scan_end {
+            candidate_starts.push(p);
+            p = p.saturating_add(4);
+        }
+    }
+
+    let mut parsed = None;
+    for start in candidate_starts {
+        if let Some(features) = parse_standard_feature_stream_exact(data, start, expected_count, &columns) {
+            parsed = Some(features);
+            break;
+        }
+    }
+
+    let features = parsed.ok_or_else(|| {
+        GeoError::NotFlatGeobuf("unable to decode indexed FlatGeobuf feature stream".into())
+    })?;
+
+    for (fidx, (geometry, attrs)) in features.into_iter().enumerate() {
+        layer.push(Feature {
+            fid: fidx as u64,
+            geometry,
+            attributes: attrs,
+        });
+    }
+
+    Ok(layer)
+}
+
+fn parse_standard_feature_stream_exact(
+    data: &[u8],
+    start: usize,
+    expected_count: usize,
+    columns: &[FgbColumn],
+) -> Option<Vec<(Option<Geometry>, Vec<FieldValue>)>> {
+    if expected_count == 0 || start + 4 > data.len() {
+        return None;
+    }
+
+    let mut pos = start;
+    let mut out: Vec<(Option<Geometry>, Vec<FieldValue>)> = Vec::with_capacity(expected_count);
+
+    for _ in 0..expected_count {
+        if pos + 4 > data.len() {
+            return None;
+        }
+        let feat_size = u32::from_le_bytes(data[pos..pos + 4].try_into().ok()?) as usize;
+        pos += 4;
+        if feat_size == 0 || pos + feat_size > data.len() {
+            return None;
+        }
+
+        let feat_buf = &data[pos..pos + feat_size];
+        let extended_end = (pos + feat_size + 16).min(data.len());
+        let feat_buf_extended = &data[pos..extended_end];
+        pos += feat_size;
+
+        let (feat, _) = parse_feature_record_compat(feat_buf, feat_buf_extended)?;
+        let geometry = match feat.geometry() {
+            Some(g) => decode_geom_standard(g).ok(),
+            None => None,
+        };
+        let attrs = if let Some(props) = feat.properties() {
+            let mut p = Vec::with_capacity(props.len());
+            for i in 0..props.len() {
+                p.push(props.get(i));
+            }
+            decode_props(&p, columns)
+        } else {
+            vec![FieldValue::Null; columns.len()]
+        };
+
+        out.push((geometry, attrs));
+    }
+
+    Some(out)
+}
+
+#[derive(Clone, Debug)]
+struct IndexNodeItem {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+    offset: u64,
+}
+
+impl IndexNodeItem {
+    fn create(offset: u64) -> Self {
+        Self {
+            min_x: f64::INFINITY,
+            min_y: f64::INFINITY,
+            max_x: f64::NEG_INFINITY,
+            max_y: f64::NEG_INFINITY,
+            offset,
+        }
+    }
+
+    fn expand(&mut self, other: &Self) {
+        if other.min_x < self.min_x { self.min_x = other.min_x; }
+        if other.min_y < self.min_y { self.min_y = other.min_y; }
+        if other.max_x > self.max_x { self.max_x = other.max_x; }
+        if other.max_y > self.max_y { self.max_y = other.max_y; }
+    }
+
+    fn width(&self) -> f64 { self.max_x - self.min_x }
+    fn height(&self) -> f64 { self.max_y - self.min_y }
+}
+
+fn index_calc_extent(nodes: &[IndexNodeItem]) -> IndexNodeItem {
+    let mut extent = IndexNodeItem::create(0);
+    for node in nodes {
+        extent.expand(node);
+    }
+    extent
+}
+
+fn hilbert(x: u32, y: u32) -> u32 {
+    let mut index = 0u32;
+    let mut rx;
+    let mut ry;
+    let mut s = 1u32 << 15;
+    let mut xx = x;
+    let mut yy = y;
+    while s > 0 {
+        rx = u32::from((xx & s) > 0);
+        ry = u32::from((yy & s) > 0);
+        index += s * s * ((3 * rx) ^ ry);
+        if ry == 0 {
+            if rx == 1 {
+                xx = (1 << 16) - 1 - xx;
+                yy = (1 << 16) - 1 - yy;
+            }
+            std::mem::swap(&mut xx, &mut yy);
+        }
+        s >>= 1;
+    }
+    index
+}
+
+fn hilbert_bbox(r: &IndexNodeItem, hilbert_max: u32, extent: &IndexNodeItem) -> u32 {
+    let width = extent.width();
+    let height = extent.height();
+    if width == 0.0 || height == 0.0 {
+        return 0;
+    }
+    let x = (hilbert_max as f64 * ((r.min_x + r.max_x) / 2.0 - extent.min_x) / width).floor().clamp(0.0, hilbert_max as f64) as u32;
+    let y = (hilbert_max as f64 * ((r.min_y + r.max_y) / 2.0 - extent.min_y) / height).floor().clamp(0.0, hilbert_max as f64) as u32;
+    hilbert(x, y)
+}
+
+fn index_hilbert_sort(items: &mut [IndexNodeItem], extent: &IndexNodeItem) {
+    const HILBERT_MAX: u32 = (1 << 16) - 1;
+    items.sort_by(|a, b| hilbert_bbox(b, HILBERT_MAX, extent).cmp(&hilbert_bbox(a, HILBERT_MAX, extent)));
+}
+
+struct PackedIndexTree {
+    node_items: Vec<IndexNodeItem>,
+    num_leaf_nodes: usize,
+    branching_factor: usize,
+    level_bounds: Vec<std::ops::Range<usize>>,
+}
+
+impl PackedIndexTree {
+    fn generate_level_bounds(num_items: usize, node_size: usize) -> Vec<std::ops::Range<usize>> {
+        let node_size = node_size.max(2);
+        let mut level_num_nodes: Vec<usize> = Vec::new();
+        let mut n = num_items;
+        let mut num_nodes = n;
+        level_num_nodes.push(n);
+        loop {
+            n = (n + node_size - 1) / node_size;
+            num_nodes += n;
+            level_num_nodes.push(n);
+            if n == 1 {
+                break;
+            }
+        }
+
+        let mut level_offsets: Vec<usize> = Vec::with_capacity(level_num_nodes.len());
+        n = num_nodes;
+        for size in &level_num_nodes {
+            level_offsets.push(n - size);
+            n -= size;
+        }
+
+        let mut level_bounds = Vec::with_capacity(level_num_nodes.len());
+        for i in 0..level_num_nodes.len() {
+            level_bounds.push(level_offsets[i]..level_offsets[i] + level_num_nodes[i]);
+        }
+        level_bounds
+    }
+
+    fn build(nodes: &[IndexNodeItem], extent: &IndexNodeItem, node_size: u16) -> Self {
+        let branching_factor = node_size.clamp(2, 65535) as usize;
+        let num_leaf_nodes = nodes.len();
+        let level_bounds = Self::generate_level_bounds(num_leaf_nodes, branching_factor);
+        let num_nodes = level_bounds.first().map(|r| r.end).unwrap_or(0);
+        let mut tree = Self {
+            node_items: vec![IndexNodeItem::create(0); num_nodes],
+            num_leaf_nodes,
+            branching_factor,
+            level_bounds,
+        };
+        if tree.node_items.is_empty() {
+            return tree;
+        }
+
+        let mut leaves = nodes.to_vec();
+        index_hilbert_sort(&mut leaves, extent);
+        let leaf_start = tree.node_items.len() - tree.num_leaf_nodes;
+        for (idx, item) in leaves.into_iter().enumerate() {
+            tree.node_items[leaf_start + idx] = item;
+        }
+        tree.generate_nodes();
+        tree
+    }
+
+    fn generate_nodes(&mut self) {
+        if self.level_bounds.len() <= 1 {
+            return;
+        }
+        for level in 0..self.level_bounds.len() - 1 {
+            let children_level = self.level_bounds[level].clone();
+            let parent_level = self.level_bounds[level + 1].clone();
+            let mut parent_idx = parent_level.start;
+            let mut child_idx = children_level.start;
+            while child_idx < children_level.end && parent_idx < parent_level.end {
+                let mut parent = IndexNodeItem::create(child_idx as u64);
+                for _ in 0..self.branching_factor {
+                    if child_idx >= children_level.end {
+                        break;
+                    }
+                    parent.expand(&self.node_items[child_idx]);
+                    child_idx += 1;
+                }
+                self.node_items[parent_idx] = parent;
+                parent_idx += 1;
+            }
+        }
+    }
+
+    fn stream_write(&self, out: &mut Vec<u8>) {
+        for item in &self.node_items {
+            out.extend_from_slice(&item.min_x.to_le_bytes());
+            out.extend_from_slice(&item.min_y.to_le_bytes());
+            out.extend_from_slice(&item.max_x.to_le_bytes());
+            out.extend_from_slice(&item.max_y.to_le_bytes());
+            out.extend_from_slice(&item.offset.to_le_bytes());
+        }
+    }
+}
+
+fn try_build_packed_spatial_index(layer: &Layer, feature_buffers: &[Vec<u8>], node_size: u16, out_index_bytes: &mut Vec<u8>) -> bool {
+    if layer.features.is_empty() || layer.features.len() != feature_buffers.len() {
+        return false;
+    }
+
+    let mut leaves = Vec::with_capacity(layer.features.len());
+    let mut offset_in_feature_section = 0u64;
+    for (feature, feat_buf) in layer.features.iter().zip(feature_buffers.iter()) {
+        let bbox = match feature.geometry.as_ref().and_then(|g| g.bbox()) {
+            Some(v) => v,
+            None => return false,
+        };
+        leaves.push(IndexNodeItem {
+            min_x: bbox.min_x,
+            min_y: bbox.min_y,
+            max_x: bbox.max_x,
+            max_y: bbox.max_y,
+            offset: offset_in_feature_section,
+        });
+        offset_in_feature_section = offset_in_feature_section.saturating_add((4 + feat_buf.len()) as u64);
+    }
+
+    let extent = index_calc_extent(&leaves);
+    let tree = PackedIndexTree::build(&leaves, &extent, node_size);
+    out_index_bytes.clear();
+    tree.stream_write(out_index_bytes);
+    true
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1494,6 +2066,13 @@ mod tests {
     }
 
     #[test]
+    fn writer_emits_spatial_index_for_geometry_features() {
+        let bytes = to_bytes(&sample_layer());
+        let node_size = header_index_node_size(&bytes).unwrap_or(0);
+        assert!(node_size > 0);
+    }
+
+    #[test]
     fn polygon_roundtrip() {
         let mut l = Layer::new("polys").with_geom_type(GeometryType::Polygon);
         l.add_feature(
@@ -1565,6 +2144,6 @@ mod tests {
     #[test]
     fn telemetry_reset_and_snapshot_work() {
         reset_indexed_read_telemetry();
-        assert_eq!(indexed_read_telemetry_snapshot(), (0, 0, 0, 0));
+        assert_eq!(indexed_read_telemetry_snapshot(), (0, 0));
     }
 }

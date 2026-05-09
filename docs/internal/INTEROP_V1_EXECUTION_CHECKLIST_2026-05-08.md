@@ -27,7 +27,7 @@ Scope note:
 | Run ID | v1-2026-05-08 |
 | Operator | user |
 | Date | 2026-05-08 |
-| Environment summary | Phase A complete (33/33 pass); Phase B complete (15/15 pass); all interop cases passing; V04 now uses default indexed GDAL producer with native validation and compatibility fallback; R05 resolved via GDAL HFA→GeoTIFF fallback; Phase C parser hardening is in progress |
+| Environment summary | Phase A complete (33/33 pass); Phase B now 15/15 pass with internal indexed FlatGeobuf read/write path; no external `flatgeobuf` crate dependency in wbvector; R05 resolved via GDAL HFA→GeoTIFF fallback; Phase C parser hardening stream remains active for cleanup/hardening |
 | Producer tool versions (GDAL/QGIS/PDAL/PROJ) | GDAL 3.12.3; PDAL 2.10.1; PROJ 9.8.0; QGIS 4.0.0 Norrköping |
 | Branch | checkpoint/phase1-phase2-pre-streamc-2026-04-12 |
 | Commit SHA | b157dff (Phase C telemetry checkpoint) |
@@ -85,7 +85,7 @@ Scope note:
 | V01 | mixed fields/nulls/multipart | QGIS | GeoPackage | Passed | | artifacts/interop/results/vector/V01/ | qgis_process native:savefeatures producer roundtrip succeeded |
 | V02 | schema constraints behavior | GDAL | Shapefile | Passed | | artifacts/interop/results/vector/V02/ | homogeneous point schema roundtrip succeeded |
 | V03 | basic interchange roundtrip | GDAL | GeoJSON | Passed | | artifacts/interop/results/vector/V03/ | GeoJSON roundtrip succeeded |
-| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Passed | | artifacts/interop/results/vector/V04/ | default indexed GDAL producer passes with native validation + compatibility fallback |
+| V04 | binary interchange roundtrip | GDAL | FlatGeobuf | Passed | | artifacts/interop/results/vector/V04/ | internal indexed parser/writer path restored deterministic native handling under lean dependency policy |
 
 ### B2. Lidar Cases (L01-L03)
 
@@ -101,9 +101,9 @@ Scope note:
 
 | ID | Task | Status | Owner | Last Updated | Evidence Path | Notes |
 |---|---|---|---|---|---|---|
-| CF01 | Indexed FlatGeobuf native validation gate | In Progress | | 2026-05-08 | crates/wbvector/src/flatgeobuf/mod.rs | native parse must match known/validated feature count before acceptance |
-| CF02 | Indexed FlatGeobuf compatibility fallback instrumentation | In Progress | | 2026-05-08 | crates/wbvector/src/flatgeobuf/mod.rs | telemetry counters/logging added to quantify native vs fallback paths |
-| CF03 | Remove indexed FlatGeobuf fallback entirely | Not Started | | | crates/wbvector/src/flatgeobuf/mod.rs | pending deterministic native indexed parse completion |
+| CF01 | Indexed FlatGeobuf native validation gate | Passed | | 2026-05-09 | crates/wbvector/src/flatgeobuf/mod.rs | deterministic indexed native parse restored without adding external flatgeobuf crate |
+| CF02 | Indexed FlatGeobuf compatibility fallback instrumentation | Passed | | 2026-05-09 | crates/wbvector/src/flatgeobuf/mod.rs | telemetry environment flag/logging remains available for indexed parse decisions |
+| CF03 | Remove indexed FlatGeobuf fallback entirely | Passed | | 2026-05-09 | crates/wbvector/src/flatgeobuf/mod.rs | indexed external fallback removed; dependency-lean native-only path enforced |
 
 ### C0. Phase Gate Checklist
 
@@ -158,7 +158,7 @@ Scope note:
 |---|---|---|---|---|
 | Phase A complete | Passed | | 2026-05-08 | Initial projection conformance run complete |
 | All 15 Phase B cases executed | Passed | | 2026-05-08 | v1.5 runner executed full matrix; see artifacts/interop/results/phase_b_matrix_results.json |
-| All interop test cases passing | Passed | | 2026-05-08 | Phase B 15/15 complete; V04 and R05 resolved with producer-aware settings and fallbacks |
-| Phase C parser hardening stream started | In Progress | | 2026-05-08 | active on checkpoint branch; latest checkpoint b157dff |
+| All interop test cases passing | Passed | | 2026-05-09 | Current run is 15/15 with V04 restored using internal indexed FlatGeobuf logic |
+| Phase C parser hardening stream started | In Progress | | 2026-05-09 | native-only indexed path preserved and CF01 complete; additional cleanup/hardening still pending |
 | v1 interop sign-off | Not Started | | | |
 | Phase C topology sign-off (v1.5) | Not Started | | | |

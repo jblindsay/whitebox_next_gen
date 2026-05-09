@@ -23,7 +23,7 @@ geoparquet = ["dep:parquet", "dep:serde_json"]
 [dependencies]
 thiserror = "1"
 flatbuffers = "24.12.23"
-wbprojection = { path = "../wbprojection", version = "0.1.0" }
+wbprojection = { path = "../wbprojection", version = "0.1.1" }
 zip = { version = "0.6", optional = true, default-features = false, features = ["deflate"] }
 osmpbfreader = { version = "0.16", optional = true }
 parquet = { version = "54", optional = true }

@@ -14,3 +14,11 @@ Planned scripts:
 - run_roundtrip_vector.sh
 - run_roundtrip_lidar.sh
 - summarize_results.py
+
+Current Phase C helper:
+- generate_phase_c_topology_synthetic_fixtures.py
+- phase_c_topology_test.py
+
+Example:
+- python scripts/interop/generate_phase_c_topology_synthetic_fixtures.py
+- python scripts/interop/phase_c_topology_test.py --corpus all

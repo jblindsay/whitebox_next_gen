@@ -109,24 +109,24 @@ Scope note:
 
 | ID | Task | Status | Owner | Last Updated | Evidence Path | Notes |
 |---|---|---|---|---|---|---|
-| C00 | Pathology class list finalized | Not Started | | | artifacts/interop/topology/corpus/ | |
-| C01 | Minimal synthetic fixtures created for each pathology class | Not Started | | | artifacts/interop/topology/corpus/synthetic/ | |
-| C02 | Medium-complexity fixtures curated | Not Started | | | artifacts/interop/topology/corpus/complex/ | |
-| C03 | Topology-sensitive operation suite implemented | Not Started | | | artifacts/interop/results/topology/ | |
-| C04 | Failure taxonomy and triage workflow applied | Not Started | | | artifacts/interop/results/topology/ | |
+| C00 | Pathology class list finalized | Passed | | 2026-05-09 | artifacts/interop/topology/corpus/synthetic/manifest.json | TC01-TC07 pathology classes captured in synthetic corpus manifest |
+| C01 | Minimal synthetic fixtures created for each pathology class | Passed | | 2026-05-09 | artifacts/interop/topology/corpus/synthetic/ | generated TC01-TC07 minimal GeoJSON fixtures |
+| C02 | Medium-complexity fixtures curated | Passed | | 2026-05-09 | artifacts/interop/topology/corpus/complex/ | generated TC01-TC07 medium-complexity GeoJSON fixtures |
+| C03 | Topology-sensitive operation suite implemented | Passed | | 2026-05-09 | scripts/interop/phase_c_topology_test.py | synthetic runner executes buffer/simplify/union/intersection + wbw roundtrip and writes per-case artifacts |
+| C04 | Failure taxonomy and triage workflow applied | In Progress | | 2026-05-09 | artifacts/interop/results/phase_c_topology_results.json | operation-level statuses captured; failure-class mapping to be added as medium-complexity cases are introduced |
 | C05 | Phase C exit criteria satisfied | Not Started | | | artifacts/interop/results/topology/summary_phase_c.* | |
 
 ### C1. Pathology Coverage Tracking
 
 | ID | Pathology Class | Status | Failure Class | Evidence Path | Notes |
 |---|---|---|---|---|---|
-| TC01 | Self-intersection (bow-tie) | Not Started | | artifacts/interop/results/topology/TC01/ | |
-| TC02 | Nearly-coincident edges / slivers | Not Started | | artifacts/interop/results/topology/TC02/ | |
-| TC03 | Ring orientation anomalies | Not Started | | artifacts/interop/results/topology/TC03/ | |
-| TC04 | Duplicate or near-duplicate vertices | Not Started | | artifacts/interop/results/topology/TC04/ | |
-| TC05 | Tiny gaps and overlaps | Not Started | | artifacts/interop/results/topology/TC05/ | |
-| TC06 | Point-touch boundaries | Not Started | | artifacts/interop/results/topology/TC06/ | |
-| TC07 | Multipart edge cases | Not Started | | artifacts/interop/results/topology/TC07/ | |
+| TC01 | Self-intersection (bow-tie) | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC02 | Nearly-coincident edges / slivers | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC03 | Ring orientation anomalies | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC04 | Duplicate or near-duplicate vertices | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC05 | Tiny gaps and overlaps | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC06 | Point-touch boundaries | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
+| TC07 | Multipart edge cases | Passed | | artifacts/interop/results/phase_c_topology_results.json | synthetic and complex runs passed |
 
 ## Per-Case Assertion Checklist (Copy into each case folder or ticket)
 
@@ -142,15 +142,15 @@ Scope note:
 
 ## Summary Dashboard
 
-| Category | Total | Passed | Failed | Blocked | Passed with Exceptions | Not Started |
-|---|---:|---:|---:|---:|---:|---:|
-| Phase A tasks | 8 | 8 | 0 | 0 | 0 | 0 |
-| Raster cases | 8 | 8 | 0 | 0 | 0 | 0 |
-| Vector cases | 4 | 4 | 0 | 0 | 0 | 0 |
-| Lidar cases | 3 | 3 | 0 | 0 | 0 | 0 |
-| Phase C gate tasks | 6 | 0 | 0 | 0 | 0 | 6 |
-| Phase C pathology cases | 7 | 0 | 0 | 0 | 0 | 7 |
-| Total | 36 | 23 | 0 | 0 | 0 | 13 |
+| Category | Total | Passed | In Progress | Failed | Blocked | Passed with Exceptions | Not Started |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Phase A tasks | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
+| Raster cases | 8 | 8 | 0 | 0 | 0 | 0 | 0 |
+| Vector cases | 4 | 4 | 0 | 0 | 0 | 0 | 0 |
+| Lidar cases | 3 | 3 | 0 | 0 | 0 | 0 | 0 |
+| Phase C gate tasks | 6 | 4 | 1 | 0 | 0 | 0 | 1 |
+| Phase C pathology cases | 7 | 7 | 0 | 0 | 0 | 0 | 0 |
+| Total | 36 | 34 | 1 | 0 | 0 | 0 | 1 |
 
 ## Exit Sign-Off
 

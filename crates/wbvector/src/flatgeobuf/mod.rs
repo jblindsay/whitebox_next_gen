@@ -495,24 +495,41 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
         let mut pos = start;
         let mut parsed: Vec<Feature> = Vec::new();
         let mut fidx = 0usize;
+        let mut resync_budget = if expected_count == 0 { 64usize } else { 0usize };
 
         while pos + 4 <= data.len() {
             let (skip, feat_size) = match read_feature_size(pos) {
                 Some(v) => v,
-                None => break,
+                None => {
+                    if expected_count == 0 && resync_budget > 0 {
+                        pos += 1;
+                        resync_budget -= 1;
+                        continue;
+                    }
+                    break;
+                }
             };
-            pos += skip + 4;
-            if pos + feat_size > data.len() {
+            let frame_start = pos + skip + 4;
+            if frame_start + feat_size > data.len() {
+                if expected_count == 0 && resync_budget > 0 {
+                    pos += 1;
+                    resync_budget -= 1;
+                    continue;
+                }
                 break;
             }
-            let feat_buf = &data[pos..pos + feat_size];
-            pos += feat_size;
+            let feat_buf = &data[frame_start..frame_start + feat_size];
 
             let feat = if let Ok(v) = fg::root_as_feature(feat_buf) {
                 v
             } else if let Ok(v) = fg::size_prefixed_root_as_feature(feat_buf) {
                 v
             } else {
+                if expected_count == 0 && resync_budget > 0 {
+                    pos += 1;
+                    resync_budget -= 1;
+                    continue;
+                }
                 return None;
             };
             let geometry = match feat.geometry() {
@@ -529,12 +546,27 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
                 vec![FieldValue::Null; columns.len()]
             };
 
+            let informative = geometry.is_some()
+                || attrs.iter().any(|v| !matches!(v, FieldValue::Null));
+            if expected_count == 0 && !informative {
+                if resync_budget > 0 {
+                    pos += 1;
+                    resync_budget -= 1;
+                    continue;
+                }
+                break;
+            }
+
             parsed.push(Feature {
                 fid: fidx as u64,
                 geometry,
                 attributes: attrs,
             });
             fidx += 1;
+            pos = frame_start + feat_size;
+            if expected_count == 0 {
+                resync_budget = 64;
+            }
 
             if expected_count > 0 && parsed.len() == expected_count {
                 break;

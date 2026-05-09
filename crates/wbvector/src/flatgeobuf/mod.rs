@@ -19,6 +19,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use flatbuffers::FlatBufferBuilder;
 use crate::crs;
@@ -33,6 +34,11 @@ mod feature_generated;
 
 use self::feature_generated as fg;
 use self::header_generated as hg;
+
+static FGB_INDEXED_NATIVE_ACCEPTED: AtomicUsize = AtomicUsize::new(0);
+static FGB_INDEXED_NATIVE_REJECTED: AtomicUsize = AtomicUsize::new(0);
+static FGB_INDEXED_FALLBACK_USED: AtomicUsize = AtomicUsize::new(0);
+static FGB_INDEXED_FALLBACK_FAILED: AtomicUsize = AtomicUsize::new(0);
 
 // ── Magic ─────────────────────────────────────────────────────────────────────
 /// FlatGeobuf v3 file signature (`fgb\x03fgb\0`).
@@ -108,11 +114,17 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
 
     if let Ok(layer) = native.as_ref() {
         if indexed_native_parse_is_valid(expected_count, layer.len()) {
+            FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
+            maybe_log_indexed_read_decision(path_ref, "native-accepted", expected_count, layer.len());
             return Ok(layer.clone());
         }
+        FGB_INDEXED_NATIVE_REJECTED.fetch_add(1, Ordering::Relaxed);
+        maybe_log_indexed_read_decision(path_ref, "native-rejected", expected_count, layer.len());
         if expected_count == 0 {
             if let Some(producer_count) = ogr_feature_count(path_ref) {
                 if layer.len() == producer_count {
+                    FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
+                    maybe_log_indexed_read_decision(path_ref, "native-accepted-via-ogrinfo", producer_count, layer.len());
                     return Ok(layer.clone());
                 }
             }
@@ -120,14 +132,62 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     }
 
     if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
+        FGB_INDEXED_FALLBACK_USED.fetch_add(1, Ordering::Relaxed);
+        maybe_log_indexed_read_decision(path_ref, "fallback-used", expected_count, layer.len());
         return Ok(layer);
     }
+
+    FGB_INDEXED_FALLBACK_FAILED.fetch_add(1, Ordering::Relaxed);
+    maybe_log_indexed_read_decision(path_ref, "fallback-failed", expected_count, 0);
 
     native
 }
 
 fn indexed_native_parse_is_valid(expected_count: usize, parsed_count: usize) -> bool {
     expected_count > 0 && parsed_count == expected_count
+}
+
+fn telemetry_enabled() -> bool {
+    std::env::var("WBW_FGB_TELEMETRY")
+        .map(|v| {
+            let lv = v.trim().to_ascii_lowercase();
+            lv == "1" || lv == "true" || lv == "yes" || lv == "on"
+        })
+        .unwrap_or(false)
+}
+
+fn maybe_log_indexed_read_decision(path: &Path, decision: &str, expected_count: usize, parsed_count: usize) {
+    if !telemetry_enabled() {
+        return;
+    }
+    eprintln!(
+        "flatgeobuf indexed read: decision={decision} path={} expected_count={} parsed_count={} counters={{native_accepted:{}, native_rejected:{}, fallback_used:{}, fallback_failed:{}}}",
+        path.display(),
+        expected_count,
+        parsed_count,
+        FGB_INDEXED_NATIVE_ACCEPTED.load(Ordering::Relaxed),
+        FGB_INDEXED_NATIVE_REJECTED.load(Ordering::Relaxed),
+        FGB_INDEXED_FALLBACK_USED.load(Ordering::Relaxed),
+        FGB_INDEXED_FALLBACK_FAILED.load(Ordering::Relaxed)
+    );
+}
+
+#[cfg(test)]
+fn indexed_read_telemetry_snapshot() -> (usize, usize, usize, usize) {
+    (
+        FGB_INDEXED_NATIVE_ACCEPTED.load(Ordering::Relaxed),
+        FGB_INDEXED_NATIVE_REJECTED.load(Ordering::Relaxed),
+        FGB_INDEXED_FALLBACK_USED.load(Ordering::Relaxed),
+        FGB_INDEXED_FALLBACK_FAILED.load(Ordering::Relaxed),
+    )
+}
+
+#[cfg(test)]
+fn reset_indexed_read_telemetry() {
+    FGB_INDEXED_NATIVE_ACCEPTED.store(0, Ordering::Relaxed);
+    FGB_INDEXED_NATIVE_REJECTED.store(0, Ordering::Relaxed);
+    FGB_INDEXED_FALLBACK_USED.store(0, Ordering::Relaxed);
+    FGB_INDEXED_FALLBACK_FAILED.store(0, Ordering::Relaxed);
 }
 
 fn header_index_node_size(data: &[u8]) -> Option<u16> {
@@ -1438,5 +1498,11 @@ mod tests {
     fn parse_ogr_feature_count_missing_line() {
         let stdout = "Layer name: sample\nGeometry: Point\n";
         assert_eq!(parse_ogr_feature_count(stdout), None);
+    }
+
+    #[test]
+    fn telemetry_reset_and_snapshot_work() {
+        reset_indexed_read_telemetry();
+        assert_eq!(indexed_read_telemetry_snapshot(), (0, 0, 0, 0));
     }
 }

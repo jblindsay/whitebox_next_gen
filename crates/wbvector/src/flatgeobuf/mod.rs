@@ -112,6 +112,8 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         return native;
     }
 
+    let mut producer_count: Option<usize> = None;
+
     if let Ok(layer) = native.as_ref() {
         if indexed_native_parse_is_valid(expected_count, layer.len()) {
             FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
@@ -121,19 +123,34 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         FGB_INDEXED_NATIVE_REJECTED.fetch_add(1, Ordering::Relaxed);
         maybe_log_indexed_read_decision(path_ref, "native-rejected", expected_count, layer.len());
         if expected_count == 0 {
-            if let Some(producer_count) = ogr_feature_count(path_ref) {
-                if layer.len() == producer_count {
+            producer_count = ogr_feature_count(path_ref);
+            if let Some(pc) = producer_count {
+                if layer.len() == pc {
                     FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
-                    maybe_log_indexed_read_decision(path_ref, "native-accepted-via-ogrinfo", producer_count, layer.len());
+                    maybe_log_indexed_read_decision(path_ref, "native-accepted-via-ogrinfo", pc, layer.len());
                     return Ok(layer.clone());
+                }
+
+                // Retry native parse with a validated expected-count override to
+                // sharpen candidate selection for unknown-count producer headers.
+                if let Ok(retry) = from_bytes_with_expected_count(&data, Some(pc)) {
+                    if retry.len() == pc {
+                        FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
+                        maybe_log_indexed_read_decision(path_ref, "native-accepted-via-override", pc, retry.len());
+                        return Ok(retry);
+                    }
                 }
             }
         }
+    } else {
+        FGB_INDEXED_NATIVE_REJECTED.fetch_add(1, Ordering::Relaxed);
+        maybe_log_indexed_read_decision(path_ref, "native-error", expected_count, 0);
     }
 
     if let Ok(layer) = read_via_ogr2ogr_geojson(path_ref) {
         FGB_INDEXED_FALLBACK_USED.fetch_add(1, Ordering::Relaxed);
-        maybe_log_indexed_read_decision(path_ref, "fallback-used", expected_count, layer.len());
+        let expected_for_log = producer_count.unwrap_or(expected_count);
+        maybe_log_indexed_read_decision(path_ref, "fallback-used", expected_for_log, layer.len());
         return Ok(layer);
     }
 
@@ -296,6 +313,10 @@ fn parse_ogr_feature_count(stdout: &str) -> Option<usize> {
 
 /// Parse FlatGeobuf from a byte slice.
 pub fn from_bytes(data: &[u8]) -> Result<Layer> {
+    from_bytes_with_expected_count(data, None)
+}
+
+fn from_bytes_with_expected_count(data: &[u8], expected_count_override: Option<usize>) -> Result<Layer> {
     if data.len() < 12 || !has_compatible_magic(&data[0..8]) {
         return Err(GeoError::NotFlatGeobuf(
             format!("bad magic {:?}", &data[..8.min(data.len())])
@@ -307,18 +328,22 @@ pub fn from_bytes(data: &[u8]) -> Result<Layer> {
     }
     let hdr_data = &data[12..12 + hdr_size];
 
-    let mut expected_count: Option<usize> = None;
+    let mut expected_count: Option<usize> = expected_count_override;
 
     if let Ok(hdr) = hg::root_as_header(hdr_data) {
-        expected_count = Some(hdr.features_count() as usize);
-        if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
+        if expected_count.is_none() {
+            expected_count = Some(hdr.features_count() as usize);
+        }
+        if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr, expected_count) {
             return Ok(layer);
         }
     }
 
     if let Ok(hdr) = hg::size_prefixed_root_as_header(hdr_data) {
-        expected_count = Some(hdr.features_count() as usize);
-        if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr) {
+        if expected_count.is_none() {
+            expected_count = Some(hdr.features_count() as usize);
+        }
+        if let Ok(layer) = from_bytes_standard(data, hdr_size, hdr, expected_count) {
             return Ok(layer);
         }
     }
@@ -386,7 +411,12 @@ fn from_bytes_legacy(data: &[u8], hdr_size: usize) -> Result<Layer> {
     Ok(layer)
 }
 
-fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Result<Layer> {
+fn from_bytes_standard(
+    data: &[u8],
+    hdr_size: usize,
+    hdr: hg::Header<'_>,
+    expected_count_override: Option<usize>,
+) -> Result<Layer> {
     let mut layer = Layer::new(hdr.name().unwrap_or("layer"));
     layer.geom_type = geom_type_from_code(hdr.geometry_type().0);
     if let Some(fg_crs) = hdr.crs() {
@@ -440,7 +470,7 @@ fn from_bytes_standard(data: &[u8], hdr_size: usize, hdr: hg::Header<'_>) -> Res
         }
     }
 
-    let expected_count = hdr.features_count() as usize;
+    let expected_count = expected_count_override.unwrap_or(hdr.features_count() as usize);
     let base_pos = 12 + hdr_size;
     let mut start_positions: Vec<usize> = Vec::new();
     if hdr.index_node_size() > 0 && expected_count > 0 {

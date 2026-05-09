@@ -107,7 +107,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     }
 
     if let Ok(layer) = native.as_ref() {
-        if expected_count > 0 && layer.len() == expected_count {
+        if indexed_native_parse_is_valid(expected_count, layer.len()) {
             return Ok(layer.clone());
         }
     }
@@ -117,6 +117,10 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
     }
 
     native
+}
+
+fn indexed_native_parse_is_valid(expected_count: usize, parsed_count: usize) -> bool {
+    expected_count > 0 && parsed_count == expected_count
 }
 
 fn header_index_node_size(data: &[u8]) -> Option<u16> {
@@ -1371,5 +1375,18 @@ mod tests {
 
         assert_eq!(out.crs_epsg(), Some(4326));
         assert!(out.crs_wkt().map(|w| !w.is_empty()).unwrap_or(false));
+    }
+
+    #[test]
+    fn indexed_native_parse_requires_known_expected_count() {
+        assert!(!indexed_native_parse_is_valid(0, 0));
+        assert!(!indexed_native_parse_is_valid(0, 2));
+    }
+
+    #[test]
+    fn indexed_native_parse_requires_count_match() {
+        assert!(indexed_native_parse_is_valid(2, 2));
+        assert!(!indexed_native_parse_is_valid(2, 1));
+        assert!(!indexed_native_parse_is_valid(2, 3));
     }
 }

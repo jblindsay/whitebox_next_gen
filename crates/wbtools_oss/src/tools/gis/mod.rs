@@ -19438,42 +19438,56 @@ impl Tool for AddGeometryAttributesTool {
         }
 
         let total = output.features.len().max(1);
-        for (index, feature) in output.features.iter_mut().enumerate() {
-            if let Some(geometry) = feature.geometry.as_ref() {
-                let topo = wb_geometry_to_topo(geometry)?;
-                if include_area {
-                    feature.attributes.push(wbvector::FieldValue::Float(geometry_area(&topo)));
-                }
-                if include_length {
-                    feature.attributes.push(wbvector::FieldValue::Float(geometry_length(&topo)));
-                }
-                if include_perimeter {
-                    feature.attributes.push(wbvector::FieldValue::Float(topo_geometry_boundary_length(&topo)));
-                }
-                if include_centroid {
-                    if let Some(centroid) = geometry_centroid(&topo) {
-                        feature.attributes.push(wbvector::FieldValue::Float(centroid.x));
-                        feature.attributes.push(wbvector::FieldValue::Float(centroid.y));
-                    } else {
-                        feature.attributes.push(wbvector::FieldValue::Null);
-                        feature.attributes.push(wbvector::FieldValue::Null);
+        let computed_values: Result<Vec<Vec<wbvector::FieldValue>>, ToolError> = output
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(_, feature)| {
+                let mut values = Vec::new();
+
+                if let Some(geometry) = feature.geometry.as_ref() {
+                    let topo = wb_geometry_to_topo(geometry)?;
+                    if include_area {
+                        values.push(wbvector::FieldValue::Float(geometry_area(&topo)));
+                    }
+                    if include_length {
+                        values.push(wbvector::FieldValue::Float(geometry_length(&topo)));
+                    }
+                    if include_perimeter {
+                        values.push(wbvector::FieldValue::Float(topo_geometry_boundary_length(&topo)));
+                    }
+                    if include_centroid {
+                        if let Some(centroid) = geometry_centroid(&topo) {
+                            values.push(wbvector::FieldValue::Float(centroid.x));
+                            values.push(wbvector::FieldValue::Float(centroid.y));
+                        } else {
+                            values.push(wbvector::FieldValue::Null);
+                            values.push(wbvector::FieldValue::Null);
+                        }
+                    }
+                } else {
+                    if include_area {
+                        values.push(wbvector::FieldValue::Null);
+                    }
+                    if include_length {
+                        values.push(wbvector::FieldValue::Null);
+                    }
+                    if include_perimeter {
+                        values.push(wbvector::FieldValue::Null);
+                    }
+                    if include_centroid {
+                        values.push(wbvector::FieldValue::Null);
+                        values.push(wbvector::FieldValue::Null);
                     }
                 }
-            } else {
-                if include_area {
-                    feature.attributes.push(wbvector::FieldValue::Null);
-                }
-                if include_length {
-                    feature.attributes.push(wbvector::FieldValue::Null);
-                }
-                if include_perimeter {
-                    feature.attributes.push(wbvector::FieldValue::Null);
-                }
-                if include_centroid {
-                    feature.attributes.push(wbvector::FieldValue::Null);
-                    feature.attributes.push(wbvector::FieldValue::Null);
-                }
-            }
+
+                Ok(values)
+            })
+            .collect();
+        let computed_values = computed_values?;
+
+        for (index, values) in computed_values.into_iter().enumerate() {
+            output.features[index].attributes.extend(values);
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
 
@@ -20021,7 +20035,11 @@ impl Tool for FieldCalculatorTool {
         };
 
         let total = output.features.len().max(1);
-        for (index, feature) in output.features.iter_mut().enumerate() {
+        let computed_values: Result<Vec<wbvector::FieldValue>, ToolError> = output
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(_, feature)| {
             let mut context = HashMapContext::new();
 
             for (field_idx, field_def) in output.schema.fields().iter().enumerate() {
@@ -20060,6 +20078,13 @@ impl Tool for FieldCalculatorTool {
                 .map_err(|e| ToolError::Execution(format!("expression evaluation failed: {}", e)))?;
 
             let converted = evalexpr_to_field_value(&value, field_type.as_str());
+            Ok(converted)
+        })
+        .collect();
+        let computed_values = computed_values?;
+
+        for (index, converted) in computed_values.into_iter().enumerate() {
+            let feature = &mut output.features[index];
             if target_idx < feature.attributes.len() {
                 feature.attributes[target_idx] = converted;
             } else {

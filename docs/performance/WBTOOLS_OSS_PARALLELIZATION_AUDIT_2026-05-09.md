@@ -707,6 +707,13 @@ Batches 111–113 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 114–115 completed (2026-05-10):
+- `add_geometry_attributes`: parallelized per-feature geometry metric derivation (`area`, `length`, `perimeter`, centroid X/Y) with `par_iter().map()` collecting per-feature attribute value vectors, followed by deterministic sequential attribute append.
+- `field_calculator`: parallelized expression-context setup and evaluation with `par_iter().map()` collecting `Result<FieldValue, ToolError>` per feature, followed by deterministic sequential target-field assignment/update.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

@@ -1043,7 +1043,38 @@ Executed immediately following Batch 148. Focus on parallelizing per-point analy
 - No new errors introduced
 - Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
 
-## Parallelization Sprint Summary (Batches 138-149)
+## Batch 150: LiDAR Spatial Assignment and Footprint Utilities (4 Tools)
+
+Executed immediately following Batch 149. Focus on parallelizing per-point assignment/matching prepasses while preserving deterministic sequential aggregation and output writes.
+
+**Tools parallelized:**
+
+1. **ClassifyOverlapPointsTool** (line 9011):
+  - Pattern: parallel bounds reduction + parallel point-to-cell grouping
+  - Implementation: `par_iter().fold().reduce()` for min bounds and `par_iter().enumerate().fold().reduce()` for cell buckets
+  - Speedup opportunity: Medium (large-point-cloud cell assignment workload)
+
+2. **LidarRooftopAnalysisTool** (line 13095):
+  - Pattern: parallel point selection and parallel neighbourhood PCA precompute
+  - Implementation: per-cloud `par_iter().filter_map()` for candidate extraction and `par_iter().enumerate().map()` for PCA/planarity evaluation
+  - Speedup opportunity: Medium-High (dominant local-neighbourhood analysis phase)
+
+3. **FlightlineOverlapTool** (line 13489):
+  - Pattern: parallel active-point filtering, extent reduction, and cell-assignment prepass
+  - Implementation: `par_iter()` for filtering and assignment, followed by deterministic sequential HashSet aggregation per cell
+  - Speedup opportunity: Medium (dense-strip overlap counting)
+
+4. **FindFlightlineEdgePointsTool** (line 13670):
+  - Pattern: embarrassingly parallel point filtering
+  - Implementation: `par_iter().filter().copied().collect()` for edge-of-flightline extraction
+  - Speedup opportunity: Low-Medium (simple but fully independent predicate)
+
+**Compilation Results:**
+- `cargo check -p wbtools_oss`: SUCCESS
+- No new errors introduced
+- Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+## Parallelization Sprint Summary (Batches 138-150)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -1059,11 +1090,12 @@ Executed immediately following Batch 148. Focus on parallelizing per-point analy
 | 147 | 4 | LiDAR spatial: bucketing & filtering | ✓ Complete |
 | 148 | 4 | LiDAR interpolation/detection row+candidate parallelism | ✓ Complete |
 | 149 | 4 | LiDAR analytics: parallel assignment/matching passes | ✓ Complete |
-| **Total** | **70+** | Various patterns | **89%+ of audit target** |
+| 150 | 4 | LiDAR spatial assignment and utility filtering | ✓ Complete |
+| **Total** | **74+** | Various patterns | **94%+ of audit target** |
 
-**Total parallelized**: 70-74 tools across all batches (audit target: 79 tools)
-**Coverage**: 89-94% of audit target
-**Remaining**: ~5-9 tools to reach 95-100%
+**Total parallelized**: 74-78 tools across all batches (audit target: 79 tools)
+**Coverage**: 94-99% of audit target
+**Remaining**: ~1-5 tools to reach 95-100%
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

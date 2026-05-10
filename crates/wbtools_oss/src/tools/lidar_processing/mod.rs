@@ -9080,22 +9080,46 @@ impl Tool for ClassifyOverlapPointsTool {
             return Ok(build_lidar_result(locator));
         }
 
-        let mut min_x = f64::INFINITY;
-        let mut min_y = f64::INFINITY;
-        for p in &cloud.points {
-            min_x = min_x.min(p.x);
-            min_y = min_y.min(p.y);
-        }
+        let (min_x, min_y) = cloud
+            .points
+            .par_iter()
+            .fold(
+                || (f64::INFINITY, f64::INFINITY),
+                |(mx, my), p| (mx.min(p.x), my.min(p.y)),
+            )
+            .reduce(
+                || (f64::INFINITY, f64::INFINITY),
+                |a, b| (a.0.min(b.0), a.1.min(b.1)),
+            );
 
-        let mut cells: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-        for (idx, p) in cloud.points.iter().enumerate() {
-            if point_is_withheld(p) {
-                continue;
-            }
-            let col = ((p.x - min_x) / resolution).floor() as i64;
-            let row = ((p.y - min_y) / resolution).floor() as i64;
-            cells.entry((row, col)).or_default().push(idx);
-        }
+        let cells: HashMap<(i64, i64), Vec<usize>> = cloud
+            .points
+            .par_iter()
+            .enumerate()
+            .filter_map(|(idx, p)| {
+                if point_is_withheld(p) {
+                    return None;
+                }
+                let col = ((p.x - min_x) / resolution).floor() as i64;
+                let row = ((p.y - min_y) / resolution).floor() as i64;
+                Some(((row, col), idx))
+            })
+            .fold(
+                || HashMap::<(i64, i64), Vec<usize>>::new(),
+                |mut acc, (cell, idx)| {
+                    acc.entry(cell).or_default().push(idx);
+                    acc
+                },
+            )
+            .reduce(
+                || HashMap::<(i64, i64), Vec<usize>>::new(),
+                |mut acc, other| {
+                    for (cell, mut idxs) in other {
+                        acc.entry(cell).or_default().append(&mut idxs);
+                    }
+                    acc
+                },
+            );
 
         let mut overlapping = vec![false; cloud.points.len()];
         for ids in cells.values() {
@@ -12358,10 +12382,11 @@ impl Tool for FlightlineOverlapTool {
         let run_single = |in_path: &Path, out_path: Option<&Path>| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
 
-            let active_points: Vec<&PointRecord> = cloud
+            let active_points: Vec<PointRecord> = cloud
                 .points
-                .iter()
+                .par_iter()
                 .filter(|p| !point_is_withheld(p))
+                .copied()
                 .collect();
 
             let raster = if active_points.is_empty() {
@@ -12379,28 +12404,49 @@ impl Tool for FlightlineOverlapTool {
                     metadata: vec![("tool".to_string(), "flightline_overlap".to_string())],
                 })
             } else {
-                let min_x = active_points.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-                let max_x = active_points
-                    .iter()
-                    .map(|p| p.x)
-                    .fold(f64::NEG_INFINITY, f64::max);
-                let min_y = active_points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-                let max_y = active_points
-                    .iter()
-                    .map(|p| p.y)
-                    .fold(f64::NEG_INFINITY, f64::max);
+                let (min_x, max_x, min_y, max_y) = active_points
+                    .par_iter()
+                    .fold(
+                        || (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+                        |(min_x, max_x, min_y, max_y), p| {
+                            (
+                                min_x.min(p.x),
+                                max_x.max(p.x),
+                                min_y.min(p.y),
+                                max_y.max(p.y),
+                            )
+                        },
+                    )
+                    .reduce(
+                        || (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+                        |a, b| {
+                            (
+                                a.0.min(b.0),
+                                a.1.max(b.1),
+                                a.2.min(b.2),
+                                a.3.max(b.3),
+                            )
+                        },
+                    );
 
                 let cols = (((max_x - min_x) / resolution).ceil() as usize).max(1);
                 let rows = (((max_y - min_y) / resolution).ceil() as usize).max(1);
                 let y_min = max_y - rows as f64 * resolution;
 
+                let assignments: Vec<(usize, usize, u16)> = active_points
+                    .par_iter()
+                    .map(|p| {
+                        let col = (((p.x - min_x) / resolution).floor() as isize)
+                            .clamp(0, cols.saturating_sub(1) as isize) as usize;
+                        let row = (((max_y - p.y) / resolution).floor() as isize)
+                            .clamp(0, rows.saturating_sub(1) as isize) as usize;
+                        (row, col, p.point_source_id)
+                    })
+                    .collect();
+
                 let mut cells: HashMap<(usize, usize), HashSet<u16>> = HashMap::new();
-                for p in &active_points {
-                    let col = (((p.x - min_x) / resolution).floor() as isize)
-                        .clamp(0, cols.saturating_sub(1) as isize) as usize;
-                    let row = (((max_y - p.y) / resolution).floor() as isize)
-                        .clamp(0, rows.saturating_sub(1) as isize) as usize;
-                    cells.entry((row, col)).or_default().insert(p.point_source_id);
+                for (row, col, point_source_id) in assignments {
+                    cells.entry((row, col)).or_default().insert(point_source_id);
                 }
 
                 let mut raster = Raster::new(RasterConfig {
@@ -12599,7 +12645,7 @@ impl Tool for FindFlightlineEdgePointsTool {
         let out_cloud = PointCloud {
             points: cloud
                 .points
-                .iter()
+                .par_iter()
                 .copied()
                 .filter(|p| p.edge_of_flight_line)
                 .collect(),
@@ -13291,14 +13337,23 @@ impl Tool for LidarRooftopAnalysisTool {
             if crs.is_none() {
                 crs = cloud.crs.clone();
             }
-            for p in &cloud.points {
-                if point_is_withheld(p) || point_is_noise(p) || !is_late_return(p) {
-                    continue;
-                }
-                if let Some((building_id, _)) = feature_polys.iter().enumerate().find(|(_, polys)| point_in_any_prepared_polygon(p.x, p.y, polys)) {
-                    selected_points.push(*p);
-                    building_ids.push(building_id);
-                }
+            let selected_from_cloud: Vec<(PointRecord, usize)> = cloud
+                .points
+                .par_iter()
+                .filter_map(|p| {
+                    if point_is_withheld(p) || point_is_noise(p) || !is_late_return(p) {
+                        return None;
+                    }
+                    feature_polys
+                        .iter()
+                        .enumerate()
+                        .find(|(_, polys)| point_in_any_prepared_polygon(p.x, p.y, polys))
+                        .map(|(building_id, _)| (*p, building_id))
+                })
+                .collect();
+            for (p, building_id) in selected_from_cloud {
+                selected_points.push(p);
+                building_ids.push(building_id);
             }
         }
 
@@ -13325,25 +13380,38 @@ impl Tool for LidarRooftopAnalysisTool {
                 .map_err(|e| ToolError::Execution(format!("failed indexing rooftop points: {e}")))?;
         }
         let radius_sq = search_radius * search_radius;
-        let mut local_pca: Vec<Option<NeighborhoodPca>> = vec![None; selected_points.len()];
-        let mut planar = vec![false; selected_points.len()];
-        for (i, p) in selected_points.iter().enumerate() {
-            let neighbours = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-            let sample: Vec<Vector3<f64>> = neighbours
-                .iter()
-                .filter_map(|(_, idx)| {
-                    if building_ids[**idx] != building_ids[i] {
-                        None
-                    } else {
-                        Some(point_to_vec3(&selected_points[**idx]))
-                    }
-                })
-                .collect();
-            local_pca[i] = neighborhood_pca(&sample, point_to_vec3(p));
-            if let Some(features) = local_pca[i] {
-                planar[i] = f64::from(features.residual) <= inlier_threshold && f64::from(features.slope) <= max_planar_slope;
-            }
-        }
+        let tree = Arc::new(tree);
+        let selected_points_arc = Arc::new(selected_points.clone());
+        let building_ids_arc = Arc::new(building_ids.clone());
+        let local_results: Vec<(Option<NeighborhoodPca>, bool)> = selected_points_arc
+            .par_iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let neighbours = tree
+                    .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                let sample: Vec<Vector3<f64>> = neighbours
+                    .iter()
+                    .filter_map(|(_, idx)| {
+                        if building_ids_arc[**idx] != building_ids_arc[i] {
+                            None
+                        } else {
+                            Some(point_to_vec3(&selected_points_arc[**idx]))
+                        }
+                    })
+                    .collect();
+                let pca = neighborhood_pca(&sample, point_to_vec3(p));
+                let is_planar = if let Some(features) = pca {
+                    f64::from(features.residual) <= inlier_threshold
+                        && f64::from(features.slope) <= max_planar_slope
+                } else {
+                    false
+                };
+                (pca, is_planar)
+            })
+            .collect();
+        let local_pca: Vec<Option<NeighborhoodPca>> = local_results.iter().map(|(p, _)| *p).collect();
+        let planar: Vec<bool> = local_results.iter().map(|(_, is_planar)| *is_planar).collect();
 
         let mut segment_id = vec![0usize; selected_points.len()];
         let mut current_segment = 0usize;

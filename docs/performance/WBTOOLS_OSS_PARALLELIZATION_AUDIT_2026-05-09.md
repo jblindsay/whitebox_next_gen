@@ -981,7 +981,38 @@ Executed immediately following Batch 145. Focus on moderate-complexity paralleli
 - Zero unsafe code blocks introduced
 - Compatible with existing batch-mode infrastructure
 
-## Parallelization Sprint Summary (Batches 138-146)
+## Batch 148: LiDAR Interpolation and Detection (4 Tools)
+
+Executed immediately following Batch 147. Focus on row-parallel interpolation and candidate-parallel local-maximum detection.
+
+**Tools parallelized:**
+
+1. **LidarNearestNeighbourGriddingTool** (line 3492):
+  - Pattern: row-parallel raster interpolation over independent cells
+  - Implementation: `(0..rows).into_par_iter().map(...)` with Arc<KdTree>, followed by sequential row writeback
+  - Speedup opportunity: High (independent per-cell nearest-neighbour queries)
+
+2. **LidarRadialBasisFunctionInterpolationTool** (line 4761):
+  - Pattern: row-parallel raster interpolation with neighbourhood queries
+  - Implementation: `(0..rows).into_par_iter().map(...)` with Arc<KdTree>, preserving per-cell RBF logic
+  - Speedup opportunity: High (independent per-cell interpolation workloads)
+
+3. **IndividualTreeDetectionTool** (line 9838):
+  - Pattern: parallel candidate screening for local maxima
+  - Implementation: `eligible_pts.par_iter().filter_map(...)` to detect tree-top candidates, then sequential feature write
+  - Speedup opportunity: Medium-High (parallelized dominant O(n^2) candidate checks)
+
+4. **LidarTileFootprintTool** (line 11457):
+  - Pattern: parallel reductions for per-file min/max statistics
+  - Implementation: `cloud.points.par_iter().fold().reduce()` for min/max x/y/z aggregation
+  - Speedup opportunity: Medium (parallel stats on dense tiles)
+
+**Compilation Results:**
+- `cargo check -p wbtools_oss`: SUCCESS
+- No new errors introduced
+- Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+## Parallelization Sprint Summary (Batches 138-148)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -994,15 +1025,13 @@ Executed immediately following Batch 145. Focus on moderate-complexity paralleli
 | 144 | 5 | LiDAR per-point ops with Arc data sharing | ✓ Complete |
 | 145 | 5 | LiDAR simple per-point ops (filter/transform) | ✓ Complete |
 | 146 | 5 | LiDAR advanced: Arc + fold/reduce patterns | ✓ Complete |
-| **Total** | **58+** | Various patterns | **73%+ of audit target** |
-
-**Total parallelized**: 58-62 tools across all batches (audit target: 79 tools)
 | 147 | 4 | LiDAR spatial: bucketing & filtering | ✓ Complete |
-| **Total** | **62+** | Various patterns | **78%+ of audit target** |
+| 148 | 4 | LiDAR interpolation/detection row+candidate parallelism | ✓ Complete |
+| **Total** | **66+** | Various patterns | **83%+ of audit target** |
 
-**Total parallelized**: 62-66 tools across all batches (audit target: 79 tools)
-**Coverage**: 78-83% of audit target
-**Remaining**: ~13-17 tools to reach 95-100%
+**Total parallelized**: 66-70 tools across all batches (audit target: 79 tools)
+**Coverage**: 83-89% of audit target
+**Remaining**: ~9-13 tools to reach 95-100%
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

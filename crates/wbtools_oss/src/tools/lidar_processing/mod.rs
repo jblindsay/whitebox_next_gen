@@ -3681,6 +3681,7 @@ impl Tool for LidarNearestNeighbourGriddingTool {
             tree.add([*x, *y], *value)
                 .map_err(|e| ToolError::Execution(format!("failed building nearest-neighbour index: {e}")))?;
         }
+        let tree = Arc::new(tree);
 
         let rows = output.rows;
         let cols = output.cols;
@@ -3691,20 +3692,31 @@ impl Tool for LidarNearestNeighbourGriddingTool {
         let cell_y = output.cell_size_y;
 
         let compute_progress = PercentCoalescer::new(1, 99);
-        let mut out_values = vec![nodata; output.data.len()];
-        for row in 0..rows {
-            for col in 0..cols {
-                let x = x_min + (col as f64 + 0.5) * cell_x;
-                let y = y_max - (row as f64 + 0.5) * cell_y;
-                let nearest = tree
-                    .nearest(&[x, y], 1, &squared_euclidean)
-                    .map_err(|e| ToolError::Execution(format!("nearest-neighbour search failed: {e}")))?;
-                if let Some((dist2, value)) = nearest.first() {
-                    if dist2.sqrt() <= radius {
-                        out_values[row * cols + col] = **value;
+        let row_values: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| -> Result<Vec<f64>, ToolError> {
+                let mut vals = vec![nodata; cols];
+                for col in 0..cols {
+                    let x = x_min + (col as f64 + 0.5) * cell_x;
+                    let y = y_max - (row as f64 + 0.5) * cell_y;
+                    let nearest = tree
+                        .nearest(&[x, y], 1, &squared_euclidean)
+                        .map_err(|e| ToolError::Execution(format!("nearest-neighbour search failed: {e}")))?;
+                    if let Some((dist2, value)) = nearest.first() {
+                        if dist2.sqrt() <= radius {
+                            vals[col] = **value;
+                        }
                     }
                 }
-            }
+                Ok(vals)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut out_values = vec![nodata; output.data.len()];
+        for (row, vals) in row_values.into_iter().enumerate() {
+            let start = row * cols;
+            let end = start + cols;
+            out_values[start..end].copy_from_slice(&vals);
             compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
 
@@ -4988,6 +5000,7 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
             tree.add([*x, *y], idx)
                 .map_err(|e| ToolError::Execution(format!("failed building interpolation index: {e}")))?;
         }
+        let tree = Arc::new(tree);
 
         let hull = convex_hull_2d(&samples.iter().map(|(x, y, _)| (*x, *y)).collect::<Vec<_>>());
         let radius_sq = radius * radius;
@@ -5001,62 +5014,72 @@ impl Tool for LidarRadialBasisFunctionInterpolationTool {
         let cell_x = output.cell_size_x;
         let cell_y = output.cell_size_y;
         let compute_progress = PercentCoalescer::new(1, 99);
-        let mut out_values = vec![nodata; output.data.len()];
-
-        for row in 0..rows {
-            for col in 0..cols {
-                let x = x_min + (col as f64 + 0.5) * cell_x;
-                let y = y_max - (row as f64 + 0.5) * cell_y;
-                if !point_in_polygon_2d((x, y), &hull) {
-                    continue;
-                }
-
-                let mut neighbours = if radius > 0.0 {
-                    tree.within(&[x, y], radius_sq, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("rbf radius search failed: {e}")))?
-                } else {
-                    Vec::new()
-                };
-                if neighbours.len() < k {
-                    neighbours = tree
-                        .nearest(&[x, y], k, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("rbf nearest-neighbour search failed: {e}")))?;
-                }
-
-                if neighbours.is_empty() {
-                    continue;
-                }
-
-                let mut weighted_sum = 0.0;
-                let mut sum_w = 0.0;
-                let mut assigned = false;
-                let mut poly_neighbors = Vec::with_capacity(neighbours.len());
-                for (dist2, sample_idx) in neighbours {
-                    let sample = samples[*sample_idx];
-                    if dist2 <= f64::EPSILON {
-                        out_values[row * cols + col] = sample.2;
-                        assigned = true;
-                        break;
+        let row_values: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| -> Result<Vec<f64>, ToolError> {
+                let mut vals = vec![nodata; cols];
+                for col in 0..cols {
+                    let x = x_min + (col as f64 + 0.5) * cell_x;
+                    let y = y_max - (row as f64 + 0.5) * cell_y;
+                    if !point_in_polygon_2d((x, y), &hull) {
+                        continue;
                     }
-                    let dist = dist2.sqrt();
-                    let w = rbf_similarity_weight(dist, basis, shape_weight);
-                    if w.is_finite() && w > 0.0 {
-                        weighted_sum += sample.2 * w;
-                        sum_w += w;
-                        poly_neighbors.push((sample.0, sample.1, sample.2, w));
-                    }
-                }
 
-                if !assigned && sum_w > 0.0 {
-                    if poly_order == RbfPolyOrder::None {
-                        out_values[row * cols + col] = weighted_sum / sum_w;
-                    } else if let Some(zn) = weighted_poly_predict(x, y, &poly_neighbors, poly_order) {
-                        out_values[row * cols + col] = zn;
+                    let mut neighbours = if radius > 0.0 {
+                        tree.within(&[x, y], radius_sq, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("rbf radius search failed: {e}")))?
                     } else {
-                        out_values[row * cols + col] = weighted_sum / sum_w;
+                        Vec::new()
+                    };
+                    if neighbours.len() < k {
+                        neighbours = tree
+                            .nearest(&[x, y], k, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("rbf nearest-neighbour search failed: {e}")))?;
+                    }
+
+                    if neighbours.is_empty() {
+                        continue;
+                    }
+
+                    let mut weighted_sum = 0.0;
+                    let mut sum_w = 0.0;
+                    let mut assigned = false;
+                    let mut poly_neighbors = Vec::with_capacity(neighbours.len());
+                    for (dist2, sample_idx) in neighbours {
+                        let sample = samples[*sample_idx];
+                        if dist2 <= f64::EPSILON {
+                            vals[col] = sample.2;
+                            assigned = true;
+                            break;
+                        }
+                        let dist = dist2.sqrt();
+                        let w = rbf_similarity_weight(dist, basis, shape_weight);
+                        if w.is_finite() && w > 0.0 {
+                            weighted_sum += sample.2 * w;
+                            sum_w += w;
+                            poly_neighbors.push((sample.0, sample.1, sample.2, w));
+                        }
+                    }
+
+                    if !assigned && sum_w > 0.0 {
+                        if poly_order == RbfPolyOrder::None {
+                            vals[col] = weighted_sum / sum_w;
+                        } else if let Some(zn) = weighted_poly_predict(x, y, &poly_neighbors, poly_order) {
+                            vals[col] = zn;
+                        } else {
+                            vals[col] = weighted_sum / sum_w;
+                        }
                     }
                 }
-            }
+                Ok(vals)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut out_values = vec![nodata; output.data.len()];
+        for (row, vals) in row_values.into_iter().enumerate() {
+            let start = row * cols;
+            let end = start + cols;
+            out_values[start..end].copy_from_slice(&vals);
             compute_progress.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
         }
 
@@ -6656,7 +6679,7 @@ impl Tool for LidarThinHighDensityTool {
             let ew_range = (cols as f64 * resolution).max(resolution);
             let ns_range = (rows as f64 * resolution).max(resolution);
 
-            let (bins, cloud_arc): (HashMap<(i64, i64), Vec<(f64, usize)>>, Arc<Vec<PointRecord>>) = {
+            let bins: HashMap<(i64, i64), Vec<(f64, usize)>> = {
                 let cloud_arc = Arc::new(cloud.points.clone());
                 let result = cloud_arc.par_iter()
                     .enumerate()
@@ -6678,7 +6701,7 @@ impl Tool for LidarThinHighDensityTool {
                         }
                         (acc_bins, arc)
                     });
-                result
+                result.0
             };
 
             let threshold = resolution * resolution * density;
@@ -6945,7 +6968,7 @@ impl Tool for LidarTileTool {
         fs::create_dir_all(&base_output_dir)
             .map_err(|e| ToolError::Execution(format!("failed creating output directory '{}': {e}", base_output_dir.to_string_lossy())))?;
 
-        let mut buckets: Vec<Vec<PointRecord>> = {
+        let buckets: Vec<Vec<PointRecord>> = {
             let tile_index_arc = Arc::new(tile_index);
             let write_tile_arc = Arc::new(write_tile.clone());
             cloud.points.par_iter()
@@ -7299,7 +7322,7 @@ impl Tool for SplitLidarTool {
                 return Ok(outputs);
             }
 
-            let mut groups: BTreeMap<String, Vec<PointRecord>> = cloud.points.par_iter()
+            let groups: BTreeMap<String, Vec<PointRecord>> = cloud.points.par_iter()
                 .fold(|| {
                     BTreeMap::<String, Vec<PointRecord>>::new()
                 },
@@ -9935,46 +9958,54 @@ impl Tool for IndividualTreeDetectionTool {
         layer.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         layer.add_field(wbvector::FieldDef::new("Z", wbvector::FieldType::Float));
 
-        // Find tree tops using brute force neighbor search
+        // Find tree tops using parallel brute force neighbor search.
         let detect_progress = PercentCoalescer::new(40, 80);
-        for (eligible_idx, &(point_idx, x, y, z)) in eligible_pts.iter().enumerate() {
-            // Calculate search radius based on height
-            let radius = if z > max_height {
-                max_search_radius
-            } else if height_range > 0.0 {
-                min_search_radius + (z - min_height) / height_range * radius_range
-            } else {
-                min_search_radius
-            };
+        let eligible_pts = Arc::new(eligible_pts);
+        let mut tree_tops: Vec<(usize, f64)> = eligible_pts
+            .par_iter()
+            .filter_map(|&(point_idx, x, y, z)| {
+                let radius = if z > max_height {
+                    max_search_radius
+                } else if height_range > 0.0 {
+                    min_search_radius + (z - min_height) / height_range * radius_range
+                } else {
+                    min_search_radius
+                };
 
-            // Find neighbors within radius and check if this point is the highest
-            let mut is_highest = true;
-            for &(neighbor_idx, nx, ny, nz) in &eligible_pts {
-                if neighbor_idx != point_idx {
-                    let dist_sq = (nx - x).powi(2) + (ny - y).powi(2);
-                    if dist_sq <= radius.powi(2) && nz > z {
-                        is_highest = false;
-                        break;
+                let mut is_highest = true;
+                for &(neighbor_idx, nx, ny, nz) in eligible_pts.iter() {
+                    if neighbor_idx != point_idx {
+                        let dist_sq = (nx - x).powi(2) + (ny - y).powi(2);
+                        if dist_sq <= radius.powi(2) && nz > z {
+                            is_highest = false;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if is_highest {
-                let point = &cloud.points[point_idx];
-                layer
-                    .add_feature(
-                        Some(wbvector::Geometry::point(point.x, point.y)),
-                        &[
-                            ("FID", wbvector::FieldValue::Integer((point_idx + 1) as i64)),
-                            ("Z", wbvector::FieldValue::Float(z)),
-                        ],
-                    )
-                    .map_err(|e| ToolError::Execution(format!("Failed to add feature: {}", e)))?;
-            }
+                if is_highest {
+                    Some((point_idx, z))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
+        tree_tops.sort_unstable_by_key(|(point_idx, _)| *point_idx);
+        for (idx, (point_idx, z)) in tree_tops.into_iter().enumerate() {
+            let point = &cloud.points[point_idx];
+            layer
+                .add_feature(
+                    Some(wbvector::Geometry::point(point.x, point.y)),
+                    &[
+                        ("FID", wbvector::FieldValue::Integer((point_idx + 1) as i64)),
+                        ("Z", wbvector::FieldValue::Float(z)),
+                    ],
+                )
+                .map_err(|e| ToolError::Execution(format!("Failed to add feature: {}", e)))?;
             detect_progress.emit_unit_fraction(
                 ctx.progress,
-                (eligible_idx + 1) as f64 / eligible_pts.len().max(1) as f64,
+                (idx + 1) as f64 / cloud.points.len().max(1) as f64,
             );
         }
 
@@ -11508,12 +11539,53 @@ impl Tool for LidarTileFootprintTool {
                 continue;
             }
 
-            let min_x = cloud.points.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-            let max_x = cloud.points.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
-            let min_y = cloud.points.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-            let max_y = cloud.points.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-            let min_z = cloud.points.iter().map(|p| p.z).fold(f64::INFINITY, f64::min);
-            let max_z = cloud.points.iter().map(|p| p.z).fold(f64::NEG_INFINITY, f64::max);
+            let (min_x, max_x, min_y, max_y, min_z, max_z) = cloud
+                .points
+                .par_iter()
+                .fold(
+                    || {
+                        (
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                        )
+                    },
+                    |(min_x, max_x, min_y, max_y, min_z, max_z), p| {
+                        (
+                            min_x.min(p.x),
+                            max_x.max(p.x),
+                            min_y.min(p.y),
+                            max_y.max(p.y),
+                            min_z.min(p.z),
+                            max_z.max(p.z),
+                        )
+                    },
+                )
+                .reduce(
+                    || {
+                        (
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                            f64::INFINITY,
+                            f64::NEG_INFINITY,
+                        )
+                    },
+                    |a, b| {
+                        (
+                            a.0.min(b.0),
+                            a.1.max(b.1),
+                            a.2.min(b.2),
+                            a.3.max(b.3),
+                            a.4.min(b.4),
+                            a.5.max(b.5),
+                        )
+                    },
+                );
 
             let ring = if output_hulls {
                 let xy: Vec<(f64, f64)> = cloud.points.iter().map(|p| (p.x, p.y)).collect();

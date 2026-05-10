@@ -10885,28 +10885,83 @@ impl Tool for LidarInfoTool {
         ctx.progress.info("reading lidar and building info report");
         let cloud = load_lidar_cloud(Path::new(&input_path), "input")?;
         let n = cloud.points.len();
-        let mut min_x = f64::INFINITY;
-        let mut max_x = f64::NEG_INFINITY;
-        let mut min_y = f64::INFINITY;
-        let mut max_y = f64::NEG_INFINITY;
-        let mut min_z = f64::INFINITY;
-        let mut max_z = f64::NEG_INFINITY;
-        let mut min_i = u16::MAX;
-        let mut max_i = u16::MIN;
+        let (min_x, max_x, min_y, max_y, min_z, max_z, min_i, max_i, class_counts_hm, ret_counts) = cloud
+            .points
+            .par_iter()
+            .fold(
+                || {
+                    (
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        u16::MAX,
+                        u16::MIN,
+                        HashMap::<u8, usize>::new(),
+                        [0usize; 5],
+                    )
+                },
+                |(min_x, max_x, min_y, max_y, min_z, max_z, min_i, max_i, mut class_counts, mut ret_counts), p| {
+                    let r = p.return_number.max(1).min(5) as usize;
+                    ret_counts[r - 1] += 1;
+                    *class_counts.entry(p.classification).or_insert(0) += 1;
+                    (
+                        min_x.min(p.x),
+                        max_x.max(p.x),
+                        min_y.min(p.y),
+                        max_y.max(p.y),
+                        min_z.min(p.z),
+                        max_z.max(p.z),
+                        min_i.min(p.intensity),
+                        max_i.max(p.intensity),
+                        class_counts,
+                        ret_counts,
+                    )
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        u16::MAX,
+                        u16::MIN,
+                        HashMap::<u8, usize>::new(),
+                        [0usize; 5],
+                    )
+                },
+                |a, b| {
+                    let mut class_counts = a.8;
+                    for (k, v) in b.8 {
+                        *class_counts.entry(k).or_insert(0) += v;
+                    }
+                    let mut ret_counts = a.9;
+                    for i in 0..5 {
+                        ret_counts[i] += b.9[i];
+                    }
+                    (
+                        a.0.min(b.0),
+                        a.1.max(b.1),
+                        a.2.min(b.2),
+                        a.3.max(b.3),
+                        a.4.min(b.4),
+                        a.5.max(b.5),
+                        a.6.min(b.6),
+                        a.7.max(b.7),
+                        class_counts,
+                        ret_counts,
+                    )
+                },
+            );
         let mut class_counts: BTreeMap<u8, usize> = BTreeMap::new();
-        let mut ret_counts = [0usize; 5];
-        for p in &cloud.points {
-            min_x = min_x.min(p.x);
-            max_x = max_x.max(p.x);
-            min_y = min_y.min(p.y);
-            max_y = max_y.max(p.y);
-            min_z = min_z.min(p.z);
-            max_z = max_z.max(p.z);
-            min_i = min_i.min(p.intensity);
-            max_i = max_i.max(p.intensity);
-            *class_counts.entry(p.classification).or_insert(0) += 1;
-            let r = p.return_number.max(1).min(5) as usize;
-            ret_counts[r - 1] += 1;
+        for (cls, c) in class_counts_hm {
+            class_counts.insert(cls, c);
         }
 
         let mut report = String::new();
@@ -11170,22 +11225,30 @@ impl Tool for LidarPointStatsTool {
             let mut class_counts: Vec<HashMap<u8, usize>> = vec![HashMap::new(); rows * cols];
 
             let idx = |row: usize, col: usize| -> usize { row * cols + col };
-            for p in &cloud.points {
-                let col = ((p.x - min_x) / resolution).floor() as isize;
-                let row = ((max_y - p.y) / resolution).floor() as isize;
-                if row < 0 || col < 0 || row >= rows as isize || col >= cols as isize {
-                    continue;
-                }
-                let i = idx(row as usize, col as usize);
+            let assignments: Vec<Option<(usize, u8, u8, f64, u16)>> = cloud
+                .points
+                .par_iter()
+                .map(|p| {
+                    let col = ((p.x - min_x) / resolution).floor() as isize;
+                    let row = ((max_y - p.y) / resolution).floor() as isize;
+                    if row < 0 || col < 0 || row >= rows as isize || col >= cols as isize {
+                        None
+                    } else {
+                        Some((idx(row as usize, col as usize), p.return_number, p.classification, p.z, p.intensity))
+                    }
+                })
+                .collect();
+            for item in assignments.into_iter().flatten() {
+                let (i, return_number, classification, z, intensity) = item;
                 count[i] += 1;
-                if p.return_number <= 1 {
+                if return_number <= 1 {
                     pulses[i] += 1;
                 }
-                minz[i] = minz[i].min(p.z);
-                maxz[i] = maxz[i].max(p.z);
-                mini[i] = mini[i].min(p.intensity);
-                maxi[i] = maxi[i].max(p.intensity);
-                *class_counts[i].entry(p.classification).or_insert(0) += 1;
+                minz[i] = minz[i].min(z);
+                maxz[i] = maxz[i].max(z);
+                mini[i] = mini[i].min(intensity);
+                maxi[i] = maxi[i].max(intensity);
+                *class_counts[i].entry(classification).or_insert(0) += 1;
             }
 
             let out_dir = out_dir_override
@@ -11897,20 +11960,24 @@ impl Tool for LidarConstructVectorTinTool {
                 let mut min_i = vec![u16::MAX; centers.len()];
                 let mut max_i = vec![u16::MIN; centers.len()];
 
-                for p in &cloud.points {
-                    if let Some((_, idx_ref)) = tree
-                        .nearest(&[p.x, p.y], 1, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("failed searching hex index: {e}")))?
-                        .into_iter()
-                        .next()
-                    {
-                        let idx = *idx_ref;
-                        count[idx] += 1;
-                        min_z[idx] = min_z[idx].min(p.z);
-                        max_z[idx] = max_z[idx].max(p.z);
-                        min_i[idx] = min_i[idx].min(p.intensity);
-                        max_i[idx] = max_i[idx].max(p.intensity);
-                    }
+                let tree = Arc::new(tree);
+                let assignments: Vec<Option<(usize, f64, u16)>> = cloud
+                    .points
+                    .par_iter()
+                    .map(|p| -> Result<Option<(usize, f64, u16)>, ToolError> {
+                        let nearest = tree
+                            .nearest(&[p.x, p.y], 1, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("failed searching hex index: {e}")))?;
+                        Ok(nearest.into_iter().next().map(|(_, idx_ref)| (*idx_ref, p.z, p.intensity)))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                for item in assignments.into_iter().flatten() {
+                    let (idx, z, intensity) = item;
+                    count[idx] += 1;
+                    min_z[idx] = min_z[idx].min(z);
+                    max_z[idx] = max_z[idx].max(z);
+                    min_i[idx] = min_i[idx].min(intensity);
+                    max_i[idx] = max_i[idx].max(intensity);
                 }
 
                 let mut layer = wbvector::Layer::new("lidar_hex_bin").with_geom_type(wbvector::GeometryType::Polygon);
@@ -12750,23 +12817,38 @@ impl Tool for LidarKappaTool {
         let mut error_matrix = vec![vec![0usize; 256]; 256];
         let mut active_class = [false; 256];
 
-        for p in &classification.points {
-            let nearest = tree.nearest(&[p.x, p.y, p.z], 1, &squared_euclidean)
-                .map_err(|e| ToolError::Execution(format!("failed querying reference lidar: {e}")))?;
-            if let Some((_, idx)) = nearest.first() {
-                let ref_pt = reference.points[**idx];
-                let c1 = p.classification as usize;
-                let c2 = ref_pt.classification as usize;
-                error_matrix[c1][c2] += 1;
-                active_class[c1] = true;
-                active_class[c2] = true;
-                let col = (((p.x - min_x) / resolution).floor() as isize).clamp(0, cols.saturating_sub(1) as isize) as usize;
-                let row = (((max_y - p.y) / resolution).floor() as isize).clamp(0, rows.saturating_sub(1) as isize) as usize;
-                let index = row * cols + col;
-                total[index] += 1;
-                if c1 == c2 {
-                    correct[index] += 1;
+        let tree = Arc::new(tree);
+        let comparisons: Vec<Option<(usize, usize, usize, bool)>> = classification
+            .points
+            .par_iter()
+            .map(|p| -> Result<Option<(usize, usize, usize, bool)>, ToolError> {
+                let nearest = tree
+                    .nearest(&[p.x, p.y, p.z], 1, &squared_euclidean)
+                    .map_err(|e| ToolError::Execution(format!("failed querying reference lidar: {e}")))?;
+                if let Some((_, idx)) = nearest.first() {
+                    let ref_pt = reference.points[**idx];
+                    let c1 = p.classification as usize;
+                    let c2 = ref_pt.classification as usize;
+                    let col = (((p.x - min_x) / resolution).floor() as isize)
+                        .clamp(0, cols.saturating_sub(1) as isize) as usize;
+                    let row = (((max_y - p.y) / resolution).floor() as isize)
+                        .clamp(0, rows.saturating_sub(1) as isize) as usize;
+                    let index = row * cols + col;
+                    Ok(Some((c1, c2, index, c1 == c2)))
+                } else {
+                    Ok(None)
                 }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for item in comparisons.into_iter().flatten() {
+            let (c1, c2, index, is_correct) = item;
+            error_matrix[c1][c2] += 1;
+            active_class[c1] = true;
+            active_class[c2] = true;
+            total[index] += 1;
+            if is_correct {
+                correct[index] += 1;
             }
         }
 

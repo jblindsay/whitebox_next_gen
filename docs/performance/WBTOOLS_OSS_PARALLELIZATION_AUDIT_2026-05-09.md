@@ -1012,7 +1012,38 @@ Executed immediately following Batch 147. Focus on row-parallel interpolation an
 - No new errors introduced
 - Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
 
-## Parallelization Sprint Summary (Batches 138-148)
+## Batch 149: LiDAR Analytics and QA (4 Tools)
+
+Executed immediately following Batch 148. Focus on parallelizing per-point analytics and nearest-neighbour matching while retaining deterministic sequential output assembly.
+
+**Tools parallelized:**
+
+1. **LidarInfoTool** (line 10851):
+  - Pattern: parallel fold/reduce statistics aggregation
+  - Implementation: `par_iter().fold().reduce()` for min/max ranges, return-count histogram, and class counts
+  - Speedup opportunity: Medium (single-pass per-point stats)
+
+2. **LidarPointStatsTool** (line 11084):
+  - Pattern: parallel point-to-cell assignment pre-pass
+  - Implementation: `par_iter().map()` to compute cell assignments in parallel, then deterministic sequential raster-stat accumulation
+  - Speedup opportunity: Medium (heavy coordinate-to-grid mapping phase parallelized)
+
+3. **LidarHexBinTool** (line 11798):
+  - Pattern: parallel nearest-hex assignment pre-pass
+  - Implementation: `par_iter().map()` with Arc<KdTree> for nearest-center lookup, then sequential bin metric aggregation
+  - Speedup opportunity: Medium-High (dominant nearest-neighbour assignment workload parallelized)
+
+4. **LidarKappaTool** (line 12685):
+  - Pattern: parallel nearest-reference matching pre-pass
+  - Implementation: `par_iter().map()` with Arc<KdTree> over classification points, then sequential confusion-matrix/grid tally
+  - Speedup opportunity: High (nearest-neighbour query workload parallelized)
+
+**Compilation Results:**
+- `cargo check -p wbtools_oss`: SUCCESS
+- No new errors introduced
+- Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+## Parallelization Sprint Summary (Batches 138-149)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -1027,11 +1058,12 @@ Executed immediately following Batch 147. Focus on row-parallel interpolation an
 | 146 | 5 | LiDAR advanced: Arc + fold/reduce patterns | ✓ Complete |
 | 147 | 4 | LiDAR spatial: bucketing & filtering | ✓ Complete |
 | 148 | 4 | LiDAR interpolation/detection row+candidate parallelism | ✓ Complete |
-| **Total** | **66+** | Various patterns | **83%+ of audit target** |
+| 149 | 4 | LiDAR analytics: parallel assignment/matching passes | ✓ Complete |
+| **Total** | **70+** | Various patterns | **89%+ of audit target** |
 
-**Total parallelized**: 66-70 tools across all batches (audit target: 79 tools)
-**Coverage**: 83-89% of audit target
-**Remaining**: ~9-13 tools to reach 95-100%
+**Total parallelized**: 70-74 tools across all batches (audit target: 79 tools)
+**Coverage**: 89-94% of audit target
+**Remaining**: ~5-9 tools to reach 95-100%
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

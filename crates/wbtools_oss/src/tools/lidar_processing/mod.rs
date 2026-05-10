@@ -13245,57 +13245,74 @@ impl Tool for LidarRansacPlanesTool {
                 .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
             active_indices.push(i);
         }
+        let tree = Arc::new(tree);
         let radius_sq = search_radius * search_radius;
-        let mut rng = rand::rng();
         let mut is_planar = vec![false; cloud.points.len()];
 
-        for idx in active_indices {
-            let center = point_to_vec3(&cloud.points[idx]);
-            let neighbours = tree.within(&[center.x, center.y, center.z], radius_sq, &squared_euclidean).unwrap_or_default();
-            if neighbours.len() < num_samples.max(acceptable_model_size) {
-                continue;
-            }
-            let neighbour_points: Vec<(usize, Vector3<f64>)> = neighbours
-                .iter()
-                .map(|(_, nidx)| (**nidx, point_to_vec3(&cloud.points[**nidx])))
-                .collect();
-            let sample_indices: Vec<usize> = (0..neighbour_points.len()).collect();
-            let mut best_plane = Plane::zero();
-            let mut best_inliers = Vec::new();
-            let mut best_rmse = f64::INFINITY;
-            for _ in 0..num_iterations {
-                let picks: Vec<usize> = sample_indices
-                    .sample(&mut rng, num_samples.min(sample_indices.len()))
-                    .copied()
-                    .collect();
-                let sample: Vec<Vector3<f64>> = picks.iter().map(|p| neighbour_points[*p].1).collect();
-                let plane = Plane::from_points(&sample);
-                if plane.slope() > max_planar_slope || plane.residual(&center) > inlier_threshold {
-                    continue;
+        let planar_hits: Vec<(usize, Vec<usize>, bool)> = active_indices
+            .par_iter()
+            .filter_map(|idx| {
+                let idx = *idx;
+                let center = point_to_vec3(&cloud.points[idx]);
+                let neighbours = tree
+                    .within(&[center.x, center.y, center.z], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                if neighbours.len() < num_samples.max(acceptable_model_size) {
+                    return None;
                 }
-                let inliers: Vec<usize> = neighbour_points
+                let neighbour_points: Vec<(usize, Vector3<f64>)> = neighbours
                     .iter()
-                    .filter_map(|(pid, pt)| if plane.residual(pt) <= inlier_threshold { Some(*pid) } else { None })
+                    .map(|(_, nidx)| (**nidx, point_to_vec3(&cloud.points[**nidx])))
                     .collect();
-                if inliers.len() < acceptable_model_size {
-                    continue;
+                let sample_indices: Vec<usize> = (0..neighbour_points.len()).collect();
+                let mut rng = rand::rngs::StdRng::seed_from_u64(0x9E37_79B9_7F4A_7C15_u64 ^ idx as u64);
+                let mut best_plane = Plane::zero();
+                let mut best_inliers = Vec::new();
+                let mut best_rmse = f64::INFINITY;
+                for _ in 0..num_iterations {
+                    let picks: Vec<usize> = sample_indices
+                        .sample(&mut rng, num_samples.min(sample_indices.len()))
+                        .copied()
+                        .collect();
+                    let sample: Vec<Vector3<f64>> = picks.iter().map(|p| neighbour_points[*p].1).collect();
+                    let plane = Plane::from_points(&sample);
+                    if plane.slope() > max_planar_slope || plane.residual(&center) > inlier_threshold {
+                        continue;
+                    }
+                    let inliers: Vec<usize> = neighbour_points
+                        .iter()
+                        .filter_map(|(pid, pt)| if plane.residual(pt) <= inlier_threshold { Some(*pid) } else { None })
+                        .collect();
+                    if inliers.len() < acceptable_model_size {
+                        continue;
+                    }
+                    let refined_points: Vec<Vector3<f64>> = inliers
+                        .iter()
+                        .map(|pid| point_to_vec3(&cloud.points[*pid]))
+                        .collect();
+                    let refined = Plane::from_points(&refined_points);
+                    let rmse = refined_points.iter().map(|pt| refined.residual(pt)).sum::<f64>()
+                        / refined_points.len() as f64;
+                    if rmse < best_rmse {
+                        best_rmse = rmse;
+                        best_plane = refined;
+                        best_inliers = inliers;
+                    }
                 }
-                let refined_points: Vec<Vector3<f64>> = inliers.iter().map(|pid| point_to_vec3(&cloud.points[*pid])).collect();
-                let refined = Plane::from_points(&refined_points);
-                let rmse = refined_points.iter().map(|pt| refined.residual(pt)).sum::<f64>() / refined_points.len() as f64;
-                if rmse < best_rmse {
-                    best_rmse = rmse;
-                    best_plane = refined;
-                    best_inliers = inliers;
+                if best_rmse.is_finite() {
+                    Some((idx, best_inliers, best_plane.residual(&center) <= inlier_threshold))
+                } else {
+                    None
                 }
+            })
+            .collect();
+
+        for (idx, best_inliers, center_is_planar) in planar_hits {
+            for pid in best_inliers {
+                is_planar[pid] = true;
             }
-            if best_rmse.is_finite() {
-                for pid in best_inliers {
-                    is_planar[pid] = true;
-                }
-                if best_plane.residual(&center) <= inlier_threshold {
-                    is_planar[idx] = true;
-                }
+            if center_is_planar {
+                is_planar[idx] = true;
             }
         }
 

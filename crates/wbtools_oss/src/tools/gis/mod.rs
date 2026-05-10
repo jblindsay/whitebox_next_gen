@@ -19578,70 +19578,82 @@ impl Tool for SimplifyFeaturesTool {
 
         let mut output = input.clone();
         let total = output.features.len().max(1);
-        for (index, feature) in output.features.iter_mut().enumerate() {
-            if let Some(geometry) = feature.geometry.as_ref() {
-                let topo = wb_geometry_to_topo(geometry)?;
-                let simplified = simplify_geometry(&topo, tolerance);
-                feature.geometry = Some(match simplified {
-                    TopoGeometry::Point(coord) => wbvector::Geometry::Point(to_wb_coord(&coord)),
-                    TopoGeometry::LineString(line) => {
-                        wbvector::Geometry::LineString(line.coords.iter().map(to_wb_coord).collect())
-                    }
-                    TopoGeometry::Polygon(poly) => wbvector::Geometry::Polygon {
-                        exterior: to_wb_ring(&poly.exterior),
-                        interiors: to_wb_rings(&poly.holes),
-                    },
-                    TopoGeometry::MultiPoint(points) => {
-                        wbvector::Geometry::MultiPoint(points.iter().map(to_wb_coord).collect())
-                    }
-                    TopoGeometry::MultiLineString(lines) => wbvector::Geometry::MultiLineString(
-                        lines
-                            .iter()
-                            .map(|line| line.coords.iter().map(to_wb_coord).collect())
-                            .collect(),
-                    ),
-                    TopoGeometry::MultiPolygon(polys) => wbvector::Geometry::MultiPolygon(
-                        polys
-                            .iter()
-                            .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
-                            .collect(),
-                    ),
-                    TopoGeometry::GeometryCollection(parts) => wbvector::Geometry::GeometryCollection(
-                        parts
-                            .iter()
-                            .filter_map(|part| {
-                                match part {
-                                    TopoGeometry::Point(coord) => Some(wbvector::Geometry::Point(to_wb_coord(coord))),
-                                    TopoGeometry::LineString(line) => Some(wbvector::Geometry::LineString(
-                                        line.coords.iter().map(to_wb_coord).collect(),
-                                    )),
-                                    TopoGeometry::Polygon(poly) => Some(wbvector::Geometry::Polygon {
-                                        exterior: to_wb_ring(&poly.exterior),
-                                        interiors: to_wb_rings(&poly.holes),
-                                    }),
-                                    TopoGeometry::MultiPoint(points) => Some(wbvector::Geometry::MultiPoint(
-                                        points.iter().map(to_wb_coord).collect(),
-                                    )),
-                                    TopoGeometry::MultiLineString(lines) => Some(
-                                        wbvector::Geometry::MultiLineString(
-                                            lines
-                                                .iter()
-                                                .map(|line| line.coords.iter().map(to_wb_coord).collect())
-                                                .collect(),
+        let transformed: Result<Vec<Option<wbvector::Geometry>>, ToolError> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                if let Some(geometry) = feature.geometry.as_ref() {
+                    let topo = wb_geometry_to_topo(geometry)?;
+                    let simplified = simplify_geometry(&topo, tolerance);
+                    Ok(Some(match simplified {
+                        TopoGeometry::Point(coord) => wbvector::Geometry::Point(to_wb_coord(&coord)),
+                        TopoGeometry::LineString(line) => {
+                            wbvector::Geometry::LineString(line.coords.iter().map(to_wb_coord).collect())
+                        }
+                        TopoGeometry::Polygon(poly) => wbvector::Geometry::Polygon {
+                            exterior: to_wb_ring(&poly.exterior),
+                            interiors: to_wb_rings(&poly.holes),
+                        },
+                        TopoGeometry::MultiPoint(points) => {
+                            wbvector::Geometry::MultiPoint(points.iter().map(to_wb_coord).collect())
+                        }
+                        TopoGeometry::MultiLineString(lines) => wbvector::Geometry::MultiLineString(
+                            lines
+                                .iter()
+                                .map(|line| line.coords.iter().map(to_wb_coord).collect())
+                                .collect(),
+                        ),
+                        TopoGeometry::MultiPolygon(polys) => wbvector::Geometry::MultiPolygon(
+                            polys
+                                .iter()
+                                .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                                .collect(),
+                        ),
+                        TopoGeometry::GeometryCollection(parts) => wbvector::Geometry::GeometryCollection(
+                            parts
+                                .iter()
+                                .filter_map(|part| {
+                                    match part {
+                                        TopoGeometry::Point(coord) => Some(wbvector::Geometry::Point(to_wb_coord(coord))),
+                                        TopoGeometry::LineString(line) => Some(wbvector::Geometry::LineString(
+                                            line.coords.iter().map(to_wb_coord).collect(),
+                                        )),
+                                        TopoGeometry::Polygon(poly) => Some(wbvector::Geometry::Polygon {
+                                            exterior: to_wb_ring(&poly.exterior),
+                                            interiors: to_wb_rings(&poly.holes),
+                                        }),
+                                        TopoGeometry::MultiPoint(points) => Some(wbvector::Geometry::MultiPoint(
+                                            points.iter().map(to_wb_coord).collect(),
+                                        )),
+                                        TopoGeometry::MultiLineString(lines) => Some(
+                                            wbvector::Geometry::MultiLineString(
+                                                lines
+                                                    .iter()
+                                                    .map(|line| line.coords.iter().map(to_wb_coord).collect())
+                                                    .collect(),
+                                            ),
                                         ),
-                                    ),
-                                    TopoGeometry::MultiPolygon(polys) => Some(wbvector::Geometry::MultiPolygon(
-                                        polys
-                                            .iter()
-                                            .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
-                                            .collect(),
-                                    )),
-                                    TopoGeometry::GeometryCollection(_) => None,
-                                }
-                            })
-                            .collect(),
-                    ),
-                });
+                                        TopoGeometry::MultiPolygon(polys) => Some(wbvector::Geometry::MultiPolygon(
+                                            polys
+                                                .iter()
+                                                .map(|poly| (to_wb_ring(&poly.exterior), to_wb_rings(&poly.holes)))
+                                                .collect(),
+                                        )),
+                                        TopoGeometry::GeometryCollection(_) => None,
+                                    }
+                                })
+                                .collect(),
+                        ),
+                    }))
+                } else {
+                    Ok(None)
+                }
+            })
+            .collect();
+
+        for (index, maybe_geom) in transformed?.into_iter().enumerate() {
+            if let Some(geom) = maybe_geom {
+                output.features[index].geometry = Some(geom);
             }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }
@@ -20773,11 +20785,13 @@ impl Tool for DensifyFeaturesTool {
 
         let mut output = input.clone();
         let total = output.features.len().max(1);
-        for (index, feature) in output.features.iter_mut().enumerate() {
-            if let Some(geometry) = feature.geometry.take() {
-                let densified = match geometry {
+        let transformed: Vec<Option<wbvector::Geometry>> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                feature.geometry.as_ref().map(|geometry| match geometry {
                     wbvector::Geometry::LineString(coords) => {
-                        wbvector::Geometry::LineString(resample_linestring(&coords, spacing))
+                        wbvector::Geometry::LineString(resample_linestring(coords, spacing))
                     }
                     wbvector::Geometry::MultiLineString(lines) => wbvector::Geometry::MultiLineString(
                         lines
@@ -20828,9 +20842,14 @@ impl Tool for DensifyFeaturesTool {
                             })
                             .collect(),
                     ),
-                    other => other,
-                };
-                feature.geometry = Some(densified);
+                    other => other.clone(),
+                })
+            })
+            .collect();
+
+        for (index, maybe_geom) in transformed.into_iter().enumerate() {
+            if let Some(geom) = maybe_geom {
+                output.features[index].geometry = Some(geom);
             }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }

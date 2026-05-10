@@ -721,6 +721,13 @@ Batches 116–117 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 118–119 completed (2026-05-10):
+- `simplify_features`: parallelized per-feature geometry simplify transform with `par_iter().map()` collecting transformed geometries (`Result<Option<Geometry>, ToolError>`), followed by deterministic sequential geometry assignment.
+- `densify_features`: parallelized per-feature densification transform with `par_iter().map()` collecting transformed geometries, followed by deterministic sequential geometry assignment.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

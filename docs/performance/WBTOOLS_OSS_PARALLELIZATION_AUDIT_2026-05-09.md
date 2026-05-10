@@ -900,7 +900,49 @@ Validation:
 - All 5 tools compile cleanly with par_iter and Arc data sharing patterns
 - Batch mode retained for filter_lidar tool (file-level parallelism only in batch execution)
 
-## Parallelization Sprint Summary (Batches 138-145)
+## Batch 146: LiDAR Advanced Operations (5 Tools)
+
+Executed immediately following Batch 145. Focus on moderate-complexity parallelization patterns: Arc-wrapped data structures with per-point/per-partition accumulation.
+
+**Tools parallelized:**
+
+1. **FilterLidarByReferenceSurfaceTool** (line 8143):
+   - Pattern: Arc<Raster> + per-point z-value comparison
+   - Implementation: `par_iter().enumerate()` with raster sampling; two-phase filtering (matches computation → point selection/classification)
+   - Speedup opportunity: Medium (per-point raster lookups are independent)
+
+2. **RemoveDuplicatesTool** (line 5973):
+   - Pattern: fold/reduce with per-partition HashSet deduplication
+   - Implementation: `fold()` to build per-partition HashSets + `reduce()` to merge across threads
+   - Speedup opportunity: High (dedup is partition-local; merge is sequential hash insertion)
+
+3. **FilterLidarByPercentileTool** (line 7024):
+   - Pattern: Grid-based cell accumulation (sequential) + per-cell percentile selection (parallel)
+   - Implementation: `par_iter().enumerate()` with Arc<PointCloud> to compute percentile per cell; collect results for final filtering
+   - Speedup opportunity: Medium (percentile computation per cell is independent)
+
+4. **LidarJoinTool** (line 6499):
+   - Pattern: fold/reduce over file list with parallel file loading and point accumulation
+   - Implementation: `par_iter()` over inputs + `fold()` to load and accumulate points; `reduce()` to merge across threads
+   - Speedup opportunity: High (file I/O is the bottleneck; parallel loading reduces total wall time)
+
+5. **SplitLidarTool** (line 7127):
+   - Pattern: fold/reduce for per-partition point grouping into BTreeMap by split criterion
+   - Implementation: `fold()` to build per-partition BTreeMaps + `reduce()` to merge groups across threads
+   - Speedup opportunity: High (group building is partition-local; merge is efficient for small number of groups)
+
+**Key Challenges & Resolutions:**
+
+- **Arc-wrapped PointCloud in FilterLidarByPercentileTool**: Avoided cloning entire cloud by wrapping in Arc and sharing across parallel percentile computation threads.
+- **Type Inference in SplitLidarTool fold/reduce**: Explicit type annotations (`BTreeMap<String, Vec<PointRecord>>`) required for fold closure due to complex generic types.
+- **Deref Error in FilterLidarByReferenceSurfaceTool**: Fixed index handling in classification assignment (already using usize, no dereference needed).
+
+**Compilation Results:**
+- All 5 tools compiled cleanly with zero new errors
+- Zero unsafe code blocks introduced
+- Compatible with existing batch-mode infrastructure
+
+## Parallelization Sprint Summary (Batches 138-146)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -912,9 +954,10 @@ Validation:
 | 143 | 5 | LiDAR per-point/per-cell par_iter (batch-safe) | ✓ Complete |
 | 144 | 5 | LiDAR per-point ops with Arc data sharing | ✓ Complete |
 | 145 | 5 | LiDAR simple per-point ops (filter/transform) | ✓ Complete |
-| **Total** | **53+** | Various patterns | **67%+ of audit target** |
+| 146 | 5 | LiDAR advanced: Arc + fold/reduce patterns | ✓ Complete |
+| **Total** | **58+** | Various patterns | **73%+ of audit target** |
 
-**Total parallelized**: 53-57 tools across all batches (audit target: 79 tools)
+**Total parallelized**: 58-62 tools across all batches (audit target: 79 tools)
 **Discovery finding**: Significant overlap between audit candidates and tools already parallelized in prior batches, reducing net new opportunities.
 
 ## Automated Screening Set (Needs Manual Confirmation)

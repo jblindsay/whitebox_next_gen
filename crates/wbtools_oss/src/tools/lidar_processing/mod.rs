@@ -6001,23 +6001,46 @@ impl Tool for RemoveDuplicatesTool {
 
         let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
-            let mut seen_xy: HashSet<(u64, u64)> = HashSet::with_capacity(cloud.points.len());
-            let mut seen_xyz: HashSet<(u64, u64, u64)> = HashSet::with_capacity(cloud.points.len());
-            let mut points = Vec::with_capacity(cloud.points.len());
 
-            for p in &cloud.points {
-                if include_z {
-                    let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
-                    if seen_xyz.insert(key) {
-                        points.push(p.clone());
+            let (_, _, points) = cloud.points.par_iter()
+                .fold(|| {
+                    let seen_xy = HashSet::<(u64, u64)>::new();
+                    let seen_xyz = HashSet::<(u64, u64, u64)>::new();
+                    (seen_xy, seen_xyz, Vec::new())
+                },
+                |(mut seen_xy, mut seen_xyz, mut points), p| {
+                    if include_z {
+                        let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
+                        if seen_xyz.insert(key) {
+                            points.push(*p);
+                        }
+                    } else {
+                        let key = (p.x.to_bits(), p.y.to_bits());
+                        if seen_xy.insert(key) {
+                            points.push(*p);
+                        }
                     }
-                } else {
-                    let key = (p.x.to_bits(), p.y.to_bits());
-                    if seen_xy.insert(key) {
-                        points.push(p.clone());
+                    (seen_xy, seen_xyz, points)
+                })
+                .reduce(|| {
+                    (HashSet::new(), HashSet::new(), Vec::new())
+                },
+                |(mut seen_xy, mut seen_xyz, mut acc), (_other_xy, _other_xyz, other_pts)| {
+                    for p in other_pts {
+                        if include_z {
+                            let key = (p.x.to_bits(), p.y.to_bits(), p.z.to_bits());
+                            if seen_xyz.insert(key) {
+                                acc.push(p);
+                            }
+                        } else {
+                            let key = (p.x.to_bits(), p.y.to_bits());
+                            if seen_xy.insert(key) {
+                                acc.push(p);
+                            }
+                        }
                     }
-                }
-            }
+                    (seen_xy, seen_xyz, acc)
+                });
 
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "remove_duplicates")
@@ -6533,15 +6556,27 @@ impl Tool for LidarJoinTool {
         let output_path = parse_optional_lidar_output_path(args)?;
 
         ctx.progress.info("reading input lidar files");
-        let mut out_points: Vec<PointRecord> = Vec::new();
-        let mut out_crs: Option<LidarCrs> = None;
-        for input in &inputs {
-            let cloud = load_lidar_cloud(Path::new(input), "input")?;
-            if out_crs.is_none() {
-                out_crs = cloud.crs.clone();
-            }
-            out_points.extend(cloud.points.iter().copied());
-        }
+        let (out_points, out_crs): (Vec<PointRecord>, Option<LidarCrs>) = inputs.par_iter()
+            .fold(|| {
+                (Vec::new(), None)
+            },
+            |(mut points, mut crs), input| {
+                if let Ok(cloud) = load_lidar_cloud(Path::new(input), "input") {
+                    if crs.is_none() {
+                        crs = cloud.crs.clone();
+                    }
+                    points.extend(cloud.points.iter().copied());
+                }
+                (points, crs)
+            })
+            .reduce(|| {
+                (Vec::new(), None)
+            },
+            |(mut acc_points, acc_crs), (points, crs)| {
+                acc_points.extend(points);
+                let final_crs = if acc_crs.is_none() { crs } else { acc_crs };
+                (acc_points, final_crs)
+            });
 
         let out_cloud = PointCloud {
             points: out_points,
@@ -7097,16 +7132,21 @@ impl Tool for FilterLidarByPercentileTool {
                 cell_ids[row * cols + col].push(i);
             }
 
-            let mut selected_ids = Vec::new();
-            for ids in &cell_ids {
-                if ids.is_empty() {
-                    continue;
-                }
-                let mut sorted: Vec<(f64, usize)> = ids.iter().map(|id| (cloud.points[*id].z, *id)).collect();
-                sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
-                let idx = ((percentile / 100.0) * (sorted.len() - 1) as f64).round() as usize;
-                selected_ids.push(sorted[idx].1);
-            }
+            let cell_ids_arc = Arc::new(cell_ids);
+            let cloud_arc = Arc::new(cloud.points.clone());
+            let selected_ids: Vec<usize> = cell_ids_arc.par_iter()
+                .enumerate()
+                .filter_map(|(_, ids)| {
+                    if ids.is_empty() {
+                        return None;
+                    }
+                    let mut sorted: Vec<(f64, usize)> = ids.iter().map(|id| (cloud_arc[*id].z, *id)).collect();
+                    sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+                    let idx = ((percentile / 100.0) * (sorted.len() - 1) as f64).round() as usize;
+                    Some(sorted[idx].1)
+                })
+                .collect();
+            let mut selected_ids = selected_ids;
             selected_ids.sort_unstable();
 
             let points: Vec<PointRecord> = selected_ids.into_iter().map(|i| cloud.points[i]).collect();
@@ -7223,30 +7263,43 @@ impl Tool for SplitLidarTool {
                 return Ok(outputs);
             }
 
-            let mut groups: BTreeMap<String, Vec<PointRecord>> = BTreeMap::new();
-            for p in &cloud.points {
-                let key = match criterion {
-                    SplitCriterion::Class => format!("class{}", p.classification),
-                    SplitCriterion::PointSourceId => format!("point_source_id{}", p.point_source_id),
-                    _ => {
-                        let v = split_value(p, criterion);
-                        let bin = (v / interval).floor();
-                        let label = (bin * interval).to_string();
-                        match criterion {
-                            SplitCriterion::X => format!("x{}", label),
-                            SplitCriterion::Y => format!("y{}", label),
-                            SplitCriterion::Z => format!("z{}", label),
-                            SplitCriterion::Intensity => format!("intensity{}", label),
-                            SplitCriterion::UserData => format!("user_data{}", label),
-                            SplitCriterion::ScanAngle => format!("scan_angle{}", label),
-                            SplitCriterion::Time => format!("time{}", label),
-                            SplitCriterion::NumPts => "split".to_string(),
-                            SplitCriterion::Class | SplitCriterion::PointSourceId => unreachable!(),
+            let mut groups: BTreeMap<String, Vec<PointRecord>> = cloud.points.par_iter()
+                .fold(|| {
+                    BTreeMap::<String, Vec<PointRecord>>::new()
+                },
+                |mut groups: BTreeMap<String, Vec<PointRecord>>, p| {
+                    let key = match criterion {
+                        SplitCriterion::Class => format!("class{}", p.classification),
+                        SplitCriterion::PointSourceId => format!("point_source_id{}", p.point_source_id),
+                        _ => {
+                            let v = split_value(p, criterion);
+                            let bin = (v / interval).floor();
+                            let label = (bin * interval).to_string();
+                            match criterion {
+                                SplitCriterion::X => format!("x{}", label),
+                                SplitCriterion::Y => format!("y{}", label),
+                                SplitCriterion::Z => format!("z{}", label),
+                                SplitCriterion::Intensity => format!("intensity{}", label),
+                                SplitCriterion::UserData => format!("user_data{}", label),
+                                SplitCriterion::ScanAngle => format!("scan_angle{}", label),
+                                SplitCriterion::Time => format!("time{}", label),
+                                SplitCriterion::NumPts => "split".to_string(),
+                                SplitCriterion::Class | SplitCriterion::PointSourceId => unreachable!(),
+                            }
                         }
+                    };
+                    groups.entry(key).or_default().push(*p);
+                    groups
+                })
+                .reduce(|| {
+                    BTreeMap::<String, Vec<PointRecord>>::new()
+                },
+                |mut acc: BTreeMap<String, Vec<PointRecord>>, other: BTreeMap<String, Vec<PointRecord>>| {
+                    for (k, v) in other {
+                        acc.entry(k).or_default().extend(v);
                     }
-                };
-                groups.entry(key).or_default().push(*p);
-            }
+                    acc
+                });
 
             for (suffix, points) in groups {
                 if points.len() <= min_pts {
@@ -8232,42 +8285,46 @@ impl Tool for FilterLidarByReferenceSurfaceTool {
         ctx.progress.info("reading reference surface");
         let surface = load_raster_path_or_memory(&ref_surface_path, "reference surface")?;
 
-        let mut matches = vec![false; cloud.points.len()];
-        for (i, p) in cloud.points.iter().enumerate() {
-            if point_is_withheld(p) || point_is_noise(p) {
-                continue;
-            }
-            let Some(z_ref) = sample_dtm_elevation(&surface, p.x, p.y) else {
-                continue;
-            };
-            matches[i] = match query_type {
-                RefSurfaceQueryType::Within => (p.z - z_ref).abs() < threshold,
-                RefSurfaceQueryType::Less => p.z < z_ref,
-                RefSurfaceQueryType::LessEqual => p.z <= z_ref,
-                RefSurfaceQueryType::Greater => p.z > z_ref,
-                RefSurfaceQueryType::GreaterEqual => p.z >= z_ref,
-            };
-        }
+        let surface_arc = Arc::new(surface);
+        let matches: Vec<bool> = cloud.points.par_iter()
+            .map(|p| {
+                if point_is_withheld(p) || point_is_noise(p) {
+                    return false;
+                }
+                let Some(z_ref) = sample_dtm_elevation(&surface_arc, p.x, p.y) else {
+                    return false;
+                };
+                match query_type {
+                    RefSurfaceQueryType::Within => (p.z - z_ref).abs() < threshold,
+                    RefSurfaceQueryType::Less => p.z < z_ref,
+                    RefSurfaceQueryType::LessEqual => p.z <= z_ref,
+                    RefSurfaceQueryType::Greater => p.z > z_ref,
+                    RefSurfaceQueryType::GreaterEqual => p.z >= z_ref,
+                }
+            })
+            .collect();
+
+        let matches_arc = Arc::new(matches);
 
         let points: Vec<PointRecord> = if !classify {
             cloud
                 .points
-                .iter()
+                .par_iter()
                 .enumerate()
-                .filter(|(i, _)| matches[*i])
+                .filter(|(i, _)| matches_arc[*i])
                 .map(|(_, p)| *p)
                 .collect()
         } else {
             cloud
                 .points
-                .iter()
+                .par_iter()
                 .enumerate()
                 .map(|(i, p)| {
                     let mut q = *p;
                     if point_is_noise(p) {
                         return q;
                     }
-                    q.classification = if matches[i] {
+                    q.classification = if matches_arc[i] {
                         true_class_value
                     } else if preserve_classes {
                         q.classification

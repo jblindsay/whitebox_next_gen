@@ -10463,21 +10463,25 @@ fn extract_polygons_from_geometry(
 fn collect_overlay_polygon_pieces(
     layer: &wbvector::Layer,
 ) -> Result<Vec<OverlayPolygonPiece>, ToolError> {
-    let mut pieces = Vec::<OverlayPolygonPiece>::new();
-    for feature in &layer.features {
-        let Some(geometry) = feature.geometry.as_ref() else {
-            continue;
-        };
-        let mut polygons = Vec::<TopoPolygon>::new();
-        extract_polygons_from_geometry(geometry, &mut polygons)?;
-        for polygon in polygons {
-            pieces.push(OverlayPolygonPiece {
-                attributes: feature.attributes.clone(),
-                polygon,
-            });
-        }
-    }
-    Ok(pieces)
+    let per_feature: Result<Vec<Vec<OverlayPolygonPiece>>, ToolError> = layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                return Ok(Vec::new());
+            };
+            let mut polygons = Vec::<TopoPolygon>::new();
+            extract_polygons_from_geometry(geometry, &mut polygons)?;
+            Ok(polygons
+                .into_iter()
+                .map(|polygon| OverlayPolygonPiece {
+                    attributes: feature.attributes.clone(),
+                    polygon,
+                })
+                .collect())
+        })
+        .collect();
+    Ok(per_feature?.into_iter().flatten().collect())
 }
 
 fn build_merged_overlay_schema(
@@ -11771,31 +11775,44 @@ impl Tool for DissolveTool {
         let mut all_polygons = Vec::<TopoPolygon>::new();
         let total = input.features.len().max(1);
 
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let Some(geometry) = feature.geometry.as_ref() else {
-                coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
-                continue;
-            };
+        let extracted: Result<Vec<Option<(Option<wbvector::FieldValue>, Vec<TopoPolygon>)>>, ToolError> =
+            input
+                .features
+                .par_iter()
+                .map(|feature| {
+                    let Some(geometry) = feature.geometry.as_ref() else {
+                        return Ok(None);
+                    };
 
-            let mut polygons = Vec::<TopoPolygon>::new();
-            extract_polygons_from_geometry(geometry, &mut polygons)?;
+                    let mut polygons = Vec::<TopoPolygon>::new();
+                    extract_polygons_from_geometry(geometry, &mut polygons)?;
 
-            if let Some(field_idx) = dissolve_field_index {
-                let value = feature
-                    .attributes
-                    .get(field_idx)
-                    .cloned()
-                    .unwrap_or(wbvector::FieldValue::Null);
-                if let Some((_, group)) = grouped_polygons
-                    .iter_mut()
-                    .find(|(candidate, _)| *candidate == value)
-                {
-                    group.extend(polygons);
+                    let field_value = dissolve_field_index.map(|field_idx| {
+                        feature
+                            .attributes
+                            .get(field_idx)
+                            .cloned()
+                            .unwrap_or(wbvector::FieldValue::Null)
+                    });
+
+                    Ok(Some((field_value, polygons)))
+                })
+                .collect();
+
+        for (feature_idx, item) in extracted?.into_iter().enumerate() {
+            if let Some((field_value, polygons)) = item {
+                if let Some(value) = field_value {
+                    if let Some((_, group)) = grouped_polygons
+                        .iter_mut()
+                        .find(|(candidate, _)| *candidate == value)
+                    {
+                        group.extend(polygons);
+                    } else {
+                        grouped_polygons.push((value, polygons));
+                    }
                 } else {
-                    grouped_polygons.push((value, polygons));
+                    all_polygons.extend(polygons);
                 }
-            } else {
-                all_polygons.extend(polygons);
             }
 
             coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);

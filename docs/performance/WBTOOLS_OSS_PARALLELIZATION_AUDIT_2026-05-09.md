@@ -714,6 +714,13 @@ Batches 114–115 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 116–117 completed (2026-05-10):
+- `dissolve`: parallelized per-feature polygon extraction with `par_iter().map()` collecting `(group_value, polygons)` tuples, followed by deterministic sequential grouping and dissolve output materialization.
+- shared helper `collect_overlay_polygon_pieces`: parallelized feature-to-polygon-piece extraction with `par_iter().map()` and deterministic flattening; accelerates overlay workflows consuming this helper.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

@@ -1074,7 +1074,38 @@ Executed immediately following Batch 149. Focus on parallelizing per-point assig
 - No new errors introduced
 - Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
 
-## Parallelization Sprint Summary (Batches 138-150)
+## Batch 151: LiDAR Neighborhood Analytics and Return QC (4 Tools)
+
+Executed immediately following Batch 150 to close out remaining LiDAR sequential hotspots identified in the audit sweep.
+
+**Tools parallelized:**
+
+1. **LidarTophatTransformTool** (line 12693):
+  - Pattern: parallel neighbourhood morphology passes
+  - Implementation: Arc<KdTree> with `par_iter().map()` for erosion (local minima) and a second `par_iter().map()` for dilation/opening subtraction
+  - Speedup opportunity: Medium (two full-neighbourhood scans over all points)
+
+2. **NormalVectorsTool** (line 12763):
+  - Pattern: parallel per-point neighbour query + local plane fit
+  - Implementation: Arc<KdTree> with `par_iter().map()` for neighborhood sampling, PCA normal estimation, and point-record update
+  - Speedup opportunity: Medium-High (dominant per-point neighbourhood analysis)
+
+3. **LidarEigenvalueFeaturesTool** (line 12880):
+  - Pattern: parallel feature-row precompute with deterministic sequential write
+  - Implementation: Arc<KdTree> with `par_iter().map()` producing `[f32; 10]` feature vectors, followed by sequential binary writer emission
+  - Speedup opportunity: High (expensive neighbourhood PCA per point)
+
+4. **LidarPointReturnAnalysisTool** (line 13387):
+  - Pattern: parallel key extraction prepass + parallel optional output mapping
+  - Implementation: `par_iter().enumerate().map()` to build grouping keys and return diagnostics, sequential map aggregation for determinism, plus `par_iter().enumerate().map()` for QC classification output cloud
+  - Speedup opportunity: Medium (large-cloud bookkeeping and optional output generation)
+
+**Compilation Results:**
+- `cargo check -p wbtools_oss`: SUCCESS
+- No new errors introduced
+- Only 2 pre-existing warnings remain in `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+## Parallelization Sprint Summary (Batches 138-151)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -1091,11 +1122,12 @@ Executed immediately following Batch 149. Focus on parallelizing per-point assig
 | 148 | 4 | LiDAR interpolation/detection row+candidate parallelism | ✓ Complete |
 | 149 | 4 | LiDAR analytics: parallel assignment/matching passes | ✓ Complete |
 | 150 | 4 | LiDAR spatial assignment and utility filtering | ✓ Complete |
-| **Total** | **74+** | Various patterns | **94%+ of audit target** |
+| 151 | 4 | LiDAR neighborhood analytics and return QC | ✓ Complete |
+| **Total** | **78+** | Various patterns | **99%+ of audit target** |
 
-**Total parallelized**: 74-78 tools across all batches (audit target: 79 tools)
-**Coverage**: 94-99% of audit target
-**Remaining**: ~1-5 tools to reach 95-100%
+**Total parallelized**: 78-79 tools across all batches (audit target: 79 tools)
+**Coverage**: 99-100% of audit target
+**Remaining**: ~0-1 tools to reach full closure
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

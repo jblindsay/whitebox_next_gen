@@ -12093,17 +12093,23 @@ impl Tool for LidarConstructVectorTinTool {
                 }
 
                 let mut grouped: HashMap<(u64, u8, u8), Vec<(usize, u8)>> = HashMap::new();
+                let entries: Vec<(usize, bool, (u64, u8, u8), u8)> = cloud
+                    .points
+                    .par_iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        let greater = p.return_number > p.number_of_returns;
+                        let time_bits = p.gps_time.map(|t| t.0.to_bits()).unwrap_or((i as f64).to_bits());
+                        let channel = (p.flags & 0b0000_0011) as u8;
+                        (i, greater, (time_bits, channel, p.number_of_returns), p.return_number)
+                    })
+                    .collect();
                 let mut r_greater_n = 0usize;
-                for (i, p) in cloud.points.iter().enumerate() {
-                    if p.return_number > p.number_of_returns {
+                for (i, greater, key, ret_no) in entries {
+                    if greater {
                         r_greater_n += 1;
                     }
-                    let time_bits = p.gps_time.map(|t| t.0.to_bits()).unwrap_or((i as f64).to_bits());
-                    let channel = (p.flags & 0b0000_0011) as u8;
-                    grouped
-                        .entry((time_bits, channel, p.number_of_returns))
-                        .or_default()
-                        .push((i, p.return_number));
+                    grouped.entry(key).or_default().push((i, ret_no));
                 }
 
                 let mut missing_points = 0usize;
@@ -12202,15 +12208,25 @@ impl Tool for LidarConstructVectorTinTool {
                 );
 
                 if create_output {
-                    let mut out_cloud = cloud.clone();
-                    for (i, p) in out_cloud.points.iter_mut().enumerate() {
-                        p.classification = match (is_missing[i], is_duplicate[i]) {
-                            (true, true) => 15,
-                            (true, false) => 13,
-                            (false, true) => 14,
-                            (false, false) => 1,
-                        };
-                    }
+                    let out_points: Vec<PointRecord> = cloud
+                        .points
+                        .par_iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            let mut q = *p;
+                            q.classification = match (is_missing[i], is_duplicate[i]) {
+                                (true, true) => 15,
+                                (true, false) => 13,
+                                (false, true) => 14,
+                                (false, false) => 1,
+                            };
+                            q
+                        })
+                        .collect();
+                    let out_cloud = PointCloud {
+                        points: out_points,
+                        crs: cloud.crs.clone(),
+                    };
                     let out = output_path
                         .unwrap_or_else(|| default_output_sibling_path(Path::new(&input_path), "return_qc", "las"));
                     if let Some(parent) = out.parent() {
@@ -12700,27 +12716,40 @@ impl Tool for LidarTophatTransformTool {
             tree.add([p.x, p.y], i)
                 .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
         }
+        let tree = Arc::new(tree);
         let radius_sq = search_radius * search_radius;
 
-        let mut min_surface = vec![0.0; cloud.points.len()];
-        for (i, p) in cloud.points.iter().enumerate() {
-            let neighbours = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-            let local_min = neighbours
-                .iter()
-                .map(|(_, idx)| cloud.points[**idx].z)
-                .fold(f64::INFINITY, f64::min);
-            min_surface[i] = if local_min.is_finite() { local_min } else { p.z };
-        }
+        let min_surface: Vec<f64> = cloud
+            .points
+            .par_iter()
+            .map(|p| {
+                let neighbours = tree
+                    .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                let local_min = neighbours
+                    .iter()
+                    .map(|(_, idx)| cloud.points[**idx].z)
+                    .fold(f64::INFINITY, f64::min);
+                if local_min.is_finite() { local_min } else { p.z }
+            })
+            .collect();
 
-        let mut points = cloud.points.clone();
-        for (i, p) in cloud.points.iter().enumerate() {
-            let neighbours = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-            let opened = neighbours
-                .iter()
-                .map(|(_, idx)| min_surface[**idx])
-                .fold(f64::NEG_INFINITY, f64::max);
-            points[i].z = p.z - if opened.is_finite() { opened } else { p.z };
-        }
+        let points: Vec<PointRecord> = cloud
+            .points
+            .par_iter()
+            .map(|p| {
+                let neighbours = tree
+                    .within(&[p.x, p.y], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                let opened = neighbours
+                    .iter()
+                    .map(|(_, idx)| min_surface[**idx])
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let mut q = *p;
+                q.z = p.z - if opened.is_finite() { opened } else { p.z };
+                q
+            })
+            .collect();
 
         let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
         let locator = store_or_write_lidar_output(&out_cloud, output_path, "lidar_tophat_transform")?;
@@ -12771,22 +12800,30 @@ impl Tool for NormalVectorsTool {
             tree.add([p.x, p.y, p.z], i)
                 .map_err(|e| ToolError::Execution(format!("failed indexing lidar points: {e}")))?;
         }
+        let tree = Arc::new(tree);
         let radius_sq = search_radius * search_radius;
 
-        let mut points = cloud.points.clone();
-        for (i, p) in cloud.points.iter().enumerate() {
-            let neighbours = tree.within(&[p.x, p.y, p.z], radius_sq, &squared_euclidean).unwrap_or_default();
-            let sample: Vec<Vector3<f64>> = neighbours
-                .iter()
-                .map(|(_, idx)| point_to_vec3(&cloud.points[**idx]))
-                .collect();
-            if let Some((normal, _)) = plane_normal_and_centroid(&sample) {
-                points[i].normal_x = Some(normal.x as f32);
-                points[i].normal_y = Some(normal.y as f32);
-                points[i].normal_z = Some(normal.z as f32);
-                points[i].color = Some(rgb_from_unit_normal(normal));
-            }
-        }
+        let points: Vec<PointRecord> = cloud
+            .points
+            .par_iter()
+            .map(|p| {
+                let mut q = *p;
+                let neighbours = tree
+                    .within(&[p.x, p.y, p.z], radius_sq, &squared_euclidean)
+                    .unwrap_or_default();
+                let sample: Vec<Vector3<f64>> = neighbours
+                    .iter()
+                    .map(|(_, idx)| point_to_vec3(&cloud.points[**idx]))
+                    .collect();
+                if let Some((normal, _)) = plane_normal_and_centroid(&sample) {
+                    q.normal_x = Some(normal.x as f32);
+                    q.normal_y = Some(normal.y as f32);
+                    q.normal_z = Some(normal.z as f32);
+                    q.color = Some(rgb_from_unit_normal(normal));
+                }
+                q
+            })
+            .collect();
 
         let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
         let locator = store_or_write_lidar_output(&out_cloud, output_path, "normal_vectors")?;
@@ -13050,67 +13087,76 @@ impl Tool for LidarEigenvalueFeaturesTool {
                 .write_all(schema.as_bytes())
                 .map_err(|e| ToolError::Execution(format!("failed writing eigen sidecar: {e}")))?;
 
+            let tree = Arc::new(tree);
+            let default_radius = radius.unwrap_or_else(|| estimate_nominal_spacing(&cloud) * 3.0);
+            let feature_rows: Vec<[f32; 10]> = cloud
+                .points
+                .par_iter()
+                .map(|p| -> Result<[f32; 10], ToolError> {
+                    let sample_idx = if let Some(k) = k {
+                        tree.nearest(&[p.x, p.y, p.z], k, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("failed querying neighbours: {e}")))?
+                            .into_iter()
+                            .filter_map(|(dist, idx)| {
+                                if let Some(r) = radius {
+                                    if dist > r * r {
+                                        return None;
+                                    }
+                                }
+                                Some(*idx)
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        tree.within(&[p.x, p.y, p.z], default_radius * default_radius, &squared_euclidean)
+                            .map_err(|e| ToolError::Execution(format!("failed querying neighbours: {e}")))?
+                            .into_iter()
+                            .map(|(_, idx)| *idx)
+                            .collect::<Vec<_>>()
+                    };
+                    let sample: Vec<Vector3<f64>> = sample_idx
+                        .iter()
+                        .map(|idx| point_to_vec3(&cloud.points[*idx]))
+                        .collect();
+                    if let Some(features) = neighborhood_pca(&sample, point_to_vec3(p)) {
+                        let sum = (features.lambda1 + features.lambda2 + features.lambda3).max(f32::EPSILON);
+                        let linearity = (features.lambda1 - features.lambda2) / features.lambda1.max(f32::EPSILON);
+                        let planarity = (features.lambda2 - features.lambda3) / features.lambda1.max(f32::EPSILON);
+                        let sphericity = features.lambda3 / features.lambda1.max(f32::EPSILON);
+                        let omnivariance = (features.lambda1 * features.lambda2 * features.lambda3).max(0.0).cbrt();
+                        let e1 = features.lambda1 / sum;
+                        let e2 = features.lambda2 / sum;
+                        let e3 = features.lambda3 / sum;
+                        let eigentropy = -([e1, e2, e3]
+                            .into_iter()
+                            .filter(|v| *v > 0.0)
+                            .map(|v| v * v.ln())
+                            .sum::<f32>());
+                        Ok([
+                            features.lambda1,
+                            features.lambda2,
+                            features.lambda3,
+                            linearity,
+                            planarity,
+                            sphericity,
+                            omnivariance,
+                            eigentropy,
+                            features.slope,
+                            features.residual,
+                        ])
+                    } else {
+                        Ok([0.0; 10])
+                    }
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
             let mut writer = BufWriter::new(File::create(&out)
                 .map_err(|e| ToolError::Execution(format!("failed creating eigen output: {e}")))?);
-            for (point_num, p) in cloud.points.iter().enumerate() {
-                let sample_idx = if let Some(k) = k {
-                    tree.nearest(&[p.x, p.y, p.z], k, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("failed querying neighbours: {e}")))?
-                        .into_iter()
-                        .filter_map(|(dist, idx)| {
-                            if let Some(r) = radius {
-                                if dist > r * r {
-                                    return None;
-                                }
-                            }
-                            Some(*idx)
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    let r = radius.unwrap_or_else(|| estimate_nominal_spacing(&cloud) * 3.0);
-                    tree.within(&[p.x, p.y, p.z], r * r, &squared_euclidean)
-                        .map_err(|e| ToolError::Execution(format!("failed querying neighbours: {e}")))?
-                        .into_iter()
-                        .map(|(_, idx)| *idx)
-                        .collect::<Vec<_>>()
-                };
-                let sample: Vec<Vector3<f64>> = sample_idx.iter().map(|idx| point_to_vec3(&cloud.points[*idx])).collect();
+            for (point_num, row) in feature_rows.into_iter().enumerate() {
                 writer.write_all(&(point_num as u64).to_le_bytes())
                     .map_err(|e| ToolError::Execution(format!("failed writing eigen record: {e}")))?;
-                if let Some(features) = neighborhood_pca(&sample, point_to_vec3(p)) {
-                    let sum = (features.lambda1 + features.lambda2 + features.lambda3).max(f32::EPSILON);
-                    let linearity = (features.lambda1 - features.lambda2) / features.lambda1.max(f32::EPSILON);
-                    let planarity = (features.lambda2 - features.lambda3) / features.lambda1.max(f32::EPSILON);
-                    let sphericity = features.lambda3 / features.lambda1.max(f32::EPSILON);
-                    let omnivariance = (features.lambda1 * features.lambda2 * features.lambda3).max(0.0).cbrt();
-                    let e1 = features.lambda1 / sum;
-                    let e2 = features.lambda2 / sum;
-                    let e3 = features.lambda3 / sum;
-                    let eigentropy = -([e1, e2, e3]
-                        .into_iter()
-                        .filter(|v| *v > 0.0)
-                        .map(|v| v * v.ln())
-                        .sum::<f32>());
-                    for value in [
-                        features.lambda1,
-                        features.lambda2,
-                        features.lambda3,
-                        linearity,
-                        planarity,
-                        sphericity,
-                        omnivariance,
-                        eigentropy,
-                        features.slope,
-                        features.residual,
-                    ] {
-                        writer.write_all(&value.to_le_bytes())
-                            .map_err(|e| ToolError::Execution(format!("failed writing eigen record: {e}")))?;
-                    }
-                } else {
-                    for _ in 0..10 {
-                        writer.write_all(&0f32.to_le_bytes())
-                            .map_err(|e| ToolError::Execution(format!("failed writing eigen record: {e}")))?;
-                    }
+                for value in row {
+                    writer.write_all(&value.to_le_bytes())
+                        .map_err(|e| ToolError::Execution(format!("failed writing eigen record: {e}")))?;
                 }
             }
             writer.flush().map_err(|e| ToolError::Execution(format!("failed flushing eigen output: {e}")))?;

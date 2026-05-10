@@ -829,6 +829,11 @@ Batch 140 completed (2026-05-10):
 - `shape_complexity_index_raster`: parallelized combined per-cell transition-counting and bounds-aggregation pass with Rayon `fold/reduce`, reducing two sequential scans into one parallel pass.
 - `raster_cell_assignment`: parallelized per-cell row/column/x/y value assignment with `into_par_iter().map()`, preserving deterministic sequential raster writes.
 
+Batch 141 completed (2026-05-10):
+- `centroid_raster`: parallelized per-cell row/column accumulation with Rayon `fold/reduce`, preserving deterministic sequential centroid mapping and report generation.
+- `reclass_equal_interval`: parallelized per-cell interval-based reclassification with `into_par_iter().map()`, preserving deterministic sequential raster writes.
+- `reclass`: parallelized per-cell reclassification in both assign-mode (HashMap lookup) and range-mode (rule matching) with `into_par_iter().map()` and Arc-wrapped rules, preserving deterministic sequential raster writes.
+
 Implementation files:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 

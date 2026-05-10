@@ -7382,23 +7382,40 @@ impl Tool for CentroidRasterTool {
 
         let rows = input.rows;
         let cols = input.cols;
-        let mut sums: HashMap<i64, (usize, usize, usize)> = HashMap::new();
-        for row in 0..rows {
-            for col in 0..cols {
-                let value = input.get(0, row as isize, col as isize);
-                if input.is_nodata(value) || value <= 0.0 {
-                    continue;
-                }
-                let key = value as i64;
-                let entry = sums.entry(key).or_insert((0, 0, 0));
-                entry.0 += row;
-                entry.1 += col;
-                entry.2 += 1;
-            }
-            if row % 16 == 0 {
-                coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.5);
-            }
-        }
+        let (sums, count) = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || (HashMap::<i64, (usize, usize, usize)>::new(), HashMap::<i64, usize>::new()),
+                |(mut sums, mut counts), cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let value = input.get(0, row as isize, col as isize);
+                    if input.is_nodata(value) || value <= 0.0 {
+                        return (sums, counts);
+                    }
+                    let key = value as i64;
+                    let entry = sums.entry(key).or_insert((0, 0, 0));
+                    entry.0 += row;
+                    entry.1 += col;
+                    entry.2 += 1;
+                    *counts.entry(key).or_insert(0) += 1;
+                    (sums, counts)
+                },
+            )
+            .reduce(
+                || (HashMap::new(), HashMap::new()),
+                |(mut sums_a, mut counts_a), (sums_b, counts_b)| {
+                    for (key, (sum_row, sum_col, cnt)) in sums_b {
+                        let entry = sums_a.entry(key).or_insert((0, 0, 0));
+                        entry.0 += sum_row;
+                        entry.1 += sum_col;
+                        entry.2 += cnt;
+                        *counts_a.entry(key).or_insert(0) += cnt;
+                    }
+                    (sums_a, counts_a)
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.5);
 
         let mut output = Raster::new(RasterConfig {
             cols,
@@ -13694,36 +13711,50 @@ impl Tool for ReclassTool {
         }
 
         ctx.progress.info("running reclass");
+        let rules_arc = std::sync::Arc::new(rules);
         if assign_mode {
             let multiplier = 10000.0;
             let mut map = HashMap::<i64, f64>::new();
-            for rule in &rules {
+            for rule in rules_arc.as_ref() {
                 map.insert((rule[1] * multiplier).round() as i64, rule[0]);
             }
-            for idx in 0..input.data.len() {
-                let mut value = input.data.get_f64(idx);
-                if !input.is_nodata(value) {
-                    if let Some(mapped) = map.get(&((value * multiplier).round() as i64)) {
-                        value = *mapped;
+            let map_arc = std::sync::Arc::new(map);
+            let out_vals: Vec<f64> = (0..input.data.len())
+                .into_par_iter()
+                .map(|idx| {
+                    let mut value = input.data.get_f64(idx);
+                    if !input.is_nodata(value) {
+                        if let Some(mapped) = map_arc.get(&((value * multiplier).round() as i64)) {
+                            value = *mapped;
+                        }
                     }
-                }
-                output.data.set_f64(idx, value);
+                    value
+                })
+                .collect();
+            for idx in 0..output.data.len() {
+                output.data.set_f64(idx, out_vals[idx]);
                 if idx % 8192 == 0 {
                     coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
                 }
             }
         } else {
-            for idx in 0..input.data.len() {
-                let mut value = input.data.get_f64(idx);
-                if !input.is_nodata(value) {
-                    for rule in &rules {
-                        if value >= rule[1] && value < rule[2] {
-                            value = rule[0];
-                            break;
+            let out_vals: Vec<f64> = (0..input.data.len())
+                .into_par_iter()
+                .map(|idx| {
+                    let mut value = input.data.get_f64(idx);
+                    if !input.is_nodata(value) {
+                        for rule in rules_arc.as_ref() {
+                            if value >= rule[1] && value < rule[2] {
+                                value = rule[0];
+                                break;
+                            }
                         }
                     }
-                }
-                output.data.set_f64(idx, value);
+                    value
+                })
+                .collect();
+            for idx in 0..output.data.len() {
+                output.data.set_f64(idx, out_vals[idx]);
                 if idx % 8192 == 0 {
                     coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
                 }
@@ -13870,12 +13901,18 @@ impl Tool for ReclassEqualIntervalTool {
         }
 
         ctx.progress.info("running reclass_equal_interval");
-        for idx in 0..input.data.len() {
-            let mut value = input.data.get_f64(idx);
-            if !input.is_nodata(value) && value >= start_value && value <= end_value {
-                value = (value / interval).floor() * interval;
-            }
-            output.data.set_f64(idx, value);
+        let out_vals: Vec<f64> = (0..input.data.len())
+            .into_par_iter()
+            .map(|idx| {
+                let mut value = input.data.get_f64(idx);
+                if !input.is_nodata(value) && value >= start_value && value <= end_value {
+                    value = (value / interval).floor() * interval;
+                }
+                value
+            })
+            .collect();
+        for idx in 0..output.data.len() {
+            output.data.set_f64(idx, out_vals[idx]);
             if idx % 8192 == 0 {
                 coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
             }

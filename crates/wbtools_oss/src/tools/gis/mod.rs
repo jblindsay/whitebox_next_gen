@@ -11190,35 +11190,45 @@ impl Tool for ExtractNodesTool {
             .add_field(wbvector::FieldDef::new("PARENT_ID", wbvector::FieldType::Integer));
 
         let total = input.features.len().max(1);
-        let mut next_fid = 1u64;
-
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            if let Some(geometry) = &feature.geometry {
-                match geometry {
-                    wbvector::Geometry::LineString(_)
-                    | wbvector::Geometry::MultiLineString(_)
-                    | wbvector::Geometry::Polygon { .. }
-                    | wbvector::Geometry::MultiPolygon(_) => {}
-                    _ => {
-                        return Err(ToolError::Validation(
-                            "input layer must contain only polyline or polygon geometries"
-                                .to_string(),
-                        ));
+        let output_features: Vec<Vec<wbvector::Feature>> = input
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(feature_idx, feature)| {
+                let mut feature_nodes = Vec::new();
+                if let Some(geometry) = &feature.geometry {
+                    match geometry {
+                        wbvector::Geometry::LineString(_)
+                        | wbvector::Geometry::MultiLineString(_)
+                        | wbvector::Geometry::Polygon { .. }
+                        | wbvector::Geometry::MultiPolygon(_) => {}
+                        _ => {
+                            return feature_nodes;
+                        }
+                    }
+                    let mut coords = Vec::<wbvector::Coord>::new();
+                    collect_all_coords_from_geometry(geometry, &mut coords);
+                    for coord in coords {
+                        feature_nodes.push(wbvector::Feature {
+                            fid: 0,
+                            geometry: Some(wbvector::Geometry::Point(coord)),
+                            attributes: vec![
+                                wbvector::FieldValue::Integer(0),
+                                wbvector::FieldValue::Integer((feature_idx as i64) + 1),
+                            ],
+                        });
                     }
                 }
-                let mut coords = Vec::<wbvector::Coord>::new();
-                collect_all_coords_from_geometry(geometry, &mut coords);
-                for coord in coords {
-                    output.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(wbvector::Geometry::Point(coord)),
-                        attributes: vec![
-                            wbvector::FieldValue::Integer(next_fid as i64),
-                            wbvector::FieldValue::Integer((feature_idx as i64) + 1),
-                        ],
-                    });
-                    next_fid += 1;
-                }
+                feature_nodes
+            })
+            .collect();
+        let mut next_fid = 1u64;
+        for (feature_idx, feature_group) in output_features.into_iter().enumerate() {
+            for mut feat in feature_group {
+                feat.fid = next_fid as u64;
+                feat.attributes[0] = wbvector::FieldValue::Integer(next_fid as i64);
+                output.push(feat);
+                next_fid += 1;
             }
             coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
         }
@@ -11510,57 +11520,68 @@ impl Tool for ExtractByAttributeTool {
             .any(|f| f.name.eq_ignore_ascii_case("FID"));
 
         let total = input.features.len().max(1);
+        let output_features: Vec<Option<wbvector::Feature>> = input
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(feature_idx, feature)| {
+                let mut context = HashMapContext::new();
+
+                for (field_idx, field) in input.schema.fields().iter().enumerate() {
+                    let value = feature
+                        .attributes
+                        .get(field_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null);
+                    let eval_value = match value {
+                        wbvector::FieldValue::Integer(v) => Value::Int(*v),
+                        wbvector::FieldValue::Float(v) => Value::Float(*v),
+                        wbvector::FieldValue::Boolean(v) => Value::Boolean(*v),
+                        wbvector::FieldValue::Text(v)
+                        | wbvector::FieldValue::Date(v)
+                        | wbvector::FieldValue::DateTime(v) => Value::String(v.clone()),
+                        wbvector::FieldValue::Blob(_) | wbvector::FieldValue::Null => {
+                            Value::String("null".to_string())
+                        }
+                    };
+                    let _ = context.set_value(field.name.clone(), eval_value);
+                }
+
+                let _ = context.set_value("null".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("NULL".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("none".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("NONE".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("nodata".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("NoData".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("NODATA".to_string(), Value::String("null".to_string()));
+                let _ = context.set_value("pi".to_string(), Value::Float(std::f64::consts::PI));
+                let _ = context.set_value("PI".to_string(), Value::Float(std::f64::consts::PI));
+
+                if !has_fid_field {
+                    let _ = context.set_value("FID".to_string(), Value::Int((feature_idx as i64) + 1));
+                }
+
+                let keep = tree.eval_boolean_with_context(&context).ok()?;
+
+                if keep {
+                    Some(wbvector::Feature {
+                        fid: feature.fid,
+                        geometry: feature.geometry.clone(),
+                        attributes: feature.attributes.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
         let mut next_fid = 1u64;
-
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let mut context = HashMapContext::new();
-
-            for (field_idx, field) in input.schema.fields().iter().enumerate() {
-                let value = feature
-                    .attributes
-                    .get(field_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null);
-                let eval_value = match value {
-                    wbvector::FieldValue::Integer(v) => Value::Int(*v),
-                    wbvector::FieldValue::Float(v) => Value::Float(*v),
-                    wbvector::FieldValue::Boolean(v) => Value::Boolean(*v),
-                    wbvector::FieldValue::Text(v)
-                    | wbvector::FieldValue::Date(v)
-                    | wbvector::FieldValue::DateTime(v) => Value::String(v.clone()),
-                    wbvector::FieldValue::Blob(_) | wbvector::FieldValue::Null => {
-                        Value::String("null".to_string())
-                    }
-                };
-                let _ = context.set_value(field.name.clone(), eval_value);
-            }
-
-            let _ = context.set_value("null".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("NULL".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("none".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("NONE".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("nodata".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("NoData".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("NODATA".to_string(), Value::String("null".to_string()));
-            let _ = context.set_value("pi".to_string(), Value::Float(std::f64::consts::PI));
-            let _ = context.set_value("PI".to_string(), Value::Float(std::f64::consts::PI));
-
-            if !has_fid_field {
-                let _ = context.set_value("FID".to_string(), Value::Int((feature_idx as i64) + 1));
-            }
-
-            let keep = tree.eval_boolean_with_context(&context).map_err(|e| {
-                ToolError::Execution(format!("statement evaluation failed for feature {}: {e}", feature_idx + 1))
-            })?;
-
-            if keep {
-                output.push(wbvector::Feature {
-                    fid: if feature.fid == 0 { next_fid } else { feature.fid },
-                    geometry: feature.geometry.clone(),
-                    attributes: feature.attributes.clone(),
-                });
+        for (feature_idx, opt_feat) in output_features.into_iter().enumerate() {
+            if let Some(mut feat) = opt_feat {
+                if feat.fid == 0 {
+                    feat.fid = next_fid as u64;
+                }
+                output.push(feat);
                 next_fid += 1;
             }
-
             coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
         }
 

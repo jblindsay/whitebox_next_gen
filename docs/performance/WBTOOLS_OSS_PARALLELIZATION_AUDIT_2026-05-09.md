@@ -692,6 +692,13 @@ Batches 107–108 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 109–110 completed (2026-05-10):
+- `extract_nodes`: parallelized coordinate extraction from features with `par_iter().map()` collecting feature vectors per input, sequential FID assignment.
+- `select_by_attributes_query`: parallelized expression evaluation with `par_iter().map()` collecting Option<Feature>, sequential FID assignment for selected features.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

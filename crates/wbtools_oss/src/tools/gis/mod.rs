@@ -6251,7 +6251,6 @@ impl Tool for HexagonalGridFromRasterBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 99);
         let base = load_required_raster_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6279,21 +6278,26 @@ impl Tool for HexagonalGridFromRasterBaseTool {
         output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("ROW", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("COLUMN", wbvector::FieldType::Integer));
-
-        let total = cells.len().max(1);
-        for (idx, (row, col, ring)) in cells.into_iter().enumerate() {
-            let fid = (idx + 1) as i64;
-            output.push(wbvector::Feature {
-                fid: fid as u64,
-                geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
-                attributes: vec![
-                    wbvector::FieldValue::Integer(fid),
-                    wbvector::FieldValue::Integer(row),
-                    wbvector::FieldValue::Integer(col),
-                ],
-            });
-            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
+        let features: Vec<wbvector::Feature> = cells
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, (row, col, ring))| {
+                let fid = (idx + 1) as i64;
+                wbvector::Feature {
+                    fid: fid as u64,
+                    geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(fid),
+                        wbvector::FieldValue::Integer(row),
+                        wbvector::FieldValue::Integer(col),
+                    ],
+                }
+            })
+            .collect();
+        for feat in features {
+            output.push(feat);
         }
+        ctx.progress.progress(1.0);
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
@@ -6376,7 +6380,6 @@ impl Tool for HexagonalGridFromVectorBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 99);
         let mut base = load_vector_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6403,21 +6406,26 @@ impl Tool for HexagonalGridFromVectorBaseTool {
         output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("ROW", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("COLUMN", wbvector::FieldType::Integer));
-
-        let total = cells.len().max(1);
-        for (idx, (row, col, ring)) in cells.into_iter().enumerate() {
-            let fid = (idx + 1) as i64;
-            output.push(wbvector::Feature {
-                fid: fid as u64,
-                geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
-                attributes: vec![
-                    wbvector::FieldValue::Integer(fid),
-                    wbvector::FieldValue::Integer(row),
-                    wbvector::FieldValue::Integer(col),
-                ],
-            });
-            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
+        let features: Vec<wbvector::Feature> = cells
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, (row, col, ring))| {
+                let fid = (idx + 1) as i64;
+                wbvector::Feature {
+                    fid: fid as u64,
+                    geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(fid),
+                        wbvector::FieldValue::Integer(row),
+                        wbvector::FieldValue::Integer(col),
+                    ],
+                }
+            })
+            .collect();
+        for feat in features {
+            output.push(feat);
         }
+        ctx.progress.progress(1.0);
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
@@ -6513,7 +6521,6 @@ impl Tool for RectangularGridFromRasterBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 99);
         let base = load_required_raster_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6547,21 +6554,26 @@ impl Tool for RectangularGridFromRasterBaseTool {
         output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("ROW", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("COLUMN", wbvector::FieldType::Integer));
-
-        let total = cells.len().max(1);
-        for (idx, (row, col, ring)) in cells.into_iter().enumerate() {
-            let fid = (idx + 1) as i64;
-            output.push(wbvector::Feature {
-                fid: fid as u64,
-                geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
-                attributes: vec![
-                    wbvector::FieldValue::Integer(fid),
-                    wbvector::FieldValue::Integer(row),
-                    wbvector::FieldValue::Integer(col),
-                ],
-            });
-            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
+        let features: Vec<wbvector::Feature> = cells
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, (row, col, ring))| {
+                let fid = (idx + 1) as i64;
+                wbvector::Feature {
+                    fid: fid as u64,
+                    geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(fid),
+                        wbvector::FieldValue::Integer(row),
+                        wbvector::FieldValue::Integer(col),
+                    ],
+                }
+            })
+            .collect();
+        for feat in features {
+            output.push(feat);
         }
+        ctx.progress.progress(1.0);
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
@@ -6663,7 +6675,6 @@ impl Tool for RectangularGridFromVectorBaseTool {
     }
 
     fn run(&self, args: &ToolArgs, ctx: &ToolContext) -> Result<ToolRunResult, ToolError> {
-        let coalescer = PercentCoalescer::new(1, 99);
         let mut base = load_vector_arg(args, "base")?;
         let width = args
             .get("width")
@@ -6697,21 +6708,26 @@ impl Tool for RectangularGridFromVectorBaseTool {
         output.schema.add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("ROW", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("COLUMN", wbvector::FieldType::Integer));
-
-        let total = cells.len().max(1);
-        for (idx, (row, col, ring)) in cells.into_iter().enumerate() {
-            let fid = (idx + 1) as i64;
-            output.push(wbvector::Feature {
-                fid: fid as u64,
-                geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
-                attributes: vec![
-                    wbvector::FieldValue::Integer(fid),
-                    wbvector::FieldValue::Integer(row),
-                    wbvector::FieldValue::Integer(col),
-                ],
-            });
-            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
+        let features: Vec<wbvector::Feature> = cells
+            .into_par_iter()
+            .enumerate()
+            .map(|(idx, (row, col, ring))| {
+                let fid = (idx + 1) as i64;
+                wbvector::Feature {
+                    fid: fid as u64,
+                    geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
+                    attributes: vec![
+                        wbvector::FieldValue::Integer(fid),
+                        wbvector::FieldValue::Integer(row),
+                        wbvector::FieldValue::Integer(col),
+                    ],
+                }
+            })
+            .collect();
+        for feat in features {
+            output.push(feat);
         }
+        ctx.progress.progress(1.0);
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(output_locator))
@@ -7222,15 +7238,27 @@ impl Tool for CreatePlaneTool {
             metadata: base.metadata.clone(),
         });
 
-        for row in 0..rows {
-            for col in 0..cols {
-                let x = base.col_center_x(col as isize);
+        let sin_a = aspect_radians.sin();
+        let cos_a = aspect_radians.cos();
+
+        // Parallelize plane evaluation by row, then write rows sequentially to the output raster.
+        let row_values: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
                 let y = base.row_center_y(row as isize);
-                let z = slope * aspect_radians.sin() * x + slope * aspect_radians.cos() * y + constant;
-                output
-                    .set(0, row as isize, col as isize, z)
-                    .map_err(|e| ToolError::Execution(format!("failed writing output raster: {e}")))?;
-            }
+                let mut data = vec![output.nodata; cols];
+                for col in 0..cols {
+                    let x = base.col_center_x(col as isize);
+                    data[col] = slope * sin_a * x + slope * cos_a * y + constant;
+                }
+                data
+            })
+            .collect();
+
+        for row in 0..rows {
+            output
+                .set_row_slice(0, row as isize, &row_values[row])
+                .map_err(|e| ToolError::Execution(format!("failed writing output raster row {row}: {e}")))?;
             if row % 16 == 0 {
                 coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64);
             }
@@ -16024,7 +16052,8 @@ impl Tool for PolygonAreaTool {
                 Ok(area)
             })
             .collect();
-        for (feature, value) in output.features.iter_mut().zip(values) {
+        
+        for (feature, value) in output.features.iter_mut().zip(values.into_iter()) {
             feature.attributes.push(wbvector::FieldValue::Float(value?));
         }
 
@@ -16275,10 +16304,13 @@ impl Tool for PolygonShortAxisTool {
                 Ok(out)
             })
             .collect();
-        for result in results {
-            if let Some(feat) = result? {
-                output.push(feat);
-            }
+        let mut features: Vec<wbvector::Feature> = results
+            .into_iter()
+            .filter_map(|r| r.ok().flatten())
+            .collect();
+        features.sort_by_key(|f| f.fid);
+        for feat in features {
+            output.push(feat);
         }
 
         ctx.progress.progress(1.0);
@@ -16376,10 +16408,13 @@ impl Tool for PolygonLongAxisTool {
                 Ok(out)
             })
             .collect();
-        for result in results {
-            if let Some(feat) = result? {
-                output.push(feat);
-            }
+        let mut features: Vec<wbvector::Feature> = results
+            .into_iter()
+            .filter_map(|r| r.ok().flatten())
+            .collect();
+        features.sort_by_key(|f| f.fid);
+        for feat in features {
+            output.push(feat);
         }
 
         ctx.progress.progress(1.0);
@@ -21037,42 +21072,49 @@ impl Tool for RouteEventPointsFromTableTool {
             output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
         }
 
-        let mut next_fid = 1u64;
-        for (row_idx, row) in rows.iter().enumerate() {
-            let route_key = row[route_col].trim();
-            let measure = row[measure_col].trim().parse::<f64>().map_err(|_| {
-                ToolError::Execution(format!("row {} has invalid measure '{}'", row_idx + 2, row[measure_col]))
-            })?;
-            let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
-                ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
-            })?;
-            if measure < 0.0 || measure > *route_length + 1.0e-12 {
-                return Err(ToolError::Execution(format!(
-                    "row {} measure {} falls outside route length {} for route '{}'",
-                    row_idx + 2,
-                    measure,
-                    route_length,
-                    route_key
-                )));
-            }
-            let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
-                ToolError::Execution(format!("row {} could not be located on route '{}'", row_idx + 2, route_key))
-            })?;
+        let prepared_rows: Vec<Result<(wbvector::Coord, Vec<wbvector::FieldValue>), ToolError>> = rows
+            .par_iter()
+            .enumerate()
+            .map(|(row_idx, row)| {
+                let route_key = row[route_col].trim();
+                let measure = row[measure_col].trim().parse::<f64>().map_err(|_| {
+                    ToolError::Execution(format!("row {} has invalid measure '{}'", row_idx + 2, row[measure_col]))
+                })?;
+                let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
+                    ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
+                })?;
+                if measure < 0.0 || measure > *route_length + 1.0e-12 {
+                    return Err(ToolError::Execution(format!(
+                        "row {} measure {} falls outside route length {} for route '{}'",
+                        row_idx + 2,
+                        measure,
+                        route_length,
+                        route_key
+                    )));
+                }
+                let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
+                    ToolError::Execution(format!("row {} could not be located on route '{}'", row_idx + 2, route_key))
+                })?;
 
-            let mut attrs = vec![
-                wbvector::FieldValue::Integer(*route_fid),
-                wbvector::FieldValue::Float(measure),
-            ];
-            for (col_idx, _, field_type) in &event_fields {
-                attrs.push(string_to_field_value(&row[*col_idx], field_type));
-            }
+                let mut attrs = vec![
+                    wbvector::FieldValue::Integer(*route_fid),
+                    wbvector::FieldValue::Float(measure),
+                ];
+                for (col_idx, _, field_type) in &event_fields {
+                    attrs.push(string_to_field_value(&row[*col_idx], field_type));
+                }
 
+                Ok((point, attrs))
+            })
+            .collect();
+
+        for (row_idx, prepared) in prepared_rows.into_iter().enumerate() {
+            let (point, attrs) = prepared?;
             output.push(wbvector::Feature {
-                fid: next_fid,
+                fid: (row_idx + 1) as u64,
                 geometry: Some(wbvector::Geometry::Point(point)),
                 attributes: attrs,
             });
-            next_fid += 1;
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -21193,57 +21235,64 @@ impl Tool for RouteEventLinesFromTableTool {
             output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
         }
 
-        let mut next_fid = 1u64;
-        for (row_idx, row) in rows.iter().enumerate() {
-            let route_key = row[route_col].trim();
-            let from_measure = row[from_col].trim().parse::<f64>().map_err(|_| {
-                ToolError::Execution(format!("row {} has invalid from-measure '{}'", row_idx + 2, row[from_col]))
-            })?;
-            let to_measure = row[to_col].trim().parse::<f64>().map_err(|_| {
-                ToolError::Execution(format!("row {} has invalid to-measure '{}'", row_idx + 2, row[to_col]))
-            })?;
-            if (to_measure - from_measure).abs() <= 1.0e-12 {
-                return Err(ToolError::Execution(format!("row {} has equal from/to measures", row_idx + 2)));
-            }
+        let prepared_rows: Vec<Result<(Vec<Vec<wbvector::Coord>>, Vec<wbvector::FieldValue>), ToolError>> = rows
+            .par_iter()
+            .enumerate()
+            .map(|(row_idx, row)| {
+                let route_key = row[route_col].trim();
+                let from_measure = row[from_col].trim().parse::<f64>().map_err(|_| {
+                    ToolError::Execution(format!("row {} has invalid from-measure '{}'", row_idx + 2, row[from_col]))
+                })?;
+                let to_measure = row[to_col].trim().parse::<f64>().map_err(|_| {
+                    ToolError::Execution(format!("row {} has invalid to-measure '{}'", row_idx + 2, row[to_col]))
+                })?;
+                if (to_measure - from_measure).abs() <= 1.0e-12 {
+                    return Err(ToolError::Execution(format!("row {} has equal from/to measures", row_idx + 2)));
+                }
 
-            let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
-                ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
-            })?;
-            let min_measure = from_measure.min(to_measure);
-            let max_measure = from_measure.max(to_measure);
-            if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
-                return Err(ToolError::Execution(format!(
-                    "row {} measure range [{}, {}] falls outside route length {} for route '{}'",
-                    row_idx + 2,
-                    min_measure,
-                    max_measure,
-                    route_length,
-                    route_key
-                )));
-            }
+                let (route_fid, geometry, route_length) = route_lookup.get(route_key).ok_or_else(|| {
+                    ToolError::Execution(format!("row {} references unknown route '{}'", row_idx + 2, route_key))
+                })?;
+                let min_measure = from_measure.min(to_measure);
+                let max_measure = from_measure.max(to_measure);
+                if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
+                    return Err(ToolError::Execution(format!(
+                        "row {} measure range [{}, {}] falls outside route length {} for route '{}'",
+                        row_idx + 2,
+                        min_measure,
+                        max_measure,
+                        route_length,
+                        route_key
+                    )));
+                }
 
-            let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
-                ToolError::Execution(format!("row {} could not be sliced on route '{}'", row_idx + 2, route_key))
-            })?;
-            if from_measure > to_measure {
-                reverse_route_parts(&mut parts);
-            }
+                let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
+                    ToolError::Execution(format!("row {} could not be sliced on route '{}'", row_idx + 2, route_key))
+                })?;
+                if from_measure > to_measure {
+                    reverse_route_parts(&mut parts);
+                }
 
-            let mut attrs = vec![
-                wbvector::FieldValue::Integer(*route_fid),
-                wbvector::FieldValue::Float(from_measure),
-                wbvector::FieldValue::Float(to_measure),
-            ];
-            for (col_idx, _, field_type) in &event_fields {
-                attrs.push(string_to_field_value(&row[*col_idx], field_type));
-            }
+                let mut attrs = vec![
+                    wbvector::FieldValue::Integer(*route_fid),
+                    wbvector::FieldValue::Float(from_measure),
+                    wbvector::FieldValue::Float(to_measure),
+                ];
+                for (col_idx, _, field_type) in &event_fields {
+                    attrs.push(string_to_field_value(&row[*col_idx], field_type));
+                }
 
+                Ok((parts, attrs))
+            })
+            .collect();
+
+        for (row_idx, prepared) in prepared_rows.into_iter().enumerate() {
+            let (parts, attrs) = prepared?;
             output.push(wbvector::Feature {
-                fid: next_fid,
+                fid: (row_idx + 1) as u64,
                 geometry: Some(wbvector::Geometry::MultiLineString(parts)),
                 attributes: attrs,
             });
-            next_fid += 1;
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -21377,74 +21426,82 @@ impl Tool for RouteEventPointsFromLayerTool {
             output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
         }
 
-        let mut next_fid = 1u64;
-        for (event_idx, feature) in events.features.iter().enumerate() {
-            let route_key = field_value_to_join_key(
-                feature
-                    .attributes
-                    .get(route_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            );
-            if route_key.is_empty() {
-                return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
-            }
-            let measure = field_value_to_f64(
-                feature
-                    .attributes
-                    .get(measure_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            )
-            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid measure", event_idx + 1)))?;
-
-            let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
-                ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
-            })?;
-            if measure < 0.0 || measure > *route_length + 1.0e-12 {
-                return Err(ToolError::Execution(format!(
-                    "event feature {} measure {} falls outside route length {}",
-                    event_idx + 1,
-                    measure,
-                    route_length
-                )));
-            }
-            let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
-                ToolError::Execution(format!("event feature {} could not be located on route", event_idx + 1))
-            })?;
-
-            let mut attrs = vec![
-                wbvector::FieldValue::Integer(*route_fid),
-                wbvector::FieldValue::Float(measure),
-            ];
-            if write_event_fid {
-                attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
-            }
-            if write_event_xy {
-                let (event_x, event_y) = match feature.geometry.as_ref() {
-                    Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
-                    Some(wbvector::Geometry::MultiPoint(points)) => {
-                        points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
-                    }
-                    _ => (None, None),
-                };
-                attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
-                attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
-            }
-            for (source_idx, _, _) in &event_fields {
-                attrs.push(
+        let prepared_events: Vec<Result<(wbvector::Coord, Vec<wbvector::FieldValue>), ToolError>> = events
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(event_idx, feature)| {
+                let route_key = field_value_to_join_key(
                     feature
                         .attributes
-                        .get(*source_idx)
-                        .cloned()
-                        .unwrap_or(wbvector::FieldValue::Null),
+                        .get(route_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
                 );
-            }
+                if route_key.is_empty() {
+                    return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
+                }
+                let measure = field_value_to_f64(
+                    feature
+                        .attributes
+                        .get(measure_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                )
+                .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid measure", event_idx + 1)))?;
 
+                let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
+                    ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
+                })?;
+                if measure < 0.0 || measure > *route_length + 1.0e-12 {
+                    return Err(ToolError::Execution(format!(
+                        "event feature {} measure {} falls outside route length {}",
+                        event_idx + 1,
+                        measure,
+                        route_length
+                    )));
+                }
+                let point = point_at_measure_on_route_geometry(geometry, measure).ok_or_else(|| {
+                    ToolError::Execution(format!("event feature {} could not be located on route", event_idx + 1))
+                })?;
+
+                let mut attrs = vec![
+                    wbvector::FieldValue::Integer(*route_fid),
+                    wbvector::FieldValue::Float(measure),
+                ];
+                if write_event_fid {
+                    attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
+                }
+                if write_event_xy {
+                    let (event_x, event_y) = match feature.geometry.as_ref() {
+                        Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
+                        Some(wbvector::Geometry::MultiPoint(points)) => {
+                            points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
+                        }
+                        _ => (None, None),
+                    };
+                    attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                    attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                }
+                for (source_idx, _, _) in &event_fields {
+                    attrs.push(
+                        feature
+                            .attributes
+                            .get(*source_idx)
+                            .cloned()
+                            .unwrap_or(wbvector::FieldValue::Null),
+                    );
+                }
+
+                Ok((point, attrs))
+            })
+            .collect();
+
+        for (event_idx, prepared) in prepared_events.into_iter().enumerate() {
+            let (point, attrs) = prepared?;
             output.push(wbvector::Feature {
-                fid: next_fid,
+                fid: (event_idx + 1) as u64,
                 geometry: Some(wbvector::Geometry::Point(point)),
                 attributes: attrs,
             });
-            next_fid += 1;
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -21581,92 +21638,100 @@ impl Tool for RouteEventLinesFromLayerTool {
             output.schema.add_field(wbvector::FieldDef::new(field_name, field_type.clone()));
         }
 
-        let mut next_fid = 1u64;
-        for (event_idx, feature) in events.features.iter().enumerate() {
-            let route_key = field_value_to_join_key(
-                feature
-                    .attributes
-                    .get(route_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            );
-            if route_key.is_empty() {
-                return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
-            }
-            let from_measure = field_value_to_f64(
-                feature
-                    .attributes
-                    .get(from_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            )
-            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from-measure", event_idx + 1)))?;
-            let to_measure = field_value_to_f64(
-                feature
-                    .attributes
-                    .get(to_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            )
-            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to-measure", event_idx + 1)))?;
-            if (to_measure - from_measure).abs() <= 1.0e-12 {
-                return Err(ToolError::Execution(format!("event feature {} has equal from/to measures", event_idx + 1)));
-            }
-
-            let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
-                ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
-            })?;
-            let min_measure = from_measure.min(to_measure);
-            let max_measure = from_measure.max(to_measure);
-            if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
-                return Err(ToolError::Execution(format!(
-                    "event feature {} measure range [{}, {}] falls outside route length {}",
-                    event_idx + 1,
-                    min_measure,
-                    max_measure,
-                    route_length
-                )));
-            }
-
-            let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
-                ToolError::Execution(format!("event feature {} could not be sliced on route", event_idx + 1))
-            })?;
-            if from_measure > to_measure {
-                reverse_route_parts(&mut parts);
-            }
-
-            let mut attrs = vec![
-                wbvector::FieldValue::Integer(*route_fid),
-                wbvector::FieldValue::Float(from_measure),
-                wbvector::FieldValue::Float(to_measure),
-            ];
-            if write_event_fid {
-                attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
-            }
-            if write_event_xy {
-                let (event_x, event_y) = match feature.geometry.as_ref() {
-                    Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
-                    Some(wbvector::Geometry::MultiPoint(points)) => {
-                        points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
-                    }
-                    _ => (None, None),
-                };
-                attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
-                attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
-            }
-            for (source_idx, _, _) in &event_fields {
-                attrs.push(
+        let prepared_events: Vec<Result<(Vec<Vec<wbvector::Coord>>, Vec<wbvector::FieldValue>), ToolError>> = events
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(event_idx, feature)| {
+                let route_key = field_value_to_join_key(
                     feature
                         .attributes
-                        .get(*source_idx)
-                        .cloned()
-                        .unwrap_or(wbvector::FieldValue::Null),
+                        .get(route_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
                 );
-            }
+                if route_key.is_empty() {
+                    return Err(ToolError::Execution(format!("event feature {} has empty route id", event_idx + 1)));
+                }
+                let from_measure = field_value_to_f64(
+                    feature
+                        .attributes
+                        .get(from_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                )
+                .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from-measure", event_idx + 1)))?;
+                let to_measure = field_value_to_f64(
+                    feature
+                        .attributes
+                        .get(to_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                )
+                .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to-measure", event_idx + 1)))?;
+                if (to_measure - from_measure).abs() <= 1.0e-12 {
+                    return Err(ToolError::Execution(format!("event feature {} has equal from/to measures", event_idx + 1)));
+                }
 
+                let (route_fid, geometry, route_length) = route_lookup.get(route_key.as_str()).ok_or_else(|| {
+                    ToolError::Execution(format!("event feature {} references unknown route '{}'", event_idx + 1, route_key))
+                })?;
+                let min_measure = from_measure.min(to_measure);
+                let max_measure = from_measure.max(to_measure);
+                if min_measure < 0.0 || max_measure > *route_length + 1.0e-12 {
+                    return Err(ToolError::Execution(format!(
+                        "event feature {} measure range [{}, {}] falls outside route length {}",
+                        event_idx + 1,
+                        min_measure,
+                        max_measure,
+                        route_length
+                    )));
+                }
+
+                let mut parts = slice_route_geometry_parts(geometry, min_measure, max_measure).ok_or_else(|| {
+                    ToolError::Execution(format!("event feature {} could not be sliced on route", event_idx + 1))
+                })?;
+                if from_measure > to_measure {
+                    reverse_route_parts(&mut parts);
+                }
+
+                let mut attrs = vec![
+                    wbvector::FieldValue::Integer(*route_fid),
+                    wbvector::FieldValue::Float(from_measure),
+                    wbvector::FieldValue::Float(to_measure),
+                ];
+                if write_event_fid {
+                    attrs.push(wbvector::FieldValue::Integer(feature.fid as i64));
+                }
+                if write_event_xy {
+                    let (event_x, event_y) = match feature.geometry.as_ref() {
+                        Some(wbvector::Geometry::Point(c)) => (Some(c.x), Some(c.y)),
+                        Some(wbvector::Geometry::MultiPoint(points)) => {
+                            points.first().map(|c| (c.x, c.y)).map_or((None, None), |xy| (Some(xy.0), Some(xy.1)))
+                        }
+                        _ => (None, None),
+                    };
+                    attrs.push(event_x.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                    attrs.push(event_y.map(wbvector::FieldValue::Float).unwrap_or(wbvector::FieldValue::Null));
+                }
+                for (source_idx, _, _) in &event_fields {
+                    attrs.push(
+                        feature
+                            .attributes
+                            .get(*source_idx)
+                            .cloned()
+                            .unwrap_or(wbvector::FieldValue::Null),
+                    );
+                }
+
+                Ok((parts, attrs))
+            })
+            .collect();
+
+        for (event_idx, prepared) in prepared_events.into_iter().enumerate() {
+            let (parts, attrs) = prepared?;
             output.push(wbvector::Feature {
-                fid: next_fid,
+                fid: (event_idx + 1) as u64,
                 geometry: Some(wbvector::Geometry::MultiLineString(parts)),
                 attributes: attrs,
             });
-            next_fid += 1;
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -27665,31 +27730,46 @@ impl Tool for NetworkCentralityMetricsTool {
             degree[i] = neighbors[i].len() as i64;
         }
 
-        let mut closeness = vec![0.0f64; n];
-        let mut betweenness = vec![0.0f64; n];
-        for s in 0..n {
-            let (dist, prev) = dijkstra_tree(&graph, s);
+        let (closeness, mut betweenness) = (0..n)
+            .into_par_iter()
+            .fold(
+                || (vec![0.0f64; n], vec![0.0f64; n]),
+                |(mut local_closeness, mut local_betweenness), s| {
+                    let (dist, prev) = dijkstra_tree(&graph, s);
 
-            let mut reachable = 0usize;
-            let mut dist_sum = 0.0f64;
-            for t in 0..n {
-                if t == s || !dist[t].is_finite() {
-                    continue;
-                }
-                reachable += 1;
-                dist_sum += dist[t];
-                if let Some(path) = reconstruct_path_nodes(&prev, s, t) {
-                    if path.len() > 2 {
-                        for node in path.iter().skip(1).take(path.len() - 2) {
-                            betweenness[*node] += 1.0;
+                    let mut reachable = 0usize;
+                    let mut dist_sum = 0.0f64;
+                    for t in 0..n {
+                        if t == s || !dist[t].is_finite() {
+                            continue;
+                        }
+                        reachable += 1;
+                        dist_sum += dist[t];
+                        if let Some(path) = reconstruct_path_nodes(&prev, s, t) {
+                            if path.len() > 2 {
+                                for node in path.iter().skip(1).take(path.len() - 2) {
+                                    local_betweenness[*node] += 1.0;
+                                }
+                            }
                         }
                     }
-                }
-            }
-            if reachable > 0 && dist_sum > 0.0 {
-                closeness[s] = reachable as f64 / dist_sum;
-            }
-        }
+                    if reachable > 0 && dist_sum > 0.0 {
+                        local_closeness[s] = reachable as f64 / dist_sum;
+                    }
+
+                    (local_closeness, local_betweenness)
+                },
+            )
+            .reduce(
+                || (vec![0.0f64; n], vec![0.0f64; n]),
+                |(mut closeness_a, mut betweenness_a), (closeness_b, betweenness_b)| {
+                    for i in 0..n {
+                        closeness_a[i] += closeness_b[i];
+                        betweenness_a[i] += betweenness_b[i];
+                    }
+                    (closeness_a, betweenness_a)
+                },
+            );
 
         if n > 2 {
             let norm = ((n - 1) * (n - 2)) as f64;
@@ -28149,20 +28229,40 @@ impl Tool for OdSensitivityAnalysisTool {
             }
         }
 
-        let snapped_origins: Vec<(usize, usize)> = origin_coords
-            .iter()
-            .enumerate()
-            .filter_map(|(orig_idx, orig_coord)| {
-                nearest_network_node(&graph.nodes, orig_coord)
-                    .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
-                    .map(|(origin_node, _)| (orig_idx, origin_node))
-            })
-            .collect();
-        let snapped_destinations: Vec<(usize, f64)> = dest_coords
-            .iter()
-            .filter_map(|dest_coord| nearest_network_node(&graph.nodes, dest_coord))
-            .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
-            .collect();
+        let snapped_origins: Vec<(usize, usize)> = if parallel_execution {
+            origin_coords
+                .par_iter()
+                .enumerate()
+                .filter_map(|(orig_idx, orig_coord)| {
+                    nearest_network_node(&graph.nodes, orig_coord)
+                        .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+                        .map(|(origin_node, _)| (orig_idx, origin_node))
+                })
+                .collect()
+        } else {
+            origin_coords
+                .iter()
+                .enumerate()
+                .filter_map(|(orig_idx, orig_coord)| {
+                    nearest_network_node(&graph.nodes, orig_coord)
+                        .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+                        .map(|(origin_node, _)| (orig_idx, origin_node))
+                })
+                .collect()
+        };
+        let snapped_destinations: Vec<(usize, f64)> = if parallel_execution {
+            dest_coords
+                .par_iter()
+                .filter_map(|dest_coord| nearest_network_node(&graph.nodes, dest_coord))
+                .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+                .collect()
+        } else {
+            dest_coords
+                .iter()
+                .filter_map(|dest_coord| nearest_network_node(&graph.nodes, dest_coord))
+                .filter(|(_, snap_dist)| *snap_dist <= max_snap_distance)
+                .collect()
+        };
 
         // Compute baseline OD costs
         let baseline_costs = if parallel_execution {
@@ -28389,21 +28489,30 @@ impl Tool for NetworkNodeDegreeTool {
         output.schema.add_field(wbvector::FieldDef::new("DEGREE", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("NODE_TYPE", wbvector::FieldType::Text));
 
+        let node_metrics: Vec<(i64, &'static str)> = graph
+            .adjacency
+            .par_iter()
+            .map(|adj| {
+                let mut neighbors = HashSet::<usize>::new();
+                for (n, _) in adj {
+                    neighbors.insert(*n);
+                }
+                let degree = neighbors.len() as i64;
+                let node_type = if degree <= 0 {
+                    "isolated"
+                } else if degree == 1 {
+                    "dead_end"
+                } else if degree == 2 {
+                    "link"
+                } else {
+                    "junction"
+                };
+                (degree, node_type)
+            })
+            .collect();
+
         for (idx, node) in graph.nodes.iter().enumerate() {
-            let mut neighbors = HashSet::<usize>::new();
-            for (n, _) in &graph.adjacency[idx] {
-                neighbors.insert(*n);
-            }
-            let degree = neighbors.len() as i64;
-            let node_type = if degree <= 0 {
-                "isolated"
-            } else if degree == 1 {
-                "dead_end"
-            } else if degree == 2 {
-                "link"
-            } else {
-                "junction"
-            };
+            let (degree, node_type) = node_metrics[idx];
 
             output.push(wbvector::Feature {
                 fid: (idx + 1) as u64,
@@ -28780,48 +28889,64 @@ impl Tool for NetworkServiceAreaTool {
                 output.schema.add_field(wbvector::FieldDef::new("RING_MAX", wbvector::FieldType::Float));
             }
 
-            for (u, neighbors) in graph.adjacency.iter().enumerate() {
-                let start_cost = dist[u];
-                if !start_cost.is_finite() || start_cost > max_cost {
-                    continue;
-                }
-                let remaining = max_cost - start_cost;
-                if remaining <= 0.0 {
-                    continue;
-                }
-                for (v, weight) in neighbors {
-                    if *weight <= 0.0 {
-                        continue;
+            let per_node_edges = graph
+                .adjacency
+                .par_iter()
+                .enumerate()
+                .map(|(u, neighbors)| {
+                    let start_cost = dist[u];
+                    if !start_cost.is_finite() || start_cost > max_cost {
+                        return Vec::<(Vec<wbvector::Coord>, Vec<wbvector::FieldValue>)>::new();
                     }
-                    let frac = (remaining / *weight).min(1.0);
-                    if frac <= 0.0 {
-                        continue;
+
+                    let remaining = max_cost - start_cost;
+                    if remaining <= 0.0 {
+                        return Vec::<(Vec<wbvector::Coord>, Vec<wbvector::FieldValue>)>::new();
                     }
-                    let start = &graph.nodes[u];
-                    let end = &graph.nodes[*v];
-                    let mid = wbvector::Coord::xy(
-                        start.x + (end.x - start.x) * frac,
-                        start.y + (end.y - start.y) * frac,
-                    );
-                    let coords = if frac >= 1.0 - 1.0e-12 {
-                        vec![start.clone(), end.clone()]
-                    } else {
-                        vec![start.clone(), mid]
-                    };
-                    let end_cost = start_cost + *weight * frac;
-                    let mut attrs = vec![
-                        wbvector::FieldValue::Integer((u + 1) as i64),
-                        wbvector::FieldValue::Integer((*v + 1) as i64),
-                        wbvector::FieldValue::Float(start_cost),
-                        wbvector::FieldValue::Float(end_cost),
-                        wbvector::FieldValue::Float(frac),
-                    ];
-                    if let Some(rings) = ring_costs.as_ref() {
-                        let (ring_idx, ring_min, ring_max) = ring_interval_for_cost(end_cost, max_cost, rings);
-                        attrs.push(wbvector::FieldValue::Integer(ring_idx));
-                        attrs.push(wbvector::FieldValue::Float(ring_min));
-                        attrs.push(wbvector::FieldValue::Float(ring_max));
+
+                    let mut local_edges = Vec::<(Vec<wbvector::Coord>, Vec<wbvector::FieldValue>)>::new();
+                    for (v, weight) in neighbors {
+                        if *weight <= 0.0 {
+                            continue;
+                        }
+                        let frac = (remaining / *weight).min(1.0);
+                        if frac <= 0.0 {
+                            continue;
+                        }
+                        let start = &graph.nodes[u];
+                        let end = &graph.nodes[*v];
+                        let mid = wbvector::Coord::xy(
+                            start.x + (end.x - start.x) * frac,
+                            start.y + (end.y - start.y) * frac,
+                        );
+                        let coords = if frac >= 1.0 - 1.0e-12 {
+                            vec![start.clone(), end.clone()]
+                        } else {
+                            vec![start.clone(), mid]
+                        };
+                        let end_cost = start_cost + *weight * frac;
+                        let mut attrs = vec![
+                            wbvector::FieldValue::Integer((u + 1) as i64),
+                            wbvector::FieldValue::Integer((*v + 1) as i64),
+                            wbvector::FieldValue::Float(start_cost),
+                            wbvector::FieldValue::Float(end_cost),
+                            wbvector::FieldValue::Float(frac),
+                        ];
+                        if let Some(rings) = ring_costs.as_ref() {
+                            let (ring_idx, ring_min, ring_max) =
+                                ring_interval_for_cost(end_cost, max_cost, rings);
+                            attrs.push(wbvector::FieldValue::Integer(ring_idx));
+                            attrs.push(wbvector::FieldValue::Float(ring_min));
+                            attrs.push(wbvector::FieldValue::Float(ring_max));
+                        }
+                        local_edges.push((coords, attrs));
                     }
+                    local_edges
+                })
+                .collect::<Vec<_>>();
+
+            for edge_group in per_node_edges {
+                for (coords, attrs) in edge_group {
                     output.push(wbvector::Feature {
                         fid: next_fid,
                         geometry: Some(wbvector::Geometry::LineString(coords)),
@@ -28863,8 +28988,17 @@ impl Tool for NetworkServiceAreaTool {
 
             let eps = snap_tolerance.max(1.0e-9);
             let mut polygon_records = Vec::<ServiceAreaPolygonRecord>::new();
-            for (origin_fid, start_idx) in snapped_origins {
-                let origin_dist = dijkstra_all_costs(&graph, &[start_idx], &turn_costs);
+            let per_origin_dist = snapped_origins
+                .par_iter()
+                .map(|(origin_fid, start_idx)| {
+                    (
+                        *origin_fid,
+                        dijkstra_all_costs(&graph, &[*start_idx], &turn_costs),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            for (origin_fid, origin_dist) in per_origin_dist {
                 let ring_limits: Vec<f64> = if let Some(rings) = ring_costs.as_ref() {
                     rings.clone()
                 } else {
@@ -28898,52 +29032,77 @@ impl Tool for NetworkServiceAreaTool {
                     let mut frontier_count = 0i64;
                     let mut partial_count = 0i64;
 
-                    for (u, neighbors) in graph.adjacency.iter().enumerate() {
-                        let start_cost = origin_dist[u];
-                        if !start_cost.is_finite() || start_cost > *ring_limit {
-                            continue;
-                        }
-                        let remaining = *ring_limit - start_cost;
-                        if remaining <= 0.0 {
-                            continue;
-                        }
-
-                        for (v, weight) in neighbors {
-                            if *weight <= 0.0 {
-                                continue;
-                            }
-                            let frac = (remaining / *weight).min(1.0);
-                            if frac <= 0.0 {
-                                continue;
-                            }
-                            frontier_count += 1;
-                            if frac < 1.0 - 1.0e-12 {
-                                partial_count += 1;
+                    let per_node_frontier = graph
+                        .adjacency
+                        .par_iter()
+                        .enumerate()
+                        .map(|(u, neighbors)| {
+                            let start_cost = origin_dist[u];
+                            if !start_cost.is_finite() || start_cost > *ring_limit {
+                                return (0i64, 0i64, Vec::<wbvector::Coord>::new(), Vec::<f64>::new());
                             }
 
-                            let start = &graph.nodes[u];
-                            let end = &graph.nodes[*v];
-                            let frontier = wbvector::Coord::xy(
-                                start.x + (end.x - start.x) * frac,
-                                start.y + (end.y - start.y) * frac,
-                            );
-
-                            envelope_coords.push(start.clone());
-                            envelope_coords.push(frontier.clone());
-                            if frac > 0.5 {
-                                envelope_coords.push(wbvector::Coord::xy(
-                                    start.x + (end.x - start.x) * 0.5,
-                                    start.y + (end.y - start.y) * 0.5,
-                                ));
+                            let remaining = *ring_limit - start_cost;
+                            if remaining <= 0.0 {
+                                return (0i64, 0i64, Vec::<wbvector::Coord>::new(), Vec::<f64>::new());
                             }
 
-                            let dx = frontier.x - start.x;
-                            let dy = frontier.y - start.y;
-                            let seg_len = (dx * dx + dy * dy).sqrt();
-                            if seg_len > eps {
-                                reachable_segment_lengths.push(seg_len);
+                            let mut local_frontier_count = 0i64;
+                            let mut local_partial_count = 0i64;
+                            let mut local_envelope_coords = Vec::<wbvector::Coord>::new();
+                            let mut local_segment_lengths = Vec::<f64>::new();
+
+                            for (v, weight) in neighbors {
+                                if *weight <= 0.0 {
+                                    continue;
+                                }
+                                let frac = (remaining / *weight).min(1.0);
+                                if frac <= 0.0 {
+                                    continue;
+                                }
+                                local_frontier_count += 1;
+                                if frac < 1.0 - 1.0e-12 {
+                                    local_partial_count += 1;
+                                }
+
+                                let start = &graph.nodes[u];
+                                let end = &graph.nodes[*v];
+                                let frontier = wbvector::Coord::xy(
+                                    start.x + (end.x - start.x) * frac,
+                                    start.y + (end.y - start.y) * frac,
+                                );
+
+                                local_envelope_coords.push(start.clone());
+                                local_envelope_coords.push(frontier.clone());
+                                if frac > 0.5 {
+                                    local_envelope_coords.push(wbvector::Coord::xy(
+                                        start.x + (end.x - start.x) * 0.5,
+                                        start.y + (end.y - start.y) * 0.5,
+                                    ));
+                                }
+
+                                let dx = frontier.x - start.x;
+                                let dy = frontier.y - start.y;
+                                let seg_len = (dx * dx + dy * dy).sqrt();
+                                if seg_len > eps {
+                                    local_segment_lengths.push(seg_len);
+                                }
                             }
-                        }
+
+                            (
+                                local_frontier_count,
+                                local_partial_count,
+                                local_envelope_coords,
+                                local_segment_lengths,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+
+                    for (local_frontier_count, local_partial_count, mut local_envelope_coords, mut local_segment_lengths) in per_node_frontier {
+                        frontier_count += local_frontier_count;
+                        partial_count += local_partial_count;
+                        envelope_coords.append(&mut local_envelope_coords);
+                        reachable_segment_lengths.append(&mut local_segment_lengths);
                     }
 
                     let geom = if envelope_coords.len() < 3 {
@@ -29110,9 +29269,16 @@ impl Tool for NetworkServiceAreaTool {
                 output.schema.add_field(wbvector::FieldDef::new("RING_MAX", wbvector::FieldType::Float));
             }
 
-            for (idx, node) in graph.nodes.iter().enumerate() {
-                let d = dist[idx];
-                if d.is_finite() && d <= max_cost {
+            let node_features = graph
+                .nodes
+                .par_iter()
+                .enumerate()
+                .filter_map(|(idx, node)| {
+                    let d = dist[idx];
+                    if !(d.is_finite() && d <= max_cost) {
+                        return None;
+                    }
+
                     let mut attrs = vec![
                         wbvector::FieldValue::Integer((idx + 1) as i64),
                         wbvector::FieldValue::Float(d),
@@ -29123,13 +29289,18 @@ impl Tool for NetworkServiceAreaTool {
                         attrs.push(wbvector::FieldValue::Float(ring_min));
                         attrs.push(wbvector::FieldValue::Float(ring_max));
                     }
-                    output.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(wbvector::Geometry::Point(node.clone())),
-                        attributes: attrs,
-                    });
-                    next_fid += 1;
-                }
+
+                    Some((idx, node.clone(), attrs))
+                })
+                .collect::<Vec<_>>();
+
+            for (_idx, node, attrs) in node_features {
+                output.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry: Some(wbvector::Geometry::Point(node)),
+                    attributes: attrs,
+                });
+                next_fid += 1;
             }
         }
 
@@ -30258,34 +30429,40 @@ impl Tool for NetworkOdCostMatrixTool {
             ));
         }
 
-        let mut cache = HashMap::<usize, Vec<f64>>::new();
         let mut csv = String::from("origin_fid,destination_fid,cost,reachable,origin_node,destination_node\n");
-
-        for (origin_fid, origin_node) in &origin_nodes {
-            let dist = cache
-                .entry(*origin_node)
-                .or_insert_with(|| dijkstra_all_costs(&graph, &[*origin_node], &turn_costs));
-            for (dest_fid, dest_node) in &destination_nodes {
-                let d = dist[*dest_node];
-                if d.is_finite() {
-                    csv.push_str(&format!(
-                        "{},{},{},true,{},{}\n",
-                        origin_fid,
-                        dest_fid,
-                        d,
-                        origin_node + 1,
-                        dest_node + 1
-                    ));
-                } else {
-                    csv.push_str(&format!(
-                        "{},{},,false,{},{}\n",
-                        origin_fid,
-                        dest_fid,
-                        origin_node + 1,
-                        dest_node + 1
-                    ));
+        let mut origin_row_blocks: Vec<(usize, String)> = origin_nodes
+            .par_iter()
+            .enumerate()
+            .map(|(origin_idx, (origin_fid, origin_node))| {
+                let dist = dijkstra_all_costs(&graph, &[*origin_node], &turn_costs);
+                let mut rows = String::new();
+                for (dest_fid, dest_node) in &destination_nodes {
+                    let d = dist[*dest_node];
+                    if d.is_finite() {
+                        rows.push_str(&format!(
+                            "{},{},{},true,{},{}\n",
+                            origin_fid,
+                            dest_fid,
+                            d,
+                            origin_node + 1,
+                            dest_node + 1
+                        ));
+                    } else {
+                        rows.push_str(&format!(
+                            "{},{},,false,{},{}\n",
+                            origin_fid,
+                            dest_fid,
+                            origin_node + 1,
+                            dest_node + 1
+                        ));
+                    }
                 }
-            }
+                (origin_idx, rows)
+            })
+            .collect();
+        origin_row_blocks.sort_by_key(|(origin_idx, _)| *origin_idx);
+        for (_, rows) in origin_row_blocks {
+            csv.push_str(&rows);
         }
 
         if let Some(parent) = std::path::Path::new(output).parent() {
@@ -30386,15 +30563,19 @@ impl Tool for NetworkConnectedComponentsTool {
 
         let linework = collect_layer_linework(&input, false)?;
         let mut feature_component = vec![None::<usize>; input.features.len()];
-        for line in &linework {
-            let mut comp_for_line: Option<usize> = None;
-            for coord in &line.coords {
-                let key = network_node_key(coord, snap_tolerance);
-                if let Some(node_idx) = node_index_by_key.get(&key) {
-                    comp_for_line = Some(node_components[*node_idx]);
-                    break;
+        let line_components: Vec<Option<usize>> = linework
+            .par_iter()
+            .map(|line| {
+                for coord in &line.coords {
+                    let key = network_node_key(coord, snap_tolerance);
+                    if let Some(node_idx) = node_index_by_key.get(&key) {
+                        return Some(node_components[*node_idx]);
+                    }
                 }
-            }
+                None
+            })
+            .collect();
+        for (line, comp_for_line) in linework.iter().zip(line_components.into_iter()) {
             if let Some(component_id) = comp_for_line {
                 let entry = &mut feature_component[line.source_index];
                 if entry.is_none() {
@@ -30669,22 +30850,33 @@ impl Tool for NetworkRoutesFromOdTool {
             ));
         }
 
-        let mut origin_nodes = Vec::<(i64, usize)>::new();
-        for (fid, coord) in &origin_points {
-            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
-                .ok_or_else(|| ToolError::Execution("failed locating nearest origin node".to_string()))?;
-            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
-                origin_nodes.push((*fid, idx));
-            }
-        }
-        let mut destination_nodes = Vec::<(i64, usize)>::new();
-        for (fid, coord) in &destination_points {
-            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
-                .ok_or_else(|| ToolError::Execution("failed locating nearest destination node".to_string()))?;
-            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
-                destination_nodes.push((*fid, idx));
-            }
-        }
+        let mut origin_nodes = origin_points
+            .par_iter()
+            .filter_map(|(fid, coord)| {
+                nearest_network_node(&graph.nodes, coord).and_then(|(idx, dist)| {
+                    if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                        Some((*fid, idx))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        origin_nodes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        let mut destination_nodes = destination_points
+            .par_iter()
+            .filter_map(|(fid, coord)| {
+                nearest_network_node(&graph.nodes, coord).and_then(|(idx, dist)| {
+                    if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                        Some((*fid, idx))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        destination_nodes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
         if origin_nodes.is_empty() || destination_nodes.is_empty() {
             return Err(ToolError::Execution(
                 "no origins or destinations snapped to network within max_snap_distance".to_string(),
@@ -30740,8 +30932,22 @@ impl Tool for NetworkRoutesFromOdTool {
         output.schema.add_field(wbvector::FieldDef::new("DEST_FID", wbvector::FieldType::Integer));
         output.schema.add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
 
+        let mut routes = routes;
+        routes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        let feature_payloads = routes
+            .par_iter()
+            .map(|(origin_fid, dest_fid, cost, coords)| {
+                (
+                    *origin_fid,
+                    *dest_fid,
+                    *cost,
+                    coords.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+
         let mut next_fid = 1u64;
-        for (origin_fid, dest_fid, cost, coords) in routes {
+        for (origin_fid, dest_fid, cost, coords) in feature_payloads {
             output.push(wbvector::Feature {
                 fid: next_fid,
                 geometry: Some(wbvector::Geometry::LineString(coords)),
@@ -31006,23 +31212,33 @@ impl Tool for ClosestFacilityNetworkTool {
             ));
         }
 
-        let mut incident_nodes = Vec::<(i64, usize)>::new();
-        for (fid, coord) in &incident_points {
-            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
-                .ok_or_else(|| ToolError::Execution("failed locating nearest incident node".to_string()))?;
-            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
-                incident_nodes.push((*fid, idx));
-            }
-        }
+        let mut incident_nodes = incident_points
+            .par_iter()
+            .filter_map(|(fid, coord)| {
+                nearest_network_node(&graph.nodes, coord).and_then(|(idx, dist)| {
+                    if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                        Some((*fid, idx))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        incident_nodes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
-        let mut facility_nodes = Vec::<(i64, usize)>::new();
-        for (fid, coord) in &facility_points {
-            let (idx, dist) = nearest_network_node(&graph.nodes, coord)
-                .ok_or_else(|| ToolError::Execution("failed locating nearest facility node".to_string()))?;
-            if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
-                facility_nodes.push((*fid, idx));
-            }
-        }
+        let mut facility_nodes = facility_points
+            .par_iter()
+            .filter_map(|(fid, coord)| {
+                nearest_network_node(&graph.nodes, coord).and_then(|(idx, dist)| {
+                    if max_snap_distance.map(|d| dist <= d).unwrap_or(true) {
+                        Some((*fid, idx))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        facility_nodes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
         if incident_nodes.is_empty() || facility_nodes.is_empty() {
             return Err(ToolError::Execution(
@@ -31089,6 +31305,15 @@ impl Tool for ClosestFacilityNetworkTool {
                 .collect()
         };
 
+        let mut routes = routes;
+        routes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        let route_payloads = routes
+            .par_iter()
+            .map(|(incident_fid, facility_fid, cost, coords)| {
+                (*incident_fid, *facility_fid, *cost, coords.clone())
+            })
+            .collect::<Vec<_>>();
+
         let mut output = wbvector::Layer::new(format!("{}_closest_facility_network", input.name));
         output.geom_type = Some(wbvector::GeometryType::LineString);
         output.crs = input.crs.clone();
@@ -31103,7 +31328,7 @@ impl Tool for ClosestFacilityNetworkTool {
             .add_field(wbvector::FieldDef::new("COST", wbvector::FieldType::Float));
 
         let mut next_fid = 1u64;
-        for (incident_fid, facility_fid, cost, coords) in routes {
+        for (incident_fid, facility_fid, cost, coords) in route_payloads {
             output.push(wbvector::Feature {
                 fid: next_fid,
                 geometry: Some(wbvector::Geometry::LineString(coords)),
@@ -31638,25 +31863,36 @@ impl Tool for LocationAllocationNetworkTool {
             .filter(|idx| !required_indices.contains(idx))
             .collect::<Vec<_>>();
 
-        let mut cost_matrix = vec![vec![f64::INFINITY; facility_candidates.len()]; demand_nodes.len()];
-        let mut prev_cache = Vec::<Vec<Option<usize>>>::new();
-        if turn_costs.is_active() {
-            for (d, (_, demand_node, _)) in demand_nodes.iter().enumerate() {
-                for (f, facility) in facility_candidates.iter().enumerate() {
-                    if let Some((cost, _)) = dijkstra_shortest_path(&graph, *demand_node, facility.node, &turn_costs) {
-                        cost_matrix[d][f] = cost;
+        let (cost_matrix, prev_cache): (Vec<Vec<f64>>, Vec<Vec<Option<usize>>>) = if turn_costs.is_active() {
+            let matrix = demand_nodes
+                .par_iter()
+                .map(|(_, demand_node, _)| {
+                    let mut row = vec![f64::INFINITY; facility_candidates.len()];
+                    for (f, facility) in facility_candidates.iter().enumerate() {
+                        if let Some((cost, _)) =
+                            dijkstra_shortest_path(&graph, *demand_node, facility.node, &turn_costs)
+                        {
+                            row[f] = cost;
+                        }
                     }
-                }
-            }
+                    row
+                })
+                .collect::<Vec<_>>();
+            (matrix, Vec::new())
         } else {
-            for (d, (_, demand_node, _)) in demand_nodes.iter().enumerate() {
-                let (dist, prev) = dijkstra_tree(&graph, *demand_node);
-                for (f, facility) in facility_candidates.iter().enumerate() {
-                    cost_matrix[d][f] = dist[facility.node];
-                }
-                prev_cache.push(prev);
-            }
-        }
+            let row_prev_pairs = demand_nodes
+                .par_iter()
+                .map(|(_, demand_node, _)| {
+                    let (dist, prev) = dijkstra_tree(&graph, *demand_node);
+                    let mut row = vec![f64::INFINITY; facility_candidates.len()];
+                    for (f, facility) in facility_candidates.iter().enumerate() {
+                        row[f] = dist[facility.node];
+                    }
+                    (row, prev)
+                })
+                .collect::<Vec<_>>();
+            row_prev_pairs.into_iter().unzip()
+        };
         let demand_fids = demand_nodes.iter().map(|(fid, _, _)| *fid).collect::<Vec<_>>();
         let demand_weights = demand_nodes.iter().map(|(_, _, weight)| *weight).collect::<Vec<_>>();
         let additional_needed = facility_count.saturating_sub(required_indices.len());
@@ -31699,38 +31935,47 @@ impl Tool for LocationAllocationNetworkTool {
         }
         .ok_or_else(|| ToolError::Execution("failed to select any facilities".to_string()))?;
 
-        let mut routes = Vec::<(i64, i64, f64, f64, Vec<wbvector::Coord>)>::new();
-        for (d, assigned_facility) in solution.assignments.iter().enumerate() {
-            let Some(facility_idx) = assigned_facility else {
-                continue;
-            };
-            let demand_fid = demand_nodes[d].0;
-            let demand_node = demand_nodes[d].1;
-            let weight = demand_nodes[d].2;
-            let facility = &facility_candidates[*facility_idx];
-            let cost = cost_matrix[d][*facility_idx];
-
-            let path_nodes = if turn_costs.is_active() {
-                let Some((_, nodes)) = dijkstra_shortest_path(&graph, demand_node, facility.node, &turn_costs) else {
-                    continue;
+        let route_candidates = solution
+            .assignments
+            .par_iter()
+            .enumerate()
+            .map(|(d, assigned_facility)| {
+                let Some(facility_idx) = assigned_facility else {
+                    return None;
                 };
-                nodes
-            } else {
-                let Some(nodes) = reconstruct_path_nodes(&prev_cache[d], demand_node, facility.node) else {
-                    continue;
-                };
-                nodes
-            };
+                let demand_fid = demand_nodes[d].0;
+                let demand_node = demand_nodes[d].1;
+                let weight = demand_nodes[d].2;
+                let facility = &facility_candidates[*facility_idx];
+                let cost = cost_matrix[d][*facility_idx];
 
-            let mut coords = path_nodes
-                .into_iter()
-                .map(|idx| graph.nodes[idx].clone())
-                .collect::<Vec<_>>();
-            if coords.len() == 1 {
-                coords.push(coords[0].clone());
-            }
-            routes.push((demand_fid, facility.fid, weight, cost, coords));
-        }
+                let path_nodes = if turn_costs.is_active() {
+                    let Some((_, nodes)) =
+                        dijkstra_shortest_path(&graph, demand_node, facility.node, &turn_costs)
+                    else {
+                        return None;
+                    };
+                    nodes
+                } else {
+                    let Some(nodes) = reconstruct_path_nodes(&prev_cache[d], demand_node, facility.node)
+                    else {
+                        return None;
+                    };
+                    nodes
+                };
+
+                let mut coords = path_nodes
+                    .into_iter()
+                    .map(|idx| graph.nodes[idx].clone())
+                    .collect::<Vec<_>>();
+                if coords.len() == 1 {
+                    coords.push(coords[0].clone());
+                }
+                Some((demand_fid, facility.fid, weight, cost, coords))
+            })
+            .collect::<Vec<_>>();
+        let mut routes = route_candidates.into_iter().flatten().collect::<Vec<_>>();
+        routes.par_sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
 
         let mut output = wbvector::Layer::new(format!("{}_location_allocation_network", input.name));
         output.geom_type = Some(wbvector::GeometryType::LineString);
@@ -31751,8 +31996,15 @@ impl Tool for LocationAllocationNetworkTool {
             .schema
             .add_field(wbvector::FieldDef::new("ALLOC_COST", wbvector::FieldType::Float));
 
+        let route_payloads = routes
+            .par_iter()
+            .map(|(demand_fid, facility_fid, weight, cost, coords)| {
+                (*demand_fid, *facility_fid, *weight, *cost, coords.clone())
+            })
+            .collect::<Vec<_>>();
+
         let mut next_fid = 1u64;
-        for (demand_fid, facility_fid, weight, cost, coords) in routes {
+        for (demand_fid, facility_fid, weight, cost, coords) in route_payloads {
             output.push(wbvector::Feature {
                 fid: next_fid,
                 geometry: Some(wbvector::Geometry::LineString(coords)),

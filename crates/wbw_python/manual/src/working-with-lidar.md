@@ -180,6 +180,9 @@ print('points:', edited.point_count)
 Use these options when you need to tune compression and structure for storage,
 cloud access, or downstream compatibility.
 
+For complete lidar write-option keys and allowed values, see
+[Output Controls](output-controls.md#lidar-write-option-reference).
+
 ```python
 import whitebox_workflows as wb
 

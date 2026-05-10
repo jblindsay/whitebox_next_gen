@@ -63,7 +63,15 @@ use wbraster::memory_store::{
     remove_raster_by_path,
     replace_raster_by_id,
 };
-use wbraster::{GeoTiffCompression, GeoTiffLayout, GeoTiffWriteOptions, Raster, RasterFormat};
+use wbraster::{
+    GeoTiffCompression,
+    GeoTiffLayout,
+    GeoTiffWriteOptions,
+    Jpeg2000Compression,
+    Jpeg2000WriteOptions,
+    Raster,
+    RasterFormat,
+};
 use wbtopology::{
     buffer_linestring,
     buffer_point,
@@ -526,10 +534,18 @@ struct GeoTiffWriteControls {
 }
 
 #[derive(Debug, Clone, Default)]
+struct Jpeg2000WriteControls {
+    compression: Option<Jpeg2000Compression>,
+    decomp_levels: Option<u8>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
 struct RasterWriteControls {
     compress: Option<bool>,
     strict_format_options: bool,
     geotiff: GeoTiffWriteControls,
+    jpeg2000: Jpeg2000WriteControls,
 }
 
 impl RasterWriteControls {
@@ -558,6 +574,35 @@ impl RasterWriteControls {
                 layout,
             })
         }
+    }
+
+    fn has_jpeg2000_controls(&self) -> bool {
+        self.jpeg2000.has_fields
+    }
+
+    fn jpeg2000_options(&self) -> Option<Jpeg2000WriteOptions> {
+        let compression = self.jpeg2000.compression;
+        let decomp_levels = self.jpeg2000.decomp_levels;
+
+        if compression.is_none() && decomp_levels.is_none() {
+            None
+        } else {
+            Some(Jpeg2000WriteOptions {
+                compression,
+                decomp_levels,
+                color_space: None,
+            })
+        }
+    }
+}
+
+fn parse_jpeg2000_compression(name: &str, quality_db: Option<f32>) -> Option<Jpeg2000Compression> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "lossless" => Some(Jpeg2000Compression::Lossless),
+        "lossy" => Some(Jpeg2000Compression::Lossy {
+            quality_db: quality_db.unwrap_or(wbraster::JPEG2000_DEFAULT_LOSSY_QUALITY_DB),
+        }),
+        _ => None,
     }
 }
 
@@ -669,10 +714,58 @@ fn parse_raster_write_controls(options: &Value) -> Result<RasterWriteControls, T
         }
     }
 
+    let mut jpeg2000 = Jpeg2000WriteControls::default();
+    if let Some(jp2_val) = obj.get("jpeg2000") {
+        let jp2_obj = jp2_val.as_object().ok_or_else(|| {
+            ToolError::InvalidRequest("options.jpeg2000 must be a JSON object".to_string())
+        })?;
+
+        jpeg2000.has_fields = !jp2_obj.is_empty();
+
+        let quality_db = if let Some(v) = jp2_obj.get("quality_db") {
+            let q = v.as_f64().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.jpeg2000.quality_db must be a number".to_string(),
+                )
+            })?;
+            Some(q as f32)
+        } else {
+            None
+        };
+
+        if let Some(v) = jp2_obj.get("compression") {
+            let name = v.as_str().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.jpeg2000.compression must be a string".to_string(),
+                )
+            })?;
+            jpeg2000.compression = Some(parse_jpeg2000_compression(name, quality_db).ok_or_else(|| {
+                ToolError::InvalidRequest(format!(
+                    "unsupported jpeg2000.compression '{name}'. Expected one of: lossless, lossy"
+                ))
+            })?);
+        }
+
+        if let Some(v) = jp2_obj.get("decomp_levels") {
+            let levels_u64 = v.as_u64().ok_or_else(|| {
+                ToolError::InvalidRequest(
+                    "options.jpeg2000.decomp_levels must be a non-negative integer".to_string(),
+                )
+            })?;
+            let levels = u8::try_from(levels_u64).map_err(|_| {
+                ToolError::InvalidRequest(
+                    "options.jpeg2000.decomp_levels must be in range 0-255".to_string(),
+                )
+            })?;
+            jpeg2000.decomp_levels = Some(levels);
+        }
+    }
+
     Ok(RasterWriteControls {
         compress,
         strict_format_options,
         geotiff,
+        jpeg2000,
     })
 }
 
@@ -686,10 +779,28 @@ fn write_raster_with_controls(raster: &Raster, dst: &Path, output_format: Raster
         return raster.write(dst, output_format).map_err(to_invalid_request);
     }
 
+    if output_format != RasterFormat::Jpeg2000 && controls.has_jpeg2000_controls() {
+        if controls.strict_format_options {
+            return Err(ToolError::InvalidRequest(
+                "JPEG2000-specific write options were provided for a non-JPEG2000 output path"
+                    .to_string(),
+            ));
+        }
+        return raster.write(dst, output_format).map_err(to_invalid_request);
+    }
+
     if output_format == RasterFormat::GeoTiff {
         if let Some(opts) = controls.geotiff_options() {
             return raster
                 .write_geotiff_with_options(dst, &opts)
+                .map_err(to_invalid_request);
+        }
+    }
+
+    if output_format == RasterFormat::Jpeg2000 {
+        if let Some(opts) = controls.jpeg2000_options() {
+            return raster
+                .write_jpeg2000_with_options(dst, &opts)
                 .map_err(to_invalid_request);
         }
     }
@@ -1711,6 +1822,11 @@ pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -
 ///     `bigtiff`: bool,
 ///     `layout`: standard|stripped|tiled|cog,
 ///     `rows_per_strip`, `tile_width`, `tile_height`, `tile_size`
+///   }
+/// - `jpeg2000`: {
+///     `compression`: lossless|lossy,
+///     `quality_db`: number (used when compression=lossy),
+///     `decomp_levels`: integer 0-255
 ///   }
 pub fn raster_write_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<(), ToolError> {
     let options_value: Value = serde_json::from_str(options_json)

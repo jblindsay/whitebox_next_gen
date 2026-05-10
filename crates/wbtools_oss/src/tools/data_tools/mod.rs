@@ -2992,13 +2992,10 @@ impl Tool for ConvertNodataToZeroTool {
         let input = Raster::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
         let mut output = input.clone();
-        let len = output.data.len();
-        for i in 0..len {
+        output.par_fill_with(|i| {
             let value = input.data.get_f64(i);
-            if input.is_nodata(value) {
-                output.data.set_f64(i, 0.0);
-            }
-        }
+            if input.is_nodata(value) { 0.0 } else { value }
+        });
         ctx.progress.progress(1.0);
         write_raster_output(output, output_path, ctx)
     }
@@ -3069,12 +3066,10 @@ impl Tool for ModifyNodataValueTool {
         let input = Raster::read(&input_path)
             .map_err(|e| ToolError::Execution(format!("failed reading input raster: {e}")))?;
         let mut output = input.clone();
-        for i in 0..output.data.len() {
+        output.par_fill_with(|i| {
             let value = input.data.get_f64(i);
-            if input.is_nodata(value) {
-                output.data.set_f64(i, new_value);
-            }
-        }
+            if input.is_nodata(value) { new_value } else { value }
+        });
         output.nodata = new_value;
         ctx.progress.progress(1.0);
 
@@ -3853,12 +3848,10 @@ impl Tool for SetNodataValueTool {
             metadata: input.metadata.clone(),
         });
 
-        for i in 0..input.data.len() {
+        output.par_fill_with(|i| {
             let value = input.data.get_f64(i);
-            if !input.is_nodata(value) {
-                output.data.set_f64(i, value);
-            }
-        }
+            if input.is_nodata(value) { back_value } else { value }
+        });
 
         ctx.progress.progress(1.0);
         write_raster_output(output, output_path, ctx)

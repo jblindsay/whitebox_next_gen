@@ -174,6 +174,9 @@ v.add_field('reviewed', field_type='bool', default_value=False)
 This pattern shows both default extension behavior and explicit format control
 for reproducibility.
 
+For complete write-option keys and allowed values, see
+[Output Controls](output-controls.md#vector-write-option-reference).
+
 ```python
 import whitebox_workflows as wb
 

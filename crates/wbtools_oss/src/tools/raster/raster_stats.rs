@@ -496,7 +496,7 @@ fn write_inplace_raster(raster: Raster, input1_path: &str) -> Result<String, Too
 
 fn run_inplace_binary_op<F>(args: &ToolArgs, tool_id: &str, op: F) -> Result<ToolRunResult, ToolError>
 where
-    F: Fn(f64, f64, f64, bool) -> Option<f64>,
+    F: Fn(f64, f64, f64, bool) -> Option<f64> + Sync,
 {
     let input1_path = parse_raster_path_arg(args, "input1")?;
     let input2 = parse_raster_or_constant_arg(args, "input2")?;
@@ -507,12 +507,18 @@ where
             if tool_id == "inplace_divide" && c == 0.0 {
                 return Err(ToolError::Validation("illegal division by zero".to_string()));
             }
-            for i in 0..in1.data.len() {
-                let a = in1.data.get_f64(i);
-                if in1.is_nodata(a) {
-                    continue;
-                }
-                let out = op(a, c, in1.nodata, false).unwrap_or(in1.nodata);
+            let out_values: Vec<f64> = (0..in1.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let a = in1.data.get_f64(i);
+                    if in1.is_nodata(a) {
+                        a
+                    } else {
+                        op(a, c, in1.nodata, false).unwrap_or(in1.nodata)
+                    }
+                })
+                .collect();
+            for (i, out) in out_values.into_iter().enumerate() {
                 in1.data.set_f64(i, out);
             }
         }
@@ -523,17 +529,21 @@ where
                     "input files must have the same rows, columns, and bands".to_string(),
                 ));
             }
-            for i in 0..in1.data.len() {
-                let a = in1.data.get_f64(i);
-                let b = in2.data.get_f64(i);
-                if in1.is_nodata(a) {
-                    continue;
-                }
-                if in2.is_nodata(b) {
-                    in1.data.set_f64(i, in1.nodata);
-                    continue;
-                }
-                let out = op(a, b, in1.nodata, true).unwrap_or(in1.nodata);
+            let out_values: Vec<f64> = (0..in1.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let a = in1.data.get_f64(i);
+                    let b = in2.data.get_f64(i);
+                    if in1.is_nodata(a) {
+                        a
+                    } else if in2.is_nodata(b) {
+                        in1.nodata
+                    } else {
+                        op(a, b, in1.nodata, true).unwrap_or(in1.nodata)
+                    }
+                })
+                .collect();
+            for (i, out) in out_values.into_iter().enumerate() {
                 in1.data.set_f64(i, out);
             }
         }
@@ -672,44 +682,50 @@ fn anova_f_spin(f: f64, df1: usize, df2: usize) -> f64 {
 }
 
 fn collect_valid_values(r: &Raster) -> Vec<f64> {
-    let mut values = Vec::<f64>::new();
-    for i in 0..r.data.len() {
-        let z = r.data.get_f64(i);
-        if !r.is_nodata(z) {
-            values.push(z);
-        }
-    }
-    values
+    (0..r.data.len())
+        .into_par_iter()
+        .filter_map(|i| {
+            let z = r.data.get_f64(i);
+            if r.is_nodata(z) {
+                None
+            } else {
+                Some(z)
+            }
+        })
+        .collect()
 }
 
 fn sample_with_replacement(values: &[f64], count: usize) -> Vec<f64> {
-    let mut rng = rand::rng();
-    let mut out = Vec::with_capacity(count);
-    for _ in 0..count {
-        let idx = rng.random_range(0..values.len());
-        out.push(values[idx]);
-    }
-    out
+    (0..count)
+        .into_par_iter()
+        .map(|_| {
+            let mut rng = rand::rng();
+            let idx = rng.random_range(0..values.len());
+            values[idx]
+        })
+        .collect()
 }
 
 fn collect_paired_differences(in1: &Raster, in2: &Raster) -> Vec<f64> {
-    let mut diffs = Vec::<f64>::new();
-    for i in 0..in1.data.len() {
-        let a = in1.data.get_f64(i);
-        let b = in2.data.get_f64(i);
-        if in1.is_nodata(a) || in2.is_nodata(b) {
-            continue;
-        }
-        diffs.push(b - a);
-    }
-    diffs
+    (0..in1.data.len())
+        .into_par_iter()
+        .filter_map(|i| {
+            let a = in1.data.get_f64(i);
+            let b = in2.data.get_f64(i);
+            if in1.is_nodata(a) || in2.is_nodata(b) {
+                None
+            } else {
+                Some(b - a)
+            }
+        })
+        .collect()
 }
 
 fn two_sample_ks_statistic(data1: &[f64], data2: &[f64]) -> (f64, f64) {
     let mut v1 = data1.to_vec();
     let mut v2 = data2.to_vec();
-    v1.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    v2.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    v1.par_sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    v2.par_sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let n1 = v1.len();
     let n2 = v2.len();
@@ -747,7 +763,7 @@ fn ranked_values(values: &[f64]) -> (Vec<f64>, usize) {
     }
 
     let mut indexed: Vec<(usize, f64)> = values.iter().copied().enumerate().collect();
-    indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    indexed.par_sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut ranks = vec![0.0f64; values.len()];
     let mut i = 0usize;
@@ -780,18 +796,25 @@ fn pearson_from_pairs(x: &[f64], y: &[f64]) -> Option<(f64, usize)> {
     }
 
     let n = x.len();
-    let mean_x = x.iter().sum::<f64>() / n as f64;
-    let mean_y = y.iter().sum::<f64>() / n as f64;
-    let mut dev_x = 0.0;
-    let mut dev_y = 0.0;
-    let mut dev_xy = 0.0;
-    for i in 0..n {
-        let dx = x[i] - mean_x;
-        let dy = y[i] - mean_y;
-        dev_x += dx * dx;
-        dev_y += dy * dy;
-        dev_xy += dx * dy;
-    }
+    let (sum_x, sum_y) = x
+        .par_iter()
+        .zip(y.par_iter())
+        .map(|(a, b)| (*a, *b))
+        .reduce(|| (0.0f64, 0.0f64), |u, v| (u.0 + v.0, u.1 + v.1));
+    let mean_x = sum_x / n as f64;
+    let mean_y = sum_y / n as f64;
+    let (dev_x, dev_y, dev_xy) = x
+        .par_iter()
+        .zip(y.par_iter())
+        .map(|(xa, ya)| {
+            let dx = *xa - mean_x;
+            let dy = *ya - mean_y;
+            (dx * dx, dy * dy, dx * dy)
+        })
+        .reduce(
+            || (0.0f64, 0.0f64, 0.0f64),
+            |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2),
+        );
 
     if dev_x <= 0.0 || dev_y <= 0.0 {
         return None;
@@ -815,37 +838,43 @@ fn kendall_tau_b_from_pairs(x: &[f64], y: &[f64]) -> Option<(f64, usize)> {
     }
 
     let n = x.len();
-    let mut concordant = 0.0f64;
-    let mut discordant = 0.0f64;
-    let mut ties_x = 0.0f64;
-    let mut ties_y = 0.0f64;
+    let (concordant, discordant, ties_x, ties_y) = (0..n)
+        .into_par_iter()
+        .map(|i| {
+            let mut local_concordant = 0usize;
+            let mut local_discordant = 0usize;
+            let mut local_ties_x = 0usize;
+            let mut local_ties_y = 0usize;
+            for j in (i + 1)..n {
+                let dx = x[i] - x[j];
+                let dy = y[i] - y[j];
+                if dx == 0.0 && dy == 0.0 {
+                    continue;
+                }
+                if dx == 0.0 {
+                    local_ties_x += 1;
+                    continue;
+                }
+                if dy == 0.0 {
+                    local_ties_y += 1;
+                    continue;
+                }
+                if dx.signum() == dy.signum() {
+                    local_concordant += 1;
+                } else {
+                    local_discordant += 1;
+                }
+            }
+            (local_concordant, local_discordant, local_ties_x, local_ties_y)
+        })
+        .reduce(
+            || (0usize, 0usize, 0usize, 0usize),
+            |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3),
+        );
 
-    for i in 0..n {
-        for j in (i + 1)..n {
-            let dx = x[i] - x[j];
-            let dy = y[i] - y[j];
-            if dx == 0.0 && dy == 0.0 {
-                continue;
-            }
-            if dx == 0.0 {
-                ties_x += 1.0;
-                continue;
-            }
-            if dy == 0.0 {
-                ties_y += 1.0;
-                continue;
-            }
-            if dx.signum() == dy.signum() {
-                concordant += 1.0;
-            } else {
-                discordant += 1.0;
-            }
-        }
-    }
-
-    let numer = concordant - discordant;
+    let numer = concordant as f64 - discordant as f64;
     let n0 = (n * (n - 1) / 2) as f64;
-    let denom = ((n0 - ties_x) * (n0 - ties_y)).sqrt();
+    let denom = ((n0 - ties_x as f64) * (n0 - ties_y as f64)).sqrt();
     if denom <= 0.0 {
         return None;
     }
@@ -909,27 +938,39 @@ impl Tool for RasterSummaryStatsTool {
         let input_path = parse_raster_path_arg(args, "input")?;
         let input = load_raster(&input_path, "input")?;
 
-        let mut count = 0usize;
-        let mut min_val = f64::INFINITY;
-        let mut max_val = f64::NEG_INFINITY;
-        let mut sum = 0.0;
-        let mut sum2 = 0.0;
-
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            count += 1;
-            if z < min_val {
-                min_val = z;
-            }
-            if z > max_val {
-                max_val = z;
-            }
-            sum += z;
-            sum2 += z * z;
-        }
+        let (count, min_val, max_val, sum, sum2) = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || (0usize, f64::INFINITY, f64::NEG_INFINITY, 0.0f64, 0.0f64),
+                |mut acc, i| {
+                    let z = input.data.get_f64(i);
+                    if input.is_nodata(z) {
+                        return acc;
+                    }
+                    acc.0 += 1;
+                    if z < acc.1 {
+                        acc.1 = z;
+                    }
+                    if z > acc.2 {
+                        acc.2 = z;
+                    }
+                    acc.3 += z;
+                    acc.4 += z * z;
+                    acc
+                },
+            )
+            .reduce(
+                || (0usize, f64::INFINITY, f64::NEG_INFINITY, 0.0f64, 0.0f64),
+                |a, b| {
+                    (
+                        a.0 + b.0,
+                        a.1.min(b.1),
+                        a.2.max(b.2),
+                        a.3 + b.3,
+                        a.4 + b.4,
+                    )
+                },
+            );
 
         if count == 0 {
             return Err(ToolError::Validation(
@@ -1033,23 +1074,7 @@ impl Tool for RasterHistogramTool {
             .max(2);
         let input = load_raster(&input_path, "input")?;
 
-        let mut min_val = f64::INFINITY;
-        let mut max_val = f64::NEG_INFINITY;
-        let mut values = Vec::<f64>::new();
-
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            if z < min_val {
-                min_val = z;
-            }
-            if z > max_val {
-                max_val = z;
-            }
-            values.push(z);
-        }
+        let values = collect_valid_values(&input);
 
         if values.is_empty() {
             return Err(ToolError::Validation(
@@ -1057,13 +1082,36 @@ impl Tool for RasterHistogramTool {
             ));
         }
 
+        let min_val = values
+            .iter()
+            .copied()
+            .fold(f64::INFINITY, f64::min);
+        let max_val = values
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+
         let range = (max_val - min_val).max(1e-12);
-        let mut counts = vec![0usize; bins];
-        for z in values {
-            let idx = (((z - min_val) / range) * bins as f64).floor() as isize;
-            let idx = idx.clamp(0, bins as isize - 1) as usize;
-            counts[idx] += 1;
-        }
+        let counts = values
+            .par_iter()
+            .fold(
+                || vec![0usize; bins],
+                |mut local, z| {
+                    let idx = (((*z - min_val) / range) * bins as f64).floor() as isize;
+                    let idx = idx.clamp(0, bins as isize - 1) as usize;
+                    local[idx] += 1;
+                    local
+                },
+            )
+            .reduce(
+                || vec![0usize; bins],
+                |mut a, b| {
+                    for i in 0..bins {
+                        a[i] += b[i];
+                    }
+                    a
+                },
+            );
 
         let report = json!({
             "min": min_val,
@@ -1723,26 +1771,28 @@ impl Tool for FftRandomFieldTool {
             let sigma_cells = (range / cell_size).max(f64::MIN_POSITIVE);
             let two_pi = 2.0 * std::f64::consts::PI;
 
-            for row in 0..rows {
-                let fy = if row <= rows / 2 {
-                    row as f64 / rows as f64
-                } else {
-                    (rows - row) as f64 / rows as f64
-                };
-                let wy = two_pi * fy;
-
-                for col in 0..cols {
+            spectral
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, z)| {
+                    let row = idx / cols;
+                    let col = idx % cols;
+                    let fy = if row <= rows / 2 {
+                        row as f64 / rows as f64
+                    } else {
+                        (rows - row) as f64 / rows as f64
+                    };
                     let fx = if col <= cols / 2 {
                         col as f64 / cols as f64
                     } else {
                         (cols - col) as f64 / cols as f64
                     };
+                    let wy = two_pi * fy;
                     let wx = two_pi * fx;
                     let k2 = wx * wx + wy * wy;
                     let gain = (-0.5 * sigma_cells * sigma_cells * k2).exp();
-                    spectral[row * cols + col] *= gain;
-                }
-            }
+                    *z *= gain;
+                });
         }
 
         fft2_in_place(&mut spectral, rows, cols, true);
@@ -1872,13 +1922,17 @@ impl Tool for RandomSampleTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let base = load_raster(&base_path, "base")?;
 
-        let mut valid_indices = Vec::<usize>::new();
-        for i in 0..base.data.len() {
-            let z = base.data.get_f64(i);
-            if !base.is_nodata(z) {
-                valid_indices.push(i);
-            }
-        }
+        let mut valid_indices: Vec<usize> = (0..base.data.len())
+            .into_par_iter()
+            .filter_map(|i| {
+                let z = base.data.get_f64(i);
+                if !base.is_nodata(z) {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         if num_samples > valid_indices.len() {
             return Err(ToolError::Validation(format!(
@@ -1901,8 +1955,12 @@ impl Tool for RandomSampleTool {
             crs: base.crs.clone(),
             metadata: base.metadata.clone(),
         });
-        for i in 0..output.data.len() {
-            output.data.set_f64(i, 0.0);
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            data_slice.par_iter_mut().for_each(|cell| *cell = 0.0);
+        } else {
+            for i in 0..output.data.len() {
+                output.data.set_f64(i, 0.0);
+            }
         }
 
         let mut rng = rand::rng();
@@ -1973,18 +2031,24 @@ impl Tool for CumulativeDistributionTool {
         let output_path = parse_optional_output_path(args, "output")?;
         let input = load_raster(&input_path, "input")?;
 
-        let mut min_val = f64::INFINITY;
-        let mut max_val = f64::NEG_INFINITY;
-        let mut num_cells = 0usize;
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            min_val = min_val.min(z);
-            max_val = max_val.max(z);
-            num_cells += 1;
-        }
+        let (min_val, max_val, num_cells) = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |(mut local_min, mut local_max, mut local_count), i| {
+                    let z = input.data.get_f64(i);
+                    if !input.is_nodata(z) {
+                        local_min = local_min.min(z);
+                        local_max = local_max.max(z);
+                        local_count += 1;
+                    }
+                    (local_min, local_max, local_count)
+                },
+            )
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
+            );
 
         if num_cells == 0 {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
@@ -2005,22 +2069,43 @@ impl Tool for CumulativeDistributionTool {
         });
 
         if (max_val - min_val).abs() < 1.0e-12 {
-            for i in 0..input.data.len() {
-                let z = input.data.get_f64(i);
-                output.data.set_f64(i, if input.is_nodata(z) { input.nodata } else { 1.0 });
+            let out_values: Vec<f64> = (0..input.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = input.data.get_f64(i);
+                    if input.is_nodata(z) { input.nodata } else { 1.0 }
+                })
+                .collect();
+            for (i, out) in out_values.into_iter().enumerate() {
+                output.data.set_f64(i, out);
             }
         } else {
             let num_bins = 50_000usize;
             let bin_size = (max_val - min_val) / num_bins as f64;
-            let mut histogram = vec![0usize; num_bins];
-            for i in 0..input.data.len() {
-                let z = input.data.get_f64(i);
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let idx = (((z - min_val) / bin_size) as isize).clamp(0, num_bins as isize - 1) as usize;
-                histogram[idx] += 1;
-            }
+            let histogram = (0..input.data.len())
+                .into_par_iter()
+                .fold(
+                    || vec![0usize; num_bins],
+                    |mut local_hist, i| {
+                        let z = input.data.get_f64(i);
+                        if !input.is_nodata(z) {
+                            let idx = (((z - min_val) / bin_size) as isize)
+                                .clamp(0, num_bins as isize - 1)
+                                as usize;
+                            local_hist[idx] += 1;
+                        }
+                        local_hist
+                    },
+                )
+                .reduce(
+                    || vec![0usize; num_bins],
+                    |mut acc, local| {
+                        for (dst, src) in acc.iter_mut().zip(local) {
+                            *dst += src;
+                        }
+                        acc
+                    },
+                );
 
             let mut cdf = vec![0.0; num_bins];
             let mut running = 0.0;
@@ -2029,14 +2114,22 @@ impl Tool for CumulativeDistributionTool {
                 cdf[i] = running / num_cells as f64;
             }
 
-            for i in 0..input.data.len() {
-                let z = input.data.get_f64(i);
-                if input.is_nodata(z) {
-                    output.data.set_f64(i, input.nodata);
-                } else {
-                    let idx = (((z - min_val) / bin_size) as isize).clamp(0, num_bins as isize - 1) as usize;
-                    output.data.set_f64(i, cdf[idx]);
-                }
+            let out_values: Vec<f64> = (0..input.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = input.data.get_f64(i);
+                    if input.is_nodata(z) {
+                        input.nodata
+                    } else {
+                        let idx = (((z - min_val) / bin_size) as isize)
+                            .clamp(0, num_bins as isize - 1)
+                            as usize;
+                        cdf[idx]
+                    }
+                })
+                .collect();
+            for (i, out) in out_values.into_iter().enumerate() {
+                output.data.set_f64(i, out);
             }
         }
 
@@ -2099,35 +2192,37 @@ impl Tool for CrispnessIndexTool {
         let input_path = parse_raster_path_arg(args, "input")?;
         let input = load_raster(&input_path, "input")?;
 
-        let mut count = 0usize;
-        let mut sum = 0.0;
-        let mut ss_mp = 0.0;
-        let mut warning = false;
-
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            if !(0.0..=1.0).contains(&z) {
-                warning = true;
-            }
-            count += 1;
-            sum += z;
-        }
+        let (count, sum, warning) = (0..input.data.len())
+            .into_par_iter()
+            .map(|i| {
+                let z = input.data.get_f64(i);
+                if input.is_nodata(z) {
+                    (0usize, 0.0f64, false)
+                } else {
+                    (1usize, z, !(0.0..=1.0).contains(&z))
+                }
+            })
+            .reduce(
+                || (0usize, 0.0f64, false),
+                |(c1, s1, w1), (c2, s2, w2)| (c1 + c2, s1 + s2, w1 || w2),
+            );
 
         if count == 0 {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
         }
 
         let mean = sum / count as f64;
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                continue;
-            }
-            ss_mp += (z - mean) * (z - mean);
-        }
+        let ss_mp = (0..input.data.len())
+            .into_par_iter()
+            .map(|i| {
+                let z = input.data.get_f64(i);
+                if input.is_nodata(z) {
+                    0.0
+                } else {
+                    (z - mean) * (z - mean)
+                }
+            })
+            .sum::<f64>();
 
         let ss_b = sum * (1.0 - mean) * (1.0 - mean) + (count as f64 - sum) * mean * mean;
         let crispness = if ss_b.abs() < 1.0e-12 { 0.0 } else { ss_mp / ss_b };
@@ -2203,13 +2298,7 @@ impl Tool for KsNormalityTestTool {
         let requested_samples = args.get("num_samples").and_then(|v| v.as_u64()).map(|v| v as usize);
         let input = load_raster(&input_path, "input")?;
 
-        let mut valid_values = Vec::<f64>::new();
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if !input.is_nodata(z) {
-                valid_values.push(z);
-            }
-        }
+        let valid_values = collect_valid_values(&input);
 
         if valid_values.is_empty() {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
@@ -2248,11 +2337,26 @@ impl Tool for KsNormalityTestTool {
         if std_dev > 0.0 && max_value > min_value {
             let num_bins = 10_000usize;
             let bin_size = (max_value - min_value) / num_bins as f64;
-            let mut histogram = vec![0usize; num_bins];
-            for z in &values {
-                let idx = (((*z - min_value) / bin_size).floor() as isize).clamp(0, num_bins as isize - 1) as usize;
-                histogram[idx] += 1;
-            }
+            let histogram = values
+                .par_iter()
+                .fold(
+                    || vec![0usize; num_bins],
+                    |mut local, z| {
+                        let idx = (((*z - min_value) / bin_size).floor() as isize)
+                            .clamp(0, num_bins as isize - 1) as usize;
+                        local[idx] += 1;
+                        local
+                    },
+                )
+                .reduce(
+                    || vec![0usize; num_bins],
+                    |mut a, b| {
+                        for i in 0..num_bins {
+                            a[i] += b[i];
+                        }
+                        a
+                    },
+                );
 
             let mut cdf = vec![0.0; num_bins];
             let mut running = 0.0;
@@ -2697,18 +2801,25 @@ impl Tool for AttributeScattergramTool {
         }
 
         let n = xs.len() as f64;
-        let mean_x = xs.iter().sum::<f64>() / n;
-        let mean_y = ys.iter().sum::<f64>() / n;
-        let mut sxx = 0.0;
-        let mut syy = 0.0;
-        let mut sxy = 0.0;
-        for i in 0..xs.len() {
-            let dx = xs[i] - mean_x;
-            let dy = ys[i] - mean_y;
-            sxx += dx * dx;
-            syy += dy * dy;
-            sxy += dx * dy;
-        }
+        let (sum_x, sum_y) = xs
+            .par_iter()
+            .zip(ys.par_iter())
+            .map(|(x, y)| (*x, *y))
+            .reduce(|| (0.0f64, 0.0f64), |a, b| (a.0 + b.0, a.1 + b.1));
+        let mean_x = sum_x / n;
+        let mean_y = sum_y / n;
+        let (sxx, syy, sxy) = xs
+            .par_iter()
+            .zip(ys.par_iter())
+            .map(|(x, y)| {
+                let dx = *x - mean_x;
+                let dy = *y - mean_y;
+                (dx * dx, dy * dy, dx * dy)
+            })
+            .reduce(
+                || (0.0f64, 0.0f64, 0.0f64),
+                |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2),
+            );
         let correlation = if sxx > 0.0 && syy > 0.0 {
             sxy / (sxx * syy).sqrt()
         } else {
@@ -2722,6 +2833,23 @@ impl Tool for AttributeScattergramTool {
             (None, None)
         };
 
+        let (x_min, x_max) = xs
+            .par_iter()
+            .copied()
+            .map(|v| (v, v))
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY),
+                |a, b| (a.0.min(b.0), a.1.max(b.1)),
+            );
+        let (y_min, y_max) = ys
+            .par_iter()
+            .copied()
+            .map(|v| (v, v))
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY),
+                |a, b| (a.0.min(b.0), a.1.max(b.1)),
+            );
+
         let report = json!({
             "input": input_path,
             "fieldx": fieldx,
@@ -2731,10 +2859,10 @@ impl Tool for AttributeScattergramTool {
             "trendline": trendline,
             "slope": slope,
             "intercept": intercept,
-            "x_min": xs.iter().copied().fold(f64::INFINITY, |a, b| a.min(b)),
-            "x_max": xs.iter().copied().fold(f64::NEG_INFINITY, |a, b| a.max(b)),
-            "y_min": ys.iter().copied().fold(f64::INFINITY, |a, b| a.min(b)),
-            "y_max": ys.iter().copied().fold(f64::NEG_INFINITY, |a, b| a.max(b)),
+            "x_min": x_min,
+            "x_max": x_max,
+            "y_min": y_min,
+            "y_max": y_max,
         })
         .to_string();
 
@@ -2817,45 +2945,38 @@ impl Tool for AttributeCorrelationTool {
 
         let k = numeric_indices.len();
         let mut matrix = vec![vec![1.0f64; k]; k];
-        for a in 0..k {
-            for b in 0..a {
-                let mut xs = Vec::new();
-                let mut ys = Vec::new();
-                for i in 0..columns[a].len() {
-                    let x = columns[a][i];
-                    let y = columns[b][i];
-                    if x.is_finite() && y.is_finite() {
-                        xs.push(x);
-                        ys.push(y);
+        let pair_corrs: Vec<(usize, usize, f64)> = (0..k)
+            .into_par_iter()
+            .map(|a| {
+                let mut local = Vec::with_capacity(a);
+                for b in 0..a {
+                    let mut xs = Vec::new();
+                    let mut ys = Vec::new();
+                    for i in 0..columns[a].len() {
+                        let x = columns[a][i];
+                        let y = columns[b][i];
+                        if x.is_finite() && y.is_finite() {
+                            xs.push(x);
+                            ys.push(y);
+                        }
                     }
+
+                    let corr = pearson_from_pairs(&xs, &ys)
+                        .map(|(r, _)| r)
+                        .unwrap_or(f64::NAN);
+
+                    local.push((a, b, corr));
                 }
+                local
+            })
+            .reduce(Vec::new, |mut a, mut b| {
+                a.append(&mut b);
+                a
+            });
 
-                let corr = if xs.len() < 2 {
-                    f64::NAN
-                } else {
-                    let n = xs.len() as f64;
-                    let mx = xs.iter().sum::<f64>() / n;
-                    let my = ys.iter().sum::<f64>() / n;
-                    let mut sxx = 0.0;
-                    let mut syy = 0.0;
-                    let mut sxy = 0.0;
-                    for i in 0..xs.len() {
-                        let dx = xs[i] - mx;
-                        let dy = ys[i] - my;
-                        sxx += dx * dx;
-                        syy += dy * dy;
-                        sxy += dx * dy;
-                    }
-                    if sxx > 0.0 && syy > 0.0 {
-                        sxy / (sxx * syy).sqrt()
-                    } else {
-                        f64::NAN
-                    }
-                };
-
-                matrix[a][b] = corr;
-                matrix[b][a] = corr;
-            }
+        for (a, b, corr) in pair_corrs {
+            matrix[a][b] = corr;
+            matrix[b][a] = corr;
         }
 
         let report = json!({
@@ -2930,22 +3051,40 @@ impl Tool for CrossTabulationTool {
             return Err(ToolError::Validation("input rasters must have identical rows, columns, and bands".to_string()));
         }
 
+        let counts = (0..in1.data.len())
+            .into_par_iter()
+            .fold(
+                || HashMap::<(i64, i64), usize>::new(),
+                |mut acc, i| {
+                    let z1 = in1.data.get_f64(i);
+                    let z2 = in2.data.get_f64(i);
+                    if in1.is_nodata(z1) || in2.is_nodata(z2) {
+                        return acc;
+                    }
+                    let c1 = z1.round() as i64;
+                    let c2 = z2.round() as i64;
+                    *acc.entry((c2, c1)).or_insert(0) += 1;
+                    acc
+                },
+            )
+            .reduce(
+                || HashMap::<(i64, i64), usize>::new(),
+                |mut a, b| {
+                    for (k, v) in b {
+                        *a.entry(k).or_insert(0) += v;
+                    }
+                    a
+                },
+            );
+
         let mut row_classes = BTreeSet::<i64>::new();
         let mut col_classes = BTreeSet::<i64>::new();
-        let mut counts = BTreeMap::<(i64, i64), usize>::new();
-
-        for i in 0..in1.data.len() {
-            let z1 = in1.data.get_f64(i);
-            let z2 = in2.data.get_f64(i);
-            if in1.is_nodata(z1) || in2.is_nodata(z2) {
-                continue;
-            }
-            let c1 = z1.round() as i64;
-            let c2 = z2.round() as i64;
-            col_classes.insert(c1);
-            row_classes.insert(c2);
-            *counts.entry((c2, c1)).or_insert(0) += 1;
+        for &(r, c) in counts.keys() {
+            row_classes.insert(r);
+            col_classes.insert(c);
         }
+
+        let counts: BTreeMap<(i64, i64), usize> = counts.into_iter().collect();
 
         let rows: Vec<i64> = row_classes.into_iter().collect();
         let cols: Vec<i64> = col_classes.into_iter().collect();
@@ -3033,28 +3172,47 @@ impl Tool for AnovaTool {
             ));
         }
 
-        let mut class_stats = BTreeMap::<i64, (usize, f64, f64)>::new();
-        let mut overall_n = 0usize;
-        let mut overall_sum = 0.0f64;
-        let mut overall_sum_sqr = 0.0f64;
+        let (class_stats_raw, overall_n, overall_sum, overall_sum_sqr) = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || (HashMap::<i64, (usize, f64, f64)>::new(), 0usize, 0.0f64, 0.0f64),
+                |mut acc, i| {
+                    let z = input.data.get_f64(i);
+                    let cls = features.data.get_f64(i);
+                    if input.is_nodata(z) || features.is_nodata(cls) {
+                        return acc;
+                    }
 
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            let cls = features.data.get_f64(i);
-            if input.is_nodata(z) || features.is_nodata(cls) {
-                continue;
-            }
+                    let class_id = cls.round() as i64;
+                    let entry = acc.0.entry(class_id).or_insert((0usize, 0.0, 0.0));
+                    entry.0 += 1;
+                    entry.1 += z;
+                    entry.2 += z * z;
 
-            let class_id = cls.round() as i64;
-            let entry = class_stats.entry(class_id).or_insert((0usize, 0.0, 0.0));
-            entry.0 += 1;
-            entry.1 += z;
-            entry.2 += z * z;
+                    acc.1 += 1;
+                    acc.2 += z;
+                    acc.3 += z * z;
+                    acc
+                },
+            )
+            .reduce(
+                || (HashMap::<i64, (usize, f64, f64)>::new(), 0usize, 0.0f64, 0.0f64),
+                |mut a, b| {
+                    for (class_id, (n, sum, sum_sqr)) in b.0 {
+                        let entry = a.0.entry(class_id).or_insert((0usize, 0.0, 0.0));
+                        entry.0 += n;
+                        entry.1 += sum;
+                        entry.2 += sum_sqr;
+                    }
+                    a.1 += b.1;
+                    a.2 += b.2;
+                    a.3 += b.3;
+                    a
+                },
+            );
 
-            overall_n += 1;
-            overall_sum += z;
-            overall_sum_sqr += z * z;
-        }
+        let class_stats: BTreeMap<i64, (usize, f64, f64)> =
+            class_stats_raw.into_iter().collect();
 
         if overall_n < 2 {
             return Err(ToolError::Validation("insufficient valid cells for ANOVA".to_string()));
@@ -3197,27 +3355,32 @@ impl Tool for PhiCoefficientTool {
 
         // Binary contingency table entries:
         // a=true positive, b=false positive, c=false negative, d=true negative.
-        let mut a = 0usize;
-        let mut b = 0usize;
-        let mut c = 0usize;
-        let mut d = 0usize;
+        let (a, b, c, d) = (0..in1.data.len())
+            .into_par_iter()
+            .fold(
+                || (0usize, 0usize, 0usize, 0usize),
+                |mut acc, i| {
+                    let z1 = in1.data.get_f64(i);
+                    let z2 = in2.data.get_f64(i);
+                    if in1.is_nodata(z1) || in2.is_nodata(z2) {
+                        return acc;
+                    }
 
-        for i in 0..in1.data.len() {
-            let z1 = in1.data.get_f64(i);
-            let z2 = in2.data.get_f64(i);
-            if in1.is_nodata(z1) || in2.is_nodata(z2) {
-                continue;
-            }
-
-            let p = z1 != 0.0;
-            let q = z2 != 0.0;
-            match (p, q) {
-                (true, true) => a += 1,
-                (true, false) => b += 1,
-                (false, true) => c += 1,
-                (false, false) => d += 1,
-            }
-        }
+                    let p = z1 != 0.0;
+                    let q = z2 != 0.0;
+                    match (p, q) {
+                        (true, true) => acc.0 += 1,
+                        (true, false) => acc.1 += 1,
+                        (false, true) => acc.2 += 1,
+                        (false, false) => acc.3 += 1,
+                    }
+                    acc
+                },
+            )
+            .reduce(
+                || (0usize, 0usize, 0usize, 0usize),
+                |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3),
+            );
 
         let n = a + b + c + d;
         if n == 0 {
@@ -3340,15 +3503,20 @@ impl Tool for ImageCorrelationTool {
         let mut means = vec![0.0f64; nfiles];
         let mut valid_counts = vec![0usize; nfiles];
         for (k, r) in rasters.iter().enumerate() {
-            let mut s = 0.0;
-            let mut n = 0usize;
-            for i in 0..r.data.len() {
-                let z = r.data.get_f64(i);
-                if !r.is_nodata(z) {
-                    s += z;
-                    n += 1;
-                }
-            }
+            let (s, n) = (0..r.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = r.data.get_f64(i);
+                    if r.is_nodata(z) {
+                        (0.0f64, 0usize)
+                    } else {
+                        (z, 1usize)
+                    }
+                })
+                .reduce(
+                    || (0.0f64, 0usize),
+                    |a, b| (a.0 + b.0, a.1 + b.1),
+                );
             if n == 0 {
                 return Err(ToolError::Validation(format!(
                     "input raster '{}' contains no valid cells",
@@ -3365,23 +3533,29 @@ impl Tool for ImageCorrelationTool {
             matrix[a][a] = 1.0;
             paired_n[a][a] = valid_counts[a];
             for b in 0..a {
-                let mut dev_a = 0.0;
-                let mut dev_b = 0.0;
-                let mut dev_ab = 0.0;
-                let mut n = 0usize;
-                for i in 0..rasters[a].data.len() {
-                    let z1 = rasters[a].data.get_f64(i);
-                    let z2 = rasters[b].data.get_f64(i);
-                    if rasters[a].is_nodata(z1) || rasters[b].is_nodata(z2) {
-                        continue;
-                    }
-                    let d1 = z1 - means[a];
-                    let d2 = z2 - means[b];
-                    dev_a += d1 * d1;
-                    dev_b += d2 * d2;
-                    dev_ab += d1 * d2;
-                    n += 1;
-                }
+                let (dev_a, dev_b, dev_ab, n) = (0..rasters[a].data.len())
+                    .into_par_iter()
+                    .fold(
+                        || (0.0f64, 0.0f64, 0.0f64, 0usize),
+                        |mut acc, i| {
+                            let z1 = rasters[a].data.get_f64(i);
+                            let z2 = rasters[b].data.get_f64(i);
+                            if rasters[a].is_nodata(z1) || rasters[b].is_nodata(z2) {
+                                return acc;
+                            }
+                            let d1 = z1 - means[a];
+                            let d2 = z2 - means[b];
+                            acc.0 += d1 * d1;
+                            acc.1 += d2 * d2;
+                            acc.2 += d1 * d2;
+                            acc.3 += 1;
+                            acc
+                        },
+                    )
+                    .reduce(
+                        || (0.0f64, 0.0f64, 0.0f64, 0usize),
+                        |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3),
+                    );
 
                 let corr = if n > 1 && dev_a > 0.0 && dev_b > 0.0 {
                     dev_ab / (dev_a * dev_b).sqrt()
@@ -3516,15 +3690,21 @@ impl Tool for ImageAutocorrelationTool {
 
         let mut per_image = Vec::<serde_json::Value>::new();
         for (idx, r) in rasters.iter().enumerate() {
-            let mut sum = 0.0;
-            let mut n = 0.0;
-            for i in 0..r.data.len() {
-                let z = r.data.get_f64(i);
-                if !r.is_nodata(z) {
-                    sum += z;
-                    n += 1.0;
-                }
-            }
+            let (sum, n_count) = (0..r.data.len())
+                .into_par_iter()
+                .map(|i| {
+                    let z = r.data.get_f64(i);
+                    if r.is_nodata(z) {
+                        (0.0f64, 0usize)
+                    } else {
+                        (z, 1usize)
+                    }
+                })
+                .reduce(
+                    || (0.0f64, 0usize),
+                    |a, b| (a.0 + b.0, a.1 + b.1),
+                );
+            let n = n_count as f64;
 
             if n <= 3.0 {
                 per_image.push(json!({
@@ -3536,41 +3716,64 @@ impl Tool for ImageAutocorrelationTool {
             }
 
             let mean = sum / n;
-            let mut total_deviation = 0.0;
-            let mut w = 0.0;
-            let mut numerator = 0.0;
-            let mut s2 = 0.0;
-            let mut k = 0.0;
+            let (total_deviation, w, numerator, s2, k) = (0..rows)
+                .into_par_iter()
+                .map(|row| {
+                    let row_i = row as isize;
+                    let mut total_deviation_local = 0.0f64;
+                    let mut w_local = 0.0f64;
+                    let mut numerator_local = 0.0f64;
+                    let mut s2_local = 0.0f64;
+                    let mut k_local = 0.0f64;
 
-            for row in 0..rows as isize {
-                for col in 0..cols as isize {
-                    let z = r.get_raw(0, row, col).unwrap_or(r.nodata);
-                    if r.is_nodata(z) {
-                        continue;
-                    }
-
-                    let dz = z - mean;
-                    total_deviation += dz * dz;
-                    k += dz * dz * dz * dz;
-
-                    let mut wij = 0.0;
-                    for nidx in 0..dx.len() {
-                        let x = col + dx[nidx];
-                        let y = row + dy[nidx];
-                        if x < 0 || x >= cols as isize || y < 0 || y >= rows as isize {
+                    for col in 0..cols as isize {
+                        let z = r.get_raw(0, row_i, col).unwrap_or(r.nodata);
+                        if r.is_nodata(z) {
                             continue;
                         }
-                        let zn = r.get_raw(0, y, x).unwrap_or(r.nodata);
-                        if r.is_nodata(zn) {
-                            continue;
+
+                        let dz = z - mean;
+                        total_deviation_local += dz * dz;
+                        k_local += dz * dz * dz * dz;
+
+                        let mut wij = 0.0;
+                        for nidx in 0..dx.len() {
+                            let x = col + dx[nidx];
+                            let y = row_i + dy[nidx];
+                            if x < 0 || x >= cols as isize || y < 0 || y >= rows as isize {
+                                continue;
+                            }
+                            let zn = r.get_raw(0, y, x).unwrap_or(r.nodata);
+                            if r.is_nodata(zn) {
+                                continue;
+                            }
+                            w_local += 1.0;
+                            numerator_local += dz * (zn - mean);
+                            wij += 1.0;
                         }
-                        w += 1.0;
-                        numerator += dz * (zn - mean);
-                        wij += 1.0;
+                        s2_local += wij * wij;
                     }
-                    s2 += wij * wij;
-                }
-            }
+
+                    (
+                        total_deviation_local,
+                        w_local,
+                        numerator_local,
+                        s2_local,
+                        k_local,
+                    )
+                })
+                .reduce(
+                    || (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64),
+                    |a, b| {
+                        (
+                            a.0 + b.0,
+                            a.1 + b.1,
+                            a.2 + b.2,
+                            a.3 + b.3,
+                            a.4 + b.4,
+                        )
+                    },
+                );
 
             if w <= 0.0 || total_deviation <= 0.0 {
                 per_image.push(json!({
@@ -3839,11 +4042,6 @@ impl Tool for ImageCorrelationNeighbourhoodAnalysisTool {
             metadata: in1.metadata.clone(),
         });
 
-        for i in 0..out_corr.data.len() {
-            out_corr.data.set_f64(i, in1.nodata);
-            out_sig.data.set_f64(i, in1.nodata);
-        }
-
         let half = (filter_size as isize) / 2;
         let mut offsets = Vec::<(isize, isize)>::with_capacity(filter_size * filter_size);
         for r in 0..filter_size as isize {
@@ -3852,82 +4050,99 @@ impl Tool for ImageCorrelationNeighbourhoodAnalysisTool {
             }
         }
 
-        for band_idx in 0..bands {
-            let band = band_idx as isize;
-            for row in 0..rows_i {
-                for col in 0..cols_i {
-                    let z1 = in1.get_raw(band, row, col).unwrap_or(in1.nodata);
-                    let z2 = in2.get_raw(band, row, col).unwrap_or(in2.nodata);
-                    if in1.is_nodata(z1) || in2.is_nodata(z2) {
+        let total_cells = bands * rows * cols;
+        let (corr_values, sig_values): (Vec<f64>, Vec<f64>) = (0..total_cells)
+            .into_par_iter()
+            .map(|idx| {
+                let band_idx = idx / (rows * cols);
+                let band = band_idx as isize;
+                let rem = idx % (rows * cols);
+                let row = (rem / cols) as isize;
+                let col = (rem % cols) as isize;
+
+                let z1 = in1.get_raw(band, row, col).unwrap_or(in1.nodata);
+                let z2 = in2.get_raw(band, row, col).unwrap_or(in2.nodata);
+                if in1.is_nodata(z1) || in2.is_nodata(z2) {
+                    return (in1.nodata, in1.nodata);
+                }
+
+                let mut a = Vec::<f64>::with_capacity(offsets.len());
+                let mut b = Vec::<f64>::with_capacity(offsets.len());
+                for (dr, dc) in &offsets {
+                    let rr = row + *dr;
+                    let cc = col + *dc;
+                    if rr < 0 || rr >= rows_i || cc < 0 || cc >= cols_i {
                         continue;
                     }
-
-                    let mut a = Vec::<f64>::with_capacity(offsets.len());
-                    let mut b = Vec::<f64>::with_capacity(offsets.len());
-                    for (dr, dc) in &offsets {
-                        let rr = row + *dr;
-                        let cc = col + *dc;
-                        if rr < 0 || rr >= rows_i || cc < 0 || cc >= cols_i {
-                            continue;
-                        }
-                        let v1 = in1.get_raw(band, rr, cc).unwrap_or(in1.nodata);
-                        let v2 = in2.get_raw(band, rr, cc).unwrap_or(in2.nodata);
-                        if in1.is_nodata(v1) || in2.is_nodata(v2) {
-                            continue;
-                        }
-                        a.push(v1);
-                        b.push(v2);
-                    }
-
-                    if a.len() < 3 {
+                    let v1 = in1.get_raw(band, rr, cc).unwrap_or(in1.nodata);
+                    let v2 = in2.get_raw(band, rr, cc).unwrap_or(in2.nodata);
+                    if in1.is_nodata(v1) || in2.is_nodata(v2) {
                         continue;
                     }
+                    a.push(v1);
+                    b.push(v2);
+                }
 
-                    let (corr, pval) = if stat == "kendall" {
-                        if let Some((tau, n)) = kendall_tau_b_from_pairs(&a, &b) {
-                            let nn = n as f64;
-                            let z = if nn > 2.0 {
-                                3.0 * tau * (nn * (nn - 1.0) / (2.0 * (2.0 * nn + 5.0))).sqrt()
-                            } else {
-                                0.0
-                            };
-                            (tau, two_tailed_normal_p(z))
-                        } else {
-                            continue;
-                        }
-                    } else if stat == "spearman" {
-                        if let Some((rho, n, ties)) = spearman_from_pairs(&a, &b) {
-                            let df = n as f64 - 2.0;
-                            let t = if df > 0.0 && (1.0 - rho * rho) > 0.0 {
-                                rho * (df / (1.0 - rho * rho)).sqrt()
-                            } else {
-                                0.0
-                            };
-                            let p = two_tailed_normal_p(t);
-                            if ties > 0 {
-                                (rho, p.max(0.0))
-                            } else {
-                                (rho, p)
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else if let Some((r, n)) = pearson_from_pairs(&a, &b) {
-                        let df = n as f64 - 2.0;
-                        let t = if df > 0.0 && (1.0 - r * r) > 0.0 {
-                            r * (df / (1.0 - r * r)).sqrt()
+                if a.len() < 3 {
+                    return (in1.nodata, in1.nodata);
+                }
+
+                if stat == "kendall" {
+                    if let Some((tau, n)) = kendall_tau_b_from_pairs(&a, &b) {
+                        let nn = n as f64;
+                        let z = if nn > 2.0 {
+                            3.0 * tau * (nn * (nn - 1.0) / (2.0 * (2.0 * nn + 5.0))).sqrt()
                         } else {
                             0.0
                         };
-                        (r, two_tailed_normal_p(t))
+                        (tau, two_tailed_normal_p(z))
                     } else {
-                        continue;
+                        (in1.nodata, in1.nodata)
+                    }
+                } else if stat == "spearman" {
+                    if let Some((rho, n, ties)) = spearman_from_pairs(&a, &b) {
+                        let df = n as f64 - 2.0;
+                        let t = if df > 0.0 && (1.0 - rho * rho) > 0.0 {
+                            rho * (df / (1.0 - rho * rho)).sqrt()
+                        } else {
+                            0.0
+                        };
+                        let p = two_tailed_normal_p(t);
+                        if ties > 0 {
+                            (rho, p.max(0.0))
+                        } else {
+                            (rho, p)
+                        }
+                    } else {
+                        (in1.nodata, in1.nodata)
+                    }
+                } else if let Some((r, n)) = pearson_from_pairs(&a, &b) {
+                    let df = n as f64 - 2.0;
+                    let t = if df > 0.0 && (1.0 - r * r) > 0.0 {
+                        r * (df / (1.0 - r * r)).sqrt()
+                    } else {
+                        0.0
                     };
-
-                    let idx = band_idx * rows * cols + row as usize * cols + col as usize;
-                    out_corr.data.set_f64(idx, corr);
-                    out_sig.data.set_f64(idx, pval);
+                    (r, two_tailed_normal_p(t))
+                } else {
+                    (in1.nodata, in1.nodata)
                 }
+            })
+            .unzip();
+
+        if let (Some(corr_slice), Some(sig_slice)) = (out_corr.data.as_f32_slice_mut(), out_sig.data.as_f32_slice_mut()) {
+            corr_slice
+                .par_iter_mut()
+                .zip(sig_slice.par_iter_mut())
+                .enumerate()
+                .for_each(|(i, (corr_cell, sig_cell))| {
+                    *corr_cell = corr_values[i] as f32;
+                    *sig_cell = sig_values[i] as f32;
+                });
+        } else {
+            for i in 0..total_cells {
+                out_corr.data.set_f64(i, corr_values[i]);
+                out_sig.data.set_f64(i, sig_values[i]);
             }
         }
 
@@ -4049,26 +4264,38 @@ impl Tool for ImageRegressionTool {
             ));
         }
 
-        let mut n = 0.0f64;
-        let mut sum_x = 0.0f64;
-        let mut sum_y = 0.0f64;
-        let mut sum_xy = 0.0f64;
-        let mut sum_xx = 0.0f64;
-        let mut sum_yy = 0.0f64;
-
-        for i in 0..in1.data.len() {
-            let x = in1.data.get_f64(i);
-            let y = in2.data.get_f64(i);
-            if in1.is_nodata(x) || in2.is_nodata(y) {
-                continue;
-            }
-            n += 1.0;
-            sum_x += x;
-            sum_y += y;
-            sum_xy += x * y;
-            sum_xx += x * x;
-            sum_yy += y * y;
-        }
+        let (n, sum_x, sum_y, sum_xy, sum_xx, sum_yy) = (0..in1.data.len())
+            .into_par_iter()
+            .fold(
+                || (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64),
+                |mut acc, i| {
+                    let x = in1.data.get_f64(i);
+                    let y = in2.data.get_f64(i);
+                    if in1.is_nodata(x) || in2.is_nodata(y) {
+                        return acc;
+                    }
+                    acc.0 += 1.0;
+                    acc.1 += x;
+                    acc.2 += y;
+                    acc.3 += x * y;
+                    acc.4 += x * x;
+                    acc.5 += y * y;
+                    acc
+                },
+            )
+            .reduce(
+                || (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64),
+                |a, b| {
+                    (
+                        a.0 + b.0,
+                        a.1 + b.1,
+                        a.2 + b.2,
+                        a.3 + b.3,
+                        a.4 + b.4,
+                        a.5 + b.5,
+                    )
+                },
+            );
 
         if n <= 2.0 {
             return Err(ToolError::Validation(
@@ -4095,18 +4322,26 @@ impl Tool for ImageRegressionTool {
         let r_sqr = r * r;
         let y_mean = sum_y / n;
 
-        let mut ss_error = 0.0f64;
-        let mut ss_total = 0.0f64;
-        for i in 0..in1.data.len() {
-            let x = in1.data.get_f64(i);
-            let y = in2.data.get_f64(i);
-            if in1.is_nodata(x) || in2.is_nodata(y) {
-                continue;
-            }
-            let yhat = slope * x + intercept;
-            ss_error += (y - yhat) * (y - yhat);
-            ss_total += (y - y_mean) * (y - y_mean);
-        }
+        let (ss_error, ss_total) = (0..in1.data.len())
+            .into_par_iter()
+            .fold(
+                || (0.0f64, 0.0f64),
+                |mut acc, i| {
+                    let x = in1.data.get_f64(i);
+                    let y = in2.data.get_f64(i);
+                    if in1.is_nodata(x) || in2.is_nodata(y) {
+                        return acc;
+                    }
+                    let yhat = slope * x + intercept;
+                    acc.0 += (y - yhat) * (y - yhat);
+                    acc.1 += (y - y_mean) * (y - y_mean);
+                    acc
+                },
+            )
+            .reduce(
+                || (0.0f64, 0.0f64),
+                |a, b| (a.0 + b.0, a.1 + b.1),
+            );
 
         let df_reg = 1.0f64;
         let df_error = n - 2.0;
@@ -4148,19 +4383,32 @@ impl Tool for ImageRegressionTool {
             metadata: in1.metadata.clone(),
         });
 
-        for i in 0..residuals.data.len() {
-            let x = in1.data.get_f64(i);
-            let y = in2.data.get_f64(i);
-            if in1.is_nodata(x) || in2.is_nodata(y) {
-                residuals.data.set_f64(i, in1.nodata);
-                continue;
+        let residual_values: Vec<f64> = (0..residuals.data.len())
+            .into_par_iter()
+            .map(|i| {
+                let x = in1.data.get_f64(i);
+                let y = in2.data.get_f64(i);
+                if in1.is_nodata(x) || in2.is_nodata(y) {
+                    return in1.nodata;
+                }
+                let yhat = slope * x + intercept;
+                let mut res = y - yhat;
+                if standardize_residuals && se_of_estimate > 0.0 {
+                    res /= se_of_estimate;
+                }
+                res
+            })
+            .collect();
+
+        if let Some(data_slice) = residuals.data.as_f32_slice_mut() {
+            data_slice
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, cell)| *cell = residual_values[i] as f32);
+        } else {
+            for (i, v) in residual_values.iter().enumerate() {
+                residuals.data.set_f64(i, *v);
             }
-            let yhat = slope * x + intercept;
-            let mut res = y - yhat;
-            if standardize_residuals && se_of_estimate > 0.0 {
-                res /= se_of_estimate;
-            }
-            residuals.data.set_f64(i, res);
         }
 
         let out_loc = write_or_store_output(residuals, output_path)?;
@@ -4360,24 +4608,31 @@ impl Tool for DbscanTool {
 
         // Compute per-band scaling offsets and multipliers
         let band_scale: Vec<(f64, f64)> = rasters
-            .iter()
+            .par_iter()
             .map(|r| {
                 if normalize {
                     let stats = r.statistics();
                     let rng = stats.max - stats.min;
                     (stats.min, if rng.abs() < 1.0e-15 { 1.0 } else { rng })
                 } else if standardize {
-                    let mut n = 0.0f64;
-                    let mut sum = 0.0f64;
-                    let mut sum_sq = 0.0f64;
-                    for i in 0..r.data.len() {
-                        let z = r.data.get_f64(i);
-                        if !r.is_nodata(z) {
-                            n += 1.0;
-                            sum += z;
-                            sum_sq += z * z;
-                        }
-                    }
+                    let (n, sum, sum_sq) = (0..r.data.len())
+                        .into_par_iter()
+                        .fold(
+                            || (0.0f64, 0.0f64, 0.0f64),
+                            |(mut local_n, mut local_sum, mut local_sum_sq), i| {
+                                let z = r.data.get_f64(i);
+                                if !r.is_nodata(z) {
+                                    local_n += 1.0;
+                                    local_sum += z;
+                                    local_sum_sq += z * z;
+                                }
+                                (local_n, local_sum, local_sum_sq)
+                            },
+                        )
+                        .reduce(
+                            || (0.0f64, 0.0f64, 0.0f64),
+                            |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2),
+                        );
                     if n < 2.0 {
                         (0.0, 1.0)
                     } else {
@@ -4394,26 +4649,37 @@ impl Tool for DbscanTool {
 
         // Collect valid pixels as feature vectors
         let n_total = rows * cols;
+        let row_features: Vec<Vec<(usize, Vec<f64>)>> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let row_i = row as isize;
+                let mut local = Vec::<(usize, Vec<f64>)>::new();
+                for col in 0..cols as isize {
+                    let flat_idx = row * cols + col as usize;
+                    let mut feat = vec![0.0f64; num_features];
+                    let mut is_nodata = false;
+                    for (b, r) in rasters.iter().enumerate() {
+                        let z = r.get(0, row_i, col);
+                        if r.is_nodata(z) {
+                            is_nodata = true;
+                            break;
+                        }
+                        feat[b] = (z - band_scale[b].0) / band_scale[b].1;
+                    }
+                    if !is_nodata {
+                        local.push((flat_idx, feat));
+                    }
+                }
+                local
+            })
+            .collect();
+
         let mut points: Vec<Vec<f64>> = Vec::new();
         let mut pixel_map: Vec<usize> = Vec::new(); // point index -> flat pixel index
-
-        for row in 0..rows as isize {
-            for col in 0..cols as isize {
-                let flat_idx = row as usize * cols + col as usize;
-                let mut feat = vec![0.0f64; num_features];
-                let mut is_nodata = false;
-                for (b, r) in rasters.iter().enumerate() {
-                    let z = r.get(0, row, col);
-                    if r.is_nodata(z) {
-                        is_nodata = true;
-                        break;
-                    }
-                    feat[b] = (z - band_scale[b].0) / band_scale[b].1;
-                }
-                if !is_nodata {
-                    pixel_map.push(flat_idx);
-                    points.push(feat);
-                }
+        for local in row_features {
+            for (flat_idx, feat) in local {
+                pixel_map.push(flat_idx);
+                points.push(feat);
             }
         }
 
@@ -4490,15 +4756,26 @@ impl Tool for DbscanTool {
             metadata: rasters[0].metadata.clone(),
         });
 
-        for i in 0..n_total {
-            output.data.set_f64(i, OUT_NODATA);
-        }
-        for (pt_idx, &flat_idx) in pixel_map.iter().enumerate() {
-            let lbl = labels[pt_idx];
-            if lbl > 0 {
-                output.data.set_f64(flat_idx, (lbl - 1) as f64); // 0-based cluster IDs
+        if let Some(data_slice) = output.data.as_i16_slice_mut() {
+            data_slice.par_iter_mut().for_each(|cell| *cell = OUT_NODATA as i16);
+            for (pt_idx, &flat_idx) in pixel_map.iter().enumerate() {
+                let lbl = labels[pt_idx];
+                if lbl > 0 {
+                    data_slice[flat_idx] = (lbl - 1) as i16; // 0-based cluster IDs
+                }
+                // lbl == 0 (noise) -> keep nodata
             }
-            // lbl == 0 (noise) → keep nodata
+        } else {
+            for i in 0..n_total {
+                output.data.set_f64(i, OUT_NODATA);
+            }
+            for (pt_idx, &flat_idx) in pixel_map.iter().enumerate() {
+                let lbl = labels[pt_idx];
+                if lbl > 0 {
+                    output.data.set_f64(flat_idx, (lbl - 1) as f64); // 0-based cluster IDs
+                }
+                // lbl == 0 (noise) → keep nodata
+            }
         }
 
         let num_clusters = labels.iter().copied().filter(|&l| l > 0).max().unwrap_or(0) as usize;
@@ -4746,44 +5023,68 @@ impl Tool for KappaIndexTool {
             return Err(ToolError::Validation("input rasters must have identical rows, columns, and bands".to_string()));
         }
 
+        let counts = (0..in1.data.len())
+            .into_par_iter()
+            .fold(
+                || HashMap::<(i64, i64), usize>::new(),
+                |mut acc, i| {
+                    let z1 = in1.data.get_f64(i);
+                    let z2 = in2.data.get_f64(i);
+                    if in1.is_nodata(z1) || in2.is_nodata(z2) {
+                        return acc;
+                    }
+                    let c1 = z1.round() as i64;
+                    let c2 = z2.round() as i64;
+                    *acc.entry((c1, c2)).or_insert(0) += 1;
+                    acc
+                },
+            )
+            .reduce(
+                || HashMap::<(i64, i64), usize>::new(),
+                |mut a, b| {
+                    for (k, v) in b {
+                        *a.entry(k).or_insert(0) += v;
+                    }
+                    a
+                },
+            );
+
         let mut classes = BTreeSet::<i64>::new();
-        let mut counts = BTreeMap::<(i64, i64), usize>::new();
-        for i in 0..in1.data.len() {
-            let z1 = in1.data.get_f64(i);
-            let z2 = in2.data.get_f64(i);
-            if in1.is_nodata(z1) || in2.is_nodata(z2) {
-                continue;
-            }
-            let c1 = z1.round() as i64;
-            let c2 = z2.round() as i64;
+        for &(c1, c2) in counts.keys() {
             classes.insert(c1);
             classes.insert(c2);
-            *counts.entry((c1, c2)).or_insert(0) += 1;
         }
+
+        let counts: BTreeMap<(i64, i64), usize> = counts.into_iter().collect();
 
         let classes: Vec<i64> = classes.into_iter().collect();
         if classes.is_empty() {
             return Err(ToolError::Validation("no overlapping valid categorical cells were found".to_string()));
         }
 
-        let mut matrix = vec![vec![0usize; classes.len()]; classes.len()];
-        let mut row_totals = vec![0usize; classes.len()];
-        let mut col_totals = vec![0usize; classes.len()];
-        let mut total = 0usize;
-        let mut diag = 0usize;
+        let matrix: Vec<Vec<usize>> = classes
+            .par_iter()
+            .map(|rv| {
+                classes
+                    .iter()
+                    .map(|cv| *counts.get(&(*rv, *cv)).unwrap_or(&0))
+                    .collect()
+            })
+            .collect();
 
-        for (ri, rv) in classes.iter().enumerate() {
-            for (ci, cv) in classes.iter().enumerate() {
-                let n = *counts.get(&(*rv, *cv)).unwrap_or(&0);
-                matrix[ri][ci] = n;
-                row_totals[ri] += n;
-                col_totals[ci] += n;
-                total += n;
-                if ri == ci {
-                    diag += n;
-                }
-            }
-        }
+        let row_totals: Vec<usize> = matrix
+            .par_iter()
+            .map(|row| row.iter().copied().sum::<usize>())
+            .collect();
+        let col_totals: Vec<usize> = (0..classes.len())
+            .into_par_iter()
+            .map(|ci| matrix.iter().map(|row| row[ci]).sum::<usize>())
+            .collect();
+        let total: usize = row_totals.iter().copied().sum();
+        let diag: usize = (0..classes.len())
+            .into_par_iter()
+            .map(|i| matrix[i][i])
+            .sum();
 
         if total == 0 {
             return Err(ToolError::Validation("no overlapping valid cells were found".to_string()));
@@ -4800,10 +5101,9 @@ impl Tool for KappaIndexTool {
             (diag as f64 - expected) / (total as f64 - expected)
         };
 
-        let producers_accuracy: Vec<f64> = classes
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
+        let producers_accuracy: Vec<f64> = (0..classes.len())
+            .into_par_iter()
+            .map(|i| {
                 if col_totals[i] > 0 {
                     matrix[i][i] as f64 / col_totals[i] as f64
                 } else {
@@ -4812,10 +5112,9 @@ impl Tool for KappaIndexTool {
             })
             .collect();
 
-        let users_accuracy: Vec<f64> = classes
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
+        let users_accuracy: Vec<f64> = (0..classes.len())
+            .into_par_iter()
+            .map(|i| {
                 if row_totals[i] > 0 {
                     matrix[i][i] as f64 / row_totals[i] as f64
                 } else {
@@ -4923,11 +5222,12 @@ impl Tool for PairedSampleTTestTool {
 
         let n = diffs.len();
         let n_f = n as f64;
-        let mean = diffs.iter().sum::<f64>() / n_f;
-        let variance = diffs.iter().map(|d| {
-            let v = *d - mean;
-            v * v
-        }).sum::<f64>() / n_f;
+        let (sum, sq_sum) = diffs
+            .par_iter()
+            .map(|d| (*d, d * d))
+            .reduce(|| (0.0f64, 0.0f64), |a, b| (a.0 + b.0, a.1 + b.1));
+        let mean = sum / n_f;
+        let variance = (sq_sum / n_f - mean * mean).max(0.0);
         let std_dev = variance.sqrt();
         let std_err = if n > 0 { std_dev / n_f.sqrt() } else { 0.0 };
         let t_value = if std_err > 0.0 { mean / std_err } else { 0.0 };
@@ -5134,19 +5434,16 @@ impl Tool for WilcoxonSignedRankTestTool {
             paired_diffs
         };
 
-        let mut signed_abs = Vec::<(f64, f64)>::new();
-        for d in diffs {
-            if d == 0.0 {
-                continue;
-            }
-            signed_abs.push((d.signum(), d.abs()));
-        }
+        let mut signed_abs: Vec<(f64, f64)> = diffs
+            .into_par_iter()
+            .filter_map(|d| if d == 0.0 { None } else { Some((d.signum(), d.abs())) })
+            .collect();
 
         if signed_abs.len() < 2 {
             return Err(ToolError::Validation("insufficient non-zero differences for Wilcoxon test".to_string()));
         }
 
-        signed_abs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        signed_abs.par_sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
         let mut i = 0usize;
         let mut w_pos = 0.0f64;
@@ -5264,10 +5561,19 @@ impl Tool for MaxTool {
                     return Err(ToolError::Validation("input rasters must have identical rows, columns, and bands".to_string()));
                 }
                 let mut out = r1.clone();
-                for i in 0..out.data.len() {
-                    let a = r1.data.get_f64(i);
-                    let b = r2.data.get_f64(i);
-                    let z = if r1.is_nodata(a) || r2.is_nodata(b) { out.nodata } else { a.max(b) };
+                let out_values: Vec<f64> = (0..out.data.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        let a = r1.data.get_f64(i);
+                        let b = r2.data.get_f64(i);
+                        if r1.is_nodata(a) || r2.is_nodata(b) {
+                            out.nodata
+                        } else {
+                            a.max(b)
+                        }
+                    })
+                    .collect();
+                for (i, z) in out_values.into_iter().enumerate() {
                     out.data.set_f64(i, z);
                 }
                 let loc = write_or_store_output(out, output_path)?;
@@ -5279,9 +5585,18 @@ impl Tool for MaxTool {
             | (RasterOrConstant::Constant(c), RasterOrConstant::Raster(p)) => {
                 let r = load_raster(&p, "input")?;
                 let mut out = r.clone();
-                for i in 0..out.data.len() {
-                    let a = r.data.get_f64(i);
-                    let z = if r.is_nodata(a) { out.nodata } else { a.max(c) };
+                let out_values: Vec<f64> = (0..out.data.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        let a = r.data.get_f64(i);
+                        if r.is_nodata(a) {
+                            out.nodata
+                        } else {
+                            a.max(c)
+                        }
+                    })
+                    .collect();
+                for (i, z) in out_values.into_iter().enumerate() {
                     out.data.set_f64(i, z);
                 }
                 let loc = write_or_store_output(out, output_path)?;
@@ -5366,10 +5681,19 @@ impl Tool for MinTool {
                     return Err(ToolError::Validation("input rasters must have identical rows, columns, and bands".to_string()));
                 }
                 let mut out = r1.clone();
-                for i in 0..out.data.len() {
-                    let a = r1.data.get_f64(i);
-                    let b = r2.data.get_f64(i);
-                    let z = if r1.is_nodata(a) || r2.is_nodata(b) { out.nodata } else { a.min(b) };
+                let out_values: Vec<f64> = (0..out.data.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        let a = r1.data.get_f64(i);
+                        let b = r2.data.get_f64(i);
+                        if r1.is_nodata(a) || r2.is_nodata(b) {
+                            out.nodata
+                        } else {
+                            a.min(b)
+                        }
+                    })
+                    .collect();
+                for (i, z) in out_values.into_iter().enumerate() {
                     out.data.set_f64(i, z);
                 }
                 let loc = write_or_store_output(out, output_path)?;
@@ -5381,9 +5705,18 @@ impl Tool for MinTool {
             | (RasterOrConstant::Constant(c), RasterOrConstant::Raster(p)) => {
                 let r = load_raster(&p, "input")?;
                 let mut out = r.clone();
-                for i in 0..out.data.len() {
-                    let a = r.data.get_f64(i);
-                    let z = if r.is_nodata(a) { out.nodata } else { a.min(c) };
+                let out_values: Vec<f64> = (0..out.data.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        let a = r.data.get_f64(i);
+                        if r.is_nodata(a) {
+                            out.nodata
+                        } else {
+                            a.min(c)
+                        }
+                    })
+                    .collect();
+                for (i, z) in out_values.into_iter().enumerate() {
                     out.data.set_f64(i, z);
                 }
                 let loc = write_or_store_output(out, output_path)?;
@@ -5464,20 +5797,28 @@ impl Tool for QuantilesTool {
         let input = load_raster(&input_path, "input")?;
 
         // Compute min/max in one parallel pass
-        let (min_val, max_val, num_valid) = {
-            let mut mn = f64::INFINITY;
-            let mut mx = f64::NEG_INFINITY;
-            let mut n = 0usize;
-            for i in 0..input.data.len() {
-                let z = input.data.get_f64(i);
-                if !input.is_nodata(z) {
-                    if z < mn { mn = z; }
-                    if z > mx { mx = z; }
-                    n += 1;
-                }
-            }
-            (mn, mx, n)
-        };
+        let (min_val, max_val, num_valid) = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |(mut mn, mut mx, mut n), i| {
+                    let z = input.data.get_f64(i);
+                    if !input.is_nodata(z) {
+                        if z < mn {
+                            mn = z;
+                        }
+                        if z > mx {
+                            mx = z;
+                        }
+                        n += 1;
+                    }
+                    (mn, mx, n)
+                },
+            )
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
+            );
         if num_valid == 0 {
             return Err(ToolError::Validation("input raster contains no valid cells".to_string()));
         }
@@ -5486,15 +5827,29 @@ impl Tool for QuantilesTool {
         const NUM_BINS: usize = 10_000;
         let value_range = (max_val - min_val).max(f64::EPSILON);
         let bin_size = value_range / NUM_BINS as f64;
-        let mut histo = vec![0u64; NUM_BINS];
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if !input.is_nodata(z) {
-                let b = ((z - min_val) / bin_size).floor() as usize;
-                let b = b.min(NUM_BINS - 1);
-                histo[b] += 1;
-            }
-        }
+        let histo = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || vec![0u64; NUM_BINS],
+                |mut local_histo, i| {
+                    let z = input.data.get_f64(i);
+                    if !input.is_nodata(z) {
+                        let b = ((z - min_val) / bin_size).floor() as usize;
+                        let b = b.min(NUM_BINS - 1);
+                        local_histo[b] += 1;
+                    }
+                    local_histo
+                },
+            )
+            .reduce(
+                || vec![0u64; NUM_BINS],
+                |mut a, b| {
+                    for (i, v) in b.into_iter().enumerate() {
+                        a[i] += v;
+                    }
+                    a
+                },
+            );
 
         // Cumulative histogram → quantile class per bin
         let mut cumulative = 0u64;
@@ -5520,15 +5875,22 @@ impl Tool for QuantilesTool {
             metadata: input.metadata.clone(),
         });
 
-        for i in 0..input.data.len() {
-            let z = input.data.get_f64(i);
-            if input.is_nodata(z) {
-                out.data.set_f64(i, input.nodata);
-            } else {
-                let b = ((z - min_val) / bin_size).floor() as usize;
-                let b = b.min(NUM_BINS - 1);
-                out.data.set_f64(i, bin_class[b] as f64);
-            }
+        let out_values: Vec<f64> = (0..input.data.len())
+            .into_par_iter()
+            .map(|i| {
+                let z = input.data.get_f64(i);
+                if input.is_nodata(z) {
+                    input.nodata
+                } else {
+                    let b = ((z - min_val) / bin_size).floor() as usize;
+                    let b = b.min(NUM_BINS - 1);
+                    bin_class[b] as f64
+                }
+            })
+            .collect();
+
+        for (i, z) in out_values.into_iter().enumerate() {
+            out.data.set_f64(i, z);
         }
 
         let loc = write_or_store_output(out, output_path)?;
@@ -5604,15 +5966,32 @@ impl Tool for ListUniqueValuesTool {
             .field_index(field)
             .ok_or_else(|| ToolError::Validation(format!("field '{}' not found", field)))?;
 
-        let mut freq = BTreeMap::<String, usize>::new();
-        for f in &layer.features {
-            let key = f
-                .attributes
-                .get(idx)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "null".to_string());
-            *freq.entry(key).or_insert(0) += 1;
-        }
+        let freq_hash = layer
+            .features
+            .par_iter()
+            .fold(
+                HashMap::<String, usize>::new,
+                |mut acc, f| {
+                    let key = f
+                        .attributes
+                        .get(idx)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "null".to_string());
+                    *acc.entry(key).or_insert(0) += 1;
+                    acc
+                },
+            )
+            .reduce(
+                HashMap::<String, usize>::new,
+                |mut a, b| {
+                    for (k, v) in b {
+                        *a.entry(k).or_insert(0) += v;
+                    }
+                    a
+                },
+            );
+
+        let freq: BTreeMap<String, usize> = freq_hash.into_iter().collect();
 
         let report = json!({"field": field, "categories": freq}).to_string();
         let mut outputs = BTreeMap::new();
@@ -5677,36 +6056,52 @@ impl Tool for RootMeanSquareErrorTool {
         let input = load_raster(&input_path, "input")?;
         let base = load_raster(&base_path, "base")?;
 
-        let mut diffs = Vec::<f64>::new();
+        let diffs: Vec<f64>;
         let same_grid = input.rows == base.rows && input.cols == base.cols;
 
         if same_grid {
-            for i in 0..input.data.len() {
-                let z1 = input.data.get_f64(i);
-                let z2 = base.data.get_f64(i);
-                if input.is_nodata(z1) || base.is_nodata(z2) {
-                    continue;
-                }
-                diffs.push(z2 - z1);
-            }
-        } else {
-            for row in 0..input.rows as isize {
-                for col in 0..input.cols as isize {
-                    let z1 = input.get(0, row, col);
-                    if input.is_nodata(z1) {
-                        continue;
+            diffs = (0..input.data.len())
+                .into_par_iter()
+                .filter_map(|i| {
+                    let z1 = input.data.get_f64(i);
+                    let z2 = base.data.get_f64(i);
+                    if input.is_nodata(z1) || base.is_nodata(z2) {
+                        None
+                    } else {
+                        Some(z2 - z1)
                     }
-                    let x = input.col_center_x(col);
-                    let y = input.row_center_y(row);
-                    if let Some((bcol, brow)) = base.world_to_pixel(x, y) {
-                        let z2 = base.get(0, brow, bcol);
-                        if base.is_nodata(z2) {
+                })
+                .collect();
+        } else {
+            diffs = (0..input.rows)
+                .into_par_iter()
+                .map(|row| {
+                    let row_i = row as isize;
+                    let mut local = Vec::new();
+                    for col in 0..input.cols as isize {
+                        let z1 = input.get(0, row_i, col);
+                        if input.is_nodata(z1) {
                             continue;
                         }
-                        diffs.push(z2 - z1);
+                        let x = input.col_center_x(col);
+                        let y = input.row_center_y(row_i);
+                        if let Some((bcol, brow)) = base.world_to_pixel(x, y) {
+                            let z2 = base.get(0, brow, bcol);
+                            if base.is_nodata(z2) {
+                                continue;
+                            }
+                            local.push(z2 - z1);
+                        }
                     }
-                }
-            }
+                    local
+                })
+                .reduce(
+                    Vec::new,
+                    |mut a, mut b| {
+                        a.append(&mut b);
+                        a
+                    },
+                );
         }
 
         if diffs.is_empty() {
@@ -5714,13 +6109,15 @@ impl Tool for RootMeanSquareErrorTool {
         }
 
         let n = diffs.len() as f64;
-        let sum: f64 = diffs.iter().sum();
-        let sq_sum: f64 = diffs.iter().map(|d| d * d).sum();
+        let (sum, sq_sum) = diffs
+            .par_iter()
+            .map(|d| (*d, d * d))
+            .reduce(|| (0.0f64, 0.0f64), |a, b| (a.0 + b.0, a.1 + b.1));
         let mean_vertical_error = sum / n;
         let rmse = (sq_sum / n).sqrt();
 
-        let mut abs_residuals: Vec<f64> = diffs.iter().map(|d| d.abs()).collect();
-        abs_residuals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let mut abs_residuals: Vec<f64> = diffs.par_iter().map(|d| d.abs()).collect();
+        abs_residuals.par_sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let idx90 = ((0.9 * n).floor() as usize).min(abs_residuals.len() - 1);
         let le90 = abs_residuals[idx90];
 
@@ -5829,44 +6226,90 @@ impl Tool for ZonalStatisticsTool {
         }
 
         let n = input.rows * input.cols;
-        let mut zone_data: HashMap<i64, Vec<f64>> = HashMap::new();
-        let mut zone_set: HashMap<i64, std::collections::HashSet<i64>> = HashMap::new();
-        for i in 0..n {
-            let z_val = features.data.get_f64(i);
-            if features.is_nodata(z_val) { continue; }
-            let zone_id = z_val.round() as i64;
-            if zero_is_background && zone_id == 0 { continue; }
-            let data_val = input.data.get_f64(i);
-            if input.is_nodata(data_val) { continue; }
-            zone_data.entry(zone_id).or_default().push(data_val);
-            zone_set.entry(zone_id).or_default().insert((data_val * 1000.0).round() as i64);
-        }
-
-        let mut zone_stat: HashMap<i64, f64> = HashMap::new();
-        for (&id, data) in &mut zone_data {
-            let stat_val = match stat_type {
-                "min" => data.iter().cloned().fold(f64::INFINITY, f64::min),
-                "max" => data.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-                "range" => data.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - data.iter().cloned().fold(f64::INFINITY, f64::min),
-                "total" => data.iter().sum(),
-                "diversity" => zone_set.get(&id).map(|s| s.len()).unwrap_or(0) as f64,
-                "standard deviation" => {
-                    let cnt = data.len() as f64;
-                    if cnt < 2.0 { 0.0 } else {
-                        let mean = data.iter().sum::<f64>() / cnt;
-                        let var = data.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (cnt - 1.0);
-                        var.sqrt()
+        let (mut zone_data, zone_set) = (0..n)
+            .into_par_iter()
+            .fold(
+                || {
+                    (
+                        HashMap::<i64, Vec<f64>>::new(),
+                        HashMap::<i64, std::collections::HashSet<i64>>::new(),
+                    )
+                },
+                |mut acc, i| {
+                    let z_val = features.data.get_f64(i);
+                    if features.is_nodata(z_val) {
+                        return acc;
                     }
-                }
-                "median" => {
-                    data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                    let mid = data.len() / 2;
-                    if data.len() % 2 == 0 { (data[mid - 1] + data[mid]) / 2.0 } else { data[mid] }
-                }
-                _ => data.iter().sum::<f64>() / data.len() as f64,
-            };
-            zone_stat.insert(id, stat_val);
-        }
+                    let zone_id = z_val.round() as i64;
+                    if zero_is_background && zone_id == 0 {
+                        return acc;
+                    }
+                    let data_val = input.data.get_f64(i);
+                    if input.is_nodata(data_val) {
+                        return acc;
+                    }
+                    acc.0.entry(zone_id).or_default().push(data_val);
+                    acc.1
+                        .entry(zone_id)
+                        .or_default()
+                        .insert((data_val * 1000.0).round() as i64);
+                    acc
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        HashMap::<i64, Vec<f64>>::new(),
+                        HashMap::<i64, std::collections::HashSet<i64>>::new(),
+                    )
+                },
+                |mut a, b| {
+                    for (k, mut vals) in b.0 {
+                        a.0.entry(k).or_default().append(&mut vals);
+                    }
+                    for (k, set_b) in b.1 {
+                        a.1.entry(k).or_default().extend(set_b);
+                    }
+                    a
+                },
+            );
+
+        let zone_stat: HashMap<i64, f64> = zone_data
+            .par_iter_mut()
+            .map(|(&id, data)| {
+                let stat_val = match stat_type {
+                    "min" => data.iter().cloned().fold(f64::INFINITY, f64::min),
+                    "max" => data.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                    "range" => {
+                        data.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                            - data.iter().cloned().fold(f64::INFINITY, f64::min)
+                    }
+                    "total" => data.iter().sum(),
+                    "diversity" => zone_set.get(&id).map(|s| s.len()).unwrap_or(0) as f64,
+                    "standard deviation" => {
+                        let cnt = data.len() as f64;
+                        if cnt < 2.0 {
+                            0.0
+                        } else {
+                            let mean = data.iter().sum::<f64>() / cnt;
+                            let var = data.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (cnt - 1.0);
+                            var.sqrt()
+                        }
+                    }
+                    "median" => {
+                        data.par_sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                        let mid = data.len() / 2;
+                        if data.len() % 2 == 0 {
+                            (data[mid - 1] + data[mid]) / 2.0
+                        } else {
+                            data[mid]
+                        }
+                    }
+                    _ => data.iter().sum::<f64>() / data.len() as f64,
+                };
+                (id, stat_val)
+            })
+            .collect();
 
         let mut output = Raster::new(RasterConfig {
             rows: input.rows, cols: input.cols, bands: 1,
@@ -5876,20 +6319,35 @@ impl Tool for ZonalStatisticsTool {
             crs: input.crs.clone(), metadata: input.metadata.clone(),
             ..Default::default()
         });
-        for i in 0..n { output.data.set_f64(i, input.nodata); }
-        for i in 0..n {
-            let z_val = features.data.get_f64(i);
-            if features.is_nodata(z_val) { continue; }
-            let zone_id = z_val.round() as i64;
-            if zero_is_background && zone_id == 0 { continue; }
-            if let Some(&sv) = zone_stat.get(&zone_id) {
-                output.data.set_f64(i, sv);
+        let out_vals: Vec<f64> = (0..n)
+            .into_par_iter()
+            .map(|i| {
+                let z_val = features.data.get_f64(i);
+                if features.is_nodata(z_val) {
+                    return input.nodata;
+                }
+                let zone_id = z_val.round() as i64;
+                if zero_is_background && zone_id == 0 {
+                    return input.nodata;
+                }
+                zone_stat.get(&zone_id).copied().unwrap_or(input.nodata)
+            })
+            .collect();
+
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            data_slice
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(i, cell)| *cell = out_vals[i] as f32);
+        } else {
+            for (i, v) in out_vals.iter().enumerate() {
+                output.data.set_f64(i, *v);
             }
         }
 
         let loc = write_or_store_output(output, output_path)?;
         let mut sorted_ids: Vec<i64> = zone_stat.keys().copied().collect();
-        sorted_ids.sort_unstable();
+        sorted_ids.par_sort_unstable();
         let mut md = format!("| Zone ID | {} |\n|---------|-------|\n", stat_type);
         for id in &sorted_ids {
             md.push_str(&format!("| {} | {:.6} |\n", id, zone_stat[id]));
@@ -5977,28 +6435,37 @@ impl Tool for TurningBandsSimulationTool {
 
         for _ in 0..iterations {
             let mut t = vec![0.0f64; diagonal_size + 2 * filter_half_size];
-            for j in 0..diagonal_size { t[j] = sample_standard_normal(&mut rng); }
+            t[..diagonal_size]
+                .par_iter_mut()
+                .for_each(|cell| {
+                    let mut local_rng = rand::rng();
+                    *cell = sample_standard_normal(&mut local_rng);
+                });
 
-            let mut y = vec![0.0f32; diagonal_size];
-            let mut sum = 0.0f64;
-            let mut sq_sum = 0.0f64;
-            for j in 0..diagonal_size {
-                let mut z = 0.0f64;
-                for k in 0..filter_size {
-                    let m = cell_offsets[k];
-                    z += m as f64 * t[(j as isize + filter_half_size as isize + m) as usize];
-                }
-                y[j] = (w * z) as f32;
-                sum += y[j] as f64;
-                sq_sum += y[j] as f64 * y[j] as f64;
-            }
+            let mut y: Vec<f32> = (0..diagonal_size)
+                .into_par_iter()
+                .map(|j| {
+                    let mut z = 0.0f64;
+                    for k in 0..filter_size {
+                        let m = cell_offsets[k];
+                        z += m as f64 * t[(j as isize + filter_half_size as isize + m) as usize];
+                    }
+                    (w * z) as f32
+                })
+                .collect();
+            let (sum, sq_sum) = y
+                .par_iter()
+                .map(|&v| {
+                    let vf = v as f64;
+                    (vf, vf * vf)
+                })
+                .reduce(|| (0.0f64, 0.0f64), |a, b| (a.0 + b.0, a.1 + b.1));
             let mean = sum / diagonal_size as f64;
             let variance = (sq_sum / diagonal_size as f64 - mean * mean).max(0.0);
             let stdev = variance.sqrt();
             if stdev > 1.0e-15 {
-                for v in &mut y {
-                    *v = ((*v as f64 - mean) / stdev) as f32;
-                }
+                y.par_iter_mut()
+                    .for_each(|v| *v = ((*v as f64 - mean) / stdev) as f32);
             }
 
             // Use a random band angle and project cells onto that 1D axis.
@@ -6073,15 +6540,18 @@ fn fit_polynomial_surface(
     let n = z.len();
     let num_coeff = poly_num_coefficients(order);
     let mut design = vec![0.0f64; n * num_coeff];
-    for i in 0..n {
-        let mut m = 0;
-        for j in 0..=order {
-            for k in 0..=(order - j) {
-                design[i * num_coeff + m] = x[i].powf(j as f64) * y[i].powf(k as f64);
-                m += 1;
+    design
+        .par_chunks_mut(num_coeff)
+        .enumerate()
+        .for_each(|(i, row)| {
+            let mut m = 0;
+            for j in 0..=order {
+                for k in 0..=(order - j) {
+                    row[m] = x[i].powf(j as f64) * y[i].powf(k as f64);
+                    m += 1;
+                }
             }
-        }
-    }
+        });
     let mat = DMatrix::from_row_slice(n, num_coeff, &design);
     let qr = mat.clone().qr();
     let r = qr.r();
@@ -6091,17 +6561,23 @@ fn fit_polynomial_surface(
     let b = DVector::from_row_slice(z);
     let coeffs = (r.try_inverse().unwrap() * qr.q().transpose() * b).as_slice().to_vec();
 
-    let mut ss_resid = 0.0;
-    let mut z_sum = 0.0;
-    let mut z_ss = 0.0;
-    for i in 0..n {
-        let mut y_hat = 0.0;
-        for j in 0..num_coeff { y_hat += design[i * num_coeff + j] * coeffs[j]; }
-        let resid = z[i] - y_hat;
-        ss_resid += resid * resid;
-        z_sum += z[i];
-        z_ss += z[i] * z[i];
-    }
+    let (ss_resid, z_sum, z_ss) = (0..n)
+        .into_par_iter()
+        .map(|i| {
+            let row = &design[i * num_coeff..(i + 1) * num_coeff];
+            let y_hat = row
+                .iter()
+                .zip(coeffs.iter())
+                .map(|(a, c)| a * c)
+                .sum::<f64>();
+            let zi = z[i];
+            let resid = zi - y_hat;
+            (resid * resid, zi, zi * zi)
+        })
+        .reduce(
+            || (0.0f64, 0.0f64, 0.0f64),
+            |a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2),
+        );
     let variance = (z_ss - z_sum * z_sum / n as f64) / n as f64;
     let ss_total = (n - 1) as f64 * variance;
     let r_sqr = if ss_total.abs() < 1.0e-15 { 1.0 } else { 1.0 - ss_resid / ss_total };
@@ -6231,8 +6707,15 @@ impl Tool for TrendSurfaceTool {
                 eval_poly(x_val, y_val, &coeffs, order, min_z)
             })
             .collect();
-        for (idx, z) in fitted_values.into_iter().enumerate() {
-            output.data.set_f64(idx, z);
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            data_slice
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, cell)| *cell = fitted_values[idx] as f32);
+        } else {
+            for (idx, z) in fitted_values.into_iter().enumerate() {
+                output.data.set_f64(idx, z);
+            }
         }
 
         let loc = write_or_store_output(output, output_path)?;
@@ -6396,8 +6879,15 @@ impl Tool for TrendSurfaceVectorPointsTool {
                 eval_poly(x_val, y_val, &coeffs, order, z_offset)
             })
             .collect();
-        for (idx, z) in fitted_values.into_iter().enumerate() {
-            output.data.set_f64(idx, z);
+        if let Some(data_slice) = output.data.as_f32_slice_mut() {
+            data_slice
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, cell)| *cell = fitted_values[idx] as f32);
+        } else {
+            for (idx, z) in fitted_values.into_iter().enumerate() {
+                output.data.set_f64(idx, z);
+            }
         }
 
         let loc = write_or_store_output(output, output_path)?;
@@ -6574,22 +7064,7 @@ impl Tool for RasterCalculatorTool {
         let east = inputs[0].x_min + inputs[0].cols as f64 * inputs[0].cell_size_x;
         let west = inputs[0].x_min;
 
-        let mut context = HashMapContext::new();
-        let _ = context.set_value("rows".to_string(), EvalValue::Float(rows as f64));
-        let _ = context.set_value("columns".to_string(), EvalValue::Float(cols as f64));
-        let _ = context.set_value("north".to_string(), EvalValue::Float(north));
-        let _ = context.set_value("south".to_string(), EvalValue::Float(south));
-        let _ = context.set_value("east".to_string(), EvalValue::Float(east));
-        let _ = context.set_value("west".to_string(), EvalValue::Float(west));
-        let _ = context.set_value("cellsizex".to_string(), EvalValue::Float(inputs[0].cell_size_x));
-        let _ = context.set_value("cellsizey".to_string(), EvalValue::Float(inputs[0].cell_size_y));
-        let _ = context.set_value("cellsize".to_string(), EvalValue::Float(0.5 * (inputs[0].cell_size_x + inputs[0].cell_size_y)));
-        let _ = context.set_value("nodata".to_string(), EvalValue::Float(nodatas[0]));
-        let _ = context.set_value("null".to_string(), EvalValue::Float(nodatas[0]));
-        let _ = context.set_value("minvalue".to_string(), EvalValue::Float(stats[0].min));
-        let _ = context.set_value("maxvalue".to_string(), EvalValue::Float(stats[0].max));
-        let _ = context.set_value("pi".to_string(), EvalValue::Float(std::f64::consts::PI));
-        let _ = context.set_value("e".to_string(), EvalValue::Float(std::f64::consts::E));
+        let value_keys: Vec<String> = (0..num_inputs).map(|i| format!("value{}", i)).collect();
 
         let mut output = Raster::new(RasterConfig {
             rows, cols, bands: 1,
@@ -6600,31 +7075,70 @@ impl Tool for RasterCalculatorTool {
             ..Default::default()
         });
 
-        for row in 0..rows {
-            let _ = context.set_value("row".to_string(), EvalValue::Float(row as f64));
-            let _ = context.set_value("rowy".to_string(), EvalValue::Float(inputs[0].row_center_y(row as isize)));
-            for col in 0..cols {
-                let idx = row * cols + col;
-                let _ = context.set_value("column".to_string(), EvalValue::Float(col as f64));
-                let _ = context.set_value("columnx".to_string(), EvalValue::Float(inputs[0].col_center_x(col as isize)));
-                let mut any_nodata = false;
-                for (i, inp) in inputs.iter().enumerate() {
-                    let v = inp.data.get_f64(idx);
-                    if inp.is_nodata(v) { any_nodata = true; }
-                    let _ = context.set_value(format!("value{}", i), EvalValue::Float(v));
+        let row_results: Vec<Vec<f64>> = (0..rows)
+            .into_par_iter()
+            .map(|row| {
+                let mut row_context = HashMapContext::new();
+                let _ = row_context.set_value("rows".to_string(), EvalValue::Float(rows as f64));
+                let _ = row_context.set_value("columns".to_string(), EvalValue::Float(cols as f64));
+                let _ = row_context.set_value("north".to_string(), EvalValue::Float(north));
+                let _ = row_context.set_value("south".to_string(), EvalValue::Float(south));
+                let _ = row_context.set_value("east".to_string(), EvalValue::Float(east));
+                let _ = row_context.set_value("west".to_string(), EvalValue::Float(west));
+                let _ = row_context.set_value("cellsizex".to_string(), EvalValue::Float(inputs[0].cell_size_x));
+                let _ = row_context.set_value("cellsizey".to_string(), EvalValue::Float(inputs[0].cell_size_y));
+                let _ = row_context.set_value("cellsize".to_string(), EvalValue::Float(0.5 * (inputs[0].cell_size_x + inputs[0].cell_size_y)));
+                let _ = row_context.set_value("nodata".to_string(), EvalValue::Float(nodatas[0]));
+                let _ = row_context.set_value("null".to_string(), EvalValue::Float(nodatas[0]));
+                let _ = row_context.set_value("minvalue".to_string(), EvalValue::Float(stats[0].min));
+                let _ = row_context.set_value("maxvalue".to_string(), EvalValue::Float(stats[0].max));
+                let _ = row_context.set_value("pi".to_string(), EvalValue::Float(std::f64::consts::PI));
+                let _ = row_context.set_value("e".to_string(), EvalValue::Float(std::f64::consts::E));
+
+                let _ = row_context.set_value("row".to_string(), EvalValue::Float(row as f64));
+                let _ = row_context.set_value("rowy".to_string(), EvalValue::Float(inputs[0].row_center_y(row as isize)));
+
+                let mut row_vals = Vec::with_capacity(cols);
+                for col in 0..cols {
+                    let idx = row * cols + col;
+                    let _ = row_context.set_value("column".to_string(), EvalValue::Float(col as f64));
+                    let _ = row_context.set_value("columnx".to_string(), EvalValue::Float(inputs[0].col_center_x(col as isize)));
+
+                    let mut any_nodata = false;
+                    for (key, inp) in value_keys.iter().zip(inputs.iter()) {
+                        let v = inp.data.get_f64(idx);
+                        if inp.is_nodata(v) {
+                            any_nodata = true;
+                        }
+                        let _ = row_context.set_value(key.clone(), EvalValue::Float(v));
+                    }
+
+                    if any_nodata && !statement_contains_nodata {
+                        row_vals.push(out_nodata);
+                        continue;
+                    }
+
+                    let out_val = match expr_tree.eval_with_context(&row_context) {
+                        Ok(EvalValue::Float(v)) => v,
+                        Ok(EvalValue::Int(v)) => v as f64,
+                        Ok(EvalValue::Boolean(b)) => {
+                            if b { 1.0 } else { 0.0 }
+                        }
+                        _ => out_nodata,
+                    };
+                    row_vals.push(out_val);
                 }
-                if any_nodata && !statement_contains_nodata {
-                    output.data.set_f64(idx, out_nodata);
-                    continue;
-                }
-                let out_val = match expr_tree.eval_with_context(&context) {
-                    Ok(EvalValue::Float(v)) => v,
-                    Ok(EvalValue::Int(v)) => v as f64,
-                    Ok(EvalValue::Boolean(b)) => if b { 1.0 } else { 0.0 },
-                    _ => out_nodata,
-                };
-                output.data.set_f64(idx, out_val);
-            }
+                row_vals
+            })
+            .collect();
+
+        let flat_results: Vec<f64> = row_results
+            .into_par_iter()
+            .flat_map(|row_vals| row_vals)
+            .collect();
+
+        for (idx, &out_val) in flat_results.iter().enumerate() {
+            output.data.set_f64(idx, out_val);
         }
 
         let loc = write_or_store_output(output, output_path)?;
@@ -6741,13 +7255,15 @@ impl Tool for PrincipalComponentAnalysisTool {
         let num_comp = args.get("num_components").and_then(|v| v.as_u64())
             .map(|v| (v as usize).clamp(1, num_images)).unwrap_or(num_images);
 
-        let mut averages = vec![0.0f64; num_images];
-        let mut num_cells = vec![0.0f64; num_images];
-        for i in 0..num_images {
-            let st = inputs[i].statistics();
-            averages[i] = st.mean;
-            num_cells[i] = st.valid_count as f64;
-        }
+        let per_band_stats: Vec<(f64, f64)> = inputs
+            .par_iter()
+            .map(|r| {
+                let st = r.statistics();
+                (st.mean, st.valid_count as f64)
+            })
+            .collect();
+        let averages: Vec<f64> = per_band_stats.iter().map(|(mean, _)| *mean).collect();
+        let num_cells: Vec<f64> = per_band_stats.iter().map(|(_, count)| *count).collect();
 
         let n = rows * cols;
         let (total_dev, mut covariances) = (0..n)
@@ -6795,13 +7311,17 @@ impl Tool for PrincipalComponentAnalysisTool {
             );
 
         let mut corr = vec![vec![0.0f64; num_images]; num_images];
-        for i in 0..num_images {
-            for a in 0..num_images {
-                let denom = (total_dev[i] * total_dev[a]).sqrt();
-                corr[i][a] = if denom.abs() < 1.0e-15 { 0.0 } else { covariances[i][a] / denom };
-                covariances[i][a] /= (num_cells[i] - 1.0).max(1.0);
-            }
-        }
+        corr
+            .par_iter_mut()
+            .zip(covariances.par_iter_mut())
+            .enumerate()
+            .for_each(|(i, (corr_row, cov_row))| {
+                for a in 0..num_images {
+                    let denom = (total_dev[i] * total_dev[a]).sqrt();
+                    corr_row[a] = if denom.abs() < 1.0e-15 { 0.0 } else { cov_row[a] / denom };
+                    cov_row[a] /= (num_cells[i] - 1.0).max(1.0);
+                }
+            });
 
         let matrix = if standardized { &corr } else { &covariances };
         let flat: Vec<f64> = matrix.iter().flat_map(|row| row.iter().copied()).collect();
@@ -6810,41 +7330,54 @@ impl Tool for PrincipalComponentAnalysisTool {
         let eigenvalues = eig.eigenvalues.as_slice().to_vec();
         let evec_flat = eig.eigenvectors.as_slice().to_vec(); // column-major: col pc = eigenvector pc
 
-        let total_ev: f64 = eigenvalues.iter().map(|v| v.abs()).sum::<f64>().max(1.0e-15);
-        let explained: Vec<f64> = eigenvalues.iter().map(|&e| 100.0 * e.abs() / total_ev).collect();
+        let total_ev: f64 = eigenvalues
+            .par_iter()
+            .map(|v| v.abs())
+            .sum::<f64>()
+            .max(1.0e-15);
+        let explained: Vec<f64> = eigenvalues
+            .par_iter()
+            .map(|&e| 100.0 * e.abs() / total_ev)
+            .collect();
 
         // Sort by descending explained variance
-        let mut component_order = vec![0usize; num_images];
-        {
-            let mut used = vec![false; num_images];
-            for i in 0..num_images {
-                let (k, _) = explained.iter().enumerate()
-                    .filter(|(j, _)| !used[*j])
-                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .unwrap_or((0, &0.0));
-                component_order[i] = k;
-                used[k] = true;
-            }
-        }
+        let mut component_order: Vec<usize> = (0..num_images).collect();
+        component_order.par_sort_by(|a, b| {
+            explained[*b]
+                .partial_cmp(&explained[*a])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Factor loadings
         let mut factor_loadings = vec![vec![0.0f64; num_images]; num_images];
-        for j in 0..num_images {
-            for k in 0..num_images {
-                let pc = component_order[k];
-                factor_loadings[j][k] = if !standardized {
-                    let cov_jj = covariances[j][j].abs().sqrt();
-                    if cov_jj > 1.0e-15 { evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt() / cov_jj } else { 0.0 }
-                } else {
-                    evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt()
-                };
-            }
-        }
+        factor_loadings
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(j, row)| {
+                for k in 0..num_images {
+                    let pc = component_order[k];
+                    row[k] = if !standardized {
+                        let cov_jj = covariances[j][j].abs().sqrt();
+                        if cov_jj > 1.0e-15 {
+                            evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt() / cov_jj
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        evec_flat[pc * num_images + j] * eigenvalues[pc].abs().sqrt()
+                    };
+                }
+            });
 
-        let sorted_eigenvectors: Vec<Vec<f64>> = (0..num_images).map(|a| {
-            let pc = component_order[a];
-            (0..num_images).map(|k| evec_flat[pc * num_images + k]).collect()
-        }).collect();
+        let sorted_eigenvectors: Vec<Vec<f64>> = (0..num_images)
+            .into_par_iter()
+            .map(|a| {
+                let pc = component_order[a];
+                (0..num_images)
+                    .map(|k| evec_flat[pc * num_images + k])
+                    .collect()
+            })
+            .collect();
 
         let base_path = output_path.as_ref();
         let (base_stem, base_ext, base_parent) = base_path.map(|bp| {
@@ -6869,16 +7402,29 @@ impl Tool for PrincipalComponentAnalysisTool {
                 .map(|k| evec_flat[pc * num_images + k])
                 .collect();
             let comp_values = weighted_sum_chunked(&inputs, &comp_weights, inputs[0].nodata, n);
-            for (idx, val) in comp_values.into_iter().enumerate() {
-                comp_raster.data.set_f64(idx, val);
+            if let Some(data_slice) = comp_raster.data.as_f32_slice_mut() {
+                data_slice
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(idx, cell)| *cell = comp_values[idx] as f32);
+            } else {
+                for (idx, val) in comp_values.into_iter().enumerate() {
+                    comp_raster.data.set_f64(idx, val);
+                }
             }
             let comp_path = output_path.as_ref().map(|_| base_parent.join(format!("{}_comp{}.{}", base_stem, a + 1, base_ext)));
             let loc = write_or_store_output(comp_raster, comp_path)?;
             comp_locators.push(typed_raster_output(loc));
         }
 
-        let sorted_explained: Vec<f64> = (0..num_images).map(|i| explained[component_order[i]]).collect();
-        let sorted_eigenvalues: Vec<f64> = (0..num_images).map(|i| eigenvalues[component_order[i]]).collect();
+        let sorted_explained: Vec<f64> = (0..num_images)
+            .into_par_iter()
+            .map(|i| explained[component_order[i]])
+            .collect();
+        let sorted_eigenvalues: Vec<f64> = (0..num_images)
+            .into_par_iter()
+            .map(|i| eigenvalues[component_order[i]])
+            .collect();
         let mut cum = 0.0f64;
         let cum_variances: Vec<f64> = sorted_explained.iter().map(|&v| { cum += v; cum }).collect();
 
@@ -7040,8 +7586,15 @@ impl Tool for InversePcaTool {
                 .map(|k| eigenvectors[k].get(image_num).copied().unwrap_or(0.0))
                 .collect();
             let out_values = weighted_sum_chunked(&inputs[..valid_comp], &comp_weights, inputs[0].nodata, n);
-            for (idx, val) in out_values.into_iter().enumerate() {
-                out_raster.data.set_f64(idx, val);
+            if let Some(data_slice) = out_raster.data.as_f32_slice_mut() {
+                data_slice
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(idx, cell)| *cell = out_values[idx] as f32);
+            } else {
+                for (idx, val) in out_values.into_iter().enumerate() {
+                    out_raster.data.set_f64(idx, val);
+                }
             }
             let img_path = output_path.as_ref().map(|_| base_parent.join(format!("{}_img{}.{}", base_stem, image_num + 1, base_ext)));
             let loc = write_or_store_output(out_raster, img_path)?;

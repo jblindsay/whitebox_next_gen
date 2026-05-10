@@ -70,6 +70,9 @@ Before coding, restate:
 4. Validation plan
 
 ## Session Notes (Optional)
+- Scope refresh completed on 2026-05-10 for wbtools_oss performance-parity execution.
+- Current execution context: broad Rayon migration batches are now documented in `docs/performance/WBTOOLS_OSS_PARALLELIZATION_AUDIT_2026-05-09.md`; immediate emphasis is validating correctness/determinism and closing any remaining high-impact non-parallel hot paths identified from parity tracker slices.
+- Current working rule for this slice: prefer deterministic parallel derivation with sequential final writes, avoid speculative refactors that drift from legacy semantics, and keep parity-tracker evidence tied to concrete tool-level code paths.
 - Scope refresh completed on 2026-04-28 for raster overlay parity/performance recovery.
 - Current hot path under active investigation: raster overlay operations in `crates/wbtools_oss/src/tools/gis/mod.rs` remain slower than legacy `whitebox_workflows/src/tools/gis` despite recent direct-fill optimization changes.
 - Working rule for current slice: prefer legacy-structure parity and measurable hot-path simplification over speculative buffering or abstraction-heavy rewrites.

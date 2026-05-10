@@ -28,6 +28,9 @@ use wbraster::{
     GeoTiffCompression,
     GeoTiffLayout,
     GeoTiffWriteOptions,
+    Jpeg2000ColorSpace,
+    Jpeg2000Compression,
+    Jpeg2000WriteOptions,
     RasterFormat,
 };
 use wblidar::reproject::{
@@ -176,6 +179,7 @@ mod wbw_r {
         wbtopology::from_wkt(&geometry.to_wkt()).map_err(|e| e.to_string())
     }
 
+    #[allow(dead_code)]
     pub fn lidar_write_with_options_json(src: &str, dst: &str, options_json: &str) -> Result<String, String> {
         let src_path = Path::new(src);
         let dst_path = Path::new(dst);
@@ -187,6 +191,7 @@ mod wbw_r {
             .map_err(|e| e.to_string())
     }
 
+    #[allow(dead_code)]
     pub fn lidar_copy_to_path(src: &str, dst: &str) -> Result<String, String> {
         lidar_write_with_options_json(src, dst, "{}")
     }
@@ -766,10 +771,19 @@ struct GeoTiffWriteControls {
 }
 
 #[derive(Debug, Clone, Default)]
+struct Jpeg2000WriteControls {
+    compression: Option<Jpeg2000Compression>,
+    decomp_levels: Option<u8>,
+    color_space: Option<Jpeg2000ColorSpace>,
+    has_fields: bool,
+}
+
+#[derive(Debug, Clone, Default)]
 struct RasterWriteControls {
     compress: Option<bool>,
     strict_format_options: bool,
     geotiff: GeoTiffWriteControls,
+    jpeg2000: Jpeg2000WriteControls,
 }
 
 impl RasterWriteControls {
@@ -798,6 +812,46 @@ impl RasterWriteControls {
                 layout,
             })
         }
+    }
+
+    fn has_jpeg2000_controls(&self) -> bool {
+        self.jpeg2000.has_fields
+    }
+
+    fn jpeg2000_options(&self) -> Option<Jpeg2000WriteOptions> {
+        let compression = self.jpeg2000.compression;
+        let decomp_levels = self.jpeg2000.decomp_levels;
+        let color_space = self.jpeg2000.color_space;
+
+        if compression.is_none() && decomp_levels.is_none() && color_space.is_none() {
+            None
+        } else {
+            Some(Jpeg2000WriteOptions {
+                compression,
+                decomp_levels,
+                color_space,
+            })
+        }
+    }
+}
+
+fn parse_jpeg2000_compression(name: &str, quality_db: Option<f32>) -> Option<Jpeg2000Compression> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "lossless" => Some(Jpeg2000Compression::Lossless),
+        "lossy" => Some(Jpeg2000Compression::Lossy {
+            quality_db: quality_db.unwrap_or(wbraster::JPEG2000_DEFAULT_LOSSY_QUALITY_DB),
+        }),
+        _ => None,
+    }
+}
+
+fn parse_jpeg2000_color_space(name: &str) -> Option<Jpeg2000ColorSpace> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "greyscale" | "grayscale" | "gray" | "grey" => Some(Jpeg2000ColorSpace::Greyscale),
+        "srgb" | "rgb" => Some(Jpeg2000ColorSpace::Srgb),
+        "ycbcr" | "ycb" => Some(Jpeg2000ColorSpace::YCbCr),
+        "multiband" | "multi_band" | "multi" => Some(Jpeg2000ColorSpace::MultiBand),
+        _ => None,
     }
 }
 
@@ -922,10 +976,73 @@ fn parse_raster_write_controls(options: Option<JsonValue>) -> PyResult<RasterWri
         }
     }
 
+    let mut jpeg2000 = Jpeg2000WriteControls::default();
+    if let Some(jp2_val) = obj.get("jpeg2000") {
+        let jp2_obj = jp2_val.as_object().ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                "options.jpeg2000 must be a dict-like mapping",
+            )
+        })?;
+
+        jpeg2000.has_fields = !jp2_obj.is_empty();
+
+        let quality_db = if let Some(v) = jp2_obj.get("quality_db") {
+            let q = v.as_f64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.jpeg2000.quality_db must be a number",
+                )
+            })?;
+            Some(q as f32)
+        } else {
+            None
+        };
+
+        if let Some(v) = jp2_obj.get("compression") {
+            let name = v.as_str().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.jpeg2000.compression must be a string",
+                )
+            })?;
+            jpeg2000.compression = Some(parse_jpeg2000_compression(name, quality_db).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Unsupported jpeg2000.compression '{name}'. Expected one of: lossless, lossy"
+                ))
+            })?);
+        }
+
+        if let Some(v) = jp2_obj.get("decomp_levels") {
+            let levels_u64 = v.as_u64().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.jpeg2000.decomp_levels must be a non-negative integer",
+                )
+            })?;
+            let levels = u8::try_from(levels_u64).map_err(|_| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    "options.jpeg2000.decomp_levels must be in range 0-255",
+                )
+            })?;
+            jpeg2000.decomp_levels = Some(levels);
+        }
+
+        if let Some(v) = jp2_obj.get("color_space") {
+            let name = v.as_str().ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyTypeError, _>(
+                    "options.jpeg2000.color_space must be a string",
+                )
+            })?;
+            jpeg2000.color_space = Some(parse_jpeg2000_color_space(name).ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Unsupported jpeg2000.color_space '{name}'. Expected one of: greyscale, srgb, ycbcr, multiband"
+                ))
+            })?);
+        }
+    }
+
     Ok(RasterWriteControls {
         compress,
         strict_format_options,
         geotiff,
+        jpeg2000,
     })
 }
 
@@ -936,10 +1053,23 @@ fn write_wbraster_with_controls(
     controls: &RasterWriteControls,
 ) -> PyResult<()> {
     let has_geotiff_controls = controls.has_geotiff_controls();
+    let has_jpeg2000_controls = controls.has_jpeg2000_controls();
     if output_format != RasterFormat::GeoTiff && has_geotiff_controls {
         if controls.strict_format_options {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "GeoTIFF-specific write options were provided for a non-GeoTIFF output path",
+            ));
+        }
+        raster.write(out_path, output_format).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("Failed to write raster: {e}"))
+        })?;
+        return Ok(());
+    }
+
+    if output_format != RasterFormat::Jpeg2000 && has_jpeg2000_controls {
+        if controls.strict_format_options {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "JPEG2000-specific write options were provided for a non-JPEG2000 output path",
             ));
         }
         raster.write(out_path, output_format).map_err(|e| {
@@ -955,6 +1085,19 @@ fn write_wbraster_with_controls(
                 .map_err(|e| {
                     PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
                         "Failed to write GeoTIFF with options: {e}"
+                    ))
+                })?;
+            return Ok(());
+        }
+    }
+
+    if output_format == RasterFormat::Jpeg2000 {
+        if let Some(opts) = controls.jpeg2000_options() {
+            raster
+                .write_jpeg2000_with_options(out_path, &opts)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                        "Failed to write JPEG2000 with options: {e}"
                     ))
                 })?;
             return Ok(());
@@ -1072,7 +1215,9 @@ fn write_raster_with_controls_for_env(
         flush_cached_disk_raster(&raster.file_path)?;
     }
 
-    let requires_reencode = output_format == RasterFormat::GeoTiff && effective_controls.geotiff_options().is_some();
+    let requires_reencode =
+        (output_format == RasterFormat::GeoTiff && effective_controls.geotiff_options().is_some())
+            || (output_format == RasterFormat::Jpeg2000 && effective_controls.jpeg2000_options().is_some());
 
     if output_format != RasterFormat::GeoTiff
         && effective_controls.has_geotiff_controls()
@@ -1080,6 +1225,15 @@ fn write_raster_with_controls_for_env(
     {
         return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
             "GeoTIFF-specific write options were provided for a non-GeoTIFF output path",
+        ));
+    }
+
+    if output_format != RasterFormat::Jpeg2000
+        && effective_controls.has_jpeg2000_controls()
+        && effective_controls.strict_format_options
+    {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "JPEG2000-specific write options were provided for a non-JPEG2000 output path",
         ));
     }
 
@@ -8398,8 +8552,6 @@ impl Lidar {
 
     #[pyo3(signature = (dst, options_json=None))]
     fn write_to_path(&self, dst: &str, options_json: Option<&str>) -> PyResult<Lidar> {
-        use wbw_r;
-        
         let opts_json = options_json.unwrap_or("{}");
         let mut staged_input: Option<PathBuf> = None;
         let source_path = {
@@ -8440,8 +8592,6 @@ impl Lidar {
     }
 
     fn copy_to_path(&self, dst: &str) -> PyResult<Lidar> {
-        use wbw_r;
-        
         let mut staged_input: Option<PathBuf> = None;
         let source_path = {
             let lidar_path = self.file_path.to_string_lossy();
@@ -10844,6 +10994,11 @@ impl WbEnvironment {
     ///   - `bigtiff`: bool
     ///   - `layout`: one of standard|stripped|tiled|cog
     ///   - `rows_per_strip`, `tile_width`, `tile_height`, `tile_size`
+    /// - `jpeg2000`: dict containing
+    ///   - `compression`: one of lossless|lossy
+    ///   - `quality_db`: number (used when compression=lossy)
+    ///   - `decomp_levels`: integer 0-255
+    ///   - `color_space`: one of greyscale|srgb|ycbcr|multiband
     #[pyo3(signature = (raster, output_path, options=None, remove_after_write=false))]
     fn write_raster(
         &self,

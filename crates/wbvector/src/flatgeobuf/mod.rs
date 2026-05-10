@@ -145,8 +145,6 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         return native;
     }
 
-    let mut producer_count: Option<usize> = None;
-
     if let Ok(layer) = native.as_ref() {
         if indexed_native_parse_is_valid(expected_count, layer.len()) {
             FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
@@ -156,8 +154,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
         FGB_INDEXED_NATIVE_REJECTED.fetch_add(1, Ordering::Relaxed);
         maybe_log_indexed_read_decision(path_ref, "native-rejected", expected_count, layer.len());
         if expected_count == 0 {
-            producer_count = ogr_feature_count(path_ref);
-            if let Some(pc) = producer_count {
+            if let Some(pc) = ogr_feature_count(path_ref) {
                 if layer.len() == pc {
                     FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);
                     maybe_log_indexed_read_decision(path_ref, "native-accepted-via-ogrinfo", pc, layer.len());
@@ -188,8 +185,7 @@ pub fn read<P: AsRef<Path>>(path: P) -> Result<Layer> {
             }
         }
         if expected_count == 0 {
-            producer_count = ogr_feature_count(path_ref);
-            if let Some(pc) = producer_count {
+            if let Some(pc) = ogr_feature_count(path_ref) {
                 if let Ok(retry) = from_bytes_with_expected_count(&data, Some(pc)) {
                     if retry.len() == pc {
                         FGB_INDEXED_NATIVE_ACCEPTED.fetch_add(1, Ordering::Relaxed);

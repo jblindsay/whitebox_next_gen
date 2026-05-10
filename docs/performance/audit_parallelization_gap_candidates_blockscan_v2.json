@@ -1,0 +1,542 @@
+[
+  {
+    "tool": "anova",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/anova.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 2976
+  },
+  {
+    "tool": "ascii_to_las",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/ascii_to_las.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 10222
+  },
+  {
+    "tool": "average_flowpath_slope",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/average_flowpath_slope.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 7457
+  },
+  {
+    "tool": "average_upslope_flowpath_length",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/average_upslope_flowpath_length.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 4341
+  },
+  {
+    "tool": "canny_edge_detection",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/canny_edge_detection.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 8321
+  },
+  {
+    "tool": "classify_buildings_in_lidar",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/classify_buildings_in_lidar.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 10173
+  },
+  {
+    "tool": "clip_lidar_to_polygon",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/clip_lidar_to_polygon.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 8672
+  },
+  {
+    "tool": "conditional_evaluation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/conditional_evaluation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 4528
+  },
+  {
+    "tool": "contours_from_raster",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/geomorphometry/contours_from_raster.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/geomorphometry/contour_tools.rs",
+    "ng_line": 1529
+  },
+  {
+    "tool": "convert_nodata_to_zero",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/data_tools/convert_nodata_to_zero.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/data_tools/mod.rs",
+    "ng_line": 2920
+  },
+  {
+    "tool": "correct_vignetting",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/correct_vignetting.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 4396
+  },
+  {
+    "tool": "depth_in_sink",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/depth_in_sink.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 2747
+  },
+  {
+    "tool": "depth_to_water",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/depth_to_water.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 5036
+  },
+  {
+    "tool": "downslope_distance_to_stream",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/downslope_distance_to_stream.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 4826
+  },
+  {
+    "tool": "elevation_above_stream",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/elevation_above_stream.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 4577
+  },
+  {
+    "tool": "filter_lidar_by_reference_surface",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/filter_lidar_by_reference_surface.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 8030
+  },
+  {
+    "tool": "filter_raster_features_by_area",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/filter_raster_features_by_area.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 13215
+  },
+  {
+    "tool": "find_flightline_edge_points",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/find_flightline_edge_points.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12184
+  },
+  {
+    "tool": "find_lowest_or_highest_points",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/find_lowest_or_highest_points.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 7493
+  },
+  {
+    "tool": "find_parallel_flow",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/find_parallel_flow.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 3102
+  },
+  {
+    "tool": "flow_accum_full_workflow",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/flow_accum_full_workflow.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 2880
+  },
+  {
+    "tool": "heat_map",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/heat_map.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 5531
+  },
+  {
+    "tool": "height_above_ground",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/height_above_ground.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 7440
+  },
+  {
+    "tool": "hydrologic_connectivity",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/hydrologic_connectivity.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 6903
+  },
+  {
+    "tool": "idw_interpolation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/idw_interpolation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 4420
+  },
+  {
+    "tool": "ihs_to_rgb",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/ihs_to_rgb.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3092
+  },
+  {
+    "tool": "image_correlation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/image_correlation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 3260
+  },
+  {
+    "tool": "image_correlation_neighbourhood_analysis",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/image_correlation_neighbourhood_analysis.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 3650
+  },
+  {
+    "tool": "image_regression",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/image_regression.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 3946
+  },
+  {
+    "tool": "individual_tree_detection",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/individual_tree_detection.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 9589
+  },
+  {
+    "tool": "isobasins",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/isobasins.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 9158
+  },
+  {
+    "tool": "k_means_clustering",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/k_means_clustering.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3992
+  },
+  {
+    "tool": "lidar_colourize",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_colourize.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 9864
+  },
+  {
+    "tool": "lidar_ransac_planes",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_ransac_planes.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12691
+  },
+  {
+    "tool": "lidar_rooftop_analysis",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_rooftop_analysis.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12824
+  },
+  {
+    "tool": "lidar_segmentation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_segmentation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 8923
+  },
+  {
+    "tool": "lidar_segmentation_based_filter",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_segmentation_based_filter.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 9746
+  },
+  {
+    "tool": "lidar_tile_footprint",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_tile_footprint.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 11208
+  },
+  {
+    "tool": "lidar_tophat_transform",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/lidar_tophat_transform.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12227
+  },
+  {
+    "tool": "line_intersections",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/line_intersections.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 14036
+  },
+  {
+    "tool": "list_unique_values_raster",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/list_unique_values_raster.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 1082
+  },
+  {
+    "tool": "logistic_regression",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/logistic_regression.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 11328
+  },
+  {
+    "tool": "longest_flowpath",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/longest_flowpath.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 7724
+  },
+  {
+    "tool": "map_features",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/map_features.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 6721
+  },
+  {
+    "tool": "max_upslope_flowpath_length",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/max_upslope_flowpath_length.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 4226
+  },
+  {
+    "tool": "max_upslope_value",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/max_upslope_value.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 7597
+  },
+  {
+    "tool": "mdinf_flow_accum",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/mdinf_flow_accum.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/flow_algorithms/mod.rs",
+    "ng_line": 2801
+  },
+  {
+    "tool": "modified_k_means_clustering",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/modified_k_means_clustering.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 4201
+  },
+  {
+    "tool": "modified_shepard_interpolation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/modified_shepard_interpolation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 5136
+  },
+  {
+    "tool": "modify_nodata_value",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/data_tools/modify_nodata_value.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/data_tools/mod.rs",
+    "ng_line": 3007
+  },
+  {
+    "tool": "mosaic",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/mosaic.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3605
+  },
+  {
+    "tool": "mosaic_with_feathering",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/mosaic_with_feathering.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3724
+  },
+  {
+    "tool": "multiscale_curvatures",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/geomorphometry/multiscale_curvatures.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/geomorphometry/multiscale_curvatures.rs",
+    "ng_line": 873
+  },
+  {
+    "tool": "natural_neighbour_interpolation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/natural_neighbour_interpolation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 4941
+  },
+  {
+    "tool": "nearest_neighbour_interpolation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/nearest_neighbour_interpolation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 4603
+  },
+  {
+    "tool": "nnd_classification",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/nnd_classification.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 11857
+  },
+  {
+    "tool": "normal_vectors",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/normal_vectors.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12298
+  },
+  {
+    "tool": "normalize_lidar",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/normalize_lidar.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 7375
+  },
+  {
+    "tool": "num_inflowing_neighbours",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/num_inflowing_neighbours.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 3044
+  },
+  {
+    "tool": "paired_sample_t_test",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/paired_sample_t_test.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 4847
+  },
+  {
+    "tool": "panchromatic_sharpening",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/panchromatic_sharpening.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3451
+  },
+  {
+    "tool": "phi_coefficient",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/phi_coefficient.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 3138
+  },
+  {
+    "tool": "pick_from_list",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/pick_from_list.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 3604
+  },
+  {
+    "tool": "piecewise_contrast_stretch",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/piecewise_contrast_stretch.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 4638
+  },
+  {
+    "tool": "radial_basis_function_interpolation",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/radial_basis_function_interpolation.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 5344
+  },
+  {
+    "tool": "random_forest_classification",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/random_forest_classification.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 10535
+  },
+  {
+    "tool": "random_forest_classification_predict",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/random_forest_classification_predict.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 10953
+  },
+  {
+    "tool": "random_forest_regression",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/random_forest_regression.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 10707
+  },
+  {
+    "tool": "random_forest_regression_predict",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/random_forest_regression_predict.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 11177
+  },
+  {
+    "tool": "raster_area",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/raster_area.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 9296
+  },
+  {
+    "tool": "raster_calculator",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/raster_calculator.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 6425
+  },
+  {
+    "tool": "raster_cell_assignment",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/raster_cell_assignment.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 5773
+  },
+  {
+    "tool": "raster_perimeter",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/raster_perimeter.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 9474
+  },
+  {
+    "tool": "raster_summary_stats",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/raster_summary_stats.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 856
+  },
+  {
+    "tool": "reclass",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/reclass.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 13367
+  },
+  {
+    "tool": "reclass_equal_interval",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/gis/reclass_equal_interval.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/gis/mod.rs",
+    "ng_line": 13515
+  },
+  {
+    "tool": "recover_flightline_info",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/lidar_processing/recover_flightline_info.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/lidar_processing/mod.rs",
+    "ng_line": 12066
+  },
+  {
+    "tool": "resample",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/resample.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3849
+  },
+  {
+    "tool": "rgb_to_ihs",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/rgb_to_ihs.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 2962
+  },
+  {
+    "tool": "root_mean_square_error",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/root_mean_square_error.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 5626
+  },
+  {
+    "tool": "set_nodata_value",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/data_tools/set_nodata_value.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/data_tools/mod.rs",
+    "ng_line": 3776
+  },
+  {
+    "tool": "sink",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/sink.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 2814
+  },
+  {
+    "tool": "split_colour_composite",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/split_colour_composite.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 2875
+  },
+  {
+    "tool": "svm_classification",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/svm_classification.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 11475
+  },
+  {
+    "tool": "svm_regression",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/svm_regression.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 11685
+  },
+  {
+    "tool": "topographic_hachures",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/geomorphometry/topographic_hachures.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/geomorphometry/contour_tools.rs",
+    "ng_line": 1351
+  },
+  {
+    "tool": "upslope_depression_storage",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/hydrology/upslope_depression_storage.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/hydrology/mod.rs",
+    "ng_line": 6663
+  },
+  {
+    "tool": "wilcoxon_signed_rank_test",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/wilcoxon_signed_rank_test.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 5060
+  },
+  {
+    "tool": "write_function_memory_insertion",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/image_processing/write_function_memory_insertion.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/remote_sensing/non_filter_tools.rs",
+    "ng_line": 3335
+  },
+  {
+    "tool": "zonal_statistics",
+    "legacy_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_workflows/src/tools/math/zonal_statistics.rs",
+    "ng_file": "/Users/johnlindsay/Documents/programming/Rust/whitebox_next_gen/crates/wbtools_oss/src/tools/raster/raster_stats.rs",
+    "ng_line": 5751
+  }
+]

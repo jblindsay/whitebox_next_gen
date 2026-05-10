@@ -160,6 +160,9 @@ v$add_field('reviewed', field_type = 'integer', default_value = 0)
 
 This pattern demonstrates tool-driven persistence and post-write verification.
 
+For complete write-option keys and allowed values, see
+[Output Controls](output-controls.md#vector-write-option-reference).
+
 ```r
 library(whiteboxworkflows)
 

@@ -139,6 +139,7 @@ pub use formats::geotiff::{
 	GeoTiffWriteOptions,
 };
 pub use formats::jpeg2000::{
+	Jpeg2000ColorSpace,
 	Jpeg2000Compression,
 	Jpeg2000WriteOptions,
 	JPEG2000_DEFAULT_LOSSY_QUALITY_DB,

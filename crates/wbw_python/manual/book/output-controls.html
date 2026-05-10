@@ -213,6 +213,178 @@ wbe.write_raster(
     },
 )
 </code></pre>
+<h3 id="raster-write-option-reference"><a class="header" href="#raster-write-option-reference">Raster Write Option Reference</a></h3>
+<p>The raster <code>options</code> dictionary currently supports these top-level keys:</p>
+<ul>
+<li><code>compress</code>: boolean convenience switch for GeoTIFF-family outputs.</li>
+<li><code>strict_format_options</code>: boolean validation switch.</li>
+<li><code>geotiff</code>: nested dictionary for GeoTIFF / BigTIFF / COG-specific controls.</li>
+<li><code>jpeg2000</code>: nested dictionary for JPEG2000 (<code>.jp2</code>) controls.</li>
+</ul>
+<h4 id="compress"><a class="header" href="#compress"><code>compress</code></a></h4>
+<p><code>compress</code> is a convenience flag. It applies only to GeoTIFF-family outputs.</p>
+<ul>
+<li><code>True</code>: maps to GeoTIFF <code>deflate</code> compression.</li>
+<li><code>False</code>: maps to uncompressed GeoTIFF output.</li>
+</ul>
+<p>Default behavior:</p>
+<ul>
+<li><code>compress</code> is unset by default (not <code>True</code> and not <code>False</code>).</li>
+<li>For GeoTIFF-family outputs, an unset <code>compress</code> falls through to the
+GeoTIFF writer default compression, which is <code>deflate</code>.</li>
+<li>For non-GeoTIFF outputs, <code>compress</code> has no effect.</li>
+</ul>
+<p>If <code>geotiff.compression</code> is also supplied, the explicit
+<code>geotiff.compression</code> value takes precedence over <code>compress</code>.</p>
+<h4 id="strict_format_options"><a class="header" href="#strict_format_options"><code>strict_format_options</code></a></h4>
+<p><code>strict_format_options</code> accepts <code>True</code> or <code>False</code>.</p>
+<ul>
+<li><code>False</code> (default): GeoTIFF-specific options are ignored when writing a
+non-GeoTIFF output such as <code>.jp2</code>, <code>.gpkg</code>, or <code>.zarr</code>; JPEG2000-specific
+options are ignored when writing non-<code>.jp2</code> outputs.</li>
+<li><code>True</code>: using GeoTIFF-specific options with a non-GeoTIFF output path, or
+JPEG2000-specific options with a non-<code>.jp2</code> output path, raises an error.</li>
+</ul>
+<h4 id="jpeg2000"><a class="header" href="#jpeg2000"><code>jpeg2000</code></a></h4>
+<p>The <code>jpeg2000</code> dictionary supports these keys:</p>
+<ul>
+<li><code>compression</code>: string compression mode.</li>
+<li><code>quality_db</code>: numeric quality target in dB used when
+<code>compression='lossy'</code>.</li>
+<li><code>decomp_levels</code>: non-negative integer decode-resolution level hint
+(<code>0</code> to <code>255</code>).</li>
+<li><code>color_space</code>: string color-space override.</li>
+</ul>
+<p>Default values when keys are omitted:</p>
+<ul>
+<li><code>compression</code>: <code>lossy</code>.</li>
+<li><code>quality_db</code>: <code>35.0</code> when <code>compression='lossy'</code> and no explicit
+<code>quality_db</code> is provided.</li>
+<li><code>decomp_levels</code>: writer default (unset).</li>
+<li><code>color_space</code>: writer default (unset); inferred from band layout when
+possible.</li>
+</ul>
+<p>Supported <code>jpeg2000.compression</code> values:</p>
+<ul>
+<li><code>lossless</code></li>
+<li><code>lossy</code></li>
+</ul>
+<p>Supported <code>jpeg2000.color_space</code> values:</p>
+<ul>
+<li><code>greyscale</code> (aliases: <code>grayscale</code>, <code>gray</code>, <code>grey</code>)</li>
+<li><code>srgb</code> (alias: <code>rgb</code>)</li>
+<li><code>ycbcr</code> (alias: <code>ycb</code>)</li>
+<li><code>multiband</code> (aliases: <code>multi_band</code>, <code>multi</code>)</li>
+</ul>
+<p>Notes:</p>
+<ul>
+<li><code>quality_db</code> is optional; when omitted with <code>compression='lossy'</code>, the
+writer default quality is used.</li>
+</ul>
+<h4 id="geotiff"><a class="header" href="#geotiff"><code>geotiff</code></a></h4>
+<p>The <code>geotiff</code> dictionary supports these keys:</p>
+<ul>
+<li><code>compression</code>: string compression codec.</li>
+<li><code>bigtiff</code>: boolean.</li>
+<li><code>layout</code>: string layout name.</li>
+<li><code>rows_per_strip</code>: positive integer used when <code>layout='stripped'</code>.</li>
+<li><code>tile_width</code>: positive integer used when <code>layout='tiled'</code>.</li>
+<li><code>tile_height</code>: positive integer used when <code>layout='tiled'</code>.</li>
+<li><code>tile_size</code>: positive integer shortcut used by <code>layout='cog'</code>, and also
+accepted as a shortcut for both tile width and tile height when
+<code>layout='tiled'</code>.</li>
+<li><code>cog_tile_size</code>: positive integer alias for <code>tile_size</code> when <code>layout='cog'</code>.</li>
+</ul>
+<p>Default values when keys are omitted:</p>
+<ul>
+<li><code>compression</code>: <code>deflate</code>.</li>
+<li><code>bigtiff</code>: <code>False</code>.</li>
+<li><code>layout</code>: <code>standard</code>.</li>
+<li><code>rows_per_strip</code>: <code>1</code> when <code>layout='stripped'</code>.</li>
+<li><code>tile_width</code>: <code>512</code> when <code>layout='tiled'</code>.</li>
+<li><code>tile_height</code>: defaults to <code>tile_width</code> when <code>layout='tiled'</code>.</li>
+<li><code>tile_size</code> / <code>cog_tile_size</code>: <code>512</code> when <code>layout='cog'</code>.</li>
+</ul>
+<p>Supported <code>geotiff.compression</code> values:</p>
+<ul>
+<li><code>none</code></li>
+<li><code>off</code></li>
+<li><code>uncompressed</code></li>
+<li><code>deflate</code></li>
+<li><code>zip</code></li>
+<li><code>lzw</code></li>
+<li><code>packbits</code></li>
+<li><code>pack_bits</code></li>
+<li><code>jpeg</code></li>
+<li><code>webp</code></li>
+<li><code>web_p</code></li>
+<li><code>jpegxl</code></li>
+<li><code>jpeg_xl</code></li>
+<li><code>jxl</code></li>
+</ul>
+<p>These names are aliases for the same underlying codecs:</p>
+<ul>
+<li><code>none</code>, <code>off</code>, and <code>uncompressed</code></li>
+<li><code>deflate</code> and <code>zip</code></li>
+<li><code>packbits</code> and <code>pack_bits</code></li>
+<li><code>webp</code> and <code>web_p</code></li>
+<li><code>jpegxl</code>, <code>jpeg_xl</code>, and <code>jxl</code></li>
+</ul>
+<p>Supported <code>geotiff.layout</code> values:</p>
+<ul>
+<li><code>standard</code>: default GeoTIFF writer behavior.</li>
+<li><code>stripped</code>: strip-organized GeoTIFF.</li>
+<li><code>striped</code>: alias for <code>stripped</code>.</li>
+<li><code>tiled</code>: tiled GeoTIFF.</li>
+<li><code>cog</code>: Cloud-Optimized GeoTIFF.</li>
+</ul>
+<p>Layout-specific parameter behavior:</p>
+<ul>
+<li><code>layout='standard'</code>: ignores strip/tile size keys.</li>
+<li><code>layout='stripped'</code> or <code>layout='striped'</code>: uses <code>rows_per_strip</code>.
+Default is <code>1</code> if omitted.</li>
+<li><code>layout='tiled'</code>: uses <code>tile_width</code> and <code>tile_height</code>.
+If omitted, <code>tile_width</code> defaults to <code>512</code>.
+<code>tile_height</code> defaults to <code>tile_width</code>.
+If <code>tile_size</code> is supplied, it is accepted as a shortcut for both dimensions.</li>
+<li><code>layout='cog'</code>: uses <code>tile_size</code> or <code>cog_tile_size</code>.
+Default is <code>512</code> if neither is supplied.</li>
+</ul>
+<h4 id="extensionless-raster-outputs"><a class="header" href="#extensionless-raster-outputs">Extensionless Raster Outputs</a></h4>
+<p>If you omit the output extension, raster writes default to <code>.tif</code>. In that
+case the wrapper also defaults the GeoTIFF layout to COG unless you explicitly
+set a different layout.</p>
+<pre><code class="language-python"># Writes my_surface.tif and defaults to COG-style layout.
+wbe.write_raster(r, 'my_surface')
+</code></pre>
+<h4 id="practical-patterns"><a class="header" href="#practical-patterns">Practical Patterns</a></h4>
+<pre><code class="language-python"># Explicit uncompressed standard GeoTIFF
+wbe.write_raster(r, 'out_standard_uncompressed.tif', options={
+        'compress': False,
+        'geotiff': {'layout': 'standard'},
+})
+
+# Stripped GeoTIFF with 64 rows per strip
+wbe.write_raster(r, 'out_stripped.tif', options={
+        'geotiff': {'layout': 'stripped', 'rows_per_strip': 64},
+})
+
+# Tiled GeoTIFF using a single tile_size shortcut
+wbe.write_raster(r, 'out_tiled.tif', options={
+        'geotiff': {'layout': 'tiled', 'tile_size': 256},
+})
+
+# COG with explicit codec and BigTIFF toggle
+wbe.write_raster(r, 'out_cog.tif', options={
+        'strict_format_options': True,
+        'geotiff': {
+                'layout': 'cog',
+                'tile_size': 512,
+                'compression': 'deflate',
+                'bigtiff': False,
+        },
+})
+</code></pre>
 <h3 id="common-raster-profiles"><a class="header" href="#common-raster-profiles">Common Raster Profiles</a></h3>
 <p>These profiles illustrate common tradeoffs between compatibility and read
 performance.</p>
@@ -251,6 +423,62 @@ wbe.write_vector(
     },
 )
 </code></pre>
+<h3 id="vector-write-option-reference"><a class="header" href="#vector-write-option-reference">Vector Write Option Reference</a></h3>
+<p>For vector writes, the <code>options</code> dictionary supports these keys:</p>
+<ul>
+<li><code>strict_format_options</code>: boolean validation switch.</li>
+<li><code>geoparquet</code>: nested dictionary used for GeoParquet-specific controls.</li>
+</ul>
+<h4 id="strict_format_options-1"><a class="header" href="#strict_format_options-1"><code>strict_format_options</code></a></h4>
+<ul>
+<li><code>False</code> (default): format-specific options are ignored when they do not apply
+to the selected output format.</li>
+<li><code>True</code>: format-specific options on an incompatible output path raise an
+error.</li>
+</ul>
+<h4 id="geoparquet"><a class="header" href="#geoparquet"><code>geoparquet</code></a></h4>
+<p>The <code>geoparquet</code> dictionary supports:</p>
+<ul>
+<li><code>max_rows_per_group</code>: positive integer.</li>
+<li><code>data_page_size_limit</code>: positive integer.</li>
+<li><code>write_batch_size</code>: positive integer.</li>
+<li><code>data_page_row_count_limit</code>: positive integer.</li>
+<li><code>compression</code>: string codec name.</li>
+</ul>
+<p>Default values when keys are omitted:</p>
+<ul>
+<li><code>max_rows_per_group</code>: <code>1_048_576</code>.</li>
+<li><code>data_page_size_limit</code>: Parquet library default page size.</li>
+<li><code>write_batch_size</code>: Parquet library default write batch size.</li>
+<li><code>data_page_row_count_limit</code>: Parquet library default row-count limit.</li>
+<li><code>compression</code>: Parquet library default compression codec.</li>
+</ul>
+<p>Supported <code>geoparquet.compression</code> values:</p>
+<ul>
+<li><code>none</code></li>
+<li><code>snappy</code></li>
+<li><code>gzip</code></li>
+<li><code>lz4</code></li>
+<li><code>zstd</code></li>
+<li><code>brotli</code></li>
+</ul>
+<p>Notes:</p>
+<ul>
+<li>GeoParquet controls are only applied for <code>.parquet</code> outputs.</li>
+<li>If no output extension is provided, vector writes default to <code>.gpkg</code>.</li>
+</ul>
+<pre><code class="language-python"># GeoParquet with explicit row-group and compression controls
+wbe.write_vector(v, 'roads.parquet', options={
+        'strict_format_options': True,
+        'geoparquet': {
+                'compression': 'zstd',
+                'max_rows_per_group': 250000,
+                'data_page_size_limit': 1048576,
+                'write_batch_size': 8192,
+                'data_page_row_count_limit': 20000,
+        },
+})
+</code></pre>
 <h2 id="lidar-output-controls"><a class="header" href="#lidar-output-controls">Lidar Output Controls</a></h2>
 <p><code>write_lidar(...)</code> supports LAZ and COPC option blocks.</p>
 <p>Choose LAZ for compact archives and COPC when cloud-native spatial access is
@@ -271,6 +499,66 @@ wbe.write_lidar(l, 'survey_out.copc.laz', options={
         'max_points_per_node': 75000,
         'max_depth': 8,
         'node_point_ordering': 'hilbert',
+    },
+})
+</code></pre>
+<h3 id="lidar-write-option-reference"><a class="header" href="#lidar-write-option-reference">Lidar Write Option Reference</a></h3>
+<p>For lidar writes, the <code>options</code> dictionary supports these top-level keys:</p>
+<ul>
+<li><code>laz</code>: nested dictionary with LAZ writer controls.</li>
+<li><code>copc</code>: nested dictionary with COPC hierarchy controls.</li>
+</ul>
+<h4 id="laz"><a class="header" href="#laz"><code>laz</code></a></h4>
+<p>Supported keys:</p>
+<ul>
+<li><code>chunk_size</code>: positive integer.</li>
+<li><code>compression_level</code>: integer compression level.</li>
+</ul>
+<p>Default values when keys are omitted:</p>
+<ul>
+<li><code>chunk_size</code>: <code>50000</code>.</li>
+<li><code>compression_level</code>: <code>6</code>.</li>
+</ul>
+<p><code>compression_level</code> is typically used in the 0-9 range for LAZ workflows.</p>
+<h4 id="copc"><a class="header" href="#copc"><code>copc</code></a></h4>
+<p>Supported keys:</p>
+<ul>
+<li><code>max_points_per_node</code>: positive integer.</li>
+<li><code>max_depth</code>: positive integer.</li>
+<li><code>node_point_ordering</code>: string ordering mode.</li>
+</ul>
+<p>Default values when keys are omitted:</p>
+<ul>
+<li><code>max_points_per_node</code>: <code>100000</code>.</li>
+<li><code>max_depth</code>: <code>8</code>.</li>
+<li><code>node_point_ordering</code>: <code>auto</code>.</li>
+</ul>
+<p>Supported <code>copc.node_point_ordering</code> values:</p>
+<ul>
+<li><code>auto</code></li>
+<li><code>morton</code></li>
+<li><code>hilbert</code></li>
+</ul>
+<p>Notes:</p>
+<ul>
+<li>If no output extension is provided, lidar writes default to <code>.copc.laz</code>.</li>
+<li>COPC options are relevant when output format is COPC (<code>.copc.laz</code> or
+<code>.copc.las</code>).</li>
+</ul>
+<pre><code class="language-python"># Extensionless output defaults to COPC
+wbe.write_lidar(l, 'survey_out', options={
+    'copc': {
+        'max_points_per_node': 75000,
+        'max_depth': 8,
+        'node_point_ordering': 'hilbert',
+    },
+})
+
+# Explicit LAZ controls
+wbe.write_lidar(l, 'survey_out.laz', options={
+    'laz': {
+        'chunk_size': 25000,
+        'compression_level': 7,
     },
 })
 </code></pre>

@@ -205,6 +205,9 @@ wbe.write_raster(out, 'dem_scaled_cog.tif', options={
 })
 ```
 
+Supported raster write keys and valid values are documented in
+[Output Controls](output-controls.md#raster-write-option-reference).
+
 ## Multi-Band Iteration
 
 Use this structure when per-band logic differs or when your transform depends on

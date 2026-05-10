@@ -64,3 +64,11 @@ Documentation style rules:
 - Prefer explicit output names and formats for reproducibility, especially in batch scripts.
 - Re-open and inspect outputs after major steps to validate assumptions before chaining more tools.
 - For performance-sensitive runs, start with a small representative subset, then scale to full data.
+
+## Write Option References
+
+For quick access to output option tables:
+
+- Raster: [Output Controls -> Raster Write Option Reference](output-controls.md#raster-write-option-reference)
+- Vector: [Output Controls -> Vector Write Option Reference](output-controls.md#vector-write-option-reference)
+- Lidar: [Output Controls -> Lidar Write Option Reference](output-controls.md#lidar-write-option-reference)

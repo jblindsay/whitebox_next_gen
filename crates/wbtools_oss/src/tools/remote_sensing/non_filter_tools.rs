@@ -981,20 +981,29 @@ impl FlipImageTool {
         let mut output = input.clone();
         let rows = input.rows as isize;
         let cols = input.cols as isize;
+        let n = input.rows * input.cols;
 
         for b in 0..input.bands as isize {
-            for r in 0..rows {
-                for c in 0..cols {
+            let out_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
                     let (src_r, src_c) = match direction {
                         FlipDirection::Vertical => (rows - 1 - r, c),
                         FlipDirection::Horizontal => (r, cols - 1 - c),
                         FlipDirection::Both => (rows - 1 - r, cols - 1 - c),
                     };
-                    let z = input.get(b, src_r, src_c);
-                    output.set(b, r, c, z).map_err(|e| {
-                        ToolError::Execution(format!("failed writing flipped pixel ({r},{c}): {e}"))
-                    })?;
-                }
+                    input.get(b, src_r, src_c)
+                })
+                .collect();
+
+            for (idx, z) in out_values.into_iter().enumerate() {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
+                output.set(b, r, c, z).map_err(|e| {
+                    ToolError::Execution(format!("failed writing flipped pixel ({r},{c}): {e}"))
+                })?;
             }
         }
 
@@ -1030,45 +1039,117 @@ impl FlipImageTool {
         let mut output = input.clone();
         let l = 0.0;
         let h = 255.0;
-        let mut num_pixels = 0.0;
-        let mut r_min = f64::INFINITY;
-        let mut g_min = f64::INFINITY;
-        let mut b_min = f64::INFINITY;
-        let mut r_max = f64::NEG_INFINITY;
-        let mut g_max = f64::NEG_INFINITY;
-        let mut b_max = f64::NEG_INFINITY;
-        let mut r_sum = 0.0;
-        let mut g_sum = 0.0;
-        let mut b_sum = 0.0;
-        let mut r_sq_sum = 0.0;
-        let mut g_sq_sum = 0.0;
-        let mut b_sq_sum = 0.0;
-
-        for r in 0..input.rows as isize {
-            for c in 0..input.cols as isize {
-                let z = input.get(0, r, c);
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let (rv, gv, bv, _) = Self::unpack_rgba(z);
-                let rf = rv as f64;
-                let gf = gv as f64;
-                let bf = bv as f64;
-                num_pixels += 1.0;
-                r_min = r_min.min(rf);
-                g_min = g_min.min(gf);
-                b_min = b_min.min(bf);
-                r_max = r_max.max(rf);
-                g_max = g_max.max(gf);
-                b_max = b_max.max(bf);
-                r_sum += rf;
-                g_sum += gf;
-                b_sum += bf;
-                r_sq_sum += rf * rf;
-                g_sq_sum += gf * gf;
-                b_sq_sum += bf * bf;
-            }
-        }
+        let n = input.rows * input.cols;
+        let (
+            num_pixels,
+            r_min,
+            g_min,
+            b_min,
+            r_max,
+            g_max,
+            b_max,
+            r_sum,
+            g_sum,
+            b_sum,
+            r_sq_sum,
+            g_sq_sum,
+            b_sq_sum,
+        ) = (0..n)
+            .into_par_iter()
+            .fold(
+                || {
+                    (
+                        0.0,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    )
+                },
+                |(
+                    mut num,
+                    mut rmn,
+                    mut gmn,
+                    mut bmn,
+                    mut rmx,
+                    mut gmx,
+                    mut bmx,
+                    mut rs,
+                    mut gs,
+                    mut bs,
+                    mut rs2,
+                    mut gs2,
+                    mut bs2,
+                ), idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
+                    let z = input.get(0, r, c);
+                    if !input.is_nodata(z) {
+                        let (rv, gv, bv, _) = Self::unpack_rgba(z);
+                        let rf = rv as f64;
+                        let gf = gv as f64;
+                        let bf = bv as f64;
+                        num += 1.0;
+                        rmn = rmn.min(rf);
+                        gmn = gmn.min(gf);
+                        bmn = bmn.min(bf);
+                        rmx = rmx.max(rf);
+                        gmx = gmx.max(gf);
+                        bmx = bmx.max(bf);
+                        rs += rf;
+                        gs += gf;
+                        bs += bf;
+                        rs2 += rf * rf;
+                        gs2 += gf * gf;
+                        bs2 += bf * bf;
+                    }
+                    (num, rmn, gmn, bmn, rmx, gmx, bmx, rs, gs, bs, rs2, gs2, bs2)
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        0.0,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    )
+                },
+                |a, b| {
+                    (
+                        a.0 + b.0,
+                        a.1.min(b.1),
+                        a.2.min(b.2),
+                        a.3.min(b.3),
+                        a.4.max(b.4),
+                        a.5.max(b.5),
+                        a.6.max(b.6),
+                        a.7 + b.7,
+                        a.8 + b.8,
+                        a.9 + b.9,
+                        a.10 + b.10,
+                        a.11 + b.11,
+                        a.12 + b.12,
+                    )
+                },
+            );
 
         if num_pixels == 0.0 {
             return Ok(output);
@@ -1097,22 +1178,30 @@ impl FlipImageTool {
         let (ga, gb, gc) = parabola(g_min, g_max, g_mean, g_s);
         let (ba, bb, bc) = parabola(b_min, b_max, b_mean, b_s);
 
-        for r in 0..input.rows as isize {
-            for c in 0..input.cols as isize {
+        let out_values: Vec<f64> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
                 let z = input.get(0, r, c);
                 if input.is_nodata(z) {
-                    continue;
+                    z
+                } else {
+                    let (rv, gv, bv, av) = Self::unpack_rgba(z);
+                    let rn = (ra * (rv as f64 - rb).powi(2) + rc).clamp(0.0, 255.0).round() as u32;
+                    let gn = (ga * (gv as f64 - gb).powi(2) + gc).clamp(0.0, 255.0).round() as u32;
+                    let bn = (ba * (bv as f64 - bb).powi(2) + bc).clamp(0.0, 255.0).round() as u32;
+                    Self::pack_rgba(rn, gn, bn, av)
                 }
-                let (rv, gv, bv, av) = Self::unpack_rgba(z);
-                let rn = (ra * (rv as f64 - rb).powi(2) + rc).clamp(0.0, 255.0).round() as u32;
-                let gn = (ga * (gv as f64 - gb).powi(2) + gc).clamp(0.0, 255.0).round() as u32;
-                let bn = (ba * (bv as f64 - bb).powi(2) + bc).clamp(0.0, 255.0).round() as u32;
-                output.set(0, r, c, Self::pack_rgba(rn, gn, bn, av)).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing BCE pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-            }
+            })
+            .collect();
+
+        for (idx, z) in out_values.into_iter().enumerate() {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
+            output.set(0, r, c, z).map_err(|e| {
+                ToolError::Execution(format!("failed writing BCE pixel at ({r},{c}): {e}"))
+            })?;
         }
 
         Ok(output)
@@ -1125,31 +1214,54 @@ impl FlipImageTool {
     ) -> Result<Raster, ToolError> {
         Self::validate_packed_rgb(input, NonFilterOp::DirectDecorrelationStretch.id())?;
 
-        let mut stage1 = input.clone();
-        let mut hist = [0usize; 256];
-        let mut samples = 0usize;
+        let n = input.rows * input.cols;
+        let (stage1_values, hist, samples) = (0..n)
+            .into_par_iter()
+            .fold(
+                || (Vec::<(usize, f64)>::new(), [0usize; 256], 0usize),
+                |(mut vals, mut local_hist, mut local_samples), idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
+                    let z = input.get(0, r, c);
+                    if input.is_nodata(z) {
+                        vals.push((idx, z));
+                        return (vals, local_hist, local_samples);
+                    }
 
-        for r in 0..input.rows as isize {
-            for c in 0..input.cols as isize {
-                let z = input.get(0, r, c);
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let (rv, gv, bv, av) = Self::unpack_rgba(z);
-                let min_v = rv.min(gv).min(bv) as f64;
-                let rn = (rv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
-                let gn = (gv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
-                let bn = (bv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
-                hist[rn as usize] += 1;
-                hist[gn as usize] += 1;
-                hist[bn as usize] += 1;
-                samples += 3;
-                stage1.set(0, r, c, Self::pack_rgba(rn, gn, bn, av)).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing DDS intermediate pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-            }
+                    let (rv, gv, bv, av) = Self::unpack_rgba(z);
+                    let min_v = rv.min(gv).min(bv) as f64;
+                    let rn = (rv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
+                    let gn = (gv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
+                    let bn = (bv as f64 - achromatic_factor * min_v).clamp(0.0, 255.0).round() as u32;
+                    local_hist[rn as usize] += 1;
+                    local_hist[gn as usize] += 1;
+                    local_hist[bn as usize] += 1;
+                    local_samples += 3;
+                    vals.push((idx, Self::pack_rgba(rn, gn, bn, av)));
+                    (vals, local_hist, local_samples)
+                },
+            )
+            .reduce(
+                || (Vec::<(usize, f64)>::new(), [0usize; 256], 0usize),
+                |mut a, b| {
+                    a.0.extend(b.0);
+                    for i in 0..256 {
+                        a.1[i] += b.1[i];
+                    }
+                    a.2 += b.2;
+                    a
+                },
+            );
+
+        let mut stage1 = input.clone();
+        for (idx, z) in stage1_values {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
+            stage1.set(0, r, c, z).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing DDS intermediate pixel at ({r},{c}): {e}"
+                ))
+            })?;
         }
 
         if samples == 0 {
@@ -1177,26 +1289,39 @@ impl FlipImageTool {
             running += hist[idx];
         }
 
-        let mut output = stage1.clone();
         let width = (stretch_max as f64 - stretch_min as f64).max(1.0);
-        for r in 0..stage1.rows as isize {
-            for c in 0..stage1.cols as isize {
+        let out_values: Vec<f64> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let r = (idx / stage1.cols) as isize;
+                let c = (idx % stage1.cols) as isize;
                 let z = stage1.get(0, r, c);
                 if stage1.is_nodata(z) {
-                    continue;
+                    z
+                } else {
+                    let (rv, gv, bv, av) = Self::unpack_rgba(z);
+                    let scale = |v: u32| {
+                        (((v as f64).clamp(stretch_min as f64, stretch_max as f64)
+                            - stretch_min as f64)
+                            / width
+                            * 255.0)
+                            .clamp(0.0, 255.0)
+                            .round() as u32
+                    };
+                    Self::pack_rgba(scale(rv), scale(gv), scale(bv), av)
                 }
-                let (rv, gv, bv, av) = Self::unpack_rgba(z);
-                let scale = |v: u32| {
-                    (((v as f64).clamp(stretch_min as f64, stretch_max as f64) - stretch_min as f64) / width * 255.0)
-                        .clamp(0.0, 255.0)
-                        .round() as u32
-                };
-                output.set(0, r, c, Self::pack_rgba(scale(rv), scale(gv), scale(bv), av)).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing DDS output pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-            }
+            })
+            .collect();
+
+        let mut output = stage1.clone();
+        for (idx, z) in out_values.into_iter().enumerate() {
+            let r = (idx / stage1.cols) as isize;
+            let c = (idx % stage1.cols) as isize;
+            output.set(0, r, c, z).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing DDS output pixel at ({r},{c}): {e}"
+                ))
+            })?;
         }
 
         Ok(output)
@@ -1251,18 +1376,26 @@ impl FlipImageTool {
         });
 
         let band_min_max = |r: &Raster| {
-            let mut min_v = f64::INFINITY;
-            let mut max_v = f64::NEG_INFINITY;
-            for row in 0..r.rows as isize {
-                for col in 0..r.cols as isize {
-                    let z = r.get(0, row, col);
-                    if r.is_nodata(z) || (treat_zeros_as_nodata && z == 0.0) {
-                        continue;
-                    }
-                    min_v = min_v.min(z);
-                    max_v = max_v.max(z);
-                }
-            }
+            let n = r.rows * r.cols;
+            let (min_v, max_v) = (0..n)
+                .into_par_iter()
+                .fold(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |(mut local_min, mut local_max), idx| {
+                        let row = (idx / r.cols) as isize;
+                        let col = (idx % r.cols) as isize;
+                        let z = r.get(0, row, col);
+                        if !(r.is_nodata(z) || (treat_zeros_as_nodata && z == 0.0)) {
+                            local_min = local_min.min(z);
+                            local_max = local_max.max(z);
+                        }
+                        (local_min, local_max)
+                    },
+                )
+                .reduce(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |a, b| (a.0.min(b.0), a.1.max(b.1)),
+                );
             if !min_v.is_finite() || !max_v.is_finite() {
                 (0.0, 1.0)
             } else {
@@ -1277,8 +1410,12 @@ impl FlipImageTool {
             .map(band_min_max)
             .unwrap_or((0.0, 255.0));
 
-        for row in 0..red.rows as isize {
-            for col in 0..red.cols as isize {
+        let n = red.rows * red.cols;
+        let out_values: Vec<f64> = (0..n)
+            .into_par_iter()
+            .map(|idx| {
+                let row = (idx / red.cols) as isize;
+                let col = (idx % red.cols) as isize;
                 let rv = red.get(0, row, col);
                 let gv = green.get(0, row, col);
                 let bv = blue.get(0, row, col);
@@ -1287,7 +1424,7 @@ impl FlipImageTool {
                     || blue.is_nodata(bv)
                     || (treat_zeros_as_nodata && (rv == 0.0 || gv == 0.0 || bv == 0.0));
                 if invalid {
-                    continue;
+                    return output.nodata;
                 }
 
                 let scale = |z: f64, min_v: f64, range_v: f64| {
@@ -1306,12 +1443,18 @@ impl FlipImageTool {
                 } else {
                     255
                 };
-                output.set(0, row, col, Self::pack_rgba(r8, g8, b8, a8)).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing colour composite pixel at ({row},{col}): {e}"
-                    ))
-                })?;
-            }
+                Self::pack_rgba(r8, g8, b8, a8)
+            })
+            .collect();
+
+        for (idx, z) in out_values.into_iter().enumerate() {
+            let row = (idx / red.cols) as isize;
+            let col = (idx % red.cols) as isize;
+            output.set(0, row, col, z).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing colour composite pixel at ({row},{col}): {e}"
+                ))
+            })?;
         }
 
         if enhance {
@@ -1345,20 +1488,26 @@ impl FlipImageTool {
                 }
             }
 
-            for r in 0..rows as isize {
-                for c in 0..cols as isize {
+            let out_values: Vec<f64> = (0..rows * cols)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / cols) as isize;
+                    let c = (idx % cols) as isize;
                     let z = input.get(band, r, c);
                     if input.is_nodata(z) {
-                        output.set(band, r, c, input.nodata).map_err(|e| {
-                            ToolError::Execution(format!("failed writing nodata at ({r},{c}): {e}"))
-                        })?;
+                        input.nodata
                     } else {
-                        let v = integral[r as usize * cols + c as usize];
-                        output.set(band, r, c, v).map_err(|e| {
-                            ToolError::Execution(format!("failed writing integral value at ({r},{c}): {e}"))
-                        })?;
+                        integral[idx]
                     }
-                }
+                })
+                .collect();
+
+            for (idx, v) in out_values.into_iter().enumerate() {
+                let r = (idx / cols) as isize;
+                let c = (idx % cols) as isize;
+                output.set(band, r, c, v).map_err(|e| {
+                    ToolError::Execution(format!("failed writing integral value at ({r},{c}): {e}"))
+                })?;
             }
         }
 
@@ -1380,62 +1529,140 @@ impl FlipImageTool {
     }
 
     fn morph_erode(input: &Raster, filter_size_x: usize, filter_size_y: usize) -> Result<Raster, ToolError> {
-        let (_fx, _fy, mx, my) = Self::normalized_filter_sizes(filter_size_x, filter_size_y);
+        let (fx, _fy, mx, my) = Self::normalized_filter_sizes(filter_size_x, filter_size_y);
+        let rows = input.rows as isize;
+        let cols = input.cols as isize;
         let mut output = input.clone();
+
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
-                    let center = input.get(b, r, c);
-                    if input.is_nodata(center) {
-                        continue;
-                    }
-                    let mut min_v = f64::INFINITY;
-                    for rr in (r - my)..=(r + my) {
-                        for cc in (c - mx)..=(c + mx) {
-                            let z = input.get(b, rr, cc);
-                            if !input.is_nodata(z) {
-                                min_v = min_v.min(z);
+            let band_rows: Vec<(isize, Vec<f64>)> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let start_row = r - my;
+                    let end_row = r + my;
+                    let mut row_out = vec![input.nodata; cols as usize];
+                    let mut filter_min_vals: VecDeque<f64> = VecDeque::with_capacity(fx);
+
+                    for c in 0..cols {
+                        if c > 0 {
+                            filter_min_vals.pop_front();
+                            let mut min_v = f64::INFINITY;
+                            for rr in start_row..=end_row {
+                                let z = input.get(b, rr, c + mx);
+                                if !input.is_nodata(z) {
+                                    min_v = min_v.min(z);
+                                }
+                            }
+                            filter_min_vals.push_back(min_v);
+                        } else {
+                            for cc in (c - mx)..=(c + mx) {
+                                let mut min_v = f64::INFINITY;
+                                for rr in start_row..=end_row {
+                                    let z = input.get(b, rr, cc);
+                                    if !input.is_nodata(z) {
+                                        min_v = min_v.min(z);
+                                    }
+                                }
+                                filter_min_vals.push_back(min_v);
+                            }
+                        }
+
+                        let center = input.get(b, r, c);
+                        if !input.is_nodata(center) {
+                            let mut min_v = f64::INFINITY;
+                            for i in 0..fx {
+                                min_v = min_v.min(filter_min_vals[i]);
+                            }
+                            if min_v.is_finite() {
+                                row_out[c as usize] = min_v;
                             }
                         }
                     }
-                    if min_v.is_finite() {
-                        output.set(b, r, c, min_v).map_err(|e| {
-                            ToolError::Execution(format!("failed writing erosion value at ({r},{c}): {e}"))
-                        })?;
-                    }
+
+                    (r, row_out)
+                })
+                .collect();
+
+            for (r, row_out) in band_rows {
+                for (c, v) in row_out.iter().enumerate() {
+                    output.set(b, r, c as isize, *v).map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing erosion value at ({r},{c}): {e}"
+                        ))
+                    })?;
                 }
             }
         }
+
         Ok(output)
     }
 
     fn morph_dilate(input: &Raster, filter_size_x: usize, filter_size_y: usize) -> Result<Raster, ToolError> {
-        let (_fx, _fy, mx, my) = Self::normalized_filter_sizes(filter_size_x, filter_size_y);
+        let (fx, _fy, mx, my) = Self::normalized_filter_sizes(filter_size_x, filter_size_y);
+        let rows = input.rows as isize;
+        let cols = input.cols as isize;
         let mut output = input.clone();
+
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
-                    let center = input.get(b, r, c);
-                    if input.is_nodata(center) {
-                        continue;
-                    }
-                    let mut max_v = f64::NEG_INFINITY;
-                    for rr in (r - my)..=(r + my) {
-                        for cc in (c - mx)..=(c + mx) {
-                            let z = input.get(b, rr, cc);
-                            if !input.is_nodata(z) {
-                                max_v = max_v.max(z);
+            let band_rows: Vec<(isize, Vec<f64>)> = (0..rows)
+                .into_par_iter()
+                .map(|r| {
+                    let start_row = r - my;
+                    let end_row = r + my;
+                    let mut row_out = vec![input.nodata; cols as usize];
+                    let mut filter_max_vals: VecDeque<f64> = VecDeque::with_capacity(fx);
+
+                    for c in 0..cols {
+                        if c > 0 {
+                            filter_max_vals.pop_front();
+                            let mut max_v = f64::NEG_INFINITY;
+                            for rr in start_row..=end_row {
+                                let z = input.get(b, rr, c + mx);
+                                if !input.is_nodata(z) {
+                                    max_v = max_v.max(z);
+                                }
+                            }
+                            filter_max_vals.push_back(max_v);
+                        } else {
+                            for cc in (c - mx)..=(c + mx) {
+                                let mut max_v = f64::NEG_INFINITY;
+                                for rr in start_row..=end_row {
+                                    let z = input.get(b, rr, cc);
+                                    if !input.is_nodata(z) {
+                                        max_v = max_v.max(z);
+                                    }
+                                }
+                                filter_max_vals.push_back(max_v);
+                            }
+                        }
+
+                        let center = input.get(b, r, c);
+                        if !input.is_nodata(center) {
+                            let mut max_v = f64::NEG_INFINITY;
+                            for i in 0..fx {
+                                max_v = max_v.max(filter_max_vals[i]);
+                            }
+                            if max_v.is_finite() {
+                                row_out[c as usize] = max_v;
                             }
                         }
                     }
-                    if max_v.is_finite() {
-                        output.set(b, r, c, max_v).map_err(|e| {
-                            ToolError::Execution(format!("failed writing dilation value at ({r},{c}): {e}"))
-                        })?;
-                    }
+
+                    (r, row_out)
+                })
+                .collect();
+
+            for (r, row_out) in band_rows {
+                for (c, v) in row_out.iter().enumerate() {
+                    output.set(b, r, c as isize, *v).map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed writing dilation value at ({r},{c}): {e}"
+                        ))
+                    })?;
                 }
             }
         }
+
         Ok(output)
     }
 
@@ -1460,22 +1687,32 @@ impl FlipImageTool {
             TophatVariant::Black => Self::run_closing(input, filter_size_x, filter_size_y)?,
         };
         let mut output = input.clone();
+        let n = input.rows * input.cols;
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let out_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
                     let z0 = input.get(b, r, c);
                     let z1 = basis.get(b, r, c);
                     if input.is_nodata(z0) || basis.is_nodata(z1) {
-                        continue;
+                        z0
+                    } else {
+                        match variant {
+                            TophatVariant::White => z0 - z1,
+                            TophatVariant::Black => z1 - z0,
+                        }
                     }
-                    let out = match variant {
-                        TophatVariant::White => z0 - z1,
-                        TophatVariant::Black => z1 - z0,
-                    };
-                    output.set(b, r, c, out).map_err(|e| {
-                        ToolError::Execution(format!("failed writing top-hat value at ({r},{c}): {e}"))
-                    })?;
-                }
+                })
+                .collect();
+
+            for (idx, out_v) in out_values.into_iter().enumerate() {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
+                output.set(b, r, c, out_v).map_err(|e| {
+                    ToolError::Execution(format!("failed writing top-hat value at ({r},{c}): {e}"))
+                })?;
             }
         }
         Ok(output)
@@ -1604,18 +1841,25 @@ impl FlipImageTool {
             metadata: input.metadata.clone(),
         };
         let mut output = Raster::new(cfg);
-        for r in 0..input.rows as isize {
-            let mut row = vec![-32768.0; input.cols];
-            for c in 0..input.cols as isize {
-                let z_raw = input.get(0, r, c);
-                if input.is_nodata(z_raw) {
-                    continue;
+        let out_rows: Vec<Vec<f64>> = (0..input.rows)
+            .into_par_iter()
+            .map(|r| {
+                let mut row = vec![-32768.0; input.cols];
+                for c in 0..input.cols as isize {
+                    let z_raw = input.get(0, r as isize, c);
+                    if input.is_nodata(z_raw) {
+                        continue;
+                    }
+                    let z = if packed_rgb { value2i(z_raw) } else { z_raw };
+                    let idx = (((z - min_v) / bin_size).floor() as usize).min(num_bins - 1);
+                    row[c as usize] = if idx <= max_i { 0.0 } else { 1.0 };
                 }
-                let z = if packed_rgb { value2i(z_raw) } else { z_raw };
-                let idx = (((z - min_v) / bin_size).floor() as usize).min(num_bins - 1);
-                row[c as usize] = if idx <= max_i { 0.0 } else { 1.0 };
-            }
-            output.set_row_slice(0, r, &row).map_err(|e| {
+                row
+            })
+            .collect();
+
+        for (r, row) in out_rows.iter().enumerate() {
+            output.set_row_slice(0, r as isize, &row).map_err(|e| {
                 ToolError::Execution(format!("failed writing otsu row {}: {}", r, e))
             })?;
         }
@@ -1624,25 +1868,32 @@ impl FlipImageTool {
 
     fn to_binary_raster(input: &Raster) -> Result<Raster, ToolError> {
         let mut output = input.clone();
+        let n = input.rows * input.cols;
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let out_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        output.set(b, r, c, input.nodata).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing binary nodata at ({r},{c}): {e}"
-                            ))
-                        })?;
+                        input.nodata
+                    } else if z > 0.0 {
+                        1.0
                     } else {
-                        let v = if z > 0.0 { 1.0 } else { 0.0 };
-                        output.set(b, r, c, v).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing binary raster value at ({r},{c}): {e}"
-                            ))
-                        })?;
+                        0.0
                     }
-                }
+                })
+                .collect();
+
+            for (idx, v) in out_values.into_iter().enumerate() {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
+                output.set(b, r, c, v).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed writing binary raster value at ({r},{c}): {e}"
+                    ))
+                })?;
             }
         }
         Ok(output)
@@ -1853,6 +2104,7 @@ impl FlipImageTool {
     fn run_corner_detection(input: &Raster) -> Result<Raster, ToolError> {
         let input = Self::to_binary_raster(input)?;
         let mut output = input.clone();
+        let n = input.rows * input.cols;
         let dx: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
         let dy: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
 
@@ -1865,24 +2117,17 @@ impl FlipImageTool {
         let vals = [1.0f64, 1.0, 0.0, 0.0, 0.0];
 
         for b in 0..input.bands as isize {
-            for r in 0..input.rows as isize {
-                for c in 0..input.cols as isize {
+            let out_values: Vec<f64> = (0..n)
+                .into_par_iter()
+                .map(|idx| {
+                    let r = (idx / input.cols) as isize;
+                    let c = (idx % input.cols) as isize;
                     let z = input.get(b, r, c);
                     if input.is_nodata(z) {
-                        output.set(b, r, c, input.nodata).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing nodata corner pixel at ({r},{c}): {e}"
-                            ))
-                        })?;
-                        continue;
+                        return input.nodata;
                     }
                     if z <= 0.0 {
-                        output.set(b, r, c, 0.0).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing background corner pixel at ({r},{c}): {e}"
-                            ))
-                        })?;
-                        continue;
+                        return 0.0;
                     }
 
                     let mut neighbours = [0.0f64; 8];
@@ -1906,13 +2151,18 @@ impl FlipImageTool {
                         }
                     }
 
-                    let out_v = if pattern_match { 1.0 } else { 0.0 };
-                    output.set(b, r, c, out_v).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing corner-detection output at ({r},{c}): {e}"
-                        ))
-                    })?;
-                }
+                    if pattern_match { 1.0 } else { 0.0 }
+                })
+                .collect();
+
+            for (idx, out_v) in out_values.into_iter().enumerate() {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
+                output.set(b, r, c, out_v).map_err(|e| {
+                    ToolError::Execution(format!(
+                        "failed writing corner-detection output at ({r},{c}): {e}"
+                    ))
+                })?;
             }
         }
 
@@ -1980,16 +2230,25 @@ impl FlipImageTool {
     }
 
     fn collect_valid_values(input: &Raster, band: isize) -> Vec<f64> {
-        let mut values = Vec::with_capacity(input.rows * input.cols);
-        for r in 0..input.rows as isize {
-            for c in 0..input.cols as isize {
-                let z = input.get(band, r, c);
-                if !input.is_nodata(z) {
-                    values.push(z);
+        (0..input.rows as isize)
+            .into_par_iter()
+            .map(|r| {
+                let mut row_vals = Vec::new();
+                for c in 0..input.cols as isize {
+                    let z = input.get(band, r, c);
+                    if !input.is_nodata(z) {
+                        row_vals.push(z);
+                    }
                 }
-            }
-        }
-        values
+                row_vals
+            })
+            .reduce(
+                || Vec::new(),
+                |mut acc, mut row_vals| {
+                    acc.append(&mut row_vals);
+                    acc
+                },
+            )
     }
 
     fn quantile_from_sorted(values: &[f64], q: f64) -> f64 {
@@ -2074,16 +2333,23 @@ impl FlipImageTool {
 
         for b in 0..input.bands as isize {
             let band_values = input.band_slice(b);
-            let mut min_z = f64::INFINITY;
-            let mut max_z = f64::NEG_INFINITY;
-            let mut valid_count = 0usize;
-            for &z in &band_values {
-                if !input.is_nodata(z) {
-                    min_z = min_z.min(z);
-                    max_z = max_z.max(z);
-                    valid_count += 1;
-                }
-            }
+            let (min_z, max_z, valid_count) = band_values
+                .par_iter()
+                .fold(
+                    || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                    |(mut local_min, mut local_max, mut local_count), &z| {
+                        if !input.is_nodata(z) {
+                            local_min = local_min.min(z);
+                            local_max = local_max.max(z);
+                            local_count += 1;
+                        }
+                        (local_min, local_max, local_count)
+                    },
+                )
+                .reduce(
+                    || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                    |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
+                );
             if valid_count == 0 {
                 continue;
             }
@@ -2092,16 +2358,30 @@ impl FlipImageTool {
                 continue;
             }
 
-            let mut hist = vec![0usize; 1024];
+            let hist_bins = 1024usize;
             let width = (max_z - min_z).max(1e-12);
-            for &z in &band_values {
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let t = ((z - min_z) / width).clamp(0.0, 1.0);
-                let idx = (t * (hist.len() - 1) as f64).round() as usize;
-                hist[idx] += 1;
-            }
+            let hist = band_values
+                .par_iter()
+                .fold(
+                    || vec![0usize; hist_bins],
+                    |mut local_hist, &z| {
+                        if !input.is_nodata(z) {
+                            let t = ((z - min_z) / width).clamp(0.0, 1.0);
+                            let idx = (t * (hist_bins - 1) as f64).round() as usize;
+                            local_hist[idx] += 1;
+                        }
+                        local_hist
+                    },
+                )
+                .reduce(
+                    || vec![0usize; hist_bins],
+                    |mut acc, local| {
+                        for (dst, src) in acc.iter_mut().zip(local) {
+                            *dst += src;
+                        }
+                        acc
+                    },
+                );
 
             let mut cdf = vec![0.0; hist.len()];
             let mut running = 0usize;
@@ -2162,16 +2442,23 @@ impl FlipImageTool {
 
         for b in 0..input.bands as isize {
             let band_values = input.band_slice(b);
-            let mut min_z = f64::INFINITY;
-            let mut max_z = f64::NEG_INFINITY;
-            let mut valid_count = 0usize;
-            for &z in &band_values {
-                if !input.is_nodata(z) {
-                    min_z = min_z.min(z);
-                    max_z = max_z.max(z);
-                    valid_count += 1;
-                }
-            }
+            let (min_z, max_z, valid_count) = band_values
+                .par_iter()
+                .fold(
+                    || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                    |(mut local_min, mut local_max, mut local_count), &z| {
+                        if !input.is_nodata(z) {
+                            local_min = local_min.min(z);
+                            local_max = local_max.max(z);
+                            local_count += 1;
+                        }
+                        (local_min, local_max, local_count)
+                    },
+                )
+                .reduce(
+                    || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                    |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
+                );
             if valid_count == 0 {
                 continue;
             }
@@ -2179,16 +2466,30 @@ impl FlipImageTool {
                 continue;
             }
 
-            let mut hist = vec![0usize; 1024];
+            let hist_bins = 1024usize;
             let width = (max_z - min_z).max(1e-12);
-            for &z in &band_values {
-                if input.is_nodata(z) {
-                    continue;
-                }
-                let t = ((z - min_z) / width).clamp(0.0, 1.0);
-                let idx = (t * (hist.len() - 1) as f64).round() as usize;
-                hist[idx] += 1;
-            }
+            let hist = band_values
+                .par_iter()
+                .fold(
+                    || vec![0usize; hist_bins],
+                    |mut local_hist, &z| {
+                        if !input.is_nodata(z) {
+                            let t = ((z - min_z) / width).clamp(0.0, 1.0);
+                            let idx = (t * (hist_bins - 1) as f64).round() as usize;
+                            local_hist[idx] += 1;
+                        }
+                        local_hist
+                    },
+                )
+                .reduce(
+                    || vec![0usize; hist_bins],
+                    |mut acc, local| {
+                        for (dst, src) in acc.iter_mut().zip(local) {
+                            *dst += src;
+                        }
+                        acc
+                    },
+                );
 
             let mut cdf = vec![0.0; hist.len()];
             let mut running = 0usize;
@@ -2234,16 +2535,23 @@ impl FlipImageTool {
             ));
         }
         let ref_band = reference.band_slice(0);
-        let mut min_z = f64::INFINITY;
-        let mut max_z = f64::NEG_INFINITY;
-        let mut valid_count = 0usize;
-        for &z in &ref_band {
-            if !reference.is_nodata(z) {
-                min_z = min_z.min(z);
-                max_z = max_z.max(z);
-                valid_count += 1;
-            }
-        }
+        let (min_z, max_z, valid_count) = ref_band
+            .par_iter()
+            .fold(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |(mut local_min, mut local_max, mut local_count), &z| {
+                    if !reference.is_nodata(z) {
+                        local_min = local_min.min(z);
+                        local_max = local_max.max(z);
+                        local_count += 1;
+                    }
+                    (local_min, local_max, local_count)
+                },
+            )
+            .reduce(
+                || (f64::INFINITY, f64::NEG_INFINITY, 0usize),
+                |a, b| (a.0.min(b.0), a.1.max(b.1), a.2 + b.2),
+            );
 
         if valid_count == 0 {
             return Err(ToolError::Validation(
@@ -2258,15 +2566,28 @@ impl FlipImageTool {
 
         let bins = 4096usize;
         let width = (max_z - min_z).max(1e-12);
-        let mut hist = vec![0usize; bins];
-        for &z in &ref_band {
-            if reference.is_nodata(z) {
-                continue;
-            }
-            let t = ((z - min_z) / width).clamp(0.0, 1.0);
-            let idx = (t * (bins - 1) as f64).round() as usize;
-            hist[idx] += 1;
-        }
+        let hist = ref_band
+            .par_iter()
+            .fold(
+                || vec![0usize; bins],
+                |mut local_hist, &z| {
+                    if !reference.is_nodata(z) {
+                        let t = ((z - min_z) / width).clamp(0.0, 1.0);
+                        let idx = (t * (bins - 1) as f64).round() as usize;
+                        local_hist[idx] += 1;
+                    }
+                    local_hist
+                },
+            )
+            .reduce(
+                || vec![0usize; bins],
+                |mut acc, local| {
+                    for (dst, src) in acc.iter_mut().zip(local) {
+                        *dst += src;
+                    }
+                    acc
+                },
+            );
 
         let mut pairs = Vec::with_capacity(bins);
         let mut running = 0usize;
@@ -2440,15 +2761,24 @@ impl FlipImageTool {
 
         for b in 0..input.bands as isize {
             let values = Self::collect_valid_values(input, b);
-            let mut min_z = f64::INFINITY;
-            let mut max_z = f64::NEG_INFINITY;
-            for &z in &values {
-                min_z = min_z.min(z);
-                max_z = max_z.max(z);
-            }
             if values.is_empty() {
                 continue;
             }
+
+            let (min_z, max_z) = values
+                .par_iter()
+                .fold(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |(mut local_min, mut local_max), &z| {
+                        local_min = local_min.min(z);
+                        local_max = local_max.max(z);
+                        (local_min, local_max)
+                    },
+                )
+                .reduce(
+                    || (f64::INFINITY, f64::NEG_INFINITY),
+                    |a, b| (a.0.min(b.0), a.1.max(b.1)),
+                );
 
             let width = (max_z - min_z).max(1e-12);
             let a = 1.0 / (1.0 + (gain * cutoff).exp());
@@ -2513,12 +2843,12 @@ impl FlipImageTool {
             }
 
             let n = values.len() as f64;
-            let mean = values.iter().sum::<f64>() / n;
+            let mean = values.par_iter().copied().sum::<f64>() / n;
             let variance = if values.len() > 1 {
                 values
-                    .iter()
+                    .par_iter()
                     .map(|z| {
-                        let d = *z - mean;
+                        let d = z - mean;
                         d * d
                     })
                     .sum::<f64>()
@@ -4982,19 +5312,30 @@ fn new_f32_band_like(template: &Raster) -> Raster {
 }
 
 fn band_min_max(raster: &Raster) -> (f64, f64) {
-    let rows = raster.rows as isize;
-    let cols = raster.cols as isize;
-    let mut min = f64::MAX;
-    let mut max = f64::MIN;
-    for r in 0..rows {
-        for c in 0..cols {
-            let v = raster.get(0, r, c);
-            if !raster.is_nodata(v) {
-                if v < min { min = v; }
-                if v > max { max = v; }
-            }
-        }
-    }
+    let n = raster.rows * raster.cols;
+    let (min, max) = (0..n)
+        .into_par_iter()
+        .fold(
+            || (f64::MAX, f64::MIN),
+            |(mut local_min, mut local_max), idx| {
+                let r = (idx / raster.cols) as isize;
+                let c = (idx % raster.cols) as isize;
+                let v = raster.get(0, r, c);
+                if !raster.is_nodata(v) {
+                    if v < local_min {
+                        local_min = v;
+                    }
+                    if v > local_max {
+                        local_max = v;
+                    }
+                }
+                (local_min, local_max)
+            },
+        )
+        .reduce(
+            || (f64::MAX, f64::MIN),
+            |a, b| (a.0.min(b.0), a.1.max(b.1)),
+        );
     if min > max { (0.0, 1.0) } else { (min, max) }
 }
 
@@ -5005,55 +5346,70 @@ fn norm01(v: f64, min: f64, max: f64) -> f64 {
 }
 
 fn run_split_colour_composite(input: &Raster) -> Result<(Raster, Raster, Raster), ToolError> {
-    let rows = input.rows as isize;
-    let cols = input.cols as isize;
     let out_nd = -32768.0f64;
     let mut red = new_f32_band_like(input);
     let mut green = new_f32_band_like(input);
     let mut blue = new_f32_band_like(input);
-    for r in 0..rows {
-        for c in 0..cols {
+    let n = input.rows * input.cols;
+    let unpacked: Vec<(f64, f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
             let val = input.get(0, r, c);
-            if !input.is_nodata(val) {
-                let iv = val as i64;
-                let _ = red.set(0, r, c, (iv & 0xFF) as f64);
-                let _ = green.set(0, r, c, ((iv >> 8) & 0xFF) as f64);
-                let _ = blue.set(0, r, c, ((iv >> 16) & 0xFF) as f64);
+            if input.is_nodata(val) {
+                (out_nd, out_nd, out_nd)
             } else {
-                let _ = red.set(0, r, c, out_nd);
-                let _ = green.set(0, r, c, out_nd);
-                let _ = blue.set(0, r, c, out_nd);
+                let iv = val as i64;
+                (
+                    (iv & 0xFF) as f64,
+                    ((iv >> 8) & 0xFF) as f64,
+                    ((iv >> 16) & 0xFF) as f64,
+                )
             }
-        }
+        })
+        .collect();
+
+    for (idx, (rv, gv, bv)) in unpacked.into_iter().enumerate() {
+        let r = (idx / input.cols) as isize;
+        let c = (idx % input.cols) as isize;
+        let _ = red.set(0, r, c, rv);
+        let _ = green.set(0, r, c, gv);
+        let _ = blue.set(0, r, c, bv);
     }
     Ok((red, green, blue))
 }
 
 fn run_rgb_to_ihs_from_composite(composite: &Raster) -> Result<(Raster, Raster, Raster), ToolError> {
-    let rows = composite.rows as isize;
-    let cols = composite.cols as isize;
     let out_nd = -32768.0f64;
     let mut intensity = new_f32_band_like(composite);
     let mut hue = new_f32_band_like(composite);
     let mut saturation = new_f32_band_like(composite);
-    for r in 0..rows {
-        for c in 0..cols {
+    let n = composite.rows * composite.cols;
+    let ihs_values: Vec<(f64, f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / composite.cols) as isize;
+            let c = (idx % composite.cols) as isize;
             let val = composite.get(0, r, c);
-            if !composite.is_nodata(val) {
+            if composite.is_nodata(val) {
+                (out_nd, out_nd, out_nd)
+            } else {
                 let iv = val as i64;
                 let rn = (iv & 0xFF) as f64 / 255.0;
                 let gn = ((iv >> 8) & 0xFF) as f64 / 255.0;
                 let bn = ((iv >> 16) & 0xFF) as f64 / 255.0;
-                let (h, s, i) = rgb_to_hsi_norm(rn, gn, bn);
-                let _ = intensity.set(0, r, c, i);
-                let _ = hue.set(0, r, c, h);
-                let _ = saturation.set(0, r, c, s);
-            } else {
-                let _ = intensity.set(0, r, c, out_nd);
-                let _ = hue.set(0, r, c, out_nd);
-                let _ = saturation.set(0, r, c, out_nd);
+                rgb_to_hsi_norm(rn, gn, bn)
             }
-        }
+        })
+        .collect();
+
+    for (idx, (h, s, i)) in ihs_values.into_iter().enumerate() {
+        let r = (idx / composite.cols) as isize;
+        let c = (idx % composite.cols) as isize;
+        let _ = intensity.set(0, r, c, i);
+        let _ = hue.set(0, r, c, h);
+        let _ = saturation.set(0, r, c, s);
     }
     Ok((intensity, hue, saturation))
 }
@@ -5063,8 +5419,6 @@ fn run_rgb_to_ihs_from_bands(
     green: &Raster,
     blue: &Raster,
 ) -> Result<(Raster, Raster, Raster), ToolError> {
-    let rows = red.rows as isize;
-    let cols = red.cols as isize;
     let out_nd = -32768.0f64;
     let (r_min, r_max) = band_min_max(red);
     let (g_min, g_max) = band_min_max(green);
@@ -5072,26 +5426,33 @@ fn run_rgb_to_ihs_from_bands(
     let mut intensity = new_f32_band_like(red);
     let mut hue = new_f32_band_like(red);
     let mut saturation = new_f32_band_like(red);
-    for r in 0..rows {
-        for c in 0..cols {
+    let n = red.rows * red.cols;
+    let ihs_values: Vec<(f64, f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / red.cols) as isize;
+            let c = (idx % red.cols) as isize;
             let rv = red.get(0, r, c);
             let gv = green.get(0, r, c);
             let bv = blue.get(0, r, c);
-            if !red.is_nodata(rv) && !green.is_nodata(gv) && !blue.is_nodata(bv) {
-                let (h, s, i) = rgb_to_hsi_norm(
+            if red.is_nodata(rv) || green.is_nodata(gv) || blue.is_nodata(bv) {
+                (out_nd, out_nd, out_nd)
+            } else {
+                rgb_to_hsi_norm(
                     norm01(rv, r_min, r_max),
                     norm01(gv, g_min, g_max),
                     norm01(bv, b_min, b_max),
-                );
-                let _ = intensity.set(0, r, c, i);
-                let _ = hue.set(0, r, c, h);
-                let _ = saturation.set(0, r, c, s);
-            } else {
-                let _ = intensity.set(0, r, c, out_nd);
-                let _ = hue.set(0, r, c, out_nd);
-                let _ = saturation.set(0, r, c, out_nd);
+                )
             }
-        }
+        })
+        .collect();
+
+    for (idx, (h, s, i)) in ihs_values.into_iter().enumerate() {
+        let r = (idx / red.cols) as isize;
+        let c = (idx % red.cols) as isize;
+        let _ = intensity.set(0, r, c, i);
+        let _ = hue.set(0, r, c, h);
+        let _ = saturation.set(0, r, c, s);
     }
     Ok((intensity, hue, saturation))
 }
@@ -5101,28 +5462,38 @@ fn run_ihs_to_rgb(
     hue: &Raster,
     saturation: &Raster,
 ) -> Result<(Raster, Raster, Raster), ToolError> {
-    let rows = intensity.rows as isize;
-    let cols = intensity.cols as isize;
     let out_nd = -32768.0f64;
     let mut red = new_f32_band_like(intensity);
     let mut green = new_f32_band_like(intensity);
     let mut blue = new_f32_band_like(intensity);
-    for r in 0..rows {
-        for c in 0..cols {
+    let n = intensity.rows * intensity.cols;
+    let rgb_values: Vec<(f64, f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / intensity.cols) as isize;
+            let c = (idx % intensity.cols) as isize;
             let i_v = intensity.get(0, r, c);
             let h_v = hue.get(0, r, c);
             let s_v = saturation.get(0, r, c);
-            if !intensity.is_nodata(i_v) && !hue.is_nodata(h_v) && !saturation.is_nodata(s_v) {
-                let (rv, gv, bv) = hsi_to_rgb_norm(h_v, s_v, i_v);
-                let _ = red.set(0, r, c, (rv * 255.0).round().clamp(0.0, 255.0));
-                let _ = green.set(0, r, c, (gv * 255.0).round().clamp(0.0, 255.0));
-                let _ = blue.set(0, r, c, (bv * 255.0).round().clamp(0.0, 255.0));
+            if intensity.is_nodata(i_v) || hue.is_nodata(h_v) || saturation.is_nodata(s_v) {
+                (out_nd, out_nd, out_nd)
             } else {
-                let _ = red.set(0, r, c, out_nd);
-                let _ = green.set(0, r, c, out_nd);
-                let _ = blue.set(0, r, c, out_nd);
+                let (rv, gv, bv) = hsi_to_rgb_norm(h_v, s_v, i_v);
+                (
+                    (rv * 255.0).round().clamp(0.0, 255.0),
+                    (gv * 255.0).round().clamp(0.0, 255.0),
+                    (bv * 255.0).round().clamp(0.0, 255.0),
+                )
             }
-        }
+        })
+        .collect();
+
+    for (idx, (rv, gv, bv)) in rgb_values.into_iter().enumerate() {
+        let r = (idx / intensity.cols) as isize;
+        let c = (idx % intensity.cols) as isize;
+        let _ = red.set(0, r, c, rv);
+        let _ = green.set(0, r, c, gv);
+        let _ = blue.set(0, r, c, bv);
     }
     Ok((red, green, blue))
 }
@@ -5408,19 +5779,24 @@ fn run_generalize_classified_raster(
         metadata: input.metadata.clone(),
     });
 
-    for i in 0..n {
-        let cid = comp_id[i];
+    let initial_values: Vec<f64> = (0..n)
+        .into_par_iter()
+        .map(|i| {
+            let cid = comp_id[i];
+            if cid < 0 {
+                nodata
+            } else {
+                comp_class[cid as usize]
+            }
+        })
+        .collect();
+
+    for (i, v) in initial_values.into_iter().enumerate() {
         let r = (i / input.cols) as isize;
         let c = (i % input.cols) as isize;
-        if cid < 0 {
-            output.set(0, r, c, nodata).map_err(|e| {
-                ToolError::Execution(format!("failed writing nodata output value at ({r},{c}): {e}"))
-            })?;
-        } else {
-            output.set(0, r, c, comp_class[cid as usize]).map_err(|e| {
-                ToolError::Execution(format!("failed writing output value at ({r},{c}): {e}"))
-            })?;
-        }
+        output.set(0, r, c, v).map_err(|e| {
+            ToolError::Execution(format!("failed writing output value at ({r},{c}): {e}"))
+        })?;
     }
 
     let n4 = [(0isize, 1isize), (1, 0), (0, -1), (-1, 0)];
@@ -5472,16 +5848,27 @@ fn run_generalize_classified_raster(
             }
         }
 
-        for i in 0..n {
-            let cid = comp_id[i];
-            if cid < 0 || comp_size[cid as usize] >= min_size {
-                continue;
-            }
-            let own = owner[i];
-            if own >= 0 {
+        let nearest_values: Vec<Option<f64>> = (0..n)
+            .into_par_iter()
+            .map(|i| {
+                let cid = comp_id[i];
+                if cid < 0 || comp_size[cid as usize] >= min_size {
+                    return None;
+                }
+                let own = owner[i];
+                if own >= 0 {
+                    Some(comp_class[own as usize])
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (i, maybe_v) in nearest_values.into_iter().enumerate() {
+            if let Some(v) = maybe_v {
                 let r = (i / input.cols) as isize;
                 let c = (i % input.cols) as isize;
-                output.set(0, r, c, comp_class[own as usize]).map_err(|e| {
+                output.set(0, r, c, v).map_err(|e| {
                     ToolError::Execution(format!(
                         "failed writing nearest generalized value at ({r},{c}): {e}"
                     ))
@@ -5577,6 +5964,7 @@ fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let rows = input.rows as isize;
     let cols = input.cols as isize;
     let mut imgbuf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(cols as u32, rows as u32);
+    let n = input.rows * input.cols;
 
     let rgb_mode = color_support::detect_rgb_mode(input, false, true);
     let is_rgb = rgb_mode == color_support::RgbMode::Packed;
@@ -5585,10 +5973,13 @@ fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let min_v = stats.min;
     let range_v = (stats.max - stats.min).max(1e-12);
 
-    for r in 0..rows {
-        for c in 0..cols {
+    let pixels: Vec<Rgba<u8>> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
             let z = input.get(0, r, c);
-            let px = if input.is_nodata(z) {
+            if input.is_nodata(z) {
                 Rgba([0, 0, 0, 0])
             } else if is_rgb {
                 let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(z);
@@ -5597,9 +5988,14 @@ fn raster_to_rgba_image(input: &Raster) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
                 let p = ((z - min_v) / range_v).clamp(0.0, 1.0);
                 let v = (p * 255.0).round().clamp(0.0, 255.0) as u8;
                 Rgba([v, v, v, 255])
-            };
-            imgbuf.put_pixel(c as u32, r as u32, px);
-        }
+            }
+        })
+        .collect();
+
+    for (idx, px) in pixels.into_iter().enumerate() {
+        let r = (idx / input.cols) as u32;
+        let c = (idx % input.cols) as u32;
+        imgbuf.put_pixel(c, r, px);
     }
 
     imgbuf
@@ -5946,9 +6342,12 @@ fn run_mosaic(inputs: &[Raster], method: ResampleMethod) -> Result<Raster, ToolE
     });
 
     for band in 0..first.bands as isize {
-        for row in 0..rows as isize {
-            let y = out_y_max - (row as f64 + 0.5) * cell_size_y;
-            for col in 0..cols as isize {
+        let sampled: Vec<Option<f64>> = (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
+                let y = out_y_max - (row as f64 + 0.5) * cell_size_y;
                 let x = out_x_min + (col as f64 + 0.5) * cell_size_x;
 
                 let mut chosen = None;
@@ -5960,15 +6359,24 @@ fn run_mosaic(inputs: &[Raster], method: ResampleMethod) -> Result<Raster, ToolE
                         break;
                     }
                 }
+                chosen
+            })
+            .collect();
 
-                if let Some(v) = chosen {
-                    output.set(band, row, col, v).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing mosaic value at band {band}, ({row},{col}): {e}"
-                        ))
-                    })?;
-                }
-            }
+        let output_vals: Vec<(usize, f64)> = sampled
+            .into_par_iter()
+            .enumerate()
+            .filter_map(|(idx, maybe_v)| maybe_v.map(|v| (idx, v)))
+            .collect();
+
+        for (idx, v) in output_vals {
+            let row = (idx / cols) as isize;
+            let col = (idx % cols) as isize;
+            output.set(band, row, col, v).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing mosaic value at band {band}, ({row},{col}): {e}"
+                ))
+            })?;
         }
     }
 
@@ -6288,9 +6696,12 @@ fn run_resample(
     });
 
     for band in 0..first.bands as isize {
-        for row in 0..rows as isize {
-            let y = out_y_max - (row as f64 + 0.5) * out_cell_y;
-            for col in 0..cols as isize {
+        let sampled: Vec<Option<f64>> = (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
+                let y = out_y_max - (row as f64 + 0.5) * out_cell_y;
                 let x = out_x_min + (col as f64 + 0.5) * out_cell_x;
 
                 let mut chosen = None;
@@ -6302,15 +6713,24 @@ fn run_resample(
                         break;
                     }
                 }
+                chosen
+            })
+            .collect();
 
-                if let Some(v) = chosen {
-                    output.set(band, row, col, v).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing resample value at band {band}, ({row},{col}): {e}"
-                        ))
-                    })?;
-                }
-            }
+        let output_vals: Vec<(usize, f64)> = sampled
+            .into_par_iter()
+            .enumerate()
+            .filter_map(|(idx, maybe_v)| maybe_v.map(|v| (idx, v)))
+            .collect();
+
+        for (idx, v) in output_vals {
+            let row = (idx / cols) as isize;
+            let col = (idx % cols) as isize;
+            output.set(band, row, col, v).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing resample value at band {band}, ({row},{col}): {e}"
+                ))
+            })?;
         }
     }
 
@@ -6486,29 +6906,67 @@ fn run_kmeans(inputs: &[Raster], opts: KMeansOptions) -> Result<KMeansRunResult,
     let mut change_history = Vec::new();
 
     for _ in 0..opts.max_iterations {
-        counts.fill(0);
-        let mut sums = vec![vec![0.0; dims]; k];
-        let mut changed = 0usize;
+        let (new_labels, new_counts, sums, changed) = (0..values.len())
+            .into_par_iter()
+            .fold(
+                || {
+                    (
+                        Vec::<(usize, usize)>::new(),
+                        vec![0usize; k],
+                        vec![vec![0.0f64; dims]; k],
+                        0usize,
+                    )
+                },
+                |mut acc, i| {
+                    let feat = &values[i];
+                    let mut best_idx = 0usize;
+                    let mut best_dist = f64::INFINITY;
+                    for (a, centre) in centroids.iter().enumerate() {
+                        let dist = sqr_euclidean(feat, centre);
+                        if dist < best_dist {
+                            best_dist = dist;
+                            best_idx = a;
+                        }
+                    }
 
-        for (i, feat) in values.iter().enumerate() {
-            let mut best_idx = 0usize;
-            let mut best_dist = f64::INFINITY;
-            for (a, centre) in centroids.iter().enumerate() {
-                let dist = sqr_euclidean(feat, centre);
-                if dist < best_dist {
-                    best_dist = dist;
-                    best_idx = a;
-                }
-            }
-            labels[i] = best_idx;
-            if labels[i] != prev_labels[i] {
-                changed += 1;
-            }
-            counts[best_idx] += 1;
-            for d in 0..dims {
-                sums[best_idx][d] += feat[d];
-            }
+                    acc.0.push((i, best_idx));
+                    if best_idx != prev_labels[i] {
+                        acc.3 += 1;
+                    }
+                    acc.1[best_idx] += 1;
+                    for d in 0..dims {
+                        acc.2[best_idx][d] += feat[d];
+                    }
+                    acc
+                },
+            )
+            .reduce(
+                || {
+                    (
+                        Vec::<(usize, usize)>::new(),
+                        vec![0usize; k],
+                        vec![vec![0.0f64; dims]; k],
+                        0usize,
+                    )
+                },
+                |mut a, mut b| {
+                    a.0.append(&mut b.0);
+                    for cls in 0..k {
+                        a.1[cls] += b.1[cls];
+                        for d in 0..dims {
+                            a.2[cls][d] += b.2[cls][d];
+                        }
+                    }
+                    a.3 += b.3;
+                    a
+                },
+            );
+
+        labels.fill(0);
+        for (i, lbl) in new_labels {
+            labels[i] = lbl;
         }
+        counts = new_counts;
 
         let change_percent = (changed as f64 / values.len() as f64) * 100.0;
         change_history.push(change_percent);
@@ -6522,9 +6980,8 @@ fn run_kmeans(inputs: &[Raster], opts: KMeansOptions) -> Result<KMeansRunResult,
         }
 
         if let Some(md) = opts.merge_distance {
-            let (merged_centroids, merged_counts) = merge_close_centroids(centroids, counts, md);
+            let (merged_centroids, _merged_counts) = merge_close_centroids(centroids, counts, md);
             centroids = merged_centroids;
-            counts = merged_counts;
             k = centroids.len().max(1);
         }
 
@@ -6535,20 +6992,43 @@ fn run_kmeans(inputs: &[Raster], opts: KMeansOptions) -> Result<KMeansRunResult,
     }
 
     // Final assignment against final centroids.
-    counts = vec![0usize; centroids.len()];
-    for (i, feat) in values.iter().enumerate() {
-        let mut best_idx = 0usize;
-        let mut best_dist = f64::INFINITY;
-        for (a, centre) in centroids.iter().enumerate() {
-            let dist = sqr_euclidean(feat, centre);
-            if dist < best_dist {
-                best_dist = dist;
-                best_idx = a;
-            }
-        }
-        labels[i] = best_idx;
-        counts[best_idx] += 1;
+    let final_k = centroids.len();
+    let (final_labels, final_counts) = (0..values.len())
+        .into_par_iter()
+        .fold(
+            || (Vec::<(usize, usize)>::new(), vec![0usize; final_k]),
+            |mut acc, i| {
+                let feat = &values[i];
+                let mut best_idx = 0usize;
+                let mut best_dist = f64::INFINITY;
+                for (a, centre) in centroids.iter().enumerate() {
+                    let dist = sqr_euclidean(feat, centre);
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_idx = a;
+                    }
+                }
+                acc.0.push((i, best_idx));
+                acc.1[best_idx] += 1;
+                acc
+            },
+        )
+        .reduce(
+            || (Vec::<(usize, usize)>::new(), vec![0usize; final_k]),
+            |mut a, mut b| {
+                a.0.append(&mut b.0);
+                for cls in 0..final_k {
+                    a.1[cls] += b.1[cls];
+                }
+                a
+            },
+        );
+
+    labels.fill(0);
+    for (i, lbl) in final_labels {
+        labels[i] = lbl;
     }
+    counts = final_counts;
 
     let mut out = Raster::new(RasterConfig {
         rows: inputs[0].rows,
@@ -6566,10 +7046,20 @@ fn run_kmeans(inputs: &[Raster], opts: KMeansOptions) -> Result<KMeansRunResult,
     out.metadata
         .push(("color_interpretation".to_string(), "categorical".to_string()));
 
-    for (i, pix) in valid_indices.iter().enumerate() {
-        let row = (pix / inputs[0].cols) as isize;
-        let col = (pix % inputs[0].cols) as isize;
-        out.set(0, row, col, (labels[i] + 1) as f64).map_err(|e| {
+    let output_vals: Vec<(usize, usize, f64)> = valid_indices
+        .par_iter()
+        .enumerate()
+        .map(|(i, pix)| {
+            let row = pix / inputs[0].cols;
+            let col = pix % inputs[0].cols;
+            (row, col, (labels[i] + 1) as f64)
+        })
+        .collect();
+
+    for (row, col, val) in output_vals {
+        let row = row as isize;
+        let col = col as isize;
+        out.set(0, row, col, val).map_err(|e| {
             ToolError::Execution(format!(
                 "failed writing k-means class value at ({row},{col}): {e}"
             ))
@@ -6724,45 +7214,86 @@ fn run_correct_vignetting(
         ));
     }
 
-    let rows = input.rows as isize;
     let cols = input.cols as isize;
     let scale_factor = image_width / cols.max(1) as f64;
     let rgb_mode = color_support::detect_rgb_mode(input, false, true);
 
-    let mut unscaled = vec![input.nodata; input.rows * input.cols];
-    let mut in_min = f64::INFINITY;
-    let mut in_max = f64::NEG_INFINITY;
-    let mut out_min = f64::INFINITY;
-    let mut out_max = f64::NEG_INFINITY;
-
-    for r in 0..rows {
-        for c in 0..cols {
-            let idx = (r as usize) * input.cols + c as usize;
+    let n = input.rows * input.cols;
+    let unscaled: Vec<f64> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
             let mut i_in = input.get(0, r, c);
             if matches!(rgb_mode, color_support::RgbMode::Packed) {
                 if input.is_nodata(i_in) {
-                    continue;
+                    return input.nodata;
                 }
                 let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(i_in);
-                let (_, _, i_norm) = rgb_to_hsi_norm(rv as f64 / 255.0, gv as f64 / 255.0, bv as f64 / 255.0);
+                let (_, _, i_norm) =
+                    rgb_to_hsi_norm(rv as f64 / 255.0, gv as f64 / 255.0, bv as f64 / 255.0);
                 i_in = i_norm;
             } else if input.is_nodata(i_in) {
-                continue;
+                return input.nodata;
             }
 
             let dr = r as f64 - pp_y;
             let dc = c as f64 - pp_x;
             let dist = (dr * dr + dc * dc).sqrt();
             let theta = (dist * scale_factor / focal_length).atan();
-            let i_out = i_in / theta.cos().powf(n_param);
-            unscaled[idx] = i_out;
+            i_in / theta.cos().powf(n_param)
+        })
+        .collect();
 
-            in_min = in_min.min(i_in);
-            in_max = in_max.max(i_in);
-            out_min = out_min.min(i_out);
-            out_max = out_max.max(i_out);
-        }
-    }
+    let (in_min, in_max) = (0..n)
+        .into_par_iter()
+        .fold(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |(mut local_min, mut local_max), idx| {
+                let r = (idx / input.cols) as isize;
+                let c = (idx % input.cols) as isize;
+                let mut i_in = input.get(0, r, c);
+                if matches!(rgb_mode, color_support::RgbMode::Packed) {
+                    if input.is_nodata(i_in) {
+                        return (local_min, local_max);
+                    }
+                    let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(i_in);
+                    let (_, _, i_norm) = rgb_to_hsi_norm(
+                        rv as f64 / 255.0,
+                        gv as f64 / 255.0,
+                        bv as f64 / 255.0,
+                    );
+                    i_in = i_norm;
+                } else if input.is_nodata(i_in) {
+                    return (local_min, local_max);
+                }
+
+                local_min = local_min.min(i_in);
+                local_max = local_max.max(i_in);
+                (local_min, local_max)
+            },
+        )
+        .reduce(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |a, b| (a.0.min(b.0), a.1.max(b.1)),
+        );
+
+    let (out_min, out_max) = unscaled
+        .par_iter()
+        .fold(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |(mut local_min, mut local_max), &v| {
+                if !input.is_nodata(v) {
+                    local_min = local_min.min(v);
+                    local_max = local_max.max(v);
+                }
+                (local_min, local_max)
+            },
+        )
+        .reduce(
+            || (f64::INFINITY, f64::NEG_INFINITY),
+            |a, b| (a.0.min(b.0), a.1.max(b.1)),
+        );
 
     let in_range = (in_max - in_min).max(1e-12);
     let out_range = (out_max - out_min).max(1e-12);
@@ -6775,43 +7306,53 @@ fn run_correct_vignetting(
             .push(("color_interpretation".to_string(), "packed_rgb".to_string()));
     }
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let idx = (r as usize) * input.cols + c as usize;
+    let out_values: Vec<f64> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / input.cols) as isize;
+            let c = (idx % input.cols) as isize;
             let iu = unscaled[idx];
             if input.is_nodata(iu) {
-                output.set(0, r, c, output.nodata).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing vignetting nodata at ({r},{c}): {e}"
-                    ))
-                })?;
-                continue;
+                return output.nodata;
             }
 
             let scaled_i = in_min + (iu - out_min) / out_range * in_range;
             if matches!(rgb_mode, color_support::RgbMode::Packed) {
                 let raw = input.get(0, r, c);
                 let (rv, gv, bv, _) = FlipImageTool::unpack_rgba(raw);
-                let (h, s, _) = rgb_to_hsi_norm(rv as f64 / 255.0, gv as f64 / 255.0, bv as f64 / 255.0);
+                let (h, s, _) = rgb_to_hsi_norm(
+                    rv as f64 / 255.0,
+                    gv as f64 / 255.0,
+                    bv as f64 / 255.0,
+                );
                 let (rn, gn, bn) = hsi_to_rgb_norm(h, s, scaled_i.clamp(0.0, 1.0));
-                let packed = FlipImageTool::pack_rgba(
+                FlipImageTool::pack_rgba(
                     (rn * 255.0).round().clamp(0.0, 255.0) as u32,
                     (gn * 255.0).round().clamp(0.0, 255.0) as u32,
                     (bn * 255.0).round().clamp(0.0, 255.0) as u32,
                     255,
-                );
-                output.set(0, r, c, packed).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing vignetting RGB value at ({r},{c}): {e}"
-                    ))
-                })?;
+                )
             } else {
-                output.set(0, r, c, scaled_i).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing vignetting value at ({r},{c}): {e}"
-                    ))
-                })?;
+                scaled_i
             }
+        })
+        .collect();
+
+    for (idx, out_val) in out_values.into_iter().enumerate() {
+        let r = (idx / input.cols) as isize;
+        let c = (idx % input.cols) as isize;
+        if matches!(rgb_mode, color_support::RgbMode::Packed) {
+            output.set(0, r, c, out_val).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing vignetting RGB value at ({r},{c}): {e}"
+                ))
+            })?;
+        } else {
+            output.set(0, r, c, out_val).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing vignetting value at ({r},{c}): {e}"
+                ))
+            })?;
         }
     }
 
@@ -6886,21 +7427,21 @@ fn run_image_stack_profile(
             "image_stack_profile requires at least two input rasters".to_string(),
         ));
     }
-    let mut profiles = vec![vec![0.0; inputs.len()]; points.len()];
-    for (i, r) in inputs.iter().enumerate() {
-        for (pidx, (row, col)) in points.iter().enumerate() {
-            if *row < 0 || *col < 0 || *row >= r.rows as isize || *col >= r.cols as isize {
-                profiles[pidx][i] = f64::NAN;
-                continue;
+    let profiles: Vec<Vec<f64>> = points
+        .par_iter()
+        .map(|(row, col)| {
+            let mut profile = vec![0.0; inputs.len()];
+            for (i, r) in inputs.iter().enumerate() {
+                if *row < 0 || *col < 0 || *row >= r.rows as isize || *col >= r.cols as isize {
+                    profile[i] = f64::NAN;
+                    continue;
+                }
+                let z = r.get(0, *row, *col);
+                profile[i] = if r.is_nodata(z) { f64::NAN } else { z };
             }
-            let z = r.get(0, *row, *col);
-            if r.is_nodata(z) {
-                profiles[pidx][i] = f64::NAN;
-            } else {
-                profiles[pidx][i] = z;
-            }
-        }
-    }
+            profile
+        })
+        .collect();
     Ok(profiles)
 }
 
@@ -7307,9 +7848,6 @@ fn run_panchromatic_sharpening(
     output_mode: PanSharpenOutputMode,
 ) -> Result<Raster, ToolError> {
     FlipImageTool::validate_packed_rgb(ms_packed, "panchromatic_sharpening")?;
-    let rows_pan = pan.rows as isize;
-    let cols_pan = pan.cols as isize;
-
     let pan_stats = pan.statistics();
     let pan_min = pan_stats.min;
     let pan_range = (pan_stats.max - pan_stats.min).max(1e-12);
@@ -7341,10 +7879,15 @@ fn run_panchromatic_sharpening(
     let ms_y_max = ms_packed.y_max();
     let pan_y_max = pan.y_max();
 
-    for r in 0..rows_pan {
-        let y = pan_y_max - (r as f64 + 0.5) * pan.cell_size_y;
-        let src_r = ((ms_y_max - y) / ms_packed.cell_size_y).floor() as isize;
-        for c in 0..cols_pan {
+    let n = pan.rows * pan.cols;
+    let computed: Vec<(bool, f64, f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / pan.cols) as isize;
+            let c = (idx % pan.cols) as isize;
+
+            let y = pan_y_max - (r as f64 + 0.5) * pan.cell_size_y;
+            let src_r = ((ms_y_max - y) / ms_packed.cell_size_y).floor() as isize;
             let x = pan.x_min + (c as f64 + 0.5) * pan.cell_size_x;
             let src_c = ((x - ms_packed.x_min) / ms_packed.cell_size_x).floor() as isize;
 
@@ -7355,42 +7898,12 @@ fn run_panchromatic_sharpening(
                 || src_r >= ms_packed.rows as isize
                 || src_c >= ms_packed.cols as isize
             {
-                if matches!(output_mode, PanSharpenOutputMode::Packed) {
-                    output.set(0, r, c, output.nodata).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing pan-sharpen nodata pixel at ({r},{c}): {e}"
-                        ))
-                    })?;
-                } else {
-                    for b in 0..3 {
-                        output.set(b, r, c, output.nodata).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing pan-sharpen nodata band pixel at ({r},{c}): {e}"
-                            ))
-                        })?;
-                    }
-                }
-                continue;
+                return (false, output.nodata, output.nodata, output.nodata);
             }
 
             let ms_raw = ms_packed.get(0, src_r, src_c);
             if ms_packed.is_nodata(ms_raw) {
-                if matches!(output_mode, PanSharpenOutputMode::Packed) {
-                    output.set(0, r, c, output.nodata).map_err(|e| {
-                        ToolError::Execution(format!(
-                            "failed writing pan-sharpen nodata MS pixel at ({r},{c}): {e}"
-                        ))
-                    })?;
-                } else {
-                    for b in 0..3 {
-                        output.set(b, r, c, output.nodata).map_err(|e| {
-                            ToolError::Execution(format!(
-                                "failed writing pan-sharpen nodata MS band pixel at ({r},{c}): {e}"
-                            ))
-                        })?;
-                    }
-                }
-                continue;
+                return (false, output.nodata, output.nodata, output.nodata);
             }
 
             let (r8, g8, b8, _) = FlipImageTool::unpack_rgba(ms_raw);
@@ -7433,25 +7946,45 @@ fn run_panchromatic_sharpening(
                 let g_u32 = (gn * 255.0).round().clamp(0.0, 255.0) as u32;
                 let b_u32 = (bn * 255.0).round().clamp(0.0, 255.0) as u32;
                 let packed = FlipImageTool::pack_rgba(r_u32, g_u32, b_u32, 255);
-                output.set(0, r, c, packed).map_err(|e| {
+                (true, packed, 0.0, 0.0)
+            } else {
+                (true, rn * 255.0, gn * 255.0, bn * 255.0)
+            }
+        })
+        .collect();
+
+    for (idx, (valid, v0, v1, v2)) in computed.into_iter().enumerate() {
+        let r = (idx / pan.cols) as isize;
+        let c = (idx % pan.cols) as isize;
+        if matches!(output_mode, PanSharpenOutputMode::Packed) {
+            output
+                .set(0, r, c, if valid { v0 } else { output.nodata })
+                .map_err(|e| {
                     ToolError::Execution(format!(
                         "failed writing pan-sharpen packed pixel at ({r},{c}): {e}"
                     ))
                 })?;
-            } else {
-                output.set(0, r, c, rn * 255.0).map_err(|e| {
+        } else if valid {
+            output.set(0, r, c, v0).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing pan-sharpen red band pixel at ({r},{c}): {e}"
+                ))
+            })?;
+            output.set(1, r, c, v1).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing pan-sharpen green band pixel at ({r},{c}): {e}"
+                ))
+            })?;
+            output.set(2, r, c, v2).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed writing pan-sharpen blue band pixel at ({r},{c}): {e}"
+                ))
+            })?;
+        } else {
+            for b in 0..3 {
+                output.set(b, r, c, output.nodata).map_err(|e| {
                     ToolError::Execution(format!(
-                        "failed writing pan-sharpen red band pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-                output.set(1, r, c, gn * 255.0).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing pan-sharpen green band pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-                output.set(2, r, c, bn * 255.0).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing pan-sharpen blue band pixel at ({r},{c}): {e}"
+                        "failed writing pan-sharpen nodata band pixel at ({r},{c}): {e}"
                     ))
                 })?;
             }
@@ -7474,8 +8007,6 @@ fn run_change_vector_analysis(date1: &[Raster], date2: &[Raster]) -> Result<(Ras
     }
 
     let template = &date1[0];
-    let rows = template.rows as isize;
-    let cols = template.cols as isize;
     let out_nodata = template.nodata;
 
     for (idx, (a, b)) in date1.iter().zip(date2.iter()).enumerate() {
@@ -7514,9 +8045,13 @@ fn run_change_vector_analysis(date1: &[Raster], date2: &[Raster]) -> Result<(Ras
         metadata: template.metadata.clone(),
     });
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let mut nodata_detected = false;
+    let n = template.rows * template.cols;
+    let computed: Vec<(f64, f64)> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / template.cols) as isize;
+            let c = (idx % template.cols) as isize;
+
             let mut mag_acc = 0.0f64;
             let mut dir_code = 0.0f64;
 
@@ -7526,8 +8061,7 @@ fn run_change_vector_analysis(date1: &[Raster], date2: &[Raster]) -> Result<(Ras
                 let z1 = a.get(0, r, c);
                 let z2 = b.get(0, r, c);
                 if a.is_nodata(z1) || b.is_nodata(z2) {
-                    nodata_detected = true;
-                    break;
+                    return (out_nodata, out_nodata);
                 }
                 let dz = z2 - z1;
                 mag_acc += dz * dz;
@@ -7536,30 +8070,23 @@ fn run_change_vector_analysis(date1: &[Raster], date2: &[Raster]) -> Result<(Ras
                 }
             }
 
-            if nodata_detected {
-                mag.set(0, r, c, out_nodata).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing CVA nodata magnitude at ({r},{c}): {e}"
-                    ))
-                })?;
-                dir.set(0, r, c, out_nodata).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing CVA nodata direction at ({r},{c}): {e}"
-                    ))
-                })?;
-            } else {
-                mag.set(0, r, c, mag_acc.sqrt()).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing CVA magnitude at ({r},{c}): {e}"
-                    ))
-                })?;
-                dir.set(0, r, c, dir_code).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing CVA direction at ({r},{c}): {e}"
-                    ))
-                })?;
-            }
-        }
+            (mag_acc.sqrt(), dir_code)
+        })
+        .collect();
+
+    for (idx, (mag_val, dir_val)) in computed.into_iter().enumerate() {
+        let r = (idx / template.cols) as isize;
+        let c = (idx % template.cols) as isize;
+        mag.set(0, r, c, mag_val).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed writing CVA magnitude at ({r},{c}): {e}"
+            ))
+        })?;
+        dir.set(0, r, c, dir_val).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed writing CVA direction at ({r},{c}): {e}"
+            ))
+        })?;
     }
 
     Ok((mag, dir))
@@ -7597,30 +8124,34 @@ fn run_write_function_memory_insertion(
         .push(("color_interpretation".to_string(), "packed_rgb".to_string()));
 
     let alpha = 255u32 << 24;
-    for r in 0..input_r.rows as isize {
-        for c in 0..input_r.cols as isize {
+    let n = input_r.rows * input_r.cols;
+    let out_values: Vec<f64> = (0..n)
+        .into_par_iter()
+        .map(|idx| {
+            let r = (idx / input_r.cols) as isize;
+            let c = (idx % input_r.cols) as isize;
             let rv = input_r.get(0, r, c);
             let gv = input_g.get(0, r, c);
             let bv = input_b.get(0, r, c);
             if input_r.is_nodata(rv) || input_g.is_nodata(gv) || input_b.is_nodata(bv) {
-                out.set(0, r, c, out.nodata).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed writing WFM insertion nodata pixel at ({r},{c}): {e}"
-                    ))
-                })?;
-                continue;
+                return out.nodata;
             }
 
             let r8 = (((rv - r_min) / r_range) * 255.0).round().clamp(0.0, 255.0) as u32;
             let g8 = (((gv - g_min) / g_range) * 255.0).round().clamp(0.0, 255.0) as u32;
             let b8 = (((bv - b_min) / b_range) * 255.0).round().clamp(0.0, 255.0) as u32;
-            let packed = (alpha | (b8 << 16) | (g8 << 8) | r8) as f64;
-            out.set(0, r, c, packed).map_err(|e| {
-                ToolError::Execution(format!(
-                    "failed writing WFM insertion packed pixel at ({r},{c}): {e}"
-                ))
-            })?;
-        }
+            (alpha | (b8 << 16) | (g8 << 8) | r8) as f64
+        })
+        .collect();
+
+    for (idx, out_val) in out_values.into_iter().enumerate() {
+        let r = (idx / input_r.cols) as isize;
+        let c = (idx % input_r.cols) as isize;
+        out.set(0, r, c, out_val).map_err(|e| {
+            ToolError::Execution(format!(
+                "failed writing WFM insertion pixel at ({r},{c}): {e}"
+            ))
+        })?;
     }
 
     Ok(out)
@@ -8457,18 +8988,19 @@ impl Tool for CannyEdgeDetectionTool {
         const STRONG: f64 = 255.0;
         const WEAK: f64 = 75.0;
         let mut thresh = vec![0.0f64; (rows * cols_count) as usize];
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let v = nms[(row * cols_count + col) as usize];
-                thresh[(row * cols_count + col) as usize] = if v >= high_threshold {
+        thresh
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, out)| {
+                let v = nms[idx];
+                *out = if v >= high_threshold {
                     STRONG
                 } else if v >= low_threshold {
                     WEAK
                 } else {
                     0.0
                 };
-            }
-        }
+            });
         drop(nms);
         coalescer.emit_unit_fraction(ctx.progress, 0.80);
 
@@ -8492,30 +9024,46 @@ impl Tool for CannyEdgeDetectionTool {
             metadata: vec![],
         });
 
-        for row in 0..rows {
-            for col in 0..cols_count {
-                let v = thresh[(row * cols_count + col) as usize];
+        let out_vals: Vec<f64> = (0..(rows * cols_count) as usize)
+            .into_par_iter()
+            .map(|idx| {
+                let row = (idx as isize) / cols_count;
+                let col = (idx as isize) % cols_count;
+                let v = thresh[idx];
                 let iz = get_intensity(&input, row, col);
-                let out_val = if iz == nodata {
+                if iz == nodata {
                     out_nodata
                 } else if v == WEAK {
                     // Hysteresis: promote weak pixels that are 8-connected to a strong pixel.
-                    let strong_nbr = tget(row+1,col-1)==STRONG || tget(row+1,col)==STRONG
-                        || tget(row+1,col+1)==STRONG || tget(row,col-1)==STRONG
-                        || tget(row,col+1)==STRONG || tget(row-1,col-1)==STRONG
-                        || tget(row-1,col)==STRONG || tget(row-1,col+1)==STRONG;
+                    let strong_nbr = tget(row + 1, col - 1) == STRONG
+                        || tget(row + 1, col) == STRONG
+                        || tget(row + 1, col + 1) == STRONG
+                        || tget(row, col - 1) == STRONG
+                        || tget(row, col + 1) == STRONG
+                        || tget(row - 1, col - 1) == STRONG
+                        || tget(row - 1, col) == STRONG
+                        || tget(row - 1, col + 1) == STRONG;
                     if !add_back {
                         if strong_nbr { STRONG } else { 0.0 }
+                    } else if strong_nbr {
+                        0.0
                     } else {
-                        if strong_nbr { 0.0 } else { iz }
+                        iz
                     }
                 } else if v == STRONG {
                     if !add_back { STRONG } else { 0.0 }
+                } else if !add_back {
+                    0.0
                 } else {
-                    if !add_back { 0.0 } else { iz }
-                };
-                let _ = output.set(0, row, col, out_val);
-            }
+                    iz
+                }
+            })
+            .collect();
+
+        for (idx, out_val) in out_vals.into_iter().enumerate() {
+            let row = (idx as isize) / cols_count;
+            let col = (idx as isize) % cols_count;
+            let _ = output.set(0, row, col, out_val);
         }
 
         ctx.progress.progress(1.0);

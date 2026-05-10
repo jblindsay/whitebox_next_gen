@@ -1,8 +1,6 @@
 /// Phase B Raster Interop Test Binary
 /// Tests roundtrip read/write of raster formats via wbraster
-use std::fs;
-use std::path::Path;
-use wbraster::Raster;
+use wbraster::{Raster, RasterFormat};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -26,10 +24,10 @@ fn main() {
         Ok(raster) => {
             println!(
                 "✓ Read: {} x {} ({})",
-                raster.configs.rows, raster.configs.cols, raster.configs.data_type
+                raster.rows, raster.cols, raster.data_type
             );
-            println!("  CRS: {:?}", raster.get_crs());
-            println!("  NoData: {:?}", raster.get_nodata());
+            println!("  CRS: {:?}", raster.crs);
+            println!("  NoData: {:?}", raster.nodata);
 
             // Write raster
             match write_raster(&raster, output_path) {
@@ -54,41 +52,10 @@ fn main() {
 }
 
 fn read_raster(path: &str) -> Result<Raster, String> {
-    let path_obj = Path::new(path);
-    let ext = path_obj
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    match ext.as_str() {
-        "tif" | "tiff" => wbraster::read_geotiff(path),
-        "img" => wbraster::read_hfa(path),
-        "flt" => wbraster::read_esri_float_grid(path),
-        "dt0" | "dt1" | "dt2" => wbraster::read_dted(path),
-        "xyz" => wbraster::read_xyz_grid(path),
-        "png" => wbraster::read_png(path),
-        "jpg" | "jpeg" => wbraster::read_jpeg(path),
-        _ => Err(format!("Unsupported format: {}", ext)),
-    }
+    Raster::read(path).map_err(|e| e.to_string())
 }
 
 fn write_raster(raster: &Raster, path: &str) -> Result<(), String> {
-    let path_obj = Path::new(path);
-    let ext = path_obj
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    match ext.as_str() {
-        "tif" | "tiff" => wbraster::write_geotiff(raster, path),
-        "img" => wbraster::write_hfa(raster, path),
-        "flt" => wbraster::write_esri_float_grid(raster, path),
-        "dt0" | "dt1" | "dt2" => wbraster::write_dted(raster, path),
-        "xyz" => wbraster::write_xyz_grid(raster, path),
-        "png" => wbraster::write_png(raster, path),
-        "jpg" | "jpeg" => wbraster::write_jpeg(raster, path),
-        _ => Err(format!("Unsupported format: {}", ext)),
-    }
+    let format = RasterFormat::for_output_path(path).map_err(|e| e.to_string())?;
+    raster.write(path, format).map_err(|e| e.to_string())
 }

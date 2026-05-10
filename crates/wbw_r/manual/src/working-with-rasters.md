@@ -192,6 +192,9 @@ out <- wbw_array_to_raster(a, base, output_path = 'dem_scaled.tif')
 print(out)
 ```
 
+Supported raster write keys and valid values are documented in
+[Output Controls](output-controls.md#raster-write-option-reference).
+
 ## Multi-Band Iteration
 
 Use this when transform rules depend on band identity or per-band thresholds.

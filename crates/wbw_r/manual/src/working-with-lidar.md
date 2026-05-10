@@ -166,6 +166,9 @@ print(edited$point_count())
 Use tool-driven processing when extracting QA outputs and diagnostics from lidar
 datasets.
 
+For complete lidar write-option keys and allowed values, see
+[Output Controls](output-controls.md#lidar-write-option-reference).
+
 ```r
 library(whiteboxworkflows)
 

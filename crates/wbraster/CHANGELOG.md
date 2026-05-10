@@ -16,6 +16,9 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## [Unreleased]
 
 ### Added
+- Public `Jpeg2000ColorSpace` re-export (alias of the internal JPEG2000 core
+  color-space enum) for downstream bindings that need typed `Jpeg2000WriteOptions`
+  color-space control.
 - **Esri Binary Float Grid** (`.flt` / `.hdr`) reader and writer (`formats::esri_float`).
   Reads both `LSBFIRST` and `MSBFIRST` byte orders; handles `xllcorner`/`xllcenter` and
   `yllcorner`/`yllcenter` variants; reads and writes a `.prj` WKT sidecar when present.

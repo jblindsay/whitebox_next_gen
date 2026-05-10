@@ -9,6 +9,9 @@ use crate::crs_info::CrsInfo;
 /// option is provided.
 pub const JPEG2000_DEFAULT_LOSSY_QUALITY_DB: f32 = 35.0;
 
+/// Public JPEG2000 color-space type used by write options.
+pub type Jpeg2000ColorSpace = jp2::ColorSpace;
+
 fn color_interpretation_from_jpeg2000(
     color_space: jp2::ColorSpace,
     bands: usize,

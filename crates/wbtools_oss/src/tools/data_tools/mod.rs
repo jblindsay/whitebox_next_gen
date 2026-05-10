@@ -1983,89 +1983,100 @@ struct LineEndpointRecord {
 }
 
 fn build_indexed_polygon_features(input: &Layer) -> Result<Vec<IndexedPolygonFeature>, ToolError> {
-    let mut polygon_features = Vec::<IndexedPolygonFeature>::new();
-    for feature in &input.features {
-        let Some(geometry) = feature.geometry.as_ref() else {
-            continue;
-        };
-        if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
-            continue;
-        }
-        let Some(anchor) = geometry_anchor_coord(geometry) else {
-            continue;
-        };
-        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
-            ToolError::Execution(format!(
-                "failed converting feature {} polygon geometry for topology checks: {e}",
-                feature.fid
-            ))
-        })?;
-        polygon_features.push(IndexedPolygonFeature {
-            fid: feature.fid,
-            anchor,
-            topo,
-        });
-    }
-    Ok(polygon_features)
+    let prepared: Result<Vec<Option<IndexedPolygonFeature>>, ToolError> = input
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                return Ok(None);
+            };
+            if !matches!(geometry, Geometry::Polygon { .. } | Geometry::MultiPolygon(_)) {
+                return Ok(None);
+            }
+            let Some(anchor) = geometry_anchor_coord(geometry) else {
+                return Ok(None);
+            };
+            let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed converting feature {} polygon geometry for topology checks: {e}",
+                    feature.fid
+                ))
+            })?;
+            Ok(Some(IndexedPolygonFeature {
+                fid: feature.fid,
+                anchor,
+                topo,
+            }))
+        })
+        .collect();
+    Ok(prepared?.into_iter().flatten().collect())
 }
 
 fn build_indexed_line_features(input: &Layer) -> Result<Vec<IndexedLineFeature>, ToolError> {
-    let mut line_features = Vec::<IndexedLineFeature>::new();
-    for feature in &input.features {
-        let Some(geometry) = feature.geometry.as_ref() else {
-            continue;
-        };
-        if !matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
-            continue;
-        }
-        let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
-            ToolError::Execution(format!(
-                "failed converting feature {} line geometry for topology checks: {e}",
-                feature.fid
-            ))
-        })?;
-        line_features.push(IndexedLineFeature { topo });
-    }
-    Ok(line_features)
+    let prepared: Result<Vec<Option<IndexedLineFeature>>, ToolError> = input
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                return Ok(None);
+            };
+            if !matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
+                return Ok(None);
+            }
+            let topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+                ToolError::Execution(format!(
+                    "failed converting feature {} line geometry for topology checks: {e}",
+                    feature.fid
+                ))
+            })?;
+            Ok(Some(IndexedLineFeature { topo }))
+        })
+        .collect();
+    Ok(prepared?.into_iter().flatten().collect())
 }
 
 fn collect_line_endpoint_records(input: &Layer) -> Vec<LineEndpointRecord> {
-    let mut line_endpoints = Vec::<LineEndpointRecord>::new();
-    for feature in &input.features {
-        let Some(geometry) = feature.geometry.as_ref() else {
-            continue;
-        };
-        match geometry {
-            Geometry::LineString(coords) => {
-                if coords.len() >= 2 {
-                    line_endpoints.push(LineEndpointRecord {
-                        fid: feature.fid,
-                        coord: coords[0].clone(),
-                    });
-                    line_endpoints.push(LineEndpointRecord {
-                        fid: feature.fid,
-                        coord: coords[coords.len() - 1].clone(),
-                    });
-                }
-            }
-            Geometry::MultiLineString(parts) => {
-                for part in parts {
-                    if part.len() >= 2 {
-                        line_endpoints.push(LineEndpointRecord {
+    let per_feature: Vec<Vec<LineEndpointRecord>> = input
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = feature.geometry.as_ref() else {
+                return Vec::new();
+            };
+            let mut endpoints = Vec::<LineEndpointRecord>::new();
+            match geometry {
+                Geometry::LineString(coords) => {
+                    if coords.len() >= 2 {
+                        endpoints.push(LineEndpointRecord {
                             fid: feature.fid,
-                            coord: part[0].clone(),
+                            coord: coords[0].clone(),
                         });
-                        line_endpoints.push(LineEndpointRecord {
+                        endpoints.push(LineEndpointRecord {
                             fid: feature.fid,
-                            coord: part[part.len() - 1].clone(),
+                            coord: coords[coords.len() - 1].clone(),
                         });
                     }
                 }
+                Geometry::MultiLineString(parts) => {
+                    for part in parts {
+                        if part.len() >= 2 {
+                            endpoints.push(LineEndpointRecord {
+                                fid: feature.fid,
+                                coord: part[0].clone(),
+                            });
+                            endpoints.push(LineEndpointRecord {
+                                fid: feature.fid,
+                                coord: part[part.len() - 1].clone(),
+                            });
+                        }
+                    }
+                }
+                _ => {}
             }
-            _ => {}
-        }
-    }
-    line_endpoints
+            endpoints
+        })
+        .collect();
+    per_feature.into_iter().flatten().collect()
 }
 
 fn expand_topology_envelope(env: TopologyEnvelope, distance: f64) -> TopologyEnvelope {
@@ -3512,34 +3523,49 @@ impl Tool for PolygonsToLinesTool {
             output.add_field(field.clone());
         }
 
-        for feature in &input.features {
-            let geom = match &feature.geometry {
-                Some(Geometry::Polygon { exterior, interiors }) => {
-                    let mut lines = vec![exterior.0.clone()];
-                    for ring in interiors {
-                        lines.push(ring.0.clone());
-                    }
-                    Some(Geometry::multi_line_string(lines))
-                }
-                Some(Geometry::MultiPolygon(polys)) => {
-                    let mut lines = Vec::new();
-                    for (exterior, interiors) in polys {
-                        lines.push(exterior.0.clone());
+        let prepared_rows: Result<Vec<(Option<Geometry>, Vec<FieldValue>)>, ToolError> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let geom = match &feature.geometry {
+                    Some(Geometry::Polygon { exterior, interiors }) => {
+                        let mut lines = vec![exterior.0.clone()];
                         for ring in interiors {
                             lines.push(ring.0.clone());
                         }
+                        Some(Geometry::multi_line_string(lines))
                     }
-                    Some(Geometry::multi_line_string(lines))
-                }
-                Some(_) => {
-                    return Err(ToolError::Validation(
-                        "encountered non-polygon geometry while converting polygons_to_lines".to_string(),
-                    ));
-                }
-                None => None,
-            };
+                    Some(Geometry::MultiPolygon(polys)) => {
+                        let mut lines = Vec::new();
+                        for (exterior, interiors) in polys {
+                            lines.push(exterior.0.clone());
+                            for ring in interiors {
+                                lines.push(ring.0.clone());
+                            }
+                        }
+                        Some(Geometry::multi_line_string(lines))
+                    }
+                    Some(_) => {
+                        return Err(ToolError::Validation(
+                            "encountered non-polygon geometry while converting polygons_to_lines".to_string(),
+                        ));
+                    }
+                    None => None,
+                };
 
-            let attrs: Vec<(&str, FieldValue)> = input
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+                Ok((geom, attr_values))
+            })
+            .collect();
+
+        for (geom, attr_values) in prepared_rows? {
+            let attrs = input
                 .schema
                 .fields()
                 .iter()
@@ -3547,10 +3573,10 @@ impl Tool for PolygonsToLinesTool {
                 .map(|(idx, field)| {
                     (
                         field.name.as_str(),
-                        feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null),
+                        attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
                     )
                 })
-                .collect();
+                .collect::<Vec<_>>();
             output
                 .add_feature(geom, &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
@@ -6066,18 +6092,25 @@ impl Tool for ExportTableToCsvTool {
                 .map_err(|e| ToolError::Execution(format!("failed writing csv header: {e}")))?;
         }
 
-        for feature in &input.features {
-            let row = input
-                .schema
-                .fields()
-                .iter()
-                .enumerate()
-                .map(|(i, _)| {
-                    let v = feature.attributes.get(i).unwrap_or(&FieldValue::Null);
-                    field_value_to_csv(v)
-                })
-                .collect::<Vec<_>>()
-                .join(",");
+        let rows: Vec<String> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        let v = feature.attributes.get(i).unwrap_or(&FieldValue::Null);
+                        field_value_to_csv(v)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .collect();
+
+        for row in rows {
             writer
                 .write_all(format!("{}\n", row).as_bytes())
                 .map_err(|e| ToolError::Execution(format!("failed writing csv row: {e}")))?;

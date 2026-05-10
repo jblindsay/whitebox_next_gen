@@ -750,6 +750,14 @@ Batches 124–126 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/data_tools/mod.rs`
 
+Batches 127–129 completed (2026-05-10):
+- `polygons_to_lines`: parallelized per-feature boundary extraction and attribute preparation with `par_iter().map()` prepared rows, followed by deterministic sequential output writes.
+- `export_table_to_csv`: parallelized per-feature CSV row formatting with `par_iter().map()`, followed by deterministic sequential file writes.
+- topology-rule helper builders (`build_indexed_polygon_features`, `build_indexed_line_features`, `collect_line_endpoint_records`): parallelized per-feature topology conversion/endpoint extraction with `par_iter().map()` and deterministic flattening.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

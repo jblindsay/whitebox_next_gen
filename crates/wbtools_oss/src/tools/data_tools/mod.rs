@@ -3263,37 +3263,64 @@ impl Tool for LinesToPolygonsTool {
 
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let polygon_geom = match &feature.geometry {
-                Some(Geometry::LineString(coords)) => {
-                    Geometry::polygon(close_ring(coords), Vec::new())
-                }
-                Some(Geometry::MultiLineString(parts)) => {
-                    if parts.is_empty() {
+        let prepared_rows: Result<Vec<(Geometry, Vec<FieldValue>)>, ToolError> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let polygon_geom = match &feature.geometry {
+                    Some(Geometry::LineString(coords)) => {
+                        Geometry::polygon(close_ring(coords), Vec::new())
+                    }
+                    Some(Geometry::MultiLineString(parts)) => {
+                        if parts.is_empty() {
+                            return Err(ToolError::Validation(
+                                "encountered empty multipart line geometry while converting lines_to_polygons".to_string(),
+                            ));
+                        }
+                        let exterior = close_ring(&parts[0]);
+                        let interiors = parts[1..]
+                            .iter()
+                            .map(|part| close_ring(part))
+                            .collect::<Vec<_>>();
+                        Geometry::polygon(exterior, interiors)
+                    }
+                    Some(_) => {
                         return Err(ToolError::Validation(
-                            "encountered empty multipart line geometry while converting lines_to_polygons".to_string(),
+                            "encountered non-line geometry while converting lines_to_polygons".to_string(),
                         ));
                     }
-                    let exterior = close_ring(&parts[0]);
-                    let interiors = parts[1..]
-                        .iter()
-                        .map(|part| close_ring(part))
-                        .collect::<Vec<_>>();
-                    Geometry::polygon(exterior, interiors)
-                }
-                Some(_) => {
-                    return Err(ToolError::Validation(
-                        "encountered non-line geometry while converting lines_to_polygons".to_string(),
-                    ));
-                }
-                None => {
-                    return Err(ToolError::Validation(
-                        "line features must contain geometry".to_string(),
-                    ));
-                }
-            };
+                    None => {
+                        return Err(ToolError::Validation(
+                            "line features must contain geometry".to_string(),
+                        ));
+                    }
+                };
 
-            let attrs = clone_feature_attrs(&input, feature);
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+
+                Ok((polygon_geom, attr_values))
+            })
+            .collect();
+
+        for (feature_idx, (polygon_geom, attr_values)) in prepared_rows?.into_iter().enumerate() {
+            let attrs = input
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(idx, field)| {
+                    (
+                        field.name.as_str(),
+                        attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                    )
+                })
+                .collect::<Vec<_>>();
             output
                 .add_feature(Some(polygon_geom), &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
@@ -3675,10 +3702,16 @@ impl Tool for ReinitializeAttributeTableTool {
         output.crs = input.crs.clone();
         output.add_field(FieldDef::new("FID", FieldType::Integer));
 
-        for (feature_idx, feature) in input.features.iter().enumerate() {
+        let geometries: Vec<Option<Geometry>> = input
+            .features
+            .par_iter()
+            .map(|feature| feature.geometry.clone())
+            .collect();
+
+        for (feature_idx, geometry) in geometries.into_iter().enumerate() {
             output
                 .add_feature(
-                    feature.geometry.clone(),
+                    geometry,
                     &[("FID", FieldValue::Integer((feature_idx + 1) as i64))],
                 )
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
@@ -3866,12 +3899,38 @@ impl Tool for RemovePolygonHolesTool {
 
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let geometry = match &feature.geometry {
-                Some(geometry) => Some(strip_polygon_holes_with_topology(geometry)?),
-                None => None,
-            };
-            let attrs = clone_feature_attrs(&input, feature);
+        let prepared_rows: Result<Vec<(Option<Geometry>, Vec<FieldValue>)>, ToolError> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let geometry = match &feature.geometry {
+                    Some(geometry) => Some(strip_polygon_holes_with_topology(geometry)?),
+                    None => None,
+                };
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+                Ok((geometry, attr_values))
+            })
+            .collect();
+
+        for (feature_idx, (geometry, attr_values)) in prepared_rows?.into_iter().enumerate() {
+            let attrs = input
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(idx, field)| {
+                    (
+                        field.name.as_str(),
+                        attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                    )
+                })
+                .collect::<Vec<_>>();
             output
                 .add_feature(geometry, &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;

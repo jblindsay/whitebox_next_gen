@@ -742,6 +742,14 @@ Batches 122–123 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/data_tools/mod.rs`
 
+Batches 124–126 completed (2026-05-10):
+- `lines_to_polygons`: parallelized per-feature polygon conversion and attribute extraction with `par_iter().map()` prepared rows, followed by deterministic sequential output feature writes.
+- `reinitialize_attribute_table`: parallelized per-feature geometry cloning with `par_iter().map()` and retained deterministic sequential FID assignment/write order.
+- `remove_polygon_holes`: parallelized per-feature topology-based hole stripping and attribute extraction with `par_iter().map()` prepared rows, followed by deterministic sequential output writes.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

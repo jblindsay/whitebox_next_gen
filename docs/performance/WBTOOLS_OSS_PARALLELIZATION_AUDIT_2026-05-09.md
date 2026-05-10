@@ -685,6 +685,13 @@ Batches 103–106 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 107–108 completed (2026-05-10):
+- `medoid`: parallelized non-point-layer feature processing with `par_iter().map()` collecting Option<Feature>, deterministic sequential FID assignment for output-only features.
+- `points_along_lines`: parallelized line-to-points generation with `par_iter().map()` collecting feature vectors per input, sequential deterministic FID assignment and attribute materialization.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

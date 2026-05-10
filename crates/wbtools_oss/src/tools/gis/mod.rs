@@ -7483,19 +7483,33 @@ impl Tool for MedoidTool {
         } else {
             output.schema = input.schema.clone();
             let total = input.features.len().max(1);
-            let mut next_fid = 1u64;
-            for (feature_idx, feature) in input.features.iter().enumerate() {
-                if let Some(geometry) = feature.geometry.as_ref() {
-                    let mut coords = Vec::<wbvector::Coord>::new();
-                    collect_all_coords_from_geometry(geometry, &mut coords);
-                    if let Some(best_idx) = medoid_coordinate_index(&coords) {
-                        output.push(wbvector::Feature {
-                            fid: if feature.fid == 0 { next_fid } else { feature.fid },
-                            geometry: Some(wbvector::Geometry::Point(coords[best_idx].clone())),
-                            attributes: feature.attributes.clone(),
-                        });
-                        next_fid += 1;
+            let output_features: Vec<Option<wbvector::Feature>> = input
+                .features
+                .par_iter()
+                .enumerate()
+                .map(|(_feature_idx, feature)| {
+                    if let Some(geometry) = feature.geometry.as_ref() {
+                        let mut coords = Vec::<wbvector::Coord>::new();
+                        collect_all_coords_from_geometry(geometry, &mut coords);
+                        if let Some(best_idx) = medoid_coordinate_index(&coords) {
+                            return Some(wbvector::Feature {
+                                fid: feature.fid,
+                                geometry: Some(wbvector::Geometry::Point(coords[best_idx].clone())),
+                                attributes: feature.attributes.clone(),
+                            });
+                        }
                     }
+                    None
+                })
+                .collect();
+            let mut next_fid = 1u64;
+            for (feature_idx, opt_feat) in output_features.into_iter().enumerate() {
+                if let Some(mut feat) = opt_feat {
+                    if feat.fid == 0 {
+                        feat.fid = next_fid as u64;
+                    }
+                    output.push(feat);
+                    next_fid += 1;
                 }
                 coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total as f64);
             }
@@ -20804,35 +20818,47 @@ impl Tool for PointsAlongLinesTool {
             .add_field(wbvector::FieldDef::new("SRC_FID", wbvector::FieldType::Integer));
 
         let total = input.features.len().max(1);
-        let mut next_fid = 1u64;
-        for (index, feature) in input.features.iter().enumerate() {
-            let src_fid = feature.fid as i64;
-            if let Some(geometry) = feature.geometry.as_ref() {
-                let points = match geometry {
-                    wbvector::Geometry::LineString(coords) => {
-                        points_along_linestring(coords, spacing, include_end)
-                    }
-                    wbvector::Geometry::MultiLineString(lines) => {
-                        let mut acc = Vec::<wbvector::Coord>::new();
-                        for line in lines {
-                            acc.extend(points_along_linestring(line, spacing, include_end));
+        let output_features: Vec<Vec<wbvector::Feature>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let src_fid = feature.fid as i64;
+                let mut features = Vec::new();
+                if let Some(geometry) = feature.geometry.as_ref() {
+                    let points = match geometry {
+                        wbvector::Geometry::LineString(coords) => {
+                            points_along_linestring(coords, spacing, include_end)
                         }
-                        acc
+                        wbvector::Geometry::MultiLineString(lines) => {
+                            let mut acc = Vec::<wbvector::Coord>::new();
+                            for line in lines {
+                                acc.extend(points_along_linestring(line, spacing, include_end));
+                            }
+                            acc
+                        }
+                        _ => Vec::new(),
+                    };
+                    for point in points {
+                        features.push(wbvector::Feature {
+                            fid: 0,
+                            geometry: Some(wbvector::Geometry::Point(point)),
+                            attributes: vec![
+                                wbvector::FieldValue::Integer(0),
+                                wbvector::FieldValue::Integer(src_fid),
+                            ],
+                        });
                     }
-                    _ => Vec::new(),
-                };
-
-                for point in points {
-                    output.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(wbvector::Geometry::Point(point)),
-                        attributes: vec![
-                            wbvector::FieldValue::Integer(next_fid as i64),
-                            wbvector::FieldValue::Integer(src_fid),
-                        ],
-                    });
-                    next_fid += 1;
                 }
+                features
+            })
+            .collect();
+        let mut next_fid = 1u64;
+        for (index, feature_group) in output_features.into_iter().enumerate() {
+            for mut feat in feature_group {
+                feat.fid = next_fid as u64;
+                feat.attributes[0] = wbvector::FieldValue::Integer(next_fid as i64);
+                output.push(feat);
+                next_fid += 1;
             }
             coalescer.emit_unit_fraction(ctx.progress, (index + 1) as f64 / total as f64);
         }

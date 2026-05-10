@@ -699,6 +699,14 @@ Batches 109–110 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 111–113 completed (2026-05-10):
+- `filter_by_area`: parallelized polygon area filtering with `par_iter().map()` collecting Option<Feature> based on area threshold, sequential FID assignment.
+- `centroid_vector`: parallelized centroid calculation (point-layer path via `fold().reduce()` parallel aggregation; non-point-layer path via `par_iter().map()` collecting Option<Feature> with computed centroids).
+- `voronoi_diagram`: parallelized point extraction with `par_iter().flat_map()` collecting coordinate-attribute pairs from point/multipoint geometries, then sequential voronoi diagram generation.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

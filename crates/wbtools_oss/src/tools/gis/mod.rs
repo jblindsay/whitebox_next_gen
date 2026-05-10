@@ -8946,33 +8946,35 @@ impl Tool for VoronoiDiagramTool {
         let mut points = Vec::<TopoCoord>::new();
         let mut source_attrs = Vec::<Vec<wbvector::FieldValue>>::new();
 
-        let total = input.features.len().max(1);
-        for (idx, feature) in input.features.iter().enumerate() {
-            let Some(geometry) = feature.geometry.as_ref() else {
-                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
-                continue;
-            };
-
-            match geometry {
-                wbvector::Geometry::Point(c) => {
-                    points.push(TopoCoord::xy(c.x, c.y));
-                    source_attrs.push(feature.attributes.clone());
-                }
-                wbvector::Geometry::MultiPoint(coords) => {
-                    for c in coords {
-                        points.push(TopoCoord::xy(c.x, c.y));
-                        source_attrs.push(feature.attributes.clone());
+        let _total = input.features.len().max(1);
+        let extracted: Vec<(TopoCoord, Vec<wbvector::FieldValue>)> = input
+            .features
+            .par_iter()
+            .enumerate()
+            .flat_map(|(_idx, feature)| {
+                let mut results = Vec::new();
+                if let Some(geometry) = feature.geometry.as_ref() {
+                    match geometry {
+                        wbvector::Geometry::Point(c) => {
+                            results.push((TopoCoord::xy(c.x, c.y), feature.attributes.clone()));
+                        }
+                        wbvector::Geometry::MultiPoint(coords) => {
+                            for c in coords {
+                                results.push((TopoCoord::xy(c.x, c.y), feature.attributes.clone()));
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                _ => {
-                    return Err(ToolError::Validation(
-                        "input_points vector data must contain only point geometries".to_string(),
-                    ));
-                }
-            }
+                results
+            })
+            .collect();
 
-            coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
+        for (coord, attrs) in extracted {
+            points.push(coord);
+            source_attrs.push(attrs);
         }
+        ctx.progress.progress(1.0);
 
         if points.is_empty() {
             return Err(ToolError::Validation(
@@ -11081,20 +11083,33 @@ impl Tool for FilterVectorFeaturesByAreaTool {
         output.crs = input.crs.clone();
 
         let total = input.features.len().max(1);
-        let mut next_fid = 1u64;
-        for (idx, feature) in input.features.iter().enumerate() {
-            if let Some(geometry) = &feature.geometry {
-                let area = get_polygon_area(geometry).ok_or_else(|| {
-                    ToolError::Validation("input layer must contain polygon geometries".to_string())
-                })?;
-                if area.abs() > threshold {
-                    output.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(geometry.clone()),
-                        attributes: feature.attributes.clone(),
-                    });
-                    next_fid += 1;
+        let output_features: Vec<Option<wbvector::Feature>> = input
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(_idx, feature)| {
+                if let Some(geometry) = &feature.geometry {
+                    if let Some(area) = get_polygon_area(geometry) {
+                        if area.abs() > threshold {
+                            return Some(wbvector::Feature {
+                                fid: feature.fid,
+                                geometry: Some(geometry.clone()),
+                                attributes: feature.attributes.clone(),
+                            });
+                        }
+                    }
                 }
+                None
+            })
+            .collect();
+        let mut next_fid = 1u64;
+        for (idx, opt_feat) in output_features.into_iter().enumerate() {
+            if let Some(mut feat) = opt_feat {
+                if feat.fid == 0 {
+                    feat.fid = next_fid as u64;
+                }
+                output.push(feat);
+                next_fid += 1;
             }
             coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
         }
@@ -11339,24 +11354,37 @@ impl Tool for CentroidVectorTool {
                 .schema
                 .add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
 
-            let mut sum_x = 0.0;
-            let mut sum_y = 0.0;
-            let mut count = 0usize;
-            let total = input.features.len().max(1);
+            let totals: (f64, f64, usize) = input
+                .features
+                .par_iter()
+                .fold(
+                    || (0.0, 0.0, 0usize),
+                    |(sum_x, sum_y, count), feature| {
+                        if let Some(geometry) = &feature.geometry {
+                            let mut coords = Vec::<wbvector::Coord>::new();
+                            collect_all_coords_from_geometry(geometry, &mut coords);
+                            let mut new_sum_x = sum_x;
+                            let mut new_sum_y = sum_y;
+                            let mut new_count = count;
+                            for coord in coords {
+                                new_sum_x += coord.x;
+                                new_sum_y += coord.y;
+                                new_count += 1;
+                            }
+                            (new_sum_x, new_sum_y, new_count)
+                        } else {
+                            (sum_x, sum_y, count)
+                        }
+                    },
+                )
+                .reduce(
+                    || (0.0, 0.0, 0usize),
+                    |(sum_x1, sum_y1, count1), (sum_x2, sum_y2, count2)| {
+                        (sum_x1 + sum_x2, sum_y1 + sum_y2, count1 + count2)
+                    },
+                );
 
-            for (idx, feature) in input.features.iter().enumerate() {
-                if let Some(geometry) = &feature.geometry {
-                    let mut coords = Vec::<wbvector::Coord>::new();
-                    collect_all_coords_from_geometry(geometry, &mut coords);
-                    for coord in coords {
-                        sum_x += coord.x;
-                        sum_y += coord.y;
-                        count += 1;
-                    }
-                }
-                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
-            }
-
+            let (sum_x, sum_y, count) = totals;
             if count > 0 {
                 output.push(wbvector::Feature {
                     fid: 1,
@@ -11367,32 +11395,46 @@ impl Tool for CentroidVectorTool {
                     attributes: vec![wbvector::FieldValue::Integer(1)],
                 });
             }
+            ctx.progress.progress(1.0);
         } else {
             output.schema = input.schema.clone();
             let total = input.features.len().max(1);
-            let mut next_fid = 1u64;
-
-            for (idx, feature) in input.features.iter().enumerate() {
-                if let Some(geometry) = &feature.geometry {
-                    let mut coords = Vec::<wbvector::Coord>::new();
-                    collect_all_coords_from_geometry(geometry, &mut coords);
-                    if !coords.is_empty() {
-                        let mut sum_x = 0.0;
-                        let mut sum_y = 0.0;
-                        for coord in &coords {
-                            sum_x += coord.x;
-                            sum_y += coord.y;
+            let output_features: Vec<Option<wbvector::Feature>> = input
+                .features
+                .par_iter()
+                .enumerate()
+                .map(|(_idx, feature)| {
+                    if let Some(geometry) = &feature.geometry {
+                        let mut coords = Vec::<wbvector::Coord>::new();
+                        collect_all_coords_from_geometry(geometry, &mut coords);
+                        if !coords.is_empty() {
+                            let mut sum_x = 0.0;
+                            let mut sum_y = 0.0;
+                            for coord in &coords {
+                                sum_x += coord.x;
+                                sum_y += coord.y;
+                            }
+                            return Some(wbvector::Feature {
+                                fid: feature.fid,
+                                geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(
+                                    sum_x / coords.len() as f64,
+                                    sum_y / coords.len() as f64,
+                                ))),
+                                attributes: feature.attributes.clone(),
+                            });
                         }
-                        output.push(wbvector::Feature {
-                            fid: if feature.fid == 0 { next_fid } else { feature.fid },
-                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(
-                                sum_x / coords.len() as f64,
-                                sum_y / coords.len() as f64,
-                            ))),
-                            attributes: feature.attributes.clone(),
-                        });
-                        next_fid += 1;
                     }
+                    None
+                })
+                .collect();
+            let mut next_fid = 1u64;
+            for (idx, opt_feat) in output_features.into_iter().enumerate() {
+                if let Some(mut feat) = opt_feat {
+                    if feat.fid == 0 {
+                        feat.fid = next_fid as u64;
+                    }
+                    output.push(feat);
+                    next_fid += 1;
                 }
                 coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total as f64);
             }

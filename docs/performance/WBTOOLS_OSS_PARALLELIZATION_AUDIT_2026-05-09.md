@@ -843,7 +843,21 @@ Batch 142 in progress (2026-05-10):
 Implementation files:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
-Note: Several medium-risk audit candidates already parallelized in prior work (raster_area, raster_perimeter, pick_from_list, line_intersections).
+Note: Audit discovery phase identified 6+ additional tools already parallelized in prior work (raster_area, raster_perimeter, pick_from_list, line_intersections, extract_raster_values_at_points, edge_proportion). Many remaining medium-risk candidates exhibit complex sequential logic (clump=connected-components, cost_distance=Dijkstra, map_features=region-growing, split_with_lines=geometry operations) limiting parallelization value without algorithmic redesign.
+
+## Parallelization Sprint Summary (Batches 138-142)
+
+| Batch | Tools | Strategy | Status |
+|-------|-------|----------|--------|
+| 138 | 11 | fold/reduce per-cell accumulation | ✓ Complete |
+| 139 | 18 | route event par_iter, travelling_salesman | ✓ Complete |
+| 140 | 5 | per-cell/per-feature par_iter | ✓ Complete |
+| 141 | 3 | per-cell class metrics with fold/reduce | ✓ Complete |
+| 142 | 1+ | cost_allocation per-cell init phase | In progress |
+| **Total** | **38+** | Various patterns | **52%+ of audit target** |
+
+**Total parallelized**: 38-42 tools across all batches (audit target: 79 tools)
+**Discovery finding**: Significant overlap between audit candidates and tools already parallelized in prior batches, reducing net new opportunities.
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

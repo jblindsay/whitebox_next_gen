@@ -2527,30 +2527,29 @@ impl Tool for CostAllocationTool {
         let band_stride = rows * cols;
         let low = f64::MIN;
         let mut output = build_output_like_raster(&source, DataType::F64);
+
+        let out_vals: Vec<f64> = (0..output.data.len())
+            .into_par_iter()
+            .map(|idx| {
+                let backlink_val = backlink.data.get_f64(idx);
+                if backlink.is_nodata(backlink_val) {
+                    source.nodata
+                } else {
+                    let s = source.data.get_f64(idx);
+                    if !source.is_nodata(s) && s > 0.0 {
+                        s
+                    } else {
+                        low
+                    }
+                }
+            })
+            .collect();
         for idx in 0..output.data.len() {
-            output.data.set_f64(idx, low);
+            output.data.set_f64(idx, out_vals[idx]);
         }
 
         let dx: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
         let dy: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
-
-        for b in 0..bands {
-            for row in 0..rows {
-                for col in 0..cols {
-                    let idx = b * band_stride + grid_index(row, col, cols);
-                    let p = backlink.data.get_f64(idx);
-                    if backlink.is_nodata(p) {
-                        output.data.set_f64(idx, source.nodata);
-                        continue;
-                    }
-                    let s = source.data.get_f64(idx);
-                    if !source.is_nodata(s) && s > 0.0 {
-                        output.data.set_f64(idx, s);
-                    }
-                }
-            }
-        }
-
         let max_steps = rows * cols;
         for b in 0..bands {
             for row in 0..rows {

@@ -837,6 +837,14 @@ Batch 141 completed (2026-05-10):
 Implementation files:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batch 142 in progress (2026-05-10):
+- `cost_allocation`: parallelized per-cell source initialization phase with `into_par_iter().map()` computing backlink status and source value assignment in parallel, followed by deterministic sequential backtracking propagation; determinism preserved via sorted sequential write-back of initialized values.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+Note: Several medium-risk audit candidates already parallelized in prior work (raster_area, raster_perimeter, pick_from_list, line_intersections).
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

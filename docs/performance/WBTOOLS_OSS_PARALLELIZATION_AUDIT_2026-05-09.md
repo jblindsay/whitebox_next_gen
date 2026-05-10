@@ -735,6 +735,13 @@ Batches 120–121 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/data_tools/mod.rs`
 
+Batches 122–123 completed (2026-05-10):
+- `fix_dangling_arcs`: parallelized per-feature output row preparation in both passthrough and snapped-output materialization paths (`par_iter().map()` collecting geometry/attribute rows), followed by deterministic sequential output writes.
+- `topology_validation_report`: parallelized per-feature topology issue extraction with `par_iter().map()` collecting `(fid, geom_type, issues)` rows, followed by deterministic sequential CSV assembly.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

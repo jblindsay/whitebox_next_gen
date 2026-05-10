@@ -1606,10 +1606,35 @@ impl Tool for FixDanglingArcsTool {
             for field in input.schema.fields() {
                 passthrough.add_field(field.clone());
             }
-            for feature in &input.features {
-                let attrs = clone_feature_attrs(&input, feature);
+            let prepared_rows: Vec<(Option<Geometry>, Vec<FieldValue>)> = input
+                .features
+                .par_iter()
+                .map(|feature| {
+                    let attr_values = input
+                        .schema
+                        .fields()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                        .collect::<Vec<_>>();
+                    (feature.geometry.clone(), attr_values)
+                })
+                .collect();
+            for (geometry, attr_values) in prepared_rows {
+                let attrs = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, field)| {
+                        (
+                            field.name.as_str(),
+                            attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 passthrough
-                    .add_feature(feature.geometry.clone(), &attrs)
+                    .add_feature(geometry, &attrs)
                     .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
             }
             return write_vector_output(&passthrough, &output_path);
@@ -1716,35 +1741,62 @@ impl Tool for FixDanglingArcsTool {
             output.add_field(field.clone());
         }
 
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let part_ids = &feature_part_ids[feature_idx];
-            let out_geom = match &feature.geometry {
-                Some(Geometry::LineString(_)) => {
-                    let geom = part_ids
-                        .first()
-                        .and_then(|id| fixed_parts.get(*id))
-                        .cloned()
-                        .filter(|coords| coords.len() >= 2)
-                        .map(Geometry::line_string);
-                    geom.or_else(|| feature.geometry.clone())
-                }
-                Some(Geometry::MultiLineString(_)) => {
-                    let lines = part_ids
-                        .iter()
-                        .filter_map(|id| fixed_parts.get(*id))
-                        .filter(|coords| coords.len() >= 2)
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    if lines.is_empty() {
-                        feature.geometry.clone()
-                    } else {
-                        Some(Geometry::multi_line_string(lines))
+        let prepared_rows: Vec<(Option<Geometry>, Vec<FieldValue>)> = input
+            .features
+            .par_iter()
+            .enumerate()
+            .map(|(feature_idx, feature)| {
+                let part_ids = &feature_part_ids[feature_idx];
+                let out_geom = match &feature.geometry {
+                    Some(Geometry::LineString(_)) => {
+                        let geom = part_ids
+                            .first()
+                            .and_then(|id| fixed_parts.get(*id))
+                            .cloned()
+                            .filter(|coords| coords.len() >= 2)
+                            .map(Geometry::line_string);
+                        geom.or_else(|| feature.geometry.clone())
                     }
-                }
-                Some(_) | None => feature.geometry.clone(),
-            };
+                    Some(Geometry::MultiLineString(_)) => {
+                        let lines = part_ids
+                            .iter()
+                            .filter_map(|id| fixed_parts.get(*id))
+                            .filter(|coords| coords.len() >= 2)
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        if lines.is_empty() {
+                            feature.geometry.clone()
+                        } else {
+                            Some(Geometry::multi_line_string(lines))
+                        }
+                    }
+                    Some(_) | None => feature.geometry.clone(),
+                };
 
-            let attrs = clone_feature_attrs(&input, feature);
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+                (out_geom, attr_values)
+            })
+            .collect();
+
+        for (out_geom, attr_values) in prepared_rows {
+            let attrs = input
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(idx, field)| {
+                    (
+                        field.name.as_str(),
+                        attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                    )
+                })
+                .collect::<Vec<_>>();
             output
                 .add_feature(out_geom, &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
@@ -1823,29 +1875,37 @@ impl Tool for TopologyValidationReportTool {
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
 
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let geom_type = feature
-                .geometry
-                .as_ref()
-                .map(|geom| format!("{:?}", geom.geom_type()))
-                .unwrap_or_else(|| "Null".to_string());
+        let issue_rows: Vec<(u64, String, Vec<TopologyIssue>)> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let geom_type = feature
+                    .geometry
+                    .as_ref()
+                    .map(|geom| format!("{:?}", geom.geom_type()))
+                    .unwrap_or_else(|| "Null".to_string());
 
-            let issues = match feature.geometry.as_ref() {
-                Some(geometry) if geometry.is_empty() => vec![TopologyIssue {
-                    issue_type: "empty_geometry".to_string(),
-                    detail: "geometry is empty".to_string(),
-                }],
-                Some(geometry) => collect_topology_issues(geometry),
-                None => vec![TopologyIssue {
-                    issue_type: "null_geometry".to_string(),
-                    detail: "feature has no geometry".to_string(),
-                }],
-            };
+                let issues = match feature.geometry.as_ref() {
+                    Some(geometry) if geometry.is_empty() => vec![TopologyIssue {
+                        issue_type: "empty_geometry".to_string(),
+                        detail: "geometry is empty".to_string(),
+                    }],
+                    Some(geometry) => collect_topology_issues(geometry),
+                    None => vec![TopologyIssue {
+                        issue_type: "null_geometry".to_string(),
+                        detail: "feature has no geometry".to_string(),
+                    }],
+                };
 
+                (feature.fid, geom_type, issues)
+            })
+            .collect();
+
+        for (feature_idx, (fid, geom_type, issues)) in issue_rows.into_iter().enumerate() {
             for issue in issues {
                 csv.push_str(&format!(
                     "{},{},{},{}\n",
-                    feature.fid,
+                    fid,
                     csv_escape(&geom_type),
                     csv_escape(&issue.issue_type),
                     csv_escape(&issue.detail)

@@ -728,6 +728,13 @@ Batches 118–119 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
 
+Batches 120–121 completed (2026-05-10):
+- `add_point_coordinates_to_table`: parallelized per-feature point validation and attribute/coordinate extraction with `par_iter().map()` collecting prepared rows, followed by deterministic sequential output feature materialization.
+- `clean_vector`: parallelized per-feature geometry cleaning and attribute extraction with `par_iter().map()` collecting prepared rows, followed by deterministic sequential output feature materialization.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
+use rayon::prelude::*;
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 use wbcore::{PercentCoalescer, 
@@ -1355,26 +1356,53 @@ impl Tool for AddPointCoordinatesToTableTool {
 
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let (x, y) = match &feature.geometry {
-                Some(Geometry::Point(coord)) => (coord.x, coord.y),
-                Some(_) => {
-                    return Err(ToolError::Validation(
-                        "encountered non-point geometry while converting add_point_coordinates_to_table".to_string(),
-                    ));
-                }
-                None => {
-                    return Err(ToolError::Validation(
-                        "point features must contain geometry".to_string(),
-                    ));
-                }
-            };
+        let prepared_rows: Result<Vec<(Option<Geometry>, Vec<FieldValue>, f64, f64)>, ToolError> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let (x, y) = match &feature.geometry {
+                    Some(Geometry::Point(coord)) => (coord.x, coord.y),
+                    Some(_) => {
+                        return Err(ToolError::Validation(
+                            "encountered non-point geometry while converting add_point_coordinates_to_table".to_string(),
+                        ));
+                    }
+                    None => {
+                        return Err(ToolError::Validation(
+                            "point features must contain geometry".to_string(),
+                        ));
+                    }
+                };
 
-            let mut attrs = clone_feature_attrs(&input, feature);
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+
+                Ok((feature.geometry.clone(), attr_values, x, y))
+            })
+            .collect();
+
+        for (feature_idx, (geometry, attr_values, x, y)) in prepared_rows?.into_iter().enumerate() {
+            let mut attrs = input
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(idx, field)| {
+                    (
+                        field.name.as_str(),
+                        attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                    )
+                })
+                .collect::<Vec<_>>();
             attrs.push(("XCOORD", FieldValue::Float(x)));
             attrs.push(("YCOORD", FieldValue::Float(y)));
             output
-                .add_feature(feature.geometry.clone(), &attrs)
+                .add_feature(geometry, &attrs)
                 .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
             coalescer.emit_unit_fraction(ctx.progress, (feature_idx + 1) as f64 / total);
         }
@@ -1451,10 +1479,36 @@ impl Tool for CleanVectorTool {
 
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
-        for (feature_idx, feature) in input.features.iter().enumerate() {
-            let cleaned = feature.geometry.as_ref().and_then(clean_geometry);
+        let prepared_rows: Vec<(Option<Geometry>, Vec<FieldValue>)> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let cleaned = feature.geometry.as_ref().and_then(clean_geometry);
+                let attr_values = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, _)| feature.attributes.get(idx).cloned().unwrap_or(FieldValue::Null))
+                    .collect::<Vec<_>>();
+                (cleaned, attr_values)
+            })
+            .collect();
+
+        for (feature_idx, (cleaned, attr_values)) in prepared_rows.into_iter().enumerate() {
             if let Some(geometry) = cleaned {
-                let attrs = clone_feature_attrs(&input, feature);
+                let attrs = input
+                    .schema
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, field)| {
+                        (
+                            field.name.as_str(),
+                            attr_values.get(idx).cloned().unwrap_or(FieldValue::Null),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 output
                     .add_feature(Some(geometry), &attrs)
                     .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;

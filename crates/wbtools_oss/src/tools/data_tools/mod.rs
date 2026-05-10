@@ -2789,54 +2789,78 @@ impl Tool for TopologyRuleAutoFixTool {
         let mut change_counter = 0u32;
 
         if rules.contains(&TopologyRuleType::LineEndpointsMustSnapWithinTolerance) {
-            for feature in &mut input.features {
-                let Some(geometry) = feature.geometry.as_mut() else {
-                    continue;
-                };
-                match geometry {
-                    Geometry::LineString(coords) => {
-                        if coords.len() >= 2 {
-                            let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(coords.clone()))));
-                            let updated = snap_line_endpoints(coords, snap_tolerance);
-                            if updated != *coords {
-                                let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(updated.clone()))));
-                                *coords = updated;
-                                changes.push(AppliedFix {
-                                    change_id: format!("fix_{}", change_counter),
-                                    rule_id: "line_endpoints_must_snap_within_tolerance".to_string(),
-                                    action_type: "snap_endpoints".to_string(),
-                                    target_fid: feature.fid as i64,
-                                    pre_state_hash: pre_hash,
-                                    post_state_hash: post_hash,
-                                    detail: "snapped linestring endpoints".to_string(),
-                                });
-                                change_counter += 1;
+            let endpoint_updates = input
+                .features
+                .par_iter()
+                .map(|feature| {
+                    let Some(geometry) = feature.geometry.as_ref() else {
+                        return None;
+                    };
+                    match geometry {
+                        Geometry::LineString(coords) => {
+                            if coords.len() < 2 {
+                                return None;
                             }
+                            let updated = snap_line_endpoints(coords, snap_tolerance);
+                            if updated == *coords {
+                                return None;
+                            }
+                            let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(coords.clone()))));
+                            let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(updated.clone()))));
+                            Some((
+                                Geometry::LineString(updated),
+                                vec![(feature.fid as i64, pre_hash, post_hash, "snapped linestring endpoints".to_string())],
+                            ))
                         }
-                    }
-                    Geometry::MultiLineString(parts) => {
-                        for part in parts {
-                            if part.len() >= 2 {
-                                let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(part.clone()))));
+                        Geometry::MultiLineString(parts) => {
+                            let mut updated_parts = parts.clone();
+                            let mut feature_changes = Vec::<(i64, String, String, String)>::new();
+                            for (part_idx, part) in parts.iter().enumerate() {
+                                if part.len() < 2 {
+                                    continue;
+                                }
                                 let updated = snap_line_endpoints(part, snap_tolerance);
                                 if updated != *part {
+                                    let pre_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(part.clone()))));
                                     let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::line_string(updated.clone()))));
-                                    *part = updated;
-                                    changes.push(AppliedFix {
-                                        change_id: format!("fix_{}", change_counter),
-                                        rule_id: "line_endpoints_must_snap_within_tolerance".to_string(),
-                                        action_type: "snap_endpoints".to_string(),
-                                        target_fid: feature.fid as i64,
-                                        pre_state_hash: pre_hash,
-                                        post_state_hash: post_hash,
-                                        detail: "snapped multilinestring part endpoints".to_string(),
-                                    });
-                                    change_counter += 1;
+                                    updated_parts[part_idx] = updated;
+                                    feature_changes.push((
+                                        feature.fid as i64,
+                                        pre_hash,
+                                        post_hash,
+                                        "snapped multilinestring part endpoints".to_string(),
+                                    ));
                                 }
                             }
+                            if feature_changes.is_empty() {
+                                None
+                            } else {
+                                Some((Geometry::MultiLineString(updated_parts), feature_changes))
+                            }
                         }
+                        _ => None,
                     }
-                    _ => {}
+                })
+                .collect::<Vec<_>>();
+
+            for (idx, pending) in endpoint_updates.into_iter().enumerate() {
+                let Some((updated_geometry, feature_changes)) = pending else {
+                    continue;
+                };
+                if let Some(feature) = input.features.get_mut(idx) {
+                    feature.geometry = Some(updated_geometry);
+                }
+                for (target_fid, pre_hash, post_hash, detail) in feature_changes {
+                    changes.push(AppliedFix {
+                        change_id: format!("fix_{}", change_counter),
+                        rule_id: "line_endpoints_must_snap_within_tolerance".to_string(),
+                        action_type: "snap_endpoints".to_string(),
+                        target_fid,
+                        pre_state_hash: pre_hash,
+                        post_state_hash: post_hash,
+                        detail,
+                    });
+                    change_counter += 1;
                 }
             }
         }
@@ -2857,39 +2881,52 @@ impl Tool for TopologyRuleAutoFixTool {
                 })
                 .collect::<Vec<_>>();
 
-            for feature in &mut input.features {
-                let Some(geometry) = feature.geometry.as_mut() else {
-                    continue;
-                };
-                if !matches!(geometry, Geometry::Point(_)) {
-                    continue;
-                }
-                if lines.is_empty() {
-                    continue;
-                }
+            if !lines.is_empty() {
+                let point_updates = input
+                    .features
+                    .par_iter()
+                    .map(|feature| {
+                        let Some(geometry) = feature.geometry.as_ref() else {
+                            return None;
+                        };
+                        let Geometry::Point(coord) = geometry else {
+                            return None;
+                        };
 
-                let pre_hash = hash_string(&geom_to_hash_string(Some(geometry)));
-                if let Geometry::Point(coord) = geometry {
-                    if let Some(snap_coord) = find_nearest_point_on_lines(coord, &lines, snap_tolerance) {
+                        let pre_hash = hash_string(&geom_to_hash_string(Some(geometry)));
+                        let Some(snap_coord) = find_nearest_point_on_lines(coord, &lines, snap_tolerance) else {
+                            return None;
+                        };
                         if coord_dist(
                             TopoCoord::xy(coord.x, coord.y),
-                            TopoCoord::xy(snap_coord.x, snap_coord.y)
-                        ) > 1e-9
+                            TopoCoord::xy(snap_coord.x, snap_coord.y),
+                        ) <= 1e-9
                         {
-                            let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::Point(snap_coord.clone()))));
-                            *geometry = Geometry::Point(snap_coord);
-                            changes.push(AppliedFix {
-                                change_id: format!("fix_{}", change_counter),
-                                rule_id: "point_must_be_covered_by_line".to_string(),
-                                action_type: "project_to_line".to_string(),
-                                target_fid: feature.fid as i64,
-                                pre_state_hash: pre_hash,
-                                post_state_hash: post_hash,
-                                detail: "projected point onto nearest line".to_string(),
-                            });
-                            change_counter += 1;
+                            return None;
                         }
+
+                        let post_hash = hash_string(&geom_to_hash_string(Some(&Geometry::Point(snap_coord.clone()))));
+                        Some((Geometry::Point(snap_coord), feature.fid as i64, pre_hash, post_hash))
+                    })
+                    .collect::<Vec<_>>();
+
+                for (idx, pending) in point_updates.into_iter().enumerate() {
+                    let Some((updated_geometry, target_fid, pre_hash, post_hash)) = pending else {
+                        continue;
+                    };
+                    if let Some(feature) = input.features.get_mut(idx) {
+                        feature.geometry = Some(updated_geometry);
                     }
+                    changes.push(AppliedFix {
+                        change_id: format!("fix_{}", change_counter),
+                        rule_id: "point_must_be_covered_by_line".to_string(),
+                        action_type: "project_to_line".to_string(),
+                        target_fid,
+                        pre_state_hash: pre_hash,
+                        post_state_hash: post_hash,
+                        detail: "projected point onto nearest line".to_string(),
+                    });
+                    change_counter += 1;
                 }
             }
         }
@@ -3836,18 +3873,27 @@ impl Tool for RasterToVectorPointsTool {
         output.add_field(FieldDef::new("VALUE", FieldType::Float).width(18).precision(8));
 
         let total_rows = input.rows.max(1) as f64;
-        let mut next_fid = 1i64;
-        for row in 0..input.rows as isize {
-            for col in 0..input.cols as isize {
-                let value = input.get_raw(0, row, col).unwrap_or(input.nodata);
-                if input.is_nodata(value) || value == 0.0 {
-                    continue;
+        let row_records: Vec<Vec<(f64, f64, f64)>> = (0..input.rows as isize)
+            .into_par_iter()
+            .map(|row| {
+                let mut records = Vec::<(f64, f64, f64)>::new();
+                for col in 0..input.cols as isize {
+                    let value = input.get_raw(0, row, col).unwrap_or(input.nodata);
+                    if input.is_nodata(value) || value == 0.0 {
+                        continue;
+                    }
+                    records.push((input.col_center_x(col), input.row_center_y(row), value));
                 }
+                records
+            })
+            .collect();
 
-                let point = Geometry::point(input.col_center_x(col), input.row_center_y(row));
+        let mut next_fid = 1i64;
+        for (row_idx, records) in row_records.into_iter().enumerate() {
+            for (x, y, value) in records {
                 output
                     .add_feature(
-                        Some(point),
+                        Some(Geometry::point(x, y)),
                         &[
                             ("FID", FieldValue::Integer(next_fid)),
                             ("VALUE", FieldValue::Float(value)),
@@ -3856,7 +3902,7 @@ impl Tool for RasterToVectorPointsTool {
                     .map_err(|e| ToolError::Execution(format!("failed adding output feature: {e}")))?;
                 next_fid += 1;
             }
-            coalescer.emit_unit_fraction(ctx.progress, (row as f64 + 1.0) / total_rows);
+            coalescer.emit_unit_fraction(ctx.progress, (row_idx as f64 + 1.0) / total_rows);
         }
 
         write_vector_output(&output, &output_path)
@@ -4151,24 +4197,40 @@ impl Tool for MultipartToSinglepartTool {
 
         let total = input.features.len().max(1) as f64;
         let coalescer = PercentCoalescer::new(1, 99);
-        let mut fid = 1i64;
-        for (feat_idx, feature) in input.features.iter().enumerate() {
-            if let Some(geom) = &feature.geometry {
-                let parts = expand_to_single_part(geom, exclude_holes);
-                let src_attrs = clone_feature_attrs(&input, feature);
-                for part_geom in parts {
-                    let mut attrs: Vec<(&str, FieldValue)> = vec![("FID", FieldValue::Integer(fid))];
-                    for (name, val) in &src_attrs {
-                        if name.to_uppercase() != "FID" {
-                            attrs.push((name, val.clone()));
-                        }
+        let per_feature_parts: Vec<Vec<(wbvector::Geometry, Vec<(&str, FieldValue)>)>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let mut result = Vec::new();
+                if let Some(geom) = &feature.geometry {
+                    let parts = expand_to_single_part(geom, exclude_holes);
+                    let src_attrs = clone_feature_attrs(&input, feature);
+                    for part_geom in parts {
+                        let attrs: Vec<(&str, FieldValue)> = vec![
+                            ("FID", FieldValue::Integer(0)), // placeholder, will be set sequentially
+                        ]
+                        .into_iter()
+                        .chain(src_attrs.iter().filter(|(name, _)| name.to_uppercase() != "FID").map(|(n, v)| (*n, v.clone())))
+                        .collect();
+                        result.push((part_geom, attrs));
                     }
-                    output
-                        .add_feature(Some(part_geom), &attrs)
-                        .map_err(|e| ToolError::Execution(format!("failed adding feature: {e}")))?;
-                    fid += 1;
                 }
+                result
+            })
+            .collect();
+
+        let mut fid = 1i64;
+        for per_feature_rows in per_feature_parts {
+            for (part_geom, mut attrs) in per_feature_rows {
+                // Update FID to deterministic sequential value
+                attrs[0] = ("FID", FieldValue::Integer(fid));
+                output
+                    .add_feature(Some(part_geom), &attrs)
+                    .map_err(|e| ToolError::Execution(format!("failed adding feature: {e}")))?;
+                fid += 1;
             }
+        }
+        for (feat_idx, _) in input.features.iter().enumerate() {
             coalescer.emit_unit_fraction(ctx.progress, (feat_idx + 1) as f64 / total);
         }
 

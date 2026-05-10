@@ -766,6 +766,72 @@ Batches 130–132 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/data_tools/mod.rs`
 
+Batches 133–135 completed (2026-05-10):
+- shared GIS helper `collect_feature_topo_geometries`: parallelized per-feature geometry-to-topology conversion with `par_iter().map()` and deterministic ordered collection.
+- shared GIS helper `collect_layer_polygons`: parallelized per-feature polygon extraction with `par_iter().map()` into per-feature vectors, followed by deterministic flattening.
+- shared GIS point helpers (`collect_point_samples`, `collect_point_weights`, `collect_point_coords_from_layer`): parallelized per-feature coordinate extraction/attribute derivation with `par_iter().map()` and deterministic flattening, preserving existing validation and output ordering semantics.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+Batches 136–137 completed (2026-05-10):
+- `topology_rule_autofix` (`line_endpoints_must_snap_within_tolerance` branch): migrated in-place mutable endpoint snapping loop to a parallel preparation pass over immutable features with deterministic sequential geometry application and ordered change-log assignment.
+- `topology_rule_autofix` (`point_must_be_covered_by_line` branch): migrated point projection loop to a parallel preparation pass over immutable features with deterministic sequential geometry application and ordered change-log assignment.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
+Batch 138 completed (2026-05-10):
+- `multipart_to_singlepart`: parallelized per-feature multipart decomposition using `par_iter().flat_map()` and retained deterministic sequential FID assignment/output ordering.
+- `extract_raster_values_at_points`: parallelized per-feature point sampling with `par_iter().map()` and deterministic sequential attribute write-back.
+- `deviation_from_regional_direction`: parallelized regional-angle accumulation with Rayon `fold/reduce` and parallel per-feature deviation computation, followed by deterministic sequential attribute writes.
+- `split_with_lines`: parallelized per-line split-piece generation with `par_iter().map()` and deterministic sequential output feature assembly/FID assignment.
+- `related_circumscribing_circle`: parallelized per-feature RC_CIRCLE metric computation with deterministic sequential attribute write-back.
+- `hole_proportion`: parallelized per-feature HOLE_PROP computation with deterministic sequential attribute write-back.
+- `patch_orientation`: parallelized per-feature orientation computation with deterministic sequential attribute write-back.
+- `perimeter_area_ratio`: parallelized per-feature perimeter/area computation with deterministic sequential attribute write-back.
+- `route_calibrate`: parallelized per-route calibration result derivation with deterministic sequential attribute/status application.
+- `route_recalibrate`: parallelized per-route recalibration derivation with deterministic sequential attribute/status application.
+- `random_points_in_polygon`: parallelized polygon extraction/preparation stages (`extract_polygons_from_geometry`, envelope/prepared polygon pairing) while preserving deterministic feature-order flattening and existing point-generation behavior.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
+Batch 139 in progress (2026-05-10):
+- `construct_vector_tin`: parallelized per-feature point extraction/value pairing and per-triangle ring preparation with deterministic sequential feature write/FID assignment.
+- `raster_to_vector_points`: parallelized per-row raster point record extraction with deterministic sequential row-order feature writes and FID assignment.
+- `line_intersections`: parallelized per-input-line intersection generation with `par_iter()` and deterministic sequential output feature assembly/FID assignment.
+- `polygonize`: parallelized per-layer closed-ring extraction/dedup preparation with `par_iter().filter_map()` and deterministic sequential layer aggregation.
+- `concave_hull`: parallelized per-feature coordinate extraction/collection with `par_iter().map()` and deterministic sequential flattening before hull construction.
+- `route_event_overlay`: parallelized per-route overlap row generation over sorted route keys with `par_iter().map()`, retaining deterministic sequential output append/FID assignment.
+- `route_event_merge`: parallelized per-route event merge processing over sorted route keys with `par_iter().map()`, preserving deterministic sequential final feature append/FID assignment and existing conflict-mode behavior.
+- `delete_field`: parallelized per-feature attribute projection into retained schema columns with deterministic sequential assignment back to output features.
+- `add_field`: parallelized per-feature attribute expansion with default-value append using parallel preparation and deterministic sequential assignment.
+- `network_connected_components`: parallelized final component-attribute preparation with `par_iter().map()` and deterministic sequential feature attribute append.
+- `route_measure_qa`: parallelized per-route QA issue generation over sorted route keys with `par_iter().map()`, retaining deterministic sequential output feature append/FID assignment and aggregate counter/report semantics.
+- `route_event_split`: parallelized per-feature event split generation over immutable input with `par_iter().map()`, retaining deterministic sequential output append/FID assignment and existing boundary/min-segment semantics.
+- `travelling_salesman_problem`: parallelized per-feature coordinate extraction and local-bounds preprocessing with `par_iter().map()`, retaining deterministic sequential point-order flattening and unchanged optimization semantics.
+- `raster_area`: parallelized per-cell class-area accumulation with Rayon `fold/reduce`, plus parallel output-value derivation with deterministic sequential raster writes.
+- `raster_perimeter`: parallelized per-cell class-perimeter accumulation (lookup-table pattern) with Rayon `fold/reduce`, plus parallel output-value derivation with deterministic sequential raster writes.
+- `edge_proportion`: parallelized per-cell patch-count and edge-count accumulation with Rayon `fold/reduce`, preserving deterministic sequential output materialization.
+- `boundary_shape_complexity`: parallelized initial per-cell skeleton-state initialization pass with `into_par_iter().map()`, preserving existing sequential thinning and branch-analysis semantics.
+- `map_features`: parallelized initial per-cell nodata/priority preprocessing with Rayon `fold/reduce`, preserving deterministic row-major heap insertion and downstream labeling semantics.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
+Batch 140 completed (2026-05-10):
+- `find_lowest_or_highest_points`: parallelized per-cell min/max scan with Rayon `fold/reduce`, preserving deterministic sequential feature write/FID assignment.
+- `filter_raster_features_by_area`: parallelized per-cell class-count accumulation with Rayon `fold/reduce`, preserving deterministic sequential output materialization.
+- `euclidean_distance`: parallelized final per-cell output-value derivation with `into_par_iter().map()`, preserving deterministic sequential raster writes.
+- `shape_complexity_index_raster`: parallelized combined per-cell transition-counting and bounds-aggregation pass with Rayon `fold/reduce`, reducing two sequential scans into one parallel pass.
+- `raster_cell_assignment`: parallelized per-cell row/column/x/y value assignment with `into_par_iter().map()`, preserving deterministic sequential raster writes.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/gis/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

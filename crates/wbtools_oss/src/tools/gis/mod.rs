@@ -2223,13 +2223,19 @@ impl Tool for EuclideanDistanceTool {
 
         let mut output = build_output_like_raster(&input, DataType::F64);
         let cell_size = (input.cell_size_x + input.cell_size_y) / 2.0;
-        for idx in 0..output.data.len() {
-            let z = input.data.get_f64(idx);
-            if input.is_nodata(z) {
-                output.data.set_f64(idx, output.nodata);
-            } else {
-                output.data.set_f64(idx, dist_sq[idx].sqrt() * cell_size);
-            }
+        let out_vals: Vec<f64> = (0..output.data.len())
+            .into_par_iter()
+            .map(|idx| {
+                let z = input.data.get_f64(idx);
+                if input.is_nodata(z) {
+                    output.nodata
+                } else {
+                    dist_sq[idx].sqrt() * cell_size
+                }
+            })
+            .collect();
+        for (idx, value) in out_vals.iter().enumerate() {
+            output.data.set_f64(idx, *value);
         }
 
         let locator = GisOverlayCore::store_or_write_output(output, output_path, ctx)?;
@@ -3001,12 +3007,18 @@ fn collect_layer_polygons_recursive(
 fn collect_layer_polygons(
     layer: &wbvector::Layer,
 ) -> Result<Vec<(wbvector::Ring, Vec<wbvector::Ring>)>, ToolError> {
-    let mut polygons = Vec::<(wbvector::Ring, Vec<wbvector::Ring>)>::new();
-    for feature in &layer.features {
-        if let Some(geometry) = &feature.geometry {
-            collect_layer_polygons_recursive(geometry, &mut polygons)?;
-        }
-    }
+    let per_feature: Result<Vec<Vec<(wbvector::Ring, Vec<wbvector::Ring>)>>, ToolError> = layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            let mut polygons = Vec::<(wbvector::Ring, Vec<wbvector::Ring>)>::new();
+            if let Some(geometry) = &feature.geometry {
+                collect_layer_polygons_recursive(geometry, &mut polygons)?;
+            }
+            Ok(polygons)
+        })
+        .collect();
+    let polygons: Vec<(wbvector::Ring, Vec<wbvector::Ring>)> = per_feature?.into_iter().flatten().collect();
     if polygons.is_empty() {
         return Err(ToolError::Validation(
             "input polygons vector must contain at least one polygon feature".to_string(),
@@ -3158,41 +3170,47 @@ fn collect_point_samples(
         .map(|field| matches!(field.field_type, wbvector::FieldType::Integer | wbvector::FieldType::Float))
         .unwrap_or(false);
 
-    let mut samples = Vec::new();
-    for feature in &layer.features {
-        let Some(geometry) = &feature.geometry else {
-            continue;
-        };
-
-        let mut coords = Vec::new();
-        collect_geometry_coords(geometry, &mut coords);
-        if coords.is_empty() {
-            continue;
-        }
-
-        let attr_value = if use_z {
-            None
-        } else if field_is_numeric {
-            field_idx
-                .and_then(|idx| feature.attributes.get(idx))
-                .and_then(|value| value.as_f64())
-        } else {
-            Some(feature.fid as f64)
-        };
-
-        for coord in coords {
-            let value = if use_z {
-                coord.z.ok_or_else(|| {
-                    ToolError::Validation(
-                        "points geometry does not contain Z values required by use_z=true".to_string(),
-                    )
-                })?
-            } else {
-                attr_value.unwrap_or(feature.fid as f64)
+    let per_feature: Result<Vec<Vec<(f64, f64, f64)>>, ToolError> = layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = &feature.geometry else {
+                return Ok(Vec::new());
             };
-            samples.push((coord.x, coord.y, value));
-        }
-    }
+
+            let mut coords = Vec::new();
+            collect_geometry_coords(geometry, &mut coords);
+            if coords.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            let attr_value = if use_z {
+                None
+            } else if field_is_numeric {
+                field_idx
+                    .and_then(|idx| feature.attributes.get(idx))
+                    .and_then(|value| value.as_f64())
+            } else {
+                Some(feature.fid as f64)
+            };
+
+            let mut samples = Vec::with_capacity(coords.len());
+            for coord in coords {
+                let value = if use_z {
+                    coord.z.ok_or_else(|| {
+                        ToolError::Validation(
+                            "points geometry does not contain Z values required by use_z=true".to_string(),
+                        )
+                    })?
+                } else {
+                    attr_value.unwrap_or(feature.fid as f64)
+                };
+                samples.push((coord.x, coord.y, value));
+            }
+            Ok(samples)
+        })
+        .collect();
+    let samples: Vec<(f64, f64, f64)> = per_feature?.into_iter().flatten().collect();
 
     if samples.is_empty() {
         return Err(ToolError::Validation(
@@ -3219,26 +3237,31 @@ fn collect_point_weights(
         ));
     }
 
-    let mut weighted = Vec::new();
-    for feature in &layer.features {
-        let Some(geometry) = &feature.geometry else {
-            continue;
-        };
-        let weight = if let Some(idx) = field_idx {
-            feature
-                .attributes
-                .get(idx)
-                .and_then(|value| value.as_f64())
-                .unwrap_or(1.0)
-        } else {
-            1.0
-        };
-        let mut coords = Vec::new();
-        collect_geometry_coords(geometry, &mut coords);
-        for coord in coords {
-            weighted.push((coord.x, coord.y, weight));
-        }
-    }
+    let per_feature: Vec<Vec<(f64, f64, f64)>> = layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            let Some(geometry) = &feature.geometry else {
+                return Vec::new();
+            };
+            let weight = if let Some(idx) = field_idx {
+                feature
+                    .attributes
+                    .get(idx)
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1.0)
+            } else {
+                1.0
+            };
+            let mut coords = Vec::new();
+            collect_geometry_coords(geometry, &mut coords);
+            coords
+                .into_iter()
+                .map(|coord| (coord.x, coord.y, weight))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let weighted: Vec<(f64, f64, f64)> = per_feature.into_iter().flatten().collect();
 
     if weighted.is_empty() {
         return Err(ToolError::Validation(
@@ -5737,29 +5760,39 @@ impl Tool for ExtractRasterValuesAtPointsTool {
             ));
         }
 
-        let mut report = String::from("Point values:\n");
-        for (feature_idx, feature) in output.features.iter_mut().enumerate() {
-            let Some(geometry) = &feature.geometry else {
-                continue;
-            };
-            let mut coords = Vec::new();
-            collect_geometry_coords(geometry, &mut coords);
-            let Some(coord) = coords.first() else {
-                continue;
-            };
-            let mut sampled_values = Vec::with_capacity(rasters.len());
-            for raster in &rasters {
-                let col = ((coord.x - raster.x_min) / raster.cell_size_x).floor() as isize;
-                let row = ((raster.y_max() - coord.y) / raster.cell_size_y).floor() as isize;
-                let value = if row >= 0 && col >= 0 && row < raster.rows as isize && col < raster.cols as isize {
-                    raster.get(0, row, col)
-                } else {
-                    raster.nodata
+        let per_feature_samples: Vec<Vec<wbvector::FieldValue>> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                let Some(geometry) = &feature.geometry else {
+                    return Vec::new();
                 };
-                feature.attributes.push(wbvector::FieldValue::Float(value));
-                sampled_values.push(value);
+                let mut coords = Vec::new();
+                collect_geometry_coords(geometry, &mut coords);
+                let Some(coord) = coords.first() else {
+                    return Vec::new();
+                };
+                let mut sampled_values = Vec::with_capacity(rasters.len());
+                for raster in &rasters {
+                    let col = ((coord.x - raster.x_min) / raster.cell_size_x).floor() as isize;
+                    let row = ((raster.y_max() - coord.y) / raster.cell_size_y).floor() as isize;
+                    let value = if row >= 0 && col >= 0 && row < raster.rows as isize && col < raster.cols as isize {
+                        raster.get(0, row, col)
+                    } else {
+                        raster.nodata
+                    };
+                    sampled_values.push(wbvector::FieldValue::Float(value));
+                }
+                sampled_values
+            })
+            .collect();
+
+        let mut report = String::from("Point values:\n");
+        for (feature_idx, sampled) in per_feature_samples.into_iter().enumerate() {
+            if let Some(feature) = output.features.get_mut(feature_idx) {
+                feature.attributes.extend(sampled.iter().cloned());
+                report.push_str(&format!("Point {} values: {:?}\n", feature_idx + 1, sampled));
             }
-            report.push_str(&format!("Point {} values: {:?}\n", feature_idx + 1, sampled_values));
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -5844,16 +5877,25 @@ impl Tool for RasterCellAssignmentTool {
         let mut output = build_output_like_raster(&input, DataType::F64);
         let rows = output.rows;
         let cols = output.cols;
-        for row in 0..rows {
-            for col in 0..cols {
-                let value = match assign.as_str() {
+        let assign_mode = assign.as_str();
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
+                match assign_mode {
                     "column" | "columns" | "col" => col as f64,
                     "row" | "rows" => row as f64,
                     "x" => input.x_min + (col as f64 + 0.5) * input.cell_size_x,
                     "y" => input.y_max() - (row as f64 + 0.5) * input.cell_size_y,
                     _ => unreachable!(),
-                };
-                output.set(0, row as isize, col as isize, value).map_err(|e| {
+                }
+            })
+            .collect();
+        for row in 0..rows {
+            for col in 0..cols {
+                let cell_idx = row * cols + col;
+                output.set(0, row as isize, col as isize, out_vals[cell_idx]).map_err(|e| {
                     ToolError::Execution(format!("failed assigning raster cell value: {e}"))
                 })?;
             }
@@ -6806,19 +6848,35 @@ impl Tool for MapFeaturesTool {
         let cols = input.cols;
         let out_nodata = -999.0;
         let mut labels = vec![out_nodata; rows * cols];
+        let (mut heap_cells, mut processed) = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || (Vec::<MapFeatureGridCell>::new(), 0usize),
+                |(mut cells, nodata_count), cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let z = input.get(0, row as isize, col as isize);
+                    if input.is_nodata(z) {
+                        (cells, nodata_count + 1)
+                    } else {
+                        cells.push(MapFeatureGridCell { row, col, priority: z });
+                        (cells, nodata_count)
+                    }
+                },
+            )
+            .reduce(
+                || (Vec::<MapFeatureGridCell>::new(), 0usize),
+                |(mut cells_a, nodata_a), (mut cells_b, nodata_b)| {
+                    cells_a.append(&mut cells_b);
+                    (cells_a, nodata_a + nodata_b)
+                },
+            );
+        heap_cells.sort_by_key(|cell| (cell.row, cell.col));
         let mut heap = BinaryHeap::new();
-        let mut processed = 0usize;
-        let total = rows * cols;
-        for row in 0..rows {
-            for col in 0..cols {
-                let z = input.get(0, row as isize, col as isize);
-                if input.is_nodata(z) {
-                    processed += 1;
-                } else {
-                    heap.push(MapFeatureGridCell { row, col, priority: z });
-                }
-            }
+        for cell in heap_cells {
+            heap.push(cell);
         }
+        let total = rows * cols;
 
         let dx = [1isize, 1, 1, 0, -1, -1, -1, 0];
         let dy = [-1isize, 0, 1, 1, 1, 0, -1, -1];
@@ -7603,24 +7661,35 @@ impl Tool for FindLowestOrHighestPointsTool {
             out_type = "both".to_string();
         }
 
-        let mut low = (f64::INFINITY, 0usize, 0usize);
-        let mut high = (f64::NEG_INFINITY, 0usize, 0usize);
-        let mut has_valid = false;
-        for row in 0..input.rows {
-            for col in 0..input.cols {
-                let value = input.get(0, row as isize, col as isize);
-                if input.is_nodata(value) {
-                    continue;
-                }
-                has_valid = true;
-                if value < low.0 {
-                    low = (value, row, col);
-                }
-                if value > high.0 {
-                    high = (value, row, col);
-                }
-            }
-        }
+        let (low, high, has_valid) = (0..input.rows * input.cols)
+            .into_par_iter()
+            .fold(
+                || ((f64::INFINITY, 0usize, 0usize), (f64::NEG_INFINITY, 0usize, 0usize), false),
+                |(mut low, mut high, mut has_valid), cell_idx| {
+                    let row = cell_idx / input.cols;
+                    let col = cell_idx % input.cols;
+                    let value = input.get(0, row as isize, col as isize);
+                    if input.is_nodata(value) {
+                        return (low, high, has_valid);
+                    }
+                    has_valid = true;
+                    if value < low.0 {
+                        low = (value, row, col);
+                    }
+                    if value > high.0 {
+                        high = (value, row, col);
+                    }
+                    (low, high, has_valid)
+                },
+            )
+            .reduce(
+                || ((f64::INFINITY, 0usize, 0usize), (f64::NEG_INFINITY, 0usize, 0usize), false),
+                |(low_a, high_a, has_a), (low_b, high_b, has_b)| {
+                    let new_low = if low_b.0 < low_a.0 { low_b } else { low_a };
+                    let new_high = if high_b.0 > high_a.0 { high_b } else { high_a };
+                    (new_low, new_high, has_a || has_b)
+                },
+            );
         if !has_valid {
             return Err(ToolError::Validation(
                 "input raster contains no valid (non-NoData) cells".to_string(),
@@ -9398,46 +9467,62 @@ impl Tool for RasterAreaTool {
         let grid_cell_units = units.contains("cell");
 
         let (min_class, num_bins) = class_bins_from_raster(&input)?;
-        let mut class_area = vec![0.0f64; num_bins];
         let cell_area = input.cell_size_x * input.cell_size_y;
         let background = if zero_background { Some(0.0) } else { None };
+        let rows = input.rows;
+        let cols = input.cols;
 
         ctx.progress.info("running raster area");
-        for row in 0..input.rows {
-            for col in 0..input.cols {
-                let index = input.index(0, row as isize, col as isize).ok_or_else(|| {
-                    ToolError::Execution("computed raster index is out of bounds".to_string())
-                })?;
-                let value = input.data.get_f64(index);
-                if input.is_nodata(value) || background == Some(value) {
-                    continue;
-                }
-                if let Some(bin) = class_index(value, min_class, num_bins) {
-                    class_area[bin] += if grid_cell_units { 1.0 } else { cell_area };
-                }
-            }
-            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / input.rows.max(1) as f64);
-        }
+        let class_area = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || vec![0.0f64; num_bins],
+                |mut local_area, cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let value = input.get(0, row as isize, col as isize);
+                    if !input.is_nodata(value) && background != Some(value) {
+                        if let Some(bin) = class_index(value, min_class, num_bins) {
+                            local_area[bin] += if grid_cell_units { 1.0 } else { cell_area };
+                        }
+                    }
+                    local_area
+                },
+            )
+            .reduce(
+                || vec![0.0f64; num_bins],
+                |mut a, b| {
+                    for (idx, val) in b.into_iter().enumerate() {
+                        a[idx] += val;
+                    }
+                    a
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.45);
 
         let mut output = build_output_like_raster(&input, DataType::F64);
         output.nodata = -999.0;
         let out_nodata = output.nodata;
-        for row in 0..input.rows {
-            for col in 0..input.cols {
-                let index = input.index(0, row as isize, col as isize).ok_or_else(|| {
-                    ToolError::Execution("computed raster index is out of bounds".to_string())
-                })?;
-                let value = input.data.get_f64(index);
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
+                let value = input.get(0, row as isize, col as isize);
                 if input.is_nodata(value) || background == Some(value) {
-                    output.data.set_f64(index, out_nodata);
-                    continue;
+                    return out_nodata;
                 }
-                if let Some(bin) = class_index(value, min_class, num_bins) {
-                    output.data.set_f64(index, class_area[bin]);
-                } else {
-                    output.data.set_f64(index, out_nodata);
-                }
+                class_index(value, min_class, num_bins)
+                    .map(|bin| class_area[bin])
+                    .unwrap_or(out_nodata)
+            })
+            .collect();
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
+            coalescer.emit_unit_fraction(ctx.progress, 0.45 + (row + 1) as f64 / rows.max(1) as f64 * 0.54);
         }
 
         let mut table = String::from(if grid_cell_units { "Class,Cells\n" } else { "Class,Area\n" });
@@ -9576,64 +9661,81 @@ impl Tool for RasterPerimeterTool {
         let grid_cell_units = units.contains("cell");
 
         let (min_class, num_bins) = class_bins_from_raster(&input)?;
-        let mut class_perimeter = vec![0.0f64; num_bins];
         let background = if zero_background { Some(0.0) } else { None };
         let scale = if grid_cell_units {
             1.0
         } else {
             (input.cell_size_x + input.cell_size_y) / 2.0
         };
+        let rows = input.rows;
+        let cols = input.cols;
 
         ctx.progress.info("running raster perimeter");
-        for row in 0..input.rows {
-            for col in 0..input.cols {
-                let index = input.index(0, row as isize, col as isize).ok_or_else(|| {
-                    ToolError::Execution("computed raster index is out of bounds".to_string())
-                })?;
-                let value = input.data.get_f64(index);
-                if input.is_nodata(value) || background == Some(value) {
-                    continue;
-                }
-                let Some(bin) = class_index(value, min_class, num_bins) else {
-                    continue;
-                };
+        let class_perimeter = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || vec![0.0f64; num_bins],
+                |mut local_perimeter, cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let value = input.get(0, row as isize, col as isize);
+                    if input.is_nodata(value) || background == Some(value) {
+                        return local_perimeter;
+                    }
+                    let Some(bin) = class_index(value, min_class, num_bins) else {
+                        return local_perimeter;
+                    };
 
-                let mut pattern = 0usize;
-                for n in 0..8 {
-                    let rr = row as isize + PERIMETER_DY[n];
-                    let cc = col as isize + PERIMETER_DX[n];
-                    if rr < 0 || cc < 0 || rr >= input.rows as isize || cc >= input.cols as isize {
-                        continue;
+                    let mut pattern = 0usize;
+                    for n in 0..8 {
+                        let rr = row as isize + PERIMETER_DY[n];
+                        let cc = col as isize + PERIMETER_DX[n];
+                        if rr < 0 || cc < 0 || rr >= rows as isize || cc >= cols as isize {
+                            continue;
+                        }
+                        let neighbor = input.get(0, rr, cc);
+                        if neighbor == value {
+                            pattern += PERIMETER_MASK[n];
+                        }
                     }
-                    let neighbor = input.get(0, rr, cc);
-                    if neighbor == value {
-                        pattern += PERIMETER_MASK[n];
+                    local_perimeter[bin] += PERIMETER_LUT[pattern] * scale;
+                    local_perimeter
+                },
+            )
+            .reduce(
+                || vec![0.0f64; num_bins],
+                |mut a, b| {
+                    for (idx, val) in b.into_iter().enumerate() {
+                        a[idx] += val;
                     }
-                }
-                class_perimeter[bin] += PERIMETER_LUT[pattern] * scale;
-            }
-            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / input.rows.max(1) as f64);
-        }
+                    a
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.45);
 
         let mut output = build_output_like_raster(&input, DataType::F64);
         output.nodata = -999.0;
         let out_nodata = output.nodata;
-        for row in 0..input.rows {
-            for col in 0..input.cols {
-                let index = input.index(0, row as isize, col as isize).ok_or_else(|| {
-                    ToolError::Execution("computed raster index is out of bounds".to_string())
-                })?;
-                let value = input.data.get_f64(index);
+        let out_vals: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
+                let value = input.get(0, row as isize, col as isize);
                 if input.is_nodata(value) || background == Some(value) {
-                    output.data.set_f64(index, out_nodata);
-                    continue;
+                    return out_nodata;
                 }
-                if let Some(bin) = class_index(value, min_class, num_bins) {
-                    output.data.set_f64(index, class_perimeter[bin]);
-                } else {
-                    output.data.set_f64(index, out_nodata);
-                }
+                class_index(value, min_class, num_bins)
+                    .map(|bin| class_perimeter[bin])
+                    .unwrap_or(out_nodata)
+            })
+            .collect();
+        for row in 0..rows {
+            let row_offset = row * cols;
+            for col in 0..cols {
+                output.data.set_f64(row_offset + col, out_vals[row_offset + col]);
             }
+            coalescer.emit_unit_fraction(ctx.progress, 0.45 + (row + 1) as f64 / rows.max(1) as f64 * 0.54);
         }
 
         let mut table = String::from("Class,Perimeter\n");
@@ -13435,18 +13537,29 @@ impl Tool for FilterRasterFeaturesByAreaTool {
             .unwrap_or(false);
         let output_path = parse_optional_output_path(args, "output")?;
 
-        let mut counts = HashMap::<i64, usize>::new();
-        for idx in 0..input.data.len() {
-            let value = input.data.get_f64(idx);
-            if input.is_nodata(value) {
-                continue;
-            }
-            let key = value.round() as i64;
-            *counts.entry(key).or_insert(0) += 1;
-            if idx % 8192 == 0 {
-                coalescer.emit_unit_fraction(ctx.progress, idx as f64 / input.data.len().max(1) as f64);
-            }
-        }
+        let counts = (0..input.data.len())
+            .into_par_iter()
+            .fold(
+                || HashMap::<i64, usize>::new(),
+                |mut local_counts, idx| {
+                    let value = input.data.get_f64(idx);
+                    if !input.is_nodata(value) {
+                        let key = value.round() as i64;
+                        *local_counts.entry(key).or_insert(0) += 1;
+                    }
+                    local_counts
+                },
+            )
+            .reduce(
+                || HashMap::<i64, usize>::new(),
+                |mut a, b| {
+                    for (key, val) in b {
+                        *a.entry(key).or_insert(0) += val;
+                    }
+                    a
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.45);
 
         let mut output = build_output_like_raster(&input, input.data_type);
         output.nodata = input.nodata;
@@ -14199,56 +14312,65 @@ impl Tool for LineIntersectionsTool {
         output.crs = input.crs.clone();
         output.geom_type = Some(wbvector::GeometryType::Point);
 
-        let mut seen = HashSet::<(i64, i64, usize, usize)>::new();
         let total = input_lines.len().max(1);
-        let mut next_fid = 1u64;
+        let per_line_hits: Vec<Vec<(wbvector::Coord, Vec<wbvector::FieldValue>)>> = input_lines
+            .par_iter()
+            .map(|lhs| {
+                let mut seen = HashSet::<(i64, i64, usize, usize)>::new();
+                let mut line_hits = Vec::<(wbvector::Coord, Vec<wbvector::FieldValue>)>::new();
+                for rhs in &overlay_lines {
+                    for i in 1..lhs.coords.len() {
+                        for j in 1..rhs.coords.len() {
+                            let intersections = segment_intersection_points(
+                                &lhs.coords[i - 1],
+                                &lhs.coords[i],
+                                &rhs.coords[j - 1],
+                                &rhs.coords[j],
+                                eps,
+                            );
+                            for point in intersections {
+                                let key_xy = quantize_coord_key(&point, eps);
+                                let key = (key_xy.0, key_xy.1, lhs.source_index, rhs.source_index);
+                                if !seen.insert(key) {
+                                    continue;
+                                }
 
-        for (line_idx, lhs) in input_lines.iter().enumerate() {
-            for rhs in &overlay_lines {
-                for i in 1..lhs.coords.len() {
-                    for j in 1..rhs.coords.len() {
-                        let intersections = segment_intersection_points(
-                            &lhs.coords[i - 1],
-                            &lhs.coords[i],
-                            &rhs.coords[j - 1],
-                            &rhs.coords[j],
-                            eps,
-                        );
-                        for point in intersections {
-                            let key_xy = quantize_coord_key(&point, eps);
-                            let key = (key_xy.0, key_xy.1, lhs.source_index, rhs.source_index);
-                            if !seen.insert(key) {
-                                continue;
+                                let input_attrs = input.features[lhs.source_index].attributes.as_slice();
+                                let overlay_attrs = overlay.features[rhs.source_index].attributes.as_slice();
+                                let mut attrs = Vec::<wbvector::FieldValue>::new();
+                                attrs.push(wbvector::FieldValue::Integer(
+                                    input.features[lhs.source_index].fid.max(1) as i64,
+                                ));
+                                attrs.push(wbvector::FieldValue::Integer(
+                                    overlay.features[rhs.source_index].fid.max(1) as i64,
+                                ));
+                                attrs.extend(merged_overlay_attributes(
+                                    Some(input_attrs),
+                                    Some(overlay_attrs),
+                                    &input_mapping,
+                                    &overlay_mapping,
+                                    merged_schema.len(),
+                                ));
+
+                                line_hits.push((point, attrs));
                             }
-
-                            let input_attrs = input.features[lhs.source_index].attributes.as_slice();
-                            let overlay_attrs = overlay.features[rhs.source_index].attributes.as_slice();
-                            let mut attrs = Vec::<wbvector::FieldValue>::new();
-                            attrs.push(wbvector::FieldValue::Integer(
-                                input.features[lhs.source_index].fid.max(1) as i64,
-                            ));
-                            attrs.push(wbvector::FieldValue::Integer(
-                                overlay.features[rhs.source_index].fid.max(1) as i64,
-                            ));
-                            attrs.extend(merged_overlay_attributes(
-                                Some(input_attrs),
-                                Some(overlay_attrs),
-                                &input_mapping,
-                                &overlay_mapping,
-                                merged_schema.len(),
-                            ));
-
-                            output.push(wbvector::Feature {
-                                fid: next_fid,
-                                geometry: Some(wbvector::Geometry::Point(point)),
-                                attributes: attrs,
-                            });
-                            next_fid += 1;
                         }
                     }
                 }
-            }
+                line_hits
+            })
+            .collect();
 
+        let mut next_fid = 1u64;
+        for (line_idx, line_hits) in per_line_hits.into_iter().enumerate() {
+            for (point, attrs) in line_hits {
+                output.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry: Some(wbvector::Geometry::Point(point)),
+                    attributes: attrs,
+                });
+                next_fid += 1;
+            }
             ctx.progress
                 .progress((line_idx + 1) as f64 / total as f64);
         }
@@ -14673,20 +14795,24 @@ impl Tool for PolygonizeTool {
         let mut lines = Vec::<TopoLineString>::new();
         for layer in &layers {
             let linework = collect_layer_linework(layer, false)?;
-            for line in linework {
-                if line.coords.len() < 3 {
-                    continue;
-                }
-                let mut coords = line.coords.clone();
-                dedup_coords_eps(&mut coords, eps);
-                if coords.len() < 3 {
-                    continue;
-                }
-                if !coord_eq_eps(&coords[0], &coords[coords.len() - 1], eps) {
-                    continue;
-                }
-                lines.push(TopoLineString::new(coords.iter().map(to_topo_coord).collect()));
-            }
+            let layer_lines: Vec<TopoLineString> = linework
+                .par_iter()
+                .filter_map(|line| {
+                    if line.coords.len() < 3 {
+                        return None;
+                    }
+                    let mut coords = line.coords.clone();
+                    dedup_coords_eps(&mut coords, eps);
+                    if coords.len() < 3 {
+                        return None;
+                    }
+                    if !coord_eq_eps(&coords[0], &coords[coords.len() - 1], eps) {
+                        return None;
+                    }
+                    Some(TopoLineString::new(coords.iter().map(to_topo_coord).collect()))
+                })
+                .collect();
+            lines.extend(layer_lines);
         }
 
         let polygons = polygonize_closed_linestrings(&lines, eps);
@@ -14835,9 +14961,17 @@ impl Tool for SplitWithLinesTool {
         output.geom_type = Some(wbvector::GeometryType::LineString);
 
         let total = input_lines.len().max(1);
+        
+        // Parallel: split each line independently, collect results with source info
+        let split_results: Vec<Vec<Vec<wbvector::Coord>>> = input_lines
+            .par_iter()
+            .map(|line| split_lines_against_splitter(&line.coords, &split_lines, eps))
+            .collect();
+
+        // Sequential: assign FIDs deterministically and append to output
         let mut next_fid = 1u64;
-        for (line_idx, line) in input_lines.iter().enumerate() {
-            let pieces = split_lines_against_splitter(&line.coords, &split_lines, eps);
+        for (line_idx, pieces) in split_results.iter().enumerate() {
+            let line = &input_lines[line_idx];
             let parent_fid = input.features[line.source_index].fid.max(1) as i64;
 
             for piece in pieces {
@@ -14850,7 +14984,7 @@ impl Tool for SplitWithLinesTool {
 
                 output.push(wbvector::Feature {
                     fid: next_fid,
-                    geometry: Some(wbvector::Geometry::LineString(piece)),
+                    geometry: Some(wbvector::Geometry::LineString(piece.clone())),
                     attributes: attrs,
                 });
                 next_fid += 1;
@@ -15280,27 +15414,36 @@ impl Tool for HoleProportionTool {
             output.schema = schema;
         }
         let total = output.features.len().max(1);
-        for (i, feature) in output.features.iter_mut().enumerate() {
-            let ratio = if let Some(geom) = &feature.geometry {
-                match geom {
-                    wbvector::Geometry::Polygon { exterior, interiors } => {
-                        let hull = polygon_area(exterior.coords());
-                        let holes = interiors.iter().map(|r| polygon_area(r.coords())).sum::<f64>();
-                        if hull > 0.0 { holes / hull } else { -999.0 }
-                    }
-                    wbvector::Geometry::MultiPolygon(parts) => {
-                        let mut hull = 0.0;
-                        let mut holes = 0.0;
-                        for (ext, ints) in parts {
-                            hull += polygon_area(ext.coords());
-                            holes += ints.iter().map(|r| polygon_area(r.coords())).sum::<f64>();
+        
+        // Parallel: compute hole proportion for each feature
+        let ratios: Vec<f64> = output.features
+            .par_iter()
+            .map(|feature| {
+                if let Some(geom) = &feature.geometry {
+                    match geom {
+                        wbvector::Geometry::Polygon { exterior, interiors } => {
+                            let hull = polygon_area(exterior.coords());
+                            let holes = interiors.iter().map(|r| polygon_area(r.coords())).sum::<f64>();
+                            if hull > 0.0 { holes / hull } else { -999.0 }
                         }
-                        if hull > 0.0 { holes / hull } else { -999.0 }
+                        wbvector::Geometry::MultiPolygon(parts) => {
+                            let mut hull = 0.0;
+                            let mut holes = 0.0;
+                            for (ext, ints) in parts {
+                                hull += polygon_area(ext.coords());
+                                holes += ints.iter().map(|r| polygon_area(r.coords())).sum::<f64>();
+                            }
+                            if hull > 0.0 { holes / hull } else { -999.0 }
+                        }
+                        _ => -999.0,
                     }
-                    _ => -999.0,
-                }
-            } else { -999.0 };
-            feature.attributes.push(wbvector::FieldValue::Float(ratio));
+                } else { -999.0 }
+            })
+            .collect();
+        
+        // Sequential: append values deterministically
+        for (i, ratio) in ratios.iter().enumerate() {
+            output.features[i].attributes.push(wbvector::FieldValue::Float(*ratio));
             coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
@@ -15362,13 +15505,21 @@ impl Tool for PatchOrientationTool {
             output.schema = schema;
         }
         let total = output.features.len().max(1);
-        for (i, feature) in output.features.iter_mut().enumerate() {
-            let orient = feature
-                .geometry
-                .as_ref()
-                .and_then(feature_orientation_deg_from_rma)
-                .unwrap_or(-999.0);
-            feature.attributes.push(wbvector::FieldValue::Float(orient));
+        let orient_values: Vec<f64> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                feature
+                    .geometry
+                    .as_ref()
+                    .and_then(feature_orientation_deg_from_rma)
+                    .unwrap_or(-999.0)
+            })
+            .collect();
+        for (i, orient) in orient_values.iter().enumerate() {
+            output.features[i]
+                .attributes
+                .push(wbvector::FieldValue::Float(*orient));
             coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
@@ -15430,13 +15581,27 @@ impl Tool for PerimeterAreaRatioTool {
             output.schema = schema;
         }
         let total = output.features.len().max(1);
-        for (i, feature) in output.features.iter_mut().enumerate() {
-            let value = if let Some(geom) = &feature.geometry {
-                let perimeter = get_polygon_perimeter(geom).unwrap_or(0.0);
-                let area = get_polygon_area(geom).unwrap_or(0.0);
-                if area > 0.0 { perimeter / area } else { -999.0 }
-            } else { -999.0 };
-            feature.attributes.push(wbvector::FieldValue::Float(value));
+        let values: Vec<f64> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                if let Some(geom) = &feature.geometry {
+                    let perimeter = get_polygon_perimeter(geom).unwrap_or(0.0);
+                    let area = get_polygon_area(geom).unwrap_or(0.0);
+                    if area > 0.0 {
+                        perimeter / area
+                    } else {
+                        -999.0
+                    }
+                } else {
+                    -999.0
+                }
+            })
+            .collect();
+        for (i, value) in values.iter().enumerate() {
+            output.features[i]
+                .attributes
+                .push(wbvector::FieldValue::Float(*value));
             coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
         let locator = write_vector_output(&output, output_path.trim())?;
@@ -15498,34 +15663,44 @@ impl Tool for RelatedCircumscribingCircleTool {
             output.schema = schema;
         }
         let total = output.features.len().max(1);
-        for (i, feature) in output.features.iter_mut().enumerate() {
-            let value = if let Some(geom) = &feature.geometry {
-                let mut area = 0.0;
-                let mut circ_area = 0.0;
-                match geom {
-                    wbvector::Geometry::Polygon { exterior, interiors } => {
-                        area += polygon_area(exterior.coords());
-                        circ_area += std::f64::consts::PI * smallest_enclosing_circle_radius(exterior.coords()).powi(2);
-                        for hole in interiors {
-                            area -= polygon_area(hole.coords());
-                        }
-                    }
-                    wbvector::Geometry::MultiPolygon(parts) => {
-                        for (ext, holes) in parts {
-                            area += polygon_area(ext.coords());
-                            circ_area += std::f64::consts::PI * smallest_enclosing_circle_radius(ext.coords()).powi(2);
-                            for hole in holes {
+        
+        // Parallel: compute RC_CIRCLE values for each feature
+        let rc_circle_values: Vec<f64> = output.features
+            .par_iter()
+            .map(|feature| {
+                if let Some(geom) = &feature.geometry {
+                    let mut area = 0.0;
+                    let mut circ_area = 0.0;
+                    match geom {
+                        wbvector::Geometry::Polygon { exterior, interiors } => {
+                            area += polygon_area(exterior.coords());
+                            circ_area += std::f64::consts::PI * smallest_enclosing_circle_radius(exterior.coords()).powi(2);
+                            for hole in interiors {
                                 area -= polygon_area(hole.coords());
                             }
                         }
+                        wbvector::Geometry::MultiPolygon(parts) => {
+                            for (ext, holes) in parts {
+                                area += polygon_area(ext.coords());
+                                circ_area += std::f64::consts::PI * smallest_enclosing_circle_radius(ext.coords()).powi(2);
+                                for hole in holes {
+                                    area -= polygon_area(hole.coords());
+                                }
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                }
-                if circ_area > 0.0 { 1.0 - area / circ_area } else { -999.0 }
-            } else { -999.0 };
-            feature.attributes.push(wbvector::FieldValue::Float(value));
+                    if circ_area > 0.0 { 1.0 - area / circ_area } else { -999.0 }
+                } else { -999.0 }
+            })
+            .collect();
+        
+        // Sequential: append values deterministically
+        for (i, value) in rc_circle_values.iter().enumerate() {
+            output.features[i].attributes.push(wbvector::FieldValue::Float(*value));
             coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
+        
         let locator = write_vector_output(&output, output_path.trim())?;
         Ok(build_vector_result(locator))
     }
@@ -15587,23 +15762,30 @@ impl Tool for DeviationFromRegionalDirectionTool {
         let output_path = parse_vector_path_arg(args, "output")?;
         let elongation_threshold = args.get("elongation_threshold").and_then(|v| v.as_f64()).unwrap_or(0.75);
 
-        let mut sum_sin = 0.0;
-        let mut sum_cos = 0.0;
-        let mut used = 0usize;
-        for feature in &input.features {
-            let Some(geom) = feature.geometry.as_ref() else { continue; };
-            let Some(orient_deg) = feature_orientation_deg_from_rma(geom) else { continue; };
-            let Some((elongation, long_axis)) = feature_elongation_for_weight(geom) else { continue; };
-            let weight = if elongation >= elongation_threshold {
-                used += 1;
-                long_axis * elongation
-            } else {
-                0.0
-            };
-            let angle = (90.0 - orient_deg).to_radians();
-            sum_sin += (angle * 2.0).sin() * weight;
-            sum_cos += (angle * 2.0).cos() * weight;
-        }
+        let (sum_sin, sum_cos, used) = input
+            .features
+            .par_iter()
+            .fold(
+                || (0.0, 0.0, 0usize),
+                |(sum_sin, sum_cos, used), feature| {
+                    let Some(geom) = feature.geometry.as_ref() else { return (sum_sin, sum_cos, used); };
+                    let Some(orient_deg) = feature_orientation_deg_from_rma(geom) else { return (sum_sin, sum_cos, used); };
+                    let Some((elongation, long_axis)) = feature_elongation_for_weight(geom) else { return (sum_sin, sum_cos, used); };
+                    let (weight, new_used) = if elongation >= elongation_threshold {
+                        (long_axis * elongation, used + 1)
+                    } else {
+                        (0.0, used)
+                    };
+                    let angle = (90.0 - orient_deg).to_radians();
+                    (sum_sin + (angle * 2.0).sin() * weight, sum_cos + (angle * 2.0).cos() * weight, new_used)
+                },
+            )
+            .reduce(
+                || (0.0, 0.0, 0usize),
+                |(sum_sin_a, sum_cos_a, used_a), (sum_sin_b, sum_cos_b, used_b)| {
+                    (sum_sin_a + sum_sin_b, sum_cos_a + sum_cos_b, used_a + used_b)
+                },
+            );
 
         if used == 0 {
             return Err(ToolError::Validation("no polygons met elongation_threshold for regional direction".to_string()));
@@ -15614,6 +15796,29 @@ impl Tool for DeviationFromRegionalDirectionTool {
             regional_angle += 180.0;
         }
 
+        let per_feature_devs: Vec<Option<f64>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                if let Some(geom) = &feature.geometry {
+                    if let Some(orient) = feature_orientation_deg_from_rma(geom) {
+                        let mut d = orient - regional_angle;
+                        if d < 0.0 {
+                            d += 180.0;
+                        }
+                        if d > 90.0 {
+                            d = 180.0 - d;
+                        }
+                        Some(d)
+                    } else {
+                        Some(-999.0)
+                    }
+                } else {
+                    Some(-999.0)
+                }
+            })
+            .collect();
+
         let mut output = input.clone();
         let mut schema = output.schema.clone();
         if schema.field_index("DEV_DIR").is_none() {
@@ -15622,24 +15827,10 @@ impl Tool for DeviationFromRegionalDirectionTool {
         }
 
         let total = output.features.len().max(1);
-        for (i, feature) in output.features.iter_mut().enumerate() {
-            let value = if let Some(geom) = &feature.geometry {
-                if let Some(orient) = feature_orientation_deg_from_rma(geom) {
-                    let mut d = orient - regional_angle;
-                    if d < 0.0 {
-                        d += 180.0;
-                    }
-                    if d > 90.0 {
-                        d = 180.0 - d;
-                    }
-                    d
-                } else {
-                    -999.0
-                }
-            } else {
-                -999.0
-            };
-            feature.attributes.push(wbvector::FieldValue::Float(value));
+        for (i, (feature, value)) in output.features.iter_mut().zip(per_feature_devs.iter()).enumerate() {
+            if let Some(v) = value {
+                feature.attributes.push(wbvector::FieldValue::Float(*v));
+            }
             coalescer.emit_unit_fraction(ctx.progress, (i + 1) as f64 / total as f64);
         }
 
@@ -15834,31 +16025,44 @@ impl Tool for EdgeProportionTool {
         let dy: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
 
         ctx.progress.info("running edge proportion");
-        let mut num_cells = vec![0usize; bins];
-        let mut num_edge = vec![0usize; bins];
-
-        for row in 0..rows {
-            for col in 0..cols {
-                let z = input.get(0, row as isize, col as isize);
-                if !is_patch_value(z, nodata) {
-                    continue;
-                }
-                let Some(bin) = patch_bin_index(z, min_val, bins) else { continue; };
-                num_cells[bin] += 1;
-                let mut is_edge = false;
-                for n in 0..8 {
-                    let zn = input.get(0, row as isize + dy[n], col as isize + dx[n]);
-                    if zn != z {
-                        is_edge = true;
-                        break;
+        let (num_cells, num_edge) = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || (vec![0usize; bins], vec![0usize; bins]),
+                |(mut local_cells, mut local_edge), cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let z = input.get(0, row as isize, col as isize);
+                    if !is_patch_value(z, nodata) {
+                        return (local_cells, local_edge);
                     }
-                }
-                if is_edge {
-                    num_edge[bin] += 1;
-                }
-            }
-            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.5);
-        }
+                    let Some(bin) = patch_bin_index(z, min_val, bins) else { return (local_cells, local_edge); };
+                    local_cells[bin] += 1;
+                    let mut is_edge = false;
+                    for n in 0..8 {
+                        let zn = input.get(0, row as isize + dy[n], col as isize + dx[n]);
+                        if zn != z {
+                            is_edge = true;
+                            break;
+                        }
+                    }
+                    if is_edge {
+                        local_edge[bin] += 1;
+                    }
+                    (local_cells, local_edge)
+                },
+            )
+            .reduce(
+                || (vec![0usize; bins], vec![0usize; bins]),
+                |(mut cells_a, mut edge_a), (cells_b, edge_b)| {
+                    for idx in 0..bins {
+                        cells_a[idx] += cells_b[idx];
+                        edge_a[idx] += edge_b[idx];
+                    }
+                    (cells_a, edge_a)
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.5);
 
         let mut edge_prop = vec![nodata; bins];
         for bin in 0..bins {
@@ -16582,46 +16786,49 @@ impl Tool for ShapeComplexityIndexRasterTool {
         }
 
         ctx.progress.info("running shape complexity index raster");
-        let mut freq = vec![0usize; bins];
-        let mut min_row = vec![isize::MAX; bins];
-        let mut max_row = vec![isize::MIN; bins];
-        let mut min_col = vec![isize::MAX; bins];
-        let mut max_col = vec![isize::MIN; bins];
-
-        for row in 0..rows {
-            for col in 0..cols {
-                let val = input.get(0, row as isize, col as isize);
-                if !is_patch_value(val, nodata) || val < min_val || val > max_val {
-                    continue;
-                }
-                let Some(bin) = patch_bin_index(val, min_val, bins) else { continue; };
-                let left = input.get(0, row as isize, col as isize - 1);
-                if val != left {
-                    freq[bin] += 1;
-                }
-                min_row[bin] = min_row[bin].min(row as isize);
-                max_row[bin] = max_row[bin].max(row as isize);
-                min_col[bin] = min_col[bin].min(col as isize);
-                max_col[bin] = max_col[bin].max(col as isize);
-            }
-            coalescer.emit_unit_fraction(ctx.progress, (row + 1) as f64 / rows.max(1) as f64 * 0.4);
-        }
-
-        for col in 0..cols {
-            for row in 0..rows {
-                let val = input.get(0, row as isize, col as isize);
-                if !is_patch_value(val, nodata) || val < min_val || val > max_val {
-                    continue;
-                }
-                let up = input.get(0, row as isize - 1, col as isize);
-                if val != up {
-                    if let Some(bin) = patch_bin_index(val, min_val, bins) {
-                        freq[bin] += 1;
+        let (freq, min_row, max_row, min_col, max_col) = (0..rows * cols)
+            .into_par_iter()
+            .fold(
+                || (vec![0usize; bins], vec![isize::MAX; bins], vec![isize::MIN; bins], vec![isize::MAX; bins], vec![isize::MIN; bins]),
+                |(mut local_freq, mut local_min_row, mut local_max_row, mut local_min_col, mut local_max_col), cell_idx| {
+                    let row = cell_idx / cols;
+                    let col = cell_idx % cols;
+                    let val = input.get(0, row as isize, col as isize);
+                    if !is_patch_value(val, nodata) || val < min_val || val > max_val {
+                        return (local_freq, local_min_row, local_max_row, local_min_col, local_max_col);
                     }
-                }
-            }
-            coalescer.emit_unit_fraction(ctx.progress, 0.4 + (col + 1) as f64 / cols.max(1) as f64 * 0.2);
-        }
+                    let Some(bin) = patch_bin_index(val, min_val, bins) else {
+                        return (local_freq, local_min_row, local_max_row, local_min_col, local_max_col);
+                    };
+                    let left = if col > 0 { input.get(0, row as isize, col as isize - 1) } else { nodata };
+                    if val != left {
+                        local_freq[bin] += 1;
+                    }
+                    let up = if row > 0 { input.get(0, row as isize - 1, col as isize) } else { nodata };
+                    if val != up {
+                        local_freq[bin] += 1;
+                    }
+                    local_min_row[bin] = local_min_row[bin].min(row as isize);
+                    local_max_row[bin] = local_max_row[bin].max(row as isize);
+                    local_min_col[bin] = local_min_col[bin].min(col as isize);
+                    local_max_col[bin] = local_max_col[bin].max(col as isize);
+                    (local_freq, local_min_row, local_max_row, local_min_col, local_max_col)
+                },
+            )
+            .reduce(
+                || (vec![0usize; bins], vec![isize::MAX; bins], vec![isize::MIN; bins], vec![isize::MAX; bins], vec![isize::MIN; bins]),
+                |(mut f_a, mut mr_a, mut xr_a, mut mc_a, mut xc_a), (f_b, mr_b, xr_b, mc_b, xc_b)| {
+                    for idx in 0..bins {
+                        f_a[idx] += f_b[idx];
+                        mr_a[idx] = mr_a[idx].min(mr_b[idx]);
+                        xr_a[idx] = xr_a[idx].max(xr_b[idx]);
+                        mc_a[idx] = mc_a[idx].min(mc_b[idx]);
+                        xc_a[idx] = xc_a[idx].max(xc_b[idx]);
+                    }
+                    (f_a, mr_a, xr_a, mc_a, xc_a)
+                },
+            );
+        coalescer.emit_unit_fraction(ctx.progress, 0.6);
 
         let mut idx_vals = vec![0.0f64; bins];
         for bin in 1..bins {
@@ -16728,20 +16935,21 @@ impl Tool for BoundaryShapeComplexityTool {
         }
 
         ctx.progress.info("running boundary shape complexity");
-        let mut skeleton = vec![0.0f64; rows * cols];
-        for row in 0..rows {
-            for col in 0..cols {
+        let mut skeleton: Vec<f64> = (0..rows * cols)
+            .into_par_iter()
+            .map(|cell_idx| {
+                let row = cell_idx / cols;
+                let col = cell_idx % cols;
                 let z = input.get(0, row as isize, col as isize);
-                let idx = row * cols + col;
                 if is_patch_value(z, nodata) {
-                    skeleton[idx] = 1.0;
+                    1.0
                 } else if z == 0.0 {
-                    skeleton[idx] = 0.0;
+                    0.0
                 } else {
-                    skeleton[idx] = -999.0;
+                    -999.0
                 }
-            }
-        }
+            })
+            .collect();
 
         let dx: [isize; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
         let dy: [isize; 8] = [-1, 0, 1, 1, 1, 0, -1, -1];
@@ -17575,19 +17783,21 @@ impl Tool for TravellingSalesmanProblemTool {
 
         ctx.progress.info("running travelling salesman problem");
 
-        // Determine if using geographic projection by checking coordinate bounds
-        let is_geographic = {
-            let mut has_coords = false;
-            let mut min_x = f64::INFINITY;
-            let mut max_x = f64::NEG_INFINITY;
-            let mut min_y = f64::INFINITY;
-            let mut max_y = f64::NEG_INFINITY;
-            
-            for feature in &input.features {
+        // Parallel preprocessing: extract per-feature coordinates and local bounds.
+        let feature_coords: Vec<(Vec<(f64, f64)>, Option<(f64, f64, f64, f64)>)> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let mut coords_out = Vec::<(f64, f64)>::new();
+                let mut min_x = f64::INFINITY;
+                let mut max_x = f64::NEG_INFINITY;
+                let mut min_y = f64::INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+
                 if let Some(geometry) = &feature.geometry {
                     match geometry {
                         wbvector::Geometry::Point(coord) => {
-                            has_coords = true;
+                            coords_out.push((coord.x, coord.y));
                             min_x = min_x.min(coord.x);
                             max_x = max_x.max(coord.x);
                             min_y = min_y.min(coord.y);
@@ -17595,7 +17805,7 @@ impl Tool for TravellingSalesmanProblemTool {
                         }
                         wbvector::Geometry::MultiPoint(coords) => {
                             for coord in coords {
-                                has_coords = true;
+                                coords_out.push((coord.x, coord.y));
                                 min_x = min_x.min(coord.x);
                                 max_x = max_x.max(coord.x);
                                 min_y = min_y.min(coord.y);
@@ -17605,26 +17815,42 @@ impl Tool for TravellingSalesmanProblemTool {
                         _ => {}
                     }
                 }
-            }
-            
-            has_coords && min_x.abs() <= 180.0 && max_x.abs() <= 180.0 && min_y.abs() <= 90.0 && max_y.abs() <= 90.0
-        };
 
-        // Extract points from input layer
+                let bounds = if coords_out.is_empty() {
+                    None
+                } else {
+                    Some((min_x, max_x, min_y, max_y))
+                };
+
+                (coords_out, bounds)
+            })
+            .collect();
+
+        let mut has_coords = false;
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for (_, bounds) in &feature_coords {
+            if let Some((bx0, bx1, by0, by1)) = bounds {
+                has_coords = true;
+                min_x = min_x.min(*bx0);
+                max_x = max_x.max(*bx1);
+                min_y = min_y.min(*by0);
+                max_y = max_y.max(*by1);
+            }
+        }
+        let is_geographic = has_coords
+            && min_x.abs() <= 180.0
+            && max_x.abs() <= 180.0
+            && min_y.abs() <= 90.0
+            && max_y.abs() <= 90.0;
+
+        // Extract points from input layer preserving deterministic feature order.
         let mut points = Vec::new();
-        for feature in &input.features {
-            if let Some(geometry) = &feature.geometry {
-                match geometry {
-                    wbvector::Geometry::Point(coord) => {
-                        points.push(TspPoint::new(coord.x, coord.y, is_geographic));
-                    }
-                    wbvector::Geometry::MultiPoint(coords) => {
-                        for coord in coords {
-                            points.push(TspPoint::new(coord.x, coord.y, is_geographic));
-                        }
-                    }
-                    _ => {}
-                }
+        for (coords, _) in feature_coords {
+            for (x, y) in coords {
+                points.push(TspPoint::new(x, y, is_geographic));
             }
         }
 
@@ -17911,45 +18137,53 @@ impl Tool for ConstructVectorTinTool {
             )
         };
 
-        let mut points = Vec::<TopoCoord>::new();
-        let mut z_values = Vec::<f64>::new();
-
         let total_features = input.features.len().max(1);
-        for (idx, feature) in input.features.iter().enumerate() {
-            let Some(geometry) = feature.geometry.as_ref() else {
-                coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
-                continue;
-            };
+        let per_feature_points: Vec<Result<Vec<(TopoCoord, f64)>, ToolError>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return Ok(Vec::new());
+                };
 
-            let z_value = if let Some(field_idx) = field_idx {
-                feature
-                    .attributes
-                    .get(field_idx)
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(feature.fid as f64)
-            } else {
-                feature.fid as f64
-            };
+                let z_value = if let Some(field_idx) = field_idx {
+                    feature
+                        .attributes
+                        .get(field_idx)
+                        .and_then(|value| value.as_f64())
+                        .unwrap_or(feature.fid as f64)
+                } else {
+                    feature.fid as f64
+                };
 
-            match geometry {
-                wbvector::Geometry::Point(coord) => {
-                    points.push(TopoCoord::xy(coord.x, coord.y));
-                    z_values.push(z_value);
-                }
-                wbvector::Geometry::MultiPoint(coords) => {
-                    for coord in coords {
-                        points.push(TopoCoord::xy(coord.x, coord.y));
-                        z_values.push(z_value);
+                let mut local_points = Vec::<(TopoCoord, f64)>::new();
+                match geometry {
+                    wbvector::Geometry::Point(coord) => {
+                        local_points.push((TopoCoord::xy(coord.x, coord.y), z_value));
+                    }
+                    wbvector::Geometry::MultiPoint(coords) => {
+                        for coord in coords {
+                            local_points.push((TopoCoord::xy(coord.x, coord.y), z_value));
+                        }
+                    }
+                    _ => {
+                        return Err(ToolError::Validation(
+                            "input_points vector data must contain only point geometries"
+                                .to_string(),
+                        ));
                     }
                 }
-                _ => {
-                    return Err(ToolError::Validation(
-                        "input_points vector data must contain only point geometries"
-                            .to_string(),
-                    ));
-                }
-            }
+                Ok(local_points)
+            })
+            .collect();
 
+        let mut points = Vec::<TopoCoord>::new();
+        let mut z_values = Vec::<f64>::new();
+        for (idx, feature_points) in per_feature_points.into_iter().enumerate() {
+            for (point, z) in feature_points? {
+                points.push(point);
+                z_values.push(z);
+            }
             coalescer.emit_unit_fraction(ctx.progress, (idx + 1) as f64 / total_features as f64);
         }
 
@@ -17974,34 +18208,44 @@ impl Tool for ConstructVectorTinTool {
             .add_field(wbvector::FieldDef::new("FID", wbvector::FieldType::Integer));
 
         let total_triangles = triangulation.triangles.len().max(1);
-        let mut next_fid: u64 = 1;
-        for (tri_idx, tri) in triangulation.triangles.iter().enumerate() {
-            let p1 = tri[0];
-            let p2 = tri[1];
-            let p3 = tri[2];
+        let triangle_rings: Vec<Option<Vec<wbvector::Coord>>> = triangulation
+            .triangles
+            .par_iter()
+            .map(|tri| {
+                let p1 = tri[0];
+                let p2 = tri[1];
+                let p3 = tri[2];
 
-            let c1 = &points[p1];
-            let c2 = &points[p2];
-            let c3 = &points[p3];
-            let max_edge_sq = max_distance_squared(
-                (c1.x, c1.y),
-                (c2.x, c2.y),
-                (c3.x, c3.y),
-                z_values[p1],
-                z_values[p2],
-                z_values[p3],
-            );
-            if max_edge_sq > max_edge_len_sq {
+                let c1 = &points[p1];
+                let c2 = &points[p2];
+                let c3 = &points[p3];
+                let max_edge_sq = max_distance_squared(
+                    (c1.x, c1.y),
+                    (c2.x, c2.y),
+                    (c3.x, c3.y),
+                    z_values[p1],
+                    z_values[p2],
+                    z_values[p3],
+                );
+                if max_edge_sq > max_edge_len_sq {
+                    return None;
+                }
+
+                Some(vec![
+                    wbvector::Coord::xy(c1.x, c1.y),
+                    wbvector::Coord::xy(c2.x, c2.y),
+                    wbvector::Coord::xy(c3.x, c3.y),
+                    wbvector::Coord::xy(c1.x, c1.y),
+                ])
+            })
+            .collect();
+
+        let mut next_fid: u64 = 1;
+        for (tri_idx, ring) in triangle_rings.into_iter().enumerate() {
+            let Some(ring) = ring else {
                 coalescer.emit_unit_fraction(ctx.progress, (tri_idx + 1) as f64 / total_triangles as f64);
                 continue;
-            }
-
-            let ring = vec![
-                wbvector::Coord::xy(c1.x, c1.y),
-                wbvector::Coord::xy(c2.x, c2.y),
-                wbvector::Coord::xy(c3.x, c3.y),
-                wbvector::Coord::xy(c1.x, c1.y),
-            ];
+            };
             output.push(wbvector::Feature {
                 fid: next_fid,
                 geometry: Some(wbvector::Geometry::polygon(ring, vec![])),
@@ -18403,15 +18647,17 @@ fn wb_geometry_to_topo(geometry: &wbvector::Geometry) -> Result<TopoGeometry, To
 }
 
 fn collect_feature_topo_geometries(layer: &wbvector::Layer) -> Result<Vec<Option<TopoGeometry>>, ToolError> {
-    let mut out = Vec::with_capacity(layer.features.len());
-    for feature in &layer.features {
-        if let Some(geometry) = feature.geometry.as_ref() {
-            out.push(Some(wb_geometry_to_topo(geometry)?));
-        } else {
-            out.push(None);
-        }
-    }
-    Ok(out)
+    layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            if let Some(geometry) = feature.geometry.as_ref() {
+                Ok(Some(wb_geometry_to_topo(geometry)?))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect()
 }
 
 fn geometry_matches_predicate(
@@ -20487,14 +20733,21 @@ impl Tool for ConcaveHullTool {
         let epsilon = parse_optional_f64_arg(args, "epsilon").unwrap_or(1.0e-9);
         let output_path = parse_vector_path_arg(args, "output")?;
 
+        let feature_coords: Vec<Vec<TopoCoord>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return Vec::<TopoCoord>::new();
+                };
+                let mut points = Vec::<wbvector::Coord>::new();
+                collect_points_from_geometry(geometry, &mut points);
+                points.iter().map(to_topo_coord).collect()
+            })
+            .collect();
         let mut coords = Vec::<TopoCoord>::new();
-        for feature in &input.features {
-            let Some(geometry) = feature.geometry.as_ref() else {
-                continue;
-            };
-            let mut points = Vec::<wbvector::Coord>::new();
-            collect_points_from_geometry(geometry, &mut points);
-            coords.extend(points.iter().map(to_topo_coord));
+        for mut part in feature_coords {
+            coords.append(&mut part);
         }
 
         if coords.len() < 3 {
@@ -20640,14 +20893,22 @@ impl Tool for RandomPointsInPolygonTool {
         let _seed = args.get("seed").and_then(|v| v.as_u64());
         let output_path = parse_vector_path_arg(args, "output")?;
 
+        let extracted_per_feature: Vec<Result<Vec<TopoPolygon>, ToolError>> = input
+            .features
+            .par_iter()
+            .map(|feature| {
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return Ok(Vec::<TopoPolygon>::new());
+                };
+                let mut extracted = Vec::<TopoPolygon>::new();
+                extract_polygons_from_geometry(geometry, &mut extracted)?;
+                Ok(extracted)
+            })
+            .collect();
+
         let mut polys = Vec::<TopoPolygon>::new();
-        for feature in &input.features {
-            let Some(geometry) = feature.geometry.as_ref() else {
-                continue;
-            };
-            let mut extracted = Vec::<TopoPolygon>::new();
-            extract_polygons_from_geometry(geometry, &mut extracted)?;
-            polys.extend(extracted);
+        for extracted in extracted_per_feature {
+            polys.extend(extracted?);
         }
 
         if polys.is_empty() {
@@ -20656,15 +20917,12 @@ impl Tool for RandomPointsInPolygonTool {
             ));
         }
 
-        let mut envelopes = Vec::<TopoEnvelope>::new();
-        let mut prepared = Vec::<PreparedPolygon>::new();
-        for poly in &polys {
-            let Some(env) = poly.envelope() else {
-                continue;
-            };
-            envelopes.push(env);
-            prepared.push(PreparedPolygon::new(poly.clone()));
-        }
+        let prepared_pairs: Vec<(TopoEnvelope, PreparedPolygon)> = polys
+            .par_iter()
+            .filter_map(|poly| poly.envelope().map(|env| (env, PreparedPolygon::new(poly.clone()))))
+            .collect();
+        let (envelopes, prepared): (Vec<TopoEnvelope>, Vec<PreparedPolygon>) =
+            prepared_pairs.into_iter().unzip();
 
         if envelopes.is_empty() {
             return Err(ToolError::Execution(
@@ -22087,77 +22345,93 @@ impl Tool for RouteCalibrateTool {
             output.schema.field_index(count_field)
         }).ok_or_else(|| ToolError::Execution("failed creating control_count output field".to_string()))?;
 
-        for feature in output.features.iter_mut() {
-            let route_key = feature_join_key(feature, route_id_idx);
-            let Some(geometry) = feature.geometry.clone() else {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_geometry".to_string()));
-                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
-                continue;
-            };
-            if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("not_line_geometry".to_string()));
-                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
-                continue;
-            }
+        let calibration_results: Vec<(Option<f64>, Option<f64>, String, i64)> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                let route_key = feature_join_key(feature, route_id_idx);
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return (None, None, "missing_geometry".to_string(), 0);
+                };
+                if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+                    return (None, None, "not_line_geometry".to_string(), 0);
+                }
 
-            let controls = controls_by_route.get(route_key.as_str()).cloned().unwrap_or_default();
-            if controls.is_empty() {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("no_controls".to_string()));
-                set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(0));
-                continue;
-            }
+                let controls = controls_by_route.get(route_key.as_str()).cloned().unwrap_or_default();
+                if controls.is_empty() {
+                    return (None, None, "no_controls".to_string(), 0);
+                }
 
-            let mut projected = Vec::<(f64, f64)>::new();
-            for (control_measure, control_point) in &controls {
-                if let Some((distance_along, offset_dist, _)) = locate_point_along_route_geometry(control_point, &geometry) {
-                    if offset_dist <= snap_tolerance {
-                        projected.push((distance_along, *control_measure));
+                let mut projected = Vec::<(f64, f64)>::new();
+                for (control_measure, control_point) in &controls {
+                    if let Some((distance_along, offset_dist, _)) =
+                        locate_point_along_route_geometry(control_point, geometry)
+                    {
+                        if offset_dist <= snap_tolerance {
+                            projected.push((distance_along, *control_measure));
+                        }
                     }
                 }
-            }
-            projected.sort_by(|a, b| a.0.total_cmp(&b.0));
+                projected.sort_by(|a, b| a.0.total_cmp(&b.0));
 
-            set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(projected.len() as i64));
-
-            if projected.is_empty() {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("no_snapped_controls".to_string()));
-                continue;
-            }
-
-            let mut monotonic = true;
-            for pair in projected.windows(2) {
-                if pair[1].1 < pair[0].1 - 1.0e-12 {
-                    monotonic = false;
-                    break;
+                let projected_count = projected.len() as i64;
+                if projected.is_empty() {
+                    return (None, None, "no_snapped_controls".to_string(), projected_count);
                 }
-            }
-            if !monotonic {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("non_monotonic_controls".to_string()));
-                continue;
-            }
 
-            let route_length = route_geometry_length(&geometry);
-            let (from_measure, to_measure, status) = if projected.len() == 1 {
-                let (d, m) = projected[0];
-                let from = m - d;
-                (from, from + route_length, "single_control_assumed_unit_scale")
-            } else {
+                let mut monotonic = true;
+                for pair in projected.windows(2) {
+                    if pair[1].1 < pair[0].1 - 1.0e-12 {
+                        monotonic = false;
+                        break;
+                    }
+                }
+                if !monotonic {
+                    return (None, None, "non_monotonic_controls".to_string(), projected_count);
+                }
+
+                let route_length = route_geometry_length(geometry);
+                if projected.len() == 1 {
+                    let (d, m) = projected[0];
+                    let from = m - d;
+                    return (
+                        Some(from),
+                        Some(from + route_length),
+                        "single_control_assumed_unit_scale".to_string(),
+                        projected_count,
+                    );
+                }
+
                 let (d0, m0) = projected[0];
                 let (d1, m1) = projected[projected.len() - 1];
                 if (d1 - d0).abs() <= 1.0e-12 {
-                    (0.0, 0.0, "degenerate_control_positions")
+                    (None, None, "degenerate_control_positions".to_string(), projected_count)
                 } else {
                     let slope = (m1 - m0) / (d1 - d0);
                     let intercept = m0 - slope * d0;
-                    (intercept, intercept + slope * route_length, "calibrated")
+                    (
+                        Some(intercept),
+                        Some(intercept + slope * route_length),
+                        "calibrated".to_string(),
+                        projected_count,
+                    )
                 }
-            };
+            })
+            .collect();
 
-            if status == "calibrated" || status == "single_control_assumed_unit_scale" {
-                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from_measure));
-                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to_measure));
+        for (feature, (from_measure, to_measure, status, control_count)) in output
+            .features
+            .iter_mut()
+            .zip(calibration_results.into_iter())
+        {
+            set_feature_attr(feature, count_idx, wbvector::FieldValue::Integer(control_count));
+            if let Some(from) = from_measure {
+                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from));
             }
-            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text(status.to_string()));
+            if let Some(to) = to_measure {
+                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to));
+            }
+            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text(status));
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -22330,35 +22604,49 @@ impl Tool for RouteRecalibrateTool {
             output.schema.field_index(status_field)
         }).ok_or_else(|| ToolError::Execution("failed creating recalib_status output field".to_string()))?;
 
-        for feature in output.features.iter_mut() {
-            let key = feature_join_key(feature, edited_route_id_idx);
-            let Some((from_m, to_m, reference_len)) = reference.get(key.as_str()).cloned() else {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_reference".to_string()));
-                continue;
-            };
-            let Some(geometry) = feature.geometry.as_ref() else {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("missing_geometry".to_string()));
-                continue;
-            };
-            if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("not_line_geometry".to_string()));
-                continue;
-            }
+        let recalibration_results: Vec<(Option<f64>, Option<f64>, String)> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                let key = feature_join_key(feature, edited_route_id_idx);
+                let Some((from_m, to_m, reference_len)) = reference.get(key.as_str()).cloned() else {
+                    return (None, None, "missing_reference".to_string());
+                };
+                let Some(geometry) = feature.geometry.as_ref() else {
+                    return (None, None, "missing_geometry".to_string());
+                };
+                if !matches!(geometry, wbvector::Geometry::LineString(_) | wbvector::Geometry::MultiLineString(_)) {
+                    return (None, None, "not_line_geometry".to_string());
+                }
 
-            let edited_len = route_geometry_length(geometry);
-            if reference_len <= 1.0e-12 {
-                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from_m));
-                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to_m));
-                set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("recalibrated_zero_length_reference".to_string()));
-                continue;
-            }
+                let edited_len = route_geometry_length(geometry);
+                if reference_len <= 1.0e-12 {
+                    return (
+                        Some(from_m),
+                        Some(to_m),
+                        "recalibrated_zero_length_reference".to_string(),
+                    );
+                }
 
-            let scale = edited_len / reference_len;
-            let new_from = from_m;
-            let new_to = from_m + (to_m - from_m) * scale;
-            set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(new_from));
-            set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(new_to));
-            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text("recalibrated_scaled".to_string()));
+                let scale = edited_len / reference_len;
+                let new_from = from_m;
+                let new_to = from_m + (to_m - from_m) * scale;
+                (Some(new_from), Some(new_to), "recalibrated_scaled".to_string())
+            })
+            .collect();
+
+        for (feature, (from_value, to_value, status)) in output
+            .features
+            .iter_mut()
+            .zip(recalibration_results.into_iter())
+        {
+            if let Some(from_measure) = from_value {
+                set_feature_attr(feature, from_idx, wbvector::FieldValue::Float(from_measure));
+            }
+            if let Some(to_measure) = to_value {
+                set_feature_attr(feature, to_idx, wbvector::FieldValue::Float(to_measure));
+            }
+            set_feature_attr(feature, status_idx, wbvector::FieldValue::Text(status));
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -22527,70 +22815,99 @@ impl Tool for RouteEventSplitTool {
             output.schema.field_index("parent_fid")
         }).ok_or_else(|| ToolError::Execution("failed creating parent_fid field".to_string()))?;
 
+        let per_feature_splits: Result<Vec<Vec<wbvector::Feature>>, ToolError> = events
+            .features
+            .par_iter()
+            .map(|feature| {
+                let route_key = field_value_to_join_key(
+                    feature
+                        .attributes
+                        .get(event_route_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                );
+                if route_key.is_empty() {
+                    return Err(ToolError::Execution(format!(
+                        "event feature {} has empty route id",
+                        feature.fid
+                    )));
+                }
+                let from_m = field_value_to_f64(
+                    feature
+                        .attributes
+                        .get(from_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                )
+                .ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "event feature {} has invalid from measure",
+                        feature.fid
+                    ))
+                })?;
+                let to_m = field_value_to_f64(
+                    feature
+                        .attributes
+                        .get(to_idx)
+                        .unwrap_or(&wbvector::FieldValue::Null),
+                )
+                .ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "event feature {} has invalid to measure",
+                        feature.fid
+                    ))
+                })?;
+
+                let mut cuts = vec![from_m];
+                if let Some(boundaries_for_route) = boundary_map.get(route_key.as_str()) {
+                    if to_m >= from_m {
+                        for boundary in boundaries_for_route {
+                            if *boundary > from_m + 1.0e-12 && *boundary < to_m - 1.0e-12 {
+                                cuts.push(*boundary);
+                            }
+                        }
+                        cuts.sort_by(|a, b| a.total_cmp(b));
+                    } else {
+                        for boundary in boundaries_for_route {
+                            if *boundary > to_m + 1.0e-12 && *boundary < from_m - 1.0e-12 {
+                                cuts.push(*boundary);
+                            }
+                        }
+                        cuts.sort_by(|a, b| b.total_cmp(a));
+                    }
+                }
+                cuts.push(to_m);
+
+                let mut split_seq: i64 = 1;
+                let mut split_features = Vec::<wbvector::Feature>::new();
+                for pair in cuts.windows(2) {
+                    let segment_from = pair[0];
+                    let segment_to = pair[1];
+                    if (segment_to - segment_from).abs() < min_segment_length {
+                        continue;
+                    }
+
+                    let mut split_feature = feature.clone();
+                    split_feature.fid = 0;
+                    set_feature_attr(&mut split_feature, from_idx, wbvector::FieldValue::Float(segment_from));
+                    set_feature_attr(&mut split_feature, to_idx, wbvector::FieldValue::Float(segment_to));
+                    set_feature_attr(&mut split_feature, split_seq_idx, wbvector::FieldValue::Integer(split_seq));
+                    set_feature_attr(
+                        &mut split_feature,
+                        parent_fid_idx,
+                        wbvector::FieldValue::Integer(feature.fid as i64),
+                    );
+                    split_features.push(split_feature);
+                    split_seq += 1;
+                }
+                Ok(split_features)
+            })
+            .collect();
+
         let mut next_fid = 1u64;
-        for feature in &events.features {
-            let route_key = field_value_to_join_key(
-                feature
-                    .attributes
-                    .get(event_route_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            );
-            if route_key.is_empty() {
-                return Err(ToolError::Execution(format!("event feature {} has empty route id", feature.fid)));
-            }
-            let from_m = field_value_to_f64(
-                feature
-                    .attributes
-                    .get(from_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            )
-            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid from measure", feature.fid)))?;
-            let to_m = field_value_to_f64(
-                feature
-                    .attributes
-                    .get(to_idx)
-                    .unwrap_or(&wbvector::FieldValue::Null),
-            )
-            .ok_or_else(|| ToolError::Execution(format!("event feature {} has invalid to measure", feature.fid)))?;
-
-            let mut cuts = vec![from_m];
-            if let Some(boundaries_for_route) = boundary_map.get(route_key.as_str()) {
-                if to_m >= from_m {
-                    for boundary in boundaries_for_route {
-                        if *boundary > from_m + 1.0e-12 && *boundary < to_m - 1.0e-12 {
-                            cuts.push(*boundary);
-                        }
-                    }
-                    cuts.sort_by(|a, b| a.total_cmp(b));
-                } else {
-                    for boundary in boundaries_for_route {
-                        if *boundary > to_m + 1.0e-12 && *boundary < from_m - 1.0e-12 {
-                            cuts.push(*boundary);
-                        }
-                    }
-                    cuts.sort_by(|a, b| b.total_cmp(a));
-                }
-            }
-            cuts.push(to_m);
-
-            let mut split_seq: i64 = 1;
-            for pair in cuts.windows(2) {
-                let segment_from = pair[0];
-                let segment_to = pair[1];
-                if (segment_to - segment_from).abs() < min_segment_length {
-                    continue;
-                }
-
-                let mut split_feature = feature.clone();
+        for split_group in per_feature_splits? {
+            for mut split_feature in split_group {
                 split_feature.fid = next_fid;
-                set_feature_attr(&mut split_feature, from_idx, wbvector::FieldValue::Float(segment_from));
-                set_feature_attr(&mut split_feature, to_idx, wbvector::FieldValue::Float(segment_to));
-                set_feature_attr(&mut split_feature, split_seq_idx, wbvector::FieldValue::Integer(split_seq));
-                set_feature_attr(&mut split_feature, parent_fid_idx, wbvector::FieldValue::Integer(feature.fid as i64));
                 output.features.push(split_feature);
-
                 next_fid += 1;
-                split_seq += 1;
             }
         }
 
@@ -22812,71 +23129,89 @@ impl Tool for RouteEventMergeTool {
                 .collect()
         };
 
-        let mut next_fid = 1u64;
-        for recs in by_route.values_mut() {
-            recs.sort_by(|a, b| {
-                let ord = a.from_m.total_cmp(&b.from_m);
-                if ord == std::cmp::Ordering::Equal {
-                    a.to_m.total_cmp(&b.to_m)
-                } else {
-                    ord
-                }
-            });
+        let mut route_keys: Vec<String> = by_route.keys().cloned().collect();
+        route_keys.sort();
 
-            let mut pending: Option<(MergeRec, Vec<String>, i64)> = None;
-            for rec in recs.iter() {
-                let rec_sig = feature_signature(&rec.feature);
-
-                if let Some((current, current_sig, current_count)) = pending.take() {
-                    if rec.from_m < current.to_m - 1.0e-12 {
-                        if conflict_mode == "error" {
-                            return Err(ToolError::Execution(format!(
-                                "overlapping events detected on route '{}' around [{}, {}] and [{}, {}]",
-                                current.route_key,
-                                current.from_m,
-                                current.to_m,
-                                rec.from_m,
-                                rec.to_m
-                            )));
-                        }
-                        let mut out_feature = current.feature.clone();
-                        out_feature.fid = next_fid;
-                        set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
-                        set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
-                        set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
-                        output.features.push(out_feature);
-                        next_fid += 1;
-                        pending = Some((rec.clone(), rec_sig, 1));
-                        continue;
-                    }
-
-                    let gap = rec.from_m - current.to_m;
-                    let can_merge = gap <= gap_tolerance + 1.0e-12 && current_sig == rec_sig;
-                    if can_merge {
-                        let mut merged = current.clone();
-                        merged.to_m = rec.to_m;
-                        pending = Some((merged, current_sig, current_count + 1));
+        let per_route_merged: Vec<Result<Vec<wbvector::Feature>, ToolError>> = route_keys
+            .par_iter()
+            .map(|route_key| {
+                let mut recs = by_route
+                    .get(route_key)
+                    .cloned()
+                    .unwrap_or_default();
+                recs.sort_by(|a, b| {
+                    let ord = a.from_m.total_cmp(&b.from_m);
+                    if ord == std::cmp::Ordering::Equal {
+                        a.to_m.total_cmp(&b.to_m)
                     } else {
-                        let mut out_feature = current.feature.clone();
-                        out_feature.fid = next_fid;
-                        set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
-                        set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
-                        set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
-                        output.features.push(out_feature);
-                        next_fid += 1;
+                        ord
+                    }
+                });
+
+                let mut route_out = Vec::<wbvector::Feature>::new();
+                let mut pending: Option<(MergeRec, Vec<String>, i64)> = None;
+                for rec in recs.iter() {
+                    let rec_sig = feature_signature(&rec.feature);
+
+                    if let Some((current, current_sig, current_count)) = pending.take() {
+                        if rec.from_m < current.to_m - 1.0e-12 {
+                            if conflict_mode == "error" {
+                                return Err(ToolError::Execution(format!(
+                                    "overlapping events detected on route '{}' around [{}, {}] and [{}, {}]",
+                                    current.route_key,
+                                    current.from_m,
+                                    current.to_m,
+                                    rec.from_m,
+                                    rec.to_m
+                                )));
+                            }
+                            let mut out_feature = current.feature.clone();
+                            out_feature.fid = 0;
+                            set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
+                            set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
+                            set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
+                            route_out.push(out_feature);
+                            pending = Some((rec.clone(), rec_sig, 1));
+                            continue;
+                        }
+
+                        let gap = rec.from_m - current.to_m;
+                        let can_merge = gap <= gap_tolerance + 1.0e-12 && current_sig == rec_sig;
+                        if can_merge {
+                            let mut merged = current.clone();
+                            merged.to_m = rec.to_m;
+                            pending = Some((merged, current_sig, current_count + 1));
+                        } else {
+                            let mut out_feature = current.feature.clone();
+                            out_feature.fid = 0;
+                            set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(current.from_m));
+                            set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(current.to_m));
+                            set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(current_count));
+                            route_out.push(out_feature);
+                            pending = Some((rec.clone(), rec_sig, 1));
+                        }
+                    } else {
                         pending = Some((rec.clone(), rec_sig, 1));
                     }
-                } else {
-                    pending = Some((rec.clone(), rec_sig, 1));
                 }
-            }
 
-            if let Some((last, _, count)) = pending {
-                let mut out_feature = last.feature.clone();
+                if let Some((last, _, count)) = pending {
+                    let mut out_feature = last.feature.clone();
+                    out_feature.fid = 0;
+                    set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(last.from_m));
+                    set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(last.to_m));
+                    set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(count));
+                    route_out.push(out_feature);
+                }
+
+                Ok(route_out)
+            })
+            .collect();
+
+        let mut next_fid = 1u64;
+        for merged in per_route_merged {
+            for mut out_feature in merged? {
                 out_feature.fid = next_fid;
-                set_feature_attr(&mut out_feature, from_idx, wbvector::FieldValue::Float(last.from_m));
-                set_feature_attr(&mut out_feature, to_idx, wbvector::FieldValue::Float(last.to_m));
-                set_feature_attr(&mut out_feature, merge_count_idx, wbvector::FieldValue::Integer(count));
                 output.features.push(out_feature);
                 next_fid += 1;
             }
@@ -23166,54 +23501,76 @@ impl Tool for RouteEventOverlayTool {
             })
             .collect::<Vec<_>>();
 
-        let mut next_fid = 1u64;
-        for (route_key, primary_recs) in &primary_by_route {
-            let Some(overlay_recs) = overlay_by_route.get(route_key.as_str()) else {
-                continue;
-            };
-            for p in primary_recs {
-                for o in overlay_recs {
-                    let overlap_from = p.from_m.max(o.from_m);
-                    let overlap_to = p.to_m.min(o.to_m);
-                    if overlap_to - overlap_from < min_overlap - 1.0e-12 {
-                        continue;
-                    }
-                    if overlap_to <= overlap_from + 1.0e-12 {
-                        continue;
-                    }
+        let mut route_keys: Vec<String> = primary_by_route
+            .keys()
+            .filter(|route_key| overlay_by_route.contains_key(route_key.as_str()))
+            .cloned()
+            .collect();
+        route_keys.sort();
 
-                    let mut attrs = Vec::<wbvector::FieldValue>::new();
-                    attrs.push(wbvector::FieldValue::Text(route_key.clone()));
-                    attrs.push(wbvector::FieldValue::Float(overlap_from));
-                    attrs.push(wbvector::FieldValue::Float(overlap_to));
-                    attrs.push(wbvector::FieldValue::Integer(p.feature.fid as i64));
-                    attrs.push(wbvector::FieldValue::Integer(o.feature.fid as i64));
-                    for (idx, _) in &primary_fields {
-                        attrs.push(
-                            p.feature
-                                .attributes
-                                .get(*idx)
-                                .cloned()
-                                .unwrap_or(wbvector::FieldValue::Null),
-                        );
-                    }
-                    for (idx, _) in &overlay_fields {
-                        attrs.push(
-                            o.feature
-                                .attributes
-                                .get(*idx)
-                                .cloned()
-                                .unwrap_or(wbvector::FieldValue::Null),
-                        );
-                    }
+        let per_route_rows: Vec<Vec<(Option<wbvector::Geometry>, Vec<wbvector::FieldValue>)>> = route_keys
+            .par_iter()
+            .map(|route_key| {
+                let Some(primary_recs) = primary_by_route.get(route_key.as_str()) else {
+                    return Vec::new();
+                };
+                let Some(overlay_recs) = overlay_by_route.get(route_key.as_str()) else {
+                    return Vec::new();
+                };
 
-                    output.features.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: p.feature.geometry.clone(),
-                        attributes: attrs,
-                    });
-                    next_fid += 1;
+                let mut rows = Vec::<(Option<wbvector::Geometry>, Vec<wbvector::FieldValue>)>::new();
+                for p in primary_recs {
+                    for o in overlay_recs {
+                        let overlap_from = p.from_m.max(o.from_m);
+                        let overlap_to = p.to_m.min(o.to_m);
+                        if overlap_to - overlap_from < min_overlap - 1.0e-12 {
+                            continue;
+                        }
+                        if overlap_to <= overlap_from + 1.0e-12 {
+                            continue;
+                        }
+
+                        let mut attrs = Vec::<wbvector::FieldValue>::new();
+                        attrs.push(wbvector::FieldValue::Text(route_key.clone()));
+                        attrs.push(wbvector::FieldValue::Float(overlap_from));
+                        attrs.push(wbvector::FieldValue::Float(overlap_to));
+                        attrs.push(wbvector::FieldValue::Integer(p.feature.fid as i64));
+                        attrs.push(wbvector::FieldValue::Integer(o.feature.fid as i64));
+                        for (idx, _) in &primary_fields {
+                            attrs.push(
+                                p.feature
+                                    .attributes
+                                    .get(*idx)
+                                    .cloned()
+                                    .unwrap_or(wbvector::FieldValue::Null),
+                            );
+                        }
+                        for (idx, _) in &overlay_fields {
+                            attrs.push(
+                                o.feature
+                                    .attributes
+                                    .get(*idx)
+                                    .cloned()
+                                    .unwrap_or(wbvector::FieldValue::Null),
+                            );
+                        }
+
+                        rows.push((p.feature.geometry.clone(), attrs));
+                    }
                 }
+                rows
+            })
+            .collect();
+
+        let mut next_fid = 1u64;
+        for rows in per_route_rows {
+            for (geometry, attributes) in rows {
+                output.features.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry,
+                    attributes,
+                });
+                next_fid += 1;
             }
         }
 
@@ -23391,6 +23748,140 @@ impl Tool for RouteMeasureQaTool {
             .schema
             .add_field(wbvector::FieldDef::new("FEATURE_FID", wbvector::FieldType::Integer));
 
+        #[derive(Clone)]
+        struct QaIssueRow {
+            issue_type: &'static str,
+            severity: &'static str,
+            from_meas: f64,
+            to_meas: f64,
+            detail: String,
+            feature_fid: i64,
+        }
+
+        #[derive(Clone)]
+        struct RouteQaResult {
+            route_key: String,
+            issues: Vec<QaIssueRow>,
+            route_gap: usize,
+            route_overlap: usize,
+            route_non_monotonic: usize,
+            route_duplicate: usize,
+        }
+
+        let mut route_keys: Vec<String> = by_route.keys().cloned().collect();
+        route_keys.sort();
+
+        let route_results: Vec<RouteQaResult> = route_keys
+            .par_iter()
+            .map(|route_key| {
+                let mut recs = by_route.get(route_key).cloned().unwrap_or_default();
+                let mut route_gap = 0usize;
+                let mut route_overlap = 0usize;
+                let mut route_non_monotonic = 0usize;
+                let mut route_duplicate = 0usize;
+                let mut issues = Vec::<QaIssueRow>::new();
+
+                recs.sort_by(|a, b| a.input_order.cmp(&b.input_order));
+                let mut last_from_input = f64::NEG_INFINITY;
+                for rec in recs.iter() {
+                    if rec.from_m < last_from_input - 1.0e-12 {
+                        route_non_monotonic += 1;
+                        issues.push(QaIssueRow {
+                            issue_type: "non_monotonic",
+                            severity: "warning",
+                            from_meas: rec.from_m,
+                            to_meas: rec.to_m,
+                            detail: format!(
+                                "from_measure {} is less than prior from_measure {} in input sequence",
+                                rec.from_m, last_from_input
+                            ),
+                            feature_fid: rec.fid as i64,
+                        });
+                    }
+                    last_from_input = rec.from_m;
+
+                    if rec.to_m < rec.from_m - 1.0e-12 {
+                        route_non_monotonic += 1;
+                        issues.push(QaIssueRow {
+                            issue_type: "descending_interval",
+                            severity: "error",
+                            from_meas: rec.from_m,
+                            to_meas: rec.to_m,
+                            detail: "to_measure is less than from_measure".to_string(),
+                            feature_fid: rec.fid as i64,
+                        });
+                    }
+                }
+
+                recs.sort_by(|a, b| {
+                    let ord = a.from_m.total_cmp(&b.from_m);
+                    if ord == std::cmp::Ordering::Equal {
+                        a.to_m.total_cmp(&b.to_m)
+                    } else {
+                        ord
+                    }
+                });
+
+                let mut prev_end: Option<f64> = None;
+                let mut prev_interval: Option<(f64, f64)> = None;
+                for rec in recs.iter() {
+                    if let Some((pf, pt)) = prev_interval {
+                        if (rec.from_m - pf).abs() <= 1.0e-12 && (rec.to_m - pt).abs() <= 1.0e-12 {
+                            route_duplicate += 1;
+                            issues.push(QaIssueRow {
+                                issue_type: "duplicate_measure",
+                                severity: "warning",
+                                from_meas: rec.from_m,
+                                to_meas: rec.to_m,
+                                detail: "duplicate interval with same from/to measures".to_string(),
+                                feature_fid: rec.fid as i64,
+                            });
+                        }
+                    }
+
+                    if let Some(prev) = prev_end {
+                        if rec.from_m > prev + gap_tolerance + 1.0e-12 {
+                            route_gap += 1;
+                            issues.push(QaIssueRow {
+                                issue_type: "gap",
+                                severity: "warning",
+                                from_meas: prev,
+                                to_meas: rec.from_m,
+                                detail: "gap between consecutive intervals".to_string(),
+                                feature_fid: rec.fid as i64,
+                            });
+                        }
+                        if rec.from_m < prev - overlap_tolerance - 1.0e-12 {
+                            route_overlap += 1;
+                            issues.push(QaIssueRow {
+                                issue_type: "overlap",
+                                severity: "error",
+                                from_meas: rec.from_m,
+                                to_meas: prev,
+                                detail: "overlap between consecutive intervals".to_string(),
+                                feature_fid: rec.fid as i64,
+                            });
+                        }
+                    }
+
+                    prev_end = Some(match prev_end {
+                        Some(prev) => prev.max(rec.to_m),
+                        None => rec.to_m,
+                    });
+                    prev_interval = Some((rec.from_m, rec.to_m));
+                }
+
+                RouteQaResult {
+                    route_key: route_key.clone(),
+                    issues,
+                    route_gap,
+                    route_overlap,
+                    route_non_monotonic,
+                    route_duplicate,
+                }
+            })
+            .collect();
+
         let mut next_fid = 1u64;
         let mut gap_count = 0usize;
         let mut overlap_count = 0usize;
@@ -23398,144 +23889,35 @@ impl Tool for RouteMeasureQaTool {
         let mut duplicate_measure_count = 0usize;
         let mut route_level_details = Vec::<serde_json::Value>::new();
 
-        for (route_key, recs) in by_route.iter_mut() {
-            let mut route_gap = 0usize;
-            let mut route_overlap = 0usize;
-            let mut route_non_monotonic = 0usize;
-            let mut route_duplicate = 0usize;
+        for route_result in route_results {
+            gap_count += route_result.route_gap;
+            overlap_count += route_result.route_overlap;
+            non_monotonic_count += route_result.route_non_monotonic;
+            duplicate_measure_count += route_result.route_duplicate;
 
-            recs.sort_by(|a, b| a.input_order.cmp(&b.input_order));
-            let mut last_from_input = f64::NEG_INFINITY;
-            for rec in recs.iter() {
-                if rec.from_m < last_from_input - 1.0e-12 {
-                    non_monotonic_count += 1;
-                    route_non_monotonic += 1;
-                    output.features.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
-                        attributes: vec![
-                            wbvector::FieldValue::Text(route_key.clone()),
-                            wbvector::FieldValue::Text("non_monotonic".to_string()),
-                            wbvector::FieldValue::Text("warning".to_string()),
-                            wbvector::FieldValue::Float(rec.from_m),
-                            wbvector::FieldValue::Float(rec.to_m),
-                            wbvector::FieldValue::Text(format!(
-                                "from_measure {} is less than prior from_measure {} in input sequence",
-                                rec.from_m,
-                                last_from_input
-                            )),
-                            wbvector::FieldValue::Integer(rec.fid as i64),
-                        ],
-                    });
-                    next_fid += 1;
-                }
-                last_from_input = rec.from_m;
-
-                if rec.to_m < rec.from_m - 1.0e-12 {
-                    non_monotonic_count += 1;
-                    route_non_monotonic += 1;
-                    output.features.push(wbvector::Feature {
-                        fid: next_fid,
-                        geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
-                        attributes: vec![
-                            wbvector::FieldValue::Text(route_key.clone()),
-                            wbvector::FieldValue::Text("descending_interval".to_string()),
-                            wbvector::FieldValue::Text("error".to_string()),
-                            wbvector::FieldValue::Float(rec.from_m),
-                            wbvector::FieldValue::Float(rec.to_m),
-                            wbvector::FieldValue::Text("to_measure is less than from_measure".to_string()),
-                            wbvector::FieldValue::Integer(rec.fid as i64),
-                        ],
-                    });
-                    next_fid += 1;
-                }
-            }
-
-            recs.sort_by(|a, b| {
-                let ord = a.from_m.total_cmp(&b.from_m);
-                if ord == std::cmp::Ordering::Equal {
-                    a.to_m.total_cmp(&b.to_m)
-                } else {
-                    ord
-                }
-            });
-
-            let mut prev_end: Option<f64> = None;
-            let mut prev_interval: Option<(f64, f64)> = None;
-            for rec in recs.iter() {
-                if let Some((pf, pt)) = prev_interval {
-                    if (rec.from_m - pf).abs() <= 1.0e-12 && (rec.to_m - pt).abs() <= 1.0e-12 {
-                        duplicate_measure_count += 1;
-                        route_duplicate += 1;
-                        output.features.push(wbvector::Feature {
-                            fid: next_fid,
-                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
-                            attributes: vec![
-                                wbvector::FieldValue::Text(route_key.clone()),
-                                wbvector::FieldValue::Text("duplicate_measure".to_string()),
-                                wbvector::FieldValue::Text("warning".to_string()),
-                                wbvector::FieldValue::Float(rec.from_m),
-                                wbvector::FieldValue::Float(rec.to_m),
-                                wbvector::FieldValue::Text("duplicate interval with same from/to measures".to_string()),
-                                wbvector::FieldValue::Integer(rec.fid as i64),
-                            ],
-                        });
-                        next_fid += 1;
-                    }
-                }
-
-                if let Some(prev) = prev_end {
-                    if rec.from_m > prev + gap_tolerance + 1.0e-12 {
-                        gap_count += 1;
-                        route_gap += 1;
-                        output.features.push(wbvector::Feature {
-                            fid: next_fid,
-                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
-                            attributes: vec![
-                                wbvector::FieldValue::Text(route_key.clone()),
-                                wbvector::FieldValue::Text("gap".to_string()),
-                                wbvector::FieldValue::Text("warning".to_string()),
-                                wbvector::FieldValue::Float(prev),
-                                wbvector::FieldValue::Float(rec.from_m),
-                                wbvector::FieldValue::Text("gap between consecutive intervals".to_string()),
-                                wbvector::FieldValue::Integer(rec.fid as i64),
-                            ],
-                        });
-                        next_fid += 1;
-                    }
-                    if rec.from_m < prev - overlap_tolerance - 1.0e-12 {
-                        overlap_count += 1;
-                        route_overlap += 1;
-                        output.features.push(wbvector::Feature {
-                            fid: next_fid,
-                            geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
-                            attributes: vec![
-                                wbvector::FieldValue::Text(route_key.clone()),
-                                wbvector::FieldValue::Text("overlap".to_string()),
-                                wbvector::FieldValue::Text("error".to_string()),
-                                wbvector::FieldValue::Float(rec.from_m),
-                                wbvector::FieldValue::Float(prev),
-                                wbvector::FieldValue::Text("overlap between consecutive intervals".to_string()),
-                                wbvector::FieldValue::Integer(rec.fid as i64),
-                            ],
-                        });
-                        next_fid += 1;
-                    }
-                }
-
-                prev_end = Some(match prev_end {
-                    Some(prev) => prev.max(rec.to_m),
-                    None => rec.to_m,
+            for issue in route_result.issues {
+                output.features.push(wbvector::Feature {
+                    fid: next_fid,
+                    geometry: Some(wbvector::Geometry::Point(wbvector::Coord::xy(0.0, 0.0))),
+                    attributes: vec![
+                        wbvector::FieldValue::Text(route_result.route_key.clone()),
+                        wbvector::FieldValue::Text(issue.issue_type.to_string()),
+                        wbvector::FieldValue::Text(issue.severity.to_string()),
+                        wbvector::FieldValue::Float(issue.from_meas),
+                        wbvector::FieldValue::Float(issue.to_meas),
+                        wbvector::FieldValue::Text(issue.detail),
+                        wbvector::FieldValue::Integer(issue.feature_fid),
+                    ],
                 });
-                prev_interval = Some((rec.from_m, rec.to_m));
+                next_fid += 1;
             }
 
             route_level_details.push(json!({
-                "route_id": route_key,
-                "gap_count": route_gap,
-                "overlap_count": route_overlap,
-                "non_monotonic_count": route_non_monotonic,
-                "duplicate_measure_count": route_duplicate,
+                "route_id": route_result.route_key,
+                "gap_count": route_result.route_gap,
+                "overlap_count": route_result.route_overlap,
+                "non_monotonic_count": route_result.route_non_monotonic,
+                "duplicate_measure_count": route_result.route_duplicate,
             }));
         }
 
@@ -23904,15 +24286,22 @@ impl Tool for DeleteFieldTool {
         }
         output.schema = new_schema;
 
-        for feature in &mut output.features {
-            let mut attrs = Vec::<wbvector::FieldValue>::with_capacity(keep_indices.len());
-            for idx in &keep_indices {
-                if let Some(value) = feature.attributes.get(*idx) {
-                    attrs.push(value.clone());
-                } else {
-                    attrs.push(wbvector::FieldValue::Null);
+        let projected_attrs: Vec<Vec<wbvector::FieldValue>> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                let mut attrs = Vec::<wbvector::FieldValue>::with_capacity(keep_indices.len());
+                for idx in &keep_indices {
+                    if let Some(value) = feature.attributes.get(*idx) {
+                        attrs.push(value.clone());
+                    } else {
+                        attrs.push(wbvector::FieldValue::Null);
+                    }
                 }
-            }
+                attrs
+            })
+            .collect();
+        for (feature, attrs) in output.features.iter_mut().zip(projected_attrs.into_iter()) {
             feature.attributes = attrs;
         }
 
@@ -24002,8 +24391,17 @@ impl Tool for AddFieldTool {
             .schema
             .add_field(wbvector::FieldDef::new(&field, field_type));
 
-        for feature in &mut output.features {
-            feature.attributes.push(default_value.clone());
+        let expanded_attrs: Vec<Vec<wbvector::FieldValue>> = output
+            .features
+            .par_iter()
+            .map(|feature| {
+                let mut attrs = feature.attributes.clone();
+                attrs.push(default_value.clone());
+                attrs
+            })
+            .collect();
+        for (feature, attrs) in output.features.iter_mut().zip(expanded_attrs.into_iter()) {
+            feature.attributes = attrs;
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;
@@ -26190,23 +26588,25 @@ fn nearest_network_node(nodes: &[wbvector::Coord], target: &wbvector::Coord) -> 
 }
 
 fn collect_point_coords_from_layer(layer: &wbvector::Layer) -> Vec<(i64, wbvector::Coord)> {
-    let mut out = Vec::<(i64, wbvector::Coord)>::new();
-    for feature in &layer.features {
-        let fid = feature.fid as i64;
-        let Some(geometry) = feature.geometry.as_ref() else {
-            continue;
-        };
-        match geometry {
-            wbvector::Geometry::Point(coord) => out.push((fid, coord.clone())),
-            wbvector::Geometry::MultiPoint(coords) => {
-                for coord in coords {
-                    out.push((fid, coord.clone()));
-                }
+    let per_feature: Vec<Vec<(i64, wbvector::Coord)>> = layer
+        .features
+        .par_iter()
+        .map(|feature| {
+            let fid = feature.fid as i64;
+            let Some(geometry) = feature.geometry.as_ref() else {
+                return Vec::new();
+            };
+            match geometry {
+                wbvector::Geometry::Point(coord) => vec![(fid, coord.clone())],
+                wbvector::Geometry::MultiPoint(coords) => coords
+                    .iter()
+                    .map(|coord| (fid, coord.clone()))
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
             }
-            _ => {}
-        }
-    }
-    out
+        })
+        .collect();
+    per_feature.into_iter().flatten().collect()
 }
 
 fn load_optional_vector_arg(args: &ToolArgs, key: &str) -> Result<Option<wbvector::Layer>, ToolError> {
@@ -30738,14 +31138,18 @@ impl Tool for NetworkConnectedComponentsTool {
         output
             .schema
             .add_field(wbvector::FieldDef::new("COMP_ID", wbvector::FieldType::Integer));
-        for (idx, feature) in output.features.iter_mut().enumerate() {
-            if let Some(component_id) = feature_component[idx] {
-                feature
-                    .attributes
-                    .push(wbvector::FieldValue::Integer((component_id + 1) as i64));
-            } else {
-                feature.attributes.push(wbvector::FieldValue::Null);
-            }
+        let comp_values: Vec<wbvector::FieldValue> = feature_component
+            .par_iter()
+            .map(|comp| {
+                if let Some(component_id) = comp {
+                    wbvector::FieldValue::Integer((component_id + 1) as i64)
+                } else {
+                    wbvector::FieldValue::Null
+                }
+            })
+            .collect();
+        for (feature, comp_val) in output.features.iter_mut().zip(comp_values.into_iter()) {
+            feature.attributes.push(comp_val);
         }
 
         let output_locator = write_vector_output(&output, output_path.trim())?;

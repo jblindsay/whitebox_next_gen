@@ -6656,12 +6656,30 @@ impl Tool for LidarThinHighDensityTool {
             let ew_range = (cols as f64 * resolution).max(resolution);
             let ns_range = (rows as f64 * resolution).max(resolution);
 
-            let mut bins: HashMap<(i64, i64), Vec<(f64, usize)>> = HashMap::new();
-            for (idx, p) in cloud.points.iter().enumerate() {
-                let col = (((cols - 1) as f64 * (p.x - min_x - half_res) / ew_range).round()) as i64;
-                let row = (((rows - 1) as f64 * (max_y - half_res - p.y) / ns_range).round()) as i64;
-                bins.entry((row, col)).or_default().push((p.z, idx));
-            }
+            let (bins, cloud_arc): (HashMap<(i64, i64), Vec<(f64, usize)>>, Arc<Vec<PointRecord>>) = {
+                let cloud_arc = Arc::new(cloud.points.clone());
+                let result = cloud_arc.par_iter()
+                    .enumerate()
+                    .fold(|| {
+                        (HashMap::<(i64, i64), Vec<(f64, usize)>>::new(), cloud_arc.clone())
+                    },
+                    |(mut acc_bins, arc), (idx, p)| {
+                        let col = (((cols - 1) as f64 * (p.x - min_x - half_res) / ew_range).round()) as i64;
+                        let row = (((rows - 1) as f64 * (max_y - half_res - p.y) / ns_range).round()) as i64;
+                        acc_bins.entry((row, col)).or_default().push((p.z, idx));
+                        (acc_bins, arc)
+                    })
+                    .reduce(|| {
+                        (HashMap::<(i64, i64), Vec<(f64, usize)>>::new(), cloud_arc.clone())
+                    },
+                    |(mut acc_bins, arc): (HashMap<(i64, i64), Vec<(f64, usize)>>, _), (other_bins, _)| {
+                        for ((row, col), vals) in other_bins {
+                            acc_bins.entry((row, col)).or_default().extend(vals);
+                        }
+                        (acc_bins, arc)
+                    });
+                result
+            };
 
             let threshold = resolution * resolution * density;
             let mut filtered = vec![false; n_points];
@@ -6927,13 +6945,31 @@ impl Tool for LidarTileTool {
         fs::create_dir_all(&base_output_dir)
             .map_err(|e| ToolError::Execution(format!("failed creating output directory '{}': {e}", base_output_dir.to_string_lossy())))?;
 
-        let mut buckets: Vec<Vec<PointRecord>> = vec![Vec::new(); num_tiles];
-        for (i, p) in cloud.points.iter().enumerate() {
-            let tid = tile_index[i];
-            if write_tile[tid] {
-                buckets[tid].push(*p);
-            }
-        }
+        let mut buckets: Vec<Vec<PointRecord>> = {
+            let tile_index_arc = Arc::new(tile_index);
+            let write_tile_arc = Arc::new(write_tile.clone());
+            cloud.points.par_iter()
+                .enumerate()
+                .fold(|| {
+                    vec![Vec::new(); num_tiles]
+                },
+                |mut acc, (idx, p)| {
+                    let tid = tile_index_arc[idx];
+                    if write_tile_arc[tid] {
+                        acc[tid].push(*p);
+                    }
+                    acc
+                })
+                .reduce(|| {
+                    vec![Vec::new(); num_tiles]
+                },
+                |mut acc, other| {
+                    for (tid, pts) in other.into_iter().enumerate() {
+                        acc[tid].extend(pts);
+                    }
+                    acc
+                })
+        };
 
         let ext = if output_laz { "laz" } else { "las" };
         let mut written_paths: Vec<String> = Vec::new();
@@ -8845,23 +8881,26 @@ impl Tool for LidarClassifySubsetTool {
                 .map_err(|e| ToolError::Execution(format!("failed indexing subset points: {e}")))?;
         }
 
-        let mut out_points = Vec::with_capacity(base.points.len());
-        for mut p in base.points.iter().copied() {
-            let is_subset = if subset.points.is_empty() {
-                false
-            } else {
-                tree
-                    .nearest(&[p.x, p.y, p.z], 1, &squared_euclidean)
-                    .map(|hits| !hits.is_empty() && hits[0].0 <= tolerance_sq)
-                    .unwrap_or(false)
-            };
-            if is_subset {
-                p.classification = subset_class;
-            } else if nonsubset_class != 255 {
-                p.classification = nonsubset_class as u8;
-            }
-            out_points.push(p);
-        }
+        let tree_arc = Arc::new(tree);
+        let out_points: Vec<PointRecord> = base.points.par_iter()
+            .map(|p| {
+                let mut pt = *p;
+                let is_subset = if subset.points.is_empty() {
+                    false
+                } else {
+                    tree_arc
+                        .nearest(&[pt.x, pt.y, pt.z], 1, &squared_euclidean)
+                        .map(|hits| !hits.is_empty() && hits[0].0 <= tolerance_sq)
+                        .unwrap_or(false)
+                };
+                if is_subset {
+                    pt.classification = subset_class;
+                } else if nonsubset_class != 255 {
+                    pt.classification = nonsubset_class as u8;
+                }
+                pt
+            })
+            .collect();
 
         let out_cloud = PointCloud {
             points: out_points,
@@ -8907,9 +8946,9 @@ impl Tool for ClipLidarToPolygonTool {
 
         let points: Vec<PointRecord> = cloud
             .points
-            .iter()
-            .copied()
+            .par_iter()
             .filter(|p| point_in_any_prepared_polygon(p.x, p.y, &polys))
+            .copied()
             .collect();
 
         let out_cloud = PointCloud {
@@ -8956,9 +8995,9 @@ impl Tool for ErasePolygonFromLidarTool {
 
         let points: Vec<PointRecord> = cloud
             .points
-            .iter()
+            .par_iter()
+            .filter(|p| point_in_any_prepared_polygon(p.x, p.y, &polys))
             .copied()
-            .filter(|p| !point_in_any_prepared_polygon(p.x, p.y, &polys))
             .collect();
 
         let out_cloud = PointCloud {

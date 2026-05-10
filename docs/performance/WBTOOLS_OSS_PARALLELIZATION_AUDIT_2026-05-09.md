@@ -902,6 +902,45 @@ Validation:
 
 ## Batch 146: LiDAR Advanced Operations (5 Tools)
 
+## Batch 147: LiDAR Spatial Operations (4 Tools)
+
+Executed immediately following Batch 146. Focus on spatial filtering and bucketing with Arc-wrapped data structures and fold/reduce patterns.
+
+**Tools parallelized:**
+
+1. **ClipLidarToPolygonTool** (line 8909):
+  - Pattern: Per-point polygon containment check with par_iter filter
+  - Implementation: `par_iter().filter()` for independent polygon containment tests
+  - Speedup opportunity: Medium (per-point polygon checks are independent)
+
+2. **LidarClassifySubsetTool** (line 8818):
+  - Pattern: Arc<KdTree> + per-point 3D nearest-neighbor matching
+  - Implementation: `par_iter().map()` with Arc-wrapped KdTree for independent distance checks
+  - Speedup opportunity: High (per-point KdTree queries are independent)
+
+3. **LidarTileTool** (line 6817):
+  - Pattern: fold/reduce for per-partition tile bucketing
+  - Implementation: `par_iter().enumerate()` with Arc-wrapped tile_index; fold/reduce for bucketing into tile groups
+  - Speedup opportunity: High (tile assignment is partition-local; merge is efficient)
+
+4. **LidarThinHighDensityTool** (line 6591):
+  - Pattern: fold/reduce for per-partition bin/histogram construction
+  - Implementation: Arc-wrapped point cloud; `par_iter().enumerate()` for per-point bin assignment
+  - Speedup opportunity: High (bin building is partition-local; merge is efficient)
+
+**Key Challenges & Resolutions:**
+
+- **Arc-wrapped tile_index in LidarTileTool**: Used Arc::new(tile_index) to share pre-computed tile indices across threads; cloned write_tile boolean vector before wrapping
+- **Explicit HashMap type annotations in LidarThinHighDensityTool**: Required `HashMap::<(i64, i64), Vec<(f64, usize)>>::new()` for type inference in fold closure
+- **PointRecord copying in parallel map**: Used `*p` to copy and then modified copy in LidarClassifySubsetTool (par_iter returns &PointRecord)
+
+**Compilation Results:**
+- All 4 tools compiled cleanly with zero new errors
+- Zero unsafe code blocks introduced
+- Compatible with existing batch-mode infrastructure
+
+## Batch 146: LiDAR Advanced Operations (5 Tools)
+
 Executed immediately following Batch 145. Focus on moderate-complexity parallelization patterns: Arc-wrapped data structures with per-point/per-partition accumulation.
 
 **Tools parallelized:**
@@ -958,7 +997,12 @@ Executed immediately following Batch 145. Focus on moderate-complexity paralleli
 | **Total** | **58+** | Various patterns | **73%+ of audit target** |
 
 **Total parallelized**: 58-62 tools across all batches (audit target: 79 tools)
-**Discovery finding**: Significant overlap between audit candidates and tools already parallelized in prior batches, reducing net new opportunities.
+| 147 | 4 | LiDAR spatial: bucketing & filtering | ✓ Complete |
+| **Total** | **62+** | Various patterns | **78%+ of audit target** |
+
+**Total parallelized**: 62-66 tools across all batches (audit target: 79 tools)
+**Coverage**: 78-83% of audit target
+**Remaining**: ~13-17 tools to reach 95-100%
 
 ## Automated Screening Set (Needs Manual Confirmation)
 

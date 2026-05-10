@@ -876,7 +876,31 @@ Validation:
 - All 5 tools compile cleanly with Arc and par_iter patterns
 - Legacy-aligned granularity: SingleFile mode uses inner parallelism; batch mode (ModifyLidarTool) remains file-level only
 
-## Parallelization Sprint Summary (Batches 138-144)
+## Batch 145 (LiDAR: Simple Per-Point Operations)
+
+Completed (2026-05-10):
+- `filter_lidar_classes`: parallelized per-point classification predicate with `par_iter().filter().cloned()` for embarrassingly-parallel class membership check.
+- `filter_lidar_scan_angles`: parallelized per-point scan angle threshold with `par_iter().filter().cloned()` for embarrassingly-parallel arithmetic comparison.
+- `lidar_shift`: parallelized per-point coordinate transformation with `par_iter().map()` for independent per-point x/y/z offset arithmetic.
+- `filter_lidar`: parallelized per-point boolean expression evaluation in single-input mode with Arc<OperatorTree> and `par_iter().enumerate().filter_map()` for independent filter context evaluation; batch mode retains file-level parallelism.
+- `lidar_ground_point_filter`: parallelized per-point KdTree neighbor analysis with Arc<KdTree> + Arc<Vec<PointRecord>> and `(0..n).into_par_iter()` for independent neighborhood queries; output filtering parallelized with `par_iter().map()/filter_map()`.
+
+Implementation patterns:
+- **Simple per-point predicates**: `par_iter().filter().cloned()` for embarrassingly-parallel boolean checks (classes, scan angles).
+- **Per-point arithmetic**: `par_iter().map()` for independent coordinate transforms.
+- **Per-point expression evaluation**: Arc-wrapped operator tree for thread-safe read-only sharing; per-point context building and evaluation.
+- **Per-point data-dependent queries**: Arc-wrapped KdTree + Arc-wrapped point cloud for read-only parallel neighbor queries over independent points.
+- **Output filtering**: Arc-wrapped boolean/float vectors for per-point filtering and classification decisions.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/lidar_processing/mod.rs` (lines 5837-5915, 6047-6110, 5920-5960, 7813-7920, 7640-7800)
+
+Validation:
+- `cargo check -p wbtools_oss`: SUCCESS (no new errors; 2 pre-existing GIS warnings retained)
+- All 5 tools compile cleanly with par_iter and Arc data sharing patterns
+- Batch mode retained for filter_lidar tool (file-level parallelism only in batch execution)
+
+## Parallelization Sprint Summary (Batches 138-145)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -887,9 +911,10 @@ Validation:
 | 142 | 1+ | cost_allocation per-cell init phase | In progress |
 | 143 | 5 | LiDAR per-point/per-cell par_iter (batch-safe) | ✓ Complete |
 | 144 | 5 | LiDAR per-point ops with Arc data sharing | ✓ Complete |
-| **Total** | **48+** | Various patterns | **61%+ of audit target** |
+| 145 | 5 | LiDAR simple per-point ops (filter/transform) | ✓ Complete |
+| **Total** | **53+** | Various patterns | **67%+ of audit target** |
 
-**Total parallelized**: 48-52 tools across all batches (audit target: 79 tools)
+**Total parallelized**: 53-57 tools across all batches (audit target: 79 tools)
 **Discovery finding**: Significant overlap between audit candidates and tools already parallelized in prior batches, reducing net new opportunities.
 
 ## Automated Screening Set (Needs Manual Confirmation)

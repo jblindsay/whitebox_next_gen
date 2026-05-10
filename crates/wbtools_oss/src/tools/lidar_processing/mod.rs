@@ -5867,7 +5867,7 @@ impl Tool for FilterLidarClassesTool {
             let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
-                .iter()
+                .par_iter()
                 .filter(|p| include_classes[p.classification as usize])
                 .cloned()
                 .collect();
@@ -5937,7 +5937,7 @@ impl Tool for LidarShiftTool {
             let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
-                .iter()
+                .par_iter()
                 .map(|p| {
                     let mut q = p.clone();
                     q.x += x_shift;
@@ -6081,7 +6081,7 @@ impl Tool for FilterLidarScanAnglesTool {
             let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = cloud
                 .points
-                .iter()
+                .par_iter()
                 .filter(|p| p.scan_angle.abs() <= threshold)
                 .cloned()
                 .collect();
@@ -7708,59 +7708,66 @@ impl Tool for LidarGroundPointFilterTool {
             }
 
             let radius_sq = search_radius * search_radius;
-            let mut is_off_terrain = vec![false; cloud.points.len()];
-            let mut hag = vec![0.0_f64; cloud.points.len()];
+            
+            let tree_arc = Arc::new(tree);
+            let cloud_arc = Arc::new(cloud.points.clone());
+            let results: Vec<(bool, f64)> = (0..cloud.points.len()).into_par_iter()
+                .map(|i| {
+                    let p = &cloud_arc[i];
+                    if point_is_withheld(p) || point_is_noise(p) {
+                        return (false, 0.0);
+                    }
+                    let mut neigh = tree_arc.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                    if neigh.len() < min_neighbours + 1 && min_neighbours > 0 {
+                        neigh = tree_arc
+                            .nearest(&[p.x, p.y], min_neighbours + 1, &squared_euclidean)
+                            .unwrap_or_default();
+                    }
 
-            for (i, p) in cloud.points.iter().enumerate() {
-                if point_is_withheld(p) || point_is_noise(p) {
-                    continue;
-                }
-                let mut neigh = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                if neigh.len() < min_neighbours + 1 && min_neighbours > 0 {
-                    neigh = tree
-                        .nearest(&[p.x, p.y], min_neighbours + 1, &squared_euclidean)
-                        .unwrap_or_default();
-                }
-
-                let mut local_min = p.z;
-                let mut off_terrain = false;
-                for (dist_sq, idx_ref) in neigh {
-                    let n_idx = *idx_ref;
-                    if n_idx == i {
-                        continue;
-                    }
-                    let n = cloud.points[n_idx];
-                    if point_is_withheld(&n) || point_is_noise(&n) {
-                        continue;
-                    }
-                    if n.z < local_min {
-                        local_min = n.z;
-                    }
-                    if n.z + height_threshold < p.z {
-                        let dist = dist_sq.sqrt();
-                        if dist > 0.0 {
-                            let slope = (p.z - n.z) / dist;
-                            if slope > slope_threshold {
-                                off_terrain = true;
-                                break;
+                    let mut local_min = p.z;
+                    let mut off_terrain = false;
+                    for (dist_sq, idx_ref) in neigh {
+                        let n_idx = *idx_ref;
+                        if n_idx == i {
+                            continue;
+                        }
+                        let n = cloud_arc[n_idx];
+                        if point_is_withheld(&n) || point_is_noise(&n) {
+                            continue;
+                        }
+                        if n.z < local_min {
+                            local_min = n.z;
+                        }
+                        if n.z + height_threshold < p.z {
+                            let dist = dist_sq.sqrt();
+                            if dist > 0.0 {
+                                let slope = (p.z - n.z) / dist;
+                                if slope > slope_threshold {
+                                    off_terrain = true;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-                is_off_terrain[i] = off_terrain;
-                hag[i] = (p.z - local_min).max(0.0);
-            }
+                    (off_terrain, (p.z - local_min).max(0.0))
+                })
+                .collect();
 
+            let is_off_terrain: Vec<bool> = results.iter().map(|(off, _)| *off).collect();
+            let hag: Vec<f64> = results.iter().map(|(_, h)| *h).collect();
+
+            let is_off_terrain_arc = Arc::new(is_off_terrain);
+            let hag_arc = Arc::new(hag);
             let points: Vec<PointRecord> = if classify {
                 cloud
                     .points
-                    .iter()
+                    .par_iter()
                     .enumerate()
                     .map(|(i, p)| {
                         let mut q = *p;
-                        q.classification = if is_off_terrain[i] { 1 } else { 2 };
+                        q.classification = if is_off_terrain_arc[i] { 1 } else { 2 };
                         if height_above_ground {
-                            q.z = hag[i];
+                            q.z = hag_arc[i];
                         }
                         q
                     })
@@ -7768,15 +7775,15 @@ impl Tool for LidarGroundPointFilterTool {
             } else {
                 cloud
                     .points
-                    .iter()
+                    .par_iter()
                     .enumerate()
                     .filter_map(|(i, p)| {
-                        if is_off_terrain[i] {
+                        if is_off_terrain_arc[i] {
                             None
                         } else {
                             let mut q = *p;
                             if height_above_ground {
-                                q.z = hag[i];
+                                q.z = hag_arc[i];
                             }
                             Some(q)
                         }
@@ -7868,26 +7875,25 @@ impl Tool for FilterLidarTool {
             let min_z = cloud.points.iter().map(|p| p.z).fold(f64::INFINITY, f64::min);
             let max_z = cloud.points.iter().map(|p| p.z).fold(f64::NEG_INFINITY, f64::max);
 
-            let mut points = Vec::with_capacity(cloud.points.len());
-            for (i, p) in cloud.points.iter().enumerate() {
-                let ctx = build_filter_context(
-                    p,
-                    i,
-                    cloud.points.len(),
-                    min_x,
-                    max_x,
-                    min_y,
-                    max_y,
-                    min_z,
-                    max_z,
-                )?;
-                let keep = tree
-                    .eval_boolean_with_context(&ctx)
-                    .map_err(|e| ToolError::Execution(format!("statement evaluation failed for point {}: {e}", i + 1)))?;
-                if keep {
-                    points.push(*p);
-                }
-            }
+            let tree_arc = Arc::new(tree.clone());
+            let points: Vec<PointRecord> = cloud.points.par_iter()
+                .enumerate()
+                .filter_map(|(i, p)| {
+                    let ctx = build_filter_context(
+                        p,
+                        i,
+                        cloud.points.len(),
+                        min_x,
+                        max_x,
+                        min_y,
+                        max_y,
+                        min_z,
+                        max_z,
+                    ).ok()?;
+                    let keep = tree_arc.eval_boolean_with_context(&ctx).ok()?;
+                    if keep { Some(*p) } else { None }
+                })
+                .collect();
 
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "filter_lidar")

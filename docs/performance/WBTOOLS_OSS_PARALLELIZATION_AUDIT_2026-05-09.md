@@ -840,12 +840,43 @@ Implementation files:
 Batch 142 in progress (2026-05-10):
 - `cost_allocation`: parallelized per-cell source initialization phase with `into_par_iter().map()` computing backlink status and source value assignment in parallel, followed by deterministic sequential backtracking propagation; determinism preserved via sorted sequential write-back of initialized values.
 
+Batch 143 completed (2026-05-10):
+- `lidar_point_density` (helper `run_point_density_tile`): parallelized per-cell neighborhood query pass with `into_par_iter().map()` over flattened cell indices for single-input mode; batch mode retains file-level parallelism with sequential per-tile inner loop (legacy-aligned granularity).
+- `filter_lidar_noise`: parallelized per-point class filtering in single-input mode; batch mode keeps per-file parallelism and sequential per-file inner filtering (legacy-aligned granularity).
+- `lidar_elevation_slice`: parallelized per-point filtering/classification in single-input mode; batch mode keeps per-file parallelism and sequential per-file inner pass (legacy-aligned granularity).
+- `lidar_remove_outliers`: parallelized per-point residual and output passes in single-input mode; batch mode keeps per-file parallelism and sequential per-file inner passes (legacy-aligned granularity).
+- `lidar_histogram`: parallelized per-point histogram value extraction with `par_iter().map().collect()` before existing sort/bin stages (single-input tool).
+
 Implementation files:
 - `crates/wbtools_oss/src/tools/gis/mod.rs`
+- `crates/wbtools_oss/src/tools/lidar_processing/mod.rs`
 
 Note: Audit discovery phase identified 6+ additional tools already parallelized in prior work (raster_area, raster_perimeter, pick_from_list, line_intersections, extract_raster_values_at_points, edge_proportion). Many remaining medium-risk candidates exhibit complex sequential logic (clump=connected-components, cost_distance=Dijkstra, map_features=region-growing, split_with_lines=geometry operations) limiting parallelization value without algorithmic redesign.
 
-## Parallelization Sprint Summary (Batches 138-142)
+## Batch 144 (LiDAR: High-Value Per-Point Operations)
+
+Completed (2026-05-10):
+- `normalize_lidar`: parallelized per-point DTM lookup and Z-normalization with Arc<Raster> and `par_iter().map()` for independent DTM samples per point.
+- `height_above_ground`: parallelized per-point KdTree nearest-neighbor queries with Arc<KdTree> read-only access and `par_iter().map()` for independent tree lookups.
+- `modify_lidar`: parallelized per-point expression evaluation in single-input mode with `par_iter().enumerate().map()` for independent expression tree evaluation; batch mode retains file-level parallelism with sequential per-file inner evaluation (batch-safe).
+- `lidar_thin`: parallelized output filtering phase (kept/filtered point partitioning) with Arc<Vec<bool>> and `par_iter().filter_map()` for embarrassingly-parallel per-point classification decision (cell winner determination remains sequential).
+- `classify_overlap_points`: parallelized output filtering phase (both filter and classification-update branches) with Arc<Vec<bool>> and `par_iter().map()/filter_map()` for per-point filtering; cell grouping and overlap analysis remain sequential.
+
+Implementation patterns:
+- **Per-point read-only lookups**: Arc-wrapped data structures (Raster, KdTree, Vec<bool>) passed to `par_iter().map()` closures for independent point processing.
+- **Per-point transformation**: Expression evaluation and coordinate/attribute updates via parallel enumeration with independent evaluation context per point.
+- **Output filtering**: Parallel classification of kept/filtered points using Arc-wrapped decision vectors (boolean flags).
+- **Type safety**: Arc import added to enable thread-safe data sharing; type annotations added for KdTree.nearest result processing.
+
+Implementation files:
+- `crates/wbtools_oss/src/tools/lidar_processing/mod.rs` (lines 7488-7650, 7553-7650, 7898-8180, 6179-6330, 8883-9060)
+
+Validation:
+- `cargo check -p wbtools_oss`: SUCCESS (no new errors; 2 pre-existing GIS warnings retained)
+- All 5 tools compile cleanly with Arc and par_iter patterns
+- Legacy-aligned granularity: SingleFile mode uses inner parallelism; batch mode (ModifyLidarTool) remains file-level only
+
+## Parallelization Sprint Summary (Batches 138-144)
 
 | Batch | Tools | Strategy | Status |
 |-------|-------|----------|--------|
@@ -854,9 +885,11 @@ Note: Audit discovery phase identified 6+ additional tools already parallelized 
 | 140 | 5 | per-cell/per-feature par_iter | ✓ Complete |
 | 141 | 3 | per-cell class metrics with fold/reduce | ✓ Complete |
 | 142 | 1+ | cost_allocation per-cell init phase | In progress |
-| **Total** | **38+** | Various patterns | **52%+ of audit target** |
+| 143 | 5 | LiDAR per-point/per-cell par_iter (batch-safe) | ✓ Complete |
+| 144 | 5 | LiDAR per-point ops with Arc data sharing | ✓ Complete |
+| **Total** | **48+** | Various patterns | **61%+ of audit target** |
 
-**Total parallelized**: 38-42 tools across all batches (audit target: 79 tools)
+**Total parallelized**: 48-52 tools across all batches (audit target: 79 tools)
 **Discovery finding**: Significant overlap between audit candidates and tools already parallelized in prior batches, reducing net new opportunities.
 
 ## Automated Screening Set (Needs Manual Confirmation)

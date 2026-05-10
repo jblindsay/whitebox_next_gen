@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::time::Instant;
+use std::sync::Arc;
 
 use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
@@ -3023,6 +3024,7 @@ fn run_point_density_tile(
     include_classes: &[bool; 256],
     min_z: f64,
     max_z: f64,
+    parallel_cells: bool,
 ) -> Result<String, ToolError> {
     let cloud = load_lidar_cloud(input_path, "input")?;
 
@@ -3043,23 +3045,39 @@ fn run_point_density_tile(
     let area = std::f64::consts::PI * radius * radius;
     let rows = output.rows;
     let cols = output.cols;
-    let nodata = output.nodata;
     let x_min = output.x_min;
     let y_max = output.y_max();
     let cell_x = output.cell_size_x;
     let cell_y = output.cell_size_y;
-    let mut out_values = vec![nodata; output.data.len()];
-
-    for row in 0..rows {
-        for col in 0..cols {
-            let x = x_min + (col as f64 + 0.5) * cell_x;
-            let y = y_max - (row as f64 + 0.5) * cell_y;
-            let ret = tree
-                .within(&[x, y], radius * radius, &squared_euclidean)
-                .map_err(|e| ToolError::Execution(format!("point-density search failed: {e}")))?;
-            out_values[row * cols + col] = ret.len() as f64 / area;
+    let radius_sq = radius * radius;
+    let out_values: Vec<f64> = if parallel_cells {
+        (0..rows * cols)
+            .into_par_iter()
+            .map(|idx| {
+                let row = idx / cols;
+                let col = idx % cols;
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+                let ret = tree
+                    .within(&[x, y], radius_sq, &squared_euclidean)
+                    .map_err(|e| ToolError::Execution(format!("point-density search failed: {e}")))?;
+                Ok(ret.len() as f64 / area)
+            })
+            .collect::<Result<Vec<_>, ToolError>>()?
+    } else {
+        let mut values = vec![0.0_f64; rows * cols];
+        for row in 0..rows {
+            for col in 0..cols {
+                let x = x_min + (col as f64 + 0.5) * cell_x;
+                let y = y_max - (row as f64 + 0.5) * cell_y;
+                let ret = tree
+                    .within(&[x, y], radius_sq, &squared_euclidean)
+                    .map_err(|e| ToolError::Execution(format!("point-density search failed: {e}")))?;
+                values[row * cols + col] = ret.len() as f64 / area;
+            }
         }
-    }
+        values
+    };
 
     for (idx, value) in out_values.iter().enumerate() {
         output.data.set_f64(idx, *value);
@@ -5598,6 +5616,7 @@ impl Tool for LidarPointDensityTool {
                 &include_classes,
                 min_z,
                 max_z,
+                true,
             )?;
             ctx.progress.progress(1.0);
             Ok(build_raster_result(locator))
@@ -5617,6 +5636,7 @@ impl Tool for LidarPointDensityTool {
                         &include_classes,
                         min_z,
                         max_z,
+                        false,
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -6115,21 +6135,30 @@ impl Tool for FilterLidarNoiseTool {
         let input_path = parse_lidar_path_arg_optional(args)?;
         let output_path = parse_optional_lidar_output_path(args)?;
 
-        let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
+        let run_single = |in_path: &Path, out_path: Option<PathBuf>, parallel_points: bool| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
-            let points: Vec<PointRecord> = cloud
-                .points
-                .iter()
-                .filter(|p| p.classification != 7 && p.classification != 18)
-                .cloned()
-                .collect();
+            let points: Vec<PointRecord> = if parallel_points {
+                cloud
+                    .points
+                    .par_iter()
+                    .filter(|p| p.classification != 7 && p.classification != 18)
+                    .cloned()
+                    .collect()
+            } else {
+                cloud
+                    .points
+                    .iter()
+                    .filter(|p| p.classification != 7 && p.classification != 18)
+                    .cloned()
+                    .collect()
+            };
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "filter_lidar_noise")
         };
 
         if let Some(input_path) = input_path {
             ctx.progress.info("reading input lidar");
-            let locator = run_single(Path::new(&input_path), output_path)?;
+            let locator = run_single(Path::new(&input_path), output_path, true)?;
             ctx.progress.progress(1.0);
             Ok(build_lidar_result(locator))
         } else {
@@ -6139,7 +6168,7 @@ impl Tool for FilterLidarNoiseTool {
                 .into_par_iter()
                 .map(|input| {
                     let out = generate_batch_lidar_output_path(&input, "denoised");
-                    run_single(&input, Some(out))
+                    run_single(&input, Some(out), false)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             ctx.progress.progress(1.0);
@@ -6286,15 +6315,25 @@ impl Tool for LidarThinTool {
             for idx in cell_winner.values() {
                 keep[*idx] = true;
             }
-            let mut kept_points = Vec::with_capacity(n);
-            let mut filtered_points = if save_filtered { Vec::with_capacity(n) } else { Vec::new() };
-            for (i, p) in cloud.points.iter().enumerate() {
-                if keep[i] {
-                    kept_points.push(*p);
-                } else if save_filtered {
-                    filtered_points.push(*p);
-                }
-            }
+
+            let keep_arc = Arc::new(keep);
+            let (kept_points, filtered_points) = if save_filtered {
+                let kept: Vec<PointRecord> = cloud.points.par_iter()
+                    .enumerate()
+                    .filter_map(|(i, p)| if keep_arc[i] { Some(*p) } else { None })
+                    .collect();
+                let filtered: Vec<PointRecord> = cloud.points.par_iter()
+                    .enumerate()
+                    .filter_map(|(i, p)| if !keep_arc[i] { Some(*p) } else { None })
+                    .collect();
+                (kept, filtered)
+            } else {
+                let kept: Vec<PointRecord> = cloud.points.par_iter()
+                    .enumerate()
+                    .filter_map(|(i, p)| if keep_arc[i] { Some(*p) } else { None })
+                    .collect();
+                (kept, Vec::new())
+            };
 
             let out_cloud = PointCloud { points: kept_points, crs: cloud.crs.clone() };
             let kept_path = store_or_write_lidar_output(&out_cloud, out_path, "lidar_thin")?;
@@ -6392,31 +6431,56 @@ impl Tool for LidarElevationSliceTool {
         let out_class_value = parse_f64_alias(args, &["out_class_value"], 1.0) as u8;
         let output_path = parse_optional_lidar_output_path(args)?;
 
-        let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
+        let run_single = |in_path: &Path, out_path: Option<PathBuf>, parallel_points: bool| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
             let points: Vec<PointRecord> = if !classify {
                 // Filter mode: keep only points inside slice
-                cloud
-                    .points
-                    .iter()
-                    .filter(|p| p.z >= minz && p.z <= maxz)
-                    .cloned()
-                    .collect()
+                if parallel_points {
+                    cloud
+                        .points
+                        .par_iter()
+                        .filter(|p| p.z >= minz && p.z <= maxz)
+                        .cloned()
+                        .collect()
+                } else {
+                    cloud
+                        .points
+                        .iter()
+                        .filter(|p| p.z >= minz && p.z <= maxz)
+                        .cloned()
+                        .collect()
+                }
             } else {
                 // Classify mode: reassign classification, keep all points
-                cloud
-                    .points
-                    .iter()
-                    .map(|p| {
-                        let mut q = *p;
-                        q.classification = if p.z >= minz && p.z <= maxz {
-                            in_class_value
-                        } else {
-                            out_class_value
-                        };
-                        q
-                    })
-                    .collect()
+                if parallel_points {
+                    cloud
+                        .points
+                        .par_iter()
+                        .map(|p| {
+                            let mut q = *p;
+                            q.classification = if p.z >= minz && p.z <= maxz {
+                                in_class_value
+                            } else {
+                                out_class_value
+                            };
+                            q
+                        })
+                        .collect()
+                } else {
+                    cloud
+                        .points
+                        .iter()
+                        .map(|p| {
+                            let mut q = *p;
+                            q.classification = if p.z >= minz && p.z <= maxz {
+                                in_class_value
+                            } else {
+                                out_class_value
+                            };
+                            q
+                        })
+                        .collect()
+                }
             };
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
             store_or_write_lidar_output(&out_cloud, out_path, "lidar_elevation_slice")
@@ -6424,7 +6488,7 @@ impl Tool for LidarElevationSliceTool {
 
         if let Some(input_path) = input_path {
             ctx.progress.info("reading input lidar");
-            let locator = run_single(Path::new(&input_path), output_path)?;
+            let locator = run_single(Path::new(&input_path), output_path, true)?;
             ctx.progress.progress(1.0);
             Ok(build_lidar_result(locator))
         } else {
@@ -6434,7 +6498,7 @@ impl Tool for LidarElevationSliceTool {
                 .into_par_iter()
                 .map(|input| {
                     let out = generate_batch_lidar_output_path(&input, "elev_slice");
-                    run_single(&input, Some(out))
+                    run_single(&input, Some(out), false)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             ctx.progress.progress(1.0);
@@ -7275,7 +7339,7 @@ impl Tool for LidarRemoveOutliersTool {
         let classify = parse_bool_alias(args, &["classify"], false);
         let output_path = parse_optional_lidar_output_path(args)?;
 
-        let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
+        let run_single = |in_path: &Path, out_path: Option<PathBuf>, parallel_points: bool| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
             if cloud.points.is_empty() {
                 let out_cloud = PointCloud { points: vec![], crs: cloud.crs.clone() };
@@ -7290,55 +7354,115 @@ impl Tool for LidarRemoveOutliersTool {
             }
 
             let radius_sq = search_radius * search_radius;
-            let mut residuals = vec![0.0_f64; cloud.points.len()];
-            for (i, p) in cloud.points.iter().enumerate() {
-                let neigh = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
-                let mut z_vals = Vec::with_capacity(neigh.len());
-                for (_, idx_ref) in neigh {
-                    let idx = *idx_ref;
-                    if idx != i {
-                        z_vals.push(cloud.points[idx].z);
-                    }
-                }
-                let baseline = if z_vals.is_empty() {
-                    p.z
-                } else if use_median {
-                    z_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
-                    let n = z_vals.len();
-                    if n % 2 == 1 {
-                        z_vals[n / 2]
-                    } else {
-                        (z_vals[n / 2 - 1] + z_vals[n / 2]) / 2.0
-                    }
-                } else {
-                    z_vals.iter().sum::<f64>() / z_vals.len() as f64
-                };
-                residuals[i] = p.z - baseline;
-            }
-
-            let points: Vec<PointRecord> = if !classify {
+            let residuals: Vec<f64> = if parallel_points {
                 cloud
                     .points
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, p)| residuals[*i].abs() < elev_diff && !point_is_noise(p))
-                    .map(|(_, p)| *p)
-                    .collect()
-            } else {
-                cloud
-                    .points
-                    .iter()
+                    .par_iter()
                     .enumerate()
                     .map(|(i, p)| {
-                        let mut q = *p;
-                        if residuals[i] < -elev_diff {
-                            q.classification = 7;
-                        } else if residuals[i] > elev_diff {
-                            q.classification = 18;
+                        let neigh = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                        let mut z_vals = Vec::with_capacity(neigh.len());
+                        for (_, idx_ref) in neigh {
+                            let idx = *idx_ref;
+                            if idx != i {
+                                z_vals.push(cloud.points[idx].z);
+                            }
                         }
-                        q
+                        let baseline = if z_vals.is_empty() {
+                            p.z
+                        } else if use_median {
+                            z_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+                            let n = z_vals.len();
+                            if n % 2 == 1 {
+                                z_vals[n / 2]
+                            } else {
+                                (z_vals[n / 2 - 1] + z_vals[n / 2]) / 2.0
+                            }
+                        } else {
+                            z_vals.iter().sum::<f64>() / z_vals.len() as f64
+                        };
+                        p.z - baseline
                     })
                     .collect()
+            } else {
+                let mut values = vec![0.0_f64; cloud.points.len()];
+                for (i, p) in cloud.points.iter().enumerate() {
+                    let neigh = tree.within(&[p.x, p.y], radius_sq, &squared_euclidean).unwrap_or_default();
+                    let mut z_vals = Vec::with_capacity(neigh.len());
+                    for (_, idx_ref) in neigh {
+                        let idx = *idx_ref;
+                        if idx != i {
+                            z_vals.push(cloud.points[idx].z);
+                        }
+                    }
+                    let baseline = if z_vals.is_empty() {
+                        p.z
+                    } else if use_median {
+                        z_vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+                        let n = z_vals.len();
+                        if n % 2 == 1 {
+                            z_vals[n / 2]
+                        } else {
+                            (z_vals[n / 2 - 1] + z_vals[n / 2]) / 2.0
+                        }
+                    } else {
+                        z_vals.iter().sum::<f64>() / z_vals.len() as f64
+                    };
+                    values[i] = p.z - baseline;
+                }
+                values
+            };
+
+            let points: Vec<PointRecord> = if !classify {
+                if parallel_points {
+                    cloud
+                        .points
+                        .par_iter()
+                        .enumerate()
+                        .filter(|(i, p)| residuals[*i].abs() < elev_diff && !point_is_noise(p))
+                        .map(|(_, p)| *p)
+                        .collect()
+                } else {
+                    cloud
+                        .points
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, p)| residuals[*i].abs() < elev_diff && !point_is_noise(p))
+                        .map(|(_, p)| *p)
+                        .collect()
+                }
+            } else {
+                if parallel_points {
+                    cloud
+                        .points
+                        .par_iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            let mut q = *p;
+                            if residuals[i] < -elev_diff {
+                                q.classification = 7;
+                            } else if residuals[i] > elev_diff {
+                                q.classification = 18;
+                            }
+                            q
+                        })
+                        .collect()
+                } else {
+                    cloud
+                        .points
+                        .iter()
+                        .enumerate()
+                        .map(|(i, p)| {
+                            let mut q = *p;
+                            if residuals[i] < -elev_diff {
+                                q.classification = 7;
+                            } else if residuals[i] > elev_diff {
+                                q.classification = 18;
+                            }
+                            q
+                        })
+                        .collect()
+                }
             };
 
             let out_cloud = PointCloud { points, crs: cloud.crs.clone() };
@@ -7352,7 +7476,7 @@ impl Tool for LidarRemoveOutliersTool {
 
         if let Some(input_path) = input_path {
             ctx.progress.info("reading input lidar");
-            let locator = run_single(Path::new(&input_path), output_path)?;
+            let locator = run_single(Path::new(&input_path), output_path, true)?;
             ctx.progress.progress(1.0);
             Ok(build_lidar_result(locator))
         } else {
@@ -7363,7 +7487,7 @@ impl Tool for LidarRemoveOutliersTool {
                 .map(|input| {
                     let suffix = if classify { "outliers_classified" } else { "outliers_removed" };
                     let out = generate_batch_lidar_output_path(&input, suffix);
-                    run_single(&input, Some(out))
+                    run_single(&input, Some(out), false)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             ctx.progress.progress(1.0);
@@ -7411,21 +7535,24 @@ impl Tool for NormalizeLidarTool {
         let dtm = Raster::read(Path::new(&dtm_path))
             .map_err(|e| ToolError::Execution(format!("failed reading dtm raster '{}': {e}", dtm_path)))?;
 
-        let mut points = cloud.points.clone();
-        for p in &mut points {
-            if point_is_withheld(p) || point_is_noise(p) {
-                continue;
-            }
-            if let Some(ground_z) = sample_dtm_elevation(&dtm, p.x, p.y) {
-                let mut z = p.z - ground_z;
-                if no_negatives && z < 0.0 {
-                    z = 0.0;
+        let dtm_arc = Arc::new(dtm);
+        let points: Vec<PointRecord> = cloud.points.par_iter()
+            .map(|p| {
+                let mut point = *p;
+                if !point_is_withheld(p) && !point_is_noise(p) {
+                    if let Some(ground_z) = sample_dtm_elevation(&dtm_arc, p.x, p.y) {
+                        let mut z = point.z - ground_z;
+                        if no_negatives && z < 0.0 {
+                            z = 0.0;
+                        }
+                        point.z = z;
+                    } else {
+                        point.z = 0.0;
+                    }
                 }
-                p.z = z;
-            } else {
-                p.z = 0.0;
-            }
-        }
+                point
+            })
+            .collect();
 
         let out_cloud = PointCloud {
             points,
@@ -7479,21 +7606,26 @@ impl Tool for HeightAboveGroundTool {
             ));
         }
 
-        let mut points = cloud.points.clone();
-        for p in &mut points {
-            if p.classification == 2 {
-                p.z = 0.0;
-                continue;
-            }
-            let nearest = tree
-                .nearest(&[p.x, p.y], 1, &squared_euclidean)
-                .map_err(|e| ToolError::Execution(format!("failed nearest-ground lookup: {e}")))?;
-            if let Some((_, ground_z_ref)) = nearest.first() {
-                p.z -= *ground_z_ref;
-            } else {
-                p.z = 0.0;
-            }
-        }
+        let tree_arc = Arc::new(tree);
+        let points: Vec<PointRecord> = cloud.points.par_iter()
+            .map(|p| {
+                let mut point = *p;
+                if point.classification == 2 {
+                    point.z = 0.0;
+                } else {
+                    let nearest = tree_arc
+                        .nearest(&[point.x, point.y], 1, &squared_euclidean)
+                        .ok()
+                        .and_then(|results: Vec<(f64, &f64)>| results.into_iter().next());
+                    if let Some((_, ground_z_ref)) = nearest {
+                        point.z -= *ground_z_ref;
+                    } else {
+                        point.z = 0.0;
+                    }
+                }
+                point
+            })
+            .collect();
 
         let out_cloud = PointCloud {
             points,
@@ -7839,7 +7971,7 @@ impl Tool for ModifyLidarTool {
             .collect::<Result<Vec<_>, _>>()?;
         let output_path = parse_optional_lidar_output_path(args)?;
 
-        let run_single = |in_path: &Path, out_path: Option<PathBuf>| -> Result<String, ToolError> {
+        let run_single = |in_path: &Path, out_path: Option<PathBuf>, parallel_points: bool| -> Result<String, ToolError> {
             let cloud = load_lidar_cloud(in_path, "input")?;
 
             if cloud.points.is_empty() {
@@ -7854,8 +7986,7 @@ impl Tool for ModifyLidarTool {
             let min_z = cloud.points.iter().map(|p| p.z).fold(f64::INFINITY, f64::min);
             let max_z = cloud.points.iter().map(|p| p.z).fold(f64::NEG_INFINITY, f64::max);
 
-            let mut out_points = Vec::with_capacity(cloud.points.len());
-            for (i, p) in cloud.points.iter().enumerate() {
+            let process_point = |i: usize, p: &PointRecord| -> Result<PointRecord, ToolError> {
                 let mut point = *p;
                 let mut eval_ctx = build_filter_context(
                     p,
@@ -7996,8 +8127,18 @@ impl Tool for ModifyLidarTool {
                     }
                 }
 
-                out_points.push(point);
-            }
+                Ok(point)
+            };
+
+            let out_points: Vec<PointRecord> = if parallel_points {
+                cloud.points.par_iter().enumerate()
+                    .map(|(i, p)| process_point(i, p))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                cloud.points.iter().enumerate()
+                    .map(|(i, p)| process_point(i, p))
+                    .collect::<Result<Vec<_>, _>>()?
+            };
 
             let out_cloud = PointCloud {
                 points: out_points,
@@ -8008,7 +8149,7 @@ impl Tool for ModifyLidarTool {
 
         if let Some(input_path) = input_path {
             ctx.progress.info("reading input lidar");
-            let locator = run_single(Path::new(&input_path), output_path)?;
+            let locator = run_single(Path::new(&input_path), output_path, true)?;
             ctx.progress.progress(1.0);
             Ok(build_lidar_result(locator))
         } else {
@@ -8018,7 +8159,7 @@ impl Tool for ModifyLidarTool {
                 .into_par_iter()
                 .map(|input| {
                     let out = generate_batch_lidar_output_path(&input, "modified");
-                    run_single(&input, Some(out))
+                    run_single(&input, Some(out), false)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             ctx.progress.progress(1.0);
@@ -8893,21 +9034,27 @@ impl Tool for ClassifyOverlapPointsTool {
             }
         }
 
+        let overlapping_arc = Arc::new(overlapping);
         let points = if filter {
             cloud
                 .points
-                .iter()
+                .par_iter()
                 .enumerate()
-                .filter_map(|(i, p)| if overlapping[i] { None } else { Some(*p) })
+                .filter_map(|(i, p)| if overlapping_arc[i] { None } else { Some(*p) })
                 .collect()
         } else {
-            let mut pts = cloud.points.clone();
-            for (i, p) in pts.iter_mut().enumerate() {
-                if overlapping[i] {
-                    p.classification = 12;
-                }
-            }
-            pts
+            cloud
+                .points
+                .par_iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let mut pt = *p;
+                    if overlapping_arc[i] {
+                        pt.classification = 12;
+                    }
+                    pt
+                })
+                .collect()
         };
 
         let out_cloud = PointCloud {
@@ -10733,7 +10880,7 @@ impl Tool for LidarHistogramTool {
 
         let mut values: Vec<f64> = cloud
             .points
-            .iter()
+            .par_iter()
             .map(|p| match parameter {
                 "intensity" => f64::from(p.intensity),
                 "scan_angle" => f64::from(p.scan_angle),

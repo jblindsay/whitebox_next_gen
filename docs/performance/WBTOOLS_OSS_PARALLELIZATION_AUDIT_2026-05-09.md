@@ -758,6 +758,14 @@ Batches 127–129 completed (2026-05-10):
 Implementation file:
 - `crates/wbtools_oss/src/tools/data_tools/mod.rs`
 
+Batches 130–132 completed (2026-05-10):
+- `topology_rule_validate` (`line_must_not_self_intersect` branch): parallelized per-feature self-intersection issue extraction with `par_iter().flat_map()` and deterministic merge into violation output.
+- `topology_rule_validate` (`point_must_be_covered_by_line` branch): parallelized per-feature point coverage checks with `par_iter().map()` collecting optional violations, followed by deterministic merge.
+- `topology_rule_autofix` (`point_must_be_covered_by_line` prep): parallelized line geometry collection with `par_iter().filter_map()` prior to sequential fix application.
+
+Implementation file:
+- `crates/wbtools_oss/src/tools/data_tools/mod.rs`
+
 ## Automated Screening Set (Needs Manual Confirmation)
 
 Block-scan surfaced **90 candidates** where legacy appears parallelized and NG tool blocks do not contain explicit parallel tokens.

@@ -2358,26 +2358,30 @@ impl Tool for TopologyRuleValidateTool {
         };
 
         if rules.contains(&TopologyRuleType::LineMustNotSelfIntersect) {
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                let Some(anchor) = geometry_anchor_coord(geometry) else {
-                    continue;
-                };
-                let issues = collect_topology_issues(geometry);
-                for issue in issues {
-                    if issue.issue_type == "linestring_self_intersection" {
-                        violations.push(TopologyRuleViolation {
+            let self_intersections: Vec<TopologyRuleViolation> = input
+                .features
+                .par_iter()
+                .flat_map(|feature| {
+                    let Some(geometry) = feature.geometry.as_ref() else {
+                        return Vec::new();
+                    };
+                    let Some(anchor) = geometry_anchor_coord(geometry) else {
+                        return Vec::new();
+                    };
+                    collect_topology_issues(geometry)
+                        .into_iter()
+                        .filter(|issue| issue.issue_type == "linestring_self_intersection")
+                        .map(|issue| TopologyRuleViolation {
                             rule_type: TopologyRuleType::LineMustNotSelfIntersect,
                             feature_fid: feature.fid as i64,
                             related_fid: None,
                             detail: issue.detail,
                             anchor: anchor.clone(),
-                        });
-                    }
-                }
-            }
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            violations.extend(self_intersections);
         }
 
         if rules.contains(&TopologyRuleType::PolygonMustNotOverlap) {
@@ -2428,44 +2432,46 @@ impl Tool for TopologyRuleValidateTool {
                 .collect::<Vec<_>>();
             let line_index = SpatialIndex::build_str(&line_geometries, 16);
 
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                if !matches!(geometry, Geometry::Point(_)) {
-                    continue;
-                }
-                let Some(anchor) = geometry_anchor_coord(geometry) else {
-                    continue;
-                };
-
-                let mut covered = false;
-                let point_topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
-                    ToolError::Execution(format!(
-                        "failed converting feature {} point geometry for coverage checks: {e}",
-                        feature.fid
-                    ))
-                })?;
-
-                for line_idx in line_index.query_geometry(&point_topo) {
-                    let line_topo = &line_features[line_idx].topo;
-                    let dist = geometry_distance(&point_topo, line_topo);
-                    if dist < 1e-9 {
-                        covered = true;
-                        break;
+            let uncovered_points: Result<Vec<Option<TopologyRuleViolation>>, ToolError> = input
+                .features
+                .par_iter()
+                .map(|feature| {
+                    let Some(geometry) = feature.geometry.as_ref() else {
+                        return Ok(None);
+                    };
+                    if !matches!(geometry, Geometry::Point(_)) {
+                        return Ok(None);
                     }
-                }
+                    let Some(anchor) = geometry_anchor_coord(geometry) else {
+                        return Ok(None);
+                    };
 
-                if !covered {
-                    violations.push(TopologyRuleViolation {
-                        rule_type: TopologyRuleType::PointMustBeCoveredByLine,
-                        feature_fid: feature.fid as i64,
-                        related_fid: None,
-                        detail: "point not on any line".to_string(),
-                        anchor: anchor.clone(),
-                    });
-                }
-            }
+                    let point_topo = topology_from_wkb(&geometry.to_wkb()).map_err(|e| {
+                        ToolError::Execution(format!(
+                            "failed converting feature {} point geometry for coverage checks: {e}",
+                            feature.fid
+                        ))
+                    })?;
+
+                    let covered = line_index
+                        .query_geometry(&point_topo)
+                        .into_iter()
+                        .any(|line_idx| geometry_distance(&point_topo, &line_features[line_idx].topo) < 1e-9);
+
+                    if covered {
+                        Ok(None)
+                    } else {
+                        Ok(Some(TopologyRuleViolation {
+                            rule_type: TopologyRuleType::PointMustBeCoveredByLine,
+                            feature_fid: feature.fid as i64,
+                            related_fid: None,
+                            detail: "point not on any line".to_string(),
+                            anchor,
+                        }))
+                    }
+                })
+                .collect();
+            violations.extend(uncovered_points?.into_iter().flatten());
         }
 
         if rules.contains(&TopologyRuleType::LineMustNotHaveDangles) {
@@ -2836,15 +2842,20 @@ impl Tool for TopologyRuleAutoFixTool {
         }
 
         if rules.contains(&TopologyRuleType::PointMustBeCoveredByLine) {
-            let mut lines = Vec::<(u64, Geometry)>::new();
-            for feature in &input.features {
-                let Some(geometry) = feature.geometry.as_ref() else {
-                    continue;
-                };
-                if matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
-                    lines.push((feature.fid, geometry.clone()));
-                }
-            }
+            let lines = input
+                .features
+                .par_iter()
+                .filter_map(|feature| {
+                    let Some(geometry) = feature.geometry.as_ref() else {
+                        return None;
+                    };
+                    if matches!(geometry, Geometry::LineString(_) | Geometry::MultiLineString(_)) {
+                        Some((feature.fid, geometry.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
 
             for feature in &mut input.features {
                 let Some(geometry) = feature.geometry.as_mut() else {
